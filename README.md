@@ -15,14 +15,14 @@
 ---
 
 ## 🧱 프로젝트 구조
-
+```
 3ch-project/
 ├─ frontend/ # React 프론트엔드
 ├─ backend/ # Node.js + Express API 서버
 ├─ infra/ # 인프라 설정 및 문서 (Nginx, 배포 관련)
 ├─ README.md
 └─ .gitignore
-
+```
 ---
 
 ## 🛠 사용 기술 스택

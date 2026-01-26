@@ -1,7 +1,7 @@
 import { createBrowserRouter } from "react-router-dom";
 import AppShell from "../components/AppShell";
 import Home from "../pages/Home";
-import Login from "../pages/Login";
+// import Login from "../pages/Login";
 // import League from "../pages/League";
 // import Match from "../pages/Match";
 // import My from "../pages/My";

@@ -1,5 +1,6 @@
 // src/pages/Home.tsx
 import { useState } from "react";
+import { Link as RouterLink } from "react-router-dom";
 import {
     Box,
     Stack,
@@ -39,7 +40,7 @@ export default function Home({ isLoggedIn = false, userName = "우리리그" }: 
             <SoftCard>
                 <Stack alignItems="center" spacing={1.2}>
                     <Typography fontWeight={800}>로그인을 해주세요.</Typography>
-                    <Button variant="contained" size="medium" sx={{ px: 3, borderRadius: 2 }}>
+                    <Button component={RouterLink} to="/login" variant="contained" size="medium" sx={{ px: 3, borderRadius: 2 }}>
                         로그인
                     </Button>
                 </Stack>

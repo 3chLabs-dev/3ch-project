@@ -1,5 +1,5 @@
 import { createBrowserRouter } from "react-router-dom";
-import AppShell from "../components/Appshell";
+import AppShell from "../components/AppShell";
 import Home from "../pages/Home";
 // import League from "../pages/League";
 // import Match from "../pages/Match";

@@ -21,27 +21,23 @@
 3ch-web/
 ├─ public/
 │ ├─ index.html
-│ ├─ manifest.json
-│ └─ assets/
+│ ├─ pwa-192.png
+│ ├─ pwa-512.png
+│ └─ pwa-512-maskable.png (Exam...)
 │
 ├─ src/
-│ ├─ components/ # 공통 UI 컴포넌트
-│ ├─ pages/ # 탭/페이지 단위 화면
-│ │ ├─ Tab1.tsx
-│ │ ├─ Tab2.tsx
-│ │ ├─ Tab3.tsx
-│ │ ├─ Tab4.tsx
-│ │ └─ Tab5.tsx
-│ │
-│ ├─ theme/ # Ionic 테마 설정
-│ ├─ App.tsx # 탭/라우팅 중심 파일
-│ ├─ index.tsx # 엔트리 포인트
-│ └─ react-app-env.d.ts
+│ ├─ app/            # Redux store / 공통 hooks
+│ ├─ features/       # 도메인별 상태 / API (RTK Query)
+│ ├─ components/     # 공통 UI 컴포넌트 (Layout, Tab 등)
+│ ├─ pages/          # 라우트 단위 페이지
+│ ├─ routes/         # 라우터 설정
+│ ├─ theme/          # MUI Theme 설정
+│ ├─ main.tsx        # 엔트리 포인트
+│ └─ vite-env.d.ts
 │
-├─ .eslintrc.js
-├─ ionic.config.json
-├─ package.json
+├─ vite.config.ts
 ├─ tsconfig.json
+├─ package.json
 └─ README.md
 ```
 ---
@@ -49,11 +45,13 @@
 ## 🛠 사용 기술 스택
 
 ### Frontend
-- Ionic React
-- React + Vite (빠른 개발 환경과 경량 빌드)
-- SPA 구조
-- 하단 탭 기반 네비게이션
-- 역할별 화면 구성 예정 (게스트 / 참가자 / 관리자)
+- React + TypeScript
+- Vite (빠른 개발 환경 및 경량 빌드)
+- React Router (SPA 라우팅)
+- Redux Toolkit (RTK)
+- RTK Query (서버 상태 관리)
+- MUI(Material UI) – 빠른 MVP UI 구성
+- PWA (아이콘, 스플래시, 홈 화면 추가 지원)
 ---
 
 ## 📂 브랜치 / 협업 규칙 (초기)

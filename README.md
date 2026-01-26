@@ -3,10 +3,13 @@
 
 ## 🌐 Web (Frontend)
 
-- Framework: Ionic React + Vite
-- Type: SPA (모바일 친화 UI)
-- 역할별 화면 구조 (게스트 / 사용자 / 관리자)
-- 빌드 결과물은 서버에서 정적 서빙
+- Framework: React + TypeScript + Vite
+- Routing: React Router (SPA)
+- UI: MUI(Material UI) + 모바일 앱 느낌 레이아웃(모바일 폭 고정, 하단 탭, 카드 UI)
+- State: Redux Toolkit(RTK) + RTK Query
+- PWA: 홈 화면 추가, 아이콘/스플래시 지원
+- 역할별 화면 구조: 게스트 / 사용자(참가자) / 관리자
+- 배포: 빌드 결과물(dist)을 서버에서 정적 서빙 (Nginx 등)
 
 📁 위치: `/3ch-web`
 

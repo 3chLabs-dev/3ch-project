@@ -233,7 +233,7 @@ export default function Login(props) {
             </Box>
           </Box>
 
-          <Divider sx={{ my: 0.5, fontSize: "0.9rem" }}>or</Divider>
+          <Divider sx={{ my: 0.5, fontSize: "0.9rem" }}>간편 로그인</Divider>
 
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1.1 }}>
             {/* ✅ 구글 */}
@@ -298,7 +298,7 @@ export default function Login(props) {
               component={RouterLink}
               to="/signup"
             >
-              <SocialBtnInner icon={<IconPlaceholder />} label="이메일로 가입하기" />
+              <SocialBtnInner label="이메일로 가입하기" />
             </Button>
           </Box>
         </Box>

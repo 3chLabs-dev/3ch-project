@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useState } from 'react';
 import { useDispatch } from 'react-redux';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -153,6 +154,42 @@ function SocialBtnInner({
 }
 
 export default function Login(props) {
+    const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  const [emailError, setEmailError] = useState("");
+  const [pwError, setPwError] = useState("");
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const pwRegex = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,12}$/;
+
+  const validateEmail = (v) => {
+    if (!v) return "이메일을 입력해주세요.";
+    if (!emailRegex.test(v)) return "이메일 형식에 맞게 입력해주세요.";
+    return "";
+  };
+
+  const validatePw = (v) => {
+    if (!v) return "비밀번호를 입력해주세요.";
+    if (!pwRegex.test(v))
+      return "숫자+영문+특수기호를 모두 포함한 8~12자로 입력해주세요.";
+    return "";
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+
+    const eMsg = validateEmail(email);
+    const pMsg = validatePw(password);
+
+    setEmailError(eMsg);
+    setPwError(pMsg);
+
+    if (eMsg || pMsg) return;
+
+    // 로그인 요청
+  };
+
   return (
     <AppTheme {...props}>
       <CssBaseline enableColorScheme />
@@ -185,6 +222,7 @@ export default function Login(props) {
           <Box
             component="form"
             noValidate
+            onSubmit={handleSubmit}
             sx={{ display: "flex", flexDirection: "column", gap: 1.2 }}
           >
             <TextField
@@ -197,6 +235,17 @@ export default function Login(props) {
               fullWidth
               variant="outlined"
               sx={inputSx}
+
+              value={email}
+              onChange={(e) => {
+                const v = e.target.value;
+                setEmail(v);
+                // 입력하면서 실시간으로 에러 지우거나 업데이트:
+                // if (emailError) setEmailError(validateEmail(v));
+              }}
+              onBlur={() => setEmailError(validateEmail(email))}
+              error={!!emailError}
+              helperText={emailError || " "}
             />
 
             <TextField
@@ -209,6 +258,16 @@ export default function Login(props) {
               fullWidth
               variant="outlined"
               sx={inputSx}
+
+              value={password}
+              onChange={(e) => {
+                const v = e.target.value;
+                setPassword(v);
+                if (pwError) setPwError(validatePw(v));
+              }}
+              onBlur={() => setPwError(validatePw(password))}
+              error={!!pwError}
+              helperText={pwError || " "}
             />
 
             <Button

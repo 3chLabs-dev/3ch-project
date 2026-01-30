@@ -15,6 +15,10 @@ import VisibilityOff from "@mui/icons-material/VisibilityOff";
 import axios from 'axios';
 import { Link as RouterLink } from "react-router-dom";
 import { useNavigate } from 'react-router-dom';
+import Checkbox from "@mui/material/Checkbox";
+import FormControlLabel from "@mui/material/FormControlLabel";
+import Divider from "@mui/material/Divider";
+import Link from "@mui/material/Link";
 // import MuiCard from '@mui/material/Card';
 // import Checkbox from '@mui/material/Checkbox';
 // import FormControlLabel from '@mui/material/FormControlLabel';
@@ -99,6 +103,35 @@ export default function SignUp(props) {
     const [confirmError, setConfirmError] = useState("");
     const [nameError, setNameError] = useState("");
 
+    const [agree, setAgree] = useState({
+        all: false,
+        age: false,      // 만 14세 이상 (필수)
+        terms: false,    // 서비스 이용약관 (필수)
+        privacy: false,  // 개인정보 수집 및 이용 (필수)
+    });
+
+    const setAll = (checked) => {
+        setAgree({
+            all: checked,
+            age: checked,
+            terms: checked,
+            privacy: checked,
+        });
+    };
+
+    const toggleOne = (key) => (e) => {
+        const checked = e.target.checked;
+        setAgree((prev) => {
+            const next = { ...prev, [key]: checked };
+            const allChecked = next.age && next.terms && next.privacy;
+            return { ...next, all: allChecked };
+        });
+    };
+
+    const toggleAll = (e) => {
+        setAll(e.target.checked);
+    };
+
     // ✅ 비번 보기(누르는 동안만 보이게)
     const [showPw, setShowPw] = useState(false);
     const [showConfirmPw, setShowConfirmPw] = useState(false);
@@ -152,8 +185,10 @@ export default function SignUp(props) {
             email.trim() && password.trim() && confirmPassword.trim() && username.trim();
         const noErrors = !emailError && !pwError && !confirmError && !nameError;
         const match = password && confirmPassword && password === confirmPassword;
+        const requiredAgree = agree.age && agree.terms && agree.privacy;
+
         return Boolean(filled && noErrors && match);
-    }, [email, password, confirmPassword, username, emailError, pwError, confirmError, nameError]);
+    }, [email, password, confirmPassword, username, emailError, pwError, confirmError, nameError, agree]);
 
     const handleSubmit = (e) => {
         e.preventDefault();
@@ -250,11 +285,7 @@ export default function SignUp(props) {
                                         <IconButton
                                             edge="end"
                                             // ✅ 누르는 동안만 보이게(마우스/터치)
-                                            onMouseDown={() => setShowPw(true)}
-                                            onMouseUp={() => setShowPw(false)}
-                                            onMouseLeave={() => setShowPw(false)}
-                                            onTouchStart={() => setShowPw(true)}
-                                            onTouchEnd={() => setShowPw(false)}
+                                            onClick={() => setShowPw((prev) => !prev)}
                                             tabIndex={-1}
                                         >
                                             {showPw ? <VisibilityOff /> : <Visibility />}
@@ -289,11 +320,7 @@ export default function SignUp(props) {
                                     <InputAdornment position="end">
                                         <IconButton
                                             edge="end"
-                                            onMouseDown={() => setShowConfirmPw(true)}
-                                            onMouseUp={() => setShowConfirmPw(false)}
-                                            onMouseLeave={() => setShowConfirmPw(false)}
-                                            onTouchStart={() => setShowConfirmPw(true)}
-                                            onTouchEnd={() => setShowConfirmPw(false)}
+                                            onClick={() => setShowPw((prev) => !prev)}
                                             tabIndex={-1}
                                         >
                                             {showConfirmPw ? <VisibilityOff /> : <Visibility />}
@@ -319,6 +346,105 @@ export default function SignUp(props) {
                             error={!!nameError}
                             helperText={nameError || " "}
                         />
+
+                        <Box
+                            sx={{
+                                mt: 0.5,
+                                border: "1px solid",
+                                borderColor: "divider",
+                                borderRadius: 2,
+                                backgroundColor: "#fff",
+                                px: 1.5,
+                                py: 1.2,
+                            }}
+                        >
+                            <FormControlLabel
+                                sx={{
+                                    m: 0,
+                                    "& .MuiFormControlLabel-label": { fontWeight: 700 },
+                                }}
+                                control={
+                                    <Checkbox
+                                        checked={agree.all}
+                                        onChange={toggleAll}
+                                        size="small"
+                                    />
+                                }
+                                label="약관 전체 동의"
+                            />
+
+                            <Divider sx={{ my: 0.8 }} />
+
+                            <FormControlLabel
+                                sx={{ m: 0 }}
+                                control={
+                                    <Checkbox
+                                        checked={agree.age}
+                                        onChange={toggleOne("age")}
+                                        size="small"
+                                    />
+                                }
+                                label="만 14세 이상입니다.(필수)"
+                            />
+
+                            <Box
+                                sx={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    mt: 0.2,
+                                }}
+                            >
+                                <FormControlLabel
+                                    sx={{ m: 0 }}
+                                    control={
+                                        <Checkbox
+                                            checked={agree.terms}
+                                            onChange={toggleOne("terms")}
+                                            size="small"
+                                        />
+                                    }
+                                    label="서비스 이용약관 동의(필수)"
+                                />
+                                <Link
+                                    component={RouterLink}
+                                    to="/terms"
+                                    underline="none"
+                                    sx={{ fontSize: "0.9rem", fontWeight: 600 }}
+                                >
+                                    보기 ＞
+                                </Link>
+                            </Box>
+
+                            <Box
+                                sx={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    mt: 0.2,
+                                }}
+                            >
+                                <FormControlLabel
+                                    sx={{ m: 0 }}
+                                    control={
+                                        <Checkbox
+                                            checked={agree.privacy}
+                                            onChange={toggleOne("privacy")}
+                                            size="small"
+                                        />
+                                    }
+                                    label="개인정보 수집 및 이용 동의(필수)"
+                                />
+                                <Link
+                                    component={RouterLink}
+                                    to="/privacy"
+                                    underline="none"
+                                    sx={{ fontSize: "0.9rem", fontWeight: 600 }}
+                                >
+                                    보기 ＞
+                                </Link>
+                            </Box>
+                        </Box>
 
                         <Button
                             type="submit"

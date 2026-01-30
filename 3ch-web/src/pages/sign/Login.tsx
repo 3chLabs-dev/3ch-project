@@ -21,6 +21,9 @@ import ColorModeSelect from '../shared-theme/ColorModeSelect.jsx';
 import { GoogleIcon, SitemarkIcon } from '../../components/CustomIcons.jsx';
 import { Link as RouterLink } from "react-router-dom";
 import axios from 'axios';
+import emailIcon from "../../icon/free-icon-email-813667.png";
+import kakaoIcon from "../../icon/free-icon-kakao-talk-3991999.png";
+import naverIcon from "../../icon/naver-icon-style.png";
 // import { login } from '../../features/auth/authSlice';
 // import ForgotPassword from '../components/ForgotPassword.js';
 // import { showNotification } from '../../features/ui/notificationSlice';
@@ -97,15 +100,16 @@ const socialBtnSx = {
   },
 };
 
-function IconPlaceholder() {
+function SocialIcon({ src, alt }) {
   return (
     <Box
+      component="img"
+      src={src}
+      alt={alt}
       sx={{
         width: 26,
         height: 26,
-        borderRadius: 0.6,
-        backgroundColor: "#111",
-        display: "inline-block",
+        objectFit: "contain",
       }}
     />
   );
@@ -327,7 +331,7 @@ export default function Login(props) {
                 p: 0,
               }}
             >
-              <SocialBtnInner icon={<IconPlaceholder />} label="카카오로 시작하기" />
+              <SocialBtnInner icon={<SocialIcon src={kakaoIcon} alt="kakao" />} label="카카오로 시작하기" />
             </Button>
 
             {/* ✅ 네이버 */}
@@ -341,7 +345,7 @@ export default function Login(props) {
                 p: 0,
               }}
             >
-              <SocialBtnInner icon={<IconPlaceholder />} label="네이버로 시작하기" />
+              <SocialBtnInner icon={<SocialIcon src={naverIcon} alt="naver" />} label="네이버로 시작하기" />
             </Button>
 
             {/* ✅ 이메일 */}
@@ -357,7 +361,7 @@ export default function Login(props) {
               component={RouterLink}
               to="/signup"
             >
-              <SocialBtnInner label="이메일로 가입하기" />
+              <SocialBtnInner icon=<SocialIcon src={emailIcon} alt="email" />label="이메일로 가입하기" />
             </Button>
           </Box>
         </Box>

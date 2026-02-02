@@ -4,12 +4,15 @@
   "description": "3ch는 탁구, 배드민턴, 테니스 등 다양한 스포츠를 기반으로 한  \r 스포츠 플랫폼 서비스를 목표로 하는 프로젝트입니다.",
   "main": "index.js",
   "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
     "@prisma/client": "^7.3.0",
+    "bcrypt": "^6.0.0",
     "cors": "^2.8.6",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",

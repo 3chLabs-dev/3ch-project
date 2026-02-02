@@ -1,30 +1,24 @@
-// const express = require("express");
-// require("dotenv").config();
-
-// const testRoutes = require("./routes/test");
-
-// const app = express();
-
-// app.use(express.json());
-
-// // routes
-// app.use("/", testRoutes);
-
-// module.exports = app;
-
 const express = require("express");
 const { swaggerUi, swaggerSpec } = require("./config/swagger");
+require("dotenv").config();
 
-const testRoutes = require("./routes/test"); // 네가 만든 /test, /db-test 라우터
+const testRoutes = require("./routes/test");
+const authRouter = require("./routes/auth");
 
 const app = express();
 
 app.use(express.json());
 
-// ✅ Swagger
+// health check (nginx / 운영 필수)
+app.get("/health", (req, res) => {
+  res.json({ ok: true });
+});
+
+// Swagger
 app.use("/swagger", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-// ✅ Routes
+// Routes
 app.use("/", testRoutes);
+app.use("/auth", authRouter);
 
 module.exports = app;

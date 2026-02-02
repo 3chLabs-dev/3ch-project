@@ -3,66 +3,67 @@
 3ch는 탁구, 배드민턴, 테니스 등 다양한 스포츠를 기반으로 한  
 스포츠 플랫폼 서비스를 목표로 하는 프로젝트입니다.
 
-현재는 창업 준비 단계로, 서비스 기획과 기술 검증을 함께 진행하고 있습니다.
+## 🛠 사용 기술 스택 (Tech Stack)
 
----
+- **Backend**: Node.js, Express.js
+- **Database**: PostgreSQL
+- **Database ORM**: Prisma
+- **Authentication**: JWT (JSON Web Tokens)
+- **API Documentation**: Swagger
+- **Validation**: Zod
+- **Others**: `bcrypt` (for hashing), `cors`, `helmet`, `morgan`, `dotenv`
 
-## 📌 프로젝트 목표
-- 모임이나 리그 관리자가 생활체육리그를 효율적으로 운영할 수 있는 환경 마련
-- 스포츠와 디지털 기술의 접목으로 생활체육 저변 확대
-- 여러 종목의 스포츠를 하나의 플랫폼에서 다루는 구조
-- 종목별이 아닌 **공통 기능 + 스포츠 타입 확장** 방식
-- 초기에는 소규모, 이후 확장 가능한 아키텍처 지향
+## ⚙️ 프로젝트 설정 (Project Setup)
 
----
+1.  **저장소 복제 (Clone Repository)**
+    ```bash
+    git clone <repository-url>
+    cd 3ch-api
+    ```
 
-## 🧱 프로젝트 구조(미정)
-```
-3ch-api/
-├─ backend/ # Node.js + Express API 서버
-├─ infra/ # 인프라 설정 및 문서 (Nginx, 배포 관련)
-├─ README.md
-└─ .gitignore
-```
----
+2.  **의존성 설치 (Install Dependencies)**
+    ```bash
+    npm install
+    ```
 
-## 🛠 사용 기술 스택
+3.  **환경 변수 설정 (Environment Variables)**
+    -   프로젝트 루트에 `.env` 파일을 생성합니다.
+    -   아래 내용을 기반으로 자신의 환경에 맞게 수정합니다.
 
-### Backend
-- Node.js
-- Express
-- PM2를 통한 프로세스 관리
+    ```dotenv
+    # .env.example
+    
+    # PostgreSQL Database URL
+    DATABASE_URL="postgresql://DB_USER:DB_PASSWORD@DB_HOST:DB_PORT/DB_NAME?schema=public"
+    
+    # Server Port
+    PORT=3000
+    
+    # JWT Secret
+    JWT_SECRET="your-super-secret-key"
+    JWT_EXPIRES_IN=7d
+    ```
 
-### Database
-- PostgreSQL
+4.  **데이터베이스 동기화 (Database Sync)**
+    -   Prisma 스키마를 실제 데이터베이스에 적용하여 테이블을 생성합니다.
+    ```bash
+    npx prisma db push
+    ```
 
-### Infrastructure
-- AWS EC2 (Ubuntu)
-- Nginx (Reverse Proxy)
-- HTTPS
+## 🚀 애플리케이션 실행 (Running the App)
 
----
+-   **개발 모드 (Development mode)**
+    -   `nodemon`을 사용하여 파일 변경 시 서버가 자동으로 재시작됩니다.
+    ```bash
+    npm run dev
+    ```
 
-## 🚀 배포 방식
+-   **프로덕션 모드 (Production mode)**
+    ```bash
+    npm start
+    ```
 
-- 프론트엔드
-  - 로컬에서 build 후
-  - build 결과물만 서버 `/var/www`에 업로드
+## 📚 API 문서 (API Documentation)
 
-- 백엔드
-  - PM2로 실행 및 자동 재시작
-  - `/api` 경로로 Nginx 프록시 연결
-
----
-
-## 📂 브랜치 / 협업 규칙 (초기)
-
-- 기본 작업 브랜치는 dev
-- 배포 시에만 dev → main 머지
-- build 결과물은 Git에 포함하지 않음
-
----
-
-## ⚠️ 기타
-- 본 저장소는 현재 Private 상태
-- 외부 공개는 서비스 안정화 이후 검토 예정
+-   서버 실행 후, 아래 주소에서 Swagger UI를 통해 API 문서를 확인하고 테스트할 수 있습니다.
+-   **URL**: `http://localhost:3000/swagger`

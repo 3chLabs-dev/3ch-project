@@ -7,31 +7,17 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import Stack from '@mui/material/Stack';
 import { styled } from '@mui/material/styles';
-import AppTheme from '../shared-theme/AppTheme';
+import AppTheme from '../shared-theme/AppTheme.tsx';
 import InputAdornment from "@mui/material/InputAdornment";
 import IconButton from "@mui/material/IconButton";
 import Visibility from "@mui/icons-material/Visibility";
 import VisibilityOff from "@mui/icons-material/VisibilityOff";
 import axios from 'axios';
 import { Link as RouterLink } from "react-router-dom";
-import { useNavigate } from 'react-router-dom';
 import Checkbox from "@mui/material/Checkbox";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Divider from "@mui/material/Divider";
 import Link from "@mui/material/Link";
-// import MuiCard from '@mui/material/Card';
-// import Checkbox from '@mui/material/Checkbox';
-// import FormControlLabel from '@mui/material/FormControlLabel';
-// import Divider from '@mui/material/Divider';
-// import FormLabel from '@mui/material/FormLabel';
-// import FormControl from '@mui/material/FormControl';
-// import Link from '@mui/material/Link';
-// import { useDispatch } from 'react-redux';
-// import { showNotification } from '../../features/ui/notificationSlice';
-// import ColorModeSelect from '../shared-theme/ColorModeSelect';
-// import { GoogleIcon, SitemarkIcon } from '../../components/CustomIcons.jsx';
-// import { KakaoAuth } from '../../util/kakaoAuth.js';
-// import { GoogleAuth } from '../../util/googleAuth.js';
 
 
 const SignInContainer = styled(Stack)(({ theme }) => ({

@@ -6,8 +6,10 @@ import { chipClasses } from '@mui/material/Chip';
 import { iconButtonClasses } from '@mui/material/IconButton';
 import { gray, red, green } from '../themePrimitives';
 
+import type { Theme, Components } from '@mui/material/styles';
+
 /* eslint-disable import/prefer-default-export */
-export const dataDisplayCustomizations = {
+export const dataDisplayCustomizations: Components<Theme> = {
   MuiList: {
     styleOverrides: {
       root: {
@@ -20,7 +22,7 @@ export const dataDisplayCustomizations = {
   },
   MuiListItem: {
     styleOverrides: {
-      root: ({ theme }) => ({
+      root: ({ theme }: { theme: Theme }) => ({
         [`& .${svgIconClasses.root}`]: {
           width: '1rem',
           height: '1rem',
@@ -57,12 +59,12 @@ export const dataDisplayCustomizations = {
   },
   MuiListItemText: {
     styleOverrides: {
-      primary: ({ theme }) => ({
+      primary: ({ theme }: { theme: Theme }) => ({
         fontSize: theme.typography.body2.fontSize,
         fontWeight: 500,
         lineHeight: theme.typography.body2.lineHeight,
       }),
-      secondary: ({ theme }) => ({
+      secondary: ({ theme }: { theme: Theme }) => ({
         fontSize: theme.typography.caption.fontSize,
         lineHeight: theme.typography.caption.lineHeight,
       }),
@@ -70,7 +72,7 @@ export const dataDisplayCustomizations = {
   },
   MuiListSubheader: {
     styleOverrides: {
-      root: ({ theme }) => ({
+      root: ({ theme }: { theme: Theme }) => ({
         backgroundColor: 'transparent',
         padding: '4px 8px',
         fontSize: theme.typography.caption.fontSize,
@@ -91,18 +93,20 @@ export const dataDisplayCustomizations = {
       size: 'small',
     },
     styleOverrides: {
-      root: ({ theme }) => ({
+      root: ({ theme }: { theme: Theme }) => ({
         border: '1px solid',
         borderRadius: '999px',
         [`& .${chipClasses.label}`]: {
           fontWeight: 600,
         },
-        variants: [
+      }),
+    },
+  variants: [
           {
             props: {
               color: 'default',
             },
-            style: {
+            style: ({ theme } : { theme: Theme }) => ({
               borderColor: gray[200],
               backgroundColor: gray[100],
               [`& .${chipClasses.label}`]: {
@@ -121,13 +125,13 @@ export const dataDisplayCustomizations = {
                   color: gray[300],
                 },
               }),
-            },
+            }),
           },
           {
             props: {
               color: 'success',
             },
-            style: {
+            style: ({ theme } : { theme: Theme }) => ({
               borderColor: green[200],
               backgroundColor: green[50],
               [`& .${chipClasses.label}`]: {
@@ -146,13 +150,13 @@ export const dataDisplayCustomizations = {
                   color: green[300],
                 },
               }),
-            },
+            }),
           },
           {
             props: {
               color: 'error',
             },
-            style: {
+            style: ({ theme } : { theme: Theme }) => ({
               borderColor: red[100],
               backgroundColor: red[50],
               [`& .${chipClasses.label}`]: {
@@ -171,11 +175,11 @@ export const dataDisplayCustomizations = {
                   color: red[300],
                 },
               }),
-            },
+            }),
           },
           {
             props: { size: 'small' },
-            style: {
+            style: ({ theme } : { theme: Theme }) => ({
               maxHeight: 20,
               [`& .${chipClasses.label}`]: {
                 fontSize: theme.typography.caption.fontSize,
@@ -183,19 +187,17 @@ export const dataDisplayCustomizations = {
               [`& .${svgIconClasses.root}`]: {
                 fontSize: theme.typography.caption.fontSize,
               },
-            },
+            }),
           },
           {
             props: { size: 'medium' },
-            style: {
+            style: ({ theme } : { theme: Theme }) => ({
               [`& .${chipClasses.label}`]: {
                 fontSize: theme.typography.caption.fontSize,
               },
-            },
+            }),
           },
         ],
-      }),
-    },
   },
   MuiTablePagination: {
     styleOverrides: {

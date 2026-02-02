@@ -15,11 +15,11 @@ import {
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 
 type Props = {
-    isLoggedIn?: boolean;
+    // isLoggedIn?: boolean;
     userName?: string;
 };
 
-export default function Home({ isLoggedIn = false, userName = "우리리그" }: Props) {
+export default function Home({ userName = "우리리그" }: Props) {
     const [bizOpen, setBizOpen] = useState(false);
 
     return (

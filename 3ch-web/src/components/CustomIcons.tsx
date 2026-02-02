@@ -1,4 +1,3 @@
-import * as React from "react";
 import SvgIcon, { type SvgIconProps } from "@mui/material/SvgIcon";
 import { useNavigate } from "react-router-dom";
 

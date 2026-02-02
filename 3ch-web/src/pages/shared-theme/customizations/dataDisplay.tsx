@@ -1,62 +1,64 @@
-import { alpha } from '@mui/material/styles';
-import { svgIconClasses } from '@mui/material/SvgIcon';
-import { typographyClasses } from '@mui/material/Typography';
-import { buttonBaseClasses } from '@mui/material/ButtonBase';
-import { chipClasses } from '@mui/material/Chip';
-import { iconButtonClasses } from '@mui/material/IconButton';
-import { gray, red, green } from '../themePrimitives';
+import type { Theme, Components } from "@mui/material/styles";
+import { alpha } from "@mui/material/styles";
+import { svgIconClasses } from "@mui/material/SvgIcon";
+import { typographyClasses } from "@mui/material/Typography";
+import { buttonBaseClasses } from "@mui/material/ButtonBase";
+import { chipClasses } from "@mui/material/Chip";
+import { iconButtonClasses } from "@mui/material/IconButton";
+import { gray, red, green } from "../themePrimitives";
 
-import type { Theme, Components } from '@mui/material/styles';
-
-/* eslint-disable import/prefer-default-export */
 export const dataDisplayCustomizations: Components<Theme> = {
   MuiList: {
     styleOverrides: {
       root: {
-        padding: '8px',
-        display: 'flex',
-        flexDirection: 'column',
+        padding: "8px",
+        display: "flex",
+        flexDirection: "column",
         gap: 0,
       },
     },
   },
+
   MuiListItem: {
     styleOverrides: {
       root: ({ theme }: { theme: Theme }) => ({
         [`& .${svgIconClasses.root}`]: {
-          width: '1rem',
-          height: '1rem',
+          width: "1rem",
+          height: "1rem",
           color: (theme.vars || theme).palette.text.secondary,
         },
         [`& .${typographyClasses.root}`]: {
           fontWeight: 500,
         },
         [`& .${buttonBaseClasses.root}`]: {
-          display: 'flex',
+          display: "flex",
           gap: 8,
-          padding: '2px 8px',
+          padding: "2px 8px",
           borderRadius: (theme.vars || theme).shape.borderRadius,
           opacity: 0.7,
-          '&.Mui-selected': {
+
+          "&.Mui-selected": {
             opacity: 1,
             backgroundColor: alpha(theme.palette.action.selected, 0.3),
             [`& .${svgIconClasses.root}`]: {
               color: (theme.vars || theme).palette.text.primary,
             },
-            '&:focus-visible': {
+            "&:focus-visible": {
               backgroundColor: alpha(theme.palette.action.selected, 0.3),
             },
-            '&:hover': {
+            "&:hover": {
               backgroundColor: alpha(theme.palette.action.selected, 0.5),
             },
           },
-          '&:focus-visible': {
-            backgroundColor: 'transparent',
+
+          "&:focus-visible": {
+            backgroundColor: "transparent",
           },
         },
       }),
     },
   },
+
   MuiListItemText: {
     styleOverrides: {
       primary: ({ theme }: { theme: Theme }) => ({
@@ -70,17 +72,19 @@ export const dataDisplayCustomizations: Components<Theme> = {
       }),
     },
   },
+
   MuiListSubheader: {
     styleOverrides: {
       root: ({ theme }: { theme: Theme }) => ({
-        backgroundColor: 'transparent',
-        padding: '4px 8px',
+        backgroundColor: "transparent",
+        padding: "4px 8px",
         fontSize: theme.typography.caption.fontSize,
         fontWeight: 500,
         lineHeight: theme.typography.caption.lineHeight,
       }),
     },
   },
+
   MuiListItemIcon: {
     styleOverrides: {
       root: {
@@ -88,121 +92,97 @@ export const dataDisplayCustomizations: Components<Theme> = {
       },
     },
   },
+
   MuiChip: {
     defaultProps: {
-      size: 'small',
+      size: "small",
     },
+
     styleOverrides: {
-      root: ({ theme }: { theme: Theme }) => ({
-        border: '1px solid',
-        borderRadius: '999px',
+      // ✅ theme 안 쓰니까 함수로 받지 말고 객체로!
+      root: {
+        border: "1px solid",
+        borderRadius: "999px",
         [`& .${chipClasses.label}`]: {
           fontWeight: 600,
         },
-      }),
+      },
     },
-  variants: [
-          {
-            props: {
-              color: 'default',
-            },
-            style: ({ theme } : { theme: Theme }) => ({
-              borderColor: gray[200],
-              backgroundColor: gray[100],
-              [`& .${chipClasses.label}`]: {
-                color: gray[500],
-              },
-              [`& .${chipClasses.icon}`]: {
-                color: gray[500],
-              },
-              ...theme.applyStyles('dark', {
-                borderColor: gray[700],
-                backgroundColor: gray[800],
-                [`& .${chipClasses.label}`]: {
-                  color: gray[300],
-                },
-                [`& .${chipClasses.icon}`]: {
-                  color: gray[300],
-                },
-              }),
-            }),
+
+    // ✅ variants는 MuiChip 바로 아래로
+    variants: [
+      {
+        props: { color: "default" },
+        style: ({ theme }: { theme: Theme }) => ({
+          borderColor: gray[200],
+          backgroundColor: gray[100],
+          [`& .${chipClasses.label}`]: { color: gray[500] },
+          [`& .${chipClasses.icon}`]: { color: gray[500] },
+          ...theme.applyStyles("dark", {
+            borderColor: gray[700],
+            backgroundColor: gray[800],
+            [`& .${chipClasses.label}`]: { color: gray[300] },
+            [`& .${chipClasses.icon}`]: { color: gray[300] },
+          }),
+        }),
+      },
+      {
+        props: { color: "success" },
+        style: ({ theme }: { theme: Theme }) => ({
+          borderColor: green[200],
+          backgroundColor: green[50],
+          [`& .${chipClasses.label}`]: { color: green[500] },
+          [`& .${chipClasses.icon}`]: { color: green[500] },
+          ...theme.applyStyles("dark", {
+            borderColor: green[800],
+            backgroundColor: green[900],
+            [`& .${chipClasses.label}`]: { color: green[300] },
+            [`& .${chipClasses.icon}`]: { color: green[300] },
+          }),
+        }),
+      },
+      {
+        props: { color: "error" },
+        style: ({ theme }: { theme: Theme }) => ({
+          borderColor: red[100],
+          backgroundColor: red[50],
+          [`& .${chipClasses.label}`]: { color: red[500] },
+          [`& .${chipClasses.icon}`]: { color: red[500] },
+          ...theme.applyStyles("dark", {
+            borderColor: red[800],
+            backgroundColor: red[900],
+            [`& .${chipClasses.label}`]: { color: red[200] },
+            [`& .${chipClasses.icon}`]: { color: red[300] },
+          }),
+        }),
+      },
+      {
+        props: { size: "small" },
+        style: ({ theme }: { theme: Theme }) => ({
+          maxHeight: 20,
+          [`& .${chipClasses.label}`]: {
+            fontSize: theme.typography.caption.fontSize,
           },
-          {
-            props: {
-              color: 'success',
-            },
-            style: ({ theme } : { theme: Theme }) => ({
-              borderColor: green[200],
-              backgroundColor: green[50],
-              [`& .${chipClasses.label}`]: {
-                color: green[500],
-              },
-              [`& .${chipClasses.icon}`]: {
-                color: green[500],
-              },
-              ...theme.applyStyles('dark', {
-                borderColor: green[800],
-                backgroundColor: green[900],
-                [`& .${chipClasses.label}`]: {
-                  color: green[300],
-                },
-                [`& .${chipClasses.icon}`]: {
-                  color: green[300],
-                },
-              }),
-            }),
+          [`& .${svgIconClasses.root}`]: {
+            fontSize: theme.typography.caption.fontSize,
           },
-          {
-            props: {
-              color: 'error',
-            },
-            style: ({ theme } : { theme: Theme }) => ({
-              borderColor: red[100],
-              backgroundColor: red[50],
-              [`& .${chipClasses.label}`]: {
-                color: red[500],
-              },
-              [`& .${chipClasses.icon}`]: {
-                color: red[500],
-              },
-              ...theme.applyStyles('dark', {
-                borderColor: red[800],
-                backgroundColor: red[900],
-                [`& .${chipClasses.label}`]: {
-                  color: red[200],
-                },
-                [`& .${chipClasses.icon}`]: {
-                  color: red[300],
-                },
-              }),
-            }),
+        }),
+      },
+      {
+        props: { size: "medium" },
+        style: ({ theme }: { theme: Theme }) => ({
+          [`& .${chipClasses.label}`]: {
+            fontSize: theme.typography.caption.fontSize,
           },
-          {
-            props: { size: 'small' },
-            style: ({ theme } : { theme: Theme }) => ({
-              maxHeight: 20,
-              [`& .${chipClasses.label}`]: {
-                fontSize: theme.typography.caption.fontSize,
-              },
-              [`& .${svgIconClasses.root}`]: {
-                fontSize: theme.typography.caption.fontSize,
-              },
-            }),
-          },
-          {
-            props: { size: 'medium' },
-            style: ({ theme } : { theme: Theme }) => ({
-              [`& .${chipClasses.label}`]: {
-                fontSize: theme.typography.caption.fontSize,
-              },
-            }),
-          },
-        ],
+        }),
+      },
+    ],
   },
+
   MuiTablePagination: {
     styleOverrides: {
       actions: {
-        display: 'flex',
+        display: "flex",
         gap: 8,
         marginRight: 6,
         [`& .${iconButtonClasses.root}`]: {
@@ -213,23 +193,20 @@ export const dataDisplayCustomizations: Components<Theme> = {
       },
     },
   },
+
   MuiIcon: {
     defaultProps: {
-      fontSize: 'small',
+      fontSize: "small",
     },
-    styleOverrides: {
-      root: {
-        variants: [
-          {
-            props: {
-              fontSize: 'small',
-            },
-            style: {
-              fontSize: '1rem',
-            },
-          },
-        ],
+
+    // ✅ variants는 styleOverrides.root 안이 아니라 MuiIcon 바로 아래
+    variants: [
+      {
+        props: { fontSize: "small" },
+        style: {
+          fontSize: "1rem",
+        },
       },
-    },
+    ],
   },
 };

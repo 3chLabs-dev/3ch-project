@@ -1,35 +1,21 @@
 import * as React from 'react';
 import { useState } from 'react';
-import { useDispatch } from 'react-redux';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
-import Checkbox from '@mui/material/Checkbox';
 import CssBaseline from '@mui/material/CssBaseline';
-import FormControlLabel from '@mui/material/FormControlLabel';
 import Divider from '@mui/material/Divider';
-import FormLabel from '@mui/material/FormLabel';
-import FormControl from '@mui/material/FormControl';
 import Link from '@mui/material/Link';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import Stack from '@mui/material/Stack';
-import MuiCard from '@mui/material/Card';
 import { styled } from '@mui/material/styles';
-import { useNavigate } from 'react-router-dom';
-import AppTheme from '../shared-theme/AppTheme';
-import ColorModeSelect from '../shared-theme/ColorModeSelect.jsx';
-import { GoogleIcon, SitemarkIcon } from '../../components/CustomIcons.jsx';
+import AppTheme from '../shared-theme/AppTheme.tsx';
+import { GoogleIcon} from '../../components/CustomIcons.tsx';
 import { Link as RouterLink } from "react-router-dom";
 import axios from 'axios';
 import emailIcon from "../../icon/free-icon-email-813667.png";
 import kakaoIcon from "../../icon/free-icon-kakao-talk-3991999.png";
 import naverIcon from "../../icon/naver-icon-style.png";
-// import { login } from '../../features/auth/authSlice';
-// import ForgotPassword from '../components/ForgotPassword.js';
-// import { showNotification } from '../../features/ui/notificationSlice';
-// import { GoogleAuth } from '../../util/googleAuth.js';
-// import { KakaoAuth } from '../../util/kakaoAuth.js';
-
 
 const SignInContainer = styled(Stack)(({ theme }) => ({
   height: "auto",

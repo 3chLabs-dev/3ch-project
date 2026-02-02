@@ -30,6 +30,7 @@ import naverIcon from "../../icon/naver-icon-style.png";
 // import { GoogleAuth } from '../../util/googleAuth.js';
 // import { KakaoAuth } from '../../util/kakaoAuth.js';
 
+
 const SignInContainer = styled(Stack)(({ theme }) => ({
   height: "auto",
   overflow: "hidden",

@@ -187,7 +187,7 @@ export default function SignUp(props) {
         const match = password && confirmPassword && password === confirmPassword;
         const requiredAgree = agree.age && agree.terms && agree.privacy;
 
-        return Boolean(filled && noErrors && match);
+        return Boolean(filled && noErrors && match && requiredAgree);
     }, [email, password, confirmPassword, username, emailError, pwError, confirmError, nameError, agree]);
 
     const handleSubmit = (e) => {
@@ -320,7 +320,7 @@ export default function SignUp(props) {
                                     <InputAdornment position="end">
                                         <IconButton
                                             edge="end"
-                                            onClick={() => setShowPw((prev) => !prev)}
+                                            onClick={() => setShowConfirmPw((prev) => !prev)}
                                             tabIndex={-1}
                                         >
                                             {showConfirmPw ? <VisibilityOff /> : <Visibility />}
@@ -356,7 +356,6 @@ export default function SignUp(props) {
                                 backgroundColor: "#fff",
                                 px: 1.5,
                                 py: 1.2,
-                                colorScheme: "light"
                             }}
                         >
                             <FormControlLabel

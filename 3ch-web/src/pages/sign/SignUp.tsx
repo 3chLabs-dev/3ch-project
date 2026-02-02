@@ -281,7 +281,7 @@ export default function SignUp() {
                                 endAdornment: (
                                     <InputAdornment position="end">
                                         <IconButton edge="end" onClick={() => setShowPw((prev) => !prev)} tabIndex={-1}>
-                                            {showPw ? <VisibilityOff /> : <Visibility />}
+                                            {showPw ? <Visibility /> : <VisibilityOff />}
                                         </IconButton>
                                     </InputAdornment>
                                 ),
@@ -319,7 +319,7 @@ export default function SignUp() {
                                             onClick={() => setShowConfirmPw((prev) => !prev)}
                                             tabIndex={-1}
                                         >
-                                            {showConfirmPw ? <VisibilityOff /> : <Visibility />}
+                                            {showConfirmPw ? <Visibility /> : <VisibilityOff />}
                                         </IconButton>
                                     </InputAdornment>
                                 ),

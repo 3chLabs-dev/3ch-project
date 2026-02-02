@@ -302,7 +302,7 @@ export default function Login(props) {
             {/* ✅ 구글 */}
             <Button
               fullWidth
-              variant="outlined"
+              variant="contained"
               disableElevation
               sx={{
                 ...socialBtnSx,

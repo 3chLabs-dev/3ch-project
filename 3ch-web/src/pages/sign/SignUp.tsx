@@ -356,6 +356,7 @@ export default function SignUp(props) {
                                 backgroundColor: "#fff",
                                 px: 1.5,
                                 py: 1.2,
+                                colorScheme: "light"
                             }}
                         >
                             <FormControlLabel

@@ -22,7 +22,7 @@ export const dataDisplayCustomizations: Components<Theme> = {
   },
   MuiListItem: {
     styleOverrides: {
-      root: ({ theme }: { theme: Theme }) => ({
+      root: ({ theme }) => ({
         [`& .${svgIconClasses.root}`]: {
           width: '1rem',
           height: '1rem',
@@ -59,12 +59,12 @@ export const dataDisplayCustomizations: Components<Theme> = {
   },
   MuiListItemText: {
     styleOverrides: {
-      primary: ({ theme }: { theme: Theme }) => ({
+      primary: ({ theme }) => ({
         fontSize: theme.typography.body2.fontSize,
         fontWeight: 500,
         lineHeight: theme.typography.body2.lineHeight,
       }),
-      secondary: ({ theme }: { theme: Theme }) => ({
+      secondary: ({ theme }) => ({
         fontSize: theme.typography.caption.fontSize,
         lineHeight: theme.typography.caption.lineHeight,
       }),
@@ -72,7 +72,7 @@ export const dataDisplayCustomizations: Components<Theme> = {
   },
   MuiListSubheader: {
     styleOverrides: {
-      root: ({ theme }: { theme: Theme }) => ({
+      root: ({ theme }) => ({
         backgroundColor: 'transparent',
         padding: '4px 8px',
         fontSize: theme.typography.caption.fontSize,
@@ -93,7 +93,7 @@ export const dataDisplayCustomizations: Components<Theme> = {
       size: 'small',
     },
     styleOverrides: {
-      root: ({ theme }: { theme: Theme }) => ({
+      root: ({ theme }) => ({
         border: '1px solid',
         borderRadius: '999px',
         [`& .${chipClasses.label}`]: {
@@ -106,7 +106,7 @@ export const dataDisplayCustomizations: Components<Theme> = {
             props: {
               color: 'default',
             },
-            style: ({ theme } : { theme: Theme }) => ({
+            style: ({ theme }) => ({
               borderColor: gray[200],
               backgroundColor: gray[100],
               [`& .${chipClasses.label}`]: {
@@ -131,7 +131,7 @@ export const dataDisplayCustomizations: Components<Theme> = {
             props: {
               color: 'success',
             },
-            style: ({ theme } : { theme: Theme }) => ({
+            style: ({ theme }) => ({
               borderColor: green[200],
               backgroundColor: green[50],
               [`& .${chipClasses.label}`]: {
@@ -156,7 +156,7 @@ export const dataDisplayCustomizations: Components<Theme> = {
             props: {
               color: 'error',
             },
-            style: ({ theme } : { theme: Theme }) => ({
+            style: ({ theme }) => ({
               borderColor: red[100],
               backgroundColor: red[50],
               [`& .${chipClasses.label}`]: {
@@ -179,7 +179,7 @@ export const dataDisplayCustomizations: Components<Theme> = {
           },
           {
             props: { size: 'small' },
-            style: ({ theme } : { theme: Theme }) => ({
+            style: ({ theme }) => ({
               maxHeight: 20,
               [`& .${chipClasses.label}`]: {
                 fontSize: theme.typography.caption.fontSize,
@@ -191,7 +191,7 @@ export const dataDisplayCustomizations: Components<Theme> = {
           },
           {
             props: { size: 'medium' },
-            style: ({ theme } : { theme: Theme }) => ({
+            style: ({ theme }) => ({
               [`& .${chipClasses.label}`]: {
                 fontSize: theme.typography.caption.fontSize,
               },

@@ -107,7 +107,6 @@ export const surfacesCustomizations: Components<Theme> = {
       },
     },
   },
-
   MuiCardActions: {
     styleOverrides: {
       root: {

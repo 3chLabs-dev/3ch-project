@@ -1,9 +1,9 @@
 const express = require("express");
 const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
 const { z } = require("zod");
 const pool = require("../db/pool");
 const { requireAuth } = require("../middlewares/auth");
+const passport = require("passport"); // Import passport
 
 const router = express.Router();
 
@@ -18,12 +18,169 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
-function signToken({ id, email }) {
-  return jwt.sign({ sub: String(id), email }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN || "7d",
-  });
-}
+const { signToken } = require("../utils/authUtils");
 
+
+// Google Social Login
+/**
+ * @openapi
+ * /auth/google:
+ *   get:
+ *     summary: Google 소셜 로그인 시작
+ *     description: Google 계정을 사용하여 로그인 또는 회원가입을 시작합니다.
+ *     tags: [Auth]
+ *     responses:
+ *       302:
+ *         description: Google 인증 페이지로 리디렉션.
+ *       500:
+ *         description: 서버 오류.
+ */
+router.get(
+  "/google",
+  passport.authenticate("google", { scope: ["profile", "email"] }),
+);
+
+/**
+ * @openapi
+ * /auth/google/callback:
+ *   get:
+ *     summary: Google 소셜 로그인 콜백
+ *     description: Google 인증 후 콜백을 처리하고 JWT를 발급합니다.
+ *     tags: [Auth]
+ *     parameters:
+ *       - in: query
+ *         name: code
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: Google 인증 코드.
+ *     responses:
+ *       302:
+ *         description: JWT 토큰을 포함하여 프론트엔드로 리디렉션합니다.
+ *         headers:
+ *           Location:
+ *             schema:
+ *               type: string
+ *               example: http://localhost:3000/auth/success?token=your.jwt.token
+ *       401:
+ *         description: 인증 실패.
+ *       500:
+ *         description: 서버 오류.
+ */
+router.get(
+  "/google/callback",
+  passport.authenticate("google", { failureRedirect: "/login" }), // TODO: Handle failure redirect to a frontend error page
+  (req, res) => {
+    const token = signToken({ id: req.user.id, email: req.user.email });
+    res.redirect(`${process.env.FRONTEND_URL}/auth/success?token=${token}`); // Redirect to frontend with token
+  },
+);
+
+// Kakao Social Login
+/**
+ * @openapi
+ * /auth/kakao:
+ *   get:
+ *     summary: Kakao 소셜 로그인 시작
+ *     description: Kakao 계정을 사용하여 로그인 또는 회원가입을 시작합니다.
+ *     tags: [Auth]
+ *     responses:
+ *       302:
+ *         description: Kakao 인증 페이지로 리디렉션.
+ *       500:
+ *         description: 서버 오류.
+ */
+router.get("/kakao", passport.authenticate("kakao"));
+
+/**
+ * @openapi
+ * /auth/kakao/callback:
+ *   get:
+ *     summary: Kakao 소셜 로그인 콜백
+ *     description: Kakao 인증 후 콜백을 처리하고 JWT를 발급합니다.
+ *     tags: [Auth]
+ *     parameters:
+ *       - in: query
+ *         name: code
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: Kakao 인증 코드.
+ *     responses:
+ *       302:
+ *         description: JWT 토큰을 포함하여 프론트엔드로 리디렉션합니다.
+ *         headers:
+ *           Location:
+ *             schema:
+ *               type: string
+ *               example: http://localhost:3000/auth/success?token=your.jwt.token
+ *       401:
+ *         description: 인증 실패.
+ *       500:
+ *         description: 서버 오류.
+ */
+router.get(
+  "/kakao/callback",
+  passport.authenticate("kakao", { failureRedirect: "/login" }), // TODO: Handle failure redirect to a frontend error page
+  (req, res) => {
+    const token = signToken({ id: req.user.id, email: req.user.email });
+    res.redirect(`${process.env.FRONTEND_URL}/auth/success?token=${token}`);
+  },
+);
+
+// Naver Social Login
+/**
+ * @openapi
+ * /auth/naver:
+ *   get:
+ *     summary: Naver 소셜 로그인 시작
+ *     description: Naver 계정을 사용하여 로그인 또는 회원가입을 시작합니다.
+ *     tags: [Auth]
+ *     responses:
+ *       302:
+ *         description: Naver 인증 페이지로 리디렉션.
+ *       500:
+ *         description: 서버 오류.
+ */
+router.get("/naver", passport.authenticate("naver"));
+
+/**
+ * @openapi
+ * /auth/naver/callback:
+ *   get:
+ *     summary: Naver 소셜 로그인 콜백
+ *     description: Naver 인증 후 콜백을 처리하고 JWT를 발급합니다.
+ *     tags: [Auth]
+ *     parameters:
+ *       - in: query
+ *         name: code
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: Naver 인증 코드.
+ *     responses:
+ *       302:
+ *         description: JWT 토큰을 포함하여 프론트엔드로 리디렉션합니다.
+ *         headers:
+ *           Location:
+ *             schema:
+ *               type: string
+ *               example: http://localhost:3000/auth/success?token=your.jwt.token
+ *       401:
+ *         description: 인증 실패.
+ *       500:
+ *         description: 서버 오류.
+ */
+router.get(
+  "/naver/callback",
+  passport.authenticate("naver", { failureRedirect: "/login" }), // TODO: Handle failure redirect to a frontend error page
+  (req, res) => {
+    const token = signToken({ id: req.user.id, email: req.user.email });
+    res.redirect(`${process.env.FRONTEND_URL}/auth/success?token=${token}`);
+  },
+);
+
+// Local Register
 /**
  * @openapi
  * /auth/register:
@@ -94,6 +251,7 @@ router.post("/register", async (req, res) => {
   }
 });
 
+// Local Login
 /**
  * @openapi
  * /auth/login:
@@ -169,6 +327,7 @@ router.post("/login", async (req, res) => {
   }
 });
 
+// Get Current User Info
 /**
  * @openapi
  * /auth/me:

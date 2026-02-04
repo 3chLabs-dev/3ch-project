@@ -7,7 +7,11 @@ const authRouter = require("./routes/auth");
 
 const app = express();
 
+require("./config/passport");
+const passport = require("passport");
+
 app.use(express.json());
+app.use(passport.initialize());
 
 // health check (nginx / 운영 필수)
 app.get("/health", (req, res) => {

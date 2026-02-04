@@ -21,6 +21,7 @@ model User {
   nickname      String?
   phone         String?
   auth_provider String
+  provider_id   String?
   created_at    DateTime @default(now())
   updated_at    DateTime @default(now()) @updatedAt
 

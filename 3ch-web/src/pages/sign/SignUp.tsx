@@ -14,8 +14,10 @@ import Typography from "@mui/material/Typography";
 import Visibility from "@mui/icons-material/Visibility";
 import VisibilityOff from "@mui/icons-material/VisibilityOff";
 import { styled } from "@mui/material/styles";
-import { Link as RouterLink } from "react-router-dom";
+import { Dialog, DialogTitle, DialogContent, DialogActions } from "@mui/material";
+import { Link as RouterLink, useNavigate } from "react-router-dom";
 import AppTheme from "../shared-theme/AppTheme.tsx";
+import axios from "axios";
 
 /** =========================
  *  Types
@@ -91,6 +93,8 @@ const primaryBtnSx = {
 };
 
 export default function SignUp() {
+    const navigate = useNavigate();
+
     const [email, setEmail] = useState<string>("");
     const [password, setPassword] = useState<string>("");
     const [confirmPassword, setConfirmPassword] = useState<string>("");
@@ -107,6 +111,11 @@ export default function SignUp() {
         terms: false,
         privacy: false,
     });
+
+    const [isLoading, setIsLoading] = useState<boolean>(false);
+    const [apiError, setApiError] = useState<string>("");
+    const [openSuccessDialog, setOpenSuccessDialog] = useState<boolean>(false);
+
 
     const setAll = (checked: boolean) => {
         setAgree({
@@ -176,7 +185,7 @@ export default function SignUp() {
         const noErrors = !emailError && !pwError && !confirmError && !nameError;
         const requiredAgree = agree.age && agree.terms && agree.privacy;
 
-        return Boolean(filled && noErrors && isMatch && requiredAgree);
+        return Boolean(filled && noErrors && isMatch && requiredAgree && !isLoading);
     }, [
         email,
         password,
@@ -188,10 +197,12 @@ export default function SignUp() {
         nameError,
         agree,
         isMatch,
+        isLoading,
     ]);
 
-    const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
+        setApiError(""); // Clear previous API errors
 
         const eMsg = validateEmail(email);
         const pMsg = validatePw(password);
@@ -203,10 +214,43 @@ export default function SignUp() {
         setConfirmError(cMsg);
         setNameError(nMsg);
 
-        if (eMsg || pMsg || cMsg || nMsg) return;
+        if (eMsg || pMsg || cMsg || nMsg) {
+            setApiError("모든 필수 정보를 올바르게 입력해주세요.");
+            return;
+        }
 
-        // ✅ 여기서 회원가입 요청
-        // axios.post("/api/signup", { email, password, username })
+        setIsLoading(true);
+        try {
+            await axios.post("http://localhost:3000/auth/register", {
+                email,
+                password,
+                name: username,
+            });
+
+            setOpenSuccessDialog(true);
+        } catch (error) {
+            console.error("Signup API call failed:", error);
+            if (axios.isAxiosError(error) && error.response) {
+                const { status, data } = error.response;
+                if (status === 409 && data.error === "EMAIL_EXISTS") {
+                    setEmailError("이미 등록된 이메일입니다.");
+                    setApiError("회원가입에 실패했습니다: 이미 사용중인 이메일입니다.");
+                } else if (status === 400 && data.error === "VALIDATION_ERROR") {
+                    setApiError("회원가입에 실패했습니다: 입력값을 확인해주세요.");
+                } else {
+                    setApiError(data.error?.message || data.error || "회원가입 중 오류가 발생했습니다.");
+                }
+            } else {
+                setApiError("네트워크 오류 또는 서버에 연결할 수 없습니다.");
+            }
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleSuccessDialogClose = () => {
+        setOpenSuccessDialog(false);
+        navigate("/login");
     };
 
     return (
@@ -238,6 +282,11 @@ export default function SignUp() {
                         onSubmit={handleSubmit}
                         sx={{ display: "flex", flexDirection: "column", gap: 1.2 }}
                     >
+                        {apiError && ( // Reintroduced apiError Typography
+                            <Typography color="error" variant="body2" sx={{ textAlign: "center", mb: 1 }}>
+                                {apiError}
+                            </Typography>
+                        )}
                         {/* 이메일 */}
                         <TextField
                             id="email"
@@ -439,6 +488,27 @@ export default function SignUp() {
                     </Box>
                 </Box>
             </SignInContainer>
+
+            {/* Success Dialog */}
+            <Dialog
+                open={openSuccessDialog}
+                onClose={handleSuccessDialogClose}
+                aria-labelledby="signup-success-dialog-title"
+                aria-describedby="signup-success-dialog-description"
+            >
+                <DialogTitle id="signup-success-dialog-title">{"회원가입 완료"}</DialogTitle>
+                <DialogContent>
+                    <Typography id="signup-success-dialog-description">
+                        회원가입이 성공적으로 완료되었습니다.<br />
+                        로그인 페이지로 이동합니다.
+                    </Typography>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleSuccessDialogClose} autoFocus>
+                        확인
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </AppTheme>
     );
 }

@@ -3,6 +3,7 @@ import AppShell from "../components/AppShell";
 import Home from "../pages/Home";
 import Login from "../pages/sign/Login";
 import SignUp from "../pages/sign/SignUp";
+import League from "../pages/league/League";
 
 // import League from "../pages/League";
 // import Match from "../pages/Match";
@@ -16,7 +17,7 @@ export const router = createBrowserRouter([
       { path: "/", element: <Home /> },
       { path: "/login", element: <Login />},
       { path: "/signup", element: <SignUp />},
-    //   { path: "/league", element: <League /> },
+      { path: "/league", element: <League /> },
     //   { path: "/match", element: <Match /> },
     //   { path: "/my", element: <My /> },
 

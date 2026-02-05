@@ -19,6 +19,9 @@ import { Link as RouterLink, useNavigate } from "react-router-dom";
 import AppTheme from "../shared-theme/AppTheme.tsx";
 import axios from "axios";
 
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
+// const apiTestUrl = import.meta.env.VITE_API_TEST_URL
+
 /** =========================
  *  Types
  *  ========================= */
@@ -221,7 +224,7 @@ export default function SignUp() {
 
         setIsLoading(true);
         try {
-            await axios.post("http://localhost:3000/auth/register", {
+            await axios.post(`${apiBaseUrl}/auth/register`, {
                 email,
                 password,
                 name: username,

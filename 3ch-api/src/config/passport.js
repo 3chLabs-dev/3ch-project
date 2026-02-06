@@ -64,7 +64,7 @@ passport.use(
     {
       clientID: process.env.KAKAO_CLIENT_ID,
       clientSecret: process.env.KAKAO_CLIENT_SECRET,
-      callbackURL: `${process.env.FRONTEND_URL}/auth/kakao/callback`,
+      callbackURL: process.env.KAKAO_CALLBACK_URL
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
@@ -117,7 +117,7 @@ passport.use(
     {
       clientID: process.env.NAVER_CLIENT_ID,
       clientSecret: process.env.NAVER_CLIENT_SECRET,
-      callbackURL: `${process.env.FRONTEND_URL}/auth/naver/callback`,
+      callbackURL: process.env.NAVER_CALLBACK_URL,
     },
     async (accessToken, refreshToken, profile, done) => {
       try {

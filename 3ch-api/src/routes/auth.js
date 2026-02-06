@@ -90,7 +90,7 @@ router.get(
  *       500:
  *         description: 서버 오류.
  */
-router.get("/kakao", passport.authenticate("kakao"));
+router.get("/kakao", passport.authenticate("kakao", { session: false }));
 
 /**
  * @openapi
@@ -121,7 +121,7 @@ router.get("/kakao", passport.authenticate("kakao"));
  */
 router.get(
   "/kakao/callback",
-  passport.authenticate("kakao", { failureRedirect: "/login" }), // TODO: Handle failure redirect to a frontend error page
+  passport.authenticate("kakao", { failureRedirect: "/login", session: false  }), // TODO: Handle failure redirect to a frontend error page
   (req, res) => {
     const token = signToken({ id: req.user.id, email: req.user.email });
     res.redirect(`${process.env.FRONTEND_URL}/auth/success?token=${token}`);
@@ -142,7 +142,7 @@ router.get(
  *       500:
  *         description: 서버 오류.
  */
-router.get("/naver", passport.authenticate("naver"));
+router.get("/naver", passport.authenticate("naver",{ session: false }));
 
 /**
  * @openapi
@@ -173,7 +173,7 @@ router.get("/naver", passport.authenticate("naver"));
  */
 router.get(
   "/naver/callback",
-  passport.authenticate("naver", { failureRedirect: "/login" }), // TODO: Handle failure redirect to a frontend error page
+  passport.authenticate("naver", { failureRedirect: "/login", session: false  }), // TODO: Handle failure redirect to a frontend error page
   (req, res) => {
     const token = signToken({ id: req.user.id, email: req.user.email });
     res.redirect(`${process.env.FRONTEND_URL}/auth/success?token=${token}`);

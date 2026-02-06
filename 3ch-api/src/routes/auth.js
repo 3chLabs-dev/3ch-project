@@ -37,7 +37,7 @@ const { signToken } = require("../utils/authUtils");
  */
 router.get(
   "/google",
-  passport.authenticate("google", { scope: ["profile", "email"] }),
+  passport.authenticate("google", { scope: ["profile", "email"], session: false, }),
 );
 
 /**
@@ -69,7 +69,7 @@ router.get(
  */
 router.get(
   "/google/callback",
-  passport.authenticate("google", { failureRedirect: "/login" }), // TODO: Handle failure redirect to a frontend error page
+  passport.authenticate("google", { failureRedirect: "/login", session: false, }),
   (req, res) => {
     const token = signToken({ id: req.user.id, email: req.user.email });
     res.redirect(`${process.env.FRONTEND_URL}/auth/success?token=${token}`); // Redirect to frontend with token

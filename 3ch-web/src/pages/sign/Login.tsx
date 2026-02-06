@@ -12,6 +12,7 @@ import { styled } from "@mui/material/styles";
 import AppTheme from "../shared-theme/AppTheme";
 import { GoogleIcon } from "../../components/CustomIcons";
 import { Link as RouterLink } from "react-router-dom";
+import { GoogleAuth } from "../util/googleAuth";
 
 import emailIcon from "../../icon/free-icon-email-813667.png";
 import kakaoIcon from "../../icon/free-icon-kakao-talk-3991999.png";
@@ -281,6 +282,7 @@ export default function Login(props: Record<string, unknown>) {
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1.1 }}>
             {/* 구글 */}
             <Button
+              onClick={GoogleAuth}
               fullWidth
               variant="contained"
               disableElevation

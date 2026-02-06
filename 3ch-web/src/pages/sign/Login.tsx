@@ -12,8 +12,9 @@ import { styled } from "@mui/material/styles";
 import AppTheme from "../shared-theme/AppTheme";
 import { GoogleIcon } from "../../components/CustomIcons";
 import { Link as RouterLink } from "react-router-dom";
-import  googleAuth  from "../util/googleAuth";
-import  kakaoAuth from "../util/kakaoAuth";
+import googleAuth  from "../util/googleAuth";
+import kakaoAuth from "../util/kakaoAuth";
+import naverAuth from "../util/naverAuth"; 
 import { useNavigate } from "react-router-dom";
 
 import emailIcon from "../../icon/free-icon-email-813667.png";
@@ -346,6 +347,7 @@ export default function Login(props: Record<string, unknown>) {
 
             {/* 네이버 */}
             <Button
+            onClick={naverAuth}
               fullWidth
               variant="contained"
               disableElevation

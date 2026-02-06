@@ -1,11 +1,13 @@
 import { configureStore } from "@reduxjs/toolkit";
 import authReducer from "../features/auth/authSlice";
 import { baseApi } from "../features/api/baseApi";
+import leagueCreationReducer from "../features/league/leagueCreationSlice";
 
 export const store = configureStore({
   reducer: {
     auth: authReducer,
     [baseApi.reducerPath]: baseApi.reducer,
+    leagueCreation: leagueCreationReducer,
   },
   middleware: (getDefault) => getDefault().concat(baseApi.middleware),
 });

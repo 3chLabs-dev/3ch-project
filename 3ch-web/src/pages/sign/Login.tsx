@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import CssBaseline from "@mui/material/CssBaseline";
@@ -13,6 +13,7 @@ import AppTheme from "../shared-theme/AppTheme";
 import { GoogleIcon } from "../../components/CustomIcons";
 import { Link as RouterLink } from "react-router-dom";
 import { GoogleAuth } from "../util/googleAuth";
+import { useNavigate } from "react-router-dom";
 
 import emailIcon from "../../icon/free-icon-email-813667.png";
 import kakaoIcon from "../../icon/free-icon-kakao-talk-3991999.png";
@@ -143,6 +144,7 @@ function SocialBtnInner({
 }
 
 export default function Login(props: Record<string, unknown>) {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -178,6 +180,27 @@ export default function Login(props: Record<string, unknown>) {
 
     // TODO: 로그인 요청 (axios 쓰면 여기서 사용)
   };
+
+  // 소셜 로그인 요청처리 
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      switch (event.data?.type) {
+        case "SOCIAL_LOGIN_SUCCESS":
+          navigate("/", { replace: true });
+          break;
+
+        case "SOCIAL_LOGIN_FAIL":
+          break;
+
+        default:
+          break;
+      }
+    };
+
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, [navigate]);
 
   return (
     <AppTheme {...props}>

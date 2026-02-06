@@ -1,6 +1,6 @@
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 
-export function GoogleAuth() {
+export default  function googleAuth() {
   const url = `${apiBaseUrl}/auth/google`;
 
   window.open(

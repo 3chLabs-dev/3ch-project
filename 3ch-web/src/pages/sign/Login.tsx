@@ -12,7 +12,8 @@ import { styled } from "@mui/material/styles";
 import AppTheme from "../shared-theme/AppTheme";
 import { GoogleIcon } from "../../components/CustomIcons";
 import { Link as RouterLink } from "react-router-dom";
-import { GoogleAuth } from "../util/googleAuth";
+import  googleAuth  from "../util/googleAuth";
+import  kakaoAuth from "../util/kakaoAuth";
 import { useNavigate } from "react-router-dom";
 
 import emailIcon from "../../icon/free-icon-email-813667.png";
@@ -305,7 +306,7 @@ export default function Login(props: Record<string, unknown>) {
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1.1 }}>
             {/* 구글 */}
             <Button
-              onClick={GoogleAuth}
+              onClick={googleAuth}
               fullWidth
               variant="contained"
               disableElevation
@@ -327,6 +328,7 @@ export default function Login(props: Record<string, unknown>) {
 
             {/* 카카오 */}
             <Button
+              onClick={kakaoAuth}
               fullWidth
               variant="contained"
               disableElevation

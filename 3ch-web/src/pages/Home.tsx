@@ -74,7 +74,7 @@ export default function Home({ userName = "우리리그" }: Props) {
                     }}
                 >
                     <Typography variant="body2" fontWeight={800}>
-                        (주)3CH 사업자 정보
+                        3ch 사업자 정보
                     </Typography>
                     <IconButton size="small" sx={{ transform: bizOpen ? "rotate(180deg)" : "rotate(0deg)" }}>
                         <ExpandMoreIcon fontSize="small" />
@@ -108,7 +108,7 @@ export default function Home({ userName = "우리리그" }: Props) {
                     color="text.secondary"
                     sx={{ mt: 1.2, display: "block" }}
                 >
-                    Copyright Woorimoim Inc. All rights reserved.
+                    Copyright 3ch. All rights reserved.
                 </Typography>
             </Box>
         </Stack>

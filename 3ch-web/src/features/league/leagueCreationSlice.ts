@@ -43,9 +43,17 @@ export interface LeagueRulesInfo {
   rule: LeagueRuleValue;
 }
 
-/** Step 5: 참가자 */
+// Step5 참가자(표 기반)
+export interface Participant {
+  division: string;    // 부수
+  name: string;        // 이름
+  paid: boolean;       // 입금
+  arrived: boolean;    // 도착
+  footPool: boolean;   // 풋풀이
+}
+
 export interface LeagueParticipantsInfo {
-  participants: string[];
+  participants: Participant[];
 }
 
 /** Step 6: 일정 */

@@ -45,11 +45,11 @@ export interface LeagueRulesInfo {
 
 // Step5 참가자(표 기반)
 export interface Participant {
-  division: string;    // 부수
-  name: string;        // 이름
-  paid: boolean;       // 입금
-  arrived: boolean;    // 도착
-  footPool: boolean;   // 풋풀이
+  division: string;
+  name: string;
+  paid: boolean;
+  arrived: boolean;
+  footPool: boolean;
 }
 
 export interface LeagueParticipantsInfo {

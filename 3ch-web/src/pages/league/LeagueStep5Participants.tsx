@@ -10,6 +10,9 @@ import {
   Select,
   MenuItem,
   FormControl,
+  Dialog,
+  DialogContent,
+  DialogActions,
 } from "@mui/material";
 import { setStep, setStep5Participants } from "../../features/league/leagueCreationSlice";
 import type { Participant } from "../../features/league/leagueCreationSlice";
@@ -72,6 +75,19 @@ export default function LeagueStep5Participants() {
   const canAdd = useMemo(() => Boolean(division.trim() && name.trim()), [division, name]);
   const canNext = participants.length > 0;
 
+  const [deleteTarget, setDeleteTarget] = useState<{ idx: number; division: string; name: string } | null>(null);
+  const [openCancelDialog, setOpenCancelDialog] = useState<boolean>(false);
+
+  const handleCancelDelete = () => {
+    setOpenCancelDialog(false);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!deleteTarget) return;
+    setParticipants((prev) => prev.filter((_, i) => i !== deleteTarget.idx));
+    setOpenCancelDialog(false);
+  };
+
   const handleAdd = () => {
     if (!canAdd) return;
 
@@ -90,8 +106,13 @@ export default function LeagueStep5Participants() {
   };
 
   const handleDelete = (idx: number) => {
-    setParticipants((prev) => prev.filter((_, i) => i !== idx));
+    const p = participants[idx];
+    if (!p) return;
+
+    setDeleteTarget({ idx, division: p.division, name: p.name });
+    setOpenCancelDialog(true);
   };
+
 
   const handleToggle = (idx: number, key: "paid" | "arrived" | "footPool") => {
     setParticipants((prev) => prev.map((p, i) => (i === idx ? { ...p, [key]: !p[key] } : p)));
@@ -357,6 +378,42 @@ export default function LeagueStep5Participants() {
           완료
         </Button>
       </Stack>
+
+      {/* Cancel Dialog */}
+      <Dialog
+        open={openCancelDialog}
+        onClose={handleCancelDelete}
+      >
+        <DialogContent sx={{ pt: 2.5, pb: 1.5 }}>
+          <Typography sx={{ fontWeight: 900, mb: 1 }}>
+            리그 참가자 추가/삭제 확인
+          </Typography>
+
+          <Typography sx={{ fontSize: 15, lineHeight: 1.5 }}>
+            {deleteTarget
+              ? `"(${deleteTarget.division})${deleteTarget.name}"를 참가자 명단에서 삭제하겠습니까?`
+              : "참가자를 삭제하겠습니까?"}
+          </Typography>
+        </DialogContent>
+
+        <DialogActions sx={{ px: 2, pb: 2, gap: 1 }}>
+          <Button
+            onClick={handleCancelDelete}
+            sx={{ fontWeight: 900, color: "#111827" }}
+          >
+            취소
+          </Button>
+
+          <Button
+            onClick={handleConfirmDelete}
+            autoFocus
+            sx={{ fontWeight: 900, color: "#111827" }}
+          >
+            확인
+          </Button>
+        </DialogActions>
+      </Dialog>
+
 
       <LoadMembersDialog open={openLoad} onClose={handleCloseLoad} onConfirm={handleConfirmLoad} />
     </Box>

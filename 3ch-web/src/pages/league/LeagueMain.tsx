@@ -1,11 +1,10 @@
-import React from 'react';
-import { useDispatch } from 'react-redux';
-import { setStep } from '../../features/league/leagueCreationSlice';
-// import type { RootState } from '../../app/store'; // 임시 주석
-import { Box, Typography, Button } from '@mui/material';
+import React from "react";
+import { useAppDispatch } from "../../app/hooks";
+import { setStep } from "../../features/league/leagueCreationSlice";
+import { Box, Stack, Typography, Card, CardContent, Button } from "@mui/material";
 
-const LeagueMain: React.FC = () => {
-  const dispatch = useDispatch();
+export default function LeagueMainBody() {
+  const dispatch = useAppDispatch();
   const hasExistingLeagues = false;
 
   const handleCreateNewLeague = () => {
@@ -13,24 +12,63 @@ const LeagueMain: React.FC = () => {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h4" component="h1" gutterBottom>
-        리그 메인
-      </Typography>
-      {hasExistingLeagues ? (
-        <Typography>개설된 리그 목록...</Typography>
-      ) : (
-        <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <Typography variant="body1" sx={{ mb: 2 }}>
-            개설된 리그가 없습니다
-          </Typography>
-          <Button variant="contained" color="primary" onClick={handleCreateNewLeague}>
-            신규 생성하기
-          </Button>
-        </Box>
-      )}
-    </Box>
-  );
-};
+    <Stack spacing={2.0}>
+      {/* 타이틀 */}
+      <Box>
+        <Typography variant="h6" fontWeight={900}>
+          리그 일정
+        </Typography>
+      </Box>
 
-export default LeagueMain;
+      {/* 리그 일정 카드 */}
+      <SoftCard>
+        {hasExistingLeagues ? (
+          <Typography fontWeight={700}>개설된 리그 목록…</Typography>
+        ) : (
+          <Typography textAlign="center" color="text.secondary" fontWeight={700}>
+            개설된 리그가 없습니다.
+          </Typography>
+        )}
+      </SoftCard>
+
+      <Button
+        fullWidth
+        variant="contained"
+        disableElevation
+        onClick={handleCreateNewLeague}
+        sx={{
+          borderRadius: 1,
+          py: 1.2,
+          fontWeight: 900,
+        }}
+      >
+        신규 생성하기
+      </Button>
+    </Stack>
+  );
+}
+
+function SoftCard({ children }: { children: React.ReactNode }) {
+  return (
+    <Card
+      elevation={2}
+      sx={{
+        borderRadius: 1,
+        boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+      }}
+    >
+      <CardContent
+        sx={{
+          py: 2.0,
+          minHeight: 80,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          textAlign: "center",
+        }}
+      >
+        {children}
+      </CardContent>
+    </Card>
+  );
+}

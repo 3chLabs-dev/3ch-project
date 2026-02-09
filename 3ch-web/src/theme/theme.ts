@@ -11,6 +11,7 @@ export const theme = createTheme({
   shape: { borderRadius: 14 },
   typography: {
     fontFamily: [
+      "NanumSquare",
       "Pretendard",
       "Apple SD Gothic Neo",
       "Noto Sans KR",

@@ -53,6 +53,7 @@ function SoftCard({ children }: { children: React.ReactNode }) {
     <Card
       elevation={2}
       sx={{
+        p: 2,
         borderRadius: 1,
         boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
       }}

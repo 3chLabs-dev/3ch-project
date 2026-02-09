@@ -58,9 +58,9 @@ export interface LeagueParticipantsInfo {
 
 /** Step 6: 일정 */
 export interface GameEntry {
-  date: string;     // YYYY-MM-DD
-  time: string;     // HH:mm
-  location: string; // 선택이어도 string으로 통일(빈문자열 허용)
+  date: string;
+  time: string;
+  location: string;
 }
 
 export interface LeagueScheduleInfo {
@@ -69,7 +69,7 @@ export interface LeagueScheduleInfo {
 
 /** 전체 상태 */
 export interface LeagueCreationState {
-  currentStep: number; // 1~7
+  currentStep: number;
 
   step1BasicInfo: LeagueBasicInfo | null;
   step2Type: LeagueTypeInfo | null;

@@ -132,7 +132,14 @@ function SoftCard({ children }: { children: React.ReactNode }) {
                 boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
             }}
         >
-            <CardContent sx={{ py: 2.2 }}>{children}</CardContent>
+            <CardContent sx={{
+                py: 2.2, display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                textAlign: "center",
+            }}>
+                {children}
+            </CardContent>
         </Card>
     );
 }

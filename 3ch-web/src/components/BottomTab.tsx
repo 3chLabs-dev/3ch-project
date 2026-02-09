@@ -3,9 +3,11 @@ import HomeIcon from "@mui/icons-material/Home";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import SportsTennisIcon from "@mui/icons-material/SportsTennis";
 import PersonIcon from "@mui/icons-material/Person";
-import CasinoIcon from '@mui/icons-material/Casino';
+import CasinoIcon from "@mui/icons-material/Casino";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useMemo } from "react";
+import { useAppDispatch } from "../app/hooks";
+import { resetLeagueCreation, setStep } from "../features/league/leagueCreationSlice";
 
 const tabs = [
     { label: "홈", path: "/", icon: <HomeIcon /> },
@@ -18,21 +20,34 @@ const tabs = [
 export default function BottomTab() {
     const location = useLocation();
     const navigate = useNavigate();
+    const dispatch = useAppDispatch();
 
     const value = useMemo(() => {
         const found = tabs.findIndex((t) => t.path === location.pathname);
         return found >= 0 ? found : 0;
     }, [location.pathname]);
 
+    const handleChange = (_: unknown, newValue: number) => {
+        const tab = tabs[newValue];
+
+        if (tab.path === "/league") {
+            // 리그 탭 누를 때마다 초기화
+            dispatch(resetLeagueCreation());
+            dispatch(setStep(0));
+        }
+
+        navigate(tab.path);
+    };
+
     return (
         <Paper elevation={0} sx={{ borderTop: 1, borderColor: "divider" }}>
-            <BottomNavigation
-                showLabels
-                value={value}
-                onChange={(_, newValue) => navigate(tabs[newValue].path)}
-            >
+            <BottomNavigation showLabels value={value} onChange={handleChange}>
                 {tabs.map((t) => (
-                    <BottomNavigationAction key={t.path} label={t.label} icon={t.icon} />
+                    <BottomNavigationAction
+                        key={t.path}
+                        label={t.label}
+                        icon={t.icon}
+                    />
                 ))}
             </BottomNavigation>
         </Paper>

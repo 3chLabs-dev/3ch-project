@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useRef } from "react";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { setStep, setStep1BasicInfo } from "../../features/league/leagueCreationSlice";
 import { Box, Typography, TextField, Button, Stack } from "@mui/material";
@@ -28,6 +28,8 @@ const LeagueStep1BasicInfo: React.FC = () => {
   const dispatch = useAppDispatch();
   const existing = useAppSelector((s) => s.leagueCreation.step1BasicInfo);
 
+  const dateRef = useRef<HTMLInputElement>(null);
+  const timeRef = useRef<HTMLInputElement>(null);
   const [date, setDate] = useState(existing?.date ?? "");
   const [time, setTime] = useState(existing?.time ?? "");
   const [location, setLocation] = useState(existing?.location ?? "");
@@ -60,28 +62,28 @@ const LeagueStep1BasicInfo: React.FC = () => {
 
       <Box sx={{ borderTop: "1px solid #D9DDE6" }}>
         {/* 날짜 */}
-        <Box sx={rowSx}>
+        <Box sx={{...rowSx, cursor: "pointer"}} onClick={() => dateRef.current?.showPicker()}>
           <Typography sx={{ fontWeight: 900, letterSpacing: 6 }}>날짜</Typography>
+
           <TextField
-            placeholder="날짜"
+            inputRef={dateRef}
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
             sx={inputSx}
-            InputLabelProps={{ shrink: true }}
           />
         </Box>
 
         {/* 시간 */}
-        <Box sx={rowSx}>
+        <Box sx={{...rowSx, cursor: "pointer"}} onClick={() => timeRef.current?.showPicker()}>
           <Typography sx={{ fontWeight: 900, letterSpacing: 6 }}>시간</Typography>
+
           <TextField
-            placeholder="시간"
+            inputRef={timeRef}
             type="time"
             value={time}
             onChange={(e) => setTime(e.target.value)}
             sx={inputSx}
-            InputLabelProps={{ shrink: true }}
           />
         </Box>
 

@@ -12,9 +12,9 @@ import { styled } from "@mui/material/styles";
 import AppTheme from "../shared-theme/AppTheme";
 import { GoogleIcon } from "../../components/CustomIcons";
 import { Link as RouterLink } from "react-router-dom";
-import googleAuth  from "../util/googleAuth";
+import googleAuth from "../util/googleAuth";
 import kakaoAuth from "../util/kakaoAuth";
-import naverAuth from "../util/naverAuth"; 
+import naverAuth from "../util/naverAuth";
 import { useNavigate } from "react-router-dom";
 
 import emailIcon from "../../icon/free-icon-email-813667.png";
@@ -184,21 +184,29 @@ export default function Login(props: Record<string, unknown>) {
   };
 
   // 소셜 로그인 요청처리 
-  useEffect(() => {
+  useEffect(() => { 
     const handler = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
-      switch (event.data?.type) {
-        case "SOCIAL_LOGIN_SUCCESS":
-          navigate("/", { replace: true });
-          break;
 
-        case "SOCIAL_LOGIN_FAIL":
-          break;
+          const type = event.data?.type;
 
-        default:
-          break;
+      if (type === "SOCIAL_LOGIN_SUCCESS") {
+        navigate("/", { replace: true });
       }
-    };
+    if (type === "SOCIAL_LOGIN_FAIL") {
+      // reason이 있으면 더 정확히 분기 가능
+      const reason = event.data?.reason;
+
+      if (reason === "EMAIL_ALREADY_EXISTS") {
+        alert("이미 다른 방식으로 가입된 이메일입니다.");
+      } else if (reason === "NO_TOKEN") {
+        alert("로그인 토큰을 받지 못했습니다.");
+      } else {
+        alert("소셜 로그인에 실패했습니다.");
+      }
+      return;
+    }
+  };
 
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
@@ -347,7 +355,7 @@ export default function Login(props: Record<string, unknown>) {
 
             {/* 네이버 */}
             <Button
-            onClick={naverAuth}
+              onClick={naverAuth}
               fullWidth
               variant="contained"
               disableElevation

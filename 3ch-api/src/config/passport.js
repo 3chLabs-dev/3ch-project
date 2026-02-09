@@ -40,6 +40,10 @@ passport.use(
               [providerId, user.id],
             );
             user.provider_id = providerId;
+          } else if (user.auth_provider !== "google") {
+            return done(null, false, {
+            message: `이미 가입된 이메일`,
+            });
           }
         } else {
           const newUser = await pool.query(
@@ -93,6 +97,10 @@ passport.use(
               [providerId, user.id],
             );
             user.provider_id = providerId;
+          } else if (user.auth_provider !== "kakao") {
+            return done(null, false, {
+            message: `이미 가입된 이메일`,
+            });
           }
         } else {
           const newUser = await pool.query(
@@ -146,6 +154,10 @@ passport.use(
               [providerId, user.id],
             );
             user.provider_id = providerId;
+          } else if (user.auth_provider !== "naver") {
+            return done(null, false, {
+            message: `이미 가입된 이메일`,
+            });
           }
         } else {
           const newUser = await pool.query(

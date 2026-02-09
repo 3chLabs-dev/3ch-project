@@ -1,42 +1,47 @@
-import React, { useState } from "react";
-import { Box, Typography, Button, TextField, List, ListItem, ListItemText, IconButton, Stack } from "@mui/material";
-import DeleteIcon from "@mui/icons-material/Delete";
-import AddIcon from "@mui/icons-material/Add";
-import { setStep, setStep6Schedule } from "../../features/league/leagueCreationSlice";
-import type { GameEntry } from "../../features/league/leagueCreationSlice";
+import React, { useMemo } from "react";
+import { Typography, Button, Card, CardContent, Stack } from "@mui/material";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
+import { setStep, resetLeagueCreation } from "../../features/league/leagueCreationSlice";
 
-const LeagueStep6Schedule: React.FC = () => {
+function formatKoreanDate(dateStr: string) {
+    if (!dateStr) return "";
+    const d = new Date(dateStr);
+    if (Number.isNaN(d.getTime())) return dateStr;
+    const dow = ["일", "월", "화", "수", "목", "금", "토"][d.getDay()];
+    return `${dateStr}(${dow})`;
+}
+
+function SoftCard({ children }: { children: React.ReactNode }) {
+    return (
+        <Card
+            elevation={2}
+            sx={{
+                borderRadius: 1,
+                boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+            }}
+        >
+            <CardContent sx={{ p: 3 }}>{children}</CardContent>
+        </Card>
+    );
+}
+
+export default function LeagueStep6Schedule() {
     const dispatch = useAppDispatch();
-    const existingEntries = useAppSelector((s) => s.leagueCreation.step6Schedule?.gameEntries ?? []);
 
-    const [gameEntries, setGameEntries] = useState<GameEntry[]>(existingEntries);
-    const [newGameDate, setNewGameDate] = useState("");
-    const [newGameTime, setNewGameTime] = useState("");
-    const [newGameLocation, setNewGameLocation] = useState("");
+    const gameEntries = useAppSelector((s) => s.leagueCreation.step6Schedule?.gameEntries);
 
-    const handleAddGameEntry = () => {
-        if (!newGameDate.trim() || !newGameTime.trim()) return;
+    const top = useMemo(() => {
+        const entries = gameEntries ?? [];
+        return entries[0];
+    }, [gameEntries]);
 
-        const newEntry: GameEntry = {
-            date: newGameDate,
-            time: newGameTime,
-            location: newGameLocation.trim(), // 빈 문자열 허용
-        };
-
-        setGameEntries((prev) => [...prev, newEntry]);
-        setNewGameDate("");
-        setNewGameTime("");
-        setNewGameLocation("");
+    const handleEnter = () => {
+        alert("입장하기(상세 화면/leagueId 연결 전)");
     };
 
-    const handleRemoveGameEntry = (indexToRemove: number) => {
-        setGameEntries((prev) => prev.filter((_, idx) => idx !== indexToRemove));
-    };
-
-    const handleNext = () => {
-        dispatch(setStep6Schedule({ gameEntries }));
-        dispatch(setStep(7));
+    const handleCreateNew = () => {
+        dispatch(resetLeagueCreation());
+        dispatch(setStep(0));
     };
 
     const handlePrev = () => {
@@ -44,76 +49,66 @@ const LeagueStep6Schedule: React.FC = () => {
     };
 
     return (
-        <Box sx={{ p: 3, maxWidth: 600, mx: "auto" }}>
-            <Typography variant="h5" fontWeight={900} gutterBottom>
-                리그 일정
-            </Typography>
+        <Stack spacing={2.0}>
+            <Typography sx={{ fontSize: 20, fontWeight: 900 }}>리그 일정</Typography>
 
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ mb: 2 }}>
-                <TextField
-                    label="날짜"
-                    type="date"
-                    fullWidth
-                    InputLabelProps={{ shrink: true }}
-                    value={newGameDate}
-                    onChange={(e) => setNewGameDate(e.target.value)}
-                />
-                <TextField
-                    label="시간"
-                    type="time"
-                    fullWidth
-                    InputLabelProps={{ shrink: true }}
-                    value={newGameTime}
-                    onChange={(e) => setNewGameTime(e.target.value)}
-                />
-                <TextField
-                    label="장소 (선택)"
-                    fullWidth
-                    value={newGameLocation}
-                    onChange={(e) => setNewGameLocation(e.target.value)}
-                />
-                <Button
-                    variant="contained"
-                    onClick={handleAddGameEntry}
-                    startIcon={<AddIcon />}
-                    disabled={!newGameDate || !newGameTime}
-                    sx={{ flexShrink: 0, minWidth: 96 }}
-                >
-                    추가
-                </Button>
-            </Stack>
+            <SoftCard>
+                <Stack direction="row" alignItems="center" justifyContent="space-between">
+                    <Typography sx={{ fontWeight: 900 }}>
+                        {top ? formatKoreanDate(top.date) : "등록된 일정이 없습니다."}
+                    </Typography>
 
-            {gameEntries.length > 0 ? (
-                <List sx={{ border: "1px solid #ccc", borderRadius: 1, maxHeight: 250, overflow: "auto" }}>
-                    {gameEntries.map((entry, index) => (
-                        <ListItem
-                            key={`${entry.date}-${entry.time}-${index}`}
-                            secondaryAction={
-                                <IconButton edge="end" aria-label="delete" onClick={() => handleRemoveGameEntry(index)}>
-                                    <DeleteIcon />
-                                </IconButton>
-                            }
-                        >
-                            <ListItemText primary={`${entry.date} ${entry.time}`} secondary={entry.location || undefined} />
-                        </ListItem>
-                    ))}
-                </List>
-            ) : (
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 2, textAlign: "center" }}>
-                    등록된 일정이 없습니다.
-                </Typography>
-            )}
+                    <Button
+                        variant="contained"
+                        disableElevation
+                        onClick={handleEnter}
+                        disabled={!top}
+                        sx={{
+                            borderRadius: 1,
+                            height: 32,
+                            fontWeight: 900,
+                            bgcolor: "#E5E7EB",
+                            color: "#111827",
+                            "&:hover": { bgcolor: "#E5E7EB" },
+                            "&.Mui-disabled": { bgcolor: "#F3F4F6", color: "#9CA3AF" },
+                        }}
+                    >
+                        입장하기
+                    </Button>
+                </Stack>
+            </SoftCard>
 
-            <Box sx={{ mt: 3, display: "flex", justifyContent: "space-between" }}>
-                <Button variant="outlined" onClick={handlePrev}>
-                    이전
-                </Button>
-                <Button variant="contained" onClick={handleNext}>
-                    다음
-                </Button>
-            </Box>
-        </Box>
+            <Button
+                fullWidth
+                variant="contained"
+                disableElevation
+                onClick={handleCreateNew}
+                sx={{
+                    borderRadius: 1,
+                    height: 44,
+                    fontWeight: 900,
+                    bgcolor: "#2F80ED",
+                    "&:hover": { bgcolor: "#256FD1" },
+                }}
+            >
+                생성하기
+            </Button>
+
+            <Button
+                fullWidth
+                variant="contained"
+                disableElevation
+                onClick={handlePrev}
+                sx={{
+                    borderRadius: 1,
+                    height: 44,
+                    fontWeight: 900,
+                    bgcolor: "#777777",
+                    "&:hover": { bgcolor: "#777777" },
+                }}
+            >
+                이전
+            </Button>
+        </Stack>
     );
-};
-
-export default LeagueStep6Schedule;
+}

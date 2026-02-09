@@ -67,14 +67,27 @@ router.get(
  *       500:
  *         description: 서버 오류.
  */
-router.get(
-  "/google/callback",
-  passport.authenticate("google", { failureRedirect: "/login", session: false, }),
-  (req, res) => {
-    const token = signToken({ id: req.user.id, email: req.user.email });
-    res.redirect(`${process.env.FRONTEND_URL}/auth/success?token=${token}`); // Redirect to frontend with token
-  },
-);
+router.get("/google/callback", (req, res, next) => {
+  passport.authenticate("google", { session: false }, (err, user, info) => {
+    if (err) {
+      return next(err);
+    }
+    if (!user) {
+      const reason = info?.message || "LOGIN_FAILED";
+      return res.redirect(
+        `${process.env.FRONTEND_URL}/auth/fail?reason=${encodeURIComponent(reason)}`
+      );
+    }
+    const token = signToken({
+      id: user.id,
+      email: user.email,
+    });
+
+    return res.redirect(
+      `${process.env.FRONTEND_URL}/auth/success?token=${token}`
+    );
+  })(req, res, next);
+});
 
 // Kakao Social Login
 /**
@@ -119,14 +132,27 @@ router.get("/kakao", passport.authenticate("kakao", { session: false }));
  *       500:
  *         description: 서버 오류.
  */
-router.get(
-  "/kakao/callback",
-  passport.authenticate("kakao", { failureRedirect: "/login", session: false  }), // TODO: Handle failure redirect to a frontend error page
-  (req, res) => {
-    const token = signToken({ id: req.user.id, email: req.user.email });
-    res.redirect(`${process.env.FRONTEND_URL}/auth/success?token=${token}`);
-  },
-);
+router.get("/kakao/callback", (req, res, next) => {
+  passport.authenticate("kakao", { session: false }, (err, user, info) => {
+    if (err) {
+      return next(err);
+    }
+    if (!user) {
+      const reason = info?.message || "LOGIN_FAILED";
+      return res.redirect(
+        `${process.env.FRONTEND_URL}/auth/fail?reason=${encodeURIComponent(reason)}`
+      );
+    }
+    const token = signToken({
+      id: user.id,
+      email: user.email,
+    });
+
+    return res.redirect(
+      `${process.env.FRONTEND_URL}/auth/success?token=${token}`
+    );
+  })(req, res, next);
+});
 
 // Naver Social Login
 /**
@@ -171,14 +197,27 @@ router.get("/naver", passport.authenticate("naver",{ session: false }));
  *       500:
  *         description: 서버 오류.
  */
-router.get(
-  "/naver/callback",
-  passport.authenticate("naver", { failureRedirect: "/login", session: false  }), // TODO: Handle failure redirect to a frontend error page
-  (req, res) => {
-    const token = signToken({ id: req.user.id, email: req.user.email });
-    res.redirect(`${process.env.FRONTEND_URL}/auth/success?token=${token}`);
-  },
-);
+router.get("/naver/callback", (req, res, next) => {
+  passport.authenticate("naver", { session: false }, (err, user, info) => {
+    if (err) {
+      return next(err);
+    }
+    if (!user) {
+      const reason = info?.message || "LOGIN_FAILED";
+      return res.redirect(
+        `${process.env.FRONTEND_URL}/auth/fail?reason=${encodeURIComponent(reason)}`
+      );
+    }
+    const token = signToken({
+      id: user.id,
+      email: user.email,
+    });
+
+    return res.redirect(
+      `${process.env.FRONTEND_URL}/auth/success?token=${token}`
+    );
+  })(req, res, next);
+});
 
 // Local Register
 /**

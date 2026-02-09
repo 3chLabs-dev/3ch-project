@@ -67,7 +67,7 @@ const inputSx = {
         opacity: 0.6,
     },
     "& .MuiOutlinedInput-root": {
-        borderRadius: 1.2,
+        borderRadius: 0.6,
         backgroundColor: "#fff",
     },
 };
@@ -283,7 +283,7 @@ export default function SignUp() {
                         component="form"
                         noValidate
                         onSubmit={handleSubmit}
-                        sx={{ display: "flex", flexDirection: "column", gap: 1.2 }}
+                        sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}
                     >
                         {apiError && ( // Reintroduced apiError Typography
                             <Typography color="error" variant="body2" sx={{ textAlign: "center", mb: 1 }}>
@@ -399,12 +399,13 @@ export default function SignUp() {
                         <Box
                             sx={{
                                 mt: 0.5,
+                                mb: 2,
                                 border: "1px solid",
                                 borderColor: "divider",
-                                borderRadius: 2,
+                                borderRadius: 0.6,
                                 backgroundColor: "#fff",
                                 px: 1.5,
-                                py: 1.2,
+                                py: 0.7,
                             }}
                         >
                             <FormControlLabel
@@ -416,7 +417,7 @@ export default function SignUp() {
                                 label="약관 전체 동의"
                             />
 
-                            <Divider sx={{ my: 0.8 }} />
+                            <Divider sx={{ my: 0.5 }} />
 
                             <FormControlLabel
                                 sx={{ m: 0 }}
@@ -429,7 +430,7 @@ export default function SignUp() {
                                     display: "flex",
                                     alignItems: "center",
                                     justifyContent: "space-between",
-                                    mt: 0.2,
+                                    mt: -0.7,
                                 }}
                             >
                                 <FormControlLabel
@@ -454,7 +455,7 @@ export default function SignUp() {
                                     display: "flex",
                                     alignItems: "center",
                                     justifyContent: "space-between",
-                                    mt: 0.2,
+                                    mt: -0.7,
                                 }}
                             >
                                 <FormControlLabel

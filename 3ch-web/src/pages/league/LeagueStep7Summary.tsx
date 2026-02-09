@@ -35,7 +35,7 @@ const LeagueStep7Summary: React.FC = () => {
     alert("대진표 생성 요청을 보냈습니다!");
 
     dispatch(resetLeagueCreation());
-    dispatch(setStep(1)); // 메인/초기로 돌리고 싶으면 여기만 조절
+    dispatch(setStep(1));
   };
 
   const handlePrev = () => {
@@ -111,8 +111,13 @@ const LeagueStep7Summary: React.FC = () => {
           </Typography>
           {step5Participants && step5Participants.participants.length > 0 ? (
             <List dense>
-              {step5Participants.participants.map((p) => (
-                <ListItem key={p}><ListItemText primary={p} /></ListItem>
+              {step5Participants.participants.map((p, idx) => (
+                <ListItem key={`${p.division}-${p.name}-${idx}`}>
+                  <ListItemText
+                    primary={`(${p.division}부) ${p.name}`}
+                    secondary={`입금:${p.paid ? "O" : "X"} · 도착:${p.arrived ? "O" : "X"} · 뒷풀이:${p.footPool ? "O" : "X"}`}
+                  />
+                </ListItem>
               ))}
             </List>
           ) : (

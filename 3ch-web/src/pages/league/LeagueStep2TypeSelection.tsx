@@ -57,7 +57,7 @@ const LeagueStep2TypeSelection: React.FC = () => {
               control={<Radio />}
               sx={{
                 m: 0,
-                borderRadius: 2,
+                borderRadius: 1,
                 border: "1px solid",
                 borderColor: "grey.300",
                 bgcolor: "background.paper",

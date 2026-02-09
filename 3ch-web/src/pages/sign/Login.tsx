@@ -51,7 +51,7 @@ const inputSx = {
     opacity: 0.6,
   },
   "& .MuiOutlinedInput-root": {
-    borderRadius: 1.2,
+    borderRadius: 0.6,
     backgroundColor: "#fff",
   },
 };
@@ -237,7 +237,7 @@ export default function Login(props: Record<string, unknown>) {
             component="form"
             noValidate
             onSubmit={handleSubmit}
-            sx={{ display: "flex", flexDirection: "column", gap: 1.2 }}
+            sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}
           >
             <TextField
               id="email"

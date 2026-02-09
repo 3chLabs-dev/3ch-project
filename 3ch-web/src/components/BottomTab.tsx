@@ -9,7 +9,7 @@ import { useMemo } from "react";
 import { useAppDispatch } from "../app/hooks";
 import { resetLeagueCreation, setStep } from "../features/league/leagueCreationSlice";
 
-const TAB_HEIGHT = 56;
+const TAB_H = 56;
 
 const tabs = [
     { label: "홈", path: "/", icon: <HomeIcon /> },
@@ -33,7 +33,6 @@ export default function BottomTab() {
         const tab = tabs[newValue];
 
         if (tab.path === "/league") {
-            // 리그 탭 누를 때마다 항상 초기화
             dispatch(resetLeagueCreation());
             dispatch(setStep(0));
         }
@@ -45,9 +44,16 @@ export default function BottomTab() {
         <Paper
             elevation={0}
             sx={{
+                position: "sticky",
+                bottom: 0,
+                left: 0,
+                right: 0,
+                zIndex: 20,
                 borderTop: 1,
                 borderColor: "divider",
                 pb: "env(safe-area-inset-bottom)",
+                backgroundColor: "background.paper",
+                touchAction: "manipulation",
             }}
         >
             <BottomNavigation
@@ -55,23 +61,13 @@ export default function BottomTab() {
                 value={value}
                 onChange={handleChange}
                 sx={{
-                    height: TAB_HEIGHT,
-                    "& .MuiBottomNavigationAction-root": {
-                        minWidth: 0,
-                        py: 0.5,
-                    },
-                    "& .MuiBottomNavigationAction-label": {
-                        fontSize: 12,
-                        fontWeight: 700,
-                    },
+                    height: TAB_H,
+                    "& .MuiBottomNavigationAction-root": { minWidth: 0, py: 0.5 },
+                    "& .MuiBottomNavigationAction-label": { fontSize: 12, fontWeight: 700 },
                 }}
             >
                 {tabs.map((t) => (
-                    <BottomNavigationAction
-                        key={t.path}
-                        label={t.label}
-                        icon={t.icon}
-                    />
+                    <BottomNavigationAction key={t.path} label={t.label} icon={t.icon} />
                 ))}
             </BottomNavigation>
         </Paper>

@@ -9,6 +9,8 @@ import { useMemo } from "react";
 import { useAppDispatch } from "../app/hooks";
 import { resetLeagueCreation, setStep } from "../features/league/leagueCreationSlice";
 
+const TAB_HEIGHT = 56;
+
 const tabs = [
     { label: "홈", path: "/", icon: <HomeIcon /> },
     { label: "리그", path: "/league", icon: <EmojiEventsIcon /> },
@@ -31,7 +33,7 @@ export default function BottomTab() {
         const tab = tabs[newValue];
 
         if (tab.path === "/league") {
-            // 리그 탭 누를 때마다 초기화
+            // 리그 탭 누를 때마다 항상 초기화
             dispatch(resetLeagueCreation());
             dispatch(setStep(0));
         }
@@ -40,8 +42,30 @@ export default function BottomTab() {
     };
 
     return (
-        <Paper elevation={0} sx={{ borderTop: 1, borderColor: "divider" }}>
-            <BottomNavigation showLabels value={value} onChange={handleChange}>
+        <Paper
+            elevation={0}
+            sx={{
+                borderTop: 1,
+                borderColor: "divider",
+                pb: "env(safe-area-inset-bottom)",
+            }}
+        >
+            <BottomNavigation
+                showLabels
+                value={value}
+                onChange={handleChange}
+                sx={{
+                    height: TAB_HEIGHT,
+                    "& .MuiBottomNavigationAction-root": {
+                        minWidth: 0,
+                        py: 0.5,
+                    },
+                    "& .MuiBottomNavigationAction-label": {
+                        fontSize: 12,
+                        fontWeight: 700,
+                    },
+                }}
+            >
                 {tabs.map((t) => (
                     <BottomNavigationAction
                         key={t.path}

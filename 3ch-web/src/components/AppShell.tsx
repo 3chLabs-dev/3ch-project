@@ -3,9 +3,22 @@ import { Outlet } from "react-router-dom";
 import { AppBar, Box, Toolbar, Typography, Paper } from "@mui/material";
 import BottomTab from "./BottomTab";
 
+import { useEffect } from "react";
+import { useDispatch } from "react-redux";
+import { setToken, setUser } from "../features/auth/authSlice";
+
 const TAB_H = 56;
 
 export default function AppShell() {
+    const dispatch = useDispatch();
+
+    useEffect(() => {
+        const token = localStorage.getItem("token");
+        const userStr = localStorage.getItem("user");
+
+        if (token) dispatch(setToken(token));
+        if (userStr) dispatch(setUser(JSON.parse(userStr)));
+    }, [dispatch]);
     return (
         <Box sx={{ minHeight: "100dvh", bgcolor: "background.default" }}>
             <Paper

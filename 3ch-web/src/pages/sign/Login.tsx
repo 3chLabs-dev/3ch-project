@@ -214,33 +214,60 @@ try {
   };
 
   // 소셜 로그인 요청처리 
-  useEffect(() => { 
-    const handler = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
+useEffect(() => {
+  const handler = async (event: MessageEvent) => {
+    if (event.origin !== window.location.origin) return;
 
-          const type = event.data?.type;
+    const type = event.data?.type;
 
-      if (type === "SOCIAL_LOGIN_SUCCESS") {
+    if (type === "SOCIAL_LOGIN_SUCCESS") {
+      const token = event.data?.token;
+      if (!token) {
+        alert("토큰을 받지 못했습니다.");
+        return;
+      }
+
+      localStorage.setItem("token", token);
+      dispatch(setToken(token));
+
+      try {
+        const res = await axios.get(`${apiBaseUrl}/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        const user = res.data?.user;
+        if (!user) {
+          throw new Error("NO_USER_FROM_ME");
+        }
+
+        localStorage.setItem("user", JSON.stringify(user));
+        dispatch(setUser(user));
+
         navigate("/", { replace: true });
-      }
-    if (type === "SOCIAL_LOGIN_FAIL") {
-      // reason이 있으면 더 정확히 분기 가능
-      const reason = event.data?.reason;
+      } catch (err) {
+        console.log("social me fail:", err);
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        dispatch(setToken(null));
+        dispatch(setUser(null));
 
-      if (reason === "EMAIL_ALREADY_EXISTS") {
-        alert("이미 다른 방식으로 가입된 이메일입니다.");
-      } else if (reason === "NO_TOKEN") {
-        alert("로그인 토큰을 받지 못했습니다.");
-      } else {
-        alert("소셜 로그인에 실패했습니다.");
+        alert("소셜 로그인 처리 실패 (/auth/me 실패)");
       }
+      return;
+    }
+
+    if (type === "SOCIAL_LOGIN_FAIL") {
+      console.log("SOCIAL_LOGIN_FAIL payload:", event.data);
+      const reason = event.data?.reason || "UNKNOWN";
+      alert(`소셜 로그인 실패: ${reason}`);
       return;
     }
   };
 
-    window.addEventListener("message", handler);
-    return () => window.removeEventListener("message", handler);
-  }, [navigate]);
+  window.addEventListener("message", handler);
+  return () => window.removeEventListener("message", handler);
+}, [navigate, dispatch]);
+
 
   return (
     <AppTheme {...props}>

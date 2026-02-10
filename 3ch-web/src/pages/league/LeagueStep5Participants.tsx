@@ -14,7 +14,7 @@ import {
   DialogContent,
   DialogActions,
 } from "@mui/material";
-import { setStep, setStep5Participants } from "../../features/league/leagueCreationSlice";
+import { createLeague, setStep, setStep5Participants } from "../../features/league/leagueCreationSlice";
 import type { Participant } from "../../features/league/leagueCreationSlice";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import LoadMembersDialog, { type MemberRow } from "./LoadMembersDialog";
@@ -123,8 +123,10 @@ export default function LeagueStep5Participants() {
   };
 
   const handleNext = () => {
-    dispatch(setStep5Participants({ participants }));
+    dispatch(setStep5Participants({ participants, recruitCount: recruitCount === "" ? null : recruitCount }));
+
     dispatch(setStep(6));
+    dispatch(createLeague())
   };
 
   const handleOpenLoad = () => setOpenLoad(true);

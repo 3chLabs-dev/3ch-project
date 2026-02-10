@@ -16,10 +16,15 @@ import googleAuth from "../util/googleAuth";
 import kakaoAuth from "../util/kakaoAuth";
 import naverAuth from "../util/naverAuth";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
+import { useDispatch } from "react-redux";
+import { setToken, setUser } from "../../features/auth/authSlice";
 
 import emailIcon from "../../icon/free-icon-email-813667.png";
 import kakaoIcon from "../../icon/free-icon-kakao-talk-3991999.png";
 import naverIcon from "../../icon/naver-icon-style.png";
+
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
 
 const SignInContainer = styled(Stack)(({ theme }) => ({
   height: "auto",
@@ -147,6 +152,7 @@ function SocialBtnInner({
 
 export default function Login(props: Record<string, unknown>) {
   const navigate = useNavigate();
+    const dispatch = useDispatch();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -169,7 +175,7 @@ export default function Login(props: Record<string, unknown>) {
     return "";
   };
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     const eMsg = validateEmail(email);
@@ -178,9 +184,33 @@ export default function Login(props: Record<string, unknown>) {
     setEmailError(eMsg);
     setPwError(pMsg);
 
-    if (eMsg || pMsg) return;
+    if (eMsg || pMsg) return; 
 
-    // TODO: 로그인 요청 (axios 쓰면 여기서 사용)
+try {
+      const res = await axios.post(`${apiBaseUrl}/auth/login`, { email, password });
+
+      const token = res.data?.token;
+      const user = res.data?.user;
+
+      if (!token) {
+        alert("토큰을 받지 못했습니다.");
+        return;
+      }
+
+      // ✅ 로컬스토리지 저장
+      localStorage.setItem("token", token);
+      localStorage.setItem("user", JSON.stringify(user));
+
+      // ✅ 리덕스 저장
+      dispatch(setToken(token));
+      dispatch(setUser(user));
+
+      alert("로그인 성공");
+      navigate("/", { replace: true });
+    } catch (err) {
+      console.log("login fail:", err);
+      alert("로그인 실패");
+    }
   };
 
   // 소셜 로그인 요청처리 

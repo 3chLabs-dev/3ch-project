@@ -16,7 +16,7 @@ const tabs = [
     { label: "리그", path: "/league", icon: <EmojiEventsIcon /> },
     { label: "대회", path: "/match", icon: <SportsTennisIcon /> },
     { label: "추첨", path: "/draw", icon: <CasinoIcon /> },
-    { label: "더보기", path: "/etc", icon: <PersonIcon /> },
+    { label: "더보기", path: "/mypage", icon: <PersonIcon /> },
 ];
 
 export default function BottomTab() {

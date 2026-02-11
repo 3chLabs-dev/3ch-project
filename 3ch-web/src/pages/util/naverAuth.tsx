@@ -1,7 +1,7 @@
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 
 export default function naverAuth() {
-    const url = `${apiBaseUrl}/auth/naver`;
+    const url = `${apiBaseUrl}/api/auth/naver`;
 
     window.open(
         url,

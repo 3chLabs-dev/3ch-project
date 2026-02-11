@@ -187,7 +187,7 @@ export default function Login(props: Record<string, unknown>) {
     if (eMsg || pMsg) return; 
 
 try {
-      const res = await axios.post(`${apiBaseUrl}/auth/login`, { email, password });
+      const res = await axios.post(`${apiBaseUrl}/api/auth/login`, { email, password });
 
       const token = res.data?.token;
       const user = res.data?.user;
@@ -242,7 +242,7 @@ useEffect(() => {
       dispatch(setToken(token));
 
       try {
-        const res = await axios.get(`${apiBaseUrl}/auth/me`, {
+        const res = await axios.get(`${apiBaseUrl}/api/auth/me`, {
           headers: { Authorization: `Bearer ${token}` },
         });
 
@@ -262,7 +262,7 @@ useEffect(() => {
         dispatch(setToken(null));
         dispatch(setUser(null));
 
-        alert("소셜 로그인 처리 실패 (/auth/me 실패)");
+        alert("소셜 로그인 처리 실패 (/api/auth/me 실패)");
       }
       return;
     }

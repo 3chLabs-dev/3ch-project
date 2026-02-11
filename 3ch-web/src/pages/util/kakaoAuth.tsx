@@ -1,7 +1,7 @@
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 
 export default function kakaoAuth() {
-    const url = `${apiBaseUrl}/auth/kakao`;
+    const url = `${apiBaseUrl}/api/auth/kakao`;
 
     window.open(
         url,

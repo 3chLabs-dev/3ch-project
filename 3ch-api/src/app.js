@@ -32,9 +32,9 @@ app.get("/health", (req, res) => {
 // Swagger
 app.use("/swagger", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-// Routes
+// Routes - 모든 API를 /api 아래로 통일
 app.use("/", testRoutes);
-app.use("/auth", authRouter);
+app.use("/api/auth", authRouter);
 app.use("/api", leagueRouter);
 
 module.exports = app;

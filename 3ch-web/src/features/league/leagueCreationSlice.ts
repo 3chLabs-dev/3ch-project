@@ -150,7 +150,7 @@ export const createLeague = createAsyncThunk.withTypes<{ state: RootState }>()(
 
     const token = thunkApi.getState().auth.token;
     const response = await axios.post(
-      `${import.meta.env.VITE_API_BASE_URL}/api/league`,
+      `${import.meta.env.VITE_API_BASE_URL}/league`,
       requestBody,
       {
         headers: {

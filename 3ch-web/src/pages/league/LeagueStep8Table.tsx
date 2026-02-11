@@ -1,5 +1,9 @@
 import React from "react";
+<<<<<<< HEAD
+import { Box, TextField, InputBase } from "@mui/material";
+=======
 import { Box } from "@mui/material";
+>>>>>>> d79a568ab57845ef51bb4e8769a14e7589d4bd11
 import { useSelector } from 'react-redux';
 import type { RootState } from "../../app/store";
 import { styled } from '@mui/material/styles';
@@ -13,7 +17,7 @@ import Paper from '@mui/material/Paper';
 
 
 
-const StyledTableCell = styled(TableCell)(({ theme }) => ({
+const StyledTableCell = styled(TableCell)(({ }) => ({
   border: '1px solid #ccc',
   padding: '6px',
   textAlign: 'center',
@@ -148,6 +152,106 @@ export default function LeagueTable() {
                     key={colIdx}
                   />
                 ) : (
+<<<<<<< HEAD
+                  <StyledTableCell key={colIdx}><InputBase
+                                                    // value={scores[rowIdx][colIdx]}
+                                                    // onChange={(e) =>
+                                                    //   handleScoreChange(rowIdx, colIdx, e.target.value)
+                                                    // }
+                                                    inputProps={{
+                                                      style: {
+                                                        textAlign: "center",
+                                                        fontSize: 14,
+                                                        width: 32,
+                                                        height: 28,
+                                                      },
+                                                    }}
+                                                    sx={{
+                                                      width: 32,
+                                                      height: 28,
+                                                    }}
+                                                  />
+                    </StyledTableCell>
+                )
+              )}
+
+              <StyledTableCell><InputBase
+                                  // value={scores[rowIdx][colIdx]}
+                                  // onChange={(e) =>
+                                  //   handleScoreChange(rowIdx, colIdx, e.target.value)
+                                  // }
+                                  inputProps={{
+                                    style: {
+                                      textAlign: "center",
+                                      fontSize: 14,
+                                      width: 32,
+                                      height: 28,
+                                    },
+                                  }}
+                                  sx={{
+                                    width: 32,
+                                    height: 28,
+                                  }}
+                                /> 
+                              / 
+                                <InputBase
+                                  // value={scores[rowIdx][colIdx]}
+                                  // onChange={(e) =>
+                                  //   handleScoreChange(rowIdx, colIdx, e.target.value)
+                                  // }
+                                  inputProps={{
+                                    style: {
+                                      textAlign: "center",
+                                      fontSize: 14,
+                                      width: 32,
+                                      height: 28,
+                                    },
+                                  }}
+                                  sx={{
+                                    width: 32,
+                                    height: 28,
+                                  }}
+                                />
+              </StyledTableCell>
+              <StyledTableCell><InputBase
+                                // value={scores[rowIdx][colIdx]}
+                                // onChange={(e) =>
+                                //   handleScoreChange(rowIdx, colIdx, e.target.value)
+                                // }
+                                inputProps={{
+                                  style: {
+                                    textAlign: "center",
+                                    fontSize: 14,
+                                    width: 32,
+                                    height: 28,
+                                  },
+                                }}
+                                sx={{
+                                  width: 32,
+                                  height: 28,
+                                }}
+                              />
+              </StyledTableCell>
+              <StyledTableCell><InputBase
+                                  // value={scores[rowIdx][colIdx]}
+                                  // onChange={(e) =>
+                                  //   handleScoreChange(rowIdx, colIdx, e.target.value)
+                                  // }
+                                  inputProps={{
+                                    style: {
+                                      textAlign: "center",
+                                      fontSize: 14,
+                                      width: 32,
+                                      height: 28,
+                                    },
+                                  }}
+                                  sx={{
+                                    width: 32,
+                                    height: 28,
+                                  }}
+                                />
+              </StyledTableCell>
+=======
                   <StyledTableCell key={colIdx}>0</StyledTableCell>
                 )
               )}
@@ -155,6 +259,7 @@ export default function LeagueTable() {
               <StyledTableCell>0 / 0</StyledTableCell>
               <StyledTableCell>-</StyledTableCell>
               <StyledTableCell></StyledTableCell>
+>>>>>>> d79a568ab57845ef51bb4e8769a14e7589d4bd11
             </TableRow>
           ))}
         </TableBody>

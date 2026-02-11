@@ -224,7 +224,7 @@ export default function SignUp() {
 
         setIsLoading(true);
         try {
-            await axios.post(`${apiBaseUrl}/api/auth/register`, {
+            await axios.post(`${apiBaseUrl}/auth/register`, {
                 email,
                 password,
                 name: username,

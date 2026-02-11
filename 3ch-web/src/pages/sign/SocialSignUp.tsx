@@ -112,7 +112,7 @@ export default function SocialSignUp() {
 
         setIsLoading(true);
         try {
-            const res = await axios.post(`${apiBaseUrl}/api/auth/social/complete`, {
+            const res = await axios.post(`${apiBaseUrl}/auth/social/complete`, {
                 ticket,
                 name,
             });

@@ -5,6 +5,7 @@ const cors = require("cors");
 
 const testRoutes = require("./routes/test");
 const authRouter = require("./routes/auth");
+const leagueRouter = require("./routes/league");
 
 const app = express();
 
@@ -34,5 +35,6 @@ app.use("/swagger", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 // Routes
 app.use("/", testRoutes);
 app.use("/auth", authRouter);
+app.use("/api", leagueRouter);
 
 module.exports = app;

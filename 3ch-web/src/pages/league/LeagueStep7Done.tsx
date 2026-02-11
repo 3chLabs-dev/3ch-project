@@ -6,6 +6,13 @@ export default function LeagueStep7Done() {
   const dispatch = useAppDispatch();
 
   const handleOk = () => {
+    // TODO: 향후 리그 상세 페이지 구현 시 아래 주석 해제
+    // const createdLeagueId = useAppSelector((s) => s.leagueCreation.createdLeagueId);
+    // if (createdLeagueId) {
+    //   navigate(`/league/${createdLeagueId}`);
+    // }
+
+    // 상태 초기화 후 리그 메인으로 이동
     dispatch(resetLeagueCreation());
     dispatch(setStep(0));
   };

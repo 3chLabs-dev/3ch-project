@@ -1,11 +1,10 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import type { RootState } from "../../app/store";
+import axios from "axios";
 
 /** Step 1: 기본 정보 */
 export interface LeagueBasicInfo {
-  name: string;
-  description: string;
   date: string; // YYYY-MM-DD
   time: string; // HH:mm
   location: string;
@@ -108,20 +107,60 @@ export const createLeague = createAsyncThunk.withTypes<{ state: RootState }>()(
   async (_arg, thunkApi) => {
     const s = thunkApi.getState().leagueCreation;
 
-    const payload = {
-      step1: s.step1BasicInfo,
-      step2: s.step2Type,
-      step3: s.step3Format,
-      step4: s.step4Rules,
-      step5: s.step5Participants,
-      step6: s.step6Creating,
+    // 필수 데이터 검증
+    if (!s.step1BasicInfo) {
+      throw new Error("기본 정보가 입력되지 않았습니다.");
+    }
+    if (!s.step2Type) {
+      throw new Error("리그 타입이 선택되지 않았습니다.");
+    }
+
+    // 리그 타입 매핑 (API에 전송할 형식으로 변환)
+    const typeMap: Record<LeagueTypeValue, string> = {
+      singles: "단식",
+      doubles: "복식",
+      "2-person-team": "2인 팀",
+      "3-person-team": "3인 팀",
+      "4-person-team": "4인 팀",
     };
 
-    // eslint/ts “unused” 방지 + 나중에 axios 등으로 API 연결 시 사용
-    void payload;
+    // 리그 규칙 매핑
+    const rulesMap: Record<LeagueRuleValue, string> = {
+      "best-of-3": "3전 2선승제",
+      "best-of-5": "5전 3선승제",
+      "best-of-7": "7전 4선승제",
+      "3-sets": "3세트 매치",
+    };
 
-    await new Promise((r) => setTimeout(r, 1200));
-    return { leagueId: `L-${Date.now()}` };
+    // ISO 8601 날짜 문자열 생성
+    const startDateTime = `${s.step1BasicInfo.date}T${s.step1BasicInfo.time}:00`;
+    const start_date = new Date(startDateTime).toISOString();
+
+    // 리그명 자동 생성: "날짜 + 타입" 형식
+    const autoName = `${s.step1BasicInfo.date} ${typeMap[s.step2Type.selectedType]} 리그`;
+
+    const requestBody = {
+      name: autoName,
+      description: s.step1BasicInfo.location ? `장소: ${s.step1BasicInfo.location}` : undefined,
+      type: typeMap[s.step2Type.selectedType],
+      sport: "탁구", // 탁구로 고정 (향후 확장 예정)
+      start_date,
+      rules: s.step4Rules ? rulesMap[s.step4Rules.rule] : undefined,
+    };
+
+    const token = thunkApi.getState().auth.token;
+    const response = await axios.post(
+      `${import.meta.env.VITE_API_BASE_URL}/api/league`,
+      requestBody,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    return { leagueId: response.data.league.id };
   }
 );
 

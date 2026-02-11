@@ -7,8 +7,9 @@ import LeagueStep2TypeSelection from './LeagueStep2TypeSelection';
 import LeagueStep3FormatSelection from './LeagueStep3FormatSelection';
 import LeagueStep4Rules from './LeagueStep4Rules';
 import LeagueStep5Participants from './LeagueStep5Participants';
-import LeagueStep6Schedule from './LeagueStep6Schedule';
-import LeagueStep7Summary from './LeagueStep7Summary'; // New import
+import LeagueStep6Creating from './LeagueStep6Schedule';
+import LeagueStep7Done from './LeagueStep7Done';
+import LeagueStep8Table from './LeagueStep8Table';
 
 const LeagueCreationWizard: React.FC = () => {
   const currentStep = useSelector((state: RootState) => state.leagueCreation.currentStep);
@@ -27,9 +28,11 @@ const LeagueCreationWizard: React.FC = () => {
     case 5:
       return <LeagueStep5Participants />;
     case 6:
-      return <LeagueStep6Schedule />;
+      return <LeagueStep6Creating />;
     case 7:
-      return <LeagueStep7Summary />;
+      return <LeagueStep7Done />;
+    case 8:
+      return <LeagueStep8Table />;
     default:
       return <LeagueMain />; // Fallback
   }

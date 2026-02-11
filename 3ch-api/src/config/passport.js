@@ -50,7 +50,7 @@ passport.use(
             `insert into users (email, name, auth_provider, provider_id)
              values ($1, $2, 'google', $3)
              returning id, email, name, auth_provider, provider_id`,
-            [email, name, providerId],
+            [email, null, providerId],
           );
           user = newUser.rows[0];
         }
@@ -107,7 +107,7 @@ passport.use(
             `insert into users (email, name, auth_provider, provider_id)
              values ($1, $2, 'kakao', $3)
              returning id, email, name, auth_provider, provider_id`,
-            [email, name, providerId],
+            [email, null, providerId],
           );
           user = newUser.rows[0];
         }
@@ -164,7 +164,7 @@ passport.use(
             `insert into users (email, name, auth_provider, provider_id)
              values ($1, $2, 'naver', $3)
              returning id, email, name, auth_provider, provider_id`,
-            [email, name, providerId],
+            [email, null, providerId],
           );
           user = newUser.rows[0];
         }

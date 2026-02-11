@@ -1,5 +1,5 @@
 import React from "react";
-import { Box } from "@mui/material";
+import { Box, TextField, InputBase } from "@mui/material";
 import { useSelector } from 'react-redux';
 import type { RootState } from "../../app/store";
 import { styled } from '@mui/material/styles';
@@ -148,13 +148,104 @@ export default function LeagueTable() {
                     key={colIdx}
                   />
                 ) : (
-                  <StyledTableCell key={colIdx}>0</StyledTableCell>
+                  <StyledTableCell key={colIdx}><InputBase
+                                                    // value={scores[rowIdx][colIdx]}
+                                                    // onChange={(e) =>
+                                                    //   handleScoreChange(rowIdx, colIdx, e.target.value)
+                                                    // }
+                                                    inputProps={{
+                                                      style: {
+                                                        textAlign: "center",
+                                                        fontSize: 14,
+                                                        width: 32,
+                                                        height: 28,
+                                                      },
+                                                    }}
+                                                    sx={{
+                                                      width: 32,
+                                                      height: 28,
+                                                    }}
+                                                  />
+                    </StyledTableCell>
                 )
               )}
 
-              <StyledTableCell>0 / 0</StyledTableCell>
-              <StyledTableCell>-</StyledTableCell>
-              <StyledTableCell></StyledTableCell>
+              <StyledTableCell><InputBase
+                                  // value={scores[rowIdx][colIdx]}
+                                  // onChange={(e) =>
+                                  //   handleScoreChange(rowIdx, colIdx, e.target.value)
+                                  // }
+                                  inputProps={{
+                                    style: {
+                                      textAlign: "center",
+                                      fontSize: 14,
+                                      width: 32,
+                                      height: 28,
+                                    },
+                                  }}
+                                  sx={{
+                                    width: 32,
+                                    height: 28,
+                                  }}
+                                /> 
+                              / 
+                                <InputBase
+                                  // value={scores[rowIdx][colIdx]}
+                                  // onChange={(e) =>
+                                  //   handleScoreChange(rowIdx, colIdx, e.target.value)
+                                  // }
+                                  inputProps={{
+                                    style: {
+                                      textAlign: "center",
+                                      fontSize: 14,
+                                      width: 32,
+                                      height: 28,
+                                    },
+                                  }}
+                                  sx={{
+                                    width: 32,
+                                    height: 28,
+                                  }}
+                                />
+              </StyledTableCell>
+              <StyledTableCell><InputBase
+                                // value={scores[rowIdx][colIdx]}
+                                // onChange={(e) =>
+                                //   handleScoreChange(rowIdx, colIdx, e.target.value)
+                                // }
+                                inputProps={{
+                                  style: {
+                                    textAlign: "center",
+                                    fontSize: 14,
+                                    width: 32,
+                                    height: 28,
+                                  },
+                                }}
+                                sx={{
+                                  width: 32,
+                                  height: 28,
+                                }}
+                              />
+              </StyledTableCell>
+              <StyledTableCell><InputBase
+                                  // value={scores[rowIdx][colIdx]}
+                                  // onChange={(e) =>
+                                  //   handleScoreChange(rowIdx, colIdx, e.target.value)
+                                  // }
+                                  inputProps={{
+                                    style: {
+                                      textAlign: "center",
+                                      fontSize: 14,
+                                      width: 32,
+                                      height: 28,
+                                    },
+                                  }}
+                                  sx={{
+                                    width: 32,
+                                    height: 28,
+                                  }}
+                                />
+              </StyledTableCell>
             </TableRow>
           ))}
         </TableBody>

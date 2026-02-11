@@ -1,6 +1,7 @@
 import { Box, Typography, Button } from "@mui/material";
 import { useAppDispatch } from "../../app/hooks";
-import { resetLeagueCreation, setStep } from "../../features/league/leagueCreationSlice";
+// import { resetLeagueCreation, setStep } from "../../features/league/leagueCreationSlice";
+import { setStep } from "../../features/league/leagueCreationSlice";
 
 export default function LeagueStep7Done() {
   const dispatch = useAppDispatch();

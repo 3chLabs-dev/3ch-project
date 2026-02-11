@@ -2,22 +2,6 @@
 CREATE SCHEMA IF NOT EXISTS "public";
 
 -- CreateTable
-CREATE TABLE "users" (
-    "id" SERIAL NOT NULL,
-    "email" TEXT NOT NULL,
-    "password_hash" TEXT,
-    "name" TEXT,
-    "nickname" TEXT,
-    "phone" TEXT,
-    "auth_provider" TEXT NOT NULL,
-    "provider_id" TEXT,
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "users_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
 CREATE TABLE "leagues" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -97,3 +81,10 @@ ALTER TABLE "matches" ADD CONSTRAINT "matches_home_team_id_fkey" FOREIGN KEY ("h
 
 -- AddForeignKey
 ALTER TABLE "matches" ADD CONSTRAINT "matches_away_team_id_fkey" FOREIGN KEY ("away_team_id") REFERENCES "teams"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+ALTER TABLE "leagues"  ALTER COLUMN "id" SET DEFAULT gen_random_uuid()::text;
+ALTER TABLE "teams"    ALTER COLUMN "id" SET DEFAULT gen_random_uuid()::text;
+ALTER TABLE "players"  ALTER COLUMN "id" SET DEFAULT gen_random_uuid()::text;
+ALTER TABLE "matches"  ALTER COLUMN "id" SET DEFAULT gen_random_uuid()::text;

@@ -220,6 +220,17 @@ useEffect(() => {
 
     const type = event.data?.type;
 
+    //신규 소셜 이름 입력필요 처리
+    if (type === "SOCIAL_NEED_NAME") {
+      const ticket = event.data?.ticket;
+      if (!ticket) {
+        alert("가입 티켓이 없습니다.");
+        return;
+      }
+      navigate(`/social-signup?ticket=${encodeURIComponent(ticket)}`, { replace: true });
+      return;
+    }
+    //기존 유저 진행
     if (type === "SOCIAL_LOGIN_SUCCESS") {
       const token = event.data?.token;
       if (!token) {

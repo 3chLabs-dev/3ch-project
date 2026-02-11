@@ -18,8 +18,7 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
-const { signToken } = require("../utils/authUtils");
-
+const { signToken, signSignupTicket, verifyToken } = require("../utils/authUtils");
 
 // Google Social Login
 /**
@@ -37,7 +36,10 @@ const { signToken } = require("../utils/authUtils");
  */
 router.get(
   "/google",
-  passport.authenticate("google", { scope: ["profile", "email"], session: false, }),
+  passport.authenticate("google", {
+    scope: ["profile", "email"],
+    session: false,
+  }),
 );
 
 /**
@@ -75,7 +77,13 @@ router.get("/google/callback", (req, res, next) => {
     if (!user) {
       const reason = info?.message || "LOGIN_FAILED";
       return res.redirect(
-        `${process.env.FRONTEND_URL}/auth/fail?reason=${encodeURIComponent(reason)}`
+        `${process.env.FRONTEND_URL}/auth/fail?reason=${encodeURIComponent(reason)}`,
+      );
+    }
+    if (!user.name) {
+      const ticket = signSignupTicket({ id: user.id, email: user.email });
+      return res.redirect(
+        `${process.env.FRONTEND_URL}/auth/success?signup=1&ticket=${ticket}`,
       );
     }
     const token = signToken({
@@ -84,7 +92,7 @@ router.get("/google/callback", (req, res, next) => {
     });
 
     return res.redirect(
-      `${process.env.FRONTEND_URL}/auth/success?token=${token}`
+      `${process.env.FRONTEND_URL}/auth/success?token=${token}`,
     );
   })(req, res, next);
 });
@@ -140,7 +148,13 @@ router.get("/kakao/callback", (req, res, next) => {
     if (!user) {
       const reason = info?.message || "LOGIN_FAILED";
       return res.redirect(
-        `${process.env.FRONTEND_URL}/auth/fail?reason=${encodeURIComponent(reason)}`
+        `${process.env.FRONTEND_URL}/auth/fail?reason=${encodeURIComponent(reason)}`,
+      );
+    }
+    if (!user.name) {
+      const ticket = signSignupTicket({ id: user.id, email: user.email });
+      return res.redirect(
+        `${process.env.FRONTEND_URL}/auth/success?signup=1&ticket=${ticket}`,
       );
     }
     const token = signToken({
@@ -149,7 +163,7 @@ router.get("/kakao/callback", (req, res, next) => {
     });
 
     return res.redirect(
-      `${process.env.FRONTEND_URL}/auth/success?token=${token}`
+      `${process.env.FRONTEND_URL}/auth/success?token=${token}`,
     );
   })(req, res, next);
 });
@@ -168,7 +182,7 @@ router.get("/kakao/callback", (req, res, next) => {
  *       500:
  *         description: 서버 오류.
  */
-router.get("/naver", passport.authenticate("naver",{ session: false }));
+router.get("/naver", passport.authenticate("naver", { session: false }));
 
 /**
  * @openapi
@@ -205,7 +219,13 @@ router.get("/naver/callback", (req, res, next) => {
     if (!user) {
       const reason = info?.message || "LOGIN_FAILED";
       return res.redirect(
-        `${process.env.FRONTEND_URL}/auth/fail?reason=${encodeURIComponent(reason)}`
+        `${process.env.FRONTEND_URL}/auth/fail?reason=${encodeURIComponent(reason)}`,
+      );
+    }
+    if (!user.name) {
+      const ticket = signSignupTicket({ id: user.id, email: user.email });
+      return res.redirect(
+        `${process.env.FRONTEND_URL}/auth/success?signup=1&ticket=${ticket}`,
       );
     }
     const token = signToken({
@@ -214,7 +234,7 @@ router.get("/naver/callback", (req, res, next) => {
     });
 
     return res.redirect(
-      `${process.env.FRONTEND_URL}/auth/success?token=${token}`
+      `${process.env.FRONTEND_URL}/auth/success?token=${token}`,
     );
   })(req, res, next);
 });
@@ -255,13 +275,11 @@ router.get("/naver/callback", (req, res, next) => {
 router.post("/register", async (req, res) => {
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res
-      .status(400)
-      .json({
-        ok: false,
-        error: "VALIDATION_ERROR",
-        details: parsed.error.issues,
-      });
+    return res.status(400).json({
+      ok: false,
+      error: "VALIDATION_ERROR",
+      details: parsed.error.issues,
+    });
   }
 
   const { email, password, name } = parsed.data;
@@ -323,13 +341,11 @@ router.post("/register", async (req, res) => {
 router.post("/login", async (req, res) => {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res
-      .status(400)
-      .json({
-        ok: false,
-        error: "VALIDATION_ERROR",
-        details: parsed.error.issues,
-      });
+    return res.status(400).json({
+      ok: false,
+      error: "VALIDATION_ERROR",
+      details: parsed.error.issues,
+    });
   }
 
   const { email, password } = parsed.data;
@@ -401,6 +417,61 @@ router.get("/me", requireAuth, async (req, res) => {
       return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
     }
     return res.json({ ok: true, user: result.rows[0] });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
+});
+
+//임시 토큰 검증후 이름설정
+router.post("/social/complete", async (req, res) => {
+  const schema = z.object({
+    ticket: z.string().min(1),
+    name: z.string().min(1).max(50),
+  });
+
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    return res
+      .status(400)
+      .json({
+        ok: false,
+        error: "VALIDATION_ERROR",
+        details: parsed.error.issues,
+      });
+  }
+
+  const { ticket, name } = parsed.data;
+
+  let decoded;
+  try {
+    decoded = verifyToken(ticket);
+  } catch (e) {
+    return res.status(401).json({ ok: false, error: "BAD_TICKET" });
+  }
+
+  if (decoded.purpose !== "signup") {
+    return res.status(401).json({ ok: false, error: "NOT_SIGNUP_TICKET" });
+  }
+
+  const userId = Number(decoded.sub);
+  if (!Number.isFinite(userId)) {
+    return res.status(401).json({ ok: false, error: "BAD_TICKET_SUB" });
+  }
+
+  try {
+    const result = await pool.query(
+      "update users set name = $1 where id = $2 returning id, email, name",
+      [name, userId],
+    );
+
+    const updatedUser = result.rows[0];
+    const token = signToken({ id: updatedUser.id, email: updatedUser.email });
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
+    }
+
+    return res.json({ ok: true, token, user: updatedUser });
   } catch (e) {
     return res.status(500).json({ ok: false, error: String(e.message || e) });
   }

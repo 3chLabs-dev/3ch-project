@@ -13,8 +13,10 @@ export default function LeagueStep7Done() {
     // }
 
     // 상태 초기화 후 리그 메인으로 이동
-    dispatch(resetLeagueCreation());
-    dispatch(setStep(0));
+    // dispatch(resetLeagueCreation());
+    // dispatch(setStep(0));
+    // 표 출력을 위한 임시변경
+    dispatch(setStep(8));
 
   };
 

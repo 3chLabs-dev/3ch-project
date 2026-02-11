@@ -6,8 +6,9 @@ export default function LeagueStep7Done() {
   const dispatch = useAppDispatch();
 
   const handleOk = () => {
-    dispatch(resetLeagueCreation());
-    dispatch(setStep(0));
+    //dispatch(resetLeagueCreation());
+    //dispatch(setStep(0));
+    dispatch(setStep(8));
   };
 
   return (

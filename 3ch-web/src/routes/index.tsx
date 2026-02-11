@@ -4,7 +4,10 @@ import Home from "../pages/Home";
 import Login from "../pages/sign/Login";
 import SignUp from "../pages/sign/SignUp";
 import AuthSuccess from "../pages/util/AuthSuccess";
+import AuthFail from "../pages/util/AuthFail";
 import LeagueCreationWizard from "../pages/league/LeagueCreationWizard";
+import MyPage from "../pages/mypage/MyPage.tsx"
+import SocialSignUp from "../pages/sign/SocialSignUp.tsx";
 
 // import League from "../pages/League";
 // import Match from "../pages/Match";
@@ -19,7 +22,10 @@ export const router = createBrowserRouter([
       { path: "/login", element: <Login />},
       { path: "/signup", element: <SignUp />},
       { path: "/league", element: <LeagueCreationWizard /> },
+      { path: "/mypage", element: <MyPage />},
       { path: "/auth/success", element: <AuthSuccess />},
+      { path: "/auth/fail", element: <AuthFail />},
+      { path: "/social-signup", element: <SocialSignUp />},
     //   { path: "/match", element: <Match /> },
     //   { path: "/my", element: <My /> },
 

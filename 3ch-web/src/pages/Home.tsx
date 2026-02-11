@@ -14,6 +14,8 @@ import {
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 
+import { useAppSelector } from "../app/hooks";
+
 type Props = {
     // isLoggedIn?: boolean;
     userName?: string;
@@ -22,28 +24,51 @@ type Props = {
 export default function Home({ userName = "우리리그" }: Props) {
     const [bizOpen, setBizOpen] = useState(false);
 
+const token = useAppSelector((state) => state.auth.token);
+const user = useAppSelector((state) => state.auth.user);
+
+    const isLoggedIn = !!token;
+
+    const displayName = isLoggedIn
+        ? (user?.name || user?.email || userName)
+        : userName;
+
     return (
         <Stack spacing={2.5}>
 
             {/* 큰 타이틀 */}
             <Box>
                 <Typography variant="h5" fontWeight={900} lineHeight={1.1}>
-                    {userName}
-                </Typography>
-                <Typography variant="h6" fontWeight={900} sx={{ mt: 0.5 }}>
-                    참가자
+                    {displayName}
                 </Typography>
             </Box>
 
-            {/* 로그인 카드 */}
-            <SoftCard>
-                <Stack alignItems="center" spacing={1.2}>
-                    <Typography fontWeight={800}>로그인을 해주세요.</Typography>
-                    <Button component={RouterLink} to="/login" variant="contained" size="medium" sx={{ px: 3, borderRadius: 2 }}>
-                        로그인
-                    </Button>
-                </Stack>
-            </SoftCard>
+            {/* 로그인/임시 모임 카드 */}
+            {!isLoggedIn ? (
+                <SoftCard>
+                    <Stack alignItems="center" spacing={1.2}>
+                        <Typography fontWeight={800}>로그인을 해주세요.</Typography>
+                        <Button
+                            component={RouterLink}
+                            to="/login"
+                            variant="contained"
+                            size="medium"
+                            sx={{ px: 3, borderRadius: 2 }}
+                        >
+                            로그인
+                        </Button>
+                    </Stack>
+                </SoftCard>
+            ) : (
+                <SoftCard>
+                    <Stack alignItems="center" spacing={1.2}>
+                        <Typography fontWeight={800}> 환영합니다!</Typography>
+                        <Typography color="text.secondary" fontWeight={700}>
+                            모임 없음
+                        </Typography>
+                    </Stack>
+                </SoftCard>
+            )}
 
             {/* 진행중 경기 */}
             <SectionTitle title="나의 진행중 경기" />

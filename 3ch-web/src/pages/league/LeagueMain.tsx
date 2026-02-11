@@ -6,6 +6,7 @@ import { Box, Stack, Typography, Card, CardContent, Button } from "@mui/material
 export default function LeagueMainBody() {
   const dispatch = useAppDispatch();
   const hasExistingLeagues = false;
+  const hasExistingRally = false;
 
   const handleCreateNewLeague = () => {
     dispatch(setStep(1));
@@ -44,6 +45,37 @@ export default function LeagueMainBody() {
       >
         신규 생성하기
       </Button>
+
+      <Box>
+        <Typography variant="h6" fontWeight={900}>
+          대회 일정
+        </Typography>
+      </Box>
+
+      {/* 대회 일정 카드 */}
+      <SoftCard>
+        {hasExistingRally ? (
+          <Typography fontWeight={700}>개설된 대회 목록…</Typography>
+        ) : (
+          <Typography textAlign="center" color="text.secondary" fontWeight={700}>
+            개설된 대회가 없습니다.
+          </Typography>
+        )}
+      </SoftCard>
+
+      <Button
+        fullWidth
+        variant="contained"
+        disableElevation
+        //onClick={handleCreteNewLeague}
+        sx={{
+          borderRadius: 1,
+          py: 1.2,
+          fontWeight: 900,
+        }}
+      >
+        신규 생성하기
+      </Button>
     </Stack>
   );
 }
@@ -53,6 +85,7 @@ function SoftCard({ children }: { children: React.ReactNode }) {
     <Card
       elevation={2}
       sx={{
+        p: 2,
         borderRadius: 1,
         boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
       }}

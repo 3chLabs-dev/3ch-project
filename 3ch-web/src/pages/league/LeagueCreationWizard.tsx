@@ -7,7 +7,11 @@ import LeagueStep2TypeSelection from './LeagueStep2TypeSelection';
 import LeagueStep3FormatSelection from './LeagueStep3FormatSelection';
 import LeagueStep4Rules from './LeagueStep4Rules';
 import LeagueStep5Participants from './LeagueStep5Participants';
+<<<<<<< HEAD
 import LeagueStep6Creating from './LeagueStep6Schedule';
+=======
+import LeagueStep6Creating from './LeagueStep6Creating';
+>>>>>>> d79a568ab57845ef51bb4e8769a14e7589d4bd11
 import LeagueStep7Done from './LeagueStep7Done';
 import LeagueStep8Table from './LeagueStep8Table';
 

@@ -12,14 +12,19 @@ import { styled } from "@mui/material/styles";
 import AppTheme from "../shared-theme/AppTheme";
 import { GoogleIcon } from "../../components/CustomIcons";
 import { Link as RouterLink } from "react-router-dom";
-import googleAuth  from "../util/googleAuth";
+import googleAuth from "../util/googleAuth";
 import kakaoAuth from "../util/kakaoAuth";
-import naverAuth from "../util/naverAuth"; 
+import naverAuth from "../util/naverAuth";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
+import { useDispatch } from "react-redux";
+import { setToken, setUser } from "../../features/auth/authSlice";
 
 import emailIcon from "../../icon/free-icon-email-813667.png";
 import kakaoIcon from "../../icon/free-icon-kakao-talk-3991999.png";
 import naverIcon from "../../icon/naver-icon-style.png";
+
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
 
 const SignInContainer = styled(Stack)(({ theme }) => ({
   height: "auto",
@@ -51,7 +56,7 @@ const inputSx = {
     opacity: 0.6,
   },
   "& .MuiOutlinedInput-root": {
-    borderRadius: 1.2,
+    borderRadius: 0.6,
     backgroundColor: "#fff",
   },
 };
@@ -147,6 +152,7 @@ function SocialBtnInner({
 
 export default function Login(props: Record<string, unknown>) {
   const navigate = useNavigate();
+    const dispatch = useDispatch();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -169,7 +175,7 @@ export default function Login(props: Record<string, unknown>) {
     return "";
   };
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     const eMsg = validateEmail(email);
@@ -178,31 +184,101 @@ export default function Login(props: Record<string, unknown>) {
     setEmailError(eMsg);
     setPwError(pMsg);
 
-    if (eMsg || pMsg) return;
+    if (eMsg || pMsg) return; 
 
-    // TODO: 로그인 요청 (axios 쓰면 여기서 사용)
+try {
+      const res = await axios.post(`${apiBaseUrl}/auth/login`, { email, password });
+
+      const token = res.data?.token;
+      const user = res.data?.user;
+
+      if (!token) {
+        alert("토큰을 받지 못했습니다.");
+        return;
+      }
+
+      // ✅ 로컬스토리지 저장
+      localStorage.setItem("token", token);
+      localStorage.setItem("user", JSON.stringify(user));
+
+      // ✅ 리덕스 저장
+      dispatch(setToken(token));
+      dispatch(setUser(user));
+
+      alert("로그인 성공");
+      navigate("/", { replace: true });
+    } catch (err) {
+      console.log("login fail:", err);
+      alert("로그인 실패");
+    }
   };
 
   // 소셜 로그인 요청처리 
-  useEffect(() => {
-    const handler = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-      switch (event.data?.type) {
-        case "SOCIAL_LOGIN_SUCCESS":
-          navigate("/", { replace: true });
-          break;
+useEffect(() => {
+  const handler = async (event: MessageEvent) => {
+    if (event.origin !== window.location.origin) return;
 
-        case "SOCIAL_LOGIN_FAIL":
-          break;
+    const type = event.data?.type;
 
-        default:
-          break;
+    //신규 소셜 이름 입력필요 처리
+    if (type === "SOCIAL_NEED_NAME") {
+      const ticket = event.data?.ticket;
+      if (!ticket) {
+        alert("가입 티켓이 없습니다.");
+        return;
       }
-    };
+      navigate(`/social-signup?ticket=${encodeURIComponent(ticket)}`, { replace: true });
+      return;
+    }
+    //기존 유저 진행
+    if (type === "SOCIAL_LOGIN_SUCCESS") {
+      const token = event.data?.token;
+      if (!token) {
+        alert("토큰을 받지 못했습니다.");
+        return;
+      }
 
-    window.addEventListener("message", handler);
-    return () => window.removeEventListener("message", handler);
-  }, [navigate]);
+      localStorage.setItem("token", token);
+      dispatch(setToken(token));
+
+      try {
+        const res = await axios.get(`${apiBaseUrl}/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        const user = res.data?.user;
+        if (!user) {
+          throw new Error("NO_USER_FROM_ME");
+        }
+
+        localStorage.setItem("user", JSON.stringify(user));
+        dispatch(setUser(user));
+
+        navigate("/", { replace: true });
+      } catch (err) {
+        console.log("social me fail:", err);
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        dispatch(setToken(null));
+        dispatch(setUser(null));
+
+        alert("소셜 로그인 처리 실패 (/auth/me 실패)");
+      }
+      return;
+    }
+
+    if (type === "SOCIAL_LOGIN_FAIL") {
+      console.log("SOCIAL_LOGIN_FAIL payload:", event.data);
+      const reason = event.data?.reason || "UNKNOWN";
+      alert(`소셜 로그인 실패: ${reason}`);
+      return;
+    }
+  };
+
+  window.addEventListener("message", handler);
+  return () => window.removeEventListener("message", handler);
+}, [navigate, dispatch]);
+
 
   return (
     <AppTheme {...props}>
@@ -237,7 +313,7 @@ export default function Login(props: Record<string, unknown>) {
             component="form"
             noValidate
             onSubmit={handleSubmit}
-            sx={{ display: "flex", flexDirection: "column", gap: 1.2 }}
+            sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}
           >
             <TextField
               id="email"
@@ -347,7 +423,7 @@ export default function Login(props: Record<string, unknown>) {
 
             {/* 네이버 */}
             <Button
-            onClick={naverAuth}
+              onClick={naverAuth}
               fullWidth
               variant="contained"
               disableElevation

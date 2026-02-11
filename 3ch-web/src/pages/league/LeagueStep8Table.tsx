@@ -1,5 +1,9 @@
 import React from "react";
+<<<<<<< HEAD
 import { Box, TextField, InputBase } from "@mui/material";
+=======
+import { Box } from "@mui/material";
+>>>>>>> d79a568ab57845ef51bb4e8769a14e7589d4bd11
 import { useSelector } from 'react-redux';
 import type { RootState } from "../../app/store";
 import { styled } from '@mui/material/styles';
@@ -148,6 +152,7 @@ export default function LeagueTable() {
                     key={colIdx}
                   />
                 ) : (
+<<<<<<< HEAD
                   <StyledTableCell key={colIdx}><InputBase
                                                     // value={scores[rowIdx][colIdx]}
                                                     // onChange={(e) =>
@@ -246,6 +251,15 @@ export default function LeagueTable() {
                                   }}
                                 />
               </StyledTableCell>
+=======
+                  <StyledTableCell key={colIdx}>0</StyledTableCell>
+                )
+              )}
+
+              <StyledTableCell>0 / 0</StyledTableCell>
+              <StyledTableCell>-</StyledTableCell>
+              <StyledTableCell></StyledTableCell>
+>>>>>>> d79a568ab57845ef51bb4e8769a14e7589d4bd11
             </TableRow>
           ))}
         </TableBody>

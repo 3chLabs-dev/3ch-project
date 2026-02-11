@@ -40,13 +40,17 @@ passport.use(
               [providerId, user.id],
             );
             user.provider_id = providerId;
+          } else if (user.auth_provider !== "google") {
+            return done(null, false, {
+            message: `이미 가입된 이메일`,
+            });
           }
         } else {
           const newUser = await pool.query(
             `insert into users (email, name, auth_provider, provider_id)
              values ($1, $2, 'google', $3)
              returning id, email, name, auth_provider, provider_id`,
-            [email, name, providerId],
+            [email, null, providerId],
           );
           user = newUser.rows[0];
         }
@@ -93,13 +97,17 @@ passport.use(
               [providerId, user.id],
             );
             user.provider_id = providerId;
+          } else if (user.auth_provider !== "kakao") {
+            return done(null, false, {
+            message: `이미 가입된 이메일`,
+            });
           }
         } else {
           const newUser = await pool.query(
             `insert into users (email, name, auth_provider, provider_id)
              values ($1, $2, 'kakao', $3)
              returning id, email, name, auth_provider, provider_id`,
-            [email, name, providerId],
+            [email, null, providerId],
           );
           user = newUser.rows[0];
         }
@@ -146,13 +154,17 @@ passport.use(
               [providerId, user.id],
             );
             user.provider_id = providerId;
+          } else if (user.auth_provider !== "naver") {
+            return done(null, false, {
+            message: `이미 가입된 이메일`,
+            });
           }
         } else {
           const newUser = await pool.query(
             `insert into users (email, name, auth_provider, provider_id)
              values ($1, $2, 'naver', $3)
              returning id, email, name, auth_provider, provider_id`,
-            [email, name, providerId],
+            [email, null, providerId],
           );
           user = newUser.rows[0];
         }

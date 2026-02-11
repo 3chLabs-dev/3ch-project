@@ -58,9 +58,6 @@ CREATE TABLE "matches" (
     CONSTRAINT "matches_pkey" PRIMARY KEY ("id")
 );
 
--- CreateIndex
-CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
-
 -- AddForeignKey
 ALTER TABLE "leagues" ADD CONSTRAINT "leagues_created_by_id_fkey" FOREIGN KEY ("created_by_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 

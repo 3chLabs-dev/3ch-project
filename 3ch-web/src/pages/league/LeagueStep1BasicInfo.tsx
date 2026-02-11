@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useRef } from "react";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { setStep, setStep1BasicInfo } from "../../features/league/leagueCreationSlice";
-import { Box, Typography, TextField, Button, Stack } from "@mui/material";
+import { Box, Typography, TextField, Button, Stack, MenuItem, Select } from "@mui/material";
 
 const rowSx = {
   display: "grid",
@@ -24,15 +24,38 @@ const inputSx = {
   },
 };
 
+// 시간 옵션 (00 ~ 23)
+const generateHourOptions = () => {
+  return Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
+};
+
+// 분 옵션 (00, 10, 20, 30, 40, 50)
+const generateMinuteOptions = () => {
+  return ['00', '10', '20', '30', '40', '50'];
+};
+
 const LeagueStep1BasicInfo: React.FC = () => {
   const dispatch = useAppDispatch();
   const existing = useAppSelector((s) => s.leagueCreation.step1BasicInfo);
 
   const dateRef = useRef<HTMLInputElement>(null);
-  const timeRef = useRef<HTMLInputElement>(null);
   const [date, setDate] = useState(existing?.date ?? "");
   const [time, setTime] = useState(existing?.time ?? "");
   const [location, setLocation] = useState(existing?.location ?? "");
+
+  // 시간을 hour와 minute로 분리
+  const [hour, minute] = time ? time.split(':') : ['', ''];
+
+  const hourOptions = useMemo(() => generateHourOptions(), []);
+  const minuteOptions = useMemo(() => generateMinuteOptions(), []);
+
+  const handleHourChange = (newHour: string) => {
+    setTime(`${newHour}:${minute || '00'}`);
+  };
+
+  const handleMinuteChange = (newMinute: string) => {
+    setTime(`${hour || '00'}:${newMinute}`);
+  };
 
   // 다음 버튼 활성
   const canNext = useMemo(() => Boolean(date && time), [date, time]);
@@ -40,8 +63,6 @@ const LeagueStep1BasicInfo: React.FC = () => {
   const handleNext = () => {
     dispatch(
       setStep1BasicInfo({
-        name: existing?.name ?? "",
-        description: existing?.description ?? "",
         date,
         time,
         location,
@@ -75,16 +96,58 @@ const LeagueStep1BasicInfo: React.FC = () => {
         </Box>
 
         {/* 시간 */}
-        <Box sx={{...rowSx, cursor: "pointer"}} onClick={() => timeRef.current?.showPicker()}>
+        <Box sx={rowSx}>
           <Typography sx={{ fontWeight: 900, letterSpacing: 6 }}>시간</Typography>
 
-          <TextField
-            inputRef={timeRef}
-            type="time"
-            value={time}
-            onChange={(e) => setTime(e.target.value)}
-            sx={inputSx}
-          />
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            {/* 시 */}
+            <Select
+              value={hour}
+              onChange={(e) => handleHourChange(e.target.value)}
+              displayEmpty
+              sx={{
+                borderRadius: 0.6,
+                bgcolor: "#fff",
+                height: 32,
+                fontSize: "0.95rem",
+                flex: 1,
+              }}
+            >
+              <MenuItem value="" disabled>
+                시
+              </MenuItem>
+              {hourOptions.map((h) => (
+                <MenuItem key={h} value={h}>
+                  {h}
+                </MenuItem>
+              ))}
+            </Select>
+
+            <Typography sx={{ alignSelf: 'center' }}>:</Typography>
+
+            {/* 분 */}
+            <Select
+              value={minute}
+              onChange={(e) => handleMinuteChange(e.target.value)}
+              displayEmpty
+              sx={{
+                borderRadius: 0.6,
+                bgcolor: "#fff",
+                height: 32,
+                fontSize: "0.95rem",
+                flex: 1,
+              }}
+            >
+              <MenuItem value="" disabled>
+                분
+              </MenuItem>
+              {minuteOptions.map((m) => (
+                <MenuItem key={m} value={m}>
+                  {m}
+                </MenuItem>
+              ))}
+            </Select>
+          </Box>
         </Box>
 
         {/* 장소 */}

@@ -19,5 +19,82 @@ model User {
   created_at    DateTime @default(now())
   updated_at    DateTime @default(now()) @updatedAt
 
+  leagues       League[] @relation("LeagueCreator")
+  teams         Team[]   @relation("TeamCreator")
+
   @@map("users")
 }
+
+model League {
+  id              String    @id @default(uuid())
+  name            String
+  description     String?
+  type            String
+  sport           String
+  start_date      DateTime
+  status          String    @default("draft") // e.g., "draft", "active", "completed"
+  rules           String?
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @default(now()) @updatedAt
+
+  created_by_id   Int
+  creator         User      @relation("LeagueCreator", fields: [created_by_id], references: [id])
+
+  teams           Team[]
+  matches         Match[]
+
+  @@map("leagues")
+}
+
+model Team {
+  id              String    @id @default(uuid())
+  name            String
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @default(now()) @updatedAt
+
+  league_id       String
+  league          League    @relation(fields: [league_id], references: [id], onDelete: Cascade)
+
+  created_by_id   Int
+  creator         User      @relation("TeamCreator", fields: [created_by_id], references: [id])
+
+  players         Player[]
+  home_matches    Match[]   @relation("HomeMatches")
+  away_matches    Match[]   @relation("AwayMatches")
+
+  @@map("teams")
+}
+
+model Player {
+  id              String    @id @default(uuid())
+  name            String
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @default(now()) @updatedAt
+
+  team_id         String
+  team            Team      @relation(fields: [team_id], references: [id], onDelete: Cascade)
+
+  @@map("players")
+}
+
+model Match {
+  id              String    @id @default(uuid())
+  match_date      DateTime
+  location        String?
+  score_home      Int?
+  score_away      Int?
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @default(now()) @updatedAt
+
+  league_id       String
+  league          League    @relation(fields: [league_id], references: [id], onDelete: Cascade)
+
+  home_team_id    String
+  home_team       Team      @relation("HomeMatches", fields: [home_team_id], references: [id])
+
+  away_team_id    String
+  away_team       Team      @relation("AwayMatches", fields: [away_team_id], references: [id])
+
+  @@map("matches")
+}
+

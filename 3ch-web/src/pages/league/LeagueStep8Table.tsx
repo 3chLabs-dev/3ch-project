@@ -17,7 +17,7 @@ import Paper from '@mui/material/Paper';
 
 
 
-const StyledTableCell = styled(TableCell)(({ theme }) => ({
+const StyledTableCell = styled(TableCell)(({ }) => ({
   border: '1px solid #ccc',
   padding: '6px',
   textAlign: 'center',

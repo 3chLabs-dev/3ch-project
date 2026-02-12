@@ -1,4 +1,4 @@
-import { Box, Typography, Stack, Divider, IconButton, List, ListItemButton, ListItemText } from "@mui/material";
+import { Box, Typography, Stack, Divider, IconButton, List, ListItemButton, ListItemText, Button } from "@mui/material";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import SettingsIcon from "@mui/icons-material/Settings";
 import { useNavigate } from "react-router-dom";
@@ -52,10 +52,58 @@ export default function MyPage() {
                 </IconButton>
             </Box>
 
-            {/* 유저 이름 */}
-            <Typography sx={{ mt: 2, fontSize: 12, fontWeight: 900 }}>
-                {token ? displayName : "로그인이 필요합니다"}
-            </Typography>
+            {/* ✅ 로그인 상태: 이름(좌) + 회원정보수정(우) / 비로그인: 문구만 */}
+            {token ? (
+                <Box sx={{ mt: 2, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+                    <Typography sx={{ fontSize: 24, fontWeight: 900, color: "primary.main" }}>
+                        {displayName}
+                    </Typography>
+
+                    <Button
+                        variant="contained"
+                        onClick={() => navigate("/member/edit")} // 원하는 경로로 바꿔도 됨
+                        sx={{
+                            height: 32,
+                            px: 1.6,
+                            borderRadius: 999,
+                            fontWeight: 900,
+                            fontSize: 13,
+                            bgcolor: "grey.200",
+                            color: "text.primary",
+                            boxShadow: "none",
+                            "&:hover": { bgcolor: "grey.300", boxShadow: "none" },
+                        }}
+                    >
+                        회원정보수정
+                    </Button>
+                </Box>
+            ) : (
+                <Box sx={{ mt: 2, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+                <Typography sx={{ fontSize: 24, fontWeight: 900 }}>
+                    로그인이 필요합니다
+                </Typography>
+                
+                <Button
+                        variant="contained"
+                        onClick={() => navigate("/login")} // 원하는 경로로 바꿔도 됨
+                        sx={{
+                            height: 32,
+                            px: 1.6,
+                            borderRadius: 999,
+                            fontWeight: 900,
+                            fontSize: 13,
+                            // bgcolor: "grey.200",
+                            // color: "text.primary",
+                            // boxShadow: "none",
+                            // "&:hover": { bgcolor: "grey.300", boxShadow: "none" },
+                        }}
+                    >
+                        로그인
+                    </Button>
+                </Box>
+                
+            )}
+
 
             <Divider sx={{ my: 2 }} />
 
@@ -88,7 +136,7 @@ export default function MyPage() {
                     <Typography
                         onClick={handleLogout}
                         sx={{
-                            fontSize: 14,
+                            fontSize: 16,
                             color: "text.disabled",
                             cursor: "pointer",
                             display: "inline-block",

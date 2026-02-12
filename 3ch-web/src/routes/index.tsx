@@ -8,6 +8,8 @@ import AuthFail from "../pages/util/AuthFail";
 import LeagueCreationWizard from "../pages/league/LeagueCreationWizard";
 import MyPage from "../pages/mypage/MyPage.tsx"
 import SocialSignUp from "../pages/sign/SocialSignUp.tsx";
+import GroupMain from "../pages/group/GroupMain";
+import GroupCreate from "../pages/group/GroupCreate";
 
 // import League from "../pages/League";
 // import Match from "../pages/Match";
@@ -26,7 +28,8 @@ export const router = createBrowserRouter([
       { path: "/auth/success", element: <AuthSuccess />},
       { path: "/auth/fail", element: <AuthFail />},
       { path: "/social-signup", element: <SocialSignUp />},
-    //   { path: "/match", element: <Match /> },
+      { path: "/group", element: <GroupMain /> },
+      { path: "/group/create", element: <GroupCreate /> },
     //   { path: "/my", element: <My /> },
 
     ],

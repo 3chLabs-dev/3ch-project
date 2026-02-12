@@ -13,6 +13,8 @@ import {
   Dialog,
   DialogContent,
   DialogActions,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import { createLeague, setStep, setStep5Participants } from "../../features/league/leagueCreationSlice";
 import type { Participant } from "../../features/league/leagueCreationSlice";
@@ -72,8 +74,10 @@ export default function LeagueStep5Participants() {
 
   const [openLoad, setOpenLoad] = useState(false);
 
+  const isFull = recruitCount !== "" && participants.length >= recruitCount;
   const canAdd = useMemo(() => Boolean(division.trim() && name.trim()), [division, name]);
   const canNext = participants.length > 0;
+  const [alertMsg, setAlertMsg] = useState("");
 
   const [deleteTarget, setDeleteTarget] = useState<{ idx: number; division: string; name: string } | null>(null);
   const [openCancelDialog, setOpenCancelDialog] = useState<boolean>(false);
@@ -90,6 +94,11 @@ export default function LeagueStep5Participants() {
 
   const handleAdd = () => {
     if (!canAdd) return;
+
+    if (isFull) {
+      setAlertMsg(`모집 인원(${recruitCount}명)을 초과할 수 없습니다.`);
+      return;
+    }
 
     const d = division.trim();
     const n = name.trim();
@@ -133,7 +142,13 @@ export default function LeagueStep5Participants() {
   const handleCloseLoad = () => setOpenLoad(false);
 
   const handleConfirmLoad = (selected: MemberRow[]) => {
-    setParticipants((prev) => mergeMembers(prev, selected));
+    const merged = mergeMembers(participants, selected);
+    if (recruitCount !== "" && merged.length > recruitCount) {
+      setAlertMsg(`모집 인원(${recruitCount}명)을 초과하여 추가할 수 없습니다.`);
+      setOpenLoad(false);
+      return;
+    }
+    setParticipants(merged);
     setOpenLoad(false);
   };
 
@@ -171,10 +186,17 @@ export default function LeagueStep5Participants() {
         </Select>
       </FormControl>
 
-      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <Typography sx={{ fontSize: 22, fontWeight: 900, mb: 1 }}>
-          리그 참가자
-        </Typography>
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 0.8 }}>
+        <Stack direction="row" spacing={1} alignItems="baseline">
+          <Typography sx={{ fontSize: 22, fontWeight: 900, mb: 1 }}>
+            리그 참가자
+          </Typography>
+          {recruitCount !== "" && (
+            <Typography sx={{ fontSize: 14, fontWeight: 700, color: isFull ? "#E53935" : "#6B7280" }}>
+              {participants.length}/{recruitCount}
+            </Typography>
+          )}
+        </Stack>
 
         <Button
           variant="contained"
@@ -418,6 +440,17 @@ export default function LeagueStep5Participants() {
 
 
       <LoadMembersDialog open={openLoad} onClose={handleCloseLoad} onConfirm={handleConfirmLoad} />
+
+      <Snackbar
+        open={!!alertMsg}
+        autoHideDuration={3000}
+        onClose={() => setAlertMsg("")}
+        anchorOrigin={{ vertical: "top", horizontal: "center" }}
+      >
+        <Alert severity="warning" onClose={() => setAlertMsg("")} sx={{ fontWeight: 700 }}>
+          {alertMsg}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

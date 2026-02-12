@@ -48,6 +48,31 @@ export interface GetLeagueResponse {
   league: League;
 }
 
+export interface LeagueListItem extends League {
+  creator_name?: string;
+  recruit_count: number;
+  participant_count: number;
+  group_id?: string;
+  group_name?: string;
+}
+
+export interface GetLeaguesParams {
+  page?: number;
+  limit?: number;
+  sport?: string;
+  status?: string;
+  group_id?: string;
+  my_groups?: boolean;
+  user_id?: number;
+}
+
+export interface GetLeaguesResponse {
+  leagues: LeagueListItem[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
 export interface UpdateLeagueResponse {
   message: string;
   league: League;
@@ -58,6 +83,24 @@ export interface UpdateLeagueResponse {
  */
 export const leagueApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
+    /**
+     * 리그 목록 조회
+     */
+    getLeagues: builder.query<GetLeaguesResponse, GetLeaguesParams | void>({
+      query: (params) => {
+        const searchParams = new URLSearchParams();
+        if (params?.page) searchParams.set("page", String(params.page));
+        if (params?.limit) searchParams.set("limit", String(params.limit));
+        if (params?.sport) searchParams.set("sport", params.sport);
+        if (params?.status) searchParams.set("status", params.status);
+        if (params?.group_id) searchParams.set("group_id", params.group_id);
+        if (params?.my_groups) searchParams.set("my_groups", "true");
+        if (params?.user_id) searchParams.set("user_id", String(params.user_id));
+        const qs = searchParams.toString();
+        return `/league${qs ? `?${qs}` : ""}`;
+      },
+    }),
+
     /**
      * 리그 생성
      */
@@ -96,6 +139,7 @@ export const leagueApi = baseApi.injectEndpoints({
  * Auto-generated hooks
  */
 export const {
+  useGetLeaguesQuery,
   useCreateLeagueMutation,
   useGetLeagueQuery,
   useUpdateLeagueMutation,

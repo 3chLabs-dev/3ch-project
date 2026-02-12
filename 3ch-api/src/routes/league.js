@@ -137,6 +137,9 @@ const createLeagueSchema = z.object({
   sport: z.string().min(1, '스포츠 종목은 필수입니다'),
   start_date: z.string().datetime('시작일은 올바른 ISO 8601 날짜 형식이어야 합니다'),
   rules: z.string().optional(),
+  recruit_count: z.number().int().min(0).default(0),
+  participant_count: z.number().int().min(0).default(0),
+  group_id: z.string().uuid('올바른 모임 ID 형식이어야 합니다').optional(),
 });
 
 const updateLeagueSchema = z.object({
@@ -147,6 +150,131 @@ const updateLeagueSchema = z.object({
   start_date: z.string().datetime('시작일은 올바른 ISO 8601 날짜 형식이어야 합니다').optional(),
   rules: z.string().optional(),
   status: z.enum(["draft", "active", "completed"]).optional(),
+});
+
+// JSDoc for GET /league (list)
+/**
+ * @swagger
+ * /league:
+ *   get:
+ *     summary: 리그 목록 조회
+ *     tags: [리그]
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: 페이지 번호
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: 페이지당 항목 수
+ *       - in: query
+ *         name: sport
+ *         schema:
+ *           type: string
+ *         description: 스포츠 종목 필터
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [draft, active, completed]
+ *         description: 리그 상태 필터
+ *     responses:
+ *       200:
+ *         description: 리그 목록
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 leagues:
+ *                   type: array
+ *                   items:
+ *                     allOf:
+ *                       - $ref: '#/components/schemas/League'
+ *                       - type: object
+ *                         properties:
+ *                           creator_name:
+ *                             type: string
+ *                           team_count:
+ *                             type: integer
+ *                           player_count:
+ *                             type: integer
+ *                 total:
+ *                   type: integer
+ *                 page:
+ *                   type: integer
+ *                 limit:
+ *                   type: integer
+ *       500:
+ *         description: 내부 서버 오류
+ */
+router.get('/league', async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 10));
+    const offset = (page - 1) * limit;
+
+    const conditions = [];
+    const params = [];
+    let paramIndex = 1;
+
+    if (req.query.sport) {
+      conditions.push(`l.sport = $${paramIndex++}`);
+      params.push(req.query.sport);
+    }
+    if (req.query.status) {
+      conditions.push(`l.status = $${paramIndex++}`);
+      params.push(req.query.status);
+    }
+    if (req.query.group_id) {
+      conditions.push(`l.group_id = $${paramIndex++}`);
+      params.push(req.query.group_id);
+    }
+
+    // my_groups=true: 내가 속한 모임의 리그만 조회 (user_id 필요)
+    if (req.query.my_groups === 'true' && req.query.user_id) {
+      conditions.push(`l.group_id IN (SELECT group_id FROM group_members WHERE user_id = $${paramIndex++})`);
+      params.push(parseInt(req.query.user_id));
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const countResult = await pool.query(
+      `SELECT COUNT(*) FROM leagues l ${whereClause}`,
+      params
+    );
+    const total = parseInt(countResult.rows[0].count);
+
+    const listParams = [...params, limit, offset];
+    const result = await pool.query(
+      `SELECT l.id, l.name, l.description, l.type, l.sport, l.start_date, l.status,
+              l.recruit_count, l.participant_count, l.group_id, l.created_at,
+              u.name AS creator_name,
+              g.name AS group_name
+       FROM leagues l
+       LEFT JOIN users u ON l.created_by_id = u.id
+       LEFT JOIN groups g ON l.group_id = g.id
+       ${whereClause}
+       ORDER BY l.start_date DESC
+       LIMIT $${paramIndex++} OFFSET $${paramIndex++}`,
+      listParams
+    );
+
+    res.status(200).json({
+      leagues: result.rows,
+      total,
+      page,
+      limit,
+    });
+  } catch (error) {
+    console.error('Error fetching leagues:', error);
+    res.status(500).json({ message: '내부 서버 오류' });
+  }
 });
 
 // JSDoc for POST /league
@@ -186,15 +314,15 @@ const updateLeagueSchema = z.object({
  */
 router.post('/league', requireAuth, async (req, res) => {
   try {
-    const { name, description, type, sport, start_date, rules } = createLeagueSchema.parse(req.body);
+    const { name, description, type, sport, start_date, rules, recruit_count, participant_count, group_id } = createLeagueSchema.parse(req.body);
     const userId = req.user.sub;
     const leagueId = randomUUID();
 
     const result = await pool.query(
-      `INSERT INTO leagues (id, name, description, type, sport, start_date, rules, created_by_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING id, name, type, sport, created_at;`,
-      [leagueId, name, description, type, sport, start_date, rules, userId]
+      `INSERT INTO leagues (id, name, description, type, sport, start_date, rules, recruit_count, participant_count, group_id, created_by_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       RETURNING id, name, type, sport, recruit_count, participant_count, group_id, created_at;`,
+      [leagueId, name, description, type, sport, start_date, rules, recruit_count, participant_count, group_id || null, userId]
     );
 
     res.status(201).json({

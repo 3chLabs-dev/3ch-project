@@ -19,10 +19,46 @@ model User {
   created_at    DateTime @default(now())
   updated_at    DateTime @default(now()) @updatedAt
 
-  leagues       League[] @relation("LeagueCreator")
-  teams         Team[]   @relation("TeamCreator")
+  leagues       League[]      @relation("LeagueCreator")
+  teams         Team[]        @relation("TeamCreator")
+  created_groups Group[]      @relation("GroupCreator")
+  group_memberships GroupMember[]
 
   @@map("users")
+}
+
+model Group {
+  id              String    @id @default(uuid())
+  name            String    @unique
+  description     String?
+  region_city     String?
+  region_district String?
+  founded_at      DateTime?
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @default(now()) @updatedAt
+
+  created_by_id Int
+  creator       User    @relation("GroupCreator", fields: [created_by_id], references: [id])
+
+  members     GroupMember[]
+  leagues     League[]
+
+  @@map("groups")
+}
+
+model GroupMember {
+  id         String   @id @default(uuid())
+  role       String   @default("member") // "owner", "admin", "member"
+  joined_at  DateTime @default(now())
+
+  group_id   String
+  group      Group    @relation(fields: [group_id], references: [id], onDelete: Cascade)
+
+  user_id    Int
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([group_id, user_id])
+  @@map("group_members")
 }
 
 model League {
@@ -34,11 +70,16 @@ model League {
   start_date      DateTime
   status          String    @default("draft") // e.g., "draft", "active", "completed"
   rules           String?
+  recruit_count   Int       @default(0)
+  participant_count Int     @default(0)
   created_at      DateTime  @default(now())
   updated_at      DateTime  @default(now()) @updatedAt
 
   created_by_id   Int
   creator         User      @relation("LeagueCreator", fields: [created_by_id], references: [id])
+
+  group_id        String?
+  group           Group?    @relation(fields: [group_id], references: [id], onDelete: SetNull)
 
   teams           Team[]
   matches         Match[]

@@ -1,7 +1,7 @@
 import { BottomNavigation, BottomNavigationAction, Paper } from "@mui/material";
 import HomeIcon from "@mui/icons-material/Home";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
-import SportsTennisIcon from "@mui/icons-material/SportsTennis";
+import GroupsIcon from "@mui/icons-material/Groups";
 import PersonIcon from "@mui/icons-material/Person";
 import CasinoIcon from "@mui/icons-material/Casino";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -13,8 +13,8 @@ const TAB_H = 56;
 
 const tabs = [
     { label: "홈", path: "/", icon: <HomeIcon /> },
-    { label: "리그", path: "/league", icon: <EmojiEventsIcon /> },
-    { label: "대회", path: "/match", icon: <SportsTennisIcon /> },
+    { label: "리그·대회", path: "/league", icon: <EmojiEventsIcon /> },
+    { label: "모임", path: "/group", icon: <GroupsIcon /> },
     { label: "추첨", path: "/draw", icon: <CasinoIcon /> },
     { label: "더보기", path: "/mypage", icon: <PersonIcon /> },
 ];

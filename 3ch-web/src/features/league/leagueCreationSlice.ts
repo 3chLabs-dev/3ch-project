@@ -139,6 +139,9 @@ export const createLeague = createAsyncThunk.withTypes<{ state: RootState }>()(
     // 리그명 자동 생성: "날짜 + 타입" 형식
     const autoName = `${s.step1BasicInfo.date} ${typeMap[s.step2Type.selectedType]} 리그`;
 
+    const recruitCount = s.step5Participants?.recruitCount ?? 0;
+    const participantCount = s.step5Participants?.participants.length ?? 0;
+
     const requestBody = {
       name: autoName,
       description: s.step1BasicInfo.location ? `장소: ${s.step1BasicInfo.location}` : undefined,
@@ -146,6 +149,8 @@ export const createLeague = createAsyncThunk.withTypes<{ state: RootState }>()(
       sport: "탁구", // 탁구로 고정 (향후 확장 예정)
       start_date,
       rules: s.step4Rules ? rulesMap[s.step4Rules.rule] : undefined,
+      recruit_count: recruitCount,
+      participant_count: participantCount,
     };
 
     const token = thunkApi.getState().auth.token;

@@ -10,6 +10,7 @@ import MyPage from "../pages/mypage/MyPage.tsx"
 import SocialSignUp from "../pages/sign/SocialSignUp.tsx";
 import GroupMain from "../pages/group/GroupMain";
 import GroupCreate from "../pages/group/GroupCreate";
+import GroupManage from "../pages/group/GroupManage";
 
 // import League from "../pages/League";
 // import Match from "../pages/Match";
@@ -30,6 +31,7 @@ export const router = createBrowserRouter([
       { path: "/social-signup", element: <SocialSignUp />},
       { path: "/group", element: <GroupMain /> },
       { path: "/group/create", element: <GroupCreate /> },
+      { path: "/group/:id/manage", element: <GroupManage /> },
     //   { path: "/my", element: <My /> },
 
     ],

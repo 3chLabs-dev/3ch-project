@@ -1,5 +1,5 @@
 // src/pages/Home.tsx
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link as RouterLink } from "react-router-dom";
 import {
     Box,
@@ -11,7 +11,10 @@ import {
     Link,
     Collapse,
     IconButton,
+    Select,
+    MenuItem,
 } from "@mui/material";
+import type { SelectChangeEvent } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import TuneIcon from "@mui/icons-material/Tune";
 
@@ -33,7 +36,15 @@ export default function Home({ userName = "우리리그" }: Props) {
     const isLoggedIn = !!token;
 
     const { data: groupData } = useGetMyGroupsQuery(undefined, { skip: !isLoggedIn });
-    const hasGroups = (groupData?.groups?.length ?? 0) > 0;
+    const groups = useMemo(() => groupData?.groups ?? [], [groupData]);
+    const hasGroups = groups.length > 0;
+    const isAdmin = useMemo(
+        () => groups.some((g) => g.role === "owner" || g.role === "admin"),
+        [groups],
+    );
+
+    const [selectedGroupIdx, setSelectedGroupIdx] = useState(0);
+    const selectedGroup = hasGroups ? groups[selectedGroupIdx] ?? groups[0] : null;
 
     const { data: leagueData, isLoading: leagueLoading } = useGetLeaguesQuery(
         isLoggedIn && user?.id ? { my_groups: true, user_id: user.id } : undefined,
@@ -47,14 +58,34 @@ export default function Home({ userName = "우리리그" }: Props) {
     return (
         <Stack spacing={2.5}>
 
-            {/* 큰 타이틀 */}
-            <Box>
+            {/* 타이틀 + 모임 선택 */}
+            <Stack direction="row" alignItems="center" justifyContent="space-between">
                 <Typography variant="h5" fontWeight={900} lineHeight={1.1}>
                     {displayName}
                 </Typography>
-            </Box>
+                {hasGroups && groups.length > 1 && (
+                    <Select
+                        value={String(selectedGroupIdx)}
+                        onChange={(e: SelectChangeEvent<string>) => setSelectedGroupIdx(Number(e.target.value))}
+                        size="small"
+                        sx={{
+                            borderRadius: 1,
+                            height: 32,
+                            fontSize: "0.85rem",
+                            fontWeight: 700,
+                            bgcolor: "#EEF2FF",
+                            "& .MuiSelect-select": { py: 0.5, px: 1.5 },
+                            "& .MuiOutlinedInput-notchedOutline": { borderColor: "#C7D2FE" },
+                        }}
+                    >
+                        {groups.map((g, idx) => (
+                            <MenuItem key={g.id} value={String(idx)}>{g.name}</MenuItem>
+                        ))}
+                    </Select>
+                )}
+            </Stack>
 
-            {/* 로그인/임시 모임 카드 */}
+            {/* 로그인/모임 카드 */}
             {!isLoggedIn ? (
                 <SoftCard>
                     <Stack alignItems="center" spacing={1.2}>
@@ -70,17 +101,67 @@ export default function Home({ userName = "우리리그" }: Props) {
                         </Button>
                     </Stack>
                 </SoftCard>
-            ) : hasGroups ? (
-                <SoftCard>
-                    <Stack alignItems="center" spacing={1.2}>
-                        <Typography fontWeight={800}>
-                            {groupData!.groups[0].name}
-                        </Typography>
-                        <Typography color="text.secondary" fontWeight={700}>
-                            멤버 {groupData!.groups[0].member_count}명
-                        </Typography>
-                    </Stack>
-                </SoftCard>
+            ) : selectedGroup ? (
+                <Card
+                    elevation={2}
+                    sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
+                >
+                    <CardContent sx={{ py: 2.2, px: 2.5, "&:last-child": { pb: 2.2 } }}>
+                        <Stack direction="row" alignItems="center" spacing={2}>
+                            {/* 아이콘 */}
+                            <Box
+                                sx={{
+                                    width: 48,
+                                    height: 48,
+                                    borderRadius: "50%",
+                                    bgcolor: "#EC4899",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    flexShrink: 0,
+                                }}
+                            >
+                                <Typography sx={{ fontSize: 24, lineHeight: 1 }}>🏓</Typography>
+                            </Box>
+
+                            {/* 모임 정보 */}
+                            <Stack spacing={0.4} flex={1} minWidth={0}>
+                                <Typography fontWeight={800} fontSize={16} lineHeight={1.3}>
+                                    {selectedGroup.name}
+                                </Typography>
+                                <Typography color="text.secondary" fontWeight={600} fontSize={13} lineHeight={1.3}>
+                                    {[selectedGroup.region_city, selectedGroup.region_district]
+                                        .filter(Boolean)
+                                        .join(" ") || `멤버 ${selectedGroup.member_count}명`}
+                                </Typography>
+                            </Stack>
+
+                            {/* 자세히보기 버튼 */}
+                            <Button
+                                component={RouterLink}
+                                to="/group"
+                                variant="outlined"
+                                size="small"
+                                sx={{
+                                    borderRadius: 1,
+                                    fontWeight: 700,
+                                    fontSize: 12,
+                                    px: 1.5,
+                                    py: 0.6,
+                                    flexShrink: 0,
+                                    borderColor: "#E5E7EB",
+                                    color: "#374151",
+                                    "&:hover": {
+                                        borderColor: "#D1D5DB",
+                                        bgcolor: "#F9FAFB",
+                                    },
+                                }}
+                            >
+                                자세히보기
+                            </Button>
+                        </Stack>
+                    </CardContent>
+                </Card>
             ) : (
                 <SoftCard>
                     <Stack alignItems="center" spacing={1.2}>
@@ -119,7 +200,7 @@ export default function Home({ userName = "우리리그" }: Props) {
                     </Typography>
                 </SoftCard>
             )}
-            {isLoggedIn && (
+            {isLoggedIn && isAdmin && (
                 <Button
                     component={RouterLink}
                     to="/league"
@@ -255,10 +336,13 @@ function SoftCard({ children }: { children: React.ReactNode }) {
             }}
         >
             <CardContent sx={{
-                py: 2.2, display: "flex",
+                py: 2.5,
+                px: 2,
+                display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 textAlign: "center",
+                "&:last-child": { pb: 2.5 },
             }}>
                 {children}
             </CardContent>

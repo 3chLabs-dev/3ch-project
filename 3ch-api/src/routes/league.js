@@ -52,6 +52,16 @@ const router = express.Router();
  *           enum: [draft, active, completed]
  *           default: draft
  *           description: 리그의 현재 상태
+ *         recruit_count:
+ *           type: integer
+ *           description: 모집 인원
+ *         participant_count:
+ *           type: integer
+ *           description: 참가 인원
+ *         group_id:
+ *           type: string
+ *           format: uuid
+ *           description: 리그가 속한 모임 ID
  *         created_by_id:
  *           type: integer
  *           description: 리그를 생성한 사용자의 ID
@@ -70,6 +80,7 @@ const router = express.Router();
  *         - type
  *         - sport
  *         - start_date
+ *         - group_id
  *       properties:
  *         name:
  *           type: string
@@ -92,6 +103,18 @@ const router = express.Router();
  *           type: string
  *           nullable: true
  *           description: 리그에 대한 사용자 지정 규칙
+ *         recruit_count:
+ *           type: integer
+ *           default: 0
+ *           description: 모집 인원
+ *         participant_count:
+ *           type: integer
+ *           default: 0
+ *           description: 참가 인원
+ *         group_id:
+ *           type: string
+ *           format: uuid
+ *           description: 리그를 개설하는 모임 ID (owner 또는 admin만 가능)
  *     UpdateLeagueRequest:
  *       type: object
  *       properties:
@@ -139,7 +162,7 @@ const createLeagueSchema = z.object({
   rules: z.string().optional(),
   recruit_count: z.number().int().min(0).default(0),
   participant_count: z.number().int().min(0).default(0),
-  group_id: z.string().uuid('올바른 모임 ID 형식이어야 합니다').optional(),
+  group_id: z.string().uuid('올바른 모임 ID 형식이어야 합니다'),
 });
 
 const updateLeagueSchema = z.object({
@@ -183,6 +206,22 @@ const updateLeagueSchema = z.object({
  *           type: string
  *           enum: [draft, active, completed]
  *         description: 리그 상태 필터
+ *       - in: query
+ *         name: group_id
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: 특정 모임의 리그만 조회
+ *       - in: query
+ *         name: my_groups
+ *         schema:
+ *           type: boolean
+ *         description: 내가 속한 모임의 리그만 조회 (user_id와 함께 사용)
+ *       - in: query
+ *         name: user_id
+ *         schema:
+ *           type: integer
+ *         description: 사용자 ID (my_groups=true일 때 필요)
  *     responses:
  *       200:
  *         description: 리그 목록
@@ -316,13 +355,23 @@ router.post('/league', requireAuth, async (req, res) => {
   try {
     const { name, description, type, sport, start_date, rules, recruit_count, participant_count, group_id } = createLeagueSchema.parse(req.body);
     const userId = req.user.sub;
+
+    // 모임 권한 검증: owner 또는 admin만 리그 생성 가능
+    const roleCheck = await pool.query(
+      `SELECT role FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      [group_id, userId]
+    );
+    if (roleCheck.rows.length === 0 || !['owner', 'admin'].includes(roleCheck.rows[0].role)) {
+      return res.status(403).json({ message: '리그를 생성할 권한이 없습니다. 모임장 또는 운영진만 가능합니다.' });
+    }
+
     const leagueId = randomUUID();
 
     const result = await pool.query(
       `INSERT INTO leagues (id, name, description, type, sport, start_date, rules, recruit_count, participant_count, group_id, created_by_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING id, name, type, sport, recruit_count, participant_count, group_id, created_at;`,
-      [leagueId, name, description, type, sport, start_date, rules, recruit_count, participant_count, group_id || null, userId]
+      [leagueId, name, description, type, sport, start_date, rules, recruit_count, participant_count, group_id, userId]
     );
 
     res.status(201).json({

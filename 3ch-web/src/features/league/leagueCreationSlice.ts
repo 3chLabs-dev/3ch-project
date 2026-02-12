@@ -74,6 +74,7 @@ export type CreateStatus = "idle" | "loading" | "succeeded" | "failed";
 /** 전체 상태 */
 export interface LeagueCreationState {
   currentStep: number;
+  groupId: string | null;
 
   step1BasicInfo: LeagueBasicInfo | null;
   step2Type: LeagueTypeInfo | null;
@@ -89,6 +90,7 @@ export interface LeagueCreationState {
 
 const initialState: LeagueCreationState = {
   currentStep: 1,
+  groupId: null,
 
   step1BasicInfo: null,
   step2Type: null,
@@ -108,6 +110,9 @@ export const createLeague = createAsyncThunk.withTypes<{ state: RootState }>()(
     const s = thunkApi.getState().leagueCreation;
 
     // 필수 데이터 검증
+    if (!s.groupId) {
+      throw new Error("모임이 선택되지 않았습니다.");
+    }
     if (!s.step1BasicInfo) {
       throw new Error("기본 정보가 입력되지 않았습니다.");
     }
@@ -151,6 +156,7 @@ export const createLeague = createAsyncThunk.withTypes<{ state: RootState }>()(
       rules: s.step4Rules ? rulesMap[s.step4Rules.rule] : undefined,
       recruit_count: recruitCount,
       participant_count: participantCount,
+      group_id: s.groupId,
     };
 
     const token = thunkApi.getState().auth.token;
@@ -175,6 +181,10 @@ const leagueCreationSlice = createSlice({
   reducers: {
     setStep: (state, action: PayloadAction<number>) => {
       state.currentStep = action.payload;
+    },
+
+    setGroupId: (state, action: PayloadAction<string>) => {
+      state.groupId = action.payload;
     },
 
     setStep1BasicInfo: (state, action: PayloadAction<LeagueBasicInfo>) => {
@@ -233,6 +243,7 @@ const leagueCreationSlice = createSlice({
 
 export const {
   setStep,
+  setGroupId,
   setStep1BasicInfo,
   setStep2Type,
   setStep3Format,

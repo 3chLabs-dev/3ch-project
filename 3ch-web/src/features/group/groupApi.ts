@@ -42,6 +42,17 @@ export interface GroupMember {
   email: string;
 }
 
+export interface SearchGroupsParams {
+  q?: string;
+  region_city?: string;
+  region_district?: string;
+  limit?: number;
+}
+
+export interface SearchGroupsResponse {
+  groups: Omit<Group, "role">[];
+}
+
 export interface GetGroupDetailResponse {
   group: {
     id: string;
@@ -75,8 +86,42 @@ export const groupApi = baseApi.injectEndpoints({
       providesTags: (_result, _error, id) => [{ type: "Group", id }],
     }),
 
+    searchGroups: builder.query<SearchGroupsResponse, SearchGroupsParams>({
+      query: (params) => {
+        const sp = new URLSearchParams();
+        if (params.q) sp.set("q", params.q);
+        if (params.region_city) sp.set("region_city", params.region_city);
+        if (params.region_district) sp.set("region_district", params.region_district);
+        if (params.limit) sp.set("limit", String(params.limit));
+        return `/group/search?${sp.toString()}`;
+      },
+      providesTags: ["Group"],
+    }),
+
     checkGroupName: builder.query<CheckNameResponse, string>({
       query: (name) => `/group/check-name?name=${encodeURIComponent(name)}`,
+    }),
+
+    joinGroup: builder.mutation<{ message: string }, string>({
+      query: (groupId) => ({
+        url: `/group/${groupId}/join`,
+        method: "POST",
+      }),
+      invalidatesTags: ["Group"],
+    }),
+
+    updateMemberRole: builder.mutation<
+      { message: string },
+      { groupId: string; userId: string; role: "member" | "admin" }
+    >({
+      query: ({ groupId, userId, role }) => ({
+        url: `/group/${groupId}/member/${userId}/role`,
+        method: "PATCH",
+        body: { role },
+      }),
+      invalidatesTags: (_result, _error, { groupId }) => [
+        { type: "Group", id: groupId },
+      ],
     }),
   }),
 });
@@ -85,5 +130,8 @@ export const {
   useGetMyGroupsQuery,
   useCreateGroupMutation,
   useGetGroupDetailQuery,
+  useSearchGroupsQuery,
   useLazyCheckGroupNameQuery,
+  useJoinGroupMutation,
+  useUpdateMemberRoleMutation,
 } = groupApi;

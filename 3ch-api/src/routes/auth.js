@@ -20,6 +20,13 @@ const loginSchema = z.object({
 
 const { signToken, signSignupTicket, verifyToken } = require("../utils/authUtils");
 
+/**
+ * @openapi
+ * tags:
+ *   name: Auth
+ *   description: 인증 및 회원 관리 API - 회원가입, 로그인, 소셜 로그인 등
+ */
+
 // Google Social Login
 /**
  * @openapi

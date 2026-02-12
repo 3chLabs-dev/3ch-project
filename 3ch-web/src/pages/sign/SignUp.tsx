@@ -70,6 +70,11 @@ const inputSx = {
         borderRadius: 0.6,
         backgroundColor: "#fff",
     },
+    "& .MuiOutlinedInput-root .MuiInputAdornment-root .MuiIconButton-root": {
+        borderRadius: 0.6,
+        padding: "6px",          // 기본이 커서 공간 뜸 → 줄여줌
+        // marginRight: "2px",      // 오른쪽 벽이랑 너무 붙으면 살짝 띄움
+    },
 };
 
 // mui에서 검은 행잉 강제 추가 제거

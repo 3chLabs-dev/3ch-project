@@ -16,6 +16,11 @@ import MemberEditPage from "../pages/mypage/userinfo/MemberEditPage.tsx";
 import SettingsPage from "../pages/mypage/SettingsPage.tsx";
 import PasswordHelpPage from "../pages/sign/findPassword/PasswordHelpPage.tsx";
 import PasswordResetRequestPage from "../pages/sign/findPassword/PasswordResetRequestPage.tsx";
+import NoticePage from "../pages/mypage/NoticePage.tsx";
+import SupportCenterPage from "../pages/mypage/SupportCenterPage.tsx";
+import DonatePage from "../pages/mypage/DonatePage.tsx";
+import TermsPage from "../pages/mypage/TermsPage.tsx";
+import PrivacyPolicyPage from "../pages/mypage/PrivacyPolicyPage.tsx";
 // import League from "../pages/League";
 // import Match from "../pages/Match";
 // import My from "../pages/My";
@@ -41,6 +46,11 @@ export const router = createBrowserRouter([
       { path: "/settings", element: <SettingsPage />},
       { path: "/password/help", element: <PasswordHelpPage />},
       { path: "/password/verify-email", element: <PasswordResetRequestPage />},
+      { path: "/notice", element: <NoticePage />},
+      { path: "/support", element: <SupportCenterPage />},
+      { path: "/donate", element: <DonatePage />},
+      { path: "/terms", element: <TermsPage />},
+      { path: "/privacy", element: <PrivacyPolicyPage />},
 
 
     //   { path: "/my", element: <My /> },

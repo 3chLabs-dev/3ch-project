@@ -34,7 +34,8 @@ const SignInContainer = styled(Stack)(({ theme }) => ({
 const inputSx = {
     "& .MuiInputBase-input": {
         fontSize: "0.98rem",
-        py: 1.25,
+        paddingTop: "0px",
+        paddingBottom: "2px", 
     },
     "& .MuiInputBase-input::placeholder": {
         fontSize: "0.88rem",
@@ -43,10 +44,11 @@ const inputSx = {
     "& .MuiOutlinedInput-root": {
         borderRadius: 0.6,
         backgroundColor: "#fff",
+        
     },
     "& .MuiOutlinedInput-root .MuiInputAdornment-root .MuiIconButton-root": {
         borderRadius: 0.6,
-        padding: "6px",
+        padding: "0px",
     },
 } as const;
 
@@ -65,7 +67,8 @@ const forceSolid = (bg: string, hover: string, color: string) => ({
 
 const primaryBtnSx = {
     borderRadius: 999,
-    py: 1.2,
+    paddingTop: "0px",
+    paddingBottom: "2px", 
     fontSize: "1rem",
     fontWeight: 700,
     textTransform: "none",
@@ -114,7 +117,6 @@ export default function MemberCheckPage() {
             );
             
             sessionStorage.setItem("member_edit_verified", "true");
-            console.log("검증후", sessionStorage.getItem("member_edit_verified"));
             navigate("/member/edit", { replace: true });
         } catch (error) {
             console.error(error);

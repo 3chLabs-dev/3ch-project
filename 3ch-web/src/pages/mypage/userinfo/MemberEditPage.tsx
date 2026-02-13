@@ -8,11 +8,13 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import Visibility from "@mui/icons-material/Visibility";
 import VisibilityOff from "@mui/icons-material/VisibilityOff";
-import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew";
+import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew"; 
 import { useNavigate } from "react-router-dom";
 import AppTheme from "../../shared-theme/AppTheme";
 import axios from "axios";
+import { useDispatch } from "react-redux"
 
+import { setUser } from "../../../features/auth/authSlice";
 import { useAppSelector } from "../../../app/hooks";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
@@ -20,7 +22,8 @@ const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 const inputSx = {
     "& .MuiInputBase-input": {
         fontSize: "0.98rem",
-        py: 1.25,
+        paddingTop: "0px",
+        paddingBottom: "2px", 
     },
     "& .MuiInputBase-input::placeholder": {
         fontSize: "0.88rem",
@@ -51,7 +54,8 @@ const forceSolid = (bg: string, hover: string, color: string) => ({
 
 const primaryBtnSx = {
     borderRadius: 999,
-    py: 1.2,
+    paddingTop: "0px",
+    paddingBottom: "2px", 
     fontSize: "1rem",
     fontWeight: 700,
     textTransform: "none",
@@ -59,53 +63,54 @@ const primaryBtnSx = {
 };
 
 /** =========================
- *  Validation (SignUp 기준)
+ *  Validation (MemberEdit 기준)
  *  ========================= */
 const pwRegex = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,12}$/;
 
 const validateName = (v: string): string => {
-    if (!v) return "이름을 입력해주세요.";
+    if (!v.trim()) return "이름을 입력해주세요.";
     return "";
 };
 
+// ✅ 비어있으면 통과, 값이 있을 때만 형식 검사
 const validatePw = (v: string): string => {
-    if (!v) return "비밀번호를 입력해주세요.";
-    if (!pwRegex.test(v)) return "숫자+영문+특수기호를 모두 포함한 8~12자로 입력해주세요.";
+    if (!v) return "";
+    if (!pwRegex.test(v))
+        return "숫자+영문+특수기호를 모두 포함한 8~12자로 입력해주세요.";
     return "";
 };
 
+// ✅ 둘 다 비어있으면 통과
 const validateConfirm = (pw: string, cpw: string): string => {
-    if (!cpw) return "비밀번호 확인을 입력해주세요.";
+    if (!pw && !cpw) return "";
     if (pw !== cpw) return "비밀번호가 일치하지 않습니다.";
     return "";
 };
 
 export default function MemberEditPage() {
     const navigate = useNavigate();
-
     const checkedRef = useRef(false);
-    
-    // ✅ Redux에서 user/token 가져오기
+    const dispatch = useDispatch();
+
     const token = useAppSelector((state) => state.auth.token);
     const user = useAppSelector((state) => state.auth.user);
-    
+
     const email = user?.email ?? "";
     const originalName = user?.name ?? "";
-    
+
     const provider = user?.auth_provider ?? "local";
     const isLocal = provider === "local";
-    
-    //로컬유저 비번 체크 없이 들어올시 체크 페이지로 돌리기
+
     useEffect(() => {
         if (!user || checkedRef.current) return;
 
         checkedRef.current = true;
 
-        console.log("넘어와ㅏ서", sessionStorage.getItem("member_edit_verified"));
         if (isLocal) {
             const ok = sessionStorage.getItem("member_edit_verified") === "true";
             if (!ok) navigate("/member/password-check", { replace: true });
         }
+
         sessionStorage.removeItem("member_edit_verified");
     }, [user, isLocal, navigate]);
 
@@ -120,14 +125,13 @@ export default function MemberEditPage() {
 
     const [isLoading, setIsLoading] = useState<boolean>(false);
 
-    // 비번보기
     const [showPw, setShowPw] = useState<boolean>(false);
     const [showConfirmPw, setShowConfirmPw] = useState<boolean>(false);
 
-    // 이름값 초기 세팅
     useEffect(() => {
         setName(originalName || "");
     }, [originalName]);
+
     const isMatch = Boolean(newPw && confirmPw && newPw === confirmPw);
 
     const confirmHelper = useMemo(() => {
@@ -136,7 +140,6 @@ export default function MemberEditPage() {
         return confirmError || " ";
     }, [confirmPw, confirmError, isMatch]);
 
-    // ✅ 변경 감지
     const nameChanged = useMemo(
         () => name.trim() !== (originalName || "").trim(),
         [name, originalName]
@@ -147,29 +150,21 @@ export default function MemberEditPage() {
         [newPw, confirmPw]
     );
 
-    // - LOCAL: 이름 변경 or 비번 입력 시작 시 활성 가능(단, 비번은 두 필드 통과해야 최종 활성)
-    // - SOCIAL: 이름 변경만 가능
     const canSubmit = useMemo(() => {
         const hasChange = isLocal ? (nameChanged || pwTouched) : nameChanged;
         if (!hasChange) return false;
         if (isLoading) return false;
 
-        // 이름 검증(바꿨을 때만)
         if (nameChanged) {
-            const nMsg = validateName(name);
-            if (nMsg) return false;
+            if (validateName(name)) return false;
         }
 
-        // 비번 검증(LOCAL + 비번을 건드렸을 때만) -> 두 필드 통과 + 일치까지
         if (isLocal && pwTouched) {
-            const pMsg = validatePw(newPw);
-            const cMsg = validateConfirm(newPw, confirmPw);
-            if (pMsg || cMsg || !isMatch) return false;
+            if (validatePw(newPw)) return false;
+            if (validateConfirm(newPw, confirmPw)) return false;
         }
 
-        // 이미 떠있는 에러가 있으면 막기
-        const noErrors = !nameError && !pwError && !confirmError;
-        return Boolean(noErrors);
+        return true;
     }, [
         isLocal,
         nameChanged,
@@ -178,10 +173,6 @@ export default function MemberEditPage() {
         name,
         newPw,
         confirmPw,
-        isMatch,
-        nameError,
-        pwError,
-        confirmError,
     ]);
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -191,7 +182,6 @@ export default function MemberEditPage() {
         const hasChange = isLocal ? (nameChanged || pwTouched) : nameChanged;
         if (!hasChange) return;
 
-        // 변경한 것만 검증
         const nMsg = nameChanged ? validateName(name) : "";
         const pMsg = (isLocal && pwTouched) ? validatePw(newPw) : "";
         const cMsg = (isLocal && pwTouched) ? validateConfirm(newPw, confirmPw) : "";
@@ -201,22 +191,36 @@ export default function MemberEditPage() {
         setConfirmError(cMsg);
 
         if (nMsg || pMsg || cMsg) return;
-        if (isLocal && pwTouched && !isMatch) return;
 
         setIsLoading(true);
+
         try {
-            // ✅ payload: 바뀐 것만 보냄 (요구사항: 안 바꾸면 요청 X)
             const payload: { name?: string; password?: string } = {};
 
             if (nameChanged) payload.name = name.trim();
             if (isLocal && pwTouched) payload.password = newPw;
 
-            await axios.put(`${apiBaseUrl}/member`, payload, {
+            await axios.put(`${apiBaseUrl}/auth/member`, payload, {
                 headers: { Authorization: `Bearer ${token}` },
             });
 
+            // ✅ 최신 사용자 정보 다시 받아오기
+            const meRes = await axios.get(`${apiBaseUrl}/auth/me`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+
+            const updatedUser = meRes.data?.user;
+            if (!updatedUser) {
+                throw new Error("NO_USER_FROM_ME");
+            }
+
+            // 🔥 여기 버그 수정 (기존 user 저장하던 거 수정)
+            localStorage.setItem("user", JSON.stringify(updatedUser));
+            dispatch(setUser(updatedUser));
+
             sessionStorage.removeItem("member_edit_verified");
-            navigate("/my", { replace: true });
+            navigate("/mypage", { replace: true });
+
         } catch (error) {
             console.error(error);
             setApiError("회원정보 수정 중 오류가 발생했습니다.");
@@ -351,7 +355,7 @@ export default function MemberEditPage() {
                     {/* 회원탈퇴(회색) */}
                     <Typography
                         sx={{ mt: 2, fontSize: 13, color: "text.disabled", fontWeight: 800, cursor: "pointer" }}
-                        onClick={() => navigate("/member/withdraw")}
+                        onClick={() => alert("탈퇴를 거절합니다")}
                     >
                         회원탈퇴
                     </Typography>

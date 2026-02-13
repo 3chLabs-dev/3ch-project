@@ -61,7 +61,6 @@ export default function DrawMain() {
   const [drawName, setDrawName] = useState("");
   const [prizeName, setPrizeName] = useState("");
   const [quantity, setQuantity] = useState(1);
-  const memberCounts: Record<string, number> = {};
   const [results, setResults] = useState<DrawResult[]>([]);
 
   const defaultGroupId = useMemo(() => {
@@ -112,13 +111,14 @@ export default function DrawMain() {
 
   const participantRows = useMemo(() => {
     const loaded = participantData?.participants ?? [];
+    const memberCounts: Record<string, number> = {};
     return loaded.map((p, idx) => ({
       key: p.id,
       division: p.division || `${idx + 1}부`,
       name: p.name,
       weight: memberCounts[p.name] ?? 1,
     }));
-  }, [participantData, memberCounts]);
+  }, [participantData]);
 
   const startCreate = (type: DrawType, sourceName: string, sourceLeagueId: string) => {
     setDrawType(type);

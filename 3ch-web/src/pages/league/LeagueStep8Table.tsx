@@ -23,21 +23,34 @@ const StyledTableCell = styled(TableCell)(({ }) => ({
 const NumberHeaderCell = styled(StyledTableCell)(({ theme }) => ({
   fontWeight: 600,
   backgroundColor: theme.palette.grey[200],
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  height: "500px"
 }));
 
 const NumberRowCell = styled(StyledTableCell)(({ theme }) => ({
   fontWeight: 600,
   backgroundColor: theme.palette.grey[200],
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
 }));
 
 const NameHeaderCell = styled(StyledTableCell)(({ theme }) => ({
   fontWeight: 500,
   backgroundColor: theme.palette.grey[100],
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
 }));
 
 const BodyHeaderCell = styled(StyledTableCell)(({ theme }) => ({
   fontWeight: 600,
   backgroundColor: theme.palette.grey[100],
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
 }));
 // 대각선 긋는 셀
 const DiagonalScoreCellBase = styled(TableCell)(({ theme }) => ({
@@ -49,14 +62,15 @@ const DiagonalScoreCellBase = styled(TableCell)(({ theme }) => ({
 
 function DiagonalScoreCell() {
   const ref = React.useRef<HTMLTableCellElement>(null);
-  const [angle, setAngle] = React.useState(45);
+  const [angle, setAngle] = React.useState(135);
 
   React.useLayoutEffect(() => {
     if (!ref.current) return;
 
     const { offsetWidth, offsetHeight } = ref.current;
     const rad = Math.atan(offsetHeight / offsetWidth);
-    setAngle((rad * 180) / Math.PI);
+    const deg = ((rad * 180) / Math.PI)
+    setAngle( 180 - deg );
   }, []);
 
   return (
@@ -86,20 +100,62 @@ export default function LeagueTable() {
 
   if (!participants?.length) return null;
 
+   /* =========================
+     🔥 Canvas 설정
+  ========================= */
+
+  const wrapperRef = React.useRef<HTMLDivElement>(null);
+  const wrapperTableRef = React.useRef<HTMLDivElement>(null);
+  const [scale, setScale] = React.useState(1);
+
+  React.useLayoutEffect(() => {
+    function updateScale() {
+      if ( !wrapperRef.current || !wrapperTableRef.current ) return;
+
+      const wrapperWidth = wrapperRef.current.clientWidth;
+      const wrapperHeight = wrapperRef.current.clientHeight;
+      
+      const { clientWidth, clientHeight } = wrapperTableRef.current;
+
+      const scaleX = wrapperWidth / clientWidth;
+      const scaleY = wrapperHeight / clientHeight;
+
+      setScale(Math.min(scaleX, scaleY));
+    }
+
+    updateScale();
+    window.addEventListener("resize", updateScale);
+    return () => window.removeEventListener("resize", updateScale);
+  },);
+
   return (
    <>
-    {/* 🔥 여기만 회전 */}
-    <Box
+   <Box
+      ref={wrapperRef}
       sx={{
-        position: "absolute",
-        width: "80vh",
-        // height: "100vw",
-        transform: "rotate(90deg) translateY(-100%)",
-        transformOrigin: "top left",
-        overflow: "auto",
-        // flexDirection: "column",
+        width: "396px",
+        height: "716px",
+        overflow: "hidden",
+        position: "relative",
+        background: "#fff",
       }}
     >
+    {/* 🔥 여기만 회전 */}
+    <Box 
+      ref={wrapperTableRef}
+      sx={{
+    // width: "80vh",
+    // height: "100dvh", // vh 말고 dvh 써라 (모바일 안정)
+    // display: "flex",
+    //  width: CANVAS_WIDTH,
+          // height: CANVAS_HEIGHT,
+    justifyContent: "center",
+    writingMode: "vertical-rl",
+    transform: `scale(${scale})`,
+    textOrientation: "sideways",
+    alignItems: "center",
+    transformOrigin: "top left",
+  }}>
     {/* ===== 상단 정보 ===== */}
     <Box mb={2} fontWeight={600}>
       {step1BasicInfo?.date} / 단식 풀리그 / {step4Rules?.rule}
@@ -251,6 +307,7 @@ export default function LeagueTable() {
         </TableBody>
       </Table>
     </TableContainer>
+    </Box>
     </Box>
   </>
   );

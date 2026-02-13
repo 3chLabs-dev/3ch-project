@@ -11,13 +11,12 @@ import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Paper from '@mui/material/Paper';
 
-
-
 const StyledTableCell = styled(TableCell)(({ }) => ({
   border: '1px solid #ccc',
   padding: '6px',
   textAlign: 'center',
   fontSize: 14,
+  width: 65,
 }));
 
 const NumberHeaderCell = styled(StyledTableCell)(({ theme }) => ({
@@ -108,6 +107,9 @@ export default function LeagueTable() {
   const wrapperTableRef = React.useRef<HTMLDivElement>(null);
   const [scale, setScale] = React.useState(1);
 
+  const n = participants.length;
+  const gameOrder = (n * (n - 1)) / 2;
+
   React.useLayoutEffect(() => {
     function updateScale() {
       if ( !wrapperRef.current || !wrapperTableRef.current ) return;
@@ -143,25 +145,20 @@ export default function LeagueTable() {
     {/* 🔥 여기만 회전 */}
     <Box 
       ref={wrapperTableRef}
-      sx={{
-    // width: "80vh",
-    // height: "100dvh", // vh 말고 dvh 써라 (모바일 안정)
-    // display: "flex",
-    //  width: CANVAS_WIDTH,
-          // height: CANVAS_HEIGHT,
-    justifyContent: "center",
-    writingMode: "vertical-rl",
-    transform: `scale(${scale})`,
-    textOrientation: "sideways",
-    alignItems: "center",
-    transformOrigin: "top left",
-  }}>
+      sx={{ justifyContent: "center",
+            writingMode: "vertical-rl",
+            transform: `scale(${scale})`,
+            textOrientation: "sideways",
+            alignItems: "center",
+            transformOrigin: "top left",
+            minHeight: '1500px', // 최솟값을 넣어서 표의 일그러짐 및 하단 공간 잡기
+    }}>
     {/* ===== 상단 정보 ===== */}
     <Box mb={2} fontWeight={600}>
       {step1BasicInfo?.date} / 단식 풀리그 / {step4Rules?.rule}
     </Box>
     {/* ===== 테이블 ===== */}
-    <TableContainer component={Paper}>
+    <TableContainer component={Paper} sx={{ heigth: '1000px', width: '100%'}}>
       <Table>
         {/* ===== 헤더 ===== */}
         <TableHead>
@@ -199,111 +196,44 @@ export default function LeagueTable() {
               <BodyHeaderCell>{rowPlayer.division} {rowPlayer.name}</BodyHeaderCell>
 
               {participants.map((_, colIdx) =>
-                rowIdx === colIdx ? (
-                  <DiagonalScoreCell
-                    key={colIdx}
-                  />
-                ) : (
-                  <StyledTableCell key={colIdx}><InputBase
-                                                    // value={scores[rowIdx][colIdx]}
-                                                    // onChange={(e) =>
-                                                    //   handleScoreChange(rowIdx, colIdx, e.target.value)
-                                                    // }
-                                                    inputProps={{
-                                                      style: {
-                                                        textAlign: "center",
-                                                        fontSize: 14,
-                                                        width: 32,
-                                                        height: 28,
-                                                      },
-                                                    }}
-                                                    sx={{
-                                                      width: 32,
-                                                      height: 28,
-                                                    }}
-                                                  />
+                rowIdx === colIdx ? (<DiagonalScoreCell key={colIdx}/>) : (<StyledTableCell key={colIdx} data-type="target"><InputBase inputProps={{ style: { textAlign: "center", fontSize: 14, width: 32, height: 28, },}} sx={{ width: 32, height: 28, }}/>
                     </StyledTableCell>
                 )
               )}
 
-              <StyledTableCell><InputBase
-                                  // value={scores[rowIdx][colIdx]}
-                                  // onChange={(e) =>
-                                  //   handleScoreChange(rowIdx, colIdx, e.target.value)
-                                  // }
-                                  inputProps={{
-                                    style: {
-                                      textAlign: "center",
-                                      fontSize: 14,
-                                      width: 32,
-                                      height: 28,
-                                    },
-                                  }}
-                                  sx={{
-                                    width: 32,
-                                    height: 28,
-                                  }}
-                                /> 
-                              / 
-                                <InputBase
-                                  // value={scores[rowIdx][colIdx]}
-                                  // onChange={(e) =>
-                                  //   handleScoreChange(rowIdx, colIdx, e.target.value)
-                                  // }
-                                  inputProps={{
-                                    style: {
-                                      textAlign: "center",
-                                      fontSize: 14,
-                                      width: 32,
-                                      height: 28,
-                                    },
-                                  }}
-                                  sx={{
-                                    width: 32,
-                                    height: 28,
-                                  }}
-                                />
-              </StyledTableCell>
-              <StyledTableCell><InputBase
-                                // value={scores[rowIdx][colIdx]}
-                                // onChange={(e) =>
-                                //   handleScoreChange(rowIdx, colIdx, e.target.value)
-                                // }
-                                inputProps={{
-                                  style: {
-                                    textAlign: "center",
-                                    fontSize: 14,
-                                    width: 32,
-                                    height: 28,
-                                  },
-                                }}
-                                sx={{
-                                  width: 32,
-                                  height: 28,
-                                }}
-                              />
-              </StyledTableCell>
-              <StyledTableCell><InputBase
-                                  // value={scores[rowIdx][colIdx]}
-                                  // onChange={(e) =>
-                                  //   handleScoreChange(rowIdx, colIdx, e.target.value)
-                                  // }
-                                  inputProps={{
-                                    style: {
-                                      textAlign: "center",
-                                      fontSize: 14,
-                                      width: 32,
-                                      height: 28,
-                                    },
-                                  }}
-                                  sx={{
-                                    width: 32,
-                                    height: 28,
-                                  }}
-                                />
-              </StyledTableCell>
+              <StyledTableCell><InputBase inputProps={{ style: {textAlign: "center", fontSize: 14, width: 32, height: 28,},}} sx={{ width: 32, height: 28,}}/> / <InputBase inputProps={{ style: { textAlign: "center", fontSize: 14, width: 32, height: 28, }, }} sx={{ width: 32, height: 28, }}/></StyledTableCell>
+              <StyledTableCell><InputBase inputProps={{ style: {textAlign: "center", fontSize: 14, width: 32, height: 28,},}} sx={{ width: 32, height: 28,}}/></StyledTableCell>
+              <StyledTableCell><InputBase inputProps={{ style: {textAlign: "center", fontSize: 14, width: 32, height: 28,},}} sx={{ width: 32, height: 28,}}/></StyledTableCell>
             </TableRow>
           ))}
+        </TableBody>
+      </Table>
+    </TableContainer>
+    <br/>
+    <TableContainer>
+      <Table size="small">
+        <TableBody>
+          <TableRow>
+            <StyledTableCell rowSpan={4}>게임<br/>순서</StyledTableCell>
+            {Array.from({ length: gameOrder }).map((_, idx) => (
+              <StyledTableCell key={ idx } sx={{ textAlign: "center" }}>{ idx + 1 }</StyledTableCell>
+            ))}
+          </TableRow>
+          <TableRow>
+            {Array.from({ length: gameOrder }).map((_, idx) => (
+              <StyledTableCell key={ idx } sx={{ textAlign: "center" }}><InputBase inputProps={{ style: {textAlign: "center", fontSize: 14, width: 32, height: 28,},}} sx={{ width: 32, height: 28,}}/></StyledTableCell>
+            ))}
+          </TableRow>
+          <TableRow>
+            {Array.from({ length: gameOrder }).map((_, idx) => (
+              <StyledTableCell key={ idx } sx={{ textAlign: "center" }}><InputBase inputProps={{ style: {textAlign: "center", fontSize: 14, width: 32, height: 28,},}} sx={{ width: 32, height: 28,}}/></StyledTableCell>
+            ))}
+          </TableRow>
+          <TableRow>
+            {Array.from({ length: gameOrder }).map((_, idx) => (
+              <StyledTableCell key={ idx } sx={{ textAlign: "center" }}><InputBase inputProps={{ style: {textAlign: "center", fontSize: 14, width: 32, height: 28,},}} sx={{ width: 32, height: 28,}}/></StyledTableCell>
+            ))}
+          </TableRow>
         </TableBody>
       </Table>
     </TableContainer>

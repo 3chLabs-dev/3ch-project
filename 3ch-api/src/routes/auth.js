@@ -433,7 +433,46 @@ router.get("/me", requireAuth, async (req, res) => {
   }
 });
 
-//비밀번호 확인
+/**
+ * @openapi
+ * /auth/member/verify-password:
+ *   post:
+ *     summary: 비밀번호 확인
+ *     description: 현재 로그인한 사용자의 비밀번호가 맞는지 확인합니다.
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - password
+ *             properties:
+ *               password:
+ *                 type: string
+ *                 description: 확인할 비밀번호
+ *     responses:
+ *       200:
+ *         description: 비밀번호가 일치함
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *       400:
+ *         description: 비밀번호가 제공되지 않음 또는 유효성 검사 실패
+ *       401:
+ *         description: 비밀번호가 일치하지 않음 또는 유효하지 않은 토큰
+ *       404:
+ *         description: 사용자를 찾을 수 없음
+ *       500:
+ *         description: 서버 오류
+ */
 router.post("/member/verify-password", requireAuth, async(req, res) => {
     const parsed = verifyPasswordSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -528,7 +567,61 @@ router.put("/member", requireAuth, async (req, res) => {
   }
 });
 
-//임시 토큰 검증후 이름설정
+/**
+ * @openapi
+ * /auth/social/complete:
+ *   post:
+ *     summary: 소셜 로그인 회원가입 완료
+ *     description: 소셜 로그인 시 이름이 없는 경우, 임시 티켓을 사용하여 이름을 설정하고 회원가입을 완료합니다.
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - ticket
+ *               - name
+ *             properties:
+ *               ticket:
+ *                 type: string
+ *                 description: 소셜 로그인 콜백에서 받은 임시 티켓
+ *               name:
+ *                 type: string
+ *                 minLength: 1
+ *                 maxLength: 50
+ *                 description: 설정할 사용자 이름
+ *     responses:
+ *       200:
+ *         description: 회원가입 완료. JWT 토큰과 사용자 정보를 반환합니다.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *                 token:
+ *                   type: string
+ *                 user:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                     email:
+ *                       type: string
+ *                     name:
+ *                       type: string
+ *       400:
+ *         description: 입력값 유효성 검사 실패
+ *       401:
+ *         description: 유효하지 않은 티켓
+ *       404:
+ *         description: 사용자를 찾을 수 없음
+ *       500:
+ *         description: 서버 오류
+ */
 router.post("/social/complete", async (req, res) => {
   const schema = z.object({
     ticket: z.string().min(1),

@@ -40,6 +40,7 @@ export interface CreateGroupResponse {
 export interface GroupMember {
   id: string;
   role: string;
+  division?: string | null;
   joined_at: string;
   user_id: number;
   name?: string;
@@ -145,6 +146,20 @@ export const groupApi = baseApi.injectEndpoints({
       ],
     }),
 
+    updateMember: builder.mutation<
+      { message: string },
+      { groupId: string; userId: string; division?: string }
+    >({
+      query: ({ groupId, userId, division }) => ({
+        url: `/group/${groupId}/member/${userId}`,
+        method: "PATCH",
+        body: { division },
+      }),
+      invalidatesTags: (_result, _error, { groupId }) => [
+        { type: "Group", id: groupId },
+      ],
+    }),
+
     updateGroup: builder.mutation<
       { message: string },
       { groupId: string; data: UpdateGroupRequest }
@@ -178,6 +193,7 @@ export const {
   useLazyCheckGroupNameQuery,
   useJoinGroupMutation,
   useUpdateMemberRoleMutation,
+  useUpdateMemberMutation,
   useUpdateGroupMutation,
   useDeleteGroupMutation,
 } = groupApi;

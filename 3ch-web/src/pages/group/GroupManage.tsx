@@ -1,5 +1,5 @@
 ﻿import { useParams, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
     Box,
     Stack,
@@ -12,7 +12,6 @@ import {
     ListItem,
     ListItemText,
     Divider,
-    Menu,
     MenuItem,
     Dialog,
     DialogTitle,
@@ -22,13 +21,28 @@ import {
     Select,
     FormControl,
     InputLabel,
+    Collapse,
+    Chip,
+    CircularProgress,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import EditIcon from "@mui/icons-material/Edit";
-import SettingsIcon from "@mui/icons-material/Settings";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import QRCode from "react-qr-code";
 import { useAppSelector } from "../../app/hooks";
-import { useGetGroupDetailQuery, useUpdateMemberRoleMutation, useUpdateGroupMutation, useDeleteGroupMutation } from "../../features/group/groupApi";
+import {
+    useGetGroupDetailQuery,
+    useUpdateMemberRoleMutation,
+    useUpdateMemberMutation,
+    useUpdateGroupMutation,
+    useDeleteGroupMutation,
+} from "../../features/group/groupApi";
+import { useGetLeaguesQuery, useGetLeagueParticipantsQuery, useUpdateParticipantMutation } from "../../features/league/leagueApi";
+import type { LeagueParticipantItem } from "../../features/league/leagueApi";
+import ParticipantDetailDialog from "../league/ParticipantDetailDialog";
+import MemberEditDialog from "./MemberEditDialog";
+import type { Participant } from "../../features/league/leagueCreationSlice";
 import { getRoleLabel } from "../../utils/permissions";
 import { REGION_DATA } from "./regionData";
 
@@ -49,12 +63,20 @@ export default function GroupManage() {
     });
 
     const [updateMemberRole] = useUpdateMemberRoleMutation();
+    const [updateMember] = useUpdateMemberMutation();
     const [updateGroup, { isLoading: isUpdating }] = useUpdateGroupMutation();
     const [deleteGroup, { isLoading: isDeleting }] = useDeleteGroupMutation();
-    const [menuAnchor, setMenuAnchor] = useState<{ element: HTMLElement; userId: string } | null>(null);
     const [editDialogOpen, setEditDialogOpen] = useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+    const [showLeagueManagement] = useState(false);
+    const [expandedLeagueId, setExpandedLeagueId] = useState<string | null>(null);
+    const [participantDetailOpen, setParticipantDetailOpen] = useState(false);
+    const [selectedParticipant, setSelectedParticipant] = useState<{ leagueId: string; participant: LeagueParticipantItem } | null>(null);
+    const [memberEditOpen, setMemberEditOpen] = useState(false);
+    const [selectedMember, setSelectedMember] = useState<{ id: string; name: string; email: string; role: "owner" | "admin" | "member"; division?: string } | null>(null);
+
+    const leagueManagementRef = useRef<HTMLDivElement>(null);
 
     const [formData, setFormData] = useState({
         name: "",
@@ -63,6 +85,22 @@ export default function GroupManage() {
         region_district: "",
         founded_at: "",
     });
+
+    // 현재 모임의 리그 목록 조회
+    const { data: leagueData } = useGetLeaguesQuery(
+        id ? { group_id: id } : undefined,
+        { skip: !isLoggedIn || !id }
+    );
+    const leagues = leagueData?.leagues ?? [];
+
+    // 펼쳐진 리그의 참가자 목록 조회
+    const { data: participantData, isLoading: isLoadingParticipants, refetch: refetchParticipants } = useGetLeagueParticipantsQuery(
+        expandedLeagueId ?? "",
+        { skip: !expandedLeagueId }
+    );
+    const participants = participantData?.participants ?? [];
+
+    const [updateParticipant] = useUpdateParticipantMutation();
 
     if (!isLoggedIn) {
         return (
@@ -93,14 +131,6 @@ export default function GroupManage() {
     const isOwner = myRole === "owner";
     const emoji = group.sport ? (SPORT_EMOJI[group.sport] ?? "🏓") : "🏓";
 
-    const handleOpenMenu = (event: React.MouseEvent<HTMLButtonElement>, userId: string) => {
-        setMenuAnchor({ element: event.currentTarget, userId });
-    };
-
-    const handleCloseMenu = () => {
-        setMenuAnchor(null);
-    };
-
     const handleOpenEditDialog = () => {
         if (!group) return; // 데이터가 없으면 다이얼로그를 열지 않음
 
@@ -112,20 +142,6 @@ export default function GroupManage() {
             founded_at: group.founded_at ? group.founded_at.split('T')[0] : "",
         });
         setEditDialogOpen(true);
-    };
-
-    const handleChangeRole = async (newRole: "member" | "admin") => {
-        if (!menuAnchor || !id) return;
-        try {
-            await updateMemberRole({
-                groupId: id,
-                userId: menuAnchor.userId,
-                role: newRole,
-            }).unwrap();
-            handleCloseMenu();
-        } catch (error) {
-            console.error("Failed to update role:", error);
-        }
     };
 
     const handleUpdateGroup = async () => {
@@ -150,6 +166,104 @@ export default function GroupManage() {
         } catch (error) {
             console.error("Failed to delete group:", error);
         }
+    };
+
+    const handleToggleLeague = (leagueId: string) => {
+        setExpandedLeagueId((prev) => (prev === leagueId ? null : leagueId));
+    };
+
+    const handleOpenParticipantDetail = (leagueId: string, participant: LeagueParticipantItem) => {
+        setSelectedParticipant({ leagueId, participant });
+        setParticipantDetailOpen(true);
+    };
+
+    const handleCloseParticipantDetail = () => {
+        setParticipantDetailOpen(false);
+        setSelectedParticipant(null);
+    };
+
+    const handleSaveParticipant = async (updated: Participant) => {
+        if (!selectedParticipant) return;
+        try {
+            await updateParticipant({
+                leagueId: selectedParticipant.leagueId,
+                participantId: selectedParticipant.participant.id,
+                updates: {
+                    division: updated.division,
+                    name: updated.name,
+                    paid: updated.paid,
+                    arrived: updated.arrived,
+                    footPool: updated.footPool,
+                },
+            }).unwrap();
+            await refetchParticipants();
+            handleCloseParticipantDetail();
+        } catch (error) {
+            console.error("Failed to update participant:", error);
+        }
+    };
+
+    const handleOpenMemberEdit = (member: typeof members[0]) => {
+        setSelectedMember({
+            id: String(member.user_id),
+            name: member.name || member.email,
+            email: member.email,
+            role: member.role as "owner" | "admin" | "member",
+            division: member.division || "",
+        });
+        setMemberEditOpen(true);
+    };
+
+    const handleCloseMemberEdit = () => {
+        setMemberEditOpen(false);
+        setSelectedMember(null);
+    };
+
+    const handleSaveMemberEdit = async (updated: { role: "owner" | "admin" | "member"; division: string }) => {
+        if (!selectedMember || !id) return;
+        try {
+            if (updated.role !== "owner" && selectedMember.role !== "owner") {
+                await updateMemberRole({
+                    groupId: id,
+                    userId: selectedMember.id,
+                    role: updated.role as "member" | "admin",
+                }).unwrap();
+            }
+
+            await updateMember({
+                groupId: id,
+                userId: selectedMember.id,
+                division: updated.division.trim(),
+            }).unwrap();
+
+            handleCloseMemberEdit();
+        } catch (error) {
+            console.error("Failed to update member:", error);
+        }
+    };
+
+    const handleRemoveMember = async () => {
+        if (!selectedMember || !id) return;
+        if (!window.confirm(`"${selectedMember.name}"님을 모임에서 내보내시겠습니까?`)) {
+            return;
+        }
+        try {
+            // await removeMember({ groupId: id, userId: selectedMember.id }).unwrap();
+            console.log("Remove member:", selectedMember.id);
+            handleCloseMemberEdit();
+        } catch (error) {
+            console.error("Failed to remove member:", error);
+        }
+    };
+
+    const formatLeagueDate = (dateStr: string) => {
+        const d = new Date(dateStr);
+        const days = ["일", "월", "화", "수", "목", "금", "토"];
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, "0");
+        const dd = String(d.getDate()).padStart(2, "0");
+        const day = days[d.getDay()];
+        return `${yyyy}-${mm}-${dd}(${day})`;
     };
 
     return (
@@ -229,6 +343,7 @@ export default function GroupManage() {
                         <Button
                             variant="outlined"
                             fullWidth
+                            onClick={() => navigate(`/group/${id}/manage/league`)}
                             sx={{
                                 borderRadius: 1,
                                 py: 1.2,
@@ -269,12 +384,12 @@ export default function GroupManage() {
                                             <Typography fontSize={12} color="text.secondary" fontWeight={600}>
                                                 {getRoleLabel(member.role)}
                                             </Typography>
-                                            {isOwner && member.role !== "owner" && (
+                                            {canManage && (
                                                 <IconButton
                                                     size="small"
-                                                    onClick={(e) => handleOpenMenu(e, String(member.user_id))}
+                                                    onClick={() => handleOpenMemberEdit(member)}
                                                 >
-                                                    <SettingsIcon fontSize="small" />
+                                                    <EditIcon fontSize="small" />
                                                 </IconButton>
                                             )}
                                         </Stack>
@@ -294,7 +409,119 @@ export default function GroupManage() {
                 </Card>
             </Box>
 
-            {/* 모임 초대 버튼 */}
+            {/* 리그 관리 섹션 */}
+            {showLeagueManagement && (
+            <Box ref={leagueManagementRef}>
+                <Typography variant="subtitle1" fontWeight={900} sx={{ mb: 1.5 }}>
+                    리그 관리
+                </Typography>
+
+                {leagues.length > 0 ? (
+                    <Stack spacing={1}>
+                        {leagues.map((league) => (
+                            <Card key={league.id} elevation={2} sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
+                                <CardContent sx={{ p: 0, "&:last-child": { pb: 0 } }}>
+                                    <Box
+                                        onClick={() => handleToggleLeague(league.id)}
+                                        sx={{
+                                            px: 2.5,
+                                            py: 1.8,
+                                            cursor: "pointer",
+                                            "&:hover": { bgcolor: "#F9FAFB" },
+                                        }}
+                                    >
+                                        <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                            <Box flex={1}>
+                                                <Typography fontWeight={700} fontSize={15}>
+                                                    {formatLeagueDate(league.start_date)}
+                                                </Typography>
+                                                <Typography fontSize={12} color="text.secondary" fontWeight={600}>
+                                                    {league.type} · {league.participant_count} / {league.recruit_count}명
+                                                </Typography>
+                                            </Box>
+                                            <IconButton size="small">
+                                                {expandedLeagueId === league.id ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                                            </IconButton>
+                                        </Stack>
+                                    </Box>
+
+                                    {/* 참가자 목록 (확장된 리그만) */}
+                                    <Collapse in={expandedLeagueId === league.id} timeout="auto" unmountOnExit>
+                                        <Divider />
+                                        <Box sx={{ px: 2.5, py: 2 }}>
+                                            <Typography fontSize={13} fontWeight={700} color="text.secondary" sx={{ mb: 1.5 }}>
+                                                참가자 목록
+                                            </Typography>
+
+                                            {isLoadingParticipants ? (
+                                                <Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
+                                                    <CircularProgress size={24} />
+                                                </Box>
+                                            ) : participants.length > 0 ? (
+                                                <Stack spacing={0.8}>
+                                                    {participants.map((participant) => (
+                                                        <Box
+                                                            key={participant.id}
+                                                            onClick={() => canManage && handleOpenParticipantDetail(league.id, participant)}
+                                                            sx={{
+                                                                display: "flex",
+                                                                alignItems: "center",
+                                                                gap: 1.5,
+                                                                px: 1.5,
+                                                                py: 1,
+                                                                borderRadius: 1,
+                                                                bgcolor: "#F9FAFB",
+                                                                cursor: canManage ? "pointer" : "default",
+                                                                "&:hover": canManage ? { bgcolor: "#F3F4F6" } : {},
+                                                            }}
+                                                        >
+                                                            {participant.division && (
+                                                                <Chip
+                                                                    label={participant.division}
+                                                                    size="small"
+                                                                    sx={{ height: 20, fontSize: 11, fontWeight: 800 }}
+                                                                />
+                                                            )}
+                                                            <Typography fontWeight={700} fontSize={14} flex={1}>
+                                                                {participant.name}
+                                                            </Typography>
+                                                            <Stack direction="row" spacing={0.5}>
+                                                                {participant.paid && (
+                                                                    <Chip label="입금" size="small" color="success" sx={{ height: 20, fontSize: 10 }} />
+                                                                )}
+                                                                {participant.arrived && (
+                                                                    <Chip label="도착" size="small" color="primary" sx={{ height: 20, fontSize: 10 }} />
+                                                                )}
+                                                                {participant.foot_pool && (
+                                                                    <Chip label="뒷풀이" size="small" color="secondary" sx={{ height: 20, fontSize: 10 }} />
+                                                                )}
+                                                            </Stack>
+                                                        </Box>
+                                                    ))}
+                                                </Stack>
+                                            ) : (
+                                                <Typography fontSize={13} color="text.secondary" textAlign="center" sx={{ py: 2 }}>
+                                                    참가자가 없습니다.
+                                                </Typography>
+                                            )}
+                                        </Box>
+                                    </Collapse>
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </Stack>
+                ) : (
+                    <Card elevation={2} sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
+                        <CardContent sx={{ py: 2.5, textAlign: "center" }}>
+                            <Typography color="text.secondary" fontWeight={700}>
+                                개설된 리그가 없습니다.
+                            </Typography>
+                        </CardContent>
+                    </Card>
+                )}
+            </Box>
+            )}
+
             {canManage && (
                 <Button
                     fullWidth
@@ -311,20 +538,6 @@ export default function GroupManage() {
                 </Button>
             )}
 
-            {/* 권한 변경 메뉴 */}
-            <Menu
-                anchorEl={menuAnchor?.element}
-                open={Boolean(menuAnchor)}
-                onClose={handleCloseMenu}
-            >
-                <MenuItem onClick={() => handleChangeRole("admin")}>
-                    운영진으로 임명
-                </MenuItem>
-                <MenuItem onClick={() => handleChangeRole("member")}>
-                    일반 멤버로 변경
-                </MenuItem>
-            </Menu>
-
             {/* 모임 정보 수정 다이얼로그 */}
             <Dialog
                 open={editDialogOpen}
@@ -333,7 +546,7 @@ export default function GroupManage() {
                 fullWidth
                 PaperProps={{
                     sx: {
-                        borderRadius: 2,
+                        borderRadius: 1,
                         mx: 2,
                     },
                 }}
@@ -507,7 +720,7 @@ export default function GroupManage() {
                 fullWidth
                 PaperProps={{
                     sx: {
-                        borderRadius: 2,
+                        borderRadius: 1,
                         mx: 2,
                     },
                 }}
@@ -560,7 +773,7 @@ export default function GroupManage() {
                 fullWidth
                 PaperProps={{
                     sx: {
-                        borderRadius: 2,
+                        borderRadius: 1,
                         mx: 2,
                     },
                 }}
@@ -684,6 +897,34 @@ export default function GroupManage() {
                     </Button>
                 </DialogActions>
             </Dialog>
+
+            {selectedParticipant && (
+                <ParticipantDetailDialog
+                    key={selectedParticipant.participant.id}
+                    open={participantDetailOpen}
+                    participant={{
+                        division: selectedParticipant.participant.division || "",
+                        name: selectedParticipant.participant.name,
+                        paid: selectedParticipant.participant.paid,
+                        arrived: selectedParticipant.participant.arrived,
+                        footPool: selectedParticipant.participant.foot_pool,
+                    }}
+                    onClose={handleCloseParticipantDetail}
+                    onSave={handleSaveParticipant}
+                />
+            )}
+
+            {selectedMember && (
+                <MemberEditDialog
+                    key={selectedMember.id}
+                    open={memberEditOpen}
+                    member={selectedMember}
+                    onClose={handleCloseMemberEdit}
+                    onSave={handleSaveMemberEdit}
+                    onRemove={canManage ? handleRemoveMember : undefined}
+                    isOwner={isOwner}
+                />
+            )}
         </Stack>
     );
 }

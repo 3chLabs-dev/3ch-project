@@ -6,7 +6,7 @@ import BottomTab from "./BottomTab";
 import { useEffect } from "react";
 import { useDispatch } from "react-redux";
 import { setToken, setUser } from "../features/auth/authSlice";
-import logo from "../assets/우리리그_logo_vectorized.svg";
+import logo from "../assets/512_우리리그 로고.svg";
 
 const TAB_H = 56;
 

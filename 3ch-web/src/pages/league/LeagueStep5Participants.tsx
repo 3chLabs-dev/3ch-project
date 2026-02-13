@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import {
   Box,
   Typography,
@@ -16,12 +16,12 @@ import {
   Snackbar,
   Alert,
 } from "@mui/material";
+import type { SelectChangeEvent } from "@mui/material";
 import { createLeague, setStep, setStep5Participants } from "../../features/league/leagueCreationSlice";
 import type { Participant } from "../../features/league/leagueCreationSlice";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import LoadMembersDialog, { type MemberRow } from "./LoadMembersDialog";
 import { mergeMembers } from "./mergeMember";
-import type { SelectChangeEvent } from "@mui/material";
 
 const headCellSx = {
   fontSize: 12,
@@ -34,7 +34,6 @@ const tightCheckboxSx = {
   p: 0,
   "& .MuiSvgIcon-root": { fontSize: 20 },
 };
-
 
 const cellCenter = { display: "flex", justifyContent: "center", alignItems: "center" };
 
@@ -66,21 +65,18 @@ export default function LeagueStep5Participants() {
   const existing = useAppSelector((s) => s.leagueCreation.step5Participants?.participants ?? []);
 
   const [participants, setParticipants] = useState<Participant[]>(existing);
-
   const [recruitCount, setRecruitCount] = useState<number | "">("");
-  
   const [division, setDivision] = useState("");
   const [name, setName] = useState("");
 
   const [openLoad, setOpenLoad] = useState(false);
+  const [alertMsg, setAlertMsg] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<{ idx: number; division: string; name: string } | null>(null);
+  const [openCancelDialog, setOpenCancelDialog] = useState<boolean>(false);
 
   const isFull = recruitCount !== "" && participants.length >= recruitCount;
   const canAdd = useMemo(() => Boolean(division.trim() && name.trim()), [division, name]);
   const canNext = participants.length > 0;
-  const [alertMsg, setAlertMsg] = useState("");
-
-  const [deleteTarget, setDeleteTarget] = useState<{ idx: number; division: string; name: string } | null>(null);
-  const [openCancelDialog, setOpenCancelDialog] = useState<boolean>(false);
 
   const handleCancelDelete = () => {
     setOpenCancelDialog(false);
@@ -122,7 +118,6 @@ export default function LeagueStep5Participants() {
     setOpenCancelDialog(true);
   };
 
-
   const handleToggle = (idx: number, key: "paid" | "arrived" | "footPool") => {
     setParticipants((prev) => prev.map((p, i) => (i === idx ? { ...p, [key]: !p[key] } : p)));
   };
@@ -133,9 +128,8 @@ export default function LeagueStep5Participants() {
 
   const handleNext = () => {
     dispatch(setStep5Participants({ participants, recruitCount: recruitCount === "" ? null : recruitCount }));
-
     dispatch(setStep(6));
-    dispatch(createLeague())
+    dispatch(createLeague());
   };
 
   const handleOpenLoad = () => setOpenLoad(true);
@@ -190,20 +184,14 @@ export default function LeagueStep5Participants() {
         <Stack direction="row" spacing={1} alignItems="baseline">
           <Typography sx={{ fontSize: 22, fontWeight: 900, mb: 1 }}>
             리그 참가자
-          </Typography>
-          {recruitCount !== "" && (
+          </Typography>          {recruitCount !== "" && (
             <Typography sx={{ fontSize: 14, fontWeight: 700, color: isFull ? "#E53935" : "#6B7280" }}>
               {participants.length}/{recruitCount}
             </Typography>
           )}
         </Stack>
 
-        <Button
-          variant="contained"
-          disableElevation
-          onClick={handleOpenLoad}
-          sx={smallBtnSx("#87B8FF", "#79AEFF")}
-        >
+        <Button variant="contained" disableElevation onClick={handleOpenLoad} sx={smallBtnSx("#87B8FF", "#79AEFF")}>
           불러오기
         </Button>
       </Box>
@@ -238,12 +226,7 @@ export default function LeagueStep5Participants() {
           mb: 1.2,
         }}
       >
-        <TextField
-          placeholder="부수"
-          value={division}
-          onChange={(e) => setDivision(e.target.value)}
-          sx={inputSx}
-        />
+        <TextField placeholder="부수" value={division} onChange={(e) => setDivision(e.target.value)} sx={inputSx} />
         <TextField
           placeholder="이름"
           value={name}
@@ -283,12 +266,7 @@ export default function LeagueStep5Participants() {
       </Box>
 
       {participants.length > 0 && (
-        <Box
-          sx={{
-            borderTop: "1px solid #D9DDE6",
-            borderBottom: "1px solid #D9DDE6",
-          }}
-        >
+        <Box sx={{ borderTop: "1px solid #D9DDE6", borderBottom: "1px solid #D9DDE6" }}>
           {participants.map((p, idx) => (
             <Box
               key={`${p.division}-${p.name}-${idx}`}
@@ -302,7 +280,7 @@ export default function LeagueStep5Participants() {
                 borderTop: idx === 0 ? "none" : "1px solid #ECEFF5",
               }}
             >
-              <Box sx={{ ...cellCenter }}>
+              <Box sx={cellCenter}>
                 <Box
                   sx={{
                     minWidth: 34,
@@ -322,14 +300,16 @@ export default function LeagueStep5Participants() {
                 </Box>
               </Box>
 
-              <Typography sx={{
-                fontWeight: 900,
-                fontSize: 16,
-                lineHeight: 1.1,
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}>
+              <Typography
+                sx={{
+                  fontWeight: 900,
+                  fontSize: 16,
+                  lineHeight: 1.1,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
                 {p.name}
               </Typography>
 
@@ -403,7 +383,6 @@ export default function LeagueStep5Participants() {
         </Button>
       </Stack>
 
-      {/* Cancel Dialog */}
       <Dialog
         open={openCancelDialog}
         onClose={handleCancelDelete}
@@ -417,35 +396,25 @@ export default function LeagueStep5Participants() {
         }}
       >
         <DialogContent sx={{ pt: 2.5, pb: 1.5 }}>
-          <Typography sx={{ fontWeight: 900, mb: 1 }}>
-            리그 참가자 추가/삭제 확인
-          </Typography>
+          <Typography sx={{ fontWeight: 900, mb: 1 }}>리그 참가자 삭제 확인</Typography>
 
           <Typography sx={{ fontSize: 15, lineHeight: 1.5 }}>
             {deleteTarget
-              ? `"(${deleteTarget.division})${deleteTarget.name}"를 참가자 명단에서 삭제하겠습니까?`
-              : "참가자를 삭제하겠습니까?"}
+              ? `"(${deleteTarget.division})${deleteTarget.name}"을 참가자 명단에서 삭제하시겠습니까?`
+              : "참가자를 삭제하시겠습니까?"}
           </Typography>
         </DialogContent>
 
         <DialogActions sx={{ px: 2, pb: 2, gap: 1 }}>
-          <Button
-            onClick={handleCancelDelete}
-            sx={{ fontWeight: 900, color: "#111827" }}
-          >
+          <Button onClick={handleCancelDelete} sx={{ fontWeight: 900, color: "#111827" }}>
             취소
           </Button>
 
-          <Button
-            onClick={handleConfirmDelete}
-            autoFocus
-            sx={{ fontWeight: 900, color: "#111827" }}
-          >
+          <Button onClick={handleConfirmDelete} autoFocus sx={{ fontWeight: 900, color: "#111827" }}>
             확인
           </Button>
         </DialogActions>
       </Dialog>
-
 
       <LoadMembersDialog open={openLoad} onClose={handleCloseLoad} onConfirm={handleConfirmLoad} />
 
@@ -453,7 +422,15 @@ export default function LeagueStep5Participants() {
         open={!!alertMsg}
         autoHideDuration={3000}
         onClose={() => setAlertMsg("")}
-        anchorOrigin={{ vertical: "top", horizontal: "center" }}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+        sx={{
+          "&.MuiSnackbar-root": {
+            bottom: {
+              xs: "calc(env(safe-area-inset-bottom) + 64px)",
+              sm: "calc(env(safe-area-inset-bottom) + 20px)",
+            },
+          },
+        }}
       >
         <Alert severity="warning" onClose={() => setAlertMsg("")} sx={{ fontWeight: 700 }}>
           {alertMsg}

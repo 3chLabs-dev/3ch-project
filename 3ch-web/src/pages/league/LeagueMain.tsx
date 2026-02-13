@@ -127,8 +127,7 @@ export default function LeagueMainBody() {
           onClick={handleCreateNewLeague}
           sx={{
             borderRadius: 1,
-            py: 1.2,
-            fontWeight: 900,
+            fontWeight: 700,
           }}
         >
           신규 생성하기
@@ -158,8 +157,7 @@ export default function LeagueMainBody() {
         disableElevation
         sx={{
           borderRadius: 1,
-          py: 1.2,
-          fontWeight: 900,
+          fontWeight: 700,
         }}
       >
         신규 생성하기

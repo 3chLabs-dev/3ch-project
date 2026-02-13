@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const { z } = require('zod');
 const { randomUUID } = require('crypto');
 const pool = require('../db/pool');
@@ -6,178 +6,50 @@ const { requireAuth } = require('../middlewares/auth');
 
 const router = express.Router();
 
-/**
- * @swagger
- * components:
- *   schemas:
- *     League:
- *       type: object
- *       required:
- *         - id
- *         - name
- *         - type
- *         - sport
- *         - start_date
- *         - created_by_id
- *         - created_at
- *         - updated_at
- *       properties:
- *         id:
- *           type: string
- *           format: uuid
- *           description: 리그의 고유 식별자
- *         name:
- *           type: string
- *           description: 리그 이름
- *         description:
- *           type: string
- *           nullable: true
- *           description: 리그에 대한 선택적 설명
- *         type:
- *           type: string
- *           description: "리그 유형 (예: 단식, 복식, 3인 팀)"
- *         sport:
- *           type: string
- *           description: 리그가 생성된 스포츠
- *         start_date:
- *           type: string
- *           format: date-time
- *           description: "리그 시작일 및 시간"
- *         rules:
- *           type: string
- *           nullable: true
- *           description: 리그에 대한 사용자 지정 규칙
- *         status:
- *           type: string
- *           enum: [draft, active, completed]
- *           default: draft
- *           description: 리그의 현재 상태
- *         recruit_count:
- *           type: integer
- *           description: 모집 인원
- *         participant_count:
- *           type: integer
- *           description: 참가 인원
- *         group_id:
- *           type: string
- *           format: uuid
- *           description: 리그가 속한 모임 ID
- *         created_by_id:
- *           type: integer
- *           description: 리그를 생성한 사용자의 ID
- *         created_at:
- *           type: string
- *           format: date-time
- *           description: 리그 생성 타임스탬프
- *         updated_at:
- *           type: string
- *           format: date-time
- *           description: 리그 최종 업데이트 타임스탬프
- *     CreateLeagueRequest:
- *       type: object
- *       required:
- *         - name
- *         - type
- *         - sport
- *         - start_date
- *         - group_id
- *       properties:
- *         name:
- *           type: string
- *           description: 리그 이름
- *         description:
- *           type: string
- *           nullable: true
- *           description: 리그에 대한 선택적 설명
- *         type:
- *           type: string
- *           description: "리그 유형 (예: 단식, 복식, 3인 팀)"
- *         sport:
- *           type: string
- *           description: 리그가 생성된 스포츠
- *         start_date:
- *           type: string
- *           format: date-time
- *           description: "리그 시작일 및 시간"
- *         rules:
- *           type: string
- *           nullable: true
- *           description: 리그에 대한 사용자 지정 규칙
- *         recruit_count:
- *           type: integer
- *           default: 0
- *           description: 모집 인원
- *         participant_count:
- *           type: integer
- *           default: 0
- *           description: 참가 인원
- *         group_id:
- *           type: string
- *           format: uuid
- *           description: 리그를 개설하는 모임 ID (owner 또는 admin만 가능)
- *     UpdateLeagueRequest:
- *       type: object
- *       properties:
- *         name:
- *           type: string
- *           description: 리그 이름
- *         description:
- *           type: string
- *           nullable: true
- *           description: 리그에 대한 선택적 설명
- *         type:
- *           type: string
- *           description: "리그 유형 (예: 단식, 복식, 3인 팀)"
- *         sport:
- *           type: string
- *           description: 리그가 생성된 스포츠
- *         start_date:
- *           type: string
- *           format: date-time
- *           description: "리그 시작일 및 시간"
- *         rules:
- *           type: string
- *           nullable: true
- *           description: 리그에 대한 사용자 지정 규칙
- *         status:
- *           type: string
- *           enum: [draft, active, completed]
- *           description: 리그의 현재 상태
- */
+const participantSchema = z.object({
+  division: z.string().default(''),
+  name: z.string().min(1, '참가자 이름은 필수입니다.'),
+  paid: z.boolean().default(false),
+  arrived: z.boolean().default(false),
+  footPool: z.boolean().default(false),
+});
 
-// Initial comment block for the entire league router
 /**
- * @swagger
+ * @openapi
  * tags:
  *   name: 리그
- *   description: 리그 관리 API
+ *   description: 리그 생성/조회/수정 및 참가자 관리 API
  */
 
 const createLeagueSchema = z.object({
-  name: z.string().min(1, '리그 이름은 필수입니다'),
+  name: z.string().min(1, '리그 이름은 필수입니다.'),
   description: z.string().optional(),
-  type: z.string().min(1, '리그 유형은 필수입니다'),
-  sport: z.string().min(1, '스포츠 종목은 필수입니다'),
-  start_date: z.string().datetime('시작일은 올바른 ISO 8601 날짜 형식이어야 합니다'),
+  type: z.string().min(1, '리그 유형은 필수입니다.'),
+  sport: z.string().min(1, '스포츠 종목은 필수입니다.'),
+  start_date: z.string().datetime('시작일은 올바른 ISO 8601 형식이어야 합니다.'),
   rules: z.string().optional(),
   recruit_count: z.number().int().min(0).default(0),
   participant_count: z.number().int().min(0).default(0),
-  group_id: z.string().uuid('올바른 모임 ID 형식이어야 합니다'),
+  group_id: z.string().uuid('모임 ID 형식이 올바르지 않습니다.'),
+  participants: z.array(participantSchema).default([]),
 });
 
 const updateLeagueSchema = z.object({
-  name: z.string().min(1, '리그 이름은 필수입니다').optional(),
+  name: z.string().min(1, '리그 이름은 필수입니다.').optional(),
   description: z.string().optional(),
-  type: z.string().min(1, '리그 유형은 필수입니다').optional(),
-  sport: z.string().min(1, '스포츠 종목은 필수입니다').optional(),
-  start_date: z.string().datetime('시작일은 올바른 ISO 8601 날짜 형식이어야 합니다').optional(),
+  type: z.string().min(1, '리그 유형은 필수입니다.').optional(),
+  sport: z.string().min(1, '스포츠 종목은 필수입니다.').optional(),
+  start_date: z.string().datetime('시작일은 올바른 ISO 8601 형식이어야 합니다.').optional(),
   rules: z.string().optional(),
-  status: z.enum(["draft", "active", "completed"]).optional(),
+  status: z.enum(['draft', 'active', 'completed']).optional(),
 });
 
-// JSDoc for GET /league (list)
 /**
- * @swagger
+ * GET /league
+ * 리그 목록 조회
+ */
+/**
+ * @openapi
  * /league:
  *   get:
  *     summary: 리그 목록 조회
@@ -194,18 +66,18 @@ const updateLeagueSchema = z.object({
  *         schema:
  *           type: integer
  *           default: 10
- *         description: 페이지당 항목 수
+ *         description: 페이지당 항목 수 (최대 50)
  *       - in: query
  *         name: sport
  *         schema:
  *           type: string
- *         description: 스포츠 종목 필터
+ *         description: 종목 필터
  *       - in: query
  *         name: status
  *         schema:
  *           type: string
  *           enum: [draft, active, completed]
- *         description: 리그 상태 필터
+ *         description: 상태 필터
  *       - in: query
  *         name: group_id
  *         schema:
@@ -216,46 +88,22 @@ const updateLeagueSchema = z.object({
  *         name: my_groups
  *         schema:
  *           type: boolean
- *         description: 내가 속한 모임의 리그만 조회 (user_id와 함께 사용)
+ *         description: user_id 기준 내가 속한 모임의 리그만 조회
  *       - in: query
  *         name: user_id
  *         schema:
  *           type: integer
- *         description: 사용자 ID (my_groups=true일 때 필요)
+ *         description: my_groups=true일 때 필요한 사용자 ID
  *     responses:
  *       200:
- *         description: 리그 목록
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 leagues:
- *                   type: array
- *                   items:
- *                     allOf:
- *                       - $ref: '#/components/schemas/League'
- *                       - type: object
- *                         properties:
- *                           creator_name:
- *                             type: string
- *                           team_count:
- *                             type: integer
- *                           player_count:
- *                             type: integer
- *                 total:
- *                   type: integer
- *                 page:
- *                   type: integer
- *                 limit:
- *                   type: integer
+ *         description: 리그 목록 조회 성공
  *       500:
- *         description: 내부 서버 오류
+ *         description: 서버 오류
  */
 router.get('/league', async (req, res) => {
   try {
-    const page = Math.max(1, parseInt(req.query.page) || 1);
-    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 10));
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 10));
     const offset = (page - 1) * limit;
 
     const conditions = [];
@@ -274,20 +122,18 @@ router.get('/league', async (req, res) => {
       conditions.push(`l.group_id = $${paramIndex++}`);
       params.push(req.query.group_id);
     }
-
-    // my_groups=true: 내가 속한 모임의 리그만 조회 (user_id 필요)
     if (req.query.my_groups === 'true' && req.query.user_id) {
       conditions.push(`l.group_id IN (SELECT group_id FROM group_members WHERE user_id = $${paramIndex++})`);
-      params.push(parseInt(req.query.user_id));
+      params.push(parseInt(req.query.user_id, 10));
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     const countResult = await pool.query(
       `SELECT COUNT(*) FROM leagues l ${whereClause}`,
-      params
+      params,
     );
-    const total = parseInt(countResult.rows[0].count);
+    const total = parseInt(countResult.rows[0].count, 10);
 
     const listParams = [...params, limit, offset];
     const result = await pool.query(
@@ -301,10 +147,10 @@ router.get('/league', async (req, res) => {
        ${whereClause}
        ORDER BY l.start_date DESC
        LIMIT $${paramIndex++} OFFSET $${paramIndex++}`,
-      listParams
+      listParams,
     );
 
-    res.status(200).json({
+    return res.status(200).json({
       leagues: result.rows,
       total,
       page,
@@ -312,16 +158,20 @@ router.get('/league', async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching leagues:', error);
-    res.status(500).json({ message: '내부 서버 오류' });
+    return res.status(500).json({ message: '리그 목록 조회 중 서버 오류' });
   }
 });
 
-// JSDoc for POST /league
 /**
- * @swagger
+ * POST /league
+ * 리그 생성
+ * 인증 필요. 리그와 참가자 정보를 한 트랜잭션으로 저장합니다.
+ */
+/**
+ * @openapi
  * /league:
  *   post:
- *     summary: 새 리그 생성
+ *     summary: 리그 생성
  *     tags: [리그]
  *     security:
  *       - bearerAuth: []
@@ -330,165 +180,363 @@ router.get('/league', async (req, res) => {
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/CreateLeagueRequest'
+ *             type: object
+ *             required: [name, type, sport, start_date, group_id]
+ *             properties:
+ *               name:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               type:
+ *                 type: string
+ *               sport:
+ *                 type: string
+ *               start_date:
+ *                 type: string
+ *                 format: date-time
+ *               rules:
+ *                 type: string
+ *               recruit_count:
+ *                 type: integer
+ *               participant_count:
+ *                 type: integer
+ *               group_id:
+ *                 type: string
+ *                 format: uuid
+ *               participants:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     division:
+ *                       type: string
+ *                     name:
+ *                       type: string
+ *                     paid:
+ *                       type: boolean
+ *                     arrived:
+ *                       type: boolean
+ *                     footPool:
+ *                       type: boolean
  *     responses:
  *       201:
- *         description: 리그가 성공적으로 생성되었습니다
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: 리그가 성공적으로 생성되었습니다
- *                 league:
- *                   $ref: '#/components/schemas/League'
+ *         description: 리그 생성 성공
  *       400:
- *         description: 잘못된 입력
- *       401:
- *         description: 인증되지 않음
+ *         description: 검증 오류
+ *       403:
+ *         description: 권한 없음
  *       500:
- *         description: 내부 서버 오류
+ *         description: 서버 오류
  */
 router.post('/league', requireAuth, async (req, res) => {
+  const client = await pool.connect();
   try {
-    const { name, description, type, sport, start_date, rules, recruit_count, participant_count, group_id } = createLeagueSchema.parse(req.body);
+    const {
+      name,
+      description,
+      type,
+      sport,
+      start_date,
+      rules,
+      recruit_count,
+      participant_count,
+      group_id,
+      participants,
+    } = createLeagueSchema.parse(req.body);
+
     const userId = req.user.sub;
 
-    // 모임 권한 검증: owner 또는 admin만 리그 생성 가능
-    const roleCheck = await pool.query(
+    const roleCheck = await client.query(
       `SELECT role FROM group_members WHERE group_id = $1 AND user_id = $2`,
-      [group_id, userId]
+      [group_id, userId],
     );
+
     if (roleCheck.rows.length === 0 || !['owner', 'admin'].includes(roleCheck.rows[0].role)) {
-      return res.status(403).json({ message: '리그를 생성할 권한이 없습니다. 모임장 또는 운영진만 가능합니다.' });
+      return res.status(403).json({ message: '리그 생성 권한이 없습니다. 모임장 또는 운영진만 가능합니다.' });
     }
 
     const leagueId = randomUUID();
 
-    const result = await pool.query(
+    await client.query('BEGIN');
+
+    const result = await client.query(
       `INSERT INTO leagues (id, name, description, type, sport, start_date, rules, recruit_count, participant_count, group_id, created_by_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-       RETURNING id, name, type, sport, recruit_count, participant_count, group_id, created_at;`,
-      [leagueId, name, description, type, sport, start_date, rules, recruit_count, participant_count, group_id, userId]
+       RETURNING id, name, description, type, sport, start_date, status, rules, recruit_count, participant_count, group_id, created_at, updated_at;`,
+      [leagueId, name, description, type, sport, start_date, rules, recruit_count, participant_count, group_id, userId],
     );
 
-    res.status(201).json({
-      message: '리그가 성공적으로 생성되었습니다',
+    for (const p of participants) {
+      await client.query(
+        `INSERT INTO league_participants (id, league_id, division, name, paid, arrived, foot_pool)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [randomUUID(), leagueId, p.division ?? '', p.name, p.paid ?? false, p.arrived ?? false, p.footPool ?? false],
+      );
+    }
+
+    await client.query('COMMIT');
+
+    return res.status(201).json({
+      message: '리그가 성공적으로 생성되었습니다.',
       league: result.rows[0],
     });
   } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {
+      // ignore rollback failure
+    }
+
     if (error instanceof z.ZodError) {
-      console.error('Zod validation error:', JSON.stringify(error.errors, null, 2));
       return res.status(400).json({ errors: error.errors });
     }
+
     console.error('Error creating league:', error);
-    res.status(500).json({ message: '내부 서버 오류' });
+    return res.status(500).json({ message: '리그 생성 중 서버 오류' });
+  } finally {
+    client.release();
   }
 });
 
-// JSDoc for GET /league/:id
 /**
- * @swagger
- * /league/{id}:
+ * GET /league/:id/participants
+ * 리그 참가자 목록 조회
+ * 인증 필요. 해당 리그가 속한 모임의 멤버만 조회 가능합니다.
+ */
+/**
+ * @openapi
+ * /league/{id}/participants:
  *   get:
- *     summary: ID로 리그 상세 정보 조회
+ *     summary: 리그 참가자 목록 조회
  *     tags: [리그]
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
+ *         required: true
  *         schema:
  *           type: string
  *           format: uuid
- *         required: true
- *         description: 조회할 리그의 ID
+ *         description: 리그 ID
  *     responses:
  *       200:
- *         description: 리그 상세 정보
+ *         description: 참가자 목록 조회 성공
+ *       403:
+ *         description: 권한 없음
+ *       500:
+ *         description: 서버 오류
+ */
+router.get('/league/:id/participants', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = Number(req.user.sub);
+
+    const accessCheck = await pool.query(
+      `SELECT 1
+       FROM leagues l
+       INNER JOIN group_members gm ON gm.group_id = l.group_id
+       WHERE l.id = $1 AND gm.user_id = $2`,
+      [id, userId],
+    );
+
+    if (accessCheck.rowCount === 0) {
+      return res.status(403).json({ message: '해당 리그 참가자 목록을 조회할 권한이 없습니다.' });
+    }
+
+    const result = await pool.query(
+      `SELECT id, league_id, division, name, paid, arrived, foot_pool, created_at
+       FROM league_participants
+       WHERE league_id = $1
+       ORDER BY created_at ASC`,
+      [id],
+    );
+
+    return res.status(200).json({ participants: result.rows });
+  } catch (error) {
+    console.error('Error fetching league participants:', error);
+    return res.status(500).json({ message: '리그 참가자 조회 중 서버 오류' });
+  }
+});
+
+/**
+ * GET /league/:id
+ * 리그 상세 조회 (참가자 목록 포함)
+ */
+/**
+ * @openapi
+ * /league/{id}:
+ *   get:
+ *     summary: 리그 상세 조회 (참가자 목록 포함)
+ *     description: 리그의 기본 정보와 참가자 목록을 함께 조회합니다. 추첨 등에 활용할 수 있습니다.
+ *     tags: [리그]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: 리그 ID
+ *     responses:
+ *       200:
+ *         description: 리그 상세 조회 성공
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
  *                 league:
- *                   $ref: '#/components/schemas/League'
- *       401:
- *         description: 인증되지 않음
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                     name:
+ *                       type: string
+ *                     description:
+ *                       type: string
+ *                     type:
+ *                       type: string
+ *                     sport:
+ *                       type: string
+ *                     start_date:
+ *                       type: string
+ *                       format: date-time
+ *                     rules:
+ *                       type: string
+ *                     status:
+ *                       type: string
+ *                     recruit_count:
+ *                       type: integer
+ *                     participant_count:
+ *                       type: integer
+ *                     group_id:
+ *                       type: string
+ *                     created_by_id:
+ *                       type: integer
+ *                     created_at:
+ *                       type: string
+ *                       format: date-time
+ *                     updated_at:
+ *                       type: string
+ *                       format: date-time
+ *                 participants:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                       league_id:
+ *                         type: string
+ *                       division:
+ *                         type: string
+ *                       name:
+ *                         type: string
+ *                       paid:
+ *                         type: boolean
+ *                       arrived:
+ *                         type: boolean
+ *                       foot_pool:
+ *                         type: boolean
+ *                       created_at:
+ *                         type: string
+ *                         format: date-time
  *       404:
- *         description: 리그를 찾을 수 없습니다
+ *         description: 리그 없음
  *       500:
- *         description: 내부 서버 오류
+ *         description: 서버 오류
  */
 router.get('/league/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await pool.query(
-      `SELECT id, name, description, type, sport, start_date, rules, status, created_by_id, created_at, updated_at
+
+    // 리그 정보 조회
+    const leagueResult = await pool.query(
+      `SELECT id, name, description, type, sport, start_date, rules, status,
+              recruit_count, participant_count, group_id, created_by_id, created_at, updated_at
        FROM leagues
-       WHERE id = $1;`,
-      [id]
+       WHERE id = $1`,
+      [id],
     );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: '리그를 찾을 수 없습니다' });
+    if (leagueResult.rows.length === 0) {
+      return res.status(404).json({ message: '리그를 찾을 수 없습니다.' });
     }
 
-    res.status(200).json({
-      league: result.rows[0],
+    // 참가자 목록 조회
+    const participantsResult = await pool.query(
+      `SELECT id, league_id, division, name, paid, arrived, foot_pool, created_at
+       FROM league_participants
+       WHERE league_id = $1
+       ORDER BY created_at ASC`,
+      [id],
+    );
+
+    return res.status(200).json({
+      league: leagueResult.rows[0],
+      participants: participantsResult.rows
     });
   } catch (error) {
     console.error('Error fetching league:', error);
-    res.status(500).json({ message: '내부 서버 오류' });
+    return res.status(500).json({ message: '리그 조회 중 서버 오류' });
   }
 });
 
-// JSDoc for PUT /league/:id
 /**
- * @swagger
+ * PUT /league/:id
+ * 리그 수정
+ */
+/**
+ * @openapi
  * /league/{id}:
  *   put:
- *     summary: 리그 상세 정보 업데이트
+ *     summary: 리그 수정
  *     tags: [리그]
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
+ *         required: true
  *         schema:
  *           type: string
  *           format: uuid
- *         required: true
- *         description: 업데이트할 리그의 ID
+ *         description: 리그 ID
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/UpdateLeagueRequest'
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               type:
+ *                 type: string
+ *               sport:
+ *                 type: string
+ *               start_date:
+ *                 type: string
+ *                 format: date-time
+ *               rules:
+ *                 type: string
+ *               status:
+ *                 type: string
+ *                 enum: [draft, active, completed]
  *     responses:
  *       200:
- *         description: 리그가 성공적으로 업데이트되었습니다
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: 리그가 성공적으로 업데이트되었습니다
- *                 league:
- *                   $ref: '#/components/schemas/League'
+ *         description: 리그 수정 성공
  *       400:
- *         description: 잘못된 입력 또는 업데이트할 필드가 제공되지 않았습니다
- *       401:
- *         description: 인증되지 않음
+ *         description: 검증 오류/수정 항목 없음
  *       404:
- *         description: 리그를 찾을 수 없습니다
+ *         description: 리그 없음
  *       500:
- *         description: 내부 서버 오류
+ *         description: 서버 오류
  */
 router.put('/league/:id', requireAuth, async (req, res) => {
   try {
@@ -508,7 +556,7 @@ router.put('/league/:id', requireAuth, async (req, res) => {
     }
 
     if (fields.length === 0) {
-      return res.status(400).json({ message: '업데이트할 필드가 제공되지 않았습니다' });
+      return res.status(400).json({ message: '수정할 항목이 없습니다.' });
     }
 
     values.push(id);
@@ -522,19 +570,158 @@ router.put('/league/:id', requireAuth, async (req, res) => {
     const result = await pool.query(updateQuery, values);
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ message: '리그를 찾을 수 없습니다' });
+      return res.status(404).json({ message: '리그를 찾을 수 없습니다.' });
     }
 
-    res.status(200).json({
-      message: '리그가 성공적으로 업데이트되었습니다',
+    return res.status(200).json({
+      message: '리그가 성공적으로 수정되었습니다.',
       league: result.rows[0],
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ errors: error.errors });
     }
+
     console.error('Error updating league:', error);
-    res.status(500).json({ message: '내부 서버 오류' });
+    return res.status(500).json({ message: '리그 수정 중 서버 오류' });
+  }
+});
+
+/**
+ * PUT /league/:leagueId/participants/:participantId
+ * 리그 참가자 정보 수정
+ * 인증 필요. 해당 리그가 속한 모임의 owner 또는 admin만 수정 가능합니다.
+ */
+/**
+ * @openapi
+ * /league/{leagueId}/participants/{participantId}:
+ *   put:
+ *     summary: 리그 참가자 정보 수정
+ *     description: 참가자의 부수, 이름, 입금/도착/뒷풀이 상태를 수정합니다. 모임의 owner 또는 admin만 가능합니다.
+ *     tags: [리그]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: leagueId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: 리그 ID
+ *       - in: path
+ *         name: participantId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: 참가자 ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               division:
+ *                 type: string
+ *                 description: 부수
+ *               name:
+ *                 type: string
+ *                 description: 참가자 이름
+ *               paid:
+ *                 type: boolean
+ *                 description: 입금 완료 여부
+ *               arrived:
+ *                 type: boolean
+ *                 description: 도착 완료 여부
+ *               footPool:
+ *                 type: boolean
+ *                 description: 뒷풀이 참여 여부
+ *     responses:
+ *       200:
+ *         description: 참가자 정보 수정 성공
+ *       403:
+ *         description: 권한 없음
+ *       404:
+ *         description: 참가자를 찾을 수 없음
+ *       500:
+ *         description: 서버 오류
+ */
+router.put('/league/:leagueId/participants/:participantId', requireAuth, async (req, res) => {
+  try {
+    const { leagueId, participantId } = req.params;
+    const userId = Number(req.user.sub);
+
+    // 권한 확인: 모임의 owner 또는 admin인지 체크
+    const accessCheck = await pool.query(
+      `SELECT 1
+       FROM leagues l
+       INNER JOIN group_members gm ON gm.group_id = l.group_id
+       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+      [leagueId, userId],
+    );
+
+    if (accessCheck.rowCount === 0) {
+      return res.status(403).json({ message: '참가자를 수정할 권한이 없습니다.' });
+    }
+
+    // 업데이트할 필드 검증
+    const updateSchema = z.object({
+      division: z.string().optional(),
+      name: z.string().min(1, '이름은 필수입니다.').optional(),
+      paid: z.boolean().optional(),
+      arrived: z.boolean().optional(),
+      footPool: z.boolean().optional(),
+    });
+
+    const updates = updateSchema.parse(req.body);
+
+    const fields = [];
+    const values = [];
+    let queryIndex = 1;
+
+    for (const key in updates) {
+      if (updates[key] !== undefined) {
+        // camelCase를 snake_case로 변환
+        const dbKey = key === 'footPool' ? 'foot_pool' : key;
+        fields.push(`${dbKey} = $${queryIndex}`);
+        values.push(updates[key]);
+        queryIndex++;
+      }
+    }
+
+    if (fields.length === 0) {
+      return res.status(400).json({ message: '수정할 항목이 없습니다.' });
+    }
+
+    values.push(participantId);
+    values.push(leagueId);
+
+    const updateQuery = `
+      UPDATE league_participants
+      SET ${fields.join(', ')}
+      WHERE id = $${queryIndex} AND league_id = $${queryIndex + 1}
+      RETURNING id, league_id, division, name, paid, arrived, foot_pool, created_at;
+    `;
+
+    const result = await pool.query(updateQuery, values);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: '참가자를 찾을 수 없습니다.' });
+    }
+
+    return res.status(200).json({
+      message: '참가자 정보가 수정되었습니다.',
+      participant: result.rows[0],
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ errors: error.errors });
+    }
+
+    console.error('Error updating participant:', error);
+    return res.status(500).json({ message: '참가자 수정 중 서버 오류' });
   }
 });
 

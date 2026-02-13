@@ -40,3 +40,6 @@ pids
 
 # OS
 Thumbs.db
+
+# Prisma generated client output
+generated/

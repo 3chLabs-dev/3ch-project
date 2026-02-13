@@ -10,7 +10,7 @@ const router = express.Router();
 /**
  * @openapi
  * tags:
- *   name: Group
+ *   name: 모임
  *   description: 모임 관리 API - 모임 생성, 가입, 멤버 관리 등
  */
 
@@ -30,7 +30,7 @@ const createGroupSchema = z.object({
  *   get:
  *     summary: 모임명 중복 검사
  *     description: 모임 생성 시 모임명이 이미 사용 중인지 확인합니다.
- *     tags: [Group]
+ *     tags: [모임]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -82,7 +82,7 @@ router.get('/group/check-name', requireAuth, async (req, res) => {
  *   post:
  *     summary: 모임 생성
  *     description: 새로운 모임을 생성합니다. 생성자는 자동으로 owner 역할을 부여받습니다.
- *     tags: [Group]
+ *     tags: [모임]
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -189,7 +189,7 @@ router.post('/group', requireAuth, async (req, res) => {
  *   get:
  *     summary: 모임 검색 및 추천
  *     description: 내가 가입하지 않은 모임을 검색하거나 추천받습니다.
- *     tags: [Group]
+ *     tags: [모임]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -318,7 +318,7 @@ router.get('/group/search', requireAuth, async (req, res) => {
  *   get:
  *     summary: 내가 속한 모임 목록 조회
  *     description: 로그인한 사용자가 가입한 모든 모임 목록을 반환합니다.
- *     tags: [Group]
+ *     tags: [모임]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -386,7 +386,7 @@ router.get('/group', requireAuth, async (req, res) => {
  *   get:
  *     summary: 모임 상세 정보 조회
  *     description: 특정 모임의 상세 정보와 멤버 목록을 조회합니다. 모임에 속한 사용자만 접근 가능합니다.
- *     tags: [Group]
+ *     tags: [모임]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -474,7 +474,7 @@ router.get('/group/:id', requireAuth, async (req, res) => {
     }
 
     const membersResult = await pool.query(
-      `SELECT gm.id, gm.role, gm.joined_at, u.id AS user_id, u.name, u.email
+      `SELECT gm.id, gm.role, gm.division, gm.joined_at, u.id AS user_id, u.name, u.email
        FROM group_members gm
        INNER JOIN users u ON gm.user_id = u.id
        WHERE gm.group_id = $1
@@ -499,7 +499,7 @@ router.get('/group/:id', requireAuth, async (req, res) => {
  *   post:
  *     summary: 모임에 멤버 추가
  *     description: 모임에 새로운 멤버를 추가합니다. owner 또는 admin만 가능합니다.
- *     tags: [Group]
+ *     tags: [모임]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -578,7 +578,7 @@ router.post('/group/:id/member', requireAuth, requireGroupAdmin, async (req, res
  *   post:
  *     summary: 모임 가입
  *     description: 사용자가 모임에 가입합니다. 자동으로 member 역할이 부여됩니다.
- *     tags: [Group]
+ *     tags: [모임]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -648,7 +648,7 @@ router.post('/group/:id/join', requireAuth, async (req, res) => {
  *   patch:
  *     summary: 멤버 권한 변경
  *     description: 모임 멤버의 역할을 변경합니다. owner만 가능하며, member와 admin 간 변경만 가능합니다.
- *     tags: [Group]
+ *     tags: [모임]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -731,11 +731,100 @@ router.patch('/group/:id/member/:userId/role', requireAuth, requireGroupOwner, a
 
 /**
  * @openapi
+ * /group/{id}/member/{userId}:
+ *   patch:
+ *     summary: 멤버 정보 수정
+ *     description: 모임 멤버의 정보(부수 등)를 수정합니다. owner 또는 admin만 가능합니다.
+ *     tags: [모임]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 모임 ID
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 대상 사용자 ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               division:
+ *                 type: string
+ *                 description: 부수 (예 1부, 2부, A조 등)
+ *     responses:
+ *       200:
+ *         description: 멤버 정보 수정 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *       403:
+ *         description: 권한 없음
+ *       404:
+ *         description: 멤버를 찾을 수 없음
+ *       500:
+ *         description: 서버 오류
+ */
+router.patch('/group/:id/member/:userId', requireAuth, requireGroupAdmin, async (req, res) => {
+  try {
+    const { id, userId: targetUserId } = req.params;
+    const { division } = req.body;
+
+    // 대상 멤버 확인
+    const targetCheck = await pool.query(
+      `SELECT id FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      [id, targetUserId]
+    );
+    if (targetCheck.rows.length === 0) {
+      return res.status(404).json({ message: '해당 멤버를 찾을 수 없습니다' });
+    }
+
+    const updates = [];
+    const values = [];
+    let paramIdx = 1;
+
+    if (division !== undefined) {
+      updates.push(`division = $${paramIdx++}`);
+      values.push(division);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ message: '수정할 내용이 없습니다' });
+    }
+
+    values.push(id, targetUserId);
+    await pool.query(
+      `UPDATE group_members SET ${updates.join(', ')} WHERE group_id = $${paramIdx++} AND user_id = $${paramIdx}`,
+      values
+    );
+
+    res.status(200).json({ message: '멤버 정보가 수정되었습니다' });
+  } catch (error) {
+    console.error('Error updating member:', error);
+    res.status(500).json({ message: '내부 서버 오류' });
+  }
+});
+
+/**
+ * @openapi
  * /group/{id}:
  *   patch:
  *     summary: 모임 정보 수정
  *     description: 모임의 기본 정보를 수정합니다. owner만 가능합니다.
- *     tags: [Group]
+ *     tags: [모임]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -852,7 +941,7 @@ router.patch('/group/:id', requireAuth, requireGroupOwner, async (req, res) => {
  *   delete:
  *     summary: 모임 삭제
  *     description: 모임을 삭제합니다. owner만 가능하며, 모임의 모든 멤버와 관련 데이터가 삭제됩니다.
- *     tags: [Group]
+ *     tags: [모임]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -920,7 +1009,7 @@ router.delete('/group/:id', requireAuth, requireGroupOwner, async (req, res) => 
  *   delete:
  *     summary: 모임에서 멤버 제거
  *     description: 모임에서 멤버를 제거합니다. owner 또는 admin만 가능하며, owner는 제거할 수 없습니다.
- *     tags: [Group]
+ *     tags: [모임]
  *     security:
  *       - bearerAuth: []
  *     parameters:

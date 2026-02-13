@@ -56,6 +56,21 @@ export interface LeagueListItem extends League {
   group_name?: string;
 }
 
+export interface LeagueParticipantItem {
+  id: string;
+  league_id: string;
+  division?: string | null;
+  name: string;
+  paid: boolean;
+  arrived: boolean;
+  foot_pool: boolean;
+  created_at: string;
+}
+
+export interface GetLeagueParticipantsResponse {
+  participants: LeagueParticipantItem[];
+}
+
 export interface GetLeaguesParams {
   page?: number;
   limit?: number;
@@ -73,9 +88,45 @@ export interface GetLeaguesResponse {
   limit: number;
 }
 
+function normalizeLeaguesResponse(raw: unknown): GetLeaguesResponse {
+  const data = (raw ?? {}) as Record<string, unknown>;
+  const leagues = Array.isArray(data.leagues)
+    ? (data.leagues as LeagueListItem[])
+    : Array.isArray(data.rows)
+      ? (data.rows as LeagueListItem[])
+      : Array.isArray(raw)
+        ? (raw as LeagueListItem[])
+        : [];
+
+  const total =
+    typeof data.total === "number"
+      ? data.total
+      : typeof data.count === "number"
+        ? data.count
+        : leagues.length;
+
+  const page = typeof data.page === "number" ? data.page : 1;
+  const limit = typeof data.limit === "number" ? data.limit : leagues.length || 10;
+
+  return { leagues, total, page, limit };
+}
+
 export interface UpdateLeagueResponse {
   message: string;
   league: League;
+}
+
+export interface UpdateParticipantRequest {
+  division?: string;
+  name?: string;
+  paid?: boolean;
+  arrived?: boolean;
+  footPool?: boolean;
+}
+
+export interface UpdateParticipantResponse {
+  message: string;
+  participant: LeagueParticipantItem;
 }
 
 /**
@@ -99,6 +150,7 @@ export const leagueApi = baseApi.injectEndpoints({
         const qs = searchParams.toString();
         return `/league${qs ? `?${qs}` : ""}`;
       },
+      transformResponse: (response: unknown) => normalizeLeaguesResponse(response),
     }),
 
     /**
@@ -119,6 +171,10 @@ export const leagueApi = baseApi.injectEndpoints({
       query: (id) => `/league/${id}`,
     }),
 
+    getLeagueParticipants: builder.query<GetLeagueParticipantsResponse, string>({
+      query: (id) => `/league/${id}/participants`,
+    }),
+
     /**
      * 리그 수정
      */
@@ -128,6 +184,20 @@ export const leagueApi = baseApi.injectEndpoints({
     >({
       query: ({ id, updates }) => ({
         url: `/league/${id}`,
+        method: "PUT",
+        body: updates,
+      }),
+    }),
+
+    /**
+     * 참가자 정보 수정
+     */
+    updateParticipant: builder.mutation<
+      UpdateParticipantResponse,
+      { leagueId: string; participantId: string; updates: UpdateParticipantRequest }
+    >({
+      query: ({ leagueId, participantId, updates }) => ({
+        url: `/league/${leagueId}/participants/${participantId}`,
         method: "PUT",
         body: updates,
       }),
@@ -142,5 +212,7 @@ export const {
   useGetLeaguesQuery,
   useCreateLeagueMutation,
   useGetLeagueQuery,
+  useGetLeagueParticipantsQuery,
   useUpdateLeagueMutation,
+  useUpdateParticipantMutation,
 } = leagueApi;

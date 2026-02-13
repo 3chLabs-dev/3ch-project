@@ -148,6 +148,13 @@ export const createLeague = createAsyncThunk.withTypes<{ state: RootState }>()(
 
     const recruitCount = s.step5Participants?.recruitCount ?? 0;
     const participantCount = s.step5Participants?.participants.length ?? 0;
+    const participants = (s.step5Participants?.participants ?? []).map((p) => ({
+      division: p.division,
+      name: p.name,
+      paid: p.paid,
+      arrived: p.arrived,
+      footPool: p.footPool,
+    }));
 
     const requestBody = {
       name: autoName,
@@ -159,6 +166,7 @@ export const createLeague = createAsyncThunk.withTypes<{ state: RootState }>()(
       recruit_count: recruitCount,
       participant_count: participantCount,
       group_id: s.groupId,
+      participants,
     };
 
     const token = thunkApi.getState().auth.token;

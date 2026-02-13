@@ -31,6 +31,7 @@ model Group {
   id              String    @id @default(uuid())
   name            String    @unique
   description     String?
+  sport           String?
   region_city     String?
   region_district String?
   founded_at      DateTime?
@@ -49,6 +50,7 @@ model Group {
 model GroupMember {
   id         String   @id @default(uuid())
   role       String   @default("member") // "owner", "admin", "member"
+  division   String?
   joined_at  DateTime @default(now())
 
   group_id   String
@@ -83,8 +85,25 @@ model League {
 
   teams           Team[]
   matches         Match[]
+  participants    LeagueParticipant[]
 
   @@map("leagues")
+}
+
+model LeagueParticipant {
+  id         String   @id @default(uuid())
+  division   String?
+  name       String
+  paid       Boolean  @default(false)
+  arrived    Boolean  @default(false)
+  foot_pool  Boolean  @default(false)
+  created_at DateTime @default(now())
+
+  league_id  String
+  league     League   @relation(fields: [league_id], references: [id], onDelete: Cascade)
+
+  @@index([league_id])
+  @@map("league_participants")
 }
 
 model Team {

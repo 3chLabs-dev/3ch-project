@@ -11,6 +11,8 @@ import SocialSignUp from "../pages/sign/SocialSignUp.tsx";
 import GroupMain from "../pages/group/GroupMain";
 import GroupCreate from "../pages/group/GroupCreate";
 import GroupManage from "../pages/group/GroupManage";
+import GroupLeagueManage from "../pages/group/GroupLeagueManage";
+import DrawMain from "../pages/draw/DrawMain";
 import MemberCheckPage from "../pages/mypage/userinfo/MemberCheckPage.tsx";
 import MemberEditPage from "../pages/mypage/userinfo/MemberEditPage.tsx";
 import SettingsPage from "../pages/mypage/SettingsPage.tsx";
@@ -41,6 +43,8 @@ export const router = createBrowserRouter([
       { path: "/group", element: <GroupMain /> },
       { path: "/group/create", element: <GroupCreate /> },
       { path: "/group/:id/manage", element: <GroupManage /> },
+      { path: "/group/:id/manage/league", element: <GroupLeagueManage /> },
+      { path: "/draw", element: <DrawMain /> },
       { path: "/member/password-check", element: <MemberCheckPage />},
       { path: "/member/edit", element: <MemberEditPage />},
       { path: "/settings", element: <SettingsPage />},

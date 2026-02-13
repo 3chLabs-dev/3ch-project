@@ -6,7 +6,7 @@ const router = express.Router();
 /**
  * @openapi
  * tags:
- *   name: Test
+ *   name: 테스트
  *   description: 테스트 및 헬스체크 API
  */
 
@@ -15,7 +15,7 @@ const router = express.Router();
  * /test:
  *   get:
  *     summary: Test API 확인
- *     tags: [Test]
+ *     tags: [테스트]
  *     responses:
  *       200:
  *         description: OK
@@ -30,7 +30,7 @@ router.get("/test", (req, res) => {
  *   get:
  *     summary: 데이터베이스 연결 테스트
  *     description: PostgreSQL 데이터베이스 연결 상태를 확인합니다.
- *     tags: [Test]
+ *     tags: [테스트]
  *     responses:
  *       200:
  *         description: 데이터베이스 연결 성공

@@ -207,11 +207,10 @@ try {
       dispatch(setToken(token));
       dispatch(setUser(user));
 
-      alert("로그인 성공");
       navigate("/", { replace: true });
     } catch (err) {
       console.log("login fail:", err);
-      alert("로그인 실패");
+      alert("로그인에 실패했습니다. 다시 확인해주세요.");
     }
   };
 

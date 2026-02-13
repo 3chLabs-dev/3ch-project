@@ -29,14 +29,17 @@ export default function MyPage() {
     const displayName = user?.name ?? user?.email ?? "사용자";
 
     const handleEditClick = () => {
-    if (user?.auth_provider === "local") {
-        navigate("/member/password-check");
-    } else {
-        navigate("/member/edit");
-    }
-};
+        if (user?.auth_provider === "local") {
+            navigate("/member/password-check");
+        } else {
+            navigate("/member/edit");
+        }
+    };
 
     const handleLogout = () => {
+        const ok = window.confirm("로그아웃 하시겠습니까?");
+        if (!ok) return; // ✅ 취소면 아무 반응 없이 그대로
+
         localStorage.removeItem("token");
         localStorage.removeItem("user");
         dispatch(logout());
@@ -87,11 +90,11 @@ export default function MyPage() {
                 </Box>
             ) : (
                 <Box sx={{ mt: 2, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
-                <Typography sx={{ fontSize: 24, fontWeight: 900 }}>
-                    로그인이 필요합니다
-                </Typography>
-                
-                <Button
+                    <Typography sx={{ fontSize: 24, fontWeight: 900 }}>
+                        로그인이 필요합니다
+                    </Typography>
+
+                    <Button
                         variant="contained"
                         onClick={() => navigate("/login")}
                         sx={{
@@ -109,7 +112,7 @@ export default function MyPage() {
                         로그인
                     </Button>
                 </Box>
-                
+
             )}
 
 

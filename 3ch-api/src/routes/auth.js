@@ -18,6 +18,10 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+const verifyPasswordSchema = z.object({
+  password: z.string().min(1),
+});
+
 const { signToken, signSignupTicket, verifyToken } = require("../utils/authUtils");
 
 /**
@@ -424,6 +428,52 @@ router.get("/me", requireAuth, async (req, res) => {
       return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
     }
     return res.json({ ok: true, user: result.rows[0] });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
+});
+
+//비밀번호 확인
+router.post("/member/verify-password", requireAuth, async(req, res) => {
+    const parsed = verifyPasswordSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      ok: false,
+      error: "VALIDATION_ERROR",
+      details: parsed.error.issues,
+    });
+  }
+  const userId = Number(req.user.sub);
+  if (!Number.isFinite(userId)) {
+    return res.status(401).json({ ok: false, error: "BAD_TOKEN_SUB" });
+  }
+
+  const { password } = req.body || {};
+  if (typeof password !== "string" || password.length === 0) {
+    return res.status(400).json({ ok: false, error: "PASSWORD_REQUIRED" });
+  }
+
+  try {
+    const result = await pool.query(
+      "select password_hash from users where id = $1",
+      [userId],
+    );
+    if (result.rowCount === 0) {
+      return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
+    }
+
+    const user = result.rows[0];
+
+    if (!user.password_hash) {
+      return res.status(500).json({ ok: false, error: "NO_PASSWORD_HASH" });
+    }
+
+    const ok = await bcrypt.compare(password, user.password_hash);
+    if (!ok) {
+      return res.status(401).json({ ok: false, error: "INVALID_CREDENTIALS" });
+    }
+
+    return res.json({ ok: true });
   } catch (e) {
     return res.status(500).json({ ok: false, error: String(e.message || e) });
   }

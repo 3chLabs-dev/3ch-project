@@ -2,6 +2,7 @@ import { Box, Typography, Button } from "@mui/material";
 import { useAppDispatch } from "../../app/hooks";
 // import { resetLeagueCreation, setStep } from "../../features/league/leagueCreationSlice";
 import { setStep } from "../../features/league/leagueCreationSlice";
+import CelebrationOutlinedIcon from "@mui/icons-material/CelebrationOutlined";
 
 export default function LeagueStep7Done() {
   const dispatch = useAppDispatch();
@@ -45,8 +46,7 @@ export default function LeagueStep7Done() {
           fontWeight: 900,
         }}
       >
-        {/* SVG/이미지 넣어야됨... */}
-        🎉
+        <CelebrationOutlinedIcon sx={{ fontSize: 92, color: "#4E8DF5" }} />
       </Box>
 
       <Button

@@ -52,7 +52,7 @@ export default function GroupMain() {
 
     const { data: searchData, isLoading: searchLoading } = useSearchGroupsQuery(
         searchParams,
-        { skip: !isLoggedIn },
+        { skip: !isLoggedIn, refetchOnMountOrArgChange: true },
     );
     const recommendedGroups = searchData?.groups ?? [];
 

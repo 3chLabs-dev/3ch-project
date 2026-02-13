@@ -14,6 +14,7 @@ import {
     DialogContent,
     DialogActions,
 } from "@mui/material";
+import CelebrationOutlinedIcon from "@mui/icons-material/CelebrationOutlined";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import type { SelectChangeEvent } from "@mui/material";
 import { useCreateGroupMutation, useLazyCheckGroupNameQuery } from "../../features/group/groupApi";
@@ -154,7 +155,7 @@ export default function GroupCreate() {
                         fontWeight: 900,
                     }}
                 >
-                    🎉
+                    <CelebrationOutlinedIcon sx={{ fontSize: 92, color: "#4E8DF5" }} />
                 </Box>
 
                 <Button

@@ -321,7 +321,22 @@ export default function DrawMain() {
         <Typography color="text.secondary" fontWeight={700}>
           이제 우리리그에서 해당 추첨을 진행할 수 있습니다.
         </Typography>
-        <CelebrationOutlinedIcon sx={{ fontSize: 92, color: "#4E8DF5" }} />
+        <Box
+          sx={{
+            mt: 3,
+            width: "100%",
+            height: 200,
+            border: "2px solid #2F80ED",
+            borderRadius: 1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#2F80ED",
+            fontWeight: 900,
+          }}
+        >
+          <CelebrationOutlinedIcon sx={{ fontSize: 92, color: "#4E8DF5" }} />
+        </Box>
         <Button fullWidth variant="contained" onClick={() => setPhase("list")} sx={{ borderRadius: 1, fontWeight: 700 }}>
           확인
         </Button>

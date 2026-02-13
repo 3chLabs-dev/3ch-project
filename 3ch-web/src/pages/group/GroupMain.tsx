@@ -15,7 +15,6 @@ import SettingsIcon from "@mui/icons-material/Settings";
 import { useAppSelector } from "../../app/hooks";
 import { useGetMyGroupsQuery, useSearchGroupsQuery, useJoinGroupMutation } from "../../features/group/groupApi";
 import type { Group } from "../../features/group/groupApi";
-import { isGroupAdmin } from "../../utils/permissions";
 
 const SPORT_EMOJI: Record<string, string> = {
     "탁구": "\uD83C\uDFD3",
@@ -199,12 +198,16 @@ function GroupCard({ group }: { group: Group }) {
     const navigate = useNavigate();
     const emoji = group.sport ? (SPORT_EMOJI[group.sport] ?? "\uD83C\uDFD3") : "\uD83C\uDFD3";
     const region = [group.region_city, group.region_district].filter(Boolean).join(" ");
-    const canManage = isGroupAdmin(group);
 
     return (
         <Card
             elevation={2}
-            sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
+            onClick={() => navigate(`/group/${group.id}/manage`)}
+            sx={{
+                borderRadius: 1,
+                boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                cursor: "pointer",
+            }}
         >
             <CardContent sx={{ py: 1.6, px: 2, "&:last-child": { pb: 1.6 } }}>
                 <Stack direction="row" alignItems="center" spacing={1.5}>
@@ -224,15 +227,6 @@ function GroupCard({ group }: { group: Group }) {
                                 height: 24,
                             }}
                         />
-                    )}
-                    {canManage && (
-                        <IconButton
-                            size="small"
-                            onClick={() => navigate(`/group/${group.id}/manage`)}
-                            sx={{ ml: 0.5 }}
-                        >
-                            <SettingsIcon fontSize="small" />
-                        </IconButton>
                     )}
                 </Stack>
             </CardContent>

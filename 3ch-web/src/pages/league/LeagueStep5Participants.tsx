@@ -407,6 +407,14 @@ export default function LeagueStep5Participants() {
       <Dialog
         open={openCancelDialog}
         onClose={handleCancelDelete}
+        maxWidth="xs"
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            mx: 2,
+            maxWidth: 430,
+          },
+        }}
       >
         <DialogContent sx={{ pt: 2.5, pb: 1.5 }}>
           <Typography sx={{ fontWeight: 900, mb: 1 }}>

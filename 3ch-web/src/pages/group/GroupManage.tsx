@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from "react-router-dom";
+﻿import { useParams, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import {
     Box,
@@ -92,17 +92,6 @@ export default function GroupManage() {
     const canManage = myRole === "owner" || myRole === "admin";
     const isOwner = myRole === "owner";
     const emoji = group.sport ? (SPORT_EMOJI[group.sport] ?? "🏓") : "🏓";
-
-    if (!canManage) {
-        return (
-            <Box sx={{ p: 2 }}>
-                <Typography>관리 권한이 없습니다.</Typography>
-                <Button onClick={() => navigate("/group")} sx={{ mt: 2 }}>
-                    돌아가기
-                </Button>
-            </Box>
-        );
-    }
 
     const handleOpenMenu = (event: React.MouseEvent<HTMLButtonElement>, userId: string) => {
         setMenuAnchor({ element: event.currentTarget, userId });
@@ -306,19 +295,21 @@ export default function GroupManage() {
             </Box>
 
             {/* 모임 초대 버튼 */}
-            <Button
-                fullWidth
-                variant="contained"
-                disableElevation
-                onClick={() => setInviteDialogOpen(true)}
-                sx={{
-                    borderRadius: 1,
-                    py: 1.5,
-                    fontWeight: 900,
-                }}
-            >
-                모임 초대
-            </Button>
+            {canManage && (
+                <Button
+                    fullWidth
+                    variant="contained"
+                    disableElevation
+                    onClick={() => setInviteDialogOpen(true)}
+                    sx={{
+                        borderRadius: 1,
+                        py: 1.5,
+                        fontWeight: 900,
+                    }}
+                >
+                    모임 초대
+                </Button>
+            )}
 
             {/* 권한 변경 메뉴 */}
             <Menu

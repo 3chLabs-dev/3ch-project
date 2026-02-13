@@ -90,6 +90,7 @@ export default function LoadMembersDialog({
                 sx: {
                     borderRadius: 1,
                     overflow: "hidden",
+                    maxWidth: 430,
                 },
             }}
         >

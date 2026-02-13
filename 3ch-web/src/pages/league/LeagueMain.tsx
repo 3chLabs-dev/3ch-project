@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from "react";
+﻿import React, { useMemo, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
-import { setStep, setGroupId } from "../../features/league/leagueCreationSlice";
+import { setStep, setGroupId, setPreferredGroupId } from "../../features/league/leagueCreationSlice";
 import { useGetMyGroupsQuery } from "../../features/group/groupApi";
 import { useGetLeaguesQuery } from "../../features/league/leagueApi";
 import type { LeagueListItem } from "../../features/league/leagueApi";
@@ -13,32 +13,46 @@ import type { SelectChangeEvent } from "@mui/material";
 export default function LeagueMainBody() {
   const dispatch = useAppDispatch();
   const token = useAppSelector((s) => s.auth.token);
+  const preferredGroupId = useAppSelector((s) => s.leagueCreation.preferredGroupId);
   const isLoggedIn = !!token;
 
   const { data } = useGetMyGroupsQuery(undefined, { skip: !isLoggedIn });
-  const adminGroups = useMemo(
-    () => (data?.groups ?? []).filter((g) => g.role === "owner" || g.role === "admin"),
-    [data],
-  );
+  const myGroups = useMemo(() => data?.groups ?? [], [data]);
 
-  const autoGroupId = adminGroups.length === 1 ? adminGroups[0].id : "";
-  const [manualGroupId, setManualGroupId] = useState("");
-  const selectedGroupId = adminGroups.length === 1 ? autoGroupId : manualGroupId;
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const defaultGroupId = useMemo(() => {
+    if (myGroups.length === 0) return null;
+    if (preferredGroupId && myGroups.some((g) => g.id === preferredGroupId)) {
+      return preferredGroupId;
+    }
+    return myGroups[0].id;
+  }, [myGroups, preferredGroupId]);
+  const effectiveSelectedGroupId =
+    selectedGroupId && myGroups.some((g) => g.id === selectedGroupId)
+      ? selectedGroupId
+      : defaultGroupId;
+  const selectedGroup = effectiveSelectedGroupId
+    ? myGroups.find((g) => g.id === effectiveSelectedGroupId) ?? null
+    : null;
 
   // Fetch leagues for the selected group
   const { data: leagueData, isLoading: leagueLoading } = useGetLeaguesQuery(
-    selectedGroupId ? { group_id: selectedGroupId } : undefined,
-    { skip: !isLoggedIn || !selectedGroupId }
+    effectiveSelectedGroupId ? { group_id: effectiveSelectedGroupId } : undefined,
+    { skip: !isLoggedIn || !effectiveSelectedGroupId }
   );
   const leagues = useMemo(() => leagueData?.leagues ?? [], [leagueData]);
 
   const hasExistingRally = false;
 
-  const canCreate = isLoggedIn && adminGroups.length > 0 && selectedGroupId !== "";
+  const canCreate =
+    isLoggedIn &&
+    !!selectedGroup &&
+    (selectedGroup.role === "owner" || selectedGroup.role === "admin");
 
   const handleCreateNewLeague = () => {
-    if (!canCreate) return;
-    dispatch(setGroupId(selectedGroupId));
+    if (!canCreate || !selectedGroup) return;
+    dispatch(setGroupId(selectedGroup.id));
+    dispatch(setPreferredGroupId(selectedGroup.id));
     dispatch(setStep(1));
   };
 
@@ -49,10 +63,14 @@ export default function LeagueMainBody() {
         <Typography variant="h6" fontWeight={900}>
           리그 일정
         </Typography>
-        {isLoggedIn && adminGroups.length > 1 && (
+        {isLoggedIn && myGroups.length > 1 && (
           <Select
-            value={selectedGroupId}
-            onChange={(e: SelectChangeEvent<string>) => setManualGroupId(e.target.value)}
+            value={effectiveSelectedGroupId ?? ""}
+            onChange={(e: SelectChangeEvent<string>) => {
+              const nextGroupId = e.target.value;
+              setSelectedGroupId(nextGroupId || null);
+              dispatch(setPreferredGroupId(nextGroupId || null));
+            }}
             size="small"
             displayEmpty
             sx={{
@@ -68,7 +86,7 @@ export default function LeagueMainBody() {
             <MenuItem value="">
               <em>모임 선택</em>
             </MenuItem>
-            {adminGroups.map((g) => (
+            {myGroups.map((g) => (
               <MenuItem key={g.id} value={g.id}>{g.name}</MenuItem>
             ))}
           </Select>
@@ -76,7 +94,7 @@ export default function LeagueMainBody() {
       </Stack>
 
       {/* 리그 일정 카드 */}
-      {(!isLoggedIn || adminGroups.length > 0) && (
+      {(isLoggedIn && myGroups.length > 0) && (
         <>
           {leagueLoading ? (
             <SoftCard>
@@ -101,13 +119,12 @@ export default function LeagueMainBody() {
       )}
 
       {/* 신규 생성 */}
-      {isLoggedIn && adminGroups.length > 0 && (
+      {canCreate && (
         <Button
           fullWidth
           variant="contained"
           disableElevation
           onClick={handleCreateNewLeague}
-          disabled={!canCreate}
           sx={{
             borderRadius: 1,
             py: 1.2,
@@ -116,15 +133,6 @@ export default function LeagueMainBody() {
         >
           신규 생성하기
         </Button>
-      )}
-
-      {/* 권한 없음 메시지 */}
-      {isLoggedIn && adminGroups.length === 0 && (
-        <SoftCard>
-          <Typography textAlign="center" color="text.secondary" fontWeight={700} fontSize={14}>
-            모임장 또는 운영진만 리그를 개설할 수 있습니다.
-          </Typography>
-        </SoftCard>
       )}
 
       <Box>

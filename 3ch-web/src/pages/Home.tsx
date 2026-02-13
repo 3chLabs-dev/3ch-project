@@ -1,5 +1,5 @@
 // src/pages/Home.tsx
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link as RouterLink } from "react-router-dom";
 import {
     Box,
@@ -18,10 +18,11 @@ import type { SelectChangeEvent } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import TuneIcon from "@mui/icons-material/Tune";
 
-import { useAppSelector } from "../app/hooks";
+import { useAppDispatch, useAppSelector } from "../app/hooks";
 import { useGetLeaguesQuery } from "../features/league/leagueApi";
 import type { LeagueListItem } from "../features/league/leagueApi";
 import { useGetMyGroupsQuery } from "../features/group/groupApi";
+import { setPreferredGroupId } from "../features/league/leagueCreationSlice";
 
 const SPORT_EMOJI: Record<string, string> = {
     "탁구": "🏓",
@@ -30,10 +31,12 @@ const SPORT_EMOJI: Record<string, string> = {
 };
 
 export default function Home() {
+    const dispatch = useAppDispatch();
     const [bizOpen, setBizOpen] = useState(false);
 
     const token = useAppSelector((state) => state.auth.token);
     const user = useAppSelector((state) => state.auth.user);
+    const preferredGroupId = useAppSelector((state) => state.leagueCreation.preferredGroupId);
     const isLoggedIn = !!token;
 
     const { data: groupData } = useGetMyGroupsQuery(undefined, { skip: !isLoggedIn });
@@ -44,12 +47,31 @@ export default function Home() {
         [groups],
     );
 
-    const [selectedGroupIdx, setSelectedGroupIdx] = useState(0);
-    const selectedGroup = hasGroups ? groups[selectedGroupIdx] ?? groups[0] : null;
+    const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+    const defaultGroupId = useMemo(() => {
+        if (!hasGroups) return null;
+        if (preferredGroupId && groups.some((g) => g.id === preferredGroupId)) {
+            return preferredGroupId;
+        }
+        return groups[0].id;
+    }, [groups, hasGroups, preferredGroupId]);
+    const effectiveSelectedGroupId =
+        selectedGroupId && groups.some((g) => g.id === selectedGroupId)
+            ? selectedGroupId
+            : defaultGroupId;
+    const selectedGroup = effectiveSelectedGroupId
+        ? groups.find((g) => g.id === effectiveSelectedGroupId) ?? null
+        : null;
+
+    useEffect(() => {
+        if (!effectiveSelectedGroupId) return;
+        if (preferredGroupId === effectiveSelectedGroupId) return;
+        dispatch(setPreferredGroupId(effectiveSelectedGroupId));
+    }, [dispatch, effectiveSelectedGroupId, preferredGroupId]);
 
     const { data: leagueData, isLoading: leagueLoading } = useGetLeaguesQuery(
-        isLoggedIn && user?.id ? { my_groups: true, user_id: user.id } : undefined,
-        { skip: !isLoggedIn || !hasGroups }
+        effectiveSelectedGroupId ? { group_id: effectiveSelectedGroupId } : undefined,
+        { skip: !isLoggedIn || !effectiveSelectedGroupId }
     );
 
     return (
@@ -62,8 +84,12 @@ export default function Home() {
                     </Typography>
                     {hasGroups && groups.length > 1 && (
                         <Select
-                            value={String(selectedGroupIdx)}
-                            onChange={(e: SelectChangeEvent<string>) => setSelectedGroupIdx(Number(e.target.value))}
+                            value={effectiveSelectedGroupId ?? ""}
+                            onChange={(e: SelectChangeEvent<string>) => {
+                                const nextGroupId = e.target.value;
+                                setSelectedGroupId(nextGroupId || null);
+                                dispatch(setPreferredGroupId(nextGroupId || null));
+                            }}
                             size="small"
                             sx={{
                                 borderRadius: 1,
@@ -75,8 +101,8 @@ export default function Home() {
                                 "& .MuiOutlinedInput-notchedOutline": { borderColor: "#C7D2FE" },
                             }}
                         >
-                            {groups.map((g, idx) => (
-                                <MenuItem key={g.id} value={String(idx)}>{g.name}</MenuItem>
+                            {groups.map((g) => (
+                                <MenuItem key={g.id} value={g.id}>{g.name}</MenuItem>
                             ))}
                         </Select>
                     )}

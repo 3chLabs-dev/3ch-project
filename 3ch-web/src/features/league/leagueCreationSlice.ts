@@ -75,6 +75,7 @@ export type CreateStatus = "idle" | "loading" | "succeeded" | "failed";
 export interface LeagueCreationState {
   currentStep: number;
   groupId: string | null;
+  preferredGroupId: string | null;
 
   step1BasicInfo: LeagueBasicInfo | null;
   step2Type: LeagueTypeInfo | null;
@@ -91,6 +92,7 @@ export interface LeagueCreationState {
 const initialState: LeagueCreationState = {
   currentStep: 1,
   groupId: null,
+  preferredGroupId: null,
 
   step1BasicInfo: null,
   step2Type: null,
@@ -187,6 +189,10 @@ const leagueCreationSlice = createSlice({
       state.groupId = action.payload;
     },
 
+    setPreferredGroupId: (state, action: PayloadAction<string | null>) => {
+      state.preferredGroupId = action.payload;
+    },
+
     setStep1BasicInfo: (state, action: PayloadAction<LeagueBasicInfo>) => {
       state.step1BasicInfo = action.payload;
     },
@@ -220,7 +226,11 @@ const leagueCreationSlice = createSlice({
       state.createdLeagueId = null;
     },
 
-    resetLeagueCreation: () => initialState,
+    resetLeagueCreation: (state) => {
+      const preferredGroupId = state.preferredGroupId;
+      Object.assign(state, initialState);
+      state.preferredGroupId = preferredGroupId;
+    },
   },
 
   extraReducers: (builder) => {
@@ -244,6 +254,7 @@ const leagueCreationSlice = createSlice({
 export const {
   setStep,
   setGroupId,
+  setPreferredGroupId,
   setStep1BasicInfo,
   setStep2Type,
   setStep3Format,

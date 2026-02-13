@@ -13,6 +13,9 @@ import GroupCreate from "../pages/group/GroupCreate";
 import GroupManage from "../pages/group/GroupManage";
 import MemberCheckPage from "../pages/mypage/userinfo/MemberCheckPage.tsx";
 import MemberEditPage from "../pages/mypage/userinfo/MemberEditPage.tsx";
+import SettingsPage from "../pages/mypage/SettingsPage.tsx";
+import PasswordHelpPage from "../pages/sign/findPassword/PasswordHelpPage.tsx";
+import PasswordResetRequestPage from "../pages/sign/findPassword/PasswordResetRequestPage.tsx";
 // import League from "../pages/League";
 // import Match from "../pages/Match";
 // import My from "../pages/My";
@@ -35,6 +38,11 @@ export const router = createBrowserRouter([
       { path: "/group/:id/manage", element: <GroupManage /> },
       { path: "/member/password-check", element: <MemberCheckPage />},
       { path: "/member/edit", element: <MemberEditPage />},
+      { path: "/settings", element: <SettingsPage />},
+      { path: "/password/help", element: <PasswordHelpPage />},
+      { path: "/password/verify-email", element: <PasswordResetRequestPage />},
+
+
     //   { path: "/my", element: <My /> },
 
     ],

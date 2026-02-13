@@ -38,7 +38,8 @@ const SignInContainer = styled(Stack)(({ theme }) => ({
 const inputSx = {
     "& .MuiInputBase-input": {
         fontSize: "0.98rem",
-        py: 1.25,
+        paddingTop: "0px",
+        paddingBottom: "2px", 
     },
     "& .MuiInputBase-input::placeholder": {
         fontSize: "0.88rem",

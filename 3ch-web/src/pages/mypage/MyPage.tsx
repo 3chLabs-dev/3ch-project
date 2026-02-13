@@ -4,7 +4,6 @@ import SettingsIcon from "@mui/icons-material/Settings";
 import { useNavigate } from "react-router-dom";
 
 import { logout } from "../../features/auth/authSlice";
-import { baseApi } from "../../features/api/baseApi";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 
 type MenuItem = {
@@ -41,7 +40,6 @@ export default function MyPage() {
         localStorage.removeItem("token");
         localStorage.removeItem("user");
         dispatch(logout());
-        dispatch(baseApi.util.resetApiState());
         navigate("/", { replace: true });
     };
 

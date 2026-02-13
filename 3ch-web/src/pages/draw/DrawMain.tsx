@@ -104,6 +104,9 @@ export default function DrawMain() {
     selectedSourceLeagueId ?? "",
     {
       skip: !selectedSourceLeagueId || phase !== "create",
+      refetchOnMountOrArgChange: true,
+      refetchOnFocus: true,
+      refetchOnReconnect: true,
     }
   );
 

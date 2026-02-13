@@ -33,13 +33,23 @@ export default function GroupLeagueManage() {
 
   const { data: leagueData } = useGetLeaguesQuery(
     id ? { group_id: id } : undefined,
-    { skip: !isLoggedIn || !id, refetchOnMountOrArgChange: true }
+    {
+      skip: !isLoggedIn || !id,
+      refetchOnMountOrArgChange: true,
+      refetchOnFocus: true,
+      refetchOnReconnect: true,
+    }
   );
   const leagues = leagueData?.leagues ?? [];
 
   const { data: participantData, isLoading: isLoadingParticipants, refetch: refetchParticipants } = useGetLeagueParticipantsQuery(
     expandedLeagueId ?? "",
-    { skip: !expandedLeagueId }
+    {
+      skip: !expandedLeagueId,
+      refetchOnMountOrArgChange: true,
+      refetchOnFocus: true,
+      refetchOnReconnect: true,
+    }
   );
   const participants = participantData?.participants ?? [];
 

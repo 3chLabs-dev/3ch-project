@@ -61,6 +61,9 @@ export default function GroupManage() {
 
     const { data, isLoading } = useGetGroupDetailQuery(id || "", {
         skip: !isLoggedIn || !id,
+        refetchOnMountOrArgChange: true,
+        refetchOnFocus: true,
+        refetchOnReconnect: true,
     });
 
     const [updateMemberRole] = useUpdateMemberRoleMutation();
@@ -91,14 +94,24 @@ export default function GroupManage() {
     // 현재 모임의 리그 목록 조회
     const { data: leagueData } = useGetLeaguesQuery(
         id ? { group_id: id } : undefined,
-        { skip: !isLoggedIn || !id, refetchOnMountOrArgChange: true }
+        {
+            skip: !isLoggedIn || !id,
+            refetchOnMountOrArgChange: true,
+            refetchOnFocus: true,
+            refetchOnReconnect: true,
+        }
     );
     const leagues = leagueData?.leagues ?? [];
 
     // 펼쳐진 리그의 참가자 목록 조회
     const { data: participantData, isLoading: isLoadingParticipants, refetch: refetchParticipants } = useGetLeagueParticipantsQuery(
         expandedLeagueId ?? "",
-        { skip: !expandedLeagueId }
+        {
+            skip: !expandedLeagueId,
+            refetchOnMountOrArgChange: true,
+            refetchOnFocus: true,
+            refetchOnReconnect: true,
+        }
     );
     const participants = participantData?.participants ?? [];
 

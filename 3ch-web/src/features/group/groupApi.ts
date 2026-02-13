@@ -160,6 +160,20 @@ export const groupApi = baseApi.injectEndpoints({
       ],
     }),
 
+    removeMember: builder.mutation<
+      { message: string },
+      { groupId: string; userId: string }
+    >({
+      query: ({ groupId, userId }) => ({
+        url: `/group/${groupId}/member/${userId}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: (_result, _error, { groupId }) => [
+        { type: "Group", id: groupId },
+        "Group",
+      ],
+    }),
+
     updateGroup: builder.mutation<
       { message: string },
       { groupId: string; data: UpdateGroupRequest }
@@ -194,6 +208,7 @@ export const {
   useJoinGroupMutation,
   useUpdateMemberRoleMutation,
   useUpdateMemberMutation,
+  useRemoveMemberMutation,
   useUpdateGroupMutation,
   useDeleteGroupMutation,
 } = groupApi;

@@ -35,6 +35,7 @@ import {
     useGetGroupDetailQuery,
     useUpdateMemberRoleMutation,
     useUpdateMemberMutation,
+    useRemoveMemberMutation,
     useUpdateGroupMutation,
     useDeleteGroupMutation,
 } from "../../features/group/groupApi";
@@ -64,6 +65,7 @@ export default function GroupManage() {
 
     const [updateMemberRole] = useUpdateMemberRoleMutation();
     const [updateMember] = useUpdateMemberMutation();
+    const [removeMember] = useRemoveMemberMutation();
     const [updateGroup, { isLoading: isUpdating }] = useUpdateGroupMutation();
     const [deleteGroup, { isLoading: isDeleting }] = useDeleteGroupMutation();
     const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -248,8 +250,7 @@ export default function GroupManage() {
             return;
         }
         try {
-            // await removeMember({ groupId: id, userId: selectedMember.id }).unwrap();
-            console.log("Remove member:", selectedMember.id);
+            await removeMember({ groupId: id, userId: selectedMember.id }).unwrap();
             handleCloseMemberEdit();
         } catch (error) {
             console.error("Failed to remove member:", error);

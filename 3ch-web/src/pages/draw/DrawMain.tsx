@@ -48,7 +48,10 @@ export default function DrawMain() {
   const preferredGroupId = useAppSelector((s) => s.leagueCreation.preferredGroupId);
   const isLoggedIn = !!token;
 
-  const { data } = useGetMyGroupsQuery(undefined, { skip: !isLoggedIn });
+  const { data } = useGetMyGroupsQuery(undefined, {
+    skip: !isLoggedIn,
+    refetchOnMountOrArgChange: true,
+  });
   const myGroups = useMemo(() => data?.groups ?? [], [data]);
 
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);

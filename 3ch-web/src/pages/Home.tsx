@@ -39,7 +39,10 @@ export default function Home() {
     const preferredGroupId = useAppSelector((state) => state.leagueCreation.preferredGroupId);
     const isLoggedIn = !!token;
 
-    const { data: groupData } = useGetMyGroupsQuery(undefined, { skip: !isLoggedIn });
+    const { data: groupData } = useGetMyGroupsQuery(undefined, {
+        skip: !isLoggedIn,
+        refetchOnMountOrArgChange: true,
+    });
     const groups = useMemo(() => groupData?.groups ?? [], [groupData]);
     const hasGroups = groups.length > 0;
     const isAdmin = useMemo(

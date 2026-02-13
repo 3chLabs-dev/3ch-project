@@ -28,7 +28,10 @@ export default function GroupMain() {
     const token = useAppSelector((s) => s.auth.token);
     const isLoggedIn = !!token;
 
-    const { data, isLoading } = useGetMyGroupsQuery(undefined, { skip: !isLoggedIn });
+    const { data, isLoading } = useGetMyGroupsQuery(undefined, {
+        skip: !isLoggedIn,
+        refetchOnMountOrArgChange: true,
+    });
     const myGroups = useMemo(() => data?.groups ?? [], [data]);
 
     const [groupSearch, setGroupSearch] = useState("");

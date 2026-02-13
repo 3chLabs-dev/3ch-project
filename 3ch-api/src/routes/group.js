@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const { z } = require('zod');
 const { randomUUID } = require('crypto');
 const pool = require('../db/pool');
@@ -18,7 +18,6 @@ const createGroupSchema = z.object({
   name: z.string().min(1, '모임 이름은 필수입니다'),
   description: z.string().optional(),
   sport: z.string().optional(),
-  type: z.string().optional(),
   region_city: z.string().optional(),
   region_district: z.string().optional(),
   founded_at: z.string().optional(),
@@ -143,7 +142,7 @@ router.get('/group/check-name', requireAuth, async (req, res) => {
 router.post('/group', requireAuth, async (req, res) => {
   const client = await pool.connect();
   try {
-    const { name, description, sport, type, region_city, region_district, founded_at } = createGroupSchema.parse(req.body);
+    const { name, description, sport, region_city, region_district, founded_at } = createGroupSchema.parse(req.body);
     const userId = req.user.sub;
     const groupId = randomUUID();
     const memberId = randomUUID();
@@ -151,9 +150,9 @@ router.post('/group', requireAuth, async (req, res) => {
     await client.query('BEGIN');
 
     await client.query(
-      `INSERT INTO groups (id, name, description, sport, type, region_city, region_district, founded_at, created_by_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [groupId, name, description || null, sport || null, type || null, region_city || null, region_district || null, founded_at || null, userId]
+      `INSERT INTO groups (id, name, description, sport, region_city, region_district, founded_at, created_by_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [groupId, name, description || null, sport || null, region_city || null, region_district || null, founded_at || null, userId]
     );
 
     await client.query(
@@ -296,7 +295,7 @@ router.get('/group/search', requireAuth, async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT g.id, g.name, g.description, g.sport, g.type, g.region_city, g.region_district, g.created_at,
+      `SELECT g.id, g.name, g.description, g.sport, g.region_city, g.region_district, g.created_at,
               (SELECT COUNT(*) FROM group_members WHERE group_id = g.id)::int AS member_count
        FROM groups g
        WHERE ${conditions.join(' AND ')}
@@ -362,7 +361,7 @@ router.get('/group', requireAuth, async (req, res) => {
     const userId = req.user.sub;
 
     const result = await pool.query(
-      `SELECT g.id, g.name, g.description, g.sport, g.type, g.region_city, g.region_district, g.created_at,
+      `SELECT g.id, g.name, g.description, g.sport, g.region_city, g.region_district, g.created_at,
               gm.role,
               u.name AS creator_name,
               (SELECT COUNT(*) FROM group_members WHERE group_id = g.id)::int AS member_count
@@ -462,7 +461,7 @@ router.get('/group/:id', requireAuth, async (req, res) => {
     }
 
     const groupResult = await pool.query(
-      `SELECT g.id, g.name, g.description, g.sport, g.type, g.region_city, g.region_district,
+      `SELECT g.id, g.name, g.description, g.sport, g.region_city, g.region_district,
               g.founded_at, g.created_at, u.name AS creator_name
        FROM groups g
        LEFT JOIN users u ON g.created_by_id = u.id
@@ -883,7 +882,7 @@ router.patch('/group/:id/member/:userId', requireAuth, requireGroupAdmin, async 
 router.patch('/group/:id', requireAuth, requireGroupOwner, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, sport, type, region_city, region_district, founded_at } = req.body;
+    const { name, description, sport, region_city, region_district, founded_at } = req.body;
 
     const updates = [];
     const values = [];
@@ -900,10 +899,6 @@ router.patch('/group/:id', requireAuth, requireGroupOwner, async (req, res) => {
     if (sport !== undefined) {
       updates.push(`sport = $${paramIdx++}`);
       values.push(sport);
-    }
-    if (type !== undefined) {
-      updates.push(`type = $${paramIdx++}`);
-      values.push(type);
     }
     if (region_city !== undefined) {
       updates.push(`region_city = $${paramIdx++}`);

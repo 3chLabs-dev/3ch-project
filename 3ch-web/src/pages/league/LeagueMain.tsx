@@ -16,7 +16,10 @@ export default function LeagueMainBody() {
   const preferredGroupId = useAppSelector((s) => s.leagueCreation.preferredGroupId);
   const isLoggedIn = !!token;
 
-  const { data } = useGetMyGroupsQuery(undefined, { skip: !isLoggedIn });
+  const { data } = useGetMyGroupsQuery(undefined, {
+    skip: !isLoggedIn,
+    refetchOnMountOrArgChange: true,
+  });
   const myGroups = useMemo(() => data?.groups ?? [], [data]);
 
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
@@ -83,9 +86,9 @@ export default function LeagueMainBody() {
               "& .MuiOutlinedInput-notchedOutline": { borderColor: "#C7D2FE" },
             }}
           >
-            <MenuItem value="">
+            {/* <MenuItem value="">
               <em>모임 선택</em>
-            </MenuItem>
+            </MenuItem> */}
             {myGroups.map((g) => (
               <MenuItem key={g.id} value={g.id}>{g.name}</MenuItem>
             ))}

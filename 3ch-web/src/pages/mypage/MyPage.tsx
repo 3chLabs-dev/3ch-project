@@ -5,6 +5,8 @@ import { useNavigate } from "react-router-dom";
 
 import { logout } from "../../features/auth/authSlice";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
+import { baseApi } from "../../features/api/baseApi";
+import { resetLeagueCreation } from "../../features/league/leagueCreationSlice";
 
 type MenuItem = {
     label: string;
@@ -43,6 +45,8 @@ export default function MyPage() {
         localStorage.removeItem("token");
         localStorage.removeItem("user");
         dispatch(logout());
+        dispatch(resetLeagueCreation());
+        dispatch(baseApi.util.resetApiState());
         navigate("/", { replace: true });
     };
 

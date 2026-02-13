@@ -22,7 +22,7 @@ import { setToken, setUser } from "../../features/auth/authSlice";
 
 import emailIcon from "../../icon/free-icon-email-813667.png";
 import kakaoIcon from "../../icon/free-icon-kakao-talk-3991999.png";
-import naverIcon from "../../icon/naver-icon-style.png";
+import naverIcon from "../../icon/naver-icon.png";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
 
@@ -49,7 +49,8 @@ const SignInContainer = styled(Stack)(({ theme }) => ({
 const inputSx = {
   "& .MuiInputBase-input": {
     fontSize: "0.98rem",
-    py: 1.25,
+    paddingTop: "0px",
+    paddingBottom: "2px", 
   },
   "& .MuiInputBase-input::placeholder": {
     fontSize: "0.88rem",
@@ -77,11 +78,12 @@ const forceSolid = (bg: string, hover: string, color: string) => ({
 
 const primaryBtnSx = {
   borderRadius: 999,
-  py: 1.2,
+  paddingTop: "0px",
+  paddingBottom: "2px", 
   fontSize: "1rem",
   fontWeight: 700,
   textTransform: "none",
-  ...forceSolid("#4A90E2", "#3C7FCC", "#fff"),
+  ...forceSolid("#4A90E2", "#4A90E2", "#fff"),
 };
 
 const socialBtnSx = {
@@ -372,6 +374,7 @@ useEffect(() => {
                 type="button"
                 underline="hover"
                 sx={{ fontSize: "0.85rem", color: "text.secondary" }}
+                onClick={() => navigate("/password/help")}
               >
                 비밀번호 찾기
               </Link>
@@ -395,6 +398,10 @@ useEffect(() => {
                 backgroundImage: "none !important",
                 boxShadow: "none !important",
                 p: 0,
+                "&:hover": {
+                backgroundColor: "#fff",   // 살짝 회색
+                boxShadow: "none",
+              },
               }}
             >
               <SocialBtnInner
@@ -411,7 +418,7 @@ useEffect(() => {
               disableElevation
               sx={{
                 ...socialBtnSx,
-                ...forceSolid("#FEE500", "#F5DC00", "#111"),
+                ...forceSolid("#FFEB3B", "#FFEB3B", "#111"),
                 p: 0,
               }}
             >
@@ -429,7 +436,7 @@ useEffect(() => {
               disableElevation
               sx={{
                 ...socialBtnSx,
-                ...forceSolid("#03C75A", "#02B152", "#fff"),
+                ...forceSolid("#00C63B", "#00C63B", "#fff"),
                 p: 0,
               }}
             >
@@ -446,7 +453,7 @@ useEffect(() => {
               disableElevation
               sx={{
                 ...socialBtnSx,
-                ...forceSolid("#4A90E2", "#3C7FCC", "#fff"),
+                ...forceSolid("#4A90E2", "#4A90E2", "#fff"),
                 p: 0,
               }}
               component={RouterLink}

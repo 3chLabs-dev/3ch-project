@@ -28,6 +28,14 @@ export default function MyPage() {
 
     const displayName = user?.name ?? user?.email ?? "사용자";
 
+    const handleEditClick = () => {
+    if (user?.auth_provider === "local") {
+        navigate("/member/password-check");
+    } else {
+        navigate("/member/edit");
+    }
+};
+
     const handleLogout = () => {
         localStorage.removeItem("token");
         localStorage.removeItem("user");
@@ -61,7 +69,7 @@ export default function MyPage() {
 
                     <Button
                         variant="contained"
-                        onClick={() => navigate("/member/edit")} // 원하는 경로로 바꿔도 됨
+                        onClick={handleEditClick}
                         sx={{
                             height: 32,
                             px: 1.6,
@@ -85,7 +93,7 @@ export default function MyPage() {
                 
                 <Button
                         variant="contained"
-                        onClick={() => navigate("/login")} // 원하는 경로로 바꿔도 됨
+                        onClick={() => navigate("/login")}
                         sx={{
                             height: 32,
                             px: 1.6,

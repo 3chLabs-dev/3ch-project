@@ -8,6 +8,8 @@ import AuthFail from "../pages/util/AuthFail";
 import LeagueCreationWizard from "../pages/league/LeagueCreationWizard";
 import MyPage from "../pages/mypage/MyPage.tsx"
 import SocialSignUp from "../pages/sign/SocialSignUp.tsx";
+import MemberCheckPage from "../pages/mypage/userinfo/MemberCheckPage.tsx";
+import MemberEditPage from "../pages/mypage/userinfo/MemberEditPage.tsx";
 
 // import League from "../pages/League";
 // import Match from "../pages/Match";
@@ -26,6 +28,8 @@ export const router = createBrowserRouter([
       { path: "/auth/success", element: <AuthSuccess />},
       { path: "/auth/fail", element: <AuthFail />},
       { path: "/social-signup", element: <SocialSignUp />},
+      { path: "/member/password-check", element: <MemberCheckPage />},
+      { path: "/member/edit", element: <MemberEditPage />},
     //   { path: "/match", element: <Match /> },
     //   { path: "/my", element: <My /> },
 

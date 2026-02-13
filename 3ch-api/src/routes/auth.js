@@ -479,6 +479,55 @@ router.post("/member/verify-password", requireAuth, async(req, res) => {
   }
 });
 
+//회원정보 수정
+router.put("/member", requireAuth, async (req, res) => {
+  const userId = Number(req.user.sub);
+  const { name, password } = req.body || {};
+
+  if (!name && !password) {
+    return res.status(400).json({ ok: false, error: "NOTHING_TO_UPDATE" });
+  }
+
+  try {
+    const userResult = await pool.query(
+      "select auth_provider from users where id = $1",
+      [userId]
+    );
+
+    const user = userResult.rows[0];
+
+    if (user.auth_provider !== "local" && password) {
+      return res.status(403).json({ ok: false, error: "SOCIAL_USER" });
+    }
+
+    if (name && password) {
+      const hashed = await bcrypt.hash(password, 10);
+
+      await pool.query(
+        "update users set name = $1, password_hash = $2 where id = $3",
+        [name, hashed, userId]
+      );
+    } else if (name) {
+      await pool.query(
+        "update users set name = $1 where id = $2",
+        [name, userId]
+      );
+    } else if (password) {
+      const hashed = await bcrypt.hash(password, 10);
+
+      await pool.query(
+        "update users set password_hash = $1 where id = $2",
+        [hashed, userId]
+      );
+    }
+
+    return res.json({ ok: true });
+
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: String(e) });
+  }
+});
+
 //임시 토큰 검증후 이름설정
 router.post("/social/complete", async (req, res) => {
   const schema = z.object({

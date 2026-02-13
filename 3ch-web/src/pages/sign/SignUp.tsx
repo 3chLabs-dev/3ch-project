@@ -60,7 +60,8 @@ const SignInContainer = styled(Stack)(({ theme }) => ({
 const inputSx = {
     "& .MuiInputBase-input": {
         fontSize: "0.98rem",
-        py: 1.25,
+        paddingTop: "0px",
+        paddingBottom: "2px", 
     },
     "& .MuiInputBase-input::placeholder": {
         fontSize: "0.88rem",
@@ -93,7 +94,8 @@ const forceSolid = (bg: string, hover: string, color: string) => ({
 
 const primaryBtnSx = {
     borderRadius: 999,
-    py: 1.2,
+    paddingTop: "0px",
+    paddingBottom: "2px", 
     fontSize: "1rem",
     fontWeight: 700,
     textTransform: "none",

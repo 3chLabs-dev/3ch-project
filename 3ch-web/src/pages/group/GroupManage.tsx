@@ -91,7 +91,7 @@ export default function GroupManage() {
     // 현재 모임의 리그 목록 조회
     const { data: leagueData } = useGetLeaguesQuery(
         id ? { group_id: id } : undefined,
-        { skip: !isLoggedIn || !id }
+        { skip: !isLoggedIn || !id, refetchOnMountOrArgChange: true }
     );
     const leagues = leagueData?.leagues ?? [];
 

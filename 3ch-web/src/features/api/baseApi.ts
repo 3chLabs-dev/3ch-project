@@ -13,6 +13,6 @@ export const baseApi = createApi({
       return headers;
     },
   }),
-  tagTypes: ["Group"],
+  tagTypes: ["Group", "League"],
   endpoints: () => ({}),
 });

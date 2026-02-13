@@ -33,7 +33,7 @@ export default function GroupLeagueManage() {
 
   const { data: leagueData } = useGetLeaguesQuery(
     id ? { group_id: id } : undefined,
-    { skip: !isLoggedIn || !id }
+    { skip: !isLoggedIn || !id, refetchOnMountOrArgChange: true }
   );
   const leagues = leagueData?.leagues ?? [];
 

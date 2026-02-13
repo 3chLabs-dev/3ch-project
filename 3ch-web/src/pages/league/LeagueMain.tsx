@@ -41,7 +41,7 @@ export default function LeagueMainBody() {
   // Fetch leagues for the selected group
   const { data: leagueData, isLoading: leagueLoading } = useGetLeaguesQuery(
     effectiveSelectedGroupId ? { group_id: effectiveSelectedGroupId } : undefined,
-    { skip: !isLoggedIn || !effectiveSelectedGroupId }
+    { skip: !isLoggedIn || !effectiveSelectedGroupId, refetchOnMountOrArgChange: true }
   );
   const leagues = useMemo(() => leagueData?.leagues ?? [], [leagueData]);
 

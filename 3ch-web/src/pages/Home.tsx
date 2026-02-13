@@ -74,7 +74,7 @@ export default function Home() {
 
     const { data: leagueData, isLoading: leagueLoading } = useGetLeaguesQuery(
         effectiveSelectedGroupId ? { group_id: effectiveSelectedGroupId } : undefined,
-        { skip: !isLoggedIn || !effectiveSelectedGroupId }
+        { skip: !isLoggedIn || !effectiveSelectedGroupId, refetchOnMountOrArgChange: true }
     );
 
     return (

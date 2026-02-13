@@ -88,7 +88,7 @@ export default function DrawMain() {
 
   const { data: leagueData } = useGetLeaguesQuery(
     effectiveSelectedGroupId ? { group_id: effectiveSelectedGroupId } : undefined,
-    { skip: !isLoggedIn || !effectiveSelectedGroupId },
+    { skip: !isLoggedIn || !effectiveSelectedGroupId, refetchOnMountOrArgChange: true },
   );
   const leagueSources = useMemo<DrawSourceItem[]>(
     () => (leagueData?.leagues ?? []).map((l) => ({ id: l.id, name: l.name })),

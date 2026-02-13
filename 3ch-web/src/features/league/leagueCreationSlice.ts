@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import type { RootState } from "../../app/store";
 import axios from "axios";
+import { baseApi } from "../api/baseApi";
 
 /** Step 1: 기본 정보 */
 export interface LeagueBasicInfo {
@@ -179,6 +180,10 @@ export const createLeague = createAsyncThunk.withTypes<{ state: RootState }>()(
           "Content-Type": "application/json",
         },
       }
+    );
+
+    thunkApi.dispatch(
+      baseApi.util.invalidateTags([{ type: "League", id: "LIST" }])
     );
 
     return { leagueId: response.data.league.id };

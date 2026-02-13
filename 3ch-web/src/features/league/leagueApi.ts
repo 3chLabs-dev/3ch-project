@@ -151,6 +151,13 @@ export const leagueApi = baseApi.injectEndpoints({
         return `/league${qs ? `?${qs}` : ""}`;
       },
       transformResponse: (response: unknown) => normalizeLeaguesResponse(response),
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.leagues.map((league) => ({ type: "League" as const, id: league.id })),
+              { type: "League" as const, id: "LIST" },
+            ]
+          : [{ type: "League" as const, id: "LIST" }],
     }),
 
     /**
@@ -162,6 +169,7 @@ export const leagueApi = baseApi.injectEndpoints({
         method: "POST",
         body,
       }),
+      invalidatesTags: [{ type: "League", id: "LIST" }],
     }),
 
     /**
@@ -169,10 +177,12 @@ export const leagueApi = baseApi.injectEndpoints({
      */
     getLeague: builder.query<GetLeagueResponse, string>({
       query: (id) => `/league/${id}`,
+      providesTags: (_result, _error, id) => [{ type: "League", id }],
     }),
 
     getLeagueParticipants: builder.query<GetLeagueParticipantsResponse, string>({
       query: (id) => `/league/${id}/participants`,
+      providesTags: (_result, _error, id) => [{ type: "League", id }],
     }),
 
     /**
@@ -187,6 +197,10 @@ export const leagueApi = baseApi.injectEndpoints({
         method: "PUT",
         body: updates,
       }),
+      invalidatesTags: (_result, _error, { id }) => [
+        { type: "League", id },
+        { type: "League", id: "LIST" },
+      ],
     }),
 
     /**
@@ -201,6 +215,10 @@ export const leagueApi = baseApi.injectEndpoints({
         method: "PUT",
         body: updates,
       }),
+      invalidatesTags: (_result, _error, { leagueId }) => [
+        { type: "League", id: leagueId },
+        { type: "League", id: "LIST" },
+      ],
     }),
   }),
 });

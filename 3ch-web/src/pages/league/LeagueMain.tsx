@@ -2,6 +2,8 @@ import React, { useState, useMemo } from "react";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { setStep, setGroupId } from "../../features/league/leagueCreationSlice";
 import { useGetMyGroupsQuery } from "../../features/group/groupApi";
+import { useGetLeaguesQuery } from "../../features/league/leagueApi";
+import type { LeagueListItem } from "../../features/league/leagueApi";
 import {
   Box, Stack, Typography, Card, CardContent, Button,
   Select, MenuItem,
@@ -23,7 +25,13 @@ export default function LeagueMainBody() {
   const [manualGroupId, setManualGroupId] = useState("");
   const selectedGroupId = adminGroups.length === 1 ? autoGroupId : manualGroupId;
 
-  const hasExistingLeagues = false;
+  // Fetch leagues for the selected group
+  const { data: leagueData, isLoading: leagueLoading } = useGetLeaguesQuery(
+    selectedGroupId ? { group_id: selectedGroupId } : undefined,
+    { skip: !isLoggedIn || !selectedGroupId }
+  );
+  const leagues = useMemo(() => leagueData?.leagues ?? [], [leagueData]);
+
   const hasExistingRally = false;
 
   const canCreate = isLoggedIn && adminGroups.length > 0 && selectedGroupId !== "";
@@ -69,15 +77,27 @@ export default function LeagueMainBody() {
 
       {/* 리그 일정 카드 */}
       {(!isLoggedIn || adminGroups.length > 0) && (
-        <SoftCard>
-          {hasExistingLeagues ? (
-            <Typography fontWeight={700}>개설된 리그 목록…</Typography>
+        <>
+          {leagueLoading ? (
+            <SoftCard>
+              <Typography textAlign="center" color="text.secondary" fontWeight={700}>
+                로딩 중...
+              </Typography>
+            </SoftCard>
+          ) : leagues.length > 0 ? (
+            <Stack spacing={1}>
+              {leagues.map((league) => (
+                <LeagueCard key={league.id} league={league} />
+              ))}
+            </Stack>
           ) : (
-            <Typography textAlign="center" color="text.secondary" fontWeight={700}>
-              개설된 리그가 없습니다.
-            </Typography>
+            <SoftCard>
+              <Typography textAlign="center" color="text.secondary" fontWeight={700}>
+                개설된 리그가 없습니다.
+              </Typography>
+            </SoftCard>
           )}
-        </SoftCard>
+        </>
       )}
 
       {/* 신규 생성 */}
@@ -137,6 +157,36 @@ export default function LeagueMainBody() {
         신규 생성하기
       </Button>
     </Stack>
+  );
+}
+
+function formatLeagueDate(dateStr: string) {
+  const d = new Date(dateStr);
+  const days = ["일", "월", "화", "수", "목", "금", "토"];
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const day = days[d.getDay()];
+  return `${yyyy}-${mm}-${dd}(${day})`;
+}
+
+function LeagueCard({ league }: { league: LeagueListItem }) {
+  return (
+    <Card
+      elevation={2}
+      sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
+    >
+      <CardContent sx={{ py: 1.8, px: 2.5, "&:last-child": { pb: 1.8 } }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Typography fontWeight={700} fontSize={15}>
+            {formatLeagueDate(league.start_date)}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" fontWeight={600}>
+            {league.participant_count} / {league.recruit_count}명
+          </Typography>
+        </Stack>
+      </CardContent>
+    </Card>
   );
 }
 

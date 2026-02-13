@@ -4,6 +4,8 @@ export interface Group {
   id: string;
   name: string;
   description?: string;
+  sport?: string;
+  type?: string;
   region_city?: string;
   region_district?: string;
   created_at: string;
@@ -19,6 +21,8 @@ export interface GetGroupsResponse {
 export interface CreateGroupRequest {
   name: string;
   description?: string;
+  sport?: string;
+  type?: string;
   region_city?: string;
   region_district?: string;
   founded_at?: string;
@@ -47,6 +51,7 @@ export interface SearchGroupsParams {
   region_city?: string;
   region_district?: string;
   limit?: number;
+  sort_by_region?: boolean;
 }
 
 export interface SearchGroupsResponse {
@@ -58,11 +63,26 @@ export interface GetGroupDetailResponse {
     id: string;
     name: string;
     description?: string;
+    sport?: string;
+    type?: string;
+    region_city?: string;
+    region_district?: string;
+    founded_at?: string;
     created_at: string;
     creator_name?: string;
   };
   members: GroupMember[];
   myRole: string;
+}
+
+export interface UpdateGroupRequest {
+  name?: string;
+  description?: string;
+  sport?: string;
+  type?: string;
+  region_city?: string;
+  region_district?: string;
+  founded_at?: string;
 }
 
 export const groupApi = baseApi.injectEndpoints({
@@ -93,6 +113,7 @@ export const groupApi = baseApi.injectEndpoints({
         if (params.region_city) sp.set("region_city", params.region_city);
         if (params.region_district) sp.set("region_district", params.region_district);
         if (params.limit) sp.set("limit", String(params.limit));
+        if (params.sort_by_region !== undefined) sp.set("sort_by_region", String(params.sort_by_region));
         return `/group/search?${sp.toString()}`;
       },
       providesTags: ["Group"],
@@ -123,6 +144,29 @@ export const groupApi = baseApi.injectEndpoints({
         { type: "Group", id: groupId },
       ],
     }),
+
+    updateGroup: builder.mutation<
+      { message: string },
+      { groupId: string; data: UpdateGroupRequest }
+    >({
+      query: ({ groupId, data }) => ({
+        url: `/group/${groupId}`,
+        method: "PATCH",
+        body: data,
+      }),
+      invalidatesTags: (_result, _error, { groupId }) => [
+        { type: "Group", id: groupId },
+        "Group",
+      ],
+    }),
+
+    deleteGroup: builder.mutation<{ message: string }, string>({
+      query: (groupId) => ({
+        url: `/group/${groupId}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: ["Group"],
+    }),
   }),
 });
 
@@ -134,4 +178,6 @@ export const {
   useLazyCheckGroupNameQuery,
   useJoinGroupMutation,
   useUpdateMemberRoleMutation,
+  useUpdateGroupMutation,
+  useDeleteGroupMutation,
 } = groupApi;

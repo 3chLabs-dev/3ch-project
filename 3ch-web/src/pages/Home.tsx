@@ -23,12 +23,13 @@ import { useGetLeaguesQuery } from "../features/league/leagueApi";
 import type { LeagueListItem } from "../features/league/leagueApi";
 import { useGetMyGroupsQuery } from "../features/group/groupApi";
 
-type Props = {
-    // isLoggedIn?: boolean;
-    userName?: string;
+const SPORT_EMOJI: Record<string, string> = {
+    "탁구": "🏓",
+    "배드민턴": "🏸",
+    "테니스": "🎾",
 };
 
-export default function Home({ userName = "우리리그" }: Props) {
+export default function Home() {
     const [bizOpen, setBizOpen] = useState(false);
 
     const token = useAppSelector((state) => state.auth.token);
@@ -51,39 +52,36 @@ export default function Home({ userName = "우리리그" }: Props) {
         { skip: !isLoggedIn || !hasGroups }
     );
 
-    const displayName = isLoggedIn
-        ? (user?.name || user?.email || userName)
-        : userName;
-
     return (
         <Stack spacing={2.5}>
-
-            {/* 타이틀 + 모임 선택 */}
-            <Stack direction="row" alignItems="center" justifyContent="space-between">
-                <Typography variant="h5" fontWeight={900} lineHeight={1.1}>
-                    {displayName}
-                </Typography>
-                {hasGroups && groups.length > 1 && (
-                    <Select
-                        value={String(selectedGroupIdx)}
-                        onChange={(e: SelectChangeEvent<string>) => setSelectedGroupIdx(Number(e.target.value))}
-                        size="small"
-                        sx={{
-                            borderRadius: 1,
-                            height: 32,
-                            fontSize: "0.85rem",
-                            fontWeight: 700,
-                            bgcolor: "#EEF2FF",
-                            "& .MuiSelect-select": { py: 0.5, px: 1.5 },
-                            "& .MuiOutlinedInput-notchedOutline": { borderColor: "#C7D2FE" },
-                        }}
-                    >
-                        {groups.map((g, idx) => (
-                            <MenuItem key={g.id} value={String(idx)}>{g.name}</MenuItem>
-                        ))}
-                    </Select>
-                )}
-            </Stack>
+            {/* 사용자명 + 모임 선택 */}
+            {isLoggedIn && (
+                <Stack direction="row" alignItems="center" justifyContent="space-between">
+                    <Typography variant="h5" fontWeight={900} lineHeight={1.1}>
+                        {user?.name || user?.email || "우리리그"}
+                    </Typography>
+                    {hasGroups && groups.length > 1 && (
+                        <Select
+                            value={String(selectedGroupIdx)}
+                            onChange={(e: SelectChangeEvent<string>) => setSelectedGroupIdx(Number(e.target.value))}
+                            size="small"
+                            sx={{
+                                borderRadius: 1,
+                                height: 32,
+                                fontSize: "0.85rem",
+                                fontWeight: 700,
+                                bgcolor: "#EEF2FF",
+                                "& .MuiSelect-select": { py: 0.5, px: 1.5 },
+                                "& .MuiOutlinedInput-notchedOutline": { borderColor: "#C7D2FE" },
+                            }}
+                        >
+                            {groups.map((g, idx) => (
+                                <MenuItem key={g.id} value={String(idx)}>{g.name}</MenuItem>
+                            ))}
+                        </Select>
+                    )}
+                </Stack>
+            )}
 
             {/* 로그인/모임 카드 */}
             {!isLoggedIn ? (
@@ -121,7 +119,9 @@ export default function Home({ userName = "우리리그" }: Props) {
                                     flexShrink: 0,
                                 }}
                             >
-                                <Typography sx={{ fontSize: 24, lineHeight: 1 }}>🏓</Typography>
+                                <Typography sx={{ fontSize: 24, lineHeight: 1 }}>
+                                    {selectedGroup.sport ? (SPORT_EMOJI[selectedGroup.sport] ?? "🏓") : "🏓"}
+                                </Typography>
                             </Box>
 
                             {/* 모임 정보 */}

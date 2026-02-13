@@ -17,6 +17,8 @@ const router = express.Router();
 const createGroupSchema = z.object({
   name: z.string().min(1, '모임 이름은 필수입니다'),
   description: z.string().optional(),
+  sport: z.string().optional(),
+  type: z.string().optional(),
   region_city: z.string().optional(),
   region_district: z.string().optional(),
   founded_at: z.string().optional(),
@@ -98,6 +100,12 @@ router.get('/group/check-name', requireAuth, async (req, res) => {
  *               description:
  *                 type: string
  *                 description: 모임 설명
+ *               sport:
+ *                 type: string
+ *                 description: 종목 (예 탁구, 배드민턴, 테니스)
+ *               type:
+ *                 type: string
+ *                 description: 종류 (예 동호회, 학교, 직장, 지역)
  *               region_city:
  *                 type: string
  *                 description: 지역(시/도)
@@ -135,7 +143,7 @@ router.get('/group/check-name', requireAuth, async (req, res) => {
 router.post('/group', requireAuth, async (req, res) => {
   const client = await pool.connect();
   try {
-    const { name, description, region_city, region_district, founded_at } = createGroupSchema.parse(req.body);
+    const { name, description, sport, type, region_city, region_district, founded_at } = createGroupSchema.parse(req.body);
     const userId = req.user.sub;
     const groupId = randomUUID();
     const memberId = randomUUID();
@@ -143,9 +151,9 @@ router.post('/group', requireAuth, async (req, res) => {
     await client.query('BEGIN');
 
     await client.query(
-      `INSERT INTO groups (id, name, description, region_city, region_district, founded_at, created_by_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [groupId, name, description || null, region_city || null, region_district || null, founded_at || null, userId]
+      `INSERT INTO groups (id, name, description, sport, type, region_city, region_district, founded_at, created_by_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [groupId, name, description || null, sport || null, type || null, region_city || null, region_district || null, founded_at || null, userId]
     );
 
     await client.query(
@@ -207,6 +215,11 @@ router.post('/group', requireAuth, async (req, res) => {
  *           default: 20
  *           maximum: 50
  *         description: 결과 개수 제한
+ *       - in: query
+ *         name: sort_by_region
+ *         schema:
+ *           type: boolean
+ *         description: true일 때 region_city를 필터가 아닌 정렬 기준으로 사용 (같은 지역 우선, 다른 지역도 표시)
  *     responses:
  *       200:
  *         description: 검색 결과
@@ -241,7 +254,7 @@ router.post('/group', requireAuth, async (req, res) => {
 router.get('/group/search', requireAuth, async (req, res) => {
   try {
     const userId = req.user.sub;
-    const { q, region_city, region_district, limit = '20' } = req.query;
+    const { q, region_city, region_district, limit = '20', sort_by_region } = req.query;
 
     const conditions = [
       `g.id NOT IN (SELECT group_id FROM group_members WHERE user_id = $1)`
@@ -249,32 +262,45 @@ router.get('/group/search', requireAuth, async (req, res) => {
     const params = [userId];
     let paramIdx = 2;
 
+    // 검색어가 있으면 필터링
     if (q && q.trim()) {
       conditions.push(`g.name ILIKE $${paramIdx}`);
       params.push(`%${q.trim()}%`);
       paramIdx++;
     }
 
-    if (region_city && region_city.trim()) {
-      conditions.push(`g.region_city = $${paramIdx}`);
-      params.push(region_city.trim());
-      paramIdx++;
-    }
+    // sort_by_region=true이면 지역은 정렬 기준으로만 사용 (필터링 X)
+    // sort_by_region=false이거나 없으면 지역 필터링
+    const useSortOnly = sort_by_region === 'true';
 
-    if (region_district && region_district.trim()) {
-      conditions.push(`g.region_district = $${paramIdx}`);
-      params.push(region_district.trim());
-      paramIdx++;
+    if (!useSortOnly) {
+      if (region_city && region_city.trim()) {
+        conditions.push(`g.region_city = $${paramIdx}`);
+        params.push(region_city.trim());
+        paramIdx++;
+      }
+
+      if (region_district && region_district.trim()) {
+        conditions.push(`g.region_district = $${paramIdx}`);
+        params.push(region_district.trim());
+        paramIdx++;
+      }
     }
 
     params.push(Math.min(parseInt(limit, 10) || 20, 50));
 
+    // 정렬: region_city가 제공되고 sort_by_region=true이면 일치하는 것 우선
+    let orderBy = 'g.created_at DESC';
+    if (useSortOnly && region_city && region_city.trim()) {
+      orderBy = `(CASE WHEN g.region_city = '${region_city.trim()}' THEN 0 ELSE 1 END), g.created_at DESC`;
+    }
+
     const result = await pool.query(
-      `SELECT g.id, g.name, g.description, g.region_city, g.region_district, g.created_at,
+      `SELECT g.id, g.name, g.description, g.sport, g.type, g.region_city, g.region_district, g.created_at,
               (SELECT COUNT(*) FROM group_members WHERE group_id = g.id)::int AS member_count
        FROM groups g
        WHERE ${conditions.join(' AND ')}
-       ORDER BY g.created_at DESC
+       ORDER BY ${orderBy}
        LIMIT $${paramIdx}`,
       params
     );
@@ -336,7 +362,7 @@ router.get('/group', requireAuth, async (req, res) => {
     const userId = req.user.sub;
 
     const result = await pool.query(
-      `SELECT g.id, g.name, g.description, g.region_city, g.region_district, g.created_at,
+      `SELECT g.id, g.name, g.description, g.sport, g.type, g.region_city, g.region_district, g.created_at,
               gm.role,
               u.name AS creator_name,
               (SELECT COUNT(*) FROM group_members WHERE group_id = g.id)::int AS member_count
@@ -436,7 +462,8 @@ router.get('/group/:id', requireAuth, async (req, res) => {
     }
 
     const groupResult = await pool.query(
-      `SELECT g.id, g.name, g.description, g.created_at, u.name AS creator_name
+      `SELECT g.id, g.name, g.description, g.sport, g.type, g.region_city, g.region_district,
+              g.founded_at, g.created_at, u.name AS creator_name
        FROM groups g
        LEFT JOIN users u ON g.created_by_id = u.id
        WHERE g.id = $1`,
@@ -699,6 +726,191 @@ router.patch('/group/:id/member/:userId/role', requireAuth, requireGroupOwner, a
   } catch (error) {
     console.error('Error updating member role:', error);
     res.status(500).json({ message: '내부 서버 오류' });
+  }
+});
+
+/**
+ * @openapi
+ * /group/{id}:
+ *   patch:
+ *     summary: 모임 정보 수정
+ *     description: 모임의 기본 정보를 수정합니다. owner만 가능합니다.
+ *     tags: [Group]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 모임 ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 description: 모임명
+ *               description:
+ *                 type: string
+ *                 description: 모임 설명
+ *               sport:
+ *                 type: string
+ *                 description: 종목
+ *               type:
+ *                 type: string
+ *                 description: 종류
+ *               region_city:
+ *                 type: string
+ *                 description: 지역(시/도)
+ *               region_district:
+ *                 type: string
+ *                 description: 지역(구/군)
+ *               founded_at:
+ *                 type: string
+ *                 format: date
+ *                 description: 창립일
+ *     responses:
+ *       200:
+ *         description: 모임 정보 수정 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *       403:
+ *         description: 권한 없음 (owner만 가능)
+ *       404:
+ *         description: 모임을 찾을 수 없음
+ *       500:
+ *         description: 서버 오류
+ */
+router.patch('/group/:id', requireAuth, requireGroupOwner, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description, sport, type, region_city, region_district, founded_at } = req.body;
+
+    const updates = [];
+    const values = [];
+    let paramIdx = 1;
+
+    if (name !== undefined) {
+      updates.push(`name = $${paramIdx++}`);
+      values.push(name);
+    }
+    if (description !== undefined) {
+      updates.push(`description = $${paramIdx++}`);
+      values.push(description);
+    }
+    if (sport !== undefined) {
+      updates.push(`sport = $${paramIdx++}`);
+      values.push(sport);
+    }
+    if (type !== undefined) {
+      updates.push(`type = $${paramIdx++}`);
+      values.push(type);
+    }
+    if (region_city !== undefined) {
+      updates.push(`region_city = $${paramIdx++}`);
+      values.push(region_city);
+    }
+    if (region_district !== undefined) {
+      updates.push(`region_district = $${paramIdx++}`);
+      values.push(region_district);
+    }
+    if (founded_at !== undefined) {
+      updates.push(`founded_at = $${paramIdx++}`);
+      values.push(founded_at);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ message: '수정할 내용이 없습니다' });
+    }
+
+    values.push(id);
+    await pool.query(
+      `UPDATE groups SET ${updates.join(', ')} WHERE id = $${paramIdx}`,
+      values
+    );
+
+    res.status(200).json({ message: '모임 정보가 수정되었습니다' });
+  } catch (error) {
+    console.error('Error updating group:', error);
+    res.status(500).json({ message: '내부 서버 오류' });
+  }
+});
+
+/**
+ * @openapi
+ * /group/{id}:
+ *   delete:
+ *     summary: 모임 삭제
+ *     description: 모임을 삭제합니다. owner만 가능하며, 모임의 모든 멤버와 관련 데이터가 삭제됩니다.
+ *     tags: [Group]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 모임 ID
+ *     responses:
+ *       200:
+ *         description: 모임 삭제 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *       403:
+ *         description: 권한 없음 (owner만 가능)
+ *       404:
+ *         description: 모임을 찾을 수 없음
+ *       500:
+ *         description: 서버 오류
+ */
+router.delete('/group/:id', requireAuth, requireGroupOwner, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+
+    await client.query('BEGIN');
+
+    // 모임 멤버 삭제
+    await client.query(
+      `DELETE FROM group_members WHERE group_id = $1`,
+      [id]
+    );
+
+    // 모임 삭제
+    const result = await client.query(
+      `DELETE FROM groups WHERE id = $1`,
+      [id]
+    );
+
+    if (result.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: '모임을 찾을 수 없습니다' });
+    }
+
+    await client.query('COMMIT');
+    res.status(200).json({ message: '모임이 삭제되었습니다' });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error deleting group:', error);
+    res.status(500).json({ message: '내부 서버 오류' });
+  } finally {
+    client.release();
   }
 });
 

@@ -24,6 +24,8 @@ export default function GroupCreate() {
     const [createGroup, { isLoading: creating }] = useCreateGroupMutation();
     const [checkName] = useLazyCheckGroupNameQuery();
 
+    const [sport, setSport] = useState("");
+    // const [groupType, setGroupType] = useState("");
     const [regionCity, setRegionCity] = useState("");
     const [regionDistrict, setRegionDistrict] = useState("");
     const [groupName, setGroupName] = useState("");
@@ -37,6 +39,8 @@ export default function GroupCreate() {
     const districts = regionCity ? (REGION_DATA[regionCity] ?? []) : [];
 
     const canSubmit =
+        sport.trim() !== "" &&
+        // groupType.trim() !== "" &&
         regionCity.trim() !== "" &&
         regionDistrict.trim() !== "" &&
         groupName.trim() !== "" &&
@@ -94,6 +98,8 @@ export default function GroupCreate() {
         try {
             await createGroup({
                 name: groupName.trim(),
+                sport: sport,
+                // type: groupType,
                 region_city: regionCity,
                 region_district: regionDistrict,
                 founded_at: foundedAt,
@@ -184,6 +190,53 @@ export default function GroupCreate() {
             </Stack>
 
             <Stack spacing={3}>
+                {/* 종목 */}
+                <Box>
+                    <Typography sx={{ fontWeight: 900, mb: 1 }}>종목</Typography>
+                    <FormControl fullWidth>
+                        <Select
+                            displayEmpty
+                            value={sport}
+                            onChange={(e: SelectChangeEvent<string>) => setSport(e.target.value)}
+                            size="small"
+                            sx={selectSx}
+                        >
+                            <MenuItem value="">
+                                <em>종목 선택</em>
+                            </MenuItem>
+                            <MenuItem value="탁구">탁구</MenuItem>
+                            <MenuItem value="배드민턴">배드민턴</MenuItem>
+                            <MenuItem value="테니스">테니스</MenuItem>
+                            <MenuItem value="축구">축구</MenuItem>
+                            <MenuItem value="농구">농구</MenuItem>
+                            <MenuItem value="기타">기타</MenuItem>
+                        </Select>
+                    </FormControl>
+                </Box>
+
+                {/* 종류 */}
+                {/* <Box>
+                    <Typography sx={{ fontWeight: 900, mb: 1 }}>종류</Typography>
+                    <FormControl fullWidth>
+                        <Select
+                            displayEmpty
+                            value={groupType}
+                            onChange={(e: SelectChangeEvent<string>) => setGroupType(e.target.value)}
+                            size="small"
+                            sx={selectSx}
+                        >
+                            <MenuItem value="">
+                                <em>종류 선택</em>
+                            </MenuItem>
+                            <MenuItem value="동호회">동호회</MenuItem>
+                            <MenuItem value="학교">학교</MenuItem>
+                            <MenuItem value="직장">직장</MenuItem>
+                            <MenuItem value="지역">지역</MenuItem>
+                            <MenuItem value="기타">기타</MenuItem>
+                        </Select>
+                    </FormControl>
+                </Box> */}
+
                 {/* 지역 */}
                 <Box>
                     <Typography sx={{ fontWeight: 900, mb: 1 }}>지역</Typography>
@@ -300,10 +353,12 @@ export default function GroupCreate() {
             {/* 확인 다이얼로그 */}
             <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
                 <DialogContent sx={{ pt: 2.5, pb: 1.5 }}>
-                    <Typography sx={{ fontWeight: 900, mb: 1.5, textAlign: "center" }}>
+                    <Typography sx={{ fontWeight: 900, mb: 1.5, textAlign: "left" }}>
                         모임 생성 확인
                     </Typography>
-                    <Typography sx={{ fontSize: 15, lineHeight: 1.6, textAlign: "center" }}>
+                    <Typography sx={{ fontSize: 15, lineHeight: 1.6, textAlign: "left", whiteSpace: "pre-line" }}>
+                        {/* 종목: {sport} / 종류: {groupType}{"\n"} */}
+                        종목: {sport}{"\n"}
                         {regionCity} {regionDistrict}{"\n"}
                         "{groupName}" 모임을 생성하겠습니까?
                     </Typography>

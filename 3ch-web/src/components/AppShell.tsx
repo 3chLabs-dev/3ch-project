@@ -1,11 +1,12 @@
 // AppShell.tsx
-import { Outlet } from "react-router-dom";
-import { AppBar, Box, Toolbar, Typography, Paper } from "@mui/material";
+import { Link, Outlet } from "react-router-dom";
+import { AppBar, Box, Toolbar, Paper } from "@mui/material";
 import BottomTab from "./BottomTab";
 
 import { useEffect } from "react";
 import { useDispatch } from "react-redux";
 import { setToken, setUser } from "../features/auth/authSlice";
+import logo from "../assets/우리리그_logo_vectorized.svg";
 
 const TAB_H = 56;
 
@@ -34,6 +35,7 @@ export default function AppShell() {
                     borderColor: "divider",
                     bgcolor: "background.paper",
                     overflow: "hidden",
+                    borderRadius: 0,
                 }}
             >
                 <AppBar
@@ -43,7 +45,21 @@ export default function AppShell() {
                     sx={{ borderBottom: 1, borderColor: "divider" }}
                 >
                     <Toolbar sx={{ minHeight: 56 }}>
-                        <Typography fontWeight={900}>우리리그 로고</Typography>
+                        <Box
+                            component={Link}
+                            to="/"
+                            sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                textDecoration: 'none'
+                            }}
+                        >
+                            <img
+                                src={logo}
+                                alt="우리리그"
+                                style={{ height: 32 }}
+                            />
+                        </Box>
                     </Toolbar>
                 </AppBar>
 

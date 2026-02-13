@@ -45,6 +45,7 @@ export default function GroupMain() {
         q: groupSearch || undefined,
         region_city: !groupSearch && myRegionCity ? myRegionCity : undefined,
         limit: 10,
+        sort_by_region: !groupSearch && myRegionCity ? true : undefined,
     }), [groupSearch, myRegionCity]);
 
     const { data: searchData, isLoading: searchLoading } = useSearchGroupsQuery(
@@ -62,7 +63,36 @@ export default function GroupMain() {
                 </Typography>
 
                 {!isLoggedIn ? (
-                    <EmptyCard text="로그인 후 확인할 수 있습니다." />
+                    <Card
+                        elevation={2}
+                        sx={{
+                            borderRadius: 1,
+                            boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                        }}
+                    >
+                        <CardContent sx={{
+                            py: 2.5,
+                            px: 2,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            textAlign: "center",
+                            "&:last-child": { pb: 2.5 },
+                        }}>
+                            <Stack alignItems="center" spacing={1.2}>
+                                <Typography fontWeight={800}>로그인을 해주세요.</Typography>
+                                <Button
+                                    component={RouterLink}
+                                    to="/login"
+                                    variant="contained"
+                                    size="medium"
+                                    sx={{ px: 3, borderRadius: 1 }}
+                                >
+                                    로그인
+                                </Button>
+                            </Stack>
+                        </CardContent>
+                    </Card>
                 ) : isLoading ? (
                     <EmptyCard text="로딩 중..." />
                 ) : myGroups.length > 0 ? (
@@ -94,63 +124,71 @@ export default function GroupMain() {
                     <Typography variant="subtitle1" sx={{ fontWeight: 900 }}>
                         AI 모임 추천
                     </Typography>
-                    <IconButton size="small">
-                        <SettingsIcon fontSize="small" />
-                    </IconButton>
+                    {isLoggedIn && (
+                        <IconButton size="small">
+                            <SettingsIcon fontSize="small" />
+                        </IconButton>
+                    )}
                 </Stack>
 
-                <Stack direction="row" spacing={0.8} sx={{ mb: 1.5 }}>
-                    {SPORT_FILTERS.map((f) => (
-                        <Chip
-                            key={f}
-                            label={f}
-                            size="small"
-                            onClick={() => setSelectedFilter(selectedFilter === f ? null : f)}
-                            sx={{
-                                fontWeight: 700,
-                                fontSize: 12,
-                                bgcolor: selectedFilter === f ? "#111827" : "#F3F4F6",
-                                color: selectedFilter === f ? "#fff" : "#374151",
-                                "&:hover": {
-                                    bgcolor: selectedFilter === f ? "#111827" : "#E5E7EB",
-                                },
-                            }}
-                        />
-                    ))}
-                </Stack>
-
-                {/* 모임 검색 */}
-                <Stack direction="row" spacing={0.8} sx={{ mb: 1.5 }}>
-                    <TextField
-                        placeholder="모임 검색"
-                        size="small"
-                        value={groupSearch}
-                        onChange={(e) => setGroupSearch(e.target.value)}
-                        fullWidth
-                        sx={{
-                            "& .MuiOutlinedInput-root": {
-                                borderRadius: 1,
-                                bgcolor: "#F9FAFB",
-                                height: 38,
-                            },
-                            "& .MuiOutlinedInput-input": {
-                                py: 0.8,
-                                fontSize: "0.9rem",
-                            },
-                        }}
-                    />
-                </Stack>
-
-                {searchLoading ? (
-                    <EmptyCard text="검색 중..." />
-                ) : recommendedGroups.length > 0 ? (
-                    <Stack spacing={1}>
-                        {recommendedGroups.map((g) => (
-                            <RecommendedGroupCard key={g.id} group={g} />
-                        ))}
-                    </Stack>
+                {!isLoggedIn ? (
+                    <EmptyCard text="로그인 후 확인할 수 있습니다." />
                 ) : (
-                    <EmptyCard text={groupSearch ? "검색 결과가 없습니다." : "추천 모임이 없습니다."} />
+                    <>
+                        <Stack direction="row" spacing={0.8} sx={{ mb: 1.5 }}>
+                            {SPORT_FILTERS.map((f) => (
+                                <Chip
+                                    key={f}
+                                    label={f}
+                                    size="small"
+                                    onClick={() => setSelectedFilter(selectedFilter === f ? null : f)}
+                                    sx={{
+                                        fontWeight: 700,
+                                        fontSize: 12,
+                                        bgcolor: selectedFilter === f ? "#111827" : "#F3F4F6",
+                                        color: selectedFilter === f ? "#fff" : "#374151",
+                                        "&:hover": {
+                                            bgcolor: selectedFilter === f ? "#111827" : "#E5E7EB",
+                                        },
+                                    }}
+                                />
+                            ))}
+                        </Stack>
+
+                        {/* 모임 검색 */}
+                        <Stack direction="row" spacing={0.8} sx={{ mb: 1.5 }}>
+                            <TextField
+                                placeholder="모임 검색"
+                                size="small"
+                                value={groupSearch}
+                                onChange={(e) => setGroupSearch(e.target.value)}
+                                fullWidth
+                                sx={{
+                                    "& .MuiOutlinedInput-root": {
+                                        borderRadius: 1,
+                                        bgcolor: "#F9FAFB",
+                                        height: 38,
+                                    },
+                                    "& .MuiOutlinedInput-input": {
+                                        py: 0.8,
+                                        fontSize: "0.9rem",
+                                    },
+                                }}
+                            />
+                        </Stack>
+
+                        {searchLoading ? (
+                            <EmptyCard text="검색 중..." />
+                        ) : recommendedGroups.length > 0 ? (
+                            <Stack spacing={1}>
+                                {recommendedGroups.map((g) => (
+                                    <RecommendedGroupCard key={g.id} group={g} />
+                                ))}
+                            </Stack>
+                        ) : (
+                            <EmptyCard text={groupSearch ? "검색 결과가 없습니다." : "추천 모임이 없습니다."} />
+                        )}
+                    </>
                 )}
             </Box>
         </Stack>
@@ -159,7 +197,7 @@ export default function GroupMain() {
 
 function GroupCard({ group }: { group: Group }) {
     const navigate = useNavigate();
-    const emoji = SPORT_EMOJI["탁구"] ?? "\u26BD";
+    const emoji = group.sport ? (SPORT_EMOJI[group.sport] ?? "\uD83C\uDFD3") : "\uD83C\uDFD3";
     const region = [group.region_city, group.region_district].filter(Boolean).join(" ");
     const canManage = isGroupAdmin(group);
 
@@ -204,7 +242,7 @@ function GroupCard({ group }: { group: Group }) {
 
 function RecommendedGroupCard({ group }: { group: Omit<Group, "role"> & { id: string } }) {
     const [joinGroup, { isLoading }] = useJoinGroupMutation();
-    const emoji = SPORT_EMOJI["탁구"] ?? "\u26BD";
+    const emoji = group.sport ? (SPORT_EMOJI[group.sport] ?? "\uD83C\uDFD3") : "\uD83C\uDFD3";
     const region = [group.region_city, group.region_district].filter(Boolean).join(" ");
 
     const handleJoin = async () => {

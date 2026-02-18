@@ -1,7 +1,7 @@
 const pool = require('../db/pool');
 
 /**
- * 모임 내 특정 권한을 가진 사용자만 접근 허용
+ * 클럽 내 특정 권한을 가진 사용자만 접근 허용
  * @param {string[]} allowedRoles - 허용할 역할 목록 (예: ['owner', 'admin'])
  */
 const requireGroupRole = (allowedRoles) => async (req, res, next) => {
@@ -10,19 +10,19 @@ const requireGroupRole = (allowedRoles) => async (req, res, next) => {
     const groupId = req.params.groupId || req.params.id;
 
     if (!groupId) {
-      return res.status(400).json({ message: '모임 ID가 필요합니다' });
+      return res.status(400).json({ message: '클럽 ID가 필요합니다' });
     }
 
     const userId = req.user.sub;
 
-    // 사용자의 모임 내 역할 확인
+    // 사용자의 클럽 내 역할 확인
     const roleCheck = await pool.query(
       `SELECT role FROM group_members WHERE group_id = $1 AND user_id = $2`,
       [groupId, userId]
     );
 
     if (roleCheck.rows.length === 0) {
-      return res.status(403).json({ message: '모임에 속해있지 않습니다' });
+      return res.status(403).json({ message: '클럽에 속해있지 않습니다' });
     }
 
     const userRole = roleCheck.rows[0].role;
@@ -56,12 +56,12 @@ const requireAdmin = (req, res, next) => {
 };
 
 /**
- * 모임장(owner)만 접근 허용
+ * 리더(owner)만 접근 허용
  */
 const requireGroupOwner = requireGroupRole(['owner']);
 
 /**
- * 모임장 또는 운영진만 접근 허용
+ * 리더 또는 운영진만 접근 허용
  */
 const requireGroupAdmin = requireGroupRole(['owner', 'admin']);
 

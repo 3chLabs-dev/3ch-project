@@ -91,7 +91,7 @@ export default function GroupManage() {
         founded_at: "",
     });
 
-    // 현재 모임의 리그 목록 조회
+    // 현재 클럽의 리그 목록 조회
     const { data: leagueData } = useGetLeaguesQuery(
         id ? { group_id: id } : undefined,
         {
@@ -136,7 +136,7 @@ export default function GroupManage() {
     if (!data) {
         return (
             <Box sx={{ p: 2 }}>
-                <Typography>모임을 찾을 수 없습니다.</Typography>
+                <Typography>클럽을 찾을 수 없습니다.</Typography>
             </Box>
         );
     }
@@ -259,7 +259,7 @@ export default function GroupManage() {
 
     const handleRemoveMember = async () => {
         if (!selectedMember || !id) return;
-        if (!window.confirm(`"${selectedMember.name}"님을 모임에서 내보내시겠습니까?`)) {
+        if (!window.confirm(`"${selectedMember.name}"님을 클럽에서 내보내시겠습니까?`)) {
             return;
         }
         try {
@@ -288,7 +288,7 @@ export default function GroupManage() {
                     <ArrowBackIcon />
                 </IconButton>
                 <Typography variant="h6" fontWeight={900} flex={1}>
-                    모임 정보
+                    클럽 정보
                 </Typography>
                 {isOwner && (
                     <IconButton size="small" onClick={handleOpenEditDialog}>
@@ -297,11 +297,11 @@ export default function GroupManage() {
                 )}
             </Stack>
 
-            {/* 모임 정보 카드 */}
+            {/* 클럽 정보 카드 */}
             <Card elevation={2} sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
                 <CardContent sx={{ py: 2.5, px: 2.5, "&:last-child": { pb: 2.5 } }}>
                     <Stack spacing={2}>
-                        {/* 모임명 + 이모지 + 지역 */}
+                        {/* 클럽명 + 이모지 + 지역 */}
                         <Stack direction="row" alignItems="center" spacing={2}>
                             <Typography sx={{ fontSize: 32, lineHeight: 1 }}>{emoji}</Typography>
                             <Box flex={1}>
@@ -372,10 +372,10 @@ export default function GroupManage() {
                 </CardContent>
             </Card>
 
-            {/* 모임원 섹션 */}
+            {/* 클럽 회원 섹션 */}
             <Box>
                 <Typography variant="subtitle1" fontWeight={900} sx={{ mb: 1.5 }}>
-                    모임원
+                    클럽 회원
                 </Typography>
 
                 <Card elevation={2} sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
@@ -548,11 +548,11 @@ export default function GroupManage() {
                         fontWeight: 900,
                     }}
                 >
-                    모임 초대
+                    클럽 초대
                 </Button>
             )}
 
-            {/* 모임 정보 수정 다이얼로그 */}
+            {/* 클럽 정보 수정 다이얼로그 */}
             <Dialog
                 open={editDialogOpen}
                 onClose={() => setEditDialogOpen(false)}
@@ -566,13 +566,13 @@ export default function GroupManage() {
                 }}
             >
                 <DialogTitle sx={{ fontWeight: 900, pb: 1 }}>
-                    모임 기본정보 수정
+                    클럽 기본정보 수정
                 </DialogTitle>
                 <DialogContent>
                     <Stack spacing={2} sx={{ pt: 1 }}>
-                        {/* 모임코드 */}
+                        {/* 클럽코드 */}
                         <TextField
-                            label="모임코드"
+                            label="클럽코드"
                             value={group.id}
                             disabled
                             fullWidth
@@ -636,9 +636,9 @@ export default function GroupManage() {
                             </FormControl>
                         </Stack>
 
-                        {/* 모임명 */}
+                        {/* 클럽명 */}
                         <TextField
-                            label="모임명"
+                            label="클럽명"
                             value={formData.name}
                             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                             fullWidth
@@ -650,9 +650,9 @@ export default function GroupManage() {
                             }}
                         />
 
-                        {/* 모임장 */}
+                        {/* 리더 */}
                         <TextField
-                            label="모임장"
+                            label="리더"
                             value={group.creator_name || ""}
                             disabled
                             fullWidth
@@ -695,7 +695,7 @@ export default function GroupManage() {
                                 color: "error.main",
                             }}
                         >
-                            모임 삭제
+                            클럽 삭제
                         </Button>
                     )}
                     <Box sx={{ flex: 1 }} />
@@ -726,7 +726,7 @@ export default function GroupManage() {
                 </DialogActions>
             </Dialog>
 
-            {/* 모임 삭제 확인 다이얼로그 */}
+            {/* 클럽 삭제 확인 다이얼로그 */}
             <Dialog
                 open={deleteDialogOpen}
                 onClose={() => setDeleteDialogOpen(false)}
@@ -740,14 +740,14 @@ export default function GroupManage() {
                 }}
             >
                 <DialogTitle sx={{ fontWeight: 900, pb: 1 }}>
-                    모임 삭제
+                    클럽 삭제
                 </DialogTitle>
                 <DialogContent>
                     <Typography>
-                        정말로 "{group.name}" 모임을 삭제하시겠습니까?
+                        정말로 "{group.name}" 클럽을 삭제하시겠습니까?
                     </Typography>
                     <Typography sx={{ mt: 1, color: "error.main", fontSize: 14 }}>
-                        이 작업은 되돌릴 수 없으며, 모든 모임 데이터가 삭제됩니다.
+                        이 작업은 되돌릴 수 없으며, 모든 클럽 데이터가 삭제됩니다.
                     </Typography>
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2.5 }}>
@@ -779,7 +779,7 @@ export default function GroupManage() {
                 </DialogActions>
             </Dialog>
 
-            {/* 모임 초대 다이얼로그 */}
+            {/* 클럽 초대 다이얼로그 */}
             <Dialog
                 open={inviteDialogOpen}
                 onClose={() => setInviteDialogOpen(false)}
@@ -793,7 +793,7 @@ export default function GroupManage() {
                 }}
             >
                 <DialogTitle sx={{ fontWeight: 900, pb: 1 }}>
-                    모임 초대하기
+                    클럽 초대하기
                 </DialogTitle>
                 <DialogContent>
                     <Stack spacing={3} sx={{ pt: 1, alignItems: "center" }}>
@@ -861,7 +861,7 @@ export default function GroupManage() {
                                 fullWidth
                                 onClick={() => {
                                     const link = `${window.location.origin}/group/${id}/join`;
-                                    const message = `${group.name} 모임에 초대합니다! ${link}`;
+                                    const message = `${group.name} 클럽에 초대합니다! ${link}`;
                                     window.location.href = `sms:?body=${encodeURIComponent(message)}`;
                                 }}
                                 sx={{

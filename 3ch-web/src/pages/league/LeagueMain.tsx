@@ -61,7 +61,7 @@ export default function LeagueMainBody() {
 
   return (
     <Stack spacing={2.0}>
-      {/* 타이틀 + 모임 선택 */}
+      {/* 타이틀 + 클럽 선택 */}
       <Stack direction="row" alignItems="center" justifyContent="space-between">
         <Typography variant="h6" fontWeight={900}>
           리그 일정
@@ -87,7 +87,7 @@ export default function LeagueMainBody() {
             }}
           >
             {/* <MenuItem value="">
-              <em>모임 선택</em>
+              <em>클럽 선택</em>
             </MenuItem> */}
             {myGroups.map((g) => (
               <MenuItem key={g.id} value={g.id}>{g.name}</MenuItem>

@@ -67,10 +67,10 @@ export default function GroupCreate() {
             const result = await checkName(trimmed).unwrap();
             if (result.available) {
                 setNameChecked(true);
-                setNameCheckMsg("*사용할 수 있는 모임명입니다.");
+                setNameCheckMsg("*사용할 수 있는 클럽명입니다.");
             } else {
                 setNameChecked(false);
-                setNameCheckMsg("*사용할 수 없는 모임명입니다. 다른 모임명을 입력해주세요.");
+                setNameCheckMsg("*사용할 수 없는 클럽명입니다. 다른 클럽명을 입력해주세요.");
             }
         } catch {
             setNameChecked(false);
@@ -107,7 +107,7 @@ export default function GroupCreate() {
             }).unwrap();
             setDone(true);
         } catch {
-            alert("모임 생성에 실패했습니다.");
+            alert("클럽 생성에 실패했습니다.");
         }
     };
 
@@ -134,11 +134,11 @@ export default function GroupCreate() {
         return (
             <Box sx={{ px: 2.5, pt: 2 }}>
                 <Typography sx={{ fontSize: 18, fontWeight: 900, textAlign: "center", mt: 2 }}>
-                    모임 생성 완료
+                    클럽 생성 완료
                 </Typography>
 
                 <Typography sx={{ fontSize: 13, fontWeight: 700, textAlign: "center", mt: 1, color: "#6B7280" }}>
-                    이제 우리리그에서 모임을 관리하고{"\n"}리그를 개최할 수 있습니다!
+                    이제 우리리그에서 클럽을 관리하고{"\n"}리그를 개최할 수 있습니다!
                 </Typography>
 
                 <Box
@@ -186,7 +186,7 @@ export default function GroupCreate() {
                     <ArrowBackIcon />
                 </IconButton>
                 <Typography sx={{ fontSize: 20, fontWeight: 900 }}>
-                    모임 생성
+                    클럽 생성
                 </Typography>
             </Stack>
 
@@ -278,12 +278,12 @@ export default function GroupCreate() {
                     </Stack>
                 </Box>
 
-                {/* 모임명 */}
+                {/* 클럽명 */}
                 <Box>
-                    <Typography sx={{ fontWeight: 900, mb: 1 }}>모임명</Typography>
+                    <Typography sx={{ fontWeight: 900, mb: 1 }}>클럽명</Typography>
                     <Stack direction="row" spacing={1} alignItems="flex-start">
                         <TextField
-                            placeholder="모임명"
+                            placeholder="클럽명"
                             size="small"
                             value={groupName}
                             onChange={(e) => handleNameChange(e.target.value)}
@@ -318,9 +318,9 @@ export default function GroupCreate() {
                     )}
                 </Box>
 
-                {/* 모임 창단일 */}
+                {/* 클럽 창단일 */}
                 <Box>
-                    <Typography sx={{ fontWeight: 900, mb: 1 }}>모임 창단일</Typography>
+                    <Typography sx={{ fontWeight: 900, mb: 1 }}>클럽 창단일</Typography>
                     <TextField
                         placeholder="YYYY-MM-DD"
                         size="small"
@@ -332,7 +332,7 @@ export default function GroupCreate() {
                     />
                 </Box>
 
-                {/* 모임 생성 버튼 */}
+                {/* 클럽 생성 버튼 */}
                 <Button
                     fullWidth
                     variant="contained"
@@ -347,7 +347,7 @@ export default function GroupCreate() {
                         mt: 2,
                     }}
                 >
-                    모임 생성
+                    클럽 생성
                 </Button>
             </Stack>
 
@@ -355,13 +355,13 @@ export default function GroupCreate() {
             <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
                 <DialogContent sx={{ pt: 2.5, pb: 1.5 }}>
                     <Typography sx={{ fontWeight: 900, mb: 1.5, textAlign: "left" }}>
-                        모임 생성 확인
+                        클럽 생성 확인
                     </Typography>
                     <Typography sx={{ fontSize: 15, lineHeight: 1.6, textAlign: "left", whiteSpace: "pre-line" }}>
                         {/* 종목: {sport} / 종류: {groupType}{"\n"} */}
                         종목: {sport}{"\n"}
                         {regionCity} {regionDistrict}{"\n"}
-                        "{groupName}" 모임을 생성하겠습니까?
+                        "{groupName}" 클럽을 생성하겠습니까?
                     </Typography>
                 </DialogContent>
                 <DialogActions sx={{ px: 2, pb: 2, gap: 1 }}>

@@ -70,7 +70,7 @@ export default function MemberEditDialog({
     >
       <DialogTitle sx={{ pb: 1 }}>
         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <Typography sx={{ fontWeight: 900, fontSize: 18 }}>모임원 수정</Typography>
+          <Typography sx={{ fontWeight: 900, fontSize: 18 }}>클럽 회원 수정</Typography>
           <IconButton onClick={handleClose} size="small">
             <CloseIcon fontSize="small" />
           </IconButton>
@@ -108,7 +108,7 @@ export default function MemberEditDialog({
                   bgcolor: !isOwner || member.role === "owner" ? "#F9FAFB" : "#fff",
                 }}
               >
-                <MenuItem value="owner">모임장</MenuItem>
+                <MenuItem value="owner">리더</MenuItem>
                 <MenuItem value="admin">운영진</MenuItem>
                 <MenuItem value="member">멤버</MenuItem>
               </Select>
@@ -147,7 +147,7 @@ export default function MemberEditDialog({
                   },
                 }}
               >
-                모임원 내보내기
+                클럽 회원 내보내기
               </Button>
             </Box>
           )}

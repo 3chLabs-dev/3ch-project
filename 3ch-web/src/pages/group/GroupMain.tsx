@@ -37,7 +37,7 @@ export default function GroupMain() {
     const [groupSearch, setGroupSearch] = useState("");
     const [selectedFilter, setSelectedFilter] = useState<string | null>(null);
 
-    // 내 모임들의 지역을 기반으로 추천 검색
+    // 내 클럽들의 지역을 기반으로 추천 검색
     const myRegionCity = useMemo(() => {
         const firstWithRegion = myGroups.find((g) => g.region_city);
         return firstWithRegion?.region_city ?? "";
@@ -58,10 +58,10 @@ export default function GroupMain() {
 
     return (
         <Stack spacing={2.5}>
-            {/* 가입한 모임 */}
+            {/* 가입한 클럽 */}
             <Box>
                 <Typography variant="subtitle1" sx={{ fontWeight: 900, mb: 1.5 }}>
-                    가입한 모임
+                    가입한 클럽
                 </Typography>
 
                 {!isLoggedIn ? (
@@ -104,7 +104,7 @@ export default function GroupMain() {
                         ))}
                     </Stack>
                 ) : (
-                    <EmptyCard text="가입한 모임이 없습니다." />
+                    <EmptyCard text="가입한 클럽이 없습니다." />
                 )}
             </Box>
 
@@ -116,15 +116,15 @@ export default function GroupMain() {
                     fullWidth
                     sx={{ borderRadius: 1, fontWeight: 700 }}
                 >
-                    모임 생성
+                    클럽 생성
                 </Button>
             )}
 
-            {/* AI 모임 추천 */}
+            {/* AI 클럽 추천 */}
             <Box>
                 <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 900 }}>
-                        AI 모임 추천
+                        AI 클럽 추천
                     </Typography>
                     {isLoggedIn && (
                         <IconButton size="small">
@@ -157,10 +157,10 @@ export default function GroupMain() {
                             ))}
                         </Stack>
 
-                        {/* 모임 검색 */}
+                        {/* 클럽 검색 */}
                         <Stack direction="row" spacing={0.8} sx={{ mb: 1.5 }}>
                             <TextField
-                                placeholder="모임 검색"
+                                placeholder="클럽 검색"
                                 size="small"
                                 value={groupSearch}
                                 onChange={(e) => setGroupSearch(e.target.value)}
@@ -188,7 +188,7 @@ export default function GroupMain() {
                                 ))}
                             </Stack>
                         ) : (
-                            <EmptyCard text={groupSearch ? "검색 결과가 없습니다." : "추천 모임이 없습니다."} />
+                            <EmptyCard text={groupSearch ? "검색 결과가 없습니다." : "추천 클럽이 없습니다."} />
                         )}
                     </>
                 )}

@@ -30,7 +30,7 @@ const createLeagueSchema = z.object({
   rules: z.string().optional(),
   recruit_count: z.number().int().min(0).default(0),
   participant_count: z.number().int().min(0).default(0),
-  group_id: z.string().uuid('모임 ID 형식이 올바르지 않습니다.'),
+  group_id: z.string().uuid('클럽 ID 형식이 올바르지 않습니다.'),
   participants: z.array(participantSchema).default([]),
 });
 
@@ -83,12 +83,12 @@ const updateLeagueSchema = z.object({
  *         schema:
  *           type: string
  *           format: uuid
- *         description: 특정 모임의 리그만 조회
+ *         description: 특정 클럽의 리그만 조회
  *       - in: query
  *         name: my_groups
  *         schema:
  *           type: boolean
- *         description: user_id 기준 내가 속한 모임의 리그만 조회
+ *         description: user_id 기준 내가 속한 클럽의 리그만 조회
  *       - in: query
  *         name: user_id
  *         schema:
@@ -252,7 +252,7 @@ router.post('/league', requireAuth, async (req, res) => {
     );
 
     if (roleCheck.rows.length === 0 || !['owner', 'admin'].includes(roleCheck.rows[0].role)) {
-      return res.status(403).json({ message: '리그 생성 권한이 없습니다. 모임장 또는 운영진만 가능합니다.' });
+      return res.status(403).json({ message: '리그 생성 권한이 없습니다. 리더 또는 운영진만 가능합니다.' });
     }
 
     const leagueId = randomUUID();
@@ -301,7 +301,7 @@ router.post('/league', requireAuth, async (req, res) => {
 /**
  * GET /league/:id/participants
  * 리그 참가자 목록 조회
- * 인증 필요. 해당 리그가 속한 모임의 멤버만 조회 가능합니다.
+ * 인증 필요. 해당 리그가 속한 클럽의 멤버만 조회 가능합니다.
  */
 /**
  * @openapi
@@ -590,14 +590,14 @@ router.put('/league/:id', requireAuth, async (req, res) => {
 /**
  * PUT /league/:leagueId/participants/:participantId
  * 리그 참가자 정보 수정
- * 인증 필요. 해당 리그가 속한 모임의 owner 또는 admin만 수정 가능합니다.
+ * 인증 필요. 해당 리그가 속한 클럽의 owner 또는 admin만 수정 가능합니다.
  */
 /**
  * @openapi
  * /league/{leagueId}/participants/{participantId}:
  *   put:
  *     summary: 리그 참가자 정보 수정
- *     description: 참가자의 부수, 이름, 입금/도착/뒷풀이 상태를 수정합니다. 모임의 owner 또는 admin만 가능합니다.
+ *     description: 참가자의 부수, 이름, 입금/도착/뒷풀이 상태를 수정합니다. 클럽의 owner 또는 admin만 가능합니다.
  *     tags: [리그]
  *     security:
  *       - bearerAuth: []
@@ -653,7 +653,7 @@ router.put('/league/:leagueId/participants/:participantId', requireAuth, async (
     const { leagueId, participantId } = req.params;
     const userId = Number(req.user.sub);
 
-    // 권한 확인: 모임의 owner 또는 admin인지 체크
+    // 권한 확인: 클럽의 owner 또는 admin인지 체크
     const accessCheck = await pool.query(
       `SELECT 1
        FROM leagues l

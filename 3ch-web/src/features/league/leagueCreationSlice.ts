@@ -114,7 +114,7 @@ export const createLeague = createAsyncThunk.withTypes<{ state: RootState }>()(
 
     // 필수 데이터 검증
     if (!s.groupId) {
-      throw new Error("모임이 선택되지 않았습니다.");
+      throw new Error("클럽이 선택되지 않았습니다.");
     }
     if (!s.step1BasicInfo) {
       throw new Error("기본 정보가 입력되지 않았습니다.");

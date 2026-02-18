@@ -79,7 +79,7 @@ export default function Home() {
 
     return (
         <Stack spacing={2.5}>
-            {/* 사용자명 + 모임 선택 */}
+            {/* 사용자명 + 클럽 선택 */}
             {isLoggedIn && (
                 <Stack direction="row" alignItems="center" justifyContent="space-between">
                     <Typography variant="h5" fontWeight={900} lineHeight={1.1}>
@@ -112,7 +112,7 @@ export default function Home() {
                 </Stack>
             )}
 
-            {/* 로그인/모임 카드 */}
+            {/* 로그인/클럽 카드 */}
             {!isLoggedIn ? (
                 <SoftCard>
                     <Stack alignItems="center" spacing={1.2}>
@@ -153,7 +153,7 @@ export default function Home() {
                                 </Typography>
                             </Box>
 
-                            {/* 모임 정보 */}
+                            {/* 클럽 정보 */}
                             <Stack spacing={0.4} flex={1} minWidth={0}>
                                 <Typography fontWeight={800} fontSize={16} lineHeight={1.3}>
                                     {selectedGroup.name}
@@ -196,7 +196,7 @@ export default function Home() {
                     <Stack alignItems="center" spacing={1.2}>
                         <Typography fontWeight={800}>환영합니다!</Typography>
                         <Typography color="text.secondary" fontWeight={700}>
-                            모임 없음
+                            클럽 없음
                         </Typography>
                     </Stack>
                 </SoftCard>
@@ -207,7 +207,7 @@ export default function Home() {
             {!isLoggedIn || !hasGroups ? (
                 <SoftCard>
                     <Typography textAlign="center" color="text.secondary" fontWeight={700}>
-                        {!isLoggedIn ? "로그인 후 확인할 수 있습니다." : "모임에 가입하면 리그 일정을 확인할 수 있습니다."}
+                        {!isLoggedIn ? "로그인 후 확인할 수 있습니다." : "클럽에 가입하면 리그 일정을 확인할 수 있습니다."}
                     </Typography>
                 </SoftCard>
             ) : leagueLoading ? (
@@ -245,7 +245,7 @@ export default function Home() {
             <SectionHeader title="대회 일정" />
             <SoftCard>
                 <Typography textAlign="center" color="text.secondary" fontWeight={700}>
-                    {!isLoggedIn ? "로그인 후 확인할 수 있습니다." : !hasGroups ? "모임에 가입하면 대회 일정을 확인할 수 있습니다." : "개설된 대회가 없습니다."}
+                    {!isLoggedIn ? "로그인 후 확인할 수 있습니다." : !hasGroups ? "클럽에 가입하면 대회 일정을 확인할 수 있습니다." : "개설된 대회가 없습니다."}
                 </Typography>
             </SoftCard>
             {isLoggedIn && (

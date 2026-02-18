@@ -10,12 +10,12 @@ const router = express.Router();
 /**
  * @openapi
  * tags:
- *   name: 모임
- *   description: 모임 관리 API - 모임 생성, 가입, 멤버 관리 등
+ *   name: 클럽
+ *   description: 클럽 관리 API - 클럽 생성, 가입, 멤버 관리 등
  */
 
 const createGroupSchema = z.object({
-  name: z.string().min(1, '모임 이름은 필수입니다'),
+  name: z.string().min(1, '클럽 이름은 필수입니다'),
   description: z.string().optional(),
   sport: z.string().optional(),
   region_city: z.string().optional(),
@@ -27,9 +27,9 @@ const createGroupSchema = z.object({
  * @openapi
  * /group/check-name:
  *   get:
- *     summary: 모임명 중복 검사
- *     description: 모임 생성 시 모임명이 이미 사용 중인지 확인합니다.
- *     tags: [모임]
+ *     summary: 클럽명 중복 검사
+ *     description: 클럽 생성 시 클럽명이 이미 사용 중인지 확인합니다.
+ *     tags: [클럽]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -38,7 +38,7 @@ const createGroupSchema = z.object({
  *         required: true
  *         schema:
  *           type: string
- *         description: 확인할 모임명
+ *         description: 확인할 클럽명
  *     responses:
  *       200:
  *         description: 중복 검사 결과
@@ -51,7 +51,7 @@ const createGroupSchema = z.object({
  *                   type: boolean
  *                   description: 사용 가능 여부
  *       400:
- *         description: 모임명이 제공되지 않음
+ *         description: 클럽명이 제공되지 않음
  *       500:
  *         description: 서버 오류
  */
@@ -59,7 +59,7 @@ router.get('/group/check-name', requireAuth, async (req, res) => {
   try {
     const { name } = req.query;
     if (!name || !name.trim()) {
-      return res.status(400).json({ message: '모임명을 입력해주세요' });
+      return res.status(400).json({ message: '클럽명을 입력해주세요' });
     }
 
     const result = await pool.query(
@@ -79,9 +79,9 @@ router.get('/group/check-name', requireAuth, async (req, res) => {
  * @openapi
  * /group:
  *   post:
- *     summary: 모임 생성
- *     description: 새로운 모임을 생성합니다. 생성자는 자동으로 owner 역할을 부여받습니다.
- *     tags: [모임]
+ *     summary: 클럽 생성
+ *     description: 새로운 클럽을 생성합니다. 생성자는 자동으로 owner 역할을 부여받습니다.
+ *     tags: [클럽]
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -95,10 +95,10 @@ router.get('/group/check-name', requireAuth, async (req, res) => {
  *             properties:
  *               name:
  *                 type: string
- *                 description: 모임명
+ *                 description: 클럽명
  *               description:
  *                 type: string
- *                 description: 모임 설명
+ *                 description: 클럽 설명
  *               sport:
  *                 type: string
  *                 description: 종목 (예 탁구, 배드민턴, 테니스)
@@ -117,7 +117,7 @@ router.get('/group/check-name', requireAuth, async (req, res) => {
  *                 description: 창립일
  *     responses:
  *       201:
- *         description: 모임 생성 성공
+ *         description: 클럽 생성 성공
  *         content:
  *           application/json:
  *             schema:
@@ -135,7 +135,7 @@ router.get('/group/check-name', requireAuth, async (req, res) => {
  *       400:
  *         description: 유효하지 않은 요청
  *       409:
- *         description: 이미 사용 중인 모임명
+ *         description: 이미 사용 중인 클럽명
  *       500:
  *         description: 서버 오류
  */
@@ -164,7 +164,7 @@ router.post('/group', requireAuth, async (req, res) => {
     await client.query('COMMIT');
 
     res.status(201).json({
-      message: '모임이 성공적으로 생성되었습니다',
+      message: '클럽이 성공적으로 생성되었습니다',
       group: { id: groupId, name },
     });
   } catch (error) {
@@ -173,7 +173,7 @@ router.post('/group', requireAuth, async (req, res) => {
       return res.status(400).json({ errors: error.errors });
     }
     if (error.code === '23505') {
-      return res.status(409).json({ message: '이미 사용 중인 모임명입니다' });
+      return res.status(409).json({ message: '이미 사용 중인 클럽명입니다' });
     }
     console.error('Error creating group:', error);
     res.status(500).json({ message: '내부 서버 오류' });
@@ -186,9 +186,9 @@ router.post('/group', requireAuth, async (req, res) => {
  * @openapi
  * /group/search:
  *   get:
- *     summary: 모임 검색 및 추천
- *     description: 내가 가입하지 않은 모임을 검색하거나 추천받습니다.
- *     tags: [모임]
+ *     summary: 클럽 검색 및 추천
+ *     description: 내가 가입하지 않은 클럽을 검색하거나 추천받습니다.
+ *     tags: [클럽]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -196,7 +196,7 @@ router.post('/group', requireAuth, async (req, res) => {
  *         name: q
  *         schema:
  *           type: string
- *         description: 검색어 (모임명)
+ *         description: 검색어 (클럽명)
  *       - in: query
  *         name: region_city
  *         schema:
@@ -315,14 +315,14 @@ router.get('/group/search', requireAuth, async (req, res) => {
  * @openapi
  * /group:
  *   get:
- *     summary: 내가 속한 모임 목록 조회
- *     description: 로그인한 사용자가 가입한 모든 모임 목록을 반환합니다.
- *     tags: [모임]
+ *     summary: 내가 속한 클럽 목록 조회
+ *     description: 로그인한 사용자가 가입한 모든 클럽 목록을 반환합니다.
+ *     tags: [클럽]
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: 모임 목록
+ *         description: 클럽 목록
  *         content:
  *           application/json:
  *             schema:
@@ -383,9 +383,9 @@ router.get('/group', requireAuth, async (req, res) => {
  * @openapi
  * /group/{id}:
  *   get:
- *     summary: 모임 상세 정보 조회
- *     description: 특정 모임의 상세 정보와 멤버 목록을 조회합니다. 모임에 속한 사용자만 접근 가능합니다.
- *     tags: [모임]
+ *     summary: 클럽 상세 정보 조회
+ *     description: 특정 클럽의 상세 정보와 멤버 목록을 조회합니다. 클럽에 속한 사용자만 접근 가능합니다.
+ *     tags: [클럽]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -394,10 +394,10 @@ router.get('/group', requireAuth, async (req, res) => {
  *         required: true
  *         schema:
  *           type: string
- *         description: 모임 ID
+ *         description: 클럽 ID
  *     responses:
  *       200:
- *         description: 모임 상세 정보
+ *         description: 클럽 상세 정보
  *         content:
  *           application/json:
  *             schema:
@@ -440,9 +440,9 @@ router.get('/group', requireAuth, async (req, res) => {
  *                   type: string
  *                   enum: [owner, admin, member]
  *       403:
- *         description: 모임에 속해있지 않음
+ *         description: 클럽에 속해있지 않음
  *       404:
- *         description: 모임을 찾을 수 없음
+ *         description: 클럽을 찾을 수 없음
  *       500:
  *         description: 서버 오류
  */
@@ -451,13 +451,13 @@ router.get('/group/:id', requireAuth, async (req, res) => {
     const { id } = req.params;
     const userId = req.user.sub;
 
-    // 해당 모임에 속해있는지 확인
+    // 해당 클럽에 속해있는지 확인
     const memberCheck = await pool.query(
       `SELECT role FROM group_members WHERE group_id = $1 AND user_id = $2`,
       [id, userId]
     );
     if (memberCheck.rows.length === 0) {
-      return res.status(403).json({ message: '모임에 속해있지 않습니다' });
+      return res.status(403).json({ message: '클럽에 속해있지 않습니다' });
     }
 
     const groupResult = await pool.query(
@@ -469,7 +469,7 @@ router.get('/group/:id', requireAuth, async (req, res) => {
       [id]
     );
     if (groupResult.rows.length === 0) {
-      return res.status(404).json({ message: '모임을 찾을 수 없습니다' });
+      return res.status(404).json({ message: '클럽을 찾을 수 없습니다' });
     }
 
     const membersResult = await pool.query(
@@ -496,9 +496,9 @@ router.get('/group/:id', requireAuth, async (req, res) => {
  * @openapi
  * /group/{id}/member:
  *   post:
- *     summary: 모임에 멤버 추가
- *     description: 모임에 새로운 멤버를 추가합니다. owner 또는 admin만 가능합니다.
- *     tags: [모임]
+ *     summary: 클럽에 멤버 추가
+ *     description: 클럽에 새로운 멤버를 추가합니다. owner 또는 admin만 가능합니다.
+ *     tags: [클럽]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -507,7 +507,7 @@ router.get('/group/:id', requireAuth, async (req, res) => {
  *         required: true
  *         schema:
  *           type: string
- *         description: 모임 ID
+ *         description: 클럽 ID
  *     requestBody:
  *       required: true
  *       content:
@@ -535,7 +535,7 @@ router.get('/group/:id', requireAuth, async (req, res) => {
  *       403:
  *         description: 권한 없음
  *       409:
- *         description: 이미 모임에 속한 사용자
+ *         description: 이미 클럽에 속한 사용자
  *       500:
  *         description: 서버 오류
  */
@@ -554,7 +554,7 @@ router.post('/group/:id/member', requireAuth, requireGroupAdmin, async (req, res
       [id, user_id]
     );
     if (existing.rows.length > 0) {
-      return res.status(409).json({ message: '이미 모임에 속해있는 사용자입니다' });
+      return res.status(409).json({ message: '이미 클럽에 속해있는 사용자입니다' });
     }
 
     const memberId = randomUUID();
@@ -575,9 +575,9 @@ router.post('/group/:id/member', requireAuth, requireGroupAdmin, async (req, res
  * @openapi
  * /group/{id}/join:
  *   post:
- *     summary: 모임 가입
- *     description: 사용자가 모임에 가입합니다. 자동으로 member 역할이 부여됩니다.
- *     tags: [모임]
+ *     summary: 클럽 가입
+ *     description: 사용자가 클럽에 가입합니다. 자동으로 member 역할이 부여됩니다.
+ *     tags: [클럽]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -586,10 +586,10 @@ router.post('/group/:id/member', requireAuth, requireGroupAdmin, async (req, res
  *         required: true
  *         schema:
  *           type: string
- *         description: 가입할 모임 ID
+ *         description: 가입할 클럽 ID
  *     responses:
  *       201:
- *         description: 모임 가입 성공
+ *         description: 클럽 가입 성공
  *         content:
  *           application/json:
  *             schema:
@@ -598,9 +598,9 @@ router.post('/group/:id/member', requireAuth, requireGroupAdmin, async (req, res
  *                 message:
  *                   type: string
  *       404:
- *         description: 모임을 찾을 수 없음
+ *         description: 클럽을 찾을 수 없음
  *       409:
- *         description: 이미 가입된 모임
+ *         description: 이미 가입된 클럽
  *       500:
  *         description: 서버 오류
  */
@@ -609,13 +609,13 @@ router.post('/group/:id/join', requireAuth, async (req, res) => {
     const { id } = req.params;
     const userId = req.user.sub;
 
-    // 모임 존재 확인
+    // 클럽 존재 확인
     const groupCheck = await pool.query(
       `SELECT id FROM groups WHERE id = $1`,
       [id]
     );
     if (groupCheck.rows.length === 0) {
-      return res.status(404).json({ message: '모임을 찾을 수 없습니다' });
+      return res.status(404).json({ message: '클럽을 찾을 수 없습니다' });
     }
 
     // 이미 멤버인지 확인
@@ -624,7 +624,7 @@ router.post('/group/:id/join', requireAuth, async (req, res) => {
       [id, userId]
     );
     if (existing.rows.length > 0) {
-      return res.status(409).json({ message: '이미 가입된 모임입니다' });
+      return res.status(409).json({ message: '이미 가입된 클럽입니다' });
     }
 
     const memberId = randomUUID();
@@ -634,7 +634,7 @@ router.post('/group/:id/join', requireAuth, async (req, res) => {
       [memberId, id, userId]
     );
 
-    res.status(201).json({ message: '모임에 가입되었습니다' });
+    res.status(201).json({ message: '클럽에 가입되었습니다' });
   } catch (error) {
     console.error('Error joining group:', error);
     res.status(500).json({ message: '내부 서버 오류' });
@@ -646,8 +646,8 @@ router.post('/group/:id/join', requireAuth, async (req, res) => {
  * /group/{id}/member/{userId}/role:
  *   patch:
  *     summary: 멤버 권한 변경
- *     description: 모임 멤버의 역할을 변경합니다. owner만 가능하며, member와 admin 간 변경만 가능합니다.
- *     tags: [모임]
+ *     description: 클럽 멤버의 역할을 변경합니다. owner만 가능하며, member와 admin 간 변경만 가능합니다.
+ *     tags: [클럽]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -656,7 +656,7 @@ router.post('/group/:id/join', requireAuth, async (req, res) => {
  *         required: true
  *         schema:
  *           type: string
- *         description: 모임 ID
+ *         description: 클럽 ID
  *       - in: path
  *         name: userId
  *         required: true
@@ -713,7 +713,7 @@ router.patch('/group/:id/member/:userId/role', requireAuth, requireGroupOwner, a
       return res.status(404).json({ message: '해당 멤버를 찾을 수 없습니다' });
     }
     if (targetCheck.rows[0].role === 'owner') {
-      return res.status(400).json({ message: '모임장의 권한은 변경할 수 없습니다' });
+      return res.status(400).json({ message: '리더의 권한은 변경할 수 없습니다' });
     }
 
     await pool.query(
@@ -733,8 +733,8 @@ router.patch('/group/:id/member/:userId/role', requireAuth, requireGroupOwner, a
  * /group/{id}/member/{userId}:
  *   patch:
  *     summary: 멤버 정보 수정
- *     description: 모임 멤버의 정보(부수 등)를 수정합니다. owner 또는 admin만 가능합니다.
- *     tags: [모임]
+ *     description: 클럽 멤버의 정보(부수 등)를 수정합니다. owner 또는 admin만 가능합니다.
+ *     tags: [클럽]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -743,7 +743,7 @@ router.patch('/group/:id/member/:userId/role', requireAuth, requireGroupOwner, a
  *         required: true
  *         schema:
  *           type: string
- *         description: 모임 ID
+ *         description: 클럽 ID
  *       - in: path
  *         name: userId
  *         required: true
@@ -821,9 +821,9 @@ router.patch('/group/:id/member/:userId', requireAuth, requireGroupAdmin, async 
  * @openapi
  * /group/{id}:
  *   patch:
- *     summary: 모임 정보 수정
- *     description: 모임의 기본 정보를 수정합니다. owner만 가능합니다.
- *     tags: [모임]
+ *     summary: 클럽 정보 수정
+ *     description: 클럽의 기본 정보를 수정합니다. owner만 가능합니다.
+ *     tags: [클럽]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -832,7 +832,7 @@ router.patch('/group/:id/member/:userId', requireAuth, requireGroupAdmin, async 
  *         required: true
  *         schema:
  *           type: string
- *         description: 모임 ID
+ *         description: 클럽 ID
  *     requestBody:
  *       required: true
  *       content:
@@ -842,10 +842,10 @@ router.patch('/group/:id/member/:userId', requireAuth, requireGroupAdmin, async 
  *             properties:
  *               name:
  *                 type: string
- *                 description: 모임명
+ *                 description: 클럽명
  *               description:
  *                 type: string
- *                 description: 모임 설명
+ *                 description: 클럽 설명
  *               sport:
  *                 type: string
  *                 description: 종목
@@ -864,7 +864,7 @@ router.patch('/group/:id/member/:userId', requireAuth, requireGroupAdmin, async 
  *                 description: 창립일
  *     responses:
  *       200:
- *         description: 모임 정보 수정 성공
+ *         description: 클럽 정보 수정 성공
  *         content:
  *           application/json:
  *             schema:
@@ -875,7 +875,7 @@ router.patch('/group/:id/member/:userId', requireAuth, requireGroupAdmin, async 
  *       403:
  *         description: 권한 없음 (owner만 가능)
  *       404:
- *         description: 모임을 찾을 수 없음
+ *         description: 클럽을 찾을 수 없음
  *       500:
  *         description: 서버 오류
  */
@@ -923,7 +923,7 @@ router.patch('/group/:id', requireAuth, requireGroupOwner, async (req, res) => {
       values
     );
 
-    res.status(200).json({ message: '모임 정보가 수정되었습니다' });
+    res.status(200).json({ message: '클럽 정보가 수정되었습니다' });
   } catch (error) {
     console.error('Error updating group:', error);
     res.status(500).json({ message: '내부 서버 오류' });
@@ -934,9 +934,9 @@ router.patch('/group/:id', requireAuth, requireGroupOwner, async (req, res) => {
  * @openapi
  * /group/{id}:
  *   delete:
- *     summary: 모임 삭제
- *     description: 모임을 삭제합니다. owner만 가능하며, 모임의 모든 멤버와 관련 데이터가 삭제됩니다.
- *     tags: [모임]
+ *     summary: 클럽 삭제
+ *     description: 클럽을 삭제합니다. owner만 가능하며, 클럽의 모든 멤버와 관련 데이터가 삭제됩니다.
+ *     tags: [클럽]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -945,10 +945,10 @@ router.patch('/group/:id', requireAuth, requireGroupOwner, async (req, res) => {
  *         required: true
  *         schema:
  *           type: string
- *         description: 모임 ID
+ *         description: 클럽 ID
  *     responses:
  *       200:
- *         description: 모임 삭제 성공
+ *         description: 클럽 삭제 성공
  *         content:
  *           application/json:
  *             schema:
@@ -959,7 +959,7 @@ router.patch('/group/:id', requireAuth, requireGroupOwner, async (req, res) => {
  *       403:
  *         description: 권한 없음 (owner만 가능)
  *       404:
- *         description: 모임을 찾을 수 없음
+ *         description: 클럽을 찾을 수 없음
  *       500:
  *         description: 서버 오류
  */
@@ -970,13 +970,13 @@ router.delete('/group/:id', requireAuth, requireGroupOwner, async (req, res) => 
 
     await client.query('BEGIN');
 
-    // 모임 멤버 삭제
+    // 클럽 멤버 삭제
     await client.query(
       `DELETE FROM group_members WHERE group_id = $1`,
       [id]
     );
 
-    // 모임 삭제
+    // 클럽 삭제
     const result = await client.query(
       `DELETE FROM groups WHERE id = $1`,
       [id]
@@ -984,11 +984,11 @@ router.delete('/group/:id', requireAuth, requireGroupOwner, async (req, res) => 
 
     if (result.rowCount === 0) {
       await client.query('ROLLBACK');
-      return res.status(404).json({ message: '모임을 찾을 수 없습니다' });
+      return res.status(404).json({ message: '클럽을 찾을 수 없습니다' });
     }
 
     await client.query('COMMIT');
-    res.status(200).json({ message: '모임이 삭제되었습니다' });
+    res.status(200).json({ message: '클럽이 삭제되었습니다' });
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Error deleting group:', error);
@@ -1002,9 +1002,9 @@ router.delete('/group/:id', requireAuth, requireGroupOwner, async (req, res) => 
  * @openapi
  * /group/{id}/member/{userId}:
  *   delete:
- *     summary: 모임에서 멤버 제거
- *     description: 모임에서 멤버를 제거합니다. owner 또는 admin만 가능하며, owner는 제거할 수 없습니다.
- *     tags: [모임]
+ *     summary: 클럽에서 멤버 제거
+ *     description: 클럽에서 멤버를 제거합니다. owner 또는 admin만 가능하며, owner는 제거할 수 없습니다.
+ *     tags: [클럽]
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -1013,7 +1013,7 @@ router.delete('/group/:id', requireAuth, requireGroupOwner, async (req, res) => 
  *         required: true
  *         schema:
  *           type: string
- *         description: 모임 ID
+ *         description: 클럽 ID
  *       - in: path
  *         name: userId
  *         required: true
@@ -1052,7 +1052,7 @@ router.delete('/group/:id/member/:userId', requireAuth, requireGroupAdmin, async
       return res.status(404).json({ message: '해당 멤버를 찾을 수 없습니다' });
     }
     if (targetCheck.rows[0].role === 'owner') {
-      return res.status(400).json({ message: '모임 소유자는 제거할 수 없습니다' });
+      return res.status(400).json({ message: '클럽 소유자는 제거할 수 없습니다' });
     }
 
     await pool.query(

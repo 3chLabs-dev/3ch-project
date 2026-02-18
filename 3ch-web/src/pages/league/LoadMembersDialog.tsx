@@ -56,7 +56,7 @@ export default function LoadMembersDialog({
     const [rows, setRows] = useState<MemberRow[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [groupName, setGroupName] = useState("모임원");
+    const [groupName, setGroupName] = useState("클럽 회원");
 
     const [q, setQ] = useState("");
     const [page, setPage] = useState(1);
@@ -64,12 +64,12 @@ export default function LoadMembersDialog({
 
     const pageSize = 5;
 
-    // 모임 멤버 불러오기
+    // 클럽 멤버 불러오기
     useEffect(() => {
         if (!open) return;
         if (!effectiveGroupId) {
             setRows([]);
-            setError("모임이 선택되지 않았습니다. 리그 메인에서 모임을 먼저 선택해 주세요.");
+            setError("클럽이 선택되지 않았습니다. 리그 메인에서 클럽을 먼저 선택해 주세요.");
             return;
         }
         if (!token) {
@@ -95,7 +95,7 @@ export default function LoadMembersDialog({
                     group: { name?: string };
                     members: GroupMember[];
                 };
-                setGroupName(group?.name || "모임원");
+                setGroupName(group?.name || "클럽 회원");
 
                 const memberRows: MemberRow[] = members.map((m) => ({
                     id: String(m.user_id),
@@ -106,7 +106,7 @@ export default function LoadMembersDialog({
                 setRows(memberRows);
             } catch (err) {
                 console.error("Error fetching group members:", err);
-                setError("모임 멤버를 불러오는데 실패했습니다.");
+                setError("클럽 멤버를 불러오는데 실패했습니다.");
             } finally {
                 setLoading(false);
             }
@@ -178,7 +178,7 @@ export default function LoadMembersDialog({
                         setQ(e.target.value);
                         setPage(1);
                     }}
-                    placeholder="모임원 검색"
+                    placeholder="클럽 회원 검색"
                     size="small"
                     fullWidth
                     disabled={loading}

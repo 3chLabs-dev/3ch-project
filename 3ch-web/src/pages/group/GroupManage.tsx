@@ -38,6 +38,7 @@ import {
     useRemoveMemberMutation,
     useUpdateGroupMutation,
     useDeleteGroupMutation,
+    useLeaveGroupMutation,
 } from "../../features/group/groupApi";
 import { useGetLeaguesQuery, useGetLeagueParticipantsQuery, useUpdateParticipantMutation } from "../../features/league/leagueApi";
 import type { LeagueParticipantItem } from "../../features/league/leagueApi";
@@ -71,8 +72,10 @@ export default function GroupManage() {
     const [removeMember] = useRemoveMemberMutation();
     const [updateGroup, { isLoading: isUpdating }] = useUpdateGroupMutation();
     const [deleteGroup, { isLoading: isDeleting }] = useDeleteGroupMutation();
+    const [leaveGroup, { isLoading: isLeaving }] = useLeaveGroupMutation();
     const [editDialogOpen, setEditDialogOpen] = useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
     const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
     const [showLeagueManagement] = useState(false);
     const [expandedLeagueId, setExpandedLeagueId] = useState<string | null>(null);
@@ -180,6 +183,17 @@ export default function GroupManage() {
             navigate("/group");
         } catch (error) {
             console.error("Failed to delete group:", error);
+        }
+    };
+
+    const handleLeaveGroup = async () => {
+        if (!id) return;
+        try {
+            await leaveGroup(id).unwrap();
+            setLeaveDialogOpen(false);
+            navigate("/group");
+        } catch (error) {
+            console.error("Failed to leave group:", error);
         }
     };
 
@@ -552,6 +566,23 @@ export default function GroupManage() {
                 </Button>
             )}
 
+            {!isOwner && (
+                <Button
+                    fullWidth
+                    variant="outlined"
+                    color="error"
+                    disableElevation
+                    onClick={() => setLeaveDialogOpen(true)}
+                    sx={{
+                        borderRadius: 1,
+                        py: 1.5,
+                        fontWeight: 900,
+                    }}
+                >
+                    클럽 탈퇴
+                </Button>
+            )}
+
             {/* 클럽 정보 수정 다이얼로그 */}
             <Dialog
                 open={editDialogOpen}
@@ -722,6 +753,42 @@ export default function GroupManage() {
                         }}
                     >
                         {isUpdating ? "수정 중..." : "수정"}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* 클럽 탈퇴 확인 다이얼로그 */}
+            <Dialog
+                open={leaveDialogOpen}
+                onClose={() => setLeaveDialogOpen(false)}
+                maxWidth="xs"
+                fullWidth
+                PaperProps={{ sx: { borderRadius: 1, mx: 2 } }}
+            >
+                <DialogTitle sx={{ fontWeight: 900, pb: 1 }}>
+                    클럽 탈퇴
+                </DialogTitle>
+                <DialogContent>
+                    <Typography>
+                        정말로 "{group.name}" 클럽에서 탈퇴하시겠습니까?
+                    </Typography>
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2.5 }}>
+                    <Button
+                        onClick={() => setLeaveDialogOpen(false)}
+                        sx={{ borderRadius: 1, px: 3, fontWeight: 700, color: "text.secondary" }}
+                    >
+                        취소
+                    </Button>
+                    <Button
+                        variant="contained"
+                        color="error"
+                        disableElevation
+                        disabled={isLeaving}
+                        onClick={handleLeaveGroup}
+                        sx={{ borderRadius: 1, px: 3, fontWeight: 700 }}
+                    >
+                        {isLeaving ? "탈퇴 중..." : "탈퇴"}
                     </Button>
                 </DialogActions>
             </Dialog>

@@ -641,6 +641,37 @@ router.post('/group/:id/join', requireAuth, async (req, res) => {
   }
 });
 
+router.delete('/group/:id/leave', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.sub;
+
+    // 멤버 확인 및 role 조회
+    const memberCheck = await pool.query(
+      `SELECT id, role FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      [id, userId]
+    );
+    if (memberCheck.rows.length === 0) {
+      return res.status(404).json({ message: '클럽 멤버가 아닙니다' });
+    }
+
+    // owner는 탈퇴 불가
+    if (memberCheck.rows[0].role === 'owner') {
+      return res.status(403).json({ message: 'owner는 클럽을 탈퇴할 수 없습니다. 클럽을 삭제하거나 owner를 변경해주세요.' });
+    }
+
+    await pool.query(
+      `DELETE FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      [id, userId]
+    );
+
+    res.json({ message: '클럽에서 탈퇴했습니다' });
+  } catch (error) {
+    console.error('Error leaving group:', error);
+    res.status(500).json({ message: '내부 서버 오류' });
+  }
+});
+
 /**
  * @openapi
  * /group/{id}/member/{userId}/role:

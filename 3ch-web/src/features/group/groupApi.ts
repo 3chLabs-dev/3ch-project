@@ -196,6 +196,14 @@ export const groupApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: ["Group"],
     }),
+
+    leaveGroup: builder.mutation<{ message: string }, string>({
+      query: (groupId) => ({
+        url: `/group/${groupId}/leave`,
+        method: "DELETE",
+      }),
+      invalidatesTags: ["Group"],
+    }),
   }),
 });
 
@@ -211,4 +219,5 @@ export const {
   useRemoveMemberMutation,
   useUpdateGroupMutation,
   useDeleteGroupMutation,
+  useLeaveGroupMutation,
 } = groupApi;

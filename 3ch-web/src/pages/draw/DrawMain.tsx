@@ -151,10 +151,6 @@ export default function DrawMain() {
     }, 1600);
   };
 
-  if (!isLoggedIn) {
-    return <EmptyCard text="로그인 후 이용 가능합니다." />;
-  }
-
   if (phase === "create") {
     return (
       <Stack spacing={2.2}>
@@ -382,7 +378,11 @@ export default function DrawMain() {
       </Stack>
 
       <SectionHeader title="리그 추첨" />
-      {leagueSources.length > 0 ? (
+      {!isLoggedIn ? (
+        <EmptyCard text="로그인 후 이용할 수 있습니다." />
+      ) : myGroups.length === 0 ? (
+        <EmptyCard text="가입된 클럽이 없습니다." />
+      ) : leagueSources.length > 0 ? (
         <Stack spacing={1}>
           {leagueSources.map((item) => (
             <ResultCard
@@ -397,7 +397,9 @@ export default function DrawMain() {
       )}
 
       <SectionHeader title="대회 추첨" />
-      {tournamentDraws.length > 0 ? (
+      {!isLoggedIn ? (
+        <EmptyCard text="로그인 후 이용할 수 있습니다." />
+      ) : tournamentDraws.length > 0 ? (
         <Stack spacing={1}>
           {tournamentDraws.map((d) => (
             <ResultCard key={d.id} name={d.name} />

@@ -251,7 +251,7 @@ export default function GroupManage() {
     const handleSaveMemberEdit = async (updated: { role: "owner" | "admin" | "member"; division: string }) => {
         if (!selectedMember || !id) return;
         try {
-            if (updated.role !== selectedMember.role && updated.role !== "owner" && selectedMember.role !== "owner") {
+            if (updated.role !== "owner" && selectedMember.role !== "owner") {
                 await updateMemberRole({
                     groupId: id,
                     userId: selectedMember.id,
@@ -333,35 +333,39 @@ export default function GroupManage() {
                         {/* 기본 정보 */}
                         <Stack
                             direction="row"
-                            spacing={3}
+                            // spacing={3}
                             sx={{
                                 bgcolor: "#F9FAFB",
                                 borderRadius: 1,
                                 px: 2,
                                 py: 1.5,
+                                display: "grid",
+                                gridTemplateColumns: "1fr 1fr 1fr",
+                                alignItems: "center",
+                                textAlign: "center"
                             }}
                         >
                             <Box>
-                                <Typography fontSize={12} color="text.secondary" fontWeight={600}>
+                                <Typography fontSize={12} color="text.secondary" fontWeight={600} sx={{textAlign : "center"}}>
                                     종목
                                 </Typography>
-                                <Typography fontWeight={800} fontSize={14}>
+                                <Typography fontWeight={800} fontSize={14} sx={{textAlign : "center"}}>
                                     {group.sport || "-"}
                                 </Typography>
                             </Box>
                             <Box>
-                                <Typography fontSize={12} color="text.secondary" fontWeight={600}>
+                                <Typography fontSize={12} color="text.secondary" fontWeight={600} sx={{textAlign : "center"}}>
                                     창단일
                                 </Typography>
-                                <Typography fontWeight={800} fontSize={14}>
+                                <Typography fontWeight={800} fontSize={14} sx={{textAlign : "center"}}>
                                     {group.founded_at ? new Date(group.founded_at).toLocaleDateString("ko-KR").replace(/\. /g, "-").replace(".", "") : "-"}
                                 </Typography>
                             </Box>
                             <Box>
-                                <Typography fontSize={12} color="text.secondary" fontWeight={600}>
+                                <Typography fontSize={12} color="text.secondary" fontWeight={600} sx={{textAlign : "center"}}>
                                     회원수
                                 </Typography>
-                                <Typography fontWeight={800} fontSize={14}>
+                                <Typography fontWeight={800} fontSize={14} sx={{textAlign : "center"}}>
                                     {members.length}
                                 </Typography>
                             </Box>
@@ -394,6 +398,20 @@ export default function GroupManage() {
 
                 <Card elevation={2} sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
                     <List disablePadding>
+                        <ListItem
+                            sx={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr 1fr 1fr",
+                            py: 1.5,
+                            px: 2.5,
+                            spacing: 0.5,
+                            bgcolor: "#f5f5f5"
+                            }}
+                        >
+                            <Typography fontWeight={700} fontSize={14} sx={{flex: 1, textAlign : "left"}}>구분</Typography>
+                            <Typography fontWeight={700} fontSize={14} sx={{flex: 1, textAlign : "left"}}>부수</Typography>
+                            <Typography fontWeight={700} fontSize={14} sx={{flex: 1, textAlign : "left"}}>이름</Typography>
+                        </ListItem>
                         {members.map((member, idx) => (
                             <Box key={member.id}>
                                 {idx > 0 && <Divider />}
@@ -409,9 +427,6 @@ export default function GroupManage() {
                                     }}
                                     secondaryAction={
                                         <Stack direction="row" spacing={0.5} alignItems="center">
-                                            <Typography fontSize={12} color="text.secondary" fontWeight={600}>
-                                                {getRoleLabel(member.role)}
-                                            </Typography>
                                             {canManage && (
                                                 <IconButton
                                                     size="small"
@@ -423,9 +438,23 @@ export default function GroupManage() {
                                         </Stack>
                                     }
                                 >
-                                    <ListItemText
+                                    <ListItemText sx={{ flex: 1, textAlign: "center" }}
                                         primary={
-                                            <Typography fontWeight={700} fontSize={14}>
+                                            <Typography fontWeight={700} fontSize={14} sx={{textAlign : "left"}}>
+                                                {getRoleLabel(member.role)}
+                                            </Typography>
+                                        }
+                                    />
+                                    <ListItemText sx={{ flex: 1, textAlign: "center" }}
+                                        primary={
+                                            <Typography fontWeight={700} fontSize={14} sx={{textAlign : "left"}}>
+                                                {member.division}
+                                            </Typography>
+                                        }
+                                    />
+                                    <ListItemText sx={{ flex: 1, textAlign: "center" }}
+                                        primary={
+                                            <Typography fontWeight={700} fontSize={14} sx={{textAlign : "left"}}>
                                                 {member.name || member.email}
                                             </Typography>
                                         }
@@ -503,11 +532,13 @@ export default function GroupManage() {
                                                                 "&:hover": canManage ? { bgcolor: "#F3F4F6" } : {},
                                                             }}
                                                         >
-                                                            <Chip
-                                                                label={participant.division || "-"}
-                                                                size="small"
-                                                                sx={{ height: 20, fontSize: 11, fontWeight: 800 }}
-                                                            />
+                                                            {participant.division && (
+                                                                <Chip
+                                                                    label={participant.division}
+                                                                    size="small"
+                                                                    sx={{ height: 20, fontSize: 11, fontWeight: 800 }}
+                                                                />
+                                                            )}
                                                             <Typography fontWeight={700} fontSize={14} flex={1}>
                                                                 {participant.name}
                                                             </Typography>

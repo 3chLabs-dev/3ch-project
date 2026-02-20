@@ -247,7 +247,7 @@ export default function LoadMembersDialog({
                                 >
                                     <Checkbox checked={!!checked[r.id]} size="small" />
                                     <Typography sx={{ textAlign: "center", fontWeight: 800 }}>
-                                        {r.division}
+                                        {r.division || "-"}
                                     </Typography>
                                     <Typography sx={{ fontWeight: 800 }}>{r.name}</Typography>
                                 </Box>

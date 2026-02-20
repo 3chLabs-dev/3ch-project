@@ -172,13 +172,11 @@ export default function GroupLeagueManage() {
                               "&:hover": { bgcolor: "#F3F4F6" },
                             }}
                           >
-                            {participant.division && (
-                              <Chip
-                                label={participant.division}
-                                size="small"
-                                sx={{ height: 20, fontSize: 11, fontWeight: 800 }}
-                              />
-                            )}
+                            <Chip
+                              label={participant.division || "-"}
+                              size="small"
+                              sx={{ height: 20, fontSize: 11, fontWeight: 800 }}
+                            />
                             <Typography fontWeight={700} fontSize={14} flex={1}>
                               {participant.name}
                             </Typography>

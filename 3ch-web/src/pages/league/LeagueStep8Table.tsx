@@ -180,7 +180,7 @@ export default function LeagueTable() {
           <TableRow>
             {participants.map((p) => (
               <NameHeaderCell key={p.name}>
-                {p.division} {p.name}
+                {p.division || "-"} {p.name}
               </NameHeaderCell>
             ))}
           </TableRow>
@@ -193,7 +193,7 @@ export default function LeagueTable() {
               <NumberRowCell key={rowIdx}>
                 {rowIdx + 1}
               </NumberRowCell>
-              <BodyHeaderCell>{rowPlayer.division} {rowPlayer.name}</BodyHeaderCell>
+              <BodyHeaderCell>{rowPlayer.division || "-"} {rowPlayer.name}</BodyHeaderCell>
 
               {participants.map((_, colIdx) =>
                 rowIdx === colIdx ? (<DiagonalScoreCell key={colIdx}/>) : (<StyledTableCell key={colIdx} data-type="target"><InputBase inputProps={{ style: { textAlign: "center", fontSize: 14, width: 32, height: 28, },}} sx={{ width: 32, height: 28, }}/>

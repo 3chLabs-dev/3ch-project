@@ -251,7 +251,7 @@ export default function GroupManage() {
     const handleSaveMemberEdit = async (updated: { role: "owner" | "admin" | "member"; division: string }) => {
         if (!selectedMember || !id) return;
         try {
-            if (updated.role !== "owner" && selectedMember.role !== "owner") {
+            if (updated.role !== selectedMember.role && updated.role !== "owner" && selectedMember.role !== "owner") {
                 await updateMemberRole({
                     groupId: id,
                     userId: selectedMember.id,
@@ -503,13 +503,11 @@ export default function GroupManage() {
                                                                 "&:hover": canManage ? { bgcolor: "#F3F4F6" } : {},
                                                             }}
                                                         >
-                                                            {participant.division && (
-                                                                <Chip
-                                                                    label={participant.division}
-                                                                    size="small"
-                                                                    sx={{ height: 20, fontSize: 11, fontWeight: 800 }}
-                                                                />
-                                                            )}
+                                                            <Chip
+                                                                label={participant.division || "-"}
+                                                                size="small"
+                                                                sx={{ height: 20, fontSize: 11, fontWeight: 800 }}
+                                                            />
                                                             <Typography fontWeight={700} fontSize={14} flex={1}>
                                                                 {participant.name}
                                                             </Typography>

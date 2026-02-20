@@ -362,7 +362,7 @@ router.get('/group', requireAuth, async (req, res) => {
 
     const result = await pool.query(
       `SELECT g.id, g.name, g.description, g.sport, g.region_city, g.region_district, g.created_at,
-              gm.role,
+              gm.role, gm.division,
               u.name AS creator_name,
               (SELECT COUNT(*) FROM group_members WHERE group_id = g.id)::int AS member_count
        FROM groups g

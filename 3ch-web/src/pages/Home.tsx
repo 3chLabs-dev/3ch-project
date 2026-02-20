@@ -82,9 +82,27 @@ export default function Home() {
             {/* 사용자명 + 클럽 선택 */}
             {isLoggedIn && (
                 <Stack direction="row" alignItems="center" justifyContent="space-between">
-                    <Typography variant="h5" fontWeight={900} lineHeight={1.1}>
-                        {user?.name || user?.email || "우리리그"}
-                    </Typography>
+                    <Stack direction="row" alignItems="center" spacing={1.2}>
+                        <Box
+                            sx={{
+                                width: 36,
+                                height: 36,
+                                borderRadius: "50%",
+                                bgcolor: "#2F80ED",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                flexShrink: 0,
+                            }}
+                        >
+                            <Typography fontSize={13} fontWeight={900} color="#fff" lineHeight={1}>
+                                {selectedGroup?.division || "-"}
+                            </Typography>
+                        </Box>
+                        <Typography variant="h5" fontWeight={900} lineHeight={1.1}>
+                            {user?.name || user?.email || "우리리그"}
+                        </Typography>
+                    </Stack>
                     {hasGroups && groups.length > 1 && (
                         <Select
                             value={effectiveSelectedGroupId ?? ""}

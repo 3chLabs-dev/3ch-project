@@ -12,6 +12,7 @@ export interface Group {
   creator_name?: string;
   member_count: number;
   role: string;
+  division?: string | null;
 }
 
 export interface GetGroupsResponse {

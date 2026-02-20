@@ -112,9 +112,9 @@ export default function DrawMain() {
   const participantRows = useMemo(() => {
     const loaded = participantData?.participants ?? [];
     const memberCounts: Record<string, number> = {};
-    return loaded.map((p, idx) => ({
+    return loaded.map((p) => ({
       key: p.id,
-      division: p.division || `${idx + 1}부`,
+      division: p.division || "-",
       name: p.name,
       weight: memberCounts[p.name] ?? 1,
     }));

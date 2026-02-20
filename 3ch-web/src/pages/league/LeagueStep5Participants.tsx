@@ -296,7 +296,7 @@ export default function LeagueStep5Participants() {
                     color: "#111827",
                   }}
                 >
-                  {p.division}
+                  {p.division || "-"}
                 </Box>
               </Box>
 

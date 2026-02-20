@@ -641,6 +641,39 @@ router.post('/group/:id/join', requireAuth, async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /group/{id}/leave:
+ *   delete:
+ *     summary: 클럽 탈퇴
+ *     description: 현재 로그인한 사용자가 클럽에서 탈퇴합니다. owner는 탈퇴할 수 없습니다.
+ *     tags: [클럽]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 탈퇴할 클럽 ID
+ *     responses:
+ *       200:
+ *         description: 클럽 탈퇴 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *       403:
+ *         description: owner는 탈퇴 불가
+ *       404:
+ *         description: 클럽 멤버가 아님
+ *       500:
+ *         description: 서버 오류
+ */
 router.delete('/group/:id/leave', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;

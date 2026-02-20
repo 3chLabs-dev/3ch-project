@@ -97,7 +97,7 @@ export default function LeagueMainBody() {
       </Stack>
 
       {/* 리그 일정 카드 */}
-      {(isLoggedIn && myGroups.length > 0) && (
+      {isLoggedIn && myGroups.length > 0 ? (
         <>
           {leagueLoading ? (
             <SoftCard>
@@ -119,6 +119,12 @@ export default function LeagueMainBody() {
             </SoftCard>
           )}
         </>
+      ) : (
+        <SoftCard>
+          <Typography textAlign="center" color="text.secondary" fontWeight={700}>
+            {!isLoggedIn ? "로그인 후 이용할 수 있습니다." : "가입된 클럽이 없습니다."}
+          </Typography>
+        </SoftCard>
       )}
 
       {/* 신규 생성 */}

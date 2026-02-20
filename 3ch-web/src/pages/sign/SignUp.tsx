@@ -15,9 +15,12 @@ import Visibility from "@mui/icons-material/Visibility";
 import VisibilityOff from "@mui/icons-material/VisibilityOff";
 import { styled } from "@mui/material/styles";
 import { Dialog, DialogTitle, DialogContent, DialogActions } from "@mui/material";
-import { Link as RouterLink, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import AppTheme from "../shared-theme/AppTheme.tsx";
 import axios from "axios";
+import { TERMS, PRIVACY, } from "../../constants/policies";
+import useMediaQuery from "@mui/material/useMediaQuery";
+import { useTheme } from "@mui/material/styles";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
 // const apiTestUrl = import.meta.env.VITE_API_TEST_URL
@@ -61,7 +64,7 @@ const inputSx = {
     "& .MuiInputBase-input": {
         fontSize: "0.98rem",
         paddingTop: "0px",
-        paddingBottom: "2px", 
+        paddingBottom: "2px",
     },
     "& .MuiInputBase-input::placeholder": {
         fontSize: "0.88rem",
@@ -95,7 +98,7 @@ const forceSolid = (bg: string, hover: string, color: string) => ({
 const primaryBtnSx = {
     borderRadius: 999,
     paddingTop: "0px",
-    paddingBottom: "2px", 
+    paddingBottom: "2px",
     fontSize: "1rem",
     fontWeight: 700,
     textTransform: "none",
@@ -262,6 +265,28 @@ export default function SignUp() {
         setOpenSuccessDialog(false);
         navigate("/login");
     };
+    
+    // 약관
+    const theme = useTheme();
+    const fullScreen = useMediaQuery(theme.breakpoints.down("sm"));
+
+    type PolicyKey = "terms" | "privacy";
+    const [openPolicy, setOpenPolicy] = useState(false);
+    const [policyKey, setPolicyKey] = useState<PolicyKey>("terms");
+
+    const policy = policyKey === "terms" ? TERMS : PRIVACY;
+
+    const openTermsDialog = () => {
+        setPolicyKey("terms");
+        setOpenPolicy(true);
+    };
+
+    const openPrivacyDialog = () => {
+        setPolicyKey("privacy");
+        setOpenPolicy(true);
+    };
+
+    const closePolicyDialog = () => setOpenPolicy(false);
 
     return (
         <AppTheme>
@@ -448,8 +473,9 @@ export default function SignUp() {
                                     label="서비스 이용약관 동의(필수)"
                                 />
                                 <Link
-                                    component={RouterLink}
-                                    to="/terms"
+                                    component="button"
+                                    type="button"
+                                    onClick={openTermsDialog}
                                     underline="none"
                                     sx={{ fontSize: "0.9rem", fontWeight: 600 }}
                                 >
@@ -473,8 +499,9 @@ export default function SignUp() {
                                     label="개인정보 수집 및 이용 동의(필수)"
                                 />
                                 <Link
-                                    component={RouterLink}
-                                    to="/privacy"
+                                    component="button"
+                                    type="button"
+                                    onClick={openPrivacyDialog}
                                     underline="none"
                                     sx={{ fontSize: "0.9rem", fontWeight: 600 }}
                                 >
@@ -518,6 +545,37 @@ export default function SignUp() {
                     <Button onClick={handleSuccessDialogClose} autoFocus>
                         확인
                     </Button>
+                </DialogActions>
+            </Dialog>
+            {/* 약관 */}
+            <Dialog
+                open={openPolicy}
+                onClose={closePolicyDialog}
+                fullScreen={fullScreen}
+                scroll="paper"
+                fullWidth
+                maxWidth="sm"
+                aria-labelledby="policy-dialog-title"
+            >
+                <DialogTitle id="policy-dialog-title" sx={{ fontWeight: 900, textAlign: "center" }}>
+                    {policy.title}
+                </DialogTitle>
+
+                <DialogContent dividers>
+                    <Box
+                        sx={{
+                            whiteSpace: "pre-line",
+                            fontSize: 14,
+                            lineHeight: 1.7,
+                            color: "text.primary",
+                        }}
+                    >
+                        {policy.body}
+                    </Box>
+                </DialogContent>
+
+                <DialogActions>
+                    <Button onClick={closePolicyDialog}>닫기</Button>
                 </DialogActions>
             </Dialog>
         </AppTheme>

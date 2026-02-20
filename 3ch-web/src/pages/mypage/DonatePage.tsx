@@ -6,7 +6,7 @@ export default function DonatePage() {
     const navigate = useNavigate();
 
     return (
-        <Box sx={{ px: 2, pt: 2, width: "100%", maxWidth: 420, mx: "auto" }}>
+        <Box sx={{ px: 2, pt: 1, width: "100%", maxWidth: 420, mx: "auto" }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
                 <IconButton
                     onClick={() => navigate(-1)}

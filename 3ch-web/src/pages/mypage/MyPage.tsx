@@ -51,7 +51,7 @@ export default function MyPage() {
     };
 
     return (
-        <Box sx={{ px: 2, pt: 2 }}>
+        <Box sx={{ px: 2, pt: 1 }}>
             {/* 상단 헤더: 로고(또는 타이틀) + 설정 아이콘 */}
             <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <Typography sx={{ fontSize: 18, fontWeight: 900 }}>

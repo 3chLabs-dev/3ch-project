@@ -519,6 +519,65 @@ router.post("/member/verify-password", requireAuth, async(req, res) => {
 });
 
 //회원정보 수정
+/**
+ * @openapi
+ * /auth/member:
+ *   put:
+ *     summary: 회원 정보 수정
+ *     description: 로그인한 사용자의 이름과/또는 비밀번호를 수정합니다. 소셜 로그인 사용자는 비밀번호 변경이 불가합니다.
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 description: 변경할 사용자 이름
+ *                 example: "홍길동"
+ *               password:
+ *                 type: string
+ *                 description: 변경할 새 비밀번호 (소셜 로그인 사용자는 불가)
+ *                 example: "NewPassword123!"
+ *             minProperties: 1
+ *           examples:
+ *             updateNameOnly:
+ *               summary: 이름만 변경
+ *               value:
+ *                 name: "홍길동"
+ *             updatePasswordOnly:
+ *               summary: 비밀번호만 변경 (local 유저만 가능)
+ *               value:
+ *                 password: "NewPassword123!"
+ *             updateNameAndPassword:
+ *               summary: 이름 + 비밀번호 변경 (local 유저만 가능)
+ *               value:
+ *                 name: "홍길동"
+ *                 password: "NewPassword123!"
+ *     responses:
+ *       200:
+ *         description: 수정 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *                   example: true
+ *       400:
+ *         description: 업데이트할 값이 없음
+ *       401:
+ *         description: 인증 실패(토큰 없음/만료/유효하지 않음)
+ *       403:
+ *         description: 소셜 로그인 사용자의 비밀번호 변경 시도
+ *       500:
+ *         description: 서버 오류
+ */
 router.put("/member", requireAuth, async (req, res) => {
   const userId = Number(req.user.sub);
   const { name, password } = req.body || {};

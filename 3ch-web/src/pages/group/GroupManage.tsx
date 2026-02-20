@@ -251,7 +251,7 @@ export default function GroupManage() {
     const handleSaveMemberEdit = async (updated: { role: "owner" | "admin" | "member"; division: string }) => {
         if (!selectedMember || !id) return;
         try {
-            if (updated.role !== "owner" && selectedMember.role !== "owner") {
+            if (updated.role !== selectedMember.role && updated.role !== "owner" && selectedMember.role !== "owner") {
                 await updateMemberRole({
                     groupId: id,
                     userId: selectedMember.id,

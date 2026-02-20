@@ -146,6 +146,7 @@ export default function GroupManage() {
 
     const { group, members, myRole } = data;
     const canManage = myRole === "owner" || myRole === "admin";
+    const canInvite = myRole === "owner" || myRole === "admin" || myRole === "member";
     const isOwner = myRole === "owner";
     const emoji = group.sport ? (SPORT_EMOJI[group.sport] ?? "🏓") : "🏓";
 
@@ -579,7 +580,7 @@ export default function GroupManage() {
             </Box>
             )}
 
-            {canManage && (
+            {canInvite && (
                 <Button
                     fullWidth
                     variant="contained"

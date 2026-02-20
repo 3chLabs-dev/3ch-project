@@ -15,8 +15,8 @@ export default function PrivacyPolicyPage() {
     // ✅ 임시 버전 목록 (TODO: DB에서 가져오기)
     const versions: policiesMeta[] = useMemo(
         () => [
-            { versionId: "current", label: "현행 이용약관", effectiveDate: "2026년 2월 14일 시행", isCurrent: true },
-            { versionId: "prev-2025-06-01", label: "이전 이용약관", effectiveDate: "2025년 6월 1일 시행" },
+            { versionId: "current", label: "현행 개인정보 처리방침", effectiveDate: "2026년 2월 14일 시행", isCurrent: true },
+            { versionId: "prev-2025-06-01", label: "이전 개인정보 처리방침", effectiveDate: "2025년 6월 1일 시행" },
         ],
         []
     );

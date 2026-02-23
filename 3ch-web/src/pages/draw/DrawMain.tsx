@@ -327,11 +327,11 @@ export default function DrawMain() {
 
   if (phase === "done") {
     return (
-      <Stack spacing={2.5} alignItems="center" sx={{ pt: 4 }}>
-        <Typography variant="h6" fontSize={32} fontWeight={900} color="#2F80ED" >
+      <Stack spacing={2.5} alignItems="center" sx={{ pt: 2 }}>
+        <Typography variant="h6" fontSize={32} fontWeight={900} color="#2F80ED" mt={2}>
           추첨 생성 완료
         </Typography>
-        <Typography color="text.secondary" fontWeight={700}>
+        <Typography color="text.secondary" fontWeight={700} mt={1}>
           이제 우리리그에서 해당 추첨을 진행할 수 있습니다.
         </Typography>
         <Box
@@ -339,7 +339,7 @@ export default function DrawMain() {
             mt: 3,
             width: "100%",
             height: 200,
-            border: "2px solid #2F80ED",
+            // border: "2px solid #2F80ED",
             borderRadius: 1,
             display: "flex",
             flexDirection: "column",

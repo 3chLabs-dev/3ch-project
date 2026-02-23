@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -35,13 +35,15 @@ export default function ParticipantDetailDialog({
   const [arrived, setArrived] = useState(participant.arrived);
   const [footPool, setFootPool] = useState(participant.footPool);
 
-  useEffect(() => {
+  const [prevParticipant, setPrevParticipant] = useState(participant);
+  if (prevParticipant !== participant) {
+    setPrevParticipant(participant);
     setDivision(participant.division || "");
     setName(participant.name);
     setPaid(participant.paid);
     setArrived(participant.arrived);
     setFootPool(participant.footPool);
-  }, [participant]);
+  }
 
   const handleSave = () => {
     onSave({

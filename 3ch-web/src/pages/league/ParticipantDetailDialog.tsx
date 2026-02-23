@@ -21,6 +21,7 @@ type Props = {
   participant: Participant;
   onClose: () => void;
   onSave: (updated: Participant) => void;
+  onDelete?: () => void;
 };
 
 export default function ParticipantDetailDialog({
@@ -28,6 +29,7 @@ export default function ParticipantDetailDialog({
   participant,
   onClose,
   onSave,
+  onDelete,
 }: Props) {
   const [division, setDivision] = useState(participant.division || "");
   const [name, setName] = useState(participant.name);
@@ -133,6 +135,28 @@ export default function ParticipantDetailDialog({
             </Stack>
           </Box>
         </Stack>
+        {onDelete && (
+          <Box sx={{ mt: 1 }}>
+            <Typography
+              onClick={() => {
+                const ok = window.confirm("이 참가자를 삭제할까요?");
+                if (ok) onDelete();
+              }}
+              sx={{
+                fontSize: 16,
+                color: "text.disabled",
+                cursor: "pointer",
+                display: "inline-block",
+                textDecoration: "underline",
+                textUnderlineOffset: "3px",
+                py: 0,
+                "&:hover": { color: "text.secondary" },
+              }}
+            >
+              참가자 삭제
+            </Typography>
+          </Box>
+        )}
       </DialogContent>
 
       <DialogActions sx={{ px: 2, pb: 2 }}>

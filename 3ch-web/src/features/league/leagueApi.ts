@@ -129,6 +129,10 @@ export interface UpdateParticipantResponse {
   participant: LeagueParticipantItem;
 }
 
+export interface DeleteParticipantResponse {
+  message: string;
+}
+
 /**
  * RTK Query API endpoints
  */
@@ -220,6 +224,20 @@ export const leagueApi = baseApi.injectEndpoints({
         { type: "League", id: "LIST" },
       ],
     }),
+
+    deleteParticipant: builder.mutation<
+    DeleteParticipantResponse,
+    { leagueId: string; participantId: string }
+  >({
+    query: ({ leagueId, participantId }) => ({
+      url: `/league/${leagueId}/participants/${participantId}`,
+      method: "DELETE",
+    }),
+    invalidatesTags: (_result, _error, { leagueId }) => [
+      { type: "League", id: leagueId },
+      { type: "League", id: "LIST" },
+      ],
+    }),
   }),
 });
 
@@ -233,4 +251,5 @@ export const {
   useGetLeagueParticipantsQuery,
   useUpdateLeagueMutation,
   useUpdateParticipantMutation,
+  useDeleteParticipantMutation,
 } = leagueApi;

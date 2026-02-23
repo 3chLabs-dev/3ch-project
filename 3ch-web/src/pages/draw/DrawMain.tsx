@@ -327,7 +327,16 @@ export default function DrawMain() {
 
   if (phase === "done") {
     return (
-      <Stack spacing={2.5} alignItems="center" sx={{ pt: 2 }}>
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          px: 2.5,
+          pt: 1,
+        }}
+      >
         <Typography variant="h6" fontSize={32} fontWeight={900} color="#2F80ED" mt={2}>
           추첨 생성 완료
         </Typography>
@@ -351,10 +360,19 @@ export default function DrawMain() {
           <Typography sx={{ fontSize: 156, lineHeight: 1, mb: 4 }}>🎉</Typography>
           {/* <Typography sx={{ fontSize: 16, fontWeight: 900, color: "#2F80ED" }}>축하합니다!</Typography> */}
         </Box>
-        <Button fullWidth variant="contained" onClick={() => { if (animationRef.current) { clearInterval(animationRef.current); animationRef.current = null; } setPhase("list"); }} sx={{ borderRadius: 1, fontWeight: 700 }}>
+        <Button fullWidth variant="contained" onClick={() => { if (animationRef.current) { clearInterval(animationRef.current); animationRef.current = null; } setPhase("list"); }} 
+          sx={{
+            mt: 3,
+            borderRadius: 1,
+            height: 44,
+            fontWeight: 900,
+            bgcolor: "#2F80ED",
+            "&:hover": { bgcolor: "#256FD1" },
+          }}
+        >
           확인
         </Button>
-      </Stack>
+      </Box>
     );
   }
 

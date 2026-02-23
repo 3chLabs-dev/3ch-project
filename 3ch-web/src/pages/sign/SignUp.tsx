@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo,useEffect, useState, useRef } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Checkbox from "@mui/material/Checkbox";
@@ -21,6 +21,8 @@ import axios from "axios";
 import { TERMS, PRIVACY, } from "../../constants/policies";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { useTheme } from "@mui/material/styles";
+import confetti from "canvas-confetti";
+
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
 // const apiTestUrl = import.meta.env.VITE_API_TEST_URL
@@ -117,6 +119,8 @@ export default function SignUp() {
     const [pwError, setPwError] = useState<string>("");
     const [confirmError, setConfirmError] = useState<string>("");
     const [nameError, setNameError] = useState<string>("");
+    const [done, setDone] = useState(false);
+    // const animationRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const [agree, setAgree] = useState<AgreeState>({
         all: false,
@@ -127,8 +131,6 @@ export default function SignUp() {
 
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [apiError, setApiError] = useState<string>("");
-    const [openSuccessDialog, setOpenSuccessDialog] = useState<boolean>(false);
-
 
     const setAll = (checked: boolean) => {
         setAgree({
@@ -240,7 +242,7 @@ export default function SignUp() {
                 name: username,
             });
 
-            setOpenSuccessDialog(true);
+            setDone(true);
         } catch (error) {
             console.error("Signup API call failed:", error);
             if (axios.isAxiosError(error) && error.response) {
@@ -259,11 +261,6 @@ export default function SignUp() {
         } finally {
             setIsLoading(false);
         }
-    };
-
-    const handleSuccessDialogClose = () => {
-        setOpenSuccessDialog(false);
-        navigate("/login");
     };
     
     // 약관
@@ -287,6 +284,84 @@ export default function SignUp() {
     };
 
     const closePolicyDialog = () => setOpenPolicy(false);
+
+      const animationRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+      useEffect(() => {
+        if (!done) return;
+        const fire = (originX: number, angle: number) =>
+          confetti({
+            particleCount: 6,
+            angle,
+            spread: 50,
+            origin: { x: originX, y: 0.65 },
+            colors: ["#2F80ED", "#56CCF2", "#F2994A", "#27AE60", "#EB5757"],
+            zIndex: 9999,
+          });
+    
+        let count = 0;
+        animationRef.current = setInterval(() => {
+          fire(0.1, 60);
+          fire(0.9, 120);
+          if (++count >= 8) {
+            clearInterval(animationRef.current!);
+            animationRef.current = null;
+          }
+        }, 200);
+    
+        return () => {
+          if (animationRef.current) clearInterval(animationRef.current);
+        };
+      }, [done]);
+
+    if (done) {
+        return (
+            <Box sx={{ px: 2.5, pt: 2 }}>
+                <Typography sx={{ fontSize: 32, fontWeight: 900, textAlign: "center", mt: 2,color: "#2F80ED" }}>
+                    회원가입 완료
+                </Typography>
+
+                <Typography sx={{ fontSize: 13, fontWeight: 700, textAlign: "center", mt: 1, color: "#6B7280" }}>
+                    이제 우리리그에서 클럽을 관리하고{"\n"}리그를 개최할 수 있습니다!
+                </Typography>
+
+                <Box
+                    sx={{
+                        mt: 3,
+                        width: "100%",
+                        height: 200,
+                        // border: "2px solid #2F80ED",
+                        borderRadius: 1,
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 1,
+                    }}
+                >
+                    <Typography sx={{ fontSize: 156, lineHeight: 1, mb: 4 }}>🎉</Typography>
+                    {/* <Typography sx={{ fontSize: 32, fontWeight: 900, color: "#2F80ED" }}>축하합니다!</Typography> */}
+                </Box>
+
+                <Button
+                    fullWidth
+                    variant="contained"
+                    disableElevation
+                    onClick={() => { if (animationRef.current) { clearInterval(animationRef.current); animationRef.current = null; } navigate("/login"); }}
+                    sx={{
+                        mt: 3,
+                        borderRadius: 1,
+                        height: 44,
+                        fontWeight: 900,
+                        bgcolor: "#2F80ED",
+                        "&:hover": { bgcolor: "#256FD1" },
+                    }}
+                >
+                    확인
+                </Button>
+            </Box>
+        );
+    }
 
     return (
         <AppTheme>
@@ -528,7 +603,7 @@ export default function SignUp() {
             </SignInContainer>
 
             {/* Success Dialog */}
-            <Dialog
+            {/* <Dialog
                 open={openSuccessDialog}
                 onClose={handleSuccessDialogClose}
                 aria-labelledby="signup-success-dialog-title"
@@ -546,7 +621,7 @@ export default function SignUp() {
                         확인
                     </Button>
                 </DialogActions>
-            </Dialog>
+            </Dialog> */}
             {/* 약관 */}
             <Dialog
                 open={openPolicy}

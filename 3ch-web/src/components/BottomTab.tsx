@@ -14,7 +14,7 @@ const TAB_H = 56;
 const tabs = [
     { label: "홈", path: "/", icon: <HomeIcon /> },
     { label: "리그·대회", path: "/league", icon: <EmojiEventsIcon /> },
-    { label: "클럽", path: "/group", icon: <GroupsIcon /> },
+    { label: "클럽", path: "/club", icon: <GroupsIcon /> },
     { label: "추첨", path: "/draw", icon: <CasinoIcon /> },
     { label: "더보기", path: "/mypage", icon: <PersonIcon /> },
 ];

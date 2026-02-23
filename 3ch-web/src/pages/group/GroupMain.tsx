@@ -111,7 +111,7 @@ export default function GroupMain() {
             {isLoggedIn && (
                 <Button
                     component={RouterLink}
-                    to="/group/create"
+                    to="/club/create"
                     variant="contained"
                     fullWidth
                     sx={{ borderRadius: 1, fontWeight: 700 }}
@@ -205,7 +205,7 @@ function GroupCard({ group }: { group: Group }) {
     return (
         <Card
             elevation={2}
-            onClick={() => navigate(`/group/${group.id}/manage`)}
+            onClick={() => navigate(`/club/${group.id}/manage`)}
             sx={{
                 borderRadius: 1,
                 boxShadow: "0 4px 12px rgba(0,0,0,0.08)",

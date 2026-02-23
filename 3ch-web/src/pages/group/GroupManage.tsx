@@ -181,7 +181,7 @@ export default function GroupManage() {
         try {
             await deleteGroup(id).unwrap();
             setDeleteDialogOpen(false);
-            navigate("/group");
+            navigate("/club");
         } catch (error) {
             console.error("Failed to delete group:", error);
         }
@@ -192,7 +192,7 @@ export default function GroupManage() {
         try {
             await leaveGroup(id).unwrap();
             setLeaveDialogOpen(false);
-            navigate("/group");
+            navigate("/club");
         } catch (error) {
             console.error("Failed to leave group:", error);
         }
@@ -299,7 +299,7 @@ export default function GroupManage() {
         <Stack spacing={2.5} sx={{ pb: 3 }}>
             {/* 헤더 */}
             <Stack direction="row" alignItems="center" spacing={1.5}>
-                <IconButton onClick={() => navigate("/group")} size="small">
+                <IconButton onClick={() => navigate("/club")} size="small">
                     <ArrowBackIcon />
                 </IconButton>
                 <Typography variant="h6" fontWeight={900} flex={1}>
@@ -376,7 +376,7 @@ export default function GroupManage() {
                         <Button
                             variant="outlined"
                             fullWidth
-                            onClick={() => navigate(`/group/${id}/manage/league`)}
+                            onClick={() => navigate(`/club/${id}/manage/league`)}
                             sx={{
                                 borderRadius: 1,
                                 py: 1.2,
@@ -904,7 +904,7 @@ export default function GroupManage() {
                             }}
                         >
                             <QRCode
-                                value={`${window.location.origin}/group/${id}/join`}
+                                value={`${window.location.origin}/club/${id}/join`}
                                 size={200}
                                 style={{ height: "auto", maxWidth: "100%", width: "100%" }}
                             />
@@ -916,7 +916,7 @@ export default function GroupManage() {
                                 초대 링크
                             </Typography>
                             <TextField
-                                value={`${window.location.origin}/group/${id}/join`}
+                                value={`${window.location.origin}/club/${id}/join`}
                                 fullWidth
                                 size="small"
                                 InputProps={{
@@ -957,7 +957,7 @@ export default function GroupManage() {
                                 variant="outlined"
                                 fullWidth
                                 onClick={() => {
-                                    const link = `${window.location.origin}/group/${id}/join`;
+                                    const link = `${window.location.origin}/club/${id}/join`;
                                     const message = `${group.name} 클럽에 초대합니다! ${link}`;
                                     window.location.href = `sms:?body=${encodeURIComponent(message)}`;
                                 }}
@@ -973,7 +973,7 @@ export default function GroupManage() {
                                 variant="outlined"
                                 fullWidth
                                 onClick={async () => {
-                                    const link = `${window.location.origin}/group/${id}/join`;
+                                    const link = `${window.location.origin}/club/${id}/join`;
                                     try {
                                         await navigator.clipboard.writeText(link);
                                         alert("링크가 복사되었습니다!");

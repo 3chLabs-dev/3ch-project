@@ -177,7 +177,7 @@ export default function GroupCreate() {
                     fullWidth
                     variant="contained"
                     disableElevation
-                    onClick={() => { if (animationRef.current) { clearInterval(animationRef.current); animationRef.current = null; } navigate("/group"); }}
+                    onClick={() => { if (animationRef.current) { clearInterval(animationRef.current); animationRef.current = null; } navigate("/club"); }}
                     sx={{
                         mt: 3,
                         borderRadius: 1,

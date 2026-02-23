@@ -128,7 +128,7 @@ export default function GroupLeagueManage() {
   return (
     <Stack spacing={2.5} sx={{ pb: 3 }}>
       <Stack direction="row" alignItems="center" spacing={1.5}>
-        <IconButton onClick={() => navigate(`/group/${id}/manage`)} size="small">
+        <IconButton onClick={() => navigate(`/club/${id}/manage`)} size="small">
           <ArrowBackIcon />
         </IconButton>
         <Typography variant="h6" fontWeight={900} flex={1}>

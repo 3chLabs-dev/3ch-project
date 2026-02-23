@@ -186,7 +186,7 @@ export default function Home() {
                             {/* 자세히보기 버튼 */}
                             <Button
                                 component={RouterLink}
-                                to="/group"
+                                to="/club"
                                 variant="outlined"
                                 size="small"
                                 sx={{

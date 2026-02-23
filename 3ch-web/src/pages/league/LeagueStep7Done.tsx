@@ -65,7 +65,7 @@ export default function LeagueStep7Done() {
           mt: 3,
           width: "100%",
           height: 200,
-          border: "2px solid #2F80ED",
+          // border: "2px solid #2F80ED",
           borderRadius: 1,
           display: "flex",
           flexDirection: "column",
@@ -74,8 +74,8 @@ export default function LeagueStep7Done() {
           gap: 1,
         }}
       >
-        <Typography sx={{ fontSize: 52, lineHeight: 1 }}>🎉</Typography>
-        <Typography sx={{ fontSize: 16, fontWeight: 900, color: "#2F80ED" }}>
+        <Typography sx={{ fontSize: 104, lineHeight: 1 }}>🎉</Typography>
+        <Typography sx={{ fontSize: 32, fontWeight: 900, color: "#2F80ED" }}>
           축하합니다!
         </Typography>
       </Box>

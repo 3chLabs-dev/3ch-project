@@ -25,6 +25,7 @@ import { useGetMyGroupsQuery } from "../../features/group/groupApi";
 import { useGetLeagueParticipantsQuery, useGetLeaguesQuery } from "../../features/league/leagueApi";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { setPreferredGroupId } from "../../features/league/leagueCreationSlice";
+import { generateId } from "../../utils/dateUtils";
 
 type DrawPhase = "list" | "create" | "animating" | "done";
 type DrawType = "league" | "tournament";
@@ -154,7 +155,7 @@ export default function DrawMain() {
       setResults((prev) => [
         ...prev,
         {
-          id: crypto.randomUUID(),
+          id: generateId(),
           groupId: effectiveSelectedGroupId,
           type: drawType,
           name: drawName.trim() || `${drawType === "league" ? "리그" : "대회"} 추첨`,

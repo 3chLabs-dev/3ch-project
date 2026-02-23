@@ -24,3 +24,12 @@ export function formatLeagueTime(dateStr: string): string {
   const d = toUTCDate(dateStr);
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
+
+/** HTTP 환경에서 crypto.randomUUID가 없거나 예외를 던질 때 안전하게 대체 */
+export function generateId(): string {
+  try {
+    return crypto.randomUUID();
+  } catch {
+    return `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+  }
+}

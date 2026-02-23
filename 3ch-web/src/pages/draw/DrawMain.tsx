@@ -328,7 +328,7 @@ export default function DrawMain() {
   if (phase === "done") {
     return (
       <Stack spacing={2.5} alignItems="center" sx={{ pt: 4 }}>
-        <Typography variant="h6" fontWeight={900}>
+        <Typography variant="h6" fontSize={32} fontWeight={900} color="#2F80ED" >
           추첨 생성 완료
         </Typography>
         <Typography color="text.secondary" fontWeight={700}>
@@ -348,8 +348,8 @@ export default function DrawMain() {
             gap: 1,
           }}
         >
-          <Typography sx={{ fontSize: 52, lineHeight: 1 }}>🎉</Typography>
-          <Typography sx={{ fontSize: 16, fontWeight: 900, color: "#2F80ED" }}>축하합니다!</Typography>
+          <Typography sx={{ fontSize: 156, lineHeight: 1, mb: 4 }}>🎉</Typography>
+          {/* <Typography sx={{ fontSize: 16, fontWeight: 900, color: "#2F80ED" }}>축하합니다!</Typography> */}
         </Box>
         <Button fullWidth variant="contained" onClick={() => { if (animationRef.current) { clearInterval(animationRef.current); animationRef.current = null; } setPhase("list"); }} sx={{ borderRadius: 1, fontWeight: 700 }}>
           확인

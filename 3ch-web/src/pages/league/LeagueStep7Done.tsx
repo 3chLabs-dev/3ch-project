@@ -52,7 +52,7 @@ export default function LeagueStep7Done() {
 
   return (
     <Box sx={{ px: 2.5, pt: 2 }}>
-      <Typography sx={{ fontSize: 18, fontWeight: 900, textAlign: "center", mt: 2 }}>
+      <Typography sx={{ fontSize: 32, fontWeight: 900, textAlign: "center", mt: 2, color: "#2F80ED"  }}>
         리그 생성 완료
       </Typography>
 
@@ -74,10 +74,10 @@ export default function LeagueStep7Done() {
           gap: 1,
         }}
       >
-        <Typography sx={{ fontSize: 104, lineHeight: 1 }}>🎉</Typography>
-        <Typography sx={{ fontSize: 32, fontWeight: 900, color: "#2F80ED" }}>
+        <Typography sx={{ fontSize: 156, lineHeight: 1 , mb: 4}}>🎉</Typography>
+        {/* <Typography sx={{ fontSize: 32, fontWeight: 900, color: "#2F80ED" }}>
           축하합니다!
-        </Typography>
+        </Typography> */}
       </Box>
 
       <Button

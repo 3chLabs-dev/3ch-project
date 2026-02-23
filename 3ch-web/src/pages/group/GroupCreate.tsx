@@ -147,7 +147,7 @@ export default function GroupCreate() {
     if (done) {
         return (
             <Box sx={{ px: 2.5, pt: 2 }}>
-                <Typography sx={{ fontSize: 18, fontWeight: 900, textAlign: "center", mt: 2 }}>
+                <Typography sx={{ fontSize: 32, fontWeight: 900, textAlign: "center", mt: 2,color: "#2F80ED" }}>
                     클럽 생성 완료
                 </Typography>
 
@@ -169,8 +169,8 @@ export default function GroupCreate() {
                         gap: 1,
                     }}
                 >
-                    <Typography sx={{ fontSize: 104, lineHeight: 1 }}>🎉</Typography>
-                    <Typography sx={{ fontSize: 32, fontWeight: 900, color: "#2F80ED" }}>축하합니다!</Typography>
+                    <Typography sx={{ fontSize: 156, lineHeight: 1, mb: 4 }}>🎉</Typography>
+                    {/* <Typography sx={{ fontSize: 32, fontWeight: 900, color: "#2F80ED" }}>축하합니다!</Typography> */}
                 </Box>
 
                 <Button

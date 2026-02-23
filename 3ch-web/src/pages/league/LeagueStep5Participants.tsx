@@ -1,10 +1,9 @@
-﻿import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Box,
   Typography,
   Button,
   TextField,
-  Checkbox,
   Stack,
   Divider,
   Select,
@@ -28,11 +27,6 @@ const headCellSx = {
   fontWeight: 900,
   color: "#6B7280",
   textAlign: "center" as const,
-};
-
-const tightCheckboxSx = {
-  p: 0,
-  "& .MuiSvgIcon-root": { fontSize: 20 },
 };
 
 const cellCenter = { display: "flex", justifyContent: "center", alignItems: "center" };
@@ -118,10 +112,6 @@ export default function LeagueStep5Participants() {
     setOpenCancelDialog(true);
   };
 
-  const handleToggle = (idx: number, key: "paid" | "arrived" | "footPool") => {
-    setParticipants((prev) => prev.map((p, i) => (i === idx ? { ...p, [key]: !p[key] } : p)));
-  };
-
   const handlePrev = () => {
     dispatch(setStep(4));
   };
@@ -201,7 +191,7 @@ export default function LeagueStep5Participants() {
       <Box
         sx={{
           display: "grid",
-          gridTemplateColumns: "56px minmax(0,1fr) 36px 36px 44px 56px",
+          gridTemplateColumns: "56px minmax(0,1fr) 56px",
           gap: 1,
           alignItems: "center",
           px: 0.5,
@@ -210,16 +200,13 @@ export default function LeagueStep5Participants() {
       >
         <Typography sx={headCellSx}>부수</Typography>
         <Typography sx={headCellSx}>이름</Typography>
-        <Typography sx={headCellSx}>입금</Typography>
-        <Typography sx={headCellSx}>도착</Typography>
-        <Typography sx={headCellSx}>뒷풀이</Typography>
-        <Typography sx={headCellSx}>추가/삭제</Typography>
+        <Typography sx={headCellSx}>관리</Typography>
       </Box>
 
       <Box
         sx={{
           display: "grid",
-          gridTemplateColumns: "56px minmax(0,1fr) 36px 36px 44px 56px",
+          gridTemplateColumns: "56px minmax(0,1fr) 56px",
           gap: 1,
           alignItems: "center",
           px: 0.5,
@@ -236,16 +223,6 @@ export default function LeagueStep5Participants() {
             if (e.key === "Enter") handleAdd();
           }}
         />
-
-        <Box sx={cellCenter}>
-          <Checkbox disabled size="small" />
-        </Box>
-        <Box sx={cellCenter}>
-          <Checkbox disabled size="small" />
-        </Box>
-        <Box sx={cellCenter}>
-          <Checkbox disabled size="small" />
-        </Box>
 
         <Button
           variant="contained"
@@ -272,7 +249,7 @@ export default function LeagueStep5Participants() {
               key={`${p.division}-${p.name}-${idx}`}
               sx={{
                 display: "grid",
-                gridTemplateColumns: "56px minmax(0,1fr) 36px 36px 44px 56px",
+                gridTemplateColumns: "56px minmax(0,1fr) 56px",
                 gap: 1,
                 alignItems: "center",
                 px: 0.5,
@@ -312,18 +289,6 @@ export default function LeagueStep5Participants() {
               >
                 {p.name}
               </Typography>
-
-              <Box sx={cellCenter}>
-                <Checkbox sx={tightCheckboxSx} size="small" checked={p.paid} onChange={() => handleToggle(idx, "paid")} />
-              </Box>
-
-              <Box sx={cellCenter}>
-                <Checkbox sx={tightCheckboxSx} size="small" checked={p.arrived} onChange={() => handleToggle(idx, "arrived")} />
-              </Box>
-
-              <Box sx={cellCenter}>
-                <Checkbox sx={tightCheckboxSx} size="small" checked={p.footPool} onChange={() => handleToggle(idx, "footPool")} />
-              </Box>
 
               <Box sx={cellCenter}>
                 <Button

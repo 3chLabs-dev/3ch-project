@@ -16,9 +16,13 @@ export interface UpdateLeagueRequest {
   name?: string;
   description?: string;
   type?: string;
+  format?: string;
   sport?: string;
   start_date?: string;
   rules?: string;
+  notice?: string;
+  sort_order?: string;
+  recruit_count?: number;
   status?: "draft" | "active" | "completed";
 }
 
@@ -34,6 +38,11 @@ export interface League {
   sport: string;
   start_date: string;
   rules?: string;
+  notice?: string;
+  sort_order?: string;
+  recruit_count?: number;
+  participant_count?: number;
+  group_id?: string;
   status: "draft" | "active" | "completed";
   created_by_id: number;
   created_at: string;
@@ -134,6 +143,16 @@ export interface DeleteParticipantResponse {
   message: string;
 }
 
+export interface AddParticipantsRequest {
+  leagueId: string;
+  participants: { division: string; name: string }[];
+}
+
+export interface AddParticipantsResponse {
+  message: string;
+  participants: LeagueParticipantItem[];
+}
+
 /**
  * RTK Query API endpoints
  */
@@ -220,6 +239,20 @@ export const leagueApi = baseApi.injectEndpoints({
         method: "PUT",
         body: updates,
       }),
+      async onQueryStarted({ leagueId, participantId, updates }, { dispatch, queryFulfilled }) {
+        // 낙관적 업데이트: 서버 응답 전 UI 즉시 반영
+        const patchResult = dispatch(
+          leagueApi.util.updateQueryData("getLeagueParticipants", leagueId, (draft) => {
+            const participant = draft.participants.find((p) => p.id === participantId);
+            if (participant) Object.assign(participant, updates);
+          })
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patchResult.undo(); // 서버 실패 시 롤백
+        }
+      },
       invalidatesTags: (_result, _error, { leagueId }) => [
         { type: "League", id: leagueId },
         { type: "League", id: "LIST" },
@@ -239,6 +272,18 @@ export const leagueApi = baseApi.injectEndpoints({
       { type: "League", id: "LIST" },
       ],
     }),
+
+    addParticipants: builder.mutation<AddParticipantsResponse, AddParticipantsRequest>({
+      query: ({ leagueId, participants }) => ({
+        url: `/league/${leagueId}/participants`,
+        method: "POST",
+        body: { participants },
+      }),
+      invalidatesTags: (_result, _error, { leagueId }) => [
+        { type: "League", id: leagueId },
+        { type: "League", id: "LIST" },
+      ],
+    }),
   }),
 });
 
@@ -253,4 +298,5 @@ export const {
   useUpdateLeagueMutation,
   useUpdateParticipantMutation,
   useDeleteParticipantMutation,
+  useAddParticipantsMutation,
 } = leagueApi;

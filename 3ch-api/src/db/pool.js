@@ -1,5 +1,9 @@
 require("dotenv").config();
-const { Pool } = require("pg");
+const { Pool, types } = require("pg");
+
+// TIMESTAMP WITHOUT TIME ZONE (OID 1114)을 항상 UTC로 파싱
+// 기본값은 Node.js 프로세스의 로컬 시간대(KST 환경이면 -9시간 오차 발생)
+types.setTypeParser(1114, (val) => new Date(val.replace(" ", "T") + "Z"));
 
 const pool = new Pool({
   host: process.env.DB_HOST || "localhost",

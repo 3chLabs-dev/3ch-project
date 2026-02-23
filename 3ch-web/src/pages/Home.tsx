@@ -1,5 +1,6 @@
 // src/pages/Home.tsx
 import { useEffect, useMemo, useState } from "react";
+import { formatLeagueDate } from "../utils/dateUtils";
 import { Link as RouterLink, useNavigate } from "react-router-dom";
 import {
     Box,
@@ -343,15 +344,6 @@ function SectionHeader({ title }: { title: string }) {
     );
 }
 
-function formatLeagueDate(dateStr: string) {
-    const d = new Date(dateStr);
-    const days = ["일", "월", "화", "수", "목", "금", "토"];
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
-    const day = days[d.getDay()];
-    return `${yyyy}-${mm}-${dd}(${day})`;
-}
 
 function LeagueCard({ league }: { league: LeagueListItem }) {
     const navigate = useNavigate();

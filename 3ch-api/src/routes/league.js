@@ -39,9 +39,13 @@ const updateLeagueSchema = z.object({
   name: z.string().min(1, '리그 이름은 필수입니다.').optional(),
   description: z.string().optional(),
   type: z.string().min(1, '리그 유형은 필수입니다.').optional(),
+  format: z.string().optional(),
   sport: z.string().min(1, '스포츠 종목은 필수입니다.').optional(),
   start_date: z.string().datetime('시작일은 올바른 ISO 8601 형식이어야 합니다.').optional(),
   rules: z.string().optional(),
+  notice: z.string().optional(),
+  sort_order: z.string().optional(),
+  recruit_count: z.number().int().min(1).optional(),
   status: z.enum(['draft', 'active', 'completed']).optional(),
 });
 
@@ -264,7 +268,7 @@ router.post('/league', requireAuth, async (req, res) => {
     const result = await client.query(
       `INSERT INTO leagues (id, name, description, type, format, sport, start_date, rules, recruit_count, participant_count, group_id, created_by_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-       RETURNING id, name, description, type, format, sport, start_date, status, rules, recruit_count, participant_count, group_id, created_at, updated_at;`,
+       RETURNING id, name, description, type, format, sport, start_date, status, rules, notice, recruit_count, participant_count, group_id, created_at, updated_at;`,
       [leagueId, name, description, type, format, sport, start_date, rules, recruit_count, participant_count, group_id, userId],
     );
 
@@ -358,6 +362,64 @@ router.get('/league/:id/participants', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Error fetching league participants:', error);
     return res.status(500).json({ message: '리그 참가자 조회 중 서버 오류' });
+  }
+});
+
+/**
+ * POST /league/:leagueId/participants
+ * 참가자 추가 (관리자용 수기입력 / 클럽 회원 불러오기)
+ */
+router.post('/league/:leagueId/participants', requireAuth, async (req, res) => {
+  try {
+    const { leagueId } = req.params;
+    const userId = Number(req.user.sub);
+
+    // 권한 확인: 해당 클럽의 owner 또는 admin만 가능
+    const authCheck = await pool.query(
+      `SELECT gm.role
+       FROM leagues l
+       INNER JOIN group_members gm ON gm.group_id = l.group_id
+       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner','admin')`,
+      [leagueId, userId],
+    );
+    if (authCheck.rowCount === 0) {
+      return res.status(403).json({ message: '참가자를 추가할 권한이 없습니다.' });
+    }
+
+    const rawParticipants = req.body.participants;
+    if (!Array.isArray(rawParticipants) || rawParticipants.length === 0) {
+      return res.status(400).json({ message: '참가자 목록이 비어있습니다.' });
+    }
+
+    const addSchema = z.array(z.object({
+      division: z.string().default(''),
+      name: z.string().min(1, '이름은 필수입니다.'),
+    }));
+    const participants = addSchema.parse(rawParticipants);
+
+    const inserted = [];
+    for (const p of participants) {
+      const result = await pool.query(
+        `INSERT INTO league_participants (id, league_id, division, name, paid, arrived, "after")
+         VALUES ($1, $2, $3, $4, false, false, false)
+         RETURNING id, league_id, division, name, paid, arrived, "after", created_at`,
+        [randomUUID(), leagueId, p.division, p.name],
+      );
+      inserted.push(result.rows[0]);
+    }
+
+    // participant_count 실수 기반으로 갱신
+    await pool.query(
+      `UPDATE leagues SET participant_count = (
+         SELECT COUNT(*) FROM league_participants WHERE league_id = $1
+       ), updated_at = NOW() WHERE id = $1`,
+      [leagueId],
+    );
+
+    return res.status(201).json({ message: '참가자가 추가되었습니다.', participants: inserted });
+  } catch (error) {
+    console.error('Add participants error:', error);
+    return res.status(500).json({ message: '서버 오류가 발생했습니다.' });
   }
 });
 
@@ -457,7 +519,7 @@ router.get('/league/:id', requireAuth, async (req, res) => {
 
     // 리그 정보 조회
     const leagueResult = await pool.query(
-      `SELECT id, name, description, type, format, sport, start_date, rules, status,
+      `SELECT id, name, description, type, format, sport, start_date, rules, notice, sort_order, status,
               recruit_count, participant_count, group_id, created_by_id, created_at, updated_at
        FROM leagues
        WHERE id = $1`,
@@ -566,7 +628,7 @@ router.put('/league/:id', requireAuth, async (req, res) => {
       UPDATE leagues
       SET ${fields.join(', ')}, updated_at = NOW()
       WHERE id = $${queryIndex}
-      RETURNING id, name, description, type, sport, start_date, rules, status, created_by_id, created_at, updated_at;
+      RETURNING id, name, description, type, format, sport, start_date, rules, notice, sort_order, status, recruit_count, participant_count, created_by_id, created_at, updated_at;
     `;
 
     const result = await pool.query(updateQuery, values);
@@ -655,12 +717,12 @@ router.put('/league/:leagueId/participants/:participantId', requireAuth, async (
     const { leagueId, participantId } = req.params;
     const userId = Number(req.user.sub);
 
-    // 권한 확인: 클럽의 owner 또는 admin인지 체크
+    // 권한 확인: 클럽 멤버(owner, admin, member) 모두 가능
     const accessCheck = await pool.query(
       `SELECT 1
        FROM leagues l
        INNER JOIN group_members gm ON gm.group_id = l.group_id
-       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+       WHERE l.id = $1 AND gm.user_id = $2`,
       [leagueId, userId],
     );
 

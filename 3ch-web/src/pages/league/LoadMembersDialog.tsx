@@ -41,16 +41,19 @@ type Props = {
     open: boolean;
     onClose: () => void;
     onConfirm: (selected: MemberRow[]) => void;
+    /** 외부에서 groupId를 직접 전달할 경우 Redux 값 대신 사용 */
+    groupId?: string;
 };
 
 export default function LoadMembersDialog({
     open,
     onClose,
     onConfirm,
+    groupId: propGroupId,
 }: Props) {
-    const groupId = useAppSelector((s) => s.leagueCreation.groupId);
+    const reduxGroupId = useAppSelector((s) => s.leagueCreation.groupId);
     const preferredGroupId = useAppSelector((s) => s.leagueCreation.preferredGroupId);
-    const effectiveGroupId = groupId || preferredGroupId;
+    const effectiveGroupId = propGroupId || reduxGroupId || preferredGroupId;
     const token = useAppSelector((s) => s.auth.token);
 
     const [rows, setRows] = useState<MemberRow[]>([]);

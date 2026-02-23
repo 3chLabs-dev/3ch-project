@@ -47,6 +47,7 @@ import MemberEditDialog from "./MemberEditDialog";
 import type { Participant } from "../../features/league/leagueCreationSlice";
 import { getRoleLabel } from "../../utils/permissions";
 import { REGION_DATA } from "./regionData";
+import { formatLeagueDate } from "../../utils/dateUtils";
 
 const SPORT_EMOJI: Record<string, string> = {
     "탁구": "🏓",
@@ -283,16 +284,6 @@ export default function GroupManage() {
         } catch (error) {
             console.error("Failed to remove member:", error);
         }
-    };
-
-    const formatLeagueDate = (dateStr: string) => {
-        const d = new Date(dateStr);
-        const days = ["일", "월", "화", "수", "목", "금", "토"];
-        const yyyy = d.getFullYear();
-        const mm = String(d.getMonth() + 1).padStart(2, "0");
-        const dd = String(d.getDate()).padStart(2, "0");
-        const day = days[d.getDay()];
-        return `${yyyy}-${mm}-${dd}(${day})`;
     };
 
     return (

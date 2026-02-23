@@ -1,5 +1,6 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useState } from "react";
+import { formatLeagueDate } from "../../utils/dateUtils";
 import {
   Box,
   Typography,
@@ -42,13 +43,14 @@ export default function GroupLeagueManage() {
   );
   const leagues = leagueData?.leagues ?? [];
 
-  const { data: participantData, isLoading: isLoadingParticipants, refetch: refetchParticipants } = useGetLeagueParticipantsQuery(
+  const { data: participantData, isLoading: isLoadingParticipants } = useGetLeagueParticipantsQuery(
     expandedLeagueId ?? "",
     {
       skip: !expandedLeagueId,
       refetchOnMountOrArgChange: true,
       refetchOnFocus: true,
       refetchOnReconnect: true,
+      pollingInterval: 15000,
     }
   );
   const participants = participantData?.participants ?? [];
@@ -84,7 +86,6 @@ export default function GroupLeagueManage() {
           after: updated.after,
         },
       }).unwrap();
-      await refetchParticipants();
       handleCloseParticipantDetail();
     } catch (error) {
       console.error("Failed to update participant:", error);
@@ -100,22 +101,11 @@ export default function GroupLeagueManage() {
       participantId: selectedParticipant.participant.id,
     }).unwrap();
 
-    await refetchParticipants();
     handleCloseParticipantDetail();
   } catch (error) {
     console.error("Failed to delete participant:", error);
   }
 };
-
-  const formatLeagueDate = (dateStr: string) => {
-    const d = new Date(dateStr);
-    const days = ["일", "월", "화", "수", "목", "금", "토"];
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
-    const day = days[d.getDay()];
-    return `${yyyy}-${mm}-${dd}(${day})`;
-  };
 
   if (!isLoggedIn) {
     return (

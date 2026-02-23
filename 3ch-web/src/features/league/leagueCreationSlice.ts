@@ -127,9 +127,9 @@ export const createLeague = createAsyncThunk.withTypes<{ state: RootState }>()(
     const typeMap: Record<LeagueTypeValue, string> = {
       singles: "단식",
       doubles: "복식",
-      "2-person-team": "2인 팀",
-      "3-person-team": "3인 팀",
-      "4-person-team": "4인 팀",
+      "2-person-team": "2인 단체전",
+      "3-person-team": "3인 단체전",
+      "4-person-team": "4인 단체전",
     };
 
     // 리그 규칙 매핑
@@ -137,14 +137,14 @@ export const createLeague = createAsyncThunk.withTypes<{ state: RootState }>()(
       "best-of-3": "3전 2선승제",
       "best-of-5": "5전 3선승제",
       "best-of-7": "7전 4선승제",
-      "3-sets": "3세트 매치",
+      "3-sets": "3세트제",
     };
 
     // 리그 방식 매핑
     const formatMap: Record<LeagueFormatValue, string> = {
       "single-league": "단일리그",
       "group-league": "조별리그",
-      "group-and-knockout": "조별+토너먼트",
+      "group-and-knockout": "조별리그 + 본선리그",
     };
 
     // ISO 8601 날짜 문자열 생성

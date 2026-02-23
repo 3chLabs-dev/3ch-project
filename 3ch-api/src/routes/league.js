@@ -350,7 +350,7 @@ router.get('/league/:id/participants', requireAuth, async (req, res) => {
       `SELECT id, league_id, division, name, paid, arrived, "after", created_at
        FROM league_participants
        WHERE league_id = $1
-       ORDER BY created_at ASC`,
+       ORDER BY division ASC, created_at ASC`,
       [id],
     );
 
@@ -473,7 +473,7 @@ router.get('/league/:id', requireAuth, async (req, res) => {
       `SELECT id, league_id, division, name, paid, arrived, "after", created_at
        FROM league_participants
        WHERE league_id = $1
-       ORDER BY created_at ASC`,
+       ORDER BY division ASC, created_at ASC`,
       [id],
     );
 

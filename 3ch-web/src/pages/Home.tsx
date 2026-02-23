@@ -1,6 +1,6 @@
 // src/pages/Home.tsx
 import { useEffect, useMemo, useState } from "react";
-import { Link as RouterLink } from "react-router-dom";
+import { Link as RouterLink, useNavigate } from "react-router-dom";
 import {
     Box,
     Stack,
@@ -354,10 +354,12 @@ function formatLeagueDate(dateStr: string) {
 }
 
 function LeagueCard({ league }: { league: LeagueListItem }) {
+    const navigate = useNavigate();
     return (
         <Card
             elevation={2}
-            sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
+            onClick={() => navigate(`/league/${league.id}`)}
+            sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)", cursor: "pointer" }}
         >
             <CardContent sx={{ py: 1.8, px: 2.5, "&:last-child": { pb: 1.8 } }}>
                 <Stack direction="row" justifyContent="space-between" alignItems="center">

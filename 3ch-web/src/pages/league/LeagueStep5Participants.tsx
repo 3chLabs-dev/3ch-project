@@ -97,7 +97,7 @@ export default function LeagueStep5Participants() {
 
     setParticipants((prev) => [
       ...prev,
-      { division: d, name: n, paid: false, arrived: false, footPool: false },
+      { division: d, name: n, paid: false, arrived: false, after: false },
     ]);
 
     setDivision("");

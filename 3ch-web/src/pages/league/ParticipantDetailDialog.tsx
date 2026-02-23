@@ -35,7 +35,7 @@ export default function ParticipantDetailDialog({
   const [name, setName] = useState(participant.name);
   const [paid, setPaid] = useState(participant.paid);
   const [arrived, setArrived] = useState(participant.arrived);
-  const [footPool, setFootPool] = useState(participant.footPool);
+  const [after, setAfter] = useState(participant.after);
 
   const [prevParticipant, setPrevParticipant] = useState(participant);
   if (prevParticipant !== participant) {
@@ -44,7 +44,7 @@ export default function ParticipantDetailDialog({
     setName(participant.name);
     setPaid(participant.paid);
     setArrived(participant.arrived);
-    setFootPool(participant.footPool);
+    setAfter(participant.after);
   }
 
   const handleSave = () => {
@@ -53,7 +53,7 @@ export default function ParticipantDetailDialog({
       name: name.trim(),
       paid,
       arrived,
-      footPool,
+      after,
     });
 
     onClose();
@@ -129,7 +129,7 @@ export default function ParticipantDetailDialog({
                 label={<Typography sx={{ fontWeight: 700 }}>도착 완료</Typography>}
               />
               <FormControlLabel
-                control={<Checkbox checked={footPool} onChange={(e) => setFootPool(e.target.checked)} />}
+                control={<Checkbox checked={after} onChange={(e) => setAfter(e.target.checked)} />}
                 label={<Typography sx={{ fontWeight: 700 }}>뒷풀이 참여</Typography>}
               />
             </Stack>

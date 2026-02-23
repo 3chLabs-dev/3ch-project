@@ -68,6 +68,7 @@ model League {
   name            String
   description     String?
   type            String
+  format          String?
   sport           String
   start_date      DateTime
   status          String    @default("draft") // e.g., "draft", "active", "completed"
@@ -96,7 +97,7 @@ model LeagueParticipant {
   name       String
   paid       Boolean  @default(false)
   arrived    Boolean  @default(false)
-  foot_pool  Boolean  @default(false)
+  after      Boolean  @default(false)
   created_at DateTime @default(now())
 
   league_id  String

@@ -19,7 +19,7 @@ export function mergeMembers(
         name: m.name,
         paid: false,
         arrived: false,
-        footPool: false,
+        after: false,
       });
     }
   });

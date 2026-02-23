@@ -1,4 +1,5 @@
 ﻿import React, { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { setStep, setGroupId, setPreferredGroupId } from "../../features/league/leagueCreationSlice";
 import { useGetMyGroupsQuery } from "../../features/group/groupApi";
@@ -186,10 +187,12 @@ function formatLeagueDate(dateStr: string) {
 }
 
 function LeagueCard({ league }: { league: LeagueListItem }) {
+  const navigate = useNavigate();
   return (
     <Card
       elevation={2}
-      sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
+      onClick={() => navigate(`/league/${league.id}`)}
+      sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)", cursor: "pointer" }}
     >
       <CardContent sx={{ py: 1.8, px: 2.5, "&:last-child": { pb: 1.8 } }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center">

@@ -50,7 +50,7 @@ export interface Participant {
   name: string;
   paid: boolean;
   arrived: boolean;
-  footPool: boolean;
+  after: boolean;
 }
 
 export interface LeagueParticipantsInfo {
@@ -140,6 +140,13 @@ export const createLeague = createAsyncThunk.withTypes<{ state: RootState }>()(
       "3-sets": "3세트 매치",
     };
 
+    // 리그 방식 매핑
+    const formatMap: Record<LeagueFormatValue, string> = {
+      "single-league": "단일리그",
+      "group-league": "조별리그",
+      "group-and-knockout": "조별+토너먼트",
+    };
+
     // ISO 8601 날짜 문자열 생성
     const startDateTime = `${s.step1BasicInfo.date}T${s.step1BasicInfo.time}:00`;
     const start_date = new Date(startDateTime).toISOString();
@@ -154,13 +161,14 @@ export const createLeague = createAsyncThunk.withTypes<{ state: RootState }>()(
       name: p.name,
       paid: p.paid,
       arrived: p.arrived,
-      footPool: p.footPool,
+      after: p.after,
     }));
 
     const requestBody = {
       name: autoName,
       description: s.step1BasicInfo.location ? `장소: ${s.step1BasicInfo.location}` : undefined,
       type: typeMap[s.step2Type.selectedType],
+      format: s.step3Format ? formatMap[s.step3Format.format] : undefined,
       sport: "탁구", // 탁구로 고정 (향후 확장 예정)
       start_date,
       rules: s.step4Rules ? rulesMap[s.step4Rules.rule] : undefined,

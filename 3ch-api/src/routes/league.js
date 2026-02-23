@@ -11,7 +11,7 @@ const participantSchema = z.object({
   name: z.string().min(1, '참가자 이름은 필수입니다.'),
   paid: z.boolean().default(false),
   arrived: z.boolean().default(false),
-  footPool: z.boolean().default(false),
+  after: z.boolean().default(false),
 });
 
 /**
@@ -25,6 +25,7 @@ const createLeagueSchema = z.object({
   name: z.string().min(1, '리그 이름은 필수입니다.'),
   description: z.string().optional(),
   type: z.string().min(1, '리그 유형은 필수입니다.'),
+  format: z.string().optional(),
   sport: z.string().min(1, '스포츠 종목은 필수입니다.'),
   start_date: z.string().datetime('시작일은 올바른 ISO 8601 형식이어야 합니다.'),
   rules: z.string().optional(),
@@ -216,7 +217,7 @@ router.get('/league', async (req, res) => {
  *                       type: boolean
  *                     arrived:
  *                       type: boolean
- *                     footPool:
+ *                     after:
  *                       type: boolean
  *     responses:
  *       201:
@@ -235,6 +236,7 @@ router.post('/league', requireAuth, async (req, res) => {
       name,
       description,
       type,
+      format,
       sport,
       start_date,
       rules,
@@ -260,17 +262,17 @@ router.post('/league', requireAuth, async (req, res) => {
     await client.query('BEGIN');
 
     const result = await client.query(
-      `INSERT INTO leagues (id, name, description, type, sport, start_date, rules, recruit_count, participant_count, group_id, created_by_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-       RETURNING id, name, description, type, sport, start_date, status, rules, recruit_count, participant_count, group_id, created_at, updated_at;`,
-      [leagueId, name, description, type, sport, start_date, rules, recruit_count, participant_count, group_id, userId],
+      `INSERT INTO leagues (id, name, description, type, format, sport, start_date, rules, recruit_count, participant_count, group_id, created_by_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+       RETURNING id, name, description, type, format, sport, start_date, status, rules, recruit_count, participant_count, group_id, created_at, updated_at;`,
+      [leagueId, name, description, type, format, sport, start_date, rules, recruit_count, participant_count, group_id, userId],
     );
 
     for (const p of participants) {
       await client.query(
-        `INSERT INTO league_participants (id, league_id, division, name, paid, arrived, foot_pool)
+        `INSERT INTO league_participants (id, league_id, division, name, paid, arrived, "after")
          VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [randomUUID(), leagueId, p.division ?? '', p.name, p.paid ?? false, p.arrived ?? false, p.footPool ?? false],
+        [randomUUID(), leagueId, p.division ?? '', p.name, p.paid ?? false, p.arrived ?? false, p.after ?? false],
       );
     }
 
@@ -345,7 +347,7 @@ router.get('/league/:id/participants', requireAuth, async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT id, league_id, division, name, paid, arrived, foot_pool, created_at
+      `SELECT id, league_id, division, name, paid, arrived, "after", created_at
        FROM league_participants
        WHERE league_id = $1
        ORDER BY created_at ASC`,
@@ -439,7 +441,7 @@ router.get('/league/:id/participants', requireAuth, async (req, res) => {
  *                         type: boolean
  *                       arrived:
  *                         type: boolean
- *                       foot_pool:
+ *                       after:
  *                         type: boolean
  *                       created_at:
  *                         type: string
@@ -455,7 +457,7 @@ router.get('/league/:id', requireAuth, async (req, res) => {
 
     // 리그 정보 조회
     const leagueResult = await pool.query(
-      `SELECT id, name, description, type, sport, start_date, rules, status,
+      `SELECT id, name, description, type, format, sport, start_date, rules, status,
               recruit_count, participant_count, group_id, created_by_id, created_at, updated_at
        FROM leagues
        WHERE id = $1`,
@@ -468,7 +470,7 @@ router.get('/league/:id', requireAuth, async (req, res) => {
 
     // 참가자 목록 조회
     const participantsResult = await pool.query(
-      `SELECT id, league_id, division, name, paid, arrived, foot_pool, created_at
+      `SELECT id, league_id, division, name, paid, arrived, "after", created_at
        FROM league_participants
        WHERE league_id = $1
        ORDER BY created_at ASC`,
@@ -672,7 +674,7 @@ router.put('/league/:leagueId/participants/:participantId', requireAuth, async (
       name: z.string().min(1, '이름은 필수입니다.').optional(),
       paid: z.boolean().optional(),
       arrived: z.boolean().optional(),
-      footPool: z.boolean().optional(),
+      after: z.boolean().optional(),
     });
 
     const updates = updateSchema.parse(req.body);
@@ -683,8 +685,7 @@ router.put('/league/:leagueId/participants/:participantId', requireAuth, async (
 
     for (const key in updates) {
       if (updates[key] !== undefined) {
-        // camelCase를 snake_case로 변환
-        const dbKey = key === 'footPool' ? 'foot_pool' : key;
+        const dbKey = key;
         fields.push(`${dbKey} = $${queryIndex}`);
         values.push(updates[key]);
         queryIndex++;
@@ -702,7 +703,7 @@ router.put('/league/:leagueId/participants/:participantId', requireAuth, async (
       UPDATE league_participants
       SET ${fields.join(', ')}
       WHERE id = $${queryIndex} AND league_id = $${queryIndex + 1}
-      RETURNING id, league_id, division, name, paid, arrived, foot_pool, created_at;
+      RETURNING id, league_id, division, name, paid, arrived, "after", created_at;
     `;
 
     const result = await pool.query(updateQuery, values);
@@ -814,7 +815,7 @@ router.delete('/league/:leagueId/participants/:participantId', requireAuth, asyn
     const delResult = await pool.query(
       `DELETE FROM league_participants
       WHERE id = $1 AND league_id = $2
-      RETURNING id, league_id, division, name, paid, arrived, foot_pool, created_at;`,
+      RETURNING id, league_id, division, name, paid, arrived, "after", created_at;`,
       [participantId, leagueId],
     );
 

@@ -13,6 +13,7 @@ import GroupCreate from "../pages/group/GroupCreate";
 import GroupManage from "../pages/group/GroupManage";
 import GroupLeagueManage from "../pages/group/GroupLeagueManage";
 import DrawMain from "../pages/draw/DrawMain";
+import LeagueDetail from "../pages/league/LeagueDetail";
 import MemberCheckPage from "../pages/mypage/userinfo/MemberCheckPage.tsx";
 import MemberEditPage from "../pages/mypage/userinfo/MemberEditPage.tsx";
 import SettingsPage from "../pages/mypage/SettingsPage.tsx";
@@ -36,6 +37,7 @@ export const router = createBrowserRouter([
       { path: "/login", element: <Login />},
       { path: "/signup", element: <SignUp />},
       { path: "/league", element: <LeagueCreationWizard /> },
+      { path: "/league/:id", element: <LeagueDetail /> },
       { path: "/mypage", element: <MyPage />},
       { path: "/auth/success", element: <AuthSuccess />},
       { path: "/auth/fail", element: <AuthFail />},

@@ -30,6 +30,7 @@ export interface League {
   name: string;
   description?: string;
   type: string;
+  format?: string;
   sport: string;
   start_date: string;
   rules?: string;
@@ -63,7 +64,7 @@ export interface LeagueParticipantItem {
   name: string;
   paid: boolean;
   arrived: boolean;
-  foot_pool: boolean;
+  after: boolean;
   created_at: string;
 }
 
@@ -121,7 +122,7 @@ export interface UpdateParticipantRequest {
   name?: string;
   paid?: boolean;
   arrived?: boolean;
-  footPool?: boolean;
+  after?: boolean;
 }
 
 export interface UpdateParticipantResponse {

@@ -223,7 +223,7 @@ export default function GroupManage() {
                     name: updated.name,
                     paid: updated.paid,
                     arrived: updated.arrived,
-                    footPool: updated.footPool,
+                    after: updated.after,
                 },
             }).unwrap();
             await refetchParticipants();
@@ -550,7 +550,7 @@ export default function GroupManage() {
                                                                 {participant.arrived && (
                                                                     <Chip label="도착" size="small" color="primary" sx={{ height: 20, fontSize: 10 }} />
                                                                 )}
-                                                                {participant.foot_pool && (
+                                                                {participant.after && (
                                                                     <Chip label="뒷풀이" size="small" color="secondary" sx={{ height: 20, fontSize: 10 }} />
                                                                 )}
                                                             </Stack>
@@ -1018,7 +1018,7 @@ export default function GroupManage() {
                         name: selectedParticipant.participant.name,
                         paid: selectedParticipant.participant.paid,
                         arrived: selectedParticipant.participant.arrived,
-                        footPool: selectedParticipant.participant.foot_pool,
+                        after: selectedParticipant.participant.after,
                     }}
                     onClose={handleCloseParticipantDetail}
                     onSave={handleSaveParticipant}

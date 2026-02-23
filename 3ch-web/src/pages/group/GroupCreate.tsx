@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
     Box,
@@ -14,7 +14,7 @@ import {
     DialogContent,
     DialogActions,
 } from "@mui/material";
-import CelebrationOutlinedIcon from "@mui/icons-material/CelebrationOutlined";
+import confetti from "canvas-confetti";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import type { SelectChangeEvent } from "@mui/material";
 import { useCreateGroupMutation, useLazyCheckGroupNameQuery } from "../../features/group/groupApi";
@@ -36,6 +36,20 @@ export default function GroupCreate() {
     const [nameCheckMsg, setNameCheckMsg] = useState("");
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [done, setDone] = useState(false);
+    const animationRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    useEffect(() => {
+        if (!done) return;
+        const fire = (originX: number, angle: number) =>
+            confetti({ particleCount: 6, angle, spread: 50, origin: { x: originX, y: 0.65 }, colors: ["#2F80ED", "#56CCF2", "#F2994A", "#27AE60", "#EB5757"], zIndex: 9999 });
+        let count = 0;
+        animationRef.current = setInterval(() => {
+            fire(0.1, 60);
+            fire(0.9, 120);
+            if (++count >= 8) { clearInterval(animationRef.current!); animationRef.current = null; }
+        }, 200);
+        return () => { if (animationRef.current) clearInterval(animationRef.current); };
+    }, [done]);
 
     const districts = regionCity ? (REGION_DATA[regionCity] ?? []) : [];
 
@@ -149,20 +163,21 @@ export default function GroupCreate() {
                         border: "2px solid #2F80ED",
                         borderRadius: 1,
                         display: "flex",
+                        flexDirection: "column",
                         alignItems: "center",
                         justifyContent: "center",
-                        color: "#2F80ED",
-                        fontWeight: 900,
+                        gap: 1,
                     }}
                 >
-                    <CelebrationOutlinedIcon sx={{ fontSize: 92, color: "#4E8DF5" }} />
+                    <Typography sx={{ fontSize: 52, lineHeight: 1 }}>🎉</Typography>
+                    <Typography sx={{ fontSize: 16, fontWeight: 900, color: "#2F80ED" }}>축하합니다!</Typography>
                 </Box>
 
                 <Button
                     fullWidth
                     variant="contained"
                     disableElevation
-                    onClick={() => navigate("/group")}
+                    onClick={() => { if (animationRef.current) { clearInterval(animationRef.current); animationRef.current = null; } navigate("/group"); }}
                     sx={{
                         mt: 3,
                         borderRadius: 1,

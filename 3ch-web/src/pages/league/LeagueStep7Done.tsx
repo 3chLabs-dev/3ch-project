@@ -1,13 +1,42 @@
+import { useEffect, useRef } from "react";
 import { Box, Typography, Button } from "@mui/material";
 import { useAppDispatch } from "../../app/hooks";
 // import { resetLeagueCreation, setStep } from "../../features/league/leagueCreationSlice";
 import { setStep } from "../../features/league/leagueCreationSlice";
-import CelebrationOutlinedIcon from "@mui/icons-material/CelebrationOutlined";
+import confetti from "canvas-confetti";
 
 export default function LeagueStep7Done() {
   const dispatch = useAppDispatch();
+  const animationRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    const fire = (originX: number, angle: number) =>
+      confetti({
+        particleCount: 6,
+        angle,
+        spread: 50,
+        origin: { x: originX, y: 0.65 },
+        colors: ["#2F80ED", "#56CCF2", "#F2994A", "#27AE60", "#EB5757"],
+        zIndex: 9999,
+      });
+
+    let count = 0;
+    animationRef.current = setInterval(() => {
+      fire(0.1, 60);
+      fire(0.9, 120);
+      if (++count >= 8) {
+        clearInterval(animationRef.current!);
+        animationRef.current = null;
+      }
+    }, 200);
+
+    return () => {
+      if (animationRef.current) clearInterval(animationRef.current);
+    };
+  }, []);
 
   const handleOk = () => {
+    if (animationRef.current) { clearInterval(animationRef.current); animationRef.current = null; }
     // TODO: 향후 리그 상세 페이지 구현 시 아래 주석 해제
     // const createdLeagueId = useAppSelector((s) => s.leagueCreation.createdLeagueId);
     // if (createdLeagueId) {
@@ -19,7 +48,6 @@ export default function LeagueStep7Done() {
     dispatch(setStep(0));
     // 표 출력을 위한 임시변경
     // dispatch(setStep(8));
-
   };
 
   return (
@@ -40,13 +68,16 @@ export default function LeagueStep7Done() {
           border: "2px solid #2F80ED",
           borderRadius: 1,
           display: "flex",
+          flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          color: "#2F80ED",
-          fontWeight: 900,
+          gap: 1,
         }}
       >
-        <CelebrationOutlinedIcon sx={{ fontSize: 92, color: "#4E8DF5" }} />
+        <Typography sx={{ fontSize: 52, lineHeight: 1 }}>🎉</Typography>
+        <Typography sx={{ fontSize: 16, fontWeight: 900, color: "#2F80ED" }}>
+          축하합니다!
+        </Typography>
       </Box>
 
       <Button

@@ -21,7 +21,7 @@ type Props = {
   participant: Participant;
   onClose: () => void;
   onSave: (updated: Participant) => void;
-  onDelete: () => void;
+  onDelete?: () => void;
 };
 
 export default function ParticipantDetailDialog({

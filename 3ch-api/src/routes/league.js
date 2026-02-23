@@ -725,4 +725,110 @@ router.put('/league/:leagueId/participants/:participantId', requireAuth, async (
   }
 });
 
+/**
+ * DELETE /league/:leagueId/participants/:participantId
+ * 리그 참가자 삭제
+ * 인증 필요. 해당 리그가 속한 클럽의 owner 또는 admin만 삭제 가능합니다.
+ */
+/**
+ * @openapi
+ * /league/{leagueId}/participants/{participantId}:
+ *   delete:
+ *     summary: 리그 참가자 삭제
+ *     description: 리그 참가자 1명을 삭제합니다. 클럽의 owner 또는 admin만 가능합니다.
+ *     tags: [리그]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: leagueId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: 리그 ID
+ *       - in: path
+ *         name: participantId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: 참가자 ID
+ *     responses:
+ *       200:
+ *         description: 참가자 삭제 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *       403:
+ *         description: 권한 없음
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *       404:
+ *         description: 참가자를 찾을 수 없음
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *       500:
+ *         description: 서버 오류
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ */
+router.delete('/league/:leagueId/participants/:participantId', requireAuth, async (req, res) => {
+  try {
+    const { leagueId, participantId } = req.params;
+    const userId = Number(req.user.sub);
+
+    // 권한 확인:
+    const accessCheck = await pool.query(
+      `SELECT 1
+      FROM leagues l
+      INNER JOIN group_members gm ON gm.group_id = l.group_id
+      WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+      [leagueId, userId],
+    );
+
+    if (accessCheck.rowCount === 0) {
+      return res.status(403).json({ message: '참가자를 삭제할 권한이 없습니다.' });
+    }
+
+    // 참가자 삭제 (리그 아이디도 추가 체크)
+    const delResult = await pool.query(
+      `DELETE FROM league_participants
+      WHERE id = $1 AND league_id = $2
+      RETURNING id, league_id, division, name, paid, arrived, foot_pool, created_at;`,
+      [participantId, leagueId],
+    );
+
+    if (delResult.rows.length === 0) {
+      return res.status(404).json({ message: '참가자를 찾을 수 없습니다.' });
+    }
+
+    return res.status(200).json({
+      message: '참가자가 삭제되었습니다.',
+    });
+  } catch (error) {
+    console.error('Error deleting participant:', error);
+    return res.status(500).json({ message: '참가자 삭제 중 서버 오류' });
+  }
+});
+
 module.exports = router;

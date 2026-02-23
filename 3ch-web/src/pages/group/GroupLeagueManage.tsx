@@ -16,7 +16,7 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import { useAppSelector } from "../../app/hooks";
-import { useGetLeaguesQuery, useGetLeagueParticipantsQuery, useUpdateParticipantMutation } from "../../features/league/leagueApi";
+import { useGetLeaguesQuery, useGetLeagueParticipantsQuery, useUpdateParticipantMutation, useDeleteParticipantMutation } from "../../features/league/leagueApi";
 import type { LeagueParticipantItem } from "../../features/league/leagueApi";
 import ParticipantDetailDialog from "../league/ParticipantDetailDialog";
 import type { Participant } from "../../features/league/leagueCreationSlice";
@@ -54,6 +54,7 @@ export default function GroupLeagueManage() {
   const participants = participantData?.participants ?? [];
 
   const [updateParticipant] = useUpdateParticipantMutation();
+  const [deleteParticipant] = useDeleteParticipantMutation();
 
   const handleToggleLeague = (leagueId: string) => {
     setExpandedLeagueId((prev) => (prev === leagueId ? null : leagueId));
@@ -89,6 +90,22 @@ export default function GroupLeagueManage() {
       console.error("Failed to update participant:", error);
     }
   };
+
+  const handleDeleteParticipant = async () => {
+  if (!selectedParticipant) return;
+
+  try {
+    await deleteParticipant({
+      leagueId: selectedParticipant.leagueId,
+      participantId: selectedParticipant.participant.id,
+    }).unwrap();
+
+    await refetchParticipants();
+    handleCloseParticipantDetail();
+  } catch (error) {
+    console.error("Failed to delete participant:", error);
+  }
+};
 
   const formatLeagueDate = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -222,6 +239,7 @@ export default function GroupLeagueManage() {
           }}
           onClose={handleCloseParticipantDetail}
           onSave={handleSaveParticipant}
+          onDelete={handleDeleteParticipant}
         />
       )}
     </Stack>

@@ -1,5 +1,5 @@
 ﻿import React, { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link as RouterLink, useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { setStep, setGroupId, setPreferredGroupId } from "../../features/league/leagueCreationSlice";
 import { useGetMyGroupsQuery } from "../../features/group/groupApi";
@@ -62,6 +62,22 @@ export default function LeagueMainBody() {
 
   return (
     <Stack spacing={2.0}>
+      {!isLoggedIn && 
+       <SoftCard>
+          <Stack alignItems="center" spacing={1.2}>
+              <Typography fontWeight={800}>로그인을 해주세요.</Typography>
+              <Button
+                  component={RouterLink}
+                  to="/login"
+                  variant="contained"
+                  size="medium"
+                  sx={{ px: 3, borderRadius: 1 }}
+              >
+                  로그인
+              </Button>
+          </Stack>
+        </SoftCard>
+      }
       {/* 타이틀 + 클럽 선택 */}
       <Stack direction="row" alignItems="center" justifyContent="space-between">
         <Typography variant="h6" fontWeight={900}>

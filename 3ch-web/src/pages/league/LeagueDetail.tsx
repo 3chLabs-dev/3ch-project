@@ -31,6 +31,7 @@ import {
   useUpdateParticipantMutation,
   useUpdateLeagueMutation,
   useAddParticipantsMutation,
+  useDeleteLeagueMutation,
 } from "../../features/league/leagueApi";
 import { toUTCDate, formatLeagueDate, formatLeagueTime } from "../../utils/dateUtils";
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
@@ -93,6 +94,7 @@ export default function LeagueDetail() {
   const [alertMsg, setAlertMsg] = useState("");
   const [alertSeverity, setAlertSeverity] = useState<"success" | "warning" | "error">("warning");
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
 
   const { data: leagueData, isLoading: leagueLoading } = useGetLeagueQuery(id ?? "", {
     skip: !id,
@@ -105,6 +107,7 @@ export default function LeagueDetail() {
   const [updateParticipant] = useUpdateParticipantMutation();
   const [updateLeague, { isLoading: saving }] = useUpdateLeagueMutation();
   const [addParticipants] = useAddParticipantsMutation();
+  const [deleteLeague] = useDeleteLeagueMutation();
 
   const { data: groupData, isLoading: groupLoading } = useGetGroupDetailQuery(leagueData?.league?.group_id ?? "", {
     skip: !leagueData?.league?.group_id,
@@ -679,6 +682,41 @@ export default function LeagueDetail() {
         </DialogActions>
       </Dialog>
 
+      {/* 리그 삭제 확인 다이얼로그 */}
+      <Dialog open={deleteConfirm} onClose={() => setDeleteConfirm(false)}>
+        <DialogTitle sx={{ fontWeight: 900, fontSize: 17 }}>리그 삭제</DialogTitle>
+        <DialogContent>
+          <Typography fontWeight={700}>
+            <b>{league?.name}</b> 리그를 삭제하시겠습니까?
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            삭제된 리그는 복구할 수 없습니다.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
+          <Button onClick={() => setDeleteConfirm(false)} sx={{ fontWeight: 700 }}>취소</Button>
+          <Button
+            variant="contained"
+            color="error"
+            disableElevation
+            sx={{ fontWeight: 700 }}
+            onClick={async () => {
+              if (!id) return;
+              setDeleteConfirm(false);
+              try {
+                await deleteLeague({ leagueId: id }).unwrap();
+                navigate(-1);
+              } catch {
+                setAlertSeverity("error");
+                setAlertMsg("리그 삭제에 실패했습니다.");
+              }
+            }}
+          >
+            삭제
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Snackbar
         open={!!alertMsg}
         autoHideDuration={3000}
@@ -728,6 +766,19 @@ export default function LeagueDetail() {
           </Box>
         )}
       </Box>
+
+      {/* 수정 모드 리그 삭제 버튼 */}
+      {isEditing && (
+        <Box sx={{ mb: 1 }}>
+          <Button
+            size="small"
+            sx={{ color: "error.main", p: 0, fontWeight: 700, minWidth: 0, fontSize: 13 }}
+            onClick={() => setDeleteConfirm(true)}
+          >
+            리그 삭제
+          </Button>
+        </Box>
+      )}
 
       {/* 수정 모드 플로팅 저장 버튼 */}
       {isEditing && (

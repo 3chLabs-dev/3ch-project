@@ -369,6 +369,48 @@ router.get('/league/:id/participants', requireAuth, async (req, res) => {
  * POST /league/:leagueId/participants
  * 참가자 추가 (관리자용 수기입력 / 클럽 회원 불러오기)
  */
+/**
+ * @openapi
+ * /league/{leagueId}/participants:
+ *   post:
+ *     summary: 참가자 추가
+ *     tags: [리그]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: leagueId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: 리그 ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [participants]
+ *             properties:
+ *               participants:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   required: [name]
+ *                   properties:
+ *                     division:
+ *                       type: string
+ *                     name:
+ *                       type: string
+ *     responses:
+ *       201:
+ *         description: 참가자 추가 성공
+ *       403:
+ *         description: 권한 없음
+ *       500:
+ *         description: 서버 오류
+ */
 router.post('/league/:leagueId/participants', requireAuth, async (req, res) => {
   try {
     const { leagueId } = req.params;
@@ -891,6 +933,65 @@ router.delete('/league/:leagueId/participants/:participantId', requireAuth, asyn
   } catch (error) {
     console.error('Error deleting participant:', error);
     return res.status(500).json({ message: '참가자 삭제 중 서버 오류' });
+  }
+});
+
+/**
+ * @openapi
+ * /league/{leagueId}:
+ *   delete:
+ *     summary: 리그 삭제
+ *     tags: [리그]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: leagueId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: 리그 ID
+ *     responses:
+ *       200:
+ *         description: 리그 삭제 성공
+ *       403:
+ *         description: 권한 없음
+ *       404:
+ *         description: 리그 없음
+ *       500:
+ *         description: 서버 오류
+ */
+router.delete('/league/:leagueId', requireAuth, async (req, res) => {
+  try {
+    const { leagueId } = req.params;
+    const userId = Number(req.user.sub);
+
+    const accessCheck = await pool.query(
+      `SELECT 1
+       FROM leagues l
+       INNER JOIN group_members gm ON gm.group_id = l.group_id
+       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+      [leagueId, userId],
+    );
+
+    if (accessCheck.rowCount === 0) {
+      return res.status(403).json({ message: '리그를 삭제할 권한이 없습니다.' });
+    }
+
+    const result = await pool.query(
+      `DELETE FROM leagues WHERE id = $1 RETURNING id`,
+      [leagueId],
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: '리그를 찾을 수 없습니다.' });
+    }
+
+    return res.status(200).json({ message: '리그가 삭제되었습니다.' });
+  } catch (error) {
+    console.error('Error deleting league:', error);
+    return res.status(500).json({ message: '리그 삭제 중 서버 오류' });
   }
 });
 

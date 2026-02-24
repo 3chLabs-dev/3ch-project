@@ -284,6 +284,14 @@ export const leagueApi = baseApi.injectEndpoints({
         { type: "League", id: "LIST" },
       ],
     }),
+
+    deleteLeague: builder.mutation<{ message: string }, { leagueId: string }>({
+      query: ({ leagueId }) => ({
+        url: `/league/${leagueId}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: [{ type: "League", id: "LIST" }],
+    }),
   }),
 });
 
@@ -299,4 +307,5 @@ export const {
   useUpdateParticipantMutation,
   useDeleteParticipantMutation,
   useAddParticipantsMutation,
+  useDeleteLeagueMutation,
 } = leagueApi;

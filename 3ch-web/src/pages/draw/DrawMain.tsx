@@ -1,4 +1,5 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Box,
   Button,
@@ -19,10 +20,12 @@ import type { SelectChangeEvent } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import TuneIcon from "@mui/icons-material/Tune";
 import CachedIcon from "@mui/icons-material/Cached";
+import HistoryIcon from "@mui/icons-material/History";
 import confetti from "canvas-confetti";
 import DragHandleIcon from "@mui/icons-material/DragHandle";
 import { useGetMyGroupsQuery } from "../../features/group/groupApi";
 import { useGetLeagueParticipantsQuery, useGetLeaguesQuery } from "../../features/league/leagueApi";
+import { useGetDrawsQuery } from "../../features/draw/drawApi";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { setPreferredGroupId } from "../../features/league/leagueCreationSlice";
 import { generateId } from "../../utils/dateUtils";
@@ -44,6 +47,7 @@ type DrawSourceItem = {
 
 export default function DrawMain() {
   const dispatch = useAppDispatch();
+  const navigate = useNavigate();
   const token = useAppSelector((s) => s.auth.token);
   const user = useAppSelector((s) => s.auth.user);
   const preferredGroupId = useAppSelector((s) => s.leagueCreation.preferredGroupId);
@@ -56,7 +60,7 @@ export default function DrawMain() {
   const myGroups = useMemo(() => data?.groups ?? [], [data]);
 
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
-  const [selectedSourceLeagueId, setSelectedSourceLeagueId] = useState<string | null>(null);
+  const selectedSourceLeagueId = null;
   const [phase, setPhase] = useState<DrawPhase>("list");
   const animationRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -72,8 +76,8 @@ export default function DrawMain() {
     }, 200);
     return () => { if (animationRef.current) clearInterval(animationRef.current); };
   }, [phase]);
-  const [drawType, setDrawType] = useState<DrawType>("league");
-  const [drawName, setDrawName] = useState("");
+  const drawType: DrawType = "league";
+  const drawName = "";
   const [prizeName, setPrizeName] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [results, setResults] = useState<DrawResult[]>([]);
@@ -134,19 +138,6 @@ export default function DrawMain() {
       weight: memberCounts[p.name] ?? 1,
     }));
   }, [participantData]);
-
-  const startCreate = (type: DrawType, sourceName: string, sourceLeagueId: string) => {
-    setDrawType(type);
-    setSelectedSourceLeagueId(sourceLeagueId);
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, "0");
-    const d = String(now.getDate()).padStart(2, "0");
-    setDrawName(`${y}-${m}-${d} ${sourceName} 추첨`);
-    setPrizeName("");
-    setQuantity(1);
-    setPhase("create");
-  };
 
   const runDraw = () => {
     if (!effectiveSelectedGroupId) return;
@@ -419,10 +410,11 @@ export default function DrawMain() {
       ) : leagueSources.length > 0 ? (
         <Stack spacing={1}>
           {leagueSources.map((item) => (
-            <ResultCard
+            <LeagueResultCard
               key={item.id}
-              name={item.name}
-              onClick={canCreate ? () => startCreate("league", item.name, item.id) : undefined}
+              item={item}
+              canCreate={canCreate}
+              navigate={navigate}
             />
           ))}
         </Stack>
@@ -482,19 +474,49 @@ function EmptyCard({ text }: { text: string }) {
   );
 }
 
-function ResultCard({ name, onClick }: { name: string; onClick?: () => void }) {
+function LeagueResultCard({ item, canCreate, navigate }: {
+  item: { id: string; name: string };
+  canCreate: boolean;
+  navigate: (path: string) => void;
+}) {
+  const { data } = useGetDrawsQuery(item.id, { refetchOnMountOrArgChange: true });
+  const hasDraws = (data?.draws?.length ?? 0) > 0;
+  return (
+    <ResultCard
+      name={item.name}
+      onClick={canCreate ? () => navigate(`/draw/${item.id}?create=1`) : undefined}
+      onHistory={hasDraws ? () => navigate(`/draw/${item.id}`) : undefined}
+    />
+  );
+}
+
+function ResultCard({ name, onClick, onHistory }: { name: string; onClick?: () => void; onHistory?: () => void }) {
   return (
     <Card
       elevation={2}
-      onClick={onClick}
-      sx={{
-        borderRadius: 1,
-        boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
-        cursor: onClick ? "pointer" : "default",
-      }}
+      sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
     >
-      <CardContent sx={{ py: 1.6, "&:last-child": { pb: 1.6 } }}>
-        <Typography fontWeight={800}>{name}</Typography>
+      <CardContent sx={{ py: 1.2, px: 2, "&:last-child": { pb: 1.2 } }}>
+        <Stack direction="row" alignItems="center" justifyContent="space-between">
+          <Typography fontWeight={800} sx={{ flex: 1, minWidth: 0 }} noWrap>{name}</Typography>
+          <Stack direction="row" alignItems="center" spacing={0.5}>
+            {onHistory && (
+              <IconButton size="small" onClick={onHistory} sx={{ color: "#6B7280" }} title="추첨 목록">
+                <HistoryIcon fontSize="small" />
+              </IconButton>
+            )}
+            {onClick && (
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={onClick}
+                sx={{ fontWeight: 700, borderRadius: 1, whiteSpace: "nowrap" }}
+              >
+                추첨하기
+              </Button>
+            )}
+          </Stack>
+        </Stack>
       </CardContent>
     </Card>
   );

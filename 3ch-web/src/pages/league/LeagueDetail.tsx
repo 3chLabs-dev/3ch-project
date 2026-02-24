@@ -24,6 +24,7 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import IosShareIcon from "@mui/icons-material/IosShare";
 import SearchIcon from "@mui/icons-material/Search";
+import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 import {
   useGetLeagueQuery,
   useGetLeagueParticipantsQuery,
@@ -300,7 +301,13 @@ export default function LeagueDetail() {
           <Typography sx={labelSx}>날 짜</Typography>
           {isEditing ? (
             <TextField type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)}
-              size="small" variant="standard" sx={inputSx} />
+              size="small" variant="standard"
+              sx={{ ...inputSx, "& input::-webkit-calendar-picker-indicator": { display: "none" } }}
+              slotProps={{ input: { endAdornment: (
+                <InputAdornment position="end">
+                  <CalendarTodayIcon sx={{ fontSize: 14, color: "#9CA3AF" }} />
+                </InputAdornment>
+              )}}} />
           ) : (
             <Typography sx={valueSx}>{formatLeagueDate(league.start_date)}</Typography>
           )}
@@ -557,10 +564,19 @@ export default function LeagueDetail() {
           )}
         </Box>
 
+        {!isEditing && isMember && (
+          <Button
+            fullWidth variant="outlined" disableElevation
+            sx={{ mt: 1.5, borderRadius: 1, height: 40, fontWeight: 700 }}
+            onClick={() => navigate(`/draw/${id}`)}
+          >
+            추첨 관리
+          </Button>
+        )}
         {!isEditing && canManage && (
           <Button
             fullWidth variant="contained" disableElevation
-            sx={{ mt: 1.5, borderRadius: 1, height: 40, fontWeight: 700, bgcolor: "#87B8FF", "&:hover": { bgcolor: "#79AEFF" } }}
+            sx={{ mt: 1, borderRadius: 1, height: 40, fontWeight: 700, bgcolor: "#87B8FF", "&:hover": { bgcolor: "#79AEFF" } }}
             onClick={() => {/* TODO */}}
           >
             대진표 생성하기

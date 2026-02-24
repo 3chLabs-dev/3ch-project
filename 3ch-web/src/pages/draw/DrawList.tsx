@@ -170,6 +170,7 @@ export default function DrawList() {
 
   // 수정 다이얼로그 상태
   const [editDraw, setEditDraw] = useState<DrawListItem | null>(null);
+  const editDrawSnapshot = useRef<DrawListItem | null>(null); // 닫힘 애니메이션 중 데이터 유지용
   const [editName, setEditName] = useState("");
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [deleteConfirmDraw, setDeleteConfirmDraw] = useState<DrawListItem | null>(null);
@@ -298,6 +299,7 @@ export default function DrawList() {
 
   const handleOpenEdit = (e: React.MouseEvent, draw: DrawListItem) => {
     e.stopPropagation();
+    editDrawSnapshot.current = draw;
     setEditDraw(draw);
     setEditName(draw.name);
   };
@@ -642,7 +644,7 @@ export default function DrawList() {
             {/* 추첨코드 */}
             <Row label="추첨코드">
               <Typography variant="body2" fontWeight={800} sx={{ fontFamily: "monospace" }}>
-                {editDraw?.id.replace(/-/g, "").slice(0, 12).toUpperCase() ?? "-"}
+                {editDrawSnapshot.current?.id.replace(/-/g, "").slice(0, 12).toUpperCase() ?? "-"}
               </Typography>
             </Row>
 
@@ -656,14 +658,14 @@ export default function DrawList() {
             {/* 생성자 */}
             <Row label="생성자">
               <Typography variant="body2" fontWeight={700}>
-                {editDraw?.creator_name ?? <span style={{ color: "#9CA3AF" }}>정보 없음</span>}
+                {editDrawSnapshot.current?.creator_name ?? <span style={{ color: "#9CA3AF" }}>정보 없음</span>}
               </Typography>
             </Row>
 
             {/* 생성일시 */}
             <Row label="생성일시">
-              <Typography variant="body2" color={editDraw?.created_at ? "text.primary" : "text.secondary"}>
-                {editDraw ? formatDateTime(editDraw.created_at) : "정보 없음"}
+              <Typography variant="body2">
+                {editDrawSnapshot.current ? formatDateTime(editDrawSnapshot.current.created_at) : "정보 없음"}
               </Typography>
             </Row>
 

@@ -1,4 +1,4 @@
-import { useMemo,useEffect, useState, useRef } from "react";
+import { useMemo, useEffect, useState, useRef } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Checkbox from "@mui/material/Checkbox";
@@ -22,6 +22,7 @@ import { TERMS, PRIVACY, } from "../../constants/policies";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { useTheme } from "@mui/material/styles";
 import confetti from "canvas-confetti";
+import confettiImg from "../../assets/128_축포.png";
 
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
@@ -262,7 +263,7 @@ export default function SignUp() {
             setIsLoading(false);
         }
     };
-    
+
     // 약관
     const theme = useTheme();
     const fullScreen = useMediaQuery(theme.breakpoints.down("sm"));
@@ -285,39 +286,39 @@ export default function SignUp() {
 
     const closePolicyDialog = () => setOpenPolicy(false);
 
-      const animationRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const animationRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-      useEffect(() => {
+    useEffect(() => {
         if (!done) return;
         const fire = (originX: number, angle: number) =>
-          confetti({
-            particleCount: 6,
-            angle,
-            spread: 50,
-            origin: { x: originX, y: 0.65 },
-            colors: ["#2F80ED", "#56CCF2", "#F2994A", "#27AE60", "#EB5757"],
-            zIndex: 9999,
-          });
-    
+            confetti({
+                particleCount: 6,
+                angle,
+                spread: 50,
+                origin: { x: originX, y: 0.65 },
+                colors: ["#2F80ED", "#56CCF2", "#F2994A", "#27AE60", "#EB5757"],
+                zIndex: 9999,
+            });
+
         let count = 0;
         animationRef.current = setInterval(() => {
-          fire(0.1, 60);
-          fire(0.9, 120);
-          if (++count >= 8) {
-            clearInterval(animationRef.current!);
-            animationRef.current = null;
-          }
+            fire(0.1, 60);
+            fire(0.9, 120);
+            if (++count >= 8) {
+                clearInterval(animationRef.current!);
+                animationRef.current = null;
+            }
         }, 200);
-    
+
         return () => {
-          if (animationRef.current) clearInterval(animationRef.current);
+            if (animationRef.current) clearInterval(animationRef.current);
         };
-      }, [done]);
+    }, [done]);
 
     if (done) {
         return (
             <Box sx={{ px: 2.5, pt: 2 }}>
-                <Typography sx={{ fontSize: 32, fontWeight: 900, textAlign: "center", mt: 2,color: "#2F80ED" }}>
+                <Typography sx={{ fontSize: 32, fontWeight: 900, textAlign: "center", mt: 2, color: "#2F80ED" }}>
                     회원가입 완료
                 </Typography>
 
@@ -339,7 +340,16 @@ export default function SignUp() {
                         gap: 1,
                     }}
                 >
-                    <Typography sx={{ fontSize: 156, lineHeight: 1, mb: 4 }}>🎉</Typography>
+                    <Box
+                        component="img"
+                        src={confettiImg}
+                        alt="축하"
+                        sx={{
+                            width: 180,
+                            height: 180,
+                            objectFit: "contain",
+                        }}
+                    />
                     {/* <Typography sx={{ fontSize: 32, fontWeight: 900, color: "#2F80ED" }}>축하합니다!</Typography> */}
                 </Box>
 

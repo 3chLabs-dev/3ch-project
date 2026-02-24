@@ -25,12 +25,14 @@ export default function BottomTab() {
     const dispatch = useAppDispatch();
 
     const value = useMemo(() => {
+        const pathname = location.pathname;
+
         // 정확히 일치하는 경로 찾기
-        let found = tabs.findIndex((t) => t.path === location.pathname);
+        let found = tabs.findIndex((t) => t.path === pathname);
 
         // 못 찾았으면 시작 경로로 찾기 (/, 제외)
         if (found < 0) {
-            found = tabs.findIndex((t) => t.path !== "/" && location.pathname.startsWith(t.path));
+            found = tabs.findIndex((t) => t.path !== "/" && pathname.startsWith(t.path));
         }
 
         return found >= 0 ? found : 0;

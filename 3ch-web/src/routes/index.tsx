@@ -14,6 +14,8 @@ import GroupManage from "../pages/group/GroupManage";
 import GroupLeagueManage from "../pages/group/GroupLeagueManage";
 import DrawMain from "../pages/draw/DrawMain";
 import LeagueDetail from "../pages/league/LeagueDetail";
+import DrawList from "../pages/draw/DrawList";
+import DrawDetail from "../pages/draw/DrawDetail";
 import MemberCheckPage from "../pages/mypage/userinfo/MemberCheckPage.tsx";
 import MemberEditPage from "../pages/mypage/userinfo/MemberEditPage.tsx";
 import SettingsPage from "../pages/mypage/SettingsPage.tsx";
@@ -47,6 +49,8 @@ export const router = createBrowserRouter([
       { path: "/club/:id/manage", element: <GroupManage /> },
       { path: "/club/:id/manage/league", element: <GroupLeagueManage /> },
       { path: "/draw", element: <DrawMain /> },
+      { path: "/draw/:leagueId", element: <DrawList /> },
+      { path: "/draw/:leagueId/:drawId", element: <DrawDetail /> },
       { path: "/member/password-check", element: <MemberCheckPage />},
       { path: "/member/edit", element: <MemberEditPage />},
       { path: "/settings", element: <SettingsPage />},

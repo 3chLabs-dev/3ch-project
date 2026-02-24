@@ -23,6 +23,7 @@ model User {
   teams         Team[]        @relation("TeamCreator")
   created_groups Group[]      @relation("GroupCreator")
   group_memberships GroupMember[]
+  draws         Draw[]        @relation("DrawCreator")
 
   @@map("users")
 }
@@ -87,6 +88,7 @@ model League {
   teams           Team[]
   matches         Match[]
   participants    LeagueParticipant[]
+  draws           Draw[]
 
   @@map("leagues")
 }
@@ -157,5 +159,54 @@ model Match {
   away_team       Team      @relation("AwayMatches", fields: [away_team_id], references: [id])
 
   @@map("matches")
+}
+
+model Draw {
+  id             String    @id @default(dbgenerated("gen_random_uuid()::text"))
+  name           String
+  created_at     DateTime  @default(now())
+
+  league_id      String
+  league         League    @relation(fields: [league_id], references: [id], onDelete: Cascade)
+
+  created_by_id  Int
+  creator        User      @relation("DrawCreator", fields: [created_by_id], references: [id])
+
+  prizes         DrawPrize[]
+
+  @@index([league_id])
+  @@map("draws")
+}
+
+model DrawPrize {
+  id            String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  prize_name    String
+  quantity      Int      @default(1)
+  display_order Int      @default(0)
+
+  draw_id       String
+  draw          Draw     @relation(fields: [draw_id], references: [id], onDelete: Cascade)
+
+  winners       DrawWinner[]
+
+  @@index([draw_id])
+  @@map("draw_prizes")
+}
+
+model DrawWinner {
+  id                   String  @id @default(dbgenerated("gen_random_uuid()::text"))
+  participant_name     String
+  participant_division String?
+  display_order        Int     @default(0)
+
+  draw_id   String
+  draw      Draw      @relation(fields: [draw_id], references: [id], onDelete: Cascade)
+
+  prize_id  String
+  prize     DrawPrize @relation(fields: [prize_id], references: [id], onDelete: Cascade)
+
+  @@index([draw_id])
+  @@index([prize_id])
+  @@map("draw_winners")
 }
 

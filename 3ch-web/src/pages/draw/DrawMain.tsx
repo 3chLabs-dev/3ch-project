@@ -29,6 +29,7 @@ import { useGetDrawsQuery } from "../../features/draw/drawApi";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { setPreferredGroupId } from "../../features/league/leagueCreationSlice";
 import { generateId } from "../../utils/dateUtils";
+import confettiImg from "../../assets/128_축포.png";
 
 type DrawPhase = "list" | "create" | "animating" | "done";
 type DrawType = "league" | "tournament";
@@ -349,7 +350,17 @@ export default function DrawMain() {
             gap: 1,
           }}
         >
-          <Typography sx={{ fontSize: 156, lineHeight: 1, mb: 4 }}>🎉</Typography>
+          <Box
+            component="img"
+            src={confettiImg}
+            alt="축하"
+            sx={{
+              width: 180,
+              height: 180,
+              objectFit: "contain",
+            }}
+          />
+          {/* <Typography sx={{ fontSize: 156, lineHeight: 1, mb: 4 }}>🎉</Typography> */}
           {/* <Typography sx={{ fontSize: 16, fontWeight: 900, color: "#2F80ED" }}>축하합니다!</Typography> */}
         </Box>
         <Button fullWidth variant="contained" onClick={() => { if (animationRef.current) { clearInterval(animationRef.current); animationRef.current = null; } setPhase("list"); }} 

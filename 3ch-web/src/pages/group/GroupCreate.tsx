@@ -19,6 +19,7 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import type { SelectChangeEvent } from "@mui/material";
 import { useCreateGroupMutation, useLazyCheckGroupNameQuery } from "../../features/group/groupApi";
 import { REGION_DATA } from "./regionData";
+import confettiImg from "../../assets/128_축포.png";
 
 export default function GroupCreate() {
     const navigate = useNavigate();
@@ -147,7 +148,7 @@ export default function GroupCreate() {
     if (done) {
         return (
             <Box sx={{ px: 2.5, pt: 2 }}>
-                <Typography sx={{ fontSize: 32, fontWeight: 900, textAlign: "center", mt: 2,color: "#2F80ED" }}>
+                <Typography sx={{ fontSize: 32, fontWeight: 900, textAlign: "center", mt: 2, color: "#2F80ED" }}>
                     클럽 생성 완료
                 </Typography>
 
@@ -169,7 +170,16 @@ export default function GroupCreate() {
                         gap: 1,
                     }}
                 >
-                    <Typography sx={{ fontSize: 156, lineHeight: 1, mb: 4 }}>🎉</Typography>
+                    <Box
+                        component="img"
+                        src={confettiImg}
+                        alt="축하"
+                        sx={{
+                            width: 180,
+                            height: 180,
+                            objectFit: "contain",
+                        }}
+                    />
                     {/* <Typography sx={{ fontSize: 32, fontWeight: 900, color: "#2F80ED" }}>축하합니다!</Typography> */}
                 </Box>
 

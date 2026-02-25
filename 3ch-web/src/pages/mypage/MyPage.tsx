@@ -14,11 +14,11 @@ type MenuItem = {
 };
 
 const MENU_ITEMS: MenuItem[] = [
-    { label: "공지사항", to: "/notice" },
-    { label: "고객센터", to: "/support" },
-    { label: "후원하기", to: "/donate" },
-    { label: "이용약관", to: "/terms" },
-    { label: "개인정보 처리방침", to: "/privacy" },
+    { label: "공지사항", to: "/mypage/notice" },
+    { label: "고객센터", to: "/mypage/support" },
+    { label: "후원하기", to: "/mypage/donate" },
+    { label: "이용약관", to: "/mypage/terms" },
+    { label: "개인정보 처리방침", to: "/mypage/privacy" },
 ];
 
 export default function MyPage() {
@@ -32,9 +32,9 @@ export default function MyPage() {
 
     const handleEditClick = () => {
         if (user?.auth_provider === "local") {
-            navigate("/member/password-check");
+            navigate("/mypage/member/password-check");
         } else {
-            navigate("/member/edit");
+            navigate("/mypage/member/edit");
         }
     };
 
@@ -60,7 +60,7 @@ export default function MyPage() {
 
                 <IconButton
                     aria-label="settings"
-                    onClick={() => navigate("/settings")}
+                    onClick={() => navigate("/mypage/settings")}
                     sx={{ ml: 1 }}
                 >
                     <SettingsIcon />

@@ -108,7 +108,7 @@ export default function MemberEditPage() {
 
         if (isLocal) {
             const ok = sessionStorage.getItem("member_edit_verified") === "true";
-            if (!ok) navigate("/member/password-check", { replace: true });
+            if (!ok) navigate("/mypage/member/password-check", { replace: true });
         }
 
         sessionStorage.removeItem("member_edit_verified");

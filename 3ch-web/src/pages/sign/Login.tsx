@@ -117,9 +117,9 @@ function SocialIcon({ src, alt }: SocialIconProps) {
 // 아이콘 위치 조절
 const ICON_SIZE = 26;
 const ICON_LEFT_PAD_LG = 70;
-
 const ICON_SLOT_W = ICON_LEFT_PAD_LG + ICON_SIZE;
 
+// 350이하 사이즈 조절 필요
 function SocialBtnInner({
   icon,
   label,
@@ -139,7 +139,7 @@ function SocialBtnInner({
       <Box
         sx={{
           pl: `clamp(16px, 16vw, ${ICON_LEFT_PAD_LG}px)`,
-          mr: 1.25,
+          mr: "20px",
           display: "flex",
           alignItems: "center",
           justifyContent: "flex-start",
@@ -149,12 +149,11 @@ function SocialBtnInner({
       </Box>
 
       <Box sx={{ position: "absolute",
-          inset: 0, // top:0 right:0 bottom:0 left:0
+          inset: 0,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          pointerEvents: "none", // 클릭은 Button이 받게
-          px: 2, // 최소 여백
+          pointerEvents: "none",
           whiteSpace: "nowrap",
        }}>{label}</Box>
       <Box />

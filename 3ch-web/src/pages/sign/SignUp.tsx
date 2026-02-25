@@ -513,6 +513,7 @@ export default function SignUp() {
                             helperText={nameError || " "}
                         />
 
+                        {/* 약관 364이하 부터 깨짐 */}
                         <Box
                             sx={{
                                 mt: 0.5,

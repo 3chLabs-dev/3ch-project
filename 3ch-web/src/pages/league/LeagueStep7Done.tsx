@@ -4,6 +4,7 @@ import { useAppDispatch } from "../../app/hooks";
 // import { resetLeagueCreation, setStep } from "../../features/league/leagueCreationSlice";
 import { setStep } from "../../features/league/leagueCreationSlice";
 import confetti from "canvas-confetti";
+import confettiImg from "../../assets/128_축포.png";
 
 export default function LeagueStep7Done() {
   const dispatch = useAppDispatch();
@@ -52,7 +53,7 @@ export default function LeagueStep7Done() {
 
   return (
     <Box sx={{ px: 2.5, pt: 2 }}>
-      <Typography sx={{ fontSize: 32, fontWeight: 900, textAlign: "center", mt: 2, color: "#2F80ED"  }}>
+      <Typography sx={{ fontSize: 32, fontWeight: 900, textAlign: "center", mt: 2, color: "#2F80ED" }}>
         리그 생성 완료
       </Typography>
 
@@ -74,7 +75,16 @@ export default function LeagueStep7Done() {
           gap: 1,
         }}
       >
-        <Typography sx={{ fontSize: 156, lineHeight: 1 , mb: 4}}>🎉</Typography>
+        <Box
+          component="img"
+          src={confettiImg}
+          alt="축하"
+          sx={{
+            width: 180,
+            height: 180,
+            objectFit: "contain",
+          }}
+        />
         {/* <Typography sx={{ fontSize: 32, fontWeight: 900, color: "#2F80ED" }}>
           축하합니다!
         </Typography> */}

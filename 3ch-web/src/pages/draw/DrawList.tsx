@@ -655,7 +655,7 @@ export default function DrawList() {
         <IconButton onClick={() => navigate(-1)} size="small">
           <ArrowBackIcon />
         </IconButton>
-        <Typography fontWeight={900} fontSize={20} sx={{ flex: 1 }}>추첨 관리</Typography>
+        <Typography fontWeight={900} fontSize={20} sx={{ flex: 1 }}>경품 추첨</Typography>
       </Stack>
 
       {league && (
@@ -672,7 +672,7 @@ export default function DrawList() {
           onClick={() => setPhase("create")}
           sx={{ borderRadius: 1, fontWeight: 700, alignSelf: "flex-start" }}
         >
-          경품 추첨
+          추첨 생성
         </Button>
       )}
 

@@ -573,7 +573,7 @@ export default function LeagueDetail() {
             sx={{ mt: 1.5, borderRadius: 1, height: 40, fontWeight: 700 }}
             onClick={() => navigate(`/draw/${id}`)}
           >
-            추첨 관리
+            경품 추첨
           </Button>
         )}
         {!isEditing && canManage && (

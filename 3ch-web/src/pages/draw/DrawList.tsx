@@ -39,6 +39,8 @@ import {
   useCreateDrawMutation,
   useDeleteDrawMutation,
   useUpdateDrawMutation,
+  useRunDrawMutation,
+  useGetDrawDetailQuery,
 } from "../../features/draw/drawApi";
 import type { DrawListItem } from "../../features/draw/drawApi";
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
@@ -126,13 +128,27 @@ export default function DrawList() {
   const [searchParams] = useSearchParams();
   const animationRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const [phase, setPhase] = useState<Phase>(searchParams.get("create") === "1" ? "create" : "list");
-  const [prizes, setPrizes] = useState<PrizeInput[]>([]);
+  const draftId = searchParams.get("draftId");
+  const [phase, setPhase] = useState<Phase>(searchParams.get("create") === "1" || !!draftId ? "create" : "list");
+  const [prizes, setPrizes] = useState<PrizeInput[]>(() => {
+    // draftId가 있으면 API에서 로드하므로 sessionStorage 무시
+    if (draftId || !leagueId) return [];
+    try {
+      const saved = sessionStorage.getItem(`draw_prizes_${leagueId}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return Array.isArray(parsed) ? parsed : [];
+      }
+    } catch { /* */ }
+    return [];
+  });
   const [prizeResults, setPrizeResults] = useState<PrizeResult[]>([]);
   const [pendingPrizeName, setPendingPrizeName] = useState("");
   const [pendingQuantity, setPendingQuantity] = useState(1);
   const [participantWeights, setParticipantWeights] = useState<Record<string, number>>({});
   const [alertMsg, setAlertMsg] = useState("");
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [prizesInitialized, setPrizesInitialized] = useState(false);
 
   const { data: leagueData } = useGetLeagueQuery(leagueId ?? "", { skip: !leagueId });
   const league = leagueData?.league;
@@ -167,6 +183,32 @@ export default function DrawList() {
   const [createDraw] = useCreateDrawMutation();
   const [deleteDraw] = useDeleteDrawMutation();
   const [updateDraw] = useUpdateDrawMutation();
+  const [runDraw] = useRunDrawMutation();
+
+  const { data: draftData } = useGetDrawDetailQuery(
+    { leagueId: leagueId ?? "", drawId: draftId ?? "" },
+    { skip: !draftId || !leagueId },
+  );
+
+  // draftId로 진입 시 기존 경품 사전 로드
+  useEffect(() => {
+    if (draftData && draftId && !prizesInitialized && phase === "create") {
+      setPrizes(
+        draftData.prizes.map((p) => ({
+          id: generateLocalId(),
+          prize_name: p.prize_name,
+          quantity: p.quantity,
+        })),
+      );
+      setPrizesInitialized(true);
+    }
+  }, [draftData, draftId, prizesInitialized, phase]);
+
+  // prizes 변경 시 sessionStorage 자동 저장 (draftId 없을 때만)
+  useEffect(() => {
+    if (draftId || !leagueId) return;
+    sessionStorage.setItem(`draw_prizes_${leagueId}`, JSON.stringify(prizes));
+  }, [prizes, draftId, leagueId]);
 
   // 수정 다이얼로그 상태
   const [editDraw, setEditDraw] = useState<DrawListItem | null>(null);
@@ -229,19 +271,56 @@ export default function DrawList() {
       setAlertMsg("참가자가 없습니다.");
       return;
     }
+    // 결과를 동기적으로 미리 계산해 state에 저장 후 애니메이션 시작
+    const usedNames = new Set<string>();
+    const results: PrizeResult[] = [];
+    for (const prize of prizes) {
+      const pool = participantRows.filter((p) => !usedNames.has(p.name));
+      const winners = weightedRandomPick(pool, prize.quantity);
+      winners.forEach((w) => usedNames.add(w.participant_name));
+      results.push({ ...prize, winners });
+    }
+    setPrizeResults(results);
     setPhase("animating");
     setTimeout(() => {
-      const usedNames = new Set<string>();
-      const results: PrizeResult[] = [];
-      for (const prize of prizes) {
-        const pool = participantRows.filter((p) => !usedNames.has(p.name));
-        const winners = weightedRandomPick(pool, prize.quantity);
-        winners.forEach((w) => usedNames.add(w.participant_name));
-        results.push({ ...prize, winners });
-      }
-      setPrizeResults(results);
       setPhase("done");
     }, 1600);
+  };
+
+  const handleSaveAsDraft = async () => {
+    if (!leagueId) return;
+    if (prizes.length === 0) {
+      setAlertMsg("경품을 최소 1개 추가해주세요.");
+      return;
+    }
+    setIsSavingDraft(true);
+    const now = new Date();
+    const drawName = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} 추첨`;
+    try {
+      await createDraw({
+        leagueId,
+        name: drawName,
+        prizes: prizes.map((p) => ({
+          prize_name: p.prize_name,
+          quantity: p.quantity,
+          winners: [],
+        })),
+      }).unwrap();
+      refetchDraws();
+    } catch {
+      setAlertMsg("저장에 실패했습니다.");
+      setIsSavingDraft(false);
+      return;
+    }
+    setIsSavingDraft(false);
+    if (leagueId) sessionStorage.removeItem(`draw_prizes_${leagueId}`);
+    setPrizes([]);
+    setPrizeResults([]);
+    setPendingPrizeName("");
+    setPendingQuantity(1);
+    setParticipantWeights({});
+    setPrizesInitialized(false);
+    setPhase("list");
   };
 
   const handleSaveAndReturn = async () => {
@@ -252,30 +331,52 @@ export default function DrawList() {
     const drawName = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} 추첨`;
 
     try {
-      const res = await createDraw({
-        leagueId,
-        name: drawName,
-        prizes: prizeResults.map((p) => ({
-          prize_name: p.prize_name,
-          quantity: p.quantity,
-          winners: p.winners.map((w) => ({
-            participant_name: w.participant_name,
-            participant_division: w.participant_division !== "-" ? w.participant_division : undefined,
+      if (draftId) {
+        await runDraw({
+          leagueId,
+          drawId: draftId,
+          prizes: prizeResults.map((p) => ({
+            prize_name: p.prize_name,
+            quantity: p.quantity,
+            winners: p.winners.map((w) => ({
+              participant_name: w.participant_name,
+              participant_division: w.participant_division !== "-" ? w.participant_division : undefined,
+            })),
           })),
-        })),
-      }).unwrap();
-      void res.draw_id;
+        }).unwrap();
+      } else {
+        const res = await createDraw({
+          leagueId,
+          name: drawName,
+          prizes: prizeResults.map((p) => ({
+            prize_name: p.prize_name,
+            quantity: p.quantity,
+            winners: p.winners.map((w) => ({
+              participant_name: w.participant_name,
+              participant_division: w.participant_division !== "-" ? w.participant_division : undefined,
+            })),
+          })),
+        }).unwrap();
+        void res.draw_id;
+      }
       refetchDraws();
     } catch {
       setAlertMsg("추첨 저장에 실패했습니다.");
+      return;
     }
 
+    if (leagueId) sessionStorage.removeItem(`draw_prizes_${leagueId}`);
     setPrizes([]);
     setPrizeResults([]);
     setPendingPrizeName("");
     setPendingQuantity(1);
     setParticipantWeights({});
-    setPhase("list");
+    setPrizesInitialized(false);
+    if (draftId) {
+      navigate(`/draw/${leagueId}`, { replace: true });
+    } else {
+      setPhase("list");
+    }
   };
 
   const handleDeleteDraw = async (drawId: string) => {
@@ -289,11 +390,12 @@ export default function DrawList() {
 
   const handleBackToList = () => {
     if (animationRef.current) { clearInterval(animationRef.current); animationRef.current = null; }
-    setPrizes([]);
+    // prizes는 sessionStorage에 저장된 상태이므로 지우지 않음 (복귀 시 복원)
     setPrizeResults([]);
     setPendingPrizeName("");
     setPendingQuantity(1);
     setParticipantWeights({});
+    setPrizesInitialized(false);
     setPhase("list");
   };
 
@@ -345,10 +447,10 @@ export default function DrawList() {
     return (
       <Stack spacing={2.2}>
         <Stack direction="row" alignItems="center" spacing={1}>
-          <IconButton onClick={fromCreate ? () => navigate(-1) : handleBackToList} size="small">
+          <IconButton onClick={draftId || fromCreate ? () => navigate(-1) : handleBackToList} size="small">
             <ArrowBackIcon />
           </IconButton>
-          <Typography fontWeight={900} fontSize={20}>추첨하기</Typography>
+          <Typography fontWeight={900} fontSize={20}>{draftId ? "추첨 진행하기" : "경품 추첨"}</Typography>
         </Stack>
 
         <Typography fontWeight={800} fontSize={14}>경품</Typography>
@@ -455,15 +557,29 @@ export default function DrawList() {
 
         <Divider sx={{ my: 0.5 }} />
 
-        <Button
-          fullWidth
-          variant="contained"
-          onClick={handleRunDraw}
-          disableElevation
-          sx={{ borderRadius: 1, py: 1.1, fontWeight: 700 }}
-        >
-          자동 추첨
-        </Button>
+        <Stack direction="row" spacing={1}>
+          {!draftId && (
+            <Button
+              fullWidth
+              variant="outlined"
+              onClick={handleSaveAsDraft}
+              disabled={prizes.length === 0 || isSavingDraft}
+              disableElevation
+              sx={{ borderRadius: 1, py: 1.1, fontWeight: 700 }}
+            >
+              {isSavingDraft ? "저장 중..." : "경품 저장"}
+            </Button>
+          )}
+          <Button
+            fullWidth
+            variant="contained"
+            onClick={handleRunDraw}
+            disableElevation
+            sx={{ borderRadius: 1, py: 1.1, fontWeight: 700 }}
+          >
+            자동 추첨
+          </Button>
+        </Stack>
 
         <Snackbar open={!!alertMsg} autoHideDuration={2500} onClose={() => setAlertMsg("")} anchorOrigin={{ vertical: "bottom", horizontal: "center" }}>
           <Alert severity="warning" onClose={() => setAlertMsg("")} sx={{ fontWeight: 700 }}>{alertMsg}</Alert>
@@ -506,7 +622,7 @@ export default function DrawList() {
                 <Stack spacing={0.6}>
                   {prize.winners.map((w, wi) => (
                     <Stack key={wi} direction="row" alignItems="center" spacing={1}>
-                      <Chip label={`${wi + 1}위`} size="small" sx={{ height: 22, fontWeight: 800, minWidth: 36 }} />
+                      <Chip label={`${wi + 1}`} size="small" sx={{ height: 22, fontWeight: 800, minWidth: 28 }} />
                       {w.participant_division !== "-" && (
                         <Chip label={w.participant_division} size="small" sx={{ height: 22, fontWeight: 700 }} />
                       )}
@@ -556,7 +672,7 @@ export default function DrawList() {
           onClick={() => setPhase("create")}
           sx={{ borderRadius: 1, fontWeight: 700, alignSelf: "flex-start" }}
         >
-          추첨 만들기
+          경품 추첨
         </Button>
       )}
 
@@ -593,6 +709,13 @@ export default function DrawList() {
                       <Typography variant="caption" color="text.secondary" fontWeight={700}>
                         경품 {draw.prize_count}개 · 당첨 {draw.winner_count}명
                       </Typography>
+                      {draw.prize_count > 0 && draw.winner_count === 0 && (
+                        <Chip
+                          label="추첨 대기"
+                          size="small"
+                          sx={{ height: 18, fontWeight: 700, bgcolor: "#FFF7E6", color: "#F59E0B", fontSize: 11 }}
+                        />
+                      )}
                     </Stack>
                   </Box>
                   <Stack direction="row" alignItems="center" spacing={0.5}>

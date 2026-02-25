@@ -580,7 +580,7 @@ export default function LeagueDetail() {
           <Button
             fullWidth variant="contained" disableElevation
             sx={{ mt: 1, borderRadius: 1, height: 40, fontWeight: 700, bgcolor: "#87B8FF", "&:hover": { bgcolor: "#79AEFF" } }}
-            onClick={() => {/* TODO */}}
+            onClick={() => { navigate(`/league/${id}/bracket`) }}
           >
             대진표 생성하기
           </Button>

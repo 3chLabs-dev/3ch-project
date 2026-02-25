@@ -1,5 +1,5 @@
 import React from "react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Box, InputBase } from "@mui/material";
 import { styled } from '@mui/material/styles';
 import Table from '@mui/material/Table';
@@ -9,8 +9,8 @@ import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Paper from '@mui/material/Paper';
-import { toUTCDate, formatLeagueDate, formatLeagueTime } from "../../utils/dateUtils";
-import { useNavigate, useParams } from "react-router-dom";
+import { toUTCDate } from "../../utils/dateUtils";
+import { useParams } from "react-router-dom";
 import {
   useGetLeagueQuery,
   useGetLeagueParticipantsQuery
@@ -93,17 +93,6 @@ function DiagonalScoreCell() {
       })}
     />
   );
-}
-
-function formatDate(iso: string) {
-  const d = new Date(iso);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  const wd = ["일", "월", "화", "수", "목", "금", "토"][d.getDay()];
-  const h = String(d.getHours()).padStart(2, "0");
-  const min = String(d.getMinutes()).padStart(2, "0");
-  return `${y}-${m}-${day}(${wd}) ${h}:${min}`;
 }
 
 export default function LeagueTable() {

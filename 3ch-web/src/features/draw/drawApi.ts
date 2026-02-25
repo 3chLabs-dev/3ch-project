@@ -72,6 +72,31 @@ export interface DeleteDrawResponse {
   message: string;
 }
 
+export interface RunDrawRequest {
+  leagueId: string;
+  drawId: string;
+  prizes: {
+    prize_name: string;
+    quantity: number;
+    winners: { participant_name: string; participant_division?: string }[];
+  }[];
+}
+
+export interface RunDrawResponse {
+  message: string;
+}
+
+export interface DrawPrizeWinnersRequest {
+  leagueId: string;
+  drawId: string;
+  prizeId: string;
+  winners: { participant_name: string; participant_division?: string | null }[];
+}
+
+export interface DrawPrizeWinnersResponse {
+  message: string;
+}
+
 // ─── RTK Query 엔드포인트 ────────────────────────────────
 
 export const drawApi = baseApi.injectEndpoints({
@@ -118,6 +143,30 @@ export const drawApi = baseApi.injectEndpoints({
         { type: "Draw" as const, id: drawId },
       ],
     }),
+
+    runDraw: builder.mutation<RunDrawResponse, RunDrawRequest>({
+      query: ({ leagueId, drawId, prizes }) => ({
+        url: `/draw/${leagueId}/${drawId}/run`,
+        method: "POST",
+        body: { prizes },
+      }),
+      invalidatesTags: (_result, _error, { leagueId, drawId }) => [
+        { type: "Draw" as const, id: leagueId },
+        { type: "Draw" as const, id: drawId },
+      ],
+    }),
+
+    drawPrizeWinners: builder.mutation<DrawPrizeWinnersResponse, DrawPrizeWinnersRequest>({
+      query: ({ leagueId, drawId, prizeId, winners }) => ({
+        url: `/draw/${leagueId}/${drawId}/prizes/${prizeId}/winners`,
+        method: "POST",
+        body: { winners },
+      }),
+      invalidatesTags: (_result, _error, { leagueId, drawId }) => [
+        { type: "Draw" as const, id: leagueId },
+        { type: "Draw" as const, id: drawId },
+      ],
+    }),
   }),
 });
 
@@ -127,4 +176,6 @@ export const {
   useGetDrawDetailQuery,
   useUpdateDrawMutation,
   useDeleteDrawMutation,
+  useRunDrawMutation,
+  useDrawPrizeWinnersMutation,
 } = drawApi;

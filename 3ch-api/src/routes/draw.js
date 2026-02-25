@@ -571,4 +571,270 @@ router.delete('/draw/:leagueId/:drawId', requireAuth, async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /draw/{leagueId}/{drawId}/run:
+ *   post:
+ *     summary: 추첨 진행 (당첨자 저장)
+ *     description: 대기 중인 추첨에 당첨자를 저장합니다. owner/admin 전용.
+ *     tags: [Draw]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: leagueId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: drawId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - prizes
+ *             properties:
+ *               prizes:
+ *                 type: array
+ *                 minItems: 1
+ *                 items:
+ *                   type: object
+ *                   required:
+ *                     - prize_name
+ *                     - quantity
+ *                   properties:
+ *                     prize_name:
+ *                       type: string
+ *                     quantity:
+ *                       type: integer
+ *                       minimum: 1
+ *                     winners:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         required:
+ *                           - participant_name
+ *                         properties:
+ *                           participant_name:
+ *                             type: string
+ *                           participant_division:
+ *                             type: string
+ *     responses:
+ *       200:
+ *         description: 추첨 완료
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *       400:
+ *         description: 유효성 검사 실패
+ *       403:
+ *         description: 권한 없음
+ *       404:
+ *         description: 추첨 없음
+ *       500:
+ *         description: 서버 오류
+ */
+router.post('/draw/:leagueId/:drawId/run', requireAuth, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { leagueId, drawId } = req.params;
+    const userId = Number(req.user.sub);
+
+    const accessCheck = await pool.query(
+      `SELECT gm.role FROM leagues l
+       INNER JOIN group_members gm ON gm.group_id = l.group_id
+       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+      [leagueId, userId],
+    );
+    if (accessCheck.rowCount === 0) {
+      return res.status(403).json({ message: '추첨을 진행할 권한이 없습니다.' });
+    }
+
+    const drawCheck = await pool.query(
+      `SELECT id FROM draws WHERE id = $1 AND league_id = $2`,
+      [drawId, leagueId],
+    );
+    if (drawCheck.rows.length === 0) {
+      return res.status(404).json({ message: '추첨을 찾을 수 없습니다.' });
+    }
+
+    const runSchema = z.object({
+      prizes: z.array(z.object({
+        prize_name: z.string().min(1, '경품 이름은 필수입니다.'),
+        quantity: z.number().int().min(1),
+        winners: z.array(z.object({
+          participant_name: z.string().min(1),
+          participant_division: z.string().optional(),
+        })).default([]),
+      })).min(1, '경품이 최소 1개 필요합니다.'),
+    });
+
+    const { prizes } = runSchema.parse(req.body);
+
+    await client.query('BEGIN');
+
+    await client.query(`DELETE FROM draw_winners WHERE draw_id = $1`, [drawId]);
+    await client.query(`DELETE FROM draw_prizes WHERE draw_id = $1`, [drawId]);
+
+    for (let i = 0; i < prizes.length; i++) {
+      const prize = prizes[i];
+      const prizeResult = await client.query(
+        `INSERT INTO draw_prizes (draw_id, prize_name, quantity, display_order) VALUES ($1, $2, $3, $4) RETURNING id`,
+        [drawId, prize.prize_name, prize.quantity, i],
+      );
+      const prizeId = prizeResult.rows[0].id;
+
+      for (let j = 0; j < prize.winners.length; j++) {
+        const winner = prize.winners[j];
+        await client.query(
+          `INSERT INTO draw_winners (draw_id, prize_id, participant_name, participant_division, display_order) VALUES ($1, $2, $3, $4, $5)`,
+          [drawId, prizeId, winner.participant_name, winner.participant_division ?? null, j],
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+
+    return res.status(200).json({ message: '추첨이 완료되었습니다.' });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ errors: error.errors });
+    }
+    console.error('Error running draw:', error);
+    return res.status(500).json({ message: '추첨 진행 중 서버 오류' });
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * @swagger
+ * /draw/{leagueId}/{drawId}/prizes/{prizeId}/winners:
+ *   post:
+ *     summary: 경품 개별 추첨 (당첨자 저장)
+ *     description: 특정 경품의 당첨자를 저장합니다. owner/admin 전용.
+ *     tags: [Draw]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: leagueId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: drawId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: prizeId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - winners
+ *             properties:
+ *               winners:
+ *                 type: array
+ *                 minItems: 1
+ *                 items:
+ *                   type: object
+ *                   required:
+ *                     - participant_name
+ *                   properties:
+ *                     participant_name:
+ *                       type: string
+ *                     participant_division:
+ *                       type: string
+ *                       nullable: true
+ *     responses:
+ *       200:
+ *         description: 추첨 완료
+ *       400:
+ *         description: 유효성 검사 실패
+ *       403:
+ *         description: 권한 없음
+ *       404:
+ *         description: 경품 없음
+ *       500:
+ *         description: 서버 오류
+ */
+router.post('/draw/:leagueId/:drawId/prizes/:prizeId/winners', requireAuth, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { leagueId, drawId, prizeId } = req.params;
+    const userId = Number(req.user.sub);
+
+    const accessCheck = await pool.query(
+      `SELECT gm.role FROM leagues l
+       INNER JOIN group_members gm ON gm.group_id = l.group_id
+       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+      [leagueId, userId],
+    );
+    if (accessCheck.rowCount === 0) {
+      return res.status(403).json({ message: '추첨을 진행할 권한이 없습니다.' });
+    }
+
+    const prizeCheck = await pool.query(
+      `SELECT dp.id FROM draw_prizes dp
+       INNER JOIN draws d ON d.id = dp.draw_id
+       WHERE dp.id = $1 AND dp.draw_id = $2 AND d.league_id = $3`,
+      [prizeId, drawId, leagueId],
+    );
+    if (prizeCheck.rows.length === 0) {
+      return res.status(404).json({ message: '경품을 찾을 수 없습니다.' });
+    }
+
+    const winnersSchema = z.object({
+      winners: z.array(z.object({
+        participant_name: z.string().min(1),
+        participant_division: z.string().nullish(),
+      })).min(1, '당첨자가 최소 1명 필요합니다.'),
+    });
+
+    const { winners } = winnersSchema.parse(req.body);
+
+    await client.query('BEGIN');
+    await client.query(`DELETE FROM draw_winners WHERE prize_id = $1`, [prizeId]);
+
+    for (let j = 0; j < winners.length; j++) {
+      const winner = winners[j];
+      await client.query(
+        `INSERT INTO draw_winners (draw_id, prize_id, participant_name, participant_division, display_order) VALUES ($1, $2, $3, $4, $5)`,
+        [drawId, prizeId, winner.participant_name, winner.participant_division ?? null, j],
+      );
+    }
+
+    await client.query('COMMIT');
+    return res.status(200).json({ message: '추첨이 완료되었습니다.' });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ errors: error.errors });
+    }
+    console.error('Error drawing prize winners:', error);
+    return res.status(500).json({ message: '추첨 진행 중 서버 오류' });
+  } finally {
+    client.release();
+  }
+});
+
 module.exports = router;

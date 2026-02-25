@@ -117,7 +117,7 @@ export default function MemberCheckPage() {
             );
             
             sessionStorage.setItem("member_edit_verified", "true");
-            navigate("/member/edit", { replace: true });
+            navigate("/mypage/member/edit", { replace: true });
         } catch (error) {
             console.error(error);
             setApiError("비밀번호가 올바르지 않습니다.");

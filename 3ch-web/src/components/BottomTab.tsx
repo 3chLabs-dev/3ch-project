@@ -71,6 +71,7 @@ export default function BottomTab() {
                 onChange={handleChange}
                 sx={{
                     height: TAB_H,
+                    whiteSpace: "nowrap",
                     "& .MuiBottomNavigationAction-root": { minWidth: 0, py: 0.5 },
                     "& .MuiBottomNavigationAction-label": { fontSize: 12, fontWeight: 700 },
                 }}

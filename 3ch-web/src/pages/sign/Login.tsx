@@ -116,7 +116,7 @@ function SocialIcon({ src, alt }: SocialIconProps) {
 
 // 아이콘 위치 조절
 const ICON_SIZE = 26;
-const ICON_LEFT_PAD_LG = 70;
+const ICON_LEFT_PAD_LG = 80;
 
 const ICON_SLOT_W = ICON_LEFT_PAD_LG + ICON_SIZE;
 
@@ -139,7 +139,6 @@ function SocialBtnInner({
       <Box
         sx={{
           pl: `clamp(16px, 16vw, ${ICON_LEFT_PAD_LG}px)`,
-          mr: 1.25,
           display: "flex",
           alignItems: "center",
           justifyContent: "flex-start",

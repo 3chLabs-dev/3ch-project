@@ -11,6 +11,7 @@ import TableRow from '@mui/material/TableRow';
 import Paper from '@mui/material/Paper';
 import { toUTCDate } from "../../utils/dateUtils";
 import { useParams } from "react-router-dom";
+import { formatLeagueDate } from "../../utils/dateUtils";
 import {
   useGetLeagueQuery,
   useGetLeagueParticipantsQuery
@@ -106,9 +107,7 @@ export default function LeagueTable() {
   );
   const league = leagueData?.league;
   if(!league) return;
-  const d = toUTCDate(league.start_date);
-  const weekDays = ["일", "월", "화", "수", "목", "금", "토"]
-  const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}(${weekDays[d.getUTCDay()]})`;
+  const date = formatLeagueDate(league.start_date);
   const type = league.type;
   const format = league.format;
   const rules = league.rules;

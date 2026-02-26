@@ -1,7 +1,6 @@
 import React from "react";
+import { useMemo } from "react";
 import { Box, InputBase } from "@mui/material";
-import { useSelector } from 'react-redux';
-import type { RootState } from "../../app/store";
 import { styled } from '@mui/material/styles';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
@@ -10,6 +9,12 @@ import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Paper from '@mui/material/Paper';
+import { toUTCDate } from "../../utils/dateUtils";
+import { useParams } from "react-router-dom";
+import {
+  useGetLeagueQuery,
+  useGetLeagueParticipantsQuery
+} from "../../features/league/leagueApi";
 
 const StyledTableCell = styled(TableCell)(({ }) => ({
   border: '1px solid #ccc',
@@ -91,13 +96,26 @@ function DiagonalScoreCell() {
 }
 
 export default function LeagueTable() {
-  const { step1BasicInfo, step4Rules, step5Participants } = useSelector(
-    (state: RootState) => state.leagueCreation
+  const { id } = useParams<{ id: string }>();
+  const { data: leagueData } = useGetLeagueQuery(id ?? "", {
+      skip: !id,
+    });
+  const { data: participantData } = useGetLeagueParticipantsQuery(
+      id ?? "",
+      { skip: !id, pollingInterval: 15000 },
   );
+  const league = leagueData?.league;
+  if(!league) return;
+  const d = toUTCDate(league.start_date);
+  const weekDays = ["일", "월", "화", "수", "목", "금", "토"]
+  const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}(${weekDays[d.getUTCDay()]})`;
+  const type = league.type;
+  const format = league.format;
+  const rules = league.rules;
 
-  const participants = step5Participants?.participants;
+  const rawParticipants = useMemo(() => participantData?.participants ?? [], [participantData]);
 
-  if (!participants?.length) return null;
+  if (!rawParticipants?.length) return null;
 
    /* =========================
      🔥 Canvas 설정
@@ -107,7 +125,7 @@ export default function LeagueTable() {
   const wrapperTableRef = React.useRef<HTMLDivElement>(null);
   const [scale, setScale] = React.useState(1);
 
-  const n = participants.length;
+  const n = rawParticipants.length;
   const gameOrder = (n * (n - 1)) / 2;
 
   React.useLayoutEffect(() => {
@@ -155,7 +173,7 @@ export default function LeagueTable() {
     }}>
     {/* ===== 상단 정보 ===== */}
     <Box mb={2} fontWeight={600}>
-      {step1BasicInfo?.date} / 단식 풀리그 / {step4Rules?.rule}
+      {date} / {type} {format} / {rules}
     </Box>
     {/* ===== 테이블 ===== */}
     <TableContainer component={Paper} sx={{ heigth: '1000px', width: '100%'}}>
@@ -166,7 +184,7 @@ export default function LeagueTable() {
             <NumberHeaderCell rowSpan={2}/>
             <NumberHeaderCell rowSpan={2}/>
 
-            {participants.map((_, idx) => (
+            {rawParticipants.map((_, idx) => (
               <NumberHeaderCell key={idx}>
                 {idx + 1}
               </NumberHeaderCell>
@@ -178,7 +196,7 @@ export default function LeagueTable() {
           </TableRow>
 
           <TableRow>
-            {participants.map((p) => (
+            {rawParticipants.map((p) => (
               <NameHeaderCell key={p.name}>
                 {p.division || "-"} {p.name}
               </NameHeaderCell>
@@ -188,14 +206,14 @@ export default function LeagueTable() {
 
         {/* ===== 바디 ===== */}
         <TableBody>
-          {participants.map((rowPlayer, rowIdx) => (
+          {rawParticipants.map((rowPlayer, rowIdx) => (
             <TableRow key={rowPlayer.name}>
               <NumberRowCell key={rowIdx}>
                 {rowIdx + 1}
               </NumberRowCell>
               <BodyHeaderCell>{rowPlayer.division || "-"} {rowPlayer.name}</BodyHeaderCell>
 
-              {participants.map((_, colIdx) =>
+              {rawParticipants.map((_, colIdx) =>
                 rowIdx === colIdx ? (<DiagonalScoreCell key={colIdx}/>) : (<StyledTableCell key={colIdx} data-type="target"><InputBase inputProps={{ style: { textAlign: "center", fontSize: 14, width: 32, height: 28, },}} sx={{ width: 32, height: 28, }}/>
                     </StyledTableCell>
                 )

@@ -8,6 +8,7 @@ const authRouter = require("./routes/auth");
 const leagueRouter = require("./routes/league");
 const groupRouter = require("./routes/group");
 const drawRouter = require("./routes/draw");
+const adminRouter = require("./routes/admin");
 
 const app = express();
 
@@ -40,5 +41,6 @@ app.use("/api/auth", authRouter);
 app.use("/api", leagueRouter);
 app.use("/api", groupRouter);
 app.use("/api", drawRouter);
+app.use("/api/admin", adminRouter);
 
 module.exports = app;

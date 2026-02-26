@@ -58,8 +58,11 @@ export default function LeagueStep5Participants() {
   const dispatch = useAppDispatch();
   const existing = useAppSelector((s) => s.leagueCreation.step5Participants?.participants ?? []);
 
+  const SORT_OPTIONS = ["부수", "이름", "랜덤"];
+
   const [participants, setParticipants] = useState<Participant[]>(existing);
   const [recruitCount, setRecruitCount] = useState<number | "">("");
+  const [sortOrder, setSortOrder] = useState<string>("");
   const [division, setDivision] = useState("");
   const [name, setName] = useState("");
 
@@ -117,7 +120,11 @@ export default function LeagueStep5Participants() {
   };
 
   const handleNext = () => {
-    dispatch(setStep5Participants({ participants, recruitCount: recruitCount === "" ? null : recruitCount }));
+    dispatch(setStep5Participants({
+      participants,
+      recruitCount: recruitCount === "" ? null : recruitCount,
+      sortOrder: sortOrder === "" ? null : sortOrder,
+    }));
     dispatch(setStep(6));
     dispatch(createLeague());
   };
@@ -138,37 +145,68 @@ export default function LeagueStep5Participants() {
 
   return (
     <Box sx={{ px: 2.5, pt: 2 }}>
-      <Typography sx={{ fontSize: 22, fontWeight: 900, mb: 1 }}>
-        모집 인원
-      </Typography>
+      <Stack direction="row" spacing={3} sx={{ mb: 4 }}>
+        <Box>
+          <Typography sx={{ fontSize: 22, fontWeight: 900, mb: 1 }}>
+            모집 인원
+          </Typography>
+          <FormControl sx={{ width: 140 }}>
+            <Select
+              displayEmpty
+              value={recruitCount === "" ? "" : String(recruitCount)}
+              onChange={(e: SelectChangeEvent<string>) => {
+                const v = e.target.value;
+                setRecruitCount(v === "" ? "" : Number(v));
+              }}
+              size="small"
+              sx={{
+                borderRadius: 0.6,
+                bgcolor: "#fff",
+                height: 34,
+                "& .MuiSelect-select": { fontWeight: 700, py: 0.6 },
+              }}
+            >
+              <MenuItem value="">
+                <em>-선택-</em>
+              </MenuItem>
+              {[4, 6, 8, 10, 12, 16, 20, 24, 32].map((n) => (
+                <MenuItem key={n} value={String(n)}>
+                  {n}명
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Box>
 
-      <FormControl sx={{ width: 140, mb: 4 }}>
-        <Select
-          displayEmpty
-          value={recruitCount === "" ? "" : String(recruitCount)}
-          onChange={(e: SelectChangeEvent<string>) => {
-            const v = e.target.value;
-            setRecruitCount(v === "" ? "" : Number(v));
-          }}
-          size="small"
-          sx={{
-            borderRadius: 0.6,
-            bgcolor: "#fff",
-            height: 34,
-            "& .MuiSelect-select": { fontWeight: 700, py: 0.6 },
-          }}
-        >
-          <MenuItem value="">
-            <em>-선택-</em>
-          </MenuItem>
-
-          {[4, 6, 8, 10, 12, 16, 20, 24, 32].map((n) => (
-            <MenuItem key={n} value={String(n)}>
-              {n}명
-            </MenuItem>
-          ))}
-        </Select>
-      </FormControl>
+        <Box>
+          <Typography sx={{ fontSize: 22, fontWeight: 900, mb: 1 }}>
+            대진 순서
+          </Typography>
+          <FormControl sx={{ width: 140 }}>
+            <Select
+              displayEmpty
+              value={sortOrder}
+              onChange={(e: SelectChangeEvent<string>) => setSortOrder(e.target.value)}
+              size="small"
+              sx={{
+                borderRadius: 0.6,
+                bgcolor: "#fff",
+                height: 34,
+                "& .MuiSelect-select": { fontWeight: 700, py: 0.6 },
+              }}
+            >
+              <MenuItem value="">
+                <em>-선택-</em>
+              </MenuItem>
+              {SORT_OPTIONS.map((opt) => (
+                <MenuItem key={opt} value={opt}>
+                  {opt}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Box>
+      </Stack>
 
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 0.8 }}>
         <Stack direction="row" spacing={1} alignItems="baseline">

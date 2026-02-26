@@ -29,6 +29,7 @@ const createLeagueSchema = z.object({
   sport: z.string().min(1, '스포츠 종목은 필수입니다.'),
   start_date: z.string().datetime('시작일은 올바른 ISO 8601 형식이어야 합니다.'),
   rules: z.string().optional(),
+  sort_order: z.string().optional(),
   recruit_count: z.number().int().min(0).default(0),
   participant_count: z.number().int().min(0).default(0),
   group_id: z.string().uuid('클럽 ID 형식이 올바르지 않습니다.'),
@@ -244,6 +245,7 @@ router.post('/league', requireAuth, async (req, res) => {
       sport,
       start_date,
       rules,
+      sort_order,
       recruit_count,
       participant_count,
       group_id,
@@ -266,10 +268,10 @@ router.post('/league', requireAuth, async (req, res) => {
     await client.query('BEGIN');
 
     const result = await client.query(
-      `INSERT INTO leagues (id, name, description, type, format, sport, start_date, rules, recruit_count, participant_count, group_id, created_by_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-       RETURNING id, name, description, type, format, sport, start_date, status, rules, notice, recruit_count, participant_count, group_id, created_at, updated_at;`,
-      [leagueId, name, description, type, format, sport, start_date, rules, recruit_count, participant_count, group_id, userId],
+      `INSERT INTO leagues (id, name, description, type, format, sport, start_date, rules, sort_order, recruit_count, participant_count, group_id, created_by_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+       RETURNING id, name, description, type, format, sport, start_date, status, rules, notice, sort_order, recruit_count, participant_count, group_id, created_at, updated_at;`,
+      [leagueId, name, description, type, format, sport, start_date, rules, sort_order ?? null, recruit_count, participant_count, group_id, userId],
     );
 
     for (const p of participants) {

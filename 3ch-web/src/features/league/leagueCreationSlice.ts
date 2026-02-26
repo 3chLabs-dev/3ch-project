@@ -55,6 +55,7 @@ export interface Participant {
 
 export interface LeagueParticipantsInfo {
   recruitCount: number | null;
+  sortOrder: string | null;
   participants: Participant[];
 }
 
@@ -175,6 +176,7 @@ export const createLeague = createAsyncThunk.withTypes<{ state: RootState }>()(
       recruit_count: recruitCount,
       participant_count: participantCount,
       group_id: s.groupId,
+      sort_order: s.step5Participants?.sortOrder ?? undefined,
       participants,
     };
 

@@ -1,5 +1,8 @@
 import { createBrowserRouter } from "react-router-dom";
 import AppShell from "../components/AppShell";
+import AdminGuard from "../components/AdminGuard";
+import AdminLogin from "../pages/admin/AdminLogin";
+import AdminDashboard from "../pages/admin/AdminDashboard";
 import Home from "../pages/Home";
 import Login from "../pages/sign/Login";
 import SignUp from "../pages/sign/SignUp";
@@ -69,5 +72,12 @@ export const router = createBrowserRouter([
 
     ],
   },
-//   { path: "/login", element: <Login /> },
+  // 어드민 (AppShell 밖 - 별도 레이아웃)
+  { path: "/admin/login", element: <AdminLogin /> },
+  {
+    element: <AdminGuard />,
+    children: [
+      { path: "/admin", element: <AdminDashboard /> },
+    ],
+  },
 ]);

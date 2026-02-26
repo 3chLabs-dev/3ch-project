@@ -72,7 +72,8 @@ type ParticipantRow = {
 function weightedRandomPick(pool: ParticipantRow[], count: number): DrawWinner[] {
   const result: DrawWinner[] = [];
   const remaining = pool.filter((p) => p.weight > 0);
-  for (let i = 0; i < Math.min(count, remaining.length); i++) {
+  const pickCount = Math.min(count, remaining.length);
+  for (let i = 0; i < pickCount; i++) {
     const totalWeight = remaining.reduce((sum, p) => sum + p.weight, 0);
     let rand = Math.random() * totalWeight;
     let idx = remaining.length - 1;

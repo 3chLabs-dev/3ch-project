@@ -115,6 +115,7 @@ router.get('/draw/:leagueId', requireAuth, async (req, res) => {
     const result = await pool.query(
       `SELECT d.id, d.name, d.created_at, u.name AS creator_name,
               COUNT(DISTINCT dp.id) AS prize_count,
+              COALESCE((SELECT SUM(quantity) FROM draw_prizes WHERE draw_id = d.id), 0) AS total_quantity,
               COUNT(DISTINCT dw.id) AS winner_count
        FROM draws d
        LEFT JOIN users u ON u.id = d.created_by_id

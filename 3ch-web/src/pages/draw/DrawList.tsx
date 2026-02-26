@@ -707,7 +707,7 @@ export default function DrawList() {
                       </Typography>
                       <Typography variant="caption" color="text.secondary">·</Typography>
                       <Typography variant="caption" color="text.secondary" fontWeight={700}>
-                        경품 {draw.prize_count}개 · 당첨 {draw.winner_count}명
+                        경품 {draw.prize_count}개 · 당첨 {draw.total_quantity}명
                       </Typography>
                       {draw.prize_count > 0 && draw.winner_count === 0 && (
                         <Chip

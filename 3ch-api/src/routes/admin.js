@@ -54,6 +54,44 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// GET /admin/stats - 대시보드 통계
+router.get('/stats', requireAdmin, async (req, res) => {
+  try {
+    const [totalsResult, trendResult] = await Promise.all([
+      pool.query(`
+        SELECT
+          (SELECT COUNT(*) FROM users WHERE is_admin = false)::int AS member_count,
+          0::int                                                    AS withdrawn_count,
+          (SELECT COUNT(*) FROM leagues)::int                       AS league_count,
+          (SELECT COUNT(*) FROM groups)::int                        AS group_count,
+          0::int                                                    AS match_count,
+          (SELECT COUNT(*) FROM draws)::int                         AS draw_count,
+          0::int                                                    AS payment_count
+      `),
+      pool.query(`
+        WITH dates AS (
+          SELECT generate_series(
+            CURRENT_DATE - INTERVAL '6 days',
+            CURRENT_DATE,
+            '1 day'
+          )::date AS day
+        )
+        SELECT
+          d.day::text,
+          COALESCE((SELECT COUNT(*) FROM users   WHERE is_admin = false AND DATE(created_at) = d.day), 0)::int AS member_cnt,
+          COALESCE((SELECT COUNT(*) FROM leagues WHERE DATE(created_at) = d.day), 0)::int AS league_cnt,
+          COALESCE((SELECT COUNT(*) FROM groups  WHERE DATE(created_at) = d.day), 0)::int AS group_cnt,
+          COALESCE((SELECT COUNT(*) FROM draws   WHERE DATE(created_at) = d.day), 0)::int AS draw_cnt
+        FROM dates d
+        ORDER BY d.day
+      `),
+    ]);
+    return res.json({ ok: true, stats: totalsResult.rows[0], trend: trendResult.rows });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
+});
+
 // GET /admin/me - 어드민 본인 확인
 router.get('/me', requireAdmin, async (req, res) => {
   try {

@@ -16,6 +16,7 @@ import TableChartIcon from "@mui/icons-material/TableChart";
 import LinkIcon from "@mui/icons-material/Link";
 import LinkOffIcon from "@mui/icons-material/LinkOff";
 import InsertPhotoIcon from "@mui/icons-material/InsertPhoto";
+import FileUploadIcon from "@mui/icons-material/FileUpload";
 import FormatColorTextIcon from "@mui/icons-material/FormatColorText";
 
 interface Props {
@@ -56,6 +57,8 @@ export default function PolicyEditor({ value, onChange, minHeight = 360 }: Props
         HTMLAttributes: { target: "_blank", rel: "noopener noreferrer" },
       }),
       Image.configure({
+        allowBase64: true,
+        inline: true,
         HTMLAttributes: { style: "max-width: 100%; height: auto;" },
       }),
     ],
@@ -89,6 +92,19 @@ export default function PolicyEditor({ value, onChange, minHeight = 360 }: Props
     const url = window.prompt("이미지 URL을 입력하세요");
     if (!url) return;
     editor?.chain().focus().setImage({ src: url }).run();
+  };
+
+  const imageUploadRef = useRef<HTMLInputElement>(null);
+  const handleImageFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const src = ev.target?.result as string;
+      if (src) editor?.chain().focus().setImage({ src }).run();
+    };
+    reader.readAsDataURL(file);
+    e.target.value = ""; // 같은 파일 재선택 가능하도록 초기화
   };
 
   return (
@@ -179,11 +195,26 @@ export default function PolicyEditor({ value, onChange, minHeight = 360 }: Props
           </IconButton>
         </Tooltip>
 
-        {/* 이미지 */}
-        <Tooltip title="이미지 삽입 (URL)">
+        {/* 이미지 - URL */}
+        <Tooltip title="이미지 URL로 삽입">
           <IconButton size="small" onClick={handleInsertImage} sx={activeSx(false)}>
             <InsertPhotoIcon fontSize="small" />
           </IconButton>
+        </Tooltip>
+        {/* 이미지 - 파일 업로드 */}
+        <Tooltip title="이미지 파일 업로드">
+          <Box sx={{ position: "relative", display: "inline-flex" }}>
+            <IconButton size="small" onClick={() => imageUploadRef.current?.click()} sx={activeSx(false)}>
+              <FileUploadIcon fontSize="small" />
+            </IconButton>
+            <input
+              ref={imageUploadRef}
+              type="file"
+              accept="image/*"
+              style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }}
+              onChange={handleImageFile}
+            />
+          </Box>
         </Tooltip>
 
         <Divider orientation="vertical" flexItem sx={{ mx: 0.25 }} />

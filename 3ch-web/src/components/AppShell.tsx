@@ -69,8 +69,7 @@ export default function AppShell() {
                         overflowY: "auto",
                         WebkitOverflowScrolling: "touch",
                         p: 2,
-                        // pb: `calc(${TAB_H}px + env(safe-area-inset-bottom))`,
-                        pd: `${TAB_H}px`,
+                        pb: `calc(${TAB_H}px + env(safe-area-inset-bottom))`,
                     }}
                 >
                     <Outlet />

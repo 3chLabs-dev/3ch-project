@@ -6,7 +6,7 @@ export default function SupportCenterPage() {
     const navigate = useNavigate();
 
     return (
-        <Box sx={{ px: 2, pt: 1, width: "100%", maxWidth: 420, mx: "auto" }}>
+        <Box sx={{ width: "100%", maxWidth: 420, mx: "auto", mt: "-4px" }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
                 <IconButton
                     onClick={() => navigate(-1)}
@@ -16,13 +16,13 @@ export default function SupportCenterPage() {
                     <ChevronLeftIcon sx={{ fontSize: 28 }} />
                 </IconButton>
 
-                <Typography sx={{ fontSize: 22, fontWeight: 700 }}>
+                <Typography sx={{ fontSize: 22, fontWeight: 900 }}>
                     고객센터
                 </Typography>
             </Box>
 
             <Box sx={{ mt: 3 }}>
-                <Typography sx={{ color: "text.secondary", fontSize: 14 }}>
+                <Typography sx={{ px: 2, color: "text.secondary", fontSize: 14 }}>
                     준비중
                 </Typography>
             </Box>

@@ -15,11 +15,10 @@ export default function SettingsPage() {
     return (
         <Box
             sx={{
-                px: 2,
-                pt: 1,
                 width: "100%",
                 maxWidth: 420,
                 mx: "auto",
+                mt: "-4px"
             }}
         >
             {/* 헤더 */}
@@ -35,13 +34,13 @@ export default function SettingsPage() {
                     <ChevronLeftIcon sx={{ fontSize: 28 }} />
                 </IconButton>
 
-                <Typography sx={{ fontSize: 22, fontWeight: 700 }}>
+                <Typography sx={{ fontSize: 20, fontWeight: 900 }}>
                     설정
                 </Typography>
             </Box>
 
             {/* 섹션 */}
-            <Box sx={{ mt: 4 }}>
+            <Box sx={{ mt: 2, mx: 2 }}>
                 <Typography sx={{ fontSize: 20, fontWeight: 800, mb: 2 }}>
                     표시
                 </Typography>

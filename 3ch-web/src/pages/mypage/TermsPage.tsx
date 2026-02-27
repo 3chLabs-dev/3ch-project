@@ -48,12 +48,11 @@ export default function TermsPage() {
                 width: "100%",
                 maxWidth: 420,
                 mx: "auto",
-                px: 2,
-                pt: 1,
                 height: "100%",
                 display: "flex",
                 flexDirection: "column",
                 overflow: "hidden",
+                mt: "-4px"
             }}
         >
             {/* 헤더 */}
@@ -66,7 +65,7 @@ export default function TermsPage() {
                     >
                         <ChevronLeftIcon sx={{ fontSize: 28 }} />
                     </IconButton>
-                    <Typography sx={{ fontSize: 22, fontWeight: 800 }}>이용약관</Typography>
+                    <Typography sx={{ fontSize: 20, fontWeight: 900 }}>이용약관</Typography>
                 </Box>
 
                 <Button
@@ -88,6 +87,7 @@ export default function TermsPage() {
                     overflowY: "auto",
                     WebkitOverflowScrolling: "touch",
                     pb: 2,
+                    mx: 2,
                 }}
             >
                 {versionsLoading || bodyLoading ? (

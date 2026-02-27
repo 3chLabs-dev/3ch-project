@@ -9,6 +9,11 @@ import AdminClubPage from "../pages/admin/AdminClubPage";
 import AdminLeaguePage from "../pages/admin/AdminLeaguePage";
 import AdminDrawPage from "../pages/admin/AdminDrawPage";
 import AdminTournamentPage from "../pages/admin/AdminTournamentPage";
+import AdminNoticePage from "../pages/admin/board/AdminNoticePage";
+import AdminFaqPage from "../pages/admin/board/AdminFaqPage";
+import AdminInquiryPage from "../pages/admin/board/AdminInquiryPage";
+import AdminTermsPage from "../pages/admin/board/AdminTermsPage";
+import AdminPrivacyPage from "../pages/admin/board/AdminPrivacyPage";
 import Home from "../pages/Home";
 import Login from "../pages/sign/Login";
 import SignUp from "../pages/sign/SignUp";
@@ -92,6 +97,11 @@ export const router = createBrowserRouter([
           { path: "/admin/league", element: <AdminLeaguePage /> },
           { path: "/admin/draw",       element: <AdminDrawPage /> },
           { path: "/admin/tournament", element: <AdminTournamentPage /> },
+          { path: "/admin/board/notice",  element: <AdminNoticePage /> },
+          { path: "/admin/board/faq",     element: <AdminFaqPage /> },
+          { path: "/admin/board/inquiry", element: <AdminInquiryPage /> },
+          { path: "/admin/board/terms",   element: <AdminTermsPage /> },
+          { path: "/admin/board/privacy", element: <AdminPrivacyPage /> },
         ],
       },
     ],

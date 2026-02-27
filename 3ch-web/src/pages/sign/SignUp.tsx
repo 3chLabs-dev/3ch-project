@@ -18,7 +18,7 @@ import { Dialog, DialogTitle, DialogContent, DialogActions } from "@mui/material
 import { useNavigate } from "react-router-dom";
 import AppTheme from "../shared-theme/AppTheme.tsx";
 import axios from "axios";
-import { TERMS, PRIVACY, } from "../../constants/policies";
+import { useGetCurrentPolicyVersionQuery } from "../../features/policy/policyApi";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { useTheme } from "@mui/material/styles";
 import confetti from "canvas-confetti";
@@ -272,7 +272,8 @@ export default function SignUp() {
     const [openPolicy, setOpenPolicy] = useState(false);
     const [policyKey, setPolicyKey] = useState<PolicyKey>("terms");
 
-    const policy = policyKey === "terms" ? TERMS : PRIVACY;
+    const { data: policyData } = useGetCurrentPolicyVersionQuery(policyKey, { skip: !openPolicy });
+    const policyTitle = policyKey === "terms" ? "이용약관" : "개인정보 처리방침";
 
     const openTermsDialog = () => {
         setPolicyKey("terms");
@@ -644,7 +645,7 @@ export default function SignUp() {
                 aria-labelledby="policy-dialog-title"
             >
                 <DialogTitle id="policy-dialog-title" sx={{ fontWeight: 900, textAlign: "center" }}>
-                    {policy.title}
+                    {policyTitle}
                 </DialogTitle>
 
                 <DialogContent dividers>
@@ -656,7 +657,7 @@ export default function SignUp() {
                             color: "text.primary",
                         }}
                     >
-                        {policy.body}
+                        {policyData?.body ?? ""}
                     </Box>
                 </DialogContent>
 

@@ -1,54 +1,38 @@
 import { useMemo, useRef, useState } from "react";
-import { Box, Typography, IconButton, Button } from "@mui/material";
+import { Box, Typography, IconButton, Button, CircularProgress } from "@mui/material";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import { useNavigate } from "react-router-dom";
-import { TERMS } from "../../constants/policies";
 import PoliciesVersionSheet from "../../components/PoliciesVersionSheet";
-import type { policiesMeta } from "../../components/PoliciesVersionSheet"
+import {
+    useGetPolicyVersionsQuery,
+    useGetPolicyVersionQuery,
+} from "../../features/policy/policyApi";
 
 export default function TermsPage() {
-    const navigate = useNavigate();
-    const contentRef = useRef<HTMLDivElement | null>(null);
+    const navigate    = useNavigate();
+    const contentRef  = useRef<HTMLDivElement | null>(null);
 
-    const [sheetOpen, setSheetOpen] = useState(false);
+    const [sheetOpen, setSheetOpen]   = useState(false);
+    const [selectedId, setSelectedId] = useState<number | null>(null);
 
-    // ✅ 임시 버전 목록 (TODO: DB에서 가져오기)
-    const versions: policiesMeta[] = useMemo(
-        () => [
-            { versionId: "current", label: "현행 이용약관", effectiveDate: "2026년 2월 14일 시행", isCurrent: true },
-            { versionId: "prev-2025-06-01", label: "이전 이용약관", effectiveDate: "2025년 6월 1일 시행" },
-        ],
-        []
+    const { data: versionsData, isLoading: versionsLoading } = useGetPolicyVersionsQuery("terms", { refetchOnMountOrArgChange: true });
+    const versions = useMemo(() => versionsData?.versions ?? [], [versionsData]);
+
+    // 유저가 명시적으로 선택하지 않은 경우 현행(is_current) → 첫 번째 버전 순으로 fallback
+    const effectiveId = useMemo(
+        () => selectedId ?? versions.find((v) => v.is_current)?.id ?? versions[0]?.id ?? null,
+        [selectedId, versions],
     );
 
-    const [selectedVersionId, setSelectedVersionId] = useState(
-        versions.find((v) => v.isCurrent)?.versionId ?? versions[0].versionId
+    const { data: detail, isFetching: bodyLoading } = useGetPolicyVersionQuery(
+        { type: "terms", id: effectiveId! },
+        { skip: effectiveId === null },
     );
 
-    const selectedMeta = useMemo(
-        () => versions.find((v) => v.versionId === selectedVersionId) ?? versions[0],
-        [versions, selectedVersionId]
-    );
+    const selectedMeta = versions.find((v) => v.id === effectiveId);
 
-    const [termsBody, setTermsBody] = useState<string>(TERMS.body);
-
-    // 임시: 버전별 본문 맵 (DB 붙이면 여기만 API로 교체)
-    const termsBodyByVersion = useMemo<Record<string, string>>(
-        () => ({
-            current: TERMS.body,
-            "prev-2025-06-01": `이전 이용약관(임시)\n\n아직 DB 연동 전이라 임시 본문입니다.\n\n- 제1조 ...\n- 제2조 ...`,
-        }),
-        []
-    );
-
-    const handleSelectVersion = (versionId: string) => {
-        setSelectedVersionId(versionId);
-
-        // 임시: 선택한 버전에 맞춰 본문 교체
-        setTermsBody(termsBodyByVersion[versionId] ?? TERMS.body);
-
-        // TODO(DB연동):
-
+    const handleSelectVersion = (id: number) => {
+        setSelectedId(id);
         contentRef.current?.scrollTo({ top: 0 });
     };
 
@@ -60,7 +44,6 @@ export default function TermsPage() {
                 mx: "auto",
                 px: 2,
                 pt: 1,
-
                 height: "100%",
                 display: "flex",
                 flexDirection: "column",
@@ -83,6 +66,7 @@ export default function TermsPage() {
                 <Button
                     onClick={() => setSheetOpen(true)}
                     variant="text"
+                    disabled={versionsLoading || versions.length <= 1}
                     sx={{ fontWeight: 800, px: 1, minWidth: "auto", color: "text.primary" }}
                 >
                     이전 버전 보기
@@ -100,23 +84,30 @@ export default function TermsPage() {
                     pb: 2,
                 }}
             >
-                <Typography sx={{ fontSize: 13, fontWeight: 900, mb: 0.8 }}>
-                    {selectedMeta.label}
-                </Typography>
-                <Typography sx={{ fontSize: 12, color: "text.secondary", mb: 2 }}>
-                    {selectedMeta.effectiveDate}
-                </Typography>
-
-                <Typography sx={{ fontSize: 13, lineHeight: 1.75, whiteSpace: "pre-line" }}>
-                    {termsBody}
-                </Typography>
+                {versionsLoading || bodyLoading ? (
+                    <Box sx={{ display: "flex", justifyContent: "center", pt: 6 }}>
+                        <CircularProgress size={28} />
+                    </Box>
+                ) : (
+                    <>
+                        <Typography sx={{ fontSize: 13, fontWeight: 900, mb: 0.8 }}>
+                            {selectedMeta?.label ?? ""}
+                        </Typography>
+                        <Typography sx={{ fontSize: 12, color: "text.secondary", mb: 2 }}>
+                            {selectedMeta?.effective_date ?? ""}
+                        </Typography>
+                        <Typography sx={{ fontSize: 13, lineHeight: 1.75, whiteSpace: "pre-line" }}>
+                            {detail?.body ?? ""}
+                        </Typography>
+                    </>
+                )}
             </Box>
 
             <PoliciesVersionSheet
                 open={sheetOpen}
                 onClose={() => setSheetOpen(false)}
                 versions={versions}
-                selectedVersionId={selectedVersionId}
+                selectedId={effectiveId}
                 onSelect={handleSelectVersion}
                 maxWidth={420}
             />

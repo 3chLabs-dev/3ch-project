@@ -1,19 +1,19 @@
 import { Box, Drawer, Typography, IconButton, Divider, Stack, Chip } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 
-export type policiesMeta = {
-    versionId: string;
+export type PolicyVersionMeta = {
+    id: number;
     label: string;
-    effectiveDate: string;
-    isCurrent?: boolean;
+    effective_date: string;
+    is_current: boolean;
 };
 
 type Props = {
     open: boolean;
     onClose: () => void;
-    versions: policiesMeta[];
-    selectedVersionId: string;
-    onSelect: (versionId: string) => void;
+    versions: PolicyVersionMeta[];
+    selectedId: number | null;
+    onSelect: (id: number) => void;
     maxWidth?: number;
 };
 
@@ -21,7 +21,7 @@ export default function PoliciesVersionSheet({
     open,
     onClose,
     versions,
-    selectedVersionId,
+    selectedId,
     onSelect,
     maxWidth = 420,
 }: Props) {
@@ -30,10 +30,7 @@ export default function PoliciesVersionSheet({
             anchor="bottom"
             open={open}
             onClose={onClose}
-            hideBackdrop
-            ModalProps={{
-                keepMounted: true,
-            }}
+            ModalProps={{ keepMounted: true }}
             PaperProps={{
                 sx: {
                     borderTopLeftRadius: 18,
@@ -41,7 +38,6 @@ export default function PoliciesVersionSheet({
                     px: 2,
                     pt: 1.5,
                     pb: 2,
-
                     width: "100%",
                     maxWidth,
                     mx: "auto",
@@ -61,13 +57,13 @@ export default function PoliciesVersionSheet({
 
             <Stack spacing={1.2}>
                 {versions.map((v) => {
-                    const active = v.versionId === selectedVersionId;
+                    const active = v.id === selectedId;
 
                     return (
                         <Box
-                            key={v.versionId}
+                            key={v.id}
                             onClick={() => {
-                                onSelect(v.versionId);
+                                onSelect(v.id);
                                 onClose();
                             }}
                             sx={{
@@ -88,7 +84,7 @@ export default function PoliciesVersionSheet({
                                     {v.label}
                                 </Typography>
                                 <Typography sx={{ fontSize: 12, color: "text.secondary", mt: 0.2 }}>
-                                    {v.effectiveDate}
+                                    {v.effective_date}
                                 </Typography>
                             </Box>
 

@@ -40,7 +40,7 @@ export default function AdminPolicyEditorPage({ type, title }: Props) {
   const [editId, setEditId]     = useState<number | null>(null);
   const [form, setForm]         = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving]     = useState(false);
-  const [alert, setAlert]       = useState("");
+  const [errorMsg, setErrorMsg]  = useState("");
 
   const load = async () => {
     const res  = await fetch(`${API}/admin/board/policies/${type}`, { headers });
@@ -51,20 +51,20 @@ export default function AdminPolicyEditorPage({ type, title }: Props) {
 
   if (!loaded) load();
 
-  const openAdd = () => { setEditId(null); setForm(EMPTY_FORM); setAlert(""); setDialogOpen(true); };
+  const openAdd = () => { setEditId(null); setForm(EMPTY_FORM); setErrorMsg(""); setDialogOpen(true); };
 
   const openEdit = async (id: number) => {
     const res  = await fetch(`${API}/admin/board/policies/${type}/${id}`, { headers });
     const data = await res.json();
     setEditId(id);
     setForm({ label: data.label, effective_date: data.effective_date, body: data.body, set_current: data.is_current });
-    setAlert("");
+    setErrorMsg("");
     setDialogOpen(true);
   };
 
   const handleSave = async () => {
     if (!form.label.trim() || !form.effective_date.trim() || !form.body.trim()) {
-      setAlert("모든 항목을 입력하세요."); return;
+      setErrorMsg("모든 항목을 입력하세요."); return;
     }
     setSaving(true);
     const url    = editId ? `${API}/admin/board/policies/${type}/${editId}` : `${API}/admin/board/policies/${type}`;
@@ -75,7 +75,7 @@ export default function AdminPolicyEditorPage({ type, title }: Props) {
       : form;
     const res = await fetch(url, { method, headers, body: JSON.stringify(body) });
     setSaving(false);
-    if (!res.ok) { setAlert((await res.json()).message ?? "오류"); return; }
+    if (!res.ok) { setErrorMsg((await res.json()).message ?? "오류"); return; }
     setDialogOpen(false);
     load();
   };
@@ -176,7 +176,7 @@ export default function AdminPolicyEditorPage({ type, title }: Props) {
         <Divider />
         <DialogContent sx={{ pt: 2 }}>
           <Stack spacing={2}>
-            {alert && <Typography sx={{ fontSize: 12, color: "error.main" }}>{alert}</Typography>}
+            {errorMsg && <Typography sx={{ fontSize: 12, color: "error.main" }}>{errorMsg}</Typography>}
             <Stack direction="row" spacing={2}>
               <TextField label="버전 레이블" size="small" fullWidth value={form.label}
                 placeholder="예) 현행 이용약관"

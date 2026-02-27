@@ -315,18 +315,19 @@ export default function LeagueBracket() {
   }, [setLocalOrder]);
 
   const handleSwapClick = useCallback((idx: number) => {
-    // functional update로 swapFirst 캡처 없이 처리
-    setSwapFirst((cur) => {
-      if (cur === null) return idx;
-      if (cur === idx) return null;
+    if (swapFirst === null) {
+      setSwapFirst(idx);
+    } else if (swapFirst === idx) {
+      setSwapFirst(null);
+    } else {
       setLocalOrder((prev) => {
         const arr = [...prev];
-        [arr[cur], arr[idx]] = [arr[idx], arr[cur]];
+        [arr[swapFirst], arr[idx]] = [arr[idx], arr[swapFirst]];
         return arr;
       });
-      return null;
-    });
-  }, [setLocalOrder]);
+      setSwapFirst(null);
+    }
+  }, [swapFirst, setLocalOrder]);
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;

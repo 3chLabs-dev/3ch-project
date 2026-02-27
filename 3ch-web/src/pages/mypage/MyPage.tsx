@@ -54,7 +54,7 @@ export default function MyPage() {
     return (
         <Box>
             {/* 상단 헤더: 로고(또는 타이틀) + 설정 아이콘 */}
-            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mt: "-4px" }}>
+            {/* <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mt: "-4px" }}>
                 <Typography sx={{ fontSize: 24, fontWeight: 900 }}>
                     더보기
                 </Typography>
@@ -66,11 +66,11 @@ export default function MyPage() {
                 >
                     <SettingsIcon />
                 </IconButton>
-            </Box>
+            </Box> */}
 
             {/* ✅ 로그인 상태: 이름(좌) + 회원정보수정(우) / 비로그인: 문구만 */}
             {token ? (
-                <Box sx={{ mt: 1, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, mt: "-5px" }}>
                     <Typography sx={{ fontSize: 24, fontWeight: 900, color: "primary.main" }}>
                         {displayName}
                     </Typography>

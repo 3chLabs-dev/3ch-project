@@ -108,14 +108,14 @@ const DiagonalBase = styled(TableCell)(({ theme }) => ({
 
 function DiagonalScoreCell() {
   const ref = useRef<HTMLTableCellElement>(null);
-  const [angle, setAngle] = useState(135);
+  const [angle, setAngle] = useState(45);
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
     const calc = () => {
       const { offsetWidth: w, offsetHeight: h } = el;
       if (!w || !h) return;
-      setAngle(180 - (Math.atan(h / w) * 180) / Math.PI);
+      setAngle((Math.atan(h / w) * 180) / Math.PI);
     };
     calc();
     const ro = new ResizeObserver(calc);

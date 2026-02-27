@@ -23,6 +23,7 @@ const verifyPasswordSchema = z.object({
 });
 
 const { signToken, signSignupTicket, verifyToken } = require("../utils/authUtils");
+const { generateMemberCode } = require("../utils/memberCodeUtils");
 
 /**
  * @openapi
@@ -304,12 +305,13 @@ router.post("/register", async (req, res) => {
     }
 
     const password_hash = await bcrypt.hash(password, 12);
+    const memberCode = await generateMemberCode();
 
     const result = await pool.query(
-      `insert into users (email, password_hash, name, auth_provider)
-       values ($1, $2, $3, 'local')
-       returning id, email, name, auth_provider, created_at`,
-      [email, password_hash, name],
+      `insert into users (email, password_hash, name, auth_provider, member_code)
+       values ($1, $2, $3, 'local', $4)
+       returning id, email, name, auth_provider, member_code, created_at`,
+      [email, password_hash, name, memberCode],
     );
 
     const user = result.rows[0];

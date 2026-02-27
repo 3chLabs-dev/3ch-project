@@ -4,6 +4,7 @@ const KakaoStrategy = require("passport-kakao").Strategy;
 const NaverStrategy = require("passport-naver").Strategy;
 const pool = require("../db/pool");
 const { signToken } = require("../utils/authUtils");
+const { generateMemberCode } = require("../utils/memberCodeUtils");
 
 // Google
 passport.use(
@@ -46,11 +47,12 @@ passport.use(
             });
           }
         } else {
+          const memberCode = await generateMemberCode();
           const newUser = await pool.query(
-            `insert into users (email, name, auth_provider, provider_id)
-             values ($1, $2, 'google', $3)
-             returning id, email, name, auth_provider, provider_id`,
-            [email, null, providerId],
+            `insert into users (email, name, auth_provider, provider_id, member_code)
+             values ($1, $2, 'google', $3, $4)
+             returning id, email, name, auth_provider, provider_id, member_code`,
+            [email, null, providerId, memberCode],
           );
           user = newUser.rows[0];
         }
@@ -103,11 +105,12 @@ passport.use(
             });
           }
         } else {
+          const memberCode = await generateMemberCode();
           const newUser = await pool.query(
-            `insert into users (email, name, auth_provider, provider_id)
-             values ($1, $2, 'kakao', $3)
-             returning id, email, name, auth_provider, provider_id`,
-            [email, null, providerId],
+            `insert into users (email, name, auth_provider, provider_id, member_code)
+             values ($1, $2, 'kakao', $3, $4)
+             returning id, email, name, auth_provider, provider_id, member_code`,
+            [email, null, providerId, memberCode],
           );
           user = newUser.rows[0];
         }
@@ -160,11 +163,12 @@ passport.use(
             });
           }
         } else {
+          const memberCode = await generateMemberCode();
           const newUser = await pool.query(
-            `insert into users (email, name, auth_provider, provider_id)
-             values ($1, $2, 'naver', $3)
-             returning id, email, name, auth_provider, provider_id`,
-            [email, null, providerId],
+            `insert into users (email, name, auth_provider, provider_id, member_code)
+             values ($1, $2, 'naver', $3, $4)
+             returning id, email, name, auth_provider, provider_id, member_code`,
+            [email, null, providerId, memberCode],
           );
           user = newUser.rows[0];
         }

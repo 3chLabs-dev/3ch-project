@@ -2,7 +2,13 @@ import { createBrowserRouter } from "react-router-dom";
 import AppShell from "../components/AppShell";
 import AdminGuard from "../components/AdminGuard";
 import AdminLogin from "../pages/admin/AdminLogin";
+import AdminShell from "../pages/admin/AdminShell";
 import AdminDashboard from "../pages/admin/AdminDashboard";
+import AdminMemberPage from "../pages/admin/AdminMemberPage";
+import AdminClubPage from "../pages/admin/AdminClubPage";
+import AdminLeaguePage from "../pages/admin/AdminLeaguePage";
+import AdminDrawPage from "../pages/admin/AdminDrawPage";
+import AdminTournamentPage from "../pages/admin/AdminTournamentPage";
 import Home from "../pages/Home";
 import Login from "../pages/sign/Login";
 import SignUp from "../pages/sign/SignUp";
@@ -77,7 +83,17 @@ export const router = createBrowserRouter([
   {
     element: <AdminGuard />,
     children: [
-      { path: "/admin", element: <AdminDashboard /> },
+      {
+        element: <AdminShell />,
+        children: [
+          { path: "/admin",        element: <AdminDashboard /> },
+          { path: "/admin/member", element: <AdminMemberPage /> },
+          { path: "/admin/club",   element: <AdminClubPage /> },
+          { path: "/admin/league", element: <AdminLeaguePage /> },
+          { path: "/admin/draw",       element: <AdminDrawPage /> },
+          { path: "/admin/tournament", element: <AdminTournamentPage /> },
+        ],
+      },
     ],
   },
 ]);

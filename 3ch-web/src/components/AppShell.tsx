@@ -1,25 +1,41 @@
 // AppShell.tsx
-import { Link, Outlet } from "react-router-dom";
-import { AppBar, Box, Toolbar, Paper } from "@mui/material";
+import { Link, Outlet, useLocation } from "react-router-dom";
+import { AppBar, Box, Toolbar, Paper, Select, MenuItem } from "@mui/material";
+import type { SelectChangeEvent } from "@mui/material";
 import BottomTab from "./BottomTab";
 
-import { useEffect } from "react";
-import { useDispatch } from "react-redux";
+import { useEffect, useMemo } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import type { RootState } from "../app/store";
 import { setToken, setUser } from "../features/auth/authSlice";
+import { setPreferredGroupId } from "../features/league/leagueCreationSlice";
+import { useGetMyGroupsQuery } from "../features/group/groupApi";
 import logo from "../assets/512_우리리그 로고.svg";
 
-const TAB_H = 56;
 
 export default function AppShell() {
     const dispatch = useDispatch();
+    const location = useLocation();
+    const token = useSelector((s: RootState) => s.auth.token);
+    const preferredGroupId = useSelector((s: RootState) => s.leagueCreation.preferredGroupId);
+    const currentStep = useSelector((s: RootState) => s.leagueCreation.currentStep);
 
     useEffect(() => {
-        const token = localStorage.getItem("token");
+        const stored = localStorage.getItem("token");
         const userStr = localStorage.getItem("user");
-
-        if (token) dispatch(setToken(token));
+        if (stored) dispatch(setToken(stored));
         if (userStr) dispatch(setUser(JSON.parse(userStr)));
     }, [dispatch]);
+
+    const { data: groupData } = useGetMyGroupsQuery(undefined, {
+        skip: !token,
+        refetchOnMountOrArgChange: true,
+    });
+    const groups = useMemo(() => groupData?.groups ?? [], [groupData]);
+    const effectiveGroupId = (preferredGroupId && groups.some((g) => g.id === preferredGroupId))
+        ? preferredGroupId
+        : groups[0]?.id ?? "";
+
     return (
         <Box sx={{ minHeight: "100dvh", bgcolor: "background.default" }}>
             <Paper
@@ -48,18 +64,35 @@ export default function AppShell() {
                         <Box
                             component={Link}
                             to="/"
-                            sx={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                textDecoration: 'none'
-                            }}
+                            sx={{ display: "flex", alignItems: "center", textDecoration: "none" }}
                         >
-                            <img
-                                src={logo}
-                                alt="우리리그"
-                                style={{ height: 32 }}
-                            />
+                            <img src={logo} alt="우리리그" style={{ height: 32 }} />
                         </Box>
+
+                        {/* 클럽 셀렉트 — 리그메인(step 0)에서만 표시 */}
+                        {token && groups.length > 1 && location.pathname === "/league" && currentStep === 0 && (
+                            <Select
+                                value={effectiveGroupId}
+                                onChange={(e: SelectChangeEvent<string>) => {
+                                    dispatch(setPreferredGroupId(e.target.value || null));
+                                }}
+                                size="small"
+                                sx={{
+                                    ml: "auto",
+                                    borderRadius: 1,
+                                    height: 30,
+                                    fontSize: "0.8rem",
+                                    fontWeight: 700,
+                                    bgcolor: "#EEF2FF",
+                                    "& .MuiSelect-select": { py: 0.25, px: 1.2 },
+                                    "& .MuiOutlinedInput-notchedOutline": { borderColor: "#C7D2FE" },
+                                }}
+                            >
+                                {groups.map((g) => (
+                                    <MenuItem key={g.id} value={g.id}>{g.name}</MenuItem>
+                                ))}
+                            </Select>
+                        )}
                     </Toolbar>
                 </AppBar>
 
@@ -69,8 +102,7 @@ export default function AppShell() {
                         overflowY: "auto",
                         WebkitOverflowScrolling: "touch",
                         p: 2,
-                        // pb: `calc(${TAB_H}px + env(safe-area-inset-bottom))`,
-                        pd: `${TAB_H}px`,
+                        pb: `calc(8px + env(safe-area-inset-bottom))`,
                     }}
                 >
                     <Outlet />

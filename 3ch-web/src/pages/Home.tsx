@@ -379,6 +379,7 @@ function SoftCard({ children }: { children: React.ReactNode }) {
             <CardContent sx={{
                 py: 2.5,
                 px: 2,
+                minHeight: 80,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",

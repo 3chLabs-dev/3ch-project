@@ -6,6 +6,7 @@ import {
   TextField, Typography,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
+import PolicyEditor from "../../../components/PolicyEditor";
 
 const API = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
@@ -185,34 +186,14 @@ export default function AdminPolicyEditorPage({ type, title }: Props) {
                 placeholder="예) 2026년 2월 14일 시행"
                 onChange={(e) => setForm((p) => ({ ...p, effective_date: e.target.value }))} />
             </Stack>
-            <TextField
-              label="내용"
-              size="small"
-              fullWidth
-              multiline
-              rows={20}
-              value={form.body}
-              onChange={(e) => setForm((p) => ({ ...p, body: e.target.value }))}
-              onPaste={(e) => {
-                const text = e.clipboardData.getData("text");
-                const hasEscaped = /\\r\\n|\\n|\\r/.test(text);
-                if (!hasEscaped) return;
-                e.preventDefault();
-                const normalized = text.replace(/\\r\\n/g, "\n").replace(/\\r/g, "\n").replace(/\\n/g, "\n");
-                const el = e.currentTarget.querySelector("textarea");
-                if (!el) { setForm((p) => ({ ...p, body: normalized })); return; }
-                const start = el.selectionStart ?? 0;
-                const end   = el.selectionEnd   ?? 0;
-                const next  = form.body.slice(0, start) + normalized + form.body.slice(end);
-                setForm((p) => ({ ...p, body: next }));
-                requestAnimationFrame(() => {
-                  const pos = start + normalized.length;
-                  el.setSelectionRange(pos, pos);
-                });
-              }}
-              slotProps={{ input: { style: { fontSize: 13, fontFamily: "inherit", lineHeight: 1.75 } } }}
-              helperText="줄바꿈은 그대로 반영됩니다."
-            />
+            <Box>
+              <Typography sx={{ fontSize: 12, color: "text.secondary", mb: 0.5 }}>내용</Typography>
+              <PolicyEditor
+                key={editId ?? "new"}
+                value={form.body}
+                onChange={(html) => setForm((p) => ({ ...p, body: html }))}
+              />
+            </Box>
             {!editId && (
               <Stack direction="row" alignItems="center" spacing={1}>
                 <input type="checkbox" id="set_current" checked={form.set_current}

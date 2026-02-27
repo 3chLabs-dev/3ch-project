@@ -8,6 +8,12 @@ import {
     useGetPolicyVersionQuery,
 } from "../../features/policy/policyApi";
 
+function toDisplayHTML(s: string): string {
+    if (!s) return "";
+    if (s.trimStart().startsWith("<")) return s;
+    return `<p>${s.trim().replace(/\n/g, "<br>")}</p>`;
+}
+
 export default function TermsPage() {
     const navigate    = useNavigate();
     const contentRef  = useRef<HTMLDivElement | null>(null);
@@ -96,9 +102,22 @@ export default function TermsPage() {
                         <Typography sx={{ fontSize: 12, color: "text.secondary", mb: 2 }}>
                             {selectedMeta?.effective_date ?? ""}
                         </Typography>
-                        <Typography sx={{ fontSize: 13, lineHeight: 1.75, whiteSpace: "pre-line" }}>
-                            {detail?.body ?? ""}
-                        </Typography>
+                        <Box
+                            sx={{
+                                fontSize: 13,
+                                lineHeight: 1.75,
+                                "& table": { borderCollapse: "collapse", width: "100%", my: 1 },
+                                "& td, & th": { border: "1px solid #D1D5DB", padding: "6px 10px", verticalAlign: "top" },
+                                "& th": { backgroundColor: "#F3F4F6", fontWeight: 700 },
+                                "& h1": { fontSize: 16, fontWeight: 700, mt: 1.5, mb: 0.5 },
+                                "& h2": { fontSize: 14, fontWeight: 700, mt: 1.5, mb: 0.5 },
+                                "& h3": { fontSize: 13, fontWeight: 700, mt: 1, mb: 0.5 },
+                                "& ul, & ol": { pl: 3, my: 0.5 },
+                                "& p": { margin: 0 },
+                                "& p:empty": { minHeight: "1.6em" },
+                            }}
+                            dangerouslySetInnerHTML={{ __html: toDisplayHTML(detail?.body ?? "") }}
+                        />
                     </>
                 )}
             </Box>

@@ -536,7 +536,7 @@ export default function DrawList() {
               {participantRows.map((row) => (
                 <Stack key={row.id} direction="row" alignItems="center" sx={{ px: 0.5, opacity: row.weight === 0 ? 0.35 : 1 }}>
                   <Box sx={{ width: 52 }}>
-                    <Chip label={row.division} size="small" sx={{ height: 22, fontWeight: 800 }} />
+                    <Chip label={row.division} size="small" sx={{ height: 22, fontWeight: 800, bgcolor: "#FAAA47", color: "#000000"}} />
                   </Box>
                   <Typography sx={{ flex: 1, fontWeight: 800, fontSize: 15, textDecoration: row.weight === 0 ? "line-through" : "none" }}>{row.name}</Typography>
                   <Stack direction="row" alignItems="center" spacing={0.5} sx={{ width: 72, justifyContent: "center" }}>

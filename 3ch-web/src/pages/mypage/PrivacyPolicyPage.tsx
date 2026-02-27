@@ -42,8 +42,6 @@ export default function PrivacyPolicyPage() {
                 width: "100%",
                 maxWidth: 420,
                 mx: "auto",
-                px: 2,
-                pt: 1,
                 height: "100%",
                 display: "flex",
                 flexDirection: "column",
@@ -60,7 +58,7 @@ export default function PrivacyPolicyPage() {
                     >
                         <ChevronLeftIcon sx={{ fontSize: 28 }} />
                     </IconButton>
-                    <Typography sx={{ fontSize: 22, fontWeight: 800 }}>개인정보 처리방침</Typography>
+                    <Typography sx={{ fontSize: 20, fontWeight: 900 }}>개인정보 처리방침</Typography>
                 </Box>
 
                 <Button
@@ -82,6 +80,8 @@ export default function PrivacyPolicyPage() {
                     overflowY: "auto",
                     WebkitOverflowScrolling: "touch",
                     pb: 2,
+                    mx: 2,
+                    mt: "-4px"
                 }}
             >
                 {versionsLoading || bodyLoading ? (

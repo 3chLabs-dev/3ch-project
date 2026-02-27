@@ -1,12 +1,13 @@
-import { Box, Typography, Stack, Divider, IconButton, List, ListItemButton, ListItemText, Button } from "@mui/material";
+import { Box, Typography, Stack, Divider, IconButton, List, ListItemButton, ListItemText, Button, Link, Collapse, } from "@mui/material";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import SettingsIcon from "@mui/icons-material/Settings";
 import { useNavigate } from "react-router-dom";
-
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { logout } from "../../features/auth/authSlice";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { baseApi } from "../../features/api/baseApi";
 import { resetLeagueCreation } from "../../features/league/leagueCreationSlice";
+import { useState } from "react";
 
 type MenuItem = {
     label: string;
@@ -29,7 +30,7 @@ export default function MyPage() {
     const token = useAppSelector((state) => state.auth.token);
 
     const displayName = user?.name ?? user?.email ?? "사용자";
-
+    const [bizOpen, setBizOpen] = useState(false);
     const handleEditClick = () => {
         if (user?.auth_provider === "local") {
             navigate("/mypage/member/password-check");
@@ -51,11 +52,11 @@ export default function MyPage() {
     };
 
     return (
-        <Box sx={{ px: 2, pt: 1 }}>
+        <Box>
             {/* 상단 헤더: 로고(또는 타이틀) + 설정 아이콘 */}
-            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <Typography sx={{ fontSize: 18, fontWeight: 900 }}>
-                    우리리그
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mt: "-4px" }}>
+                <Typography sx={{ fontSize: 24, fontWeight: 900 }}>
+                    더보기
                 </Typography>
 
                 <IconButton
@@ -69,7 +70,7 @@ export default function MyPage() {
 
             {/* ✅ 로그인 상태: 이름(좌) + 회원정보수정(우) / 비로그인: 문구만 */}
             {token ? (
-                <Box sx={{ mt: 2, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+                <Box sx={{ mt: 1, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
                     <Typography sx={{ fontSize: 24, fontWeight: 900, color: "primary.main" }}>
                         {displayName}
                     </Typography>
@@ -164,12 +165,56 @@ export default function MyPage() {
                 </Box>
             )}
 
-            <Stack sx={{ mt: 3 }} spacing={0.4}>
-                <Typography sx={{ fontSize: 12, color: "text.disabled" }}>
-                    3ch 사업자 정보
+                <Box sx={{ pt: 1 }}>
+                <Box
+                    onClick={() => setBizOpen((v) => !v)}
+                    sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        cursor: "pointer",
+                        userSelect: "none",
+                        py: 1,
+                    }}
+                >
+                    <Typography variant="body2" fontWeight={800}>
+                        3ch 사업자 정보
+                    </Typography>
+                    <IconButton size="small" sx={{ transform: bizOpen ? "rotate(180deg)" : "rotate(0deg)" }}>
+                        <ExpandMoreIcon fontSize="small" />
+                    </IconButton>
+                </Box>
+
+                <Collapse in={bizOpen} timeout={180}>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", pb: 1 }}>
+                        대표: 조하진 · 사업자등록번호: 000-00-00000
+                        <br />
+                        주소: 서울특별시 임시주소
+                        <br />
+                        고객센터: 0000-0000 · 이메일: 3chlabs@gmail.com
+                    </Typography>
+                </Collapse>
+
+                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                    <Link href="#" underline="hover" variant="body2" fontWeight={700}>
+                        이용약관
+                    </Link>
+                    <Typography variant="body2" color="text.secondary">
+                        |
+                    </Typography>
+                    <Link href="#" underline="hover" variant="body2" fontWeight={700}>
+                        개인정보 처리방침
+                    </Link>
+                </Stack>
+
+                <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ mt: 1.2, display: "block" }}
+                >
+                    Copyright 3ch. All rights reserved.
                 </Typography>
-                {/* <Typography sx={{ fontSize: 12, color: "text.disabled" }}>대표: ...</Typography> */}
-            </Stack>
+            </Box>
         </Box>
     );
 }

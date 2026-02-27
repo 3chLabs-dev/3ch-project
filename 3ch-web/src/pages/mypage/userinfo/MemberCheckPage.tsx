@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { Box, Button, CssBaseline, IconButton, InputAdornment, TextField, Typography, } from "@mui/material";
-import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew";
 import Visibility from "@mui/icons-material/Visibility";
 import VisibilityOff from "@mui/icons-material/VisibilityOff";
 import { useNavigate } from "react-router-dom";
@@ -8,6 +7,7 @@ import axios from "axios";
 import AppTheme from "../../shared-theme/AppTheme";
 import { styled } from "@mui/material/styles";
 import Stack from "@mui/material/Stack";
+import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 
@@ -128,40 +128,32 @@ export default function MemberCheckPage() {
     
 
     return (
-        <AppTheme>
-            <CssBaseline enableColorScheme />
-
-            <SignInContainer direction="column" justifyContent="flex-start">
                 <Box
-                    sx={{
-                        width: "100%",
-                        maxWidth: 420,
-                        mx: "auto",
-                        minHeight: "100dvh",
-                        backgroundColor: "transparent",
-                    }}
                 >
                     {/* 헤더 */}
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                        <IconButton onClick={() => navigate(-1)} sx={{ p: 0.5 }}>
-                            <ArrowBackIosNewIcon />
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: "-4px" }}>
+                        <IconButton onClick={() => navigate(-1)} sx={{ p: 0 }}>
+                            <ChevronLeftIcon sx={{ fontSize: 28 }} />
                         </IconButton>
                         <Typography sx={{ fontSize: 18, fontWeight: 900 }}>회원정보 수정</Typography>
                     </Box>
-
+            <AppTheme>
+            <CssBaseline enableColorScheme />
+                <SignInContainer direction="column" justifyContent="flex-start">
                     <Typography
                         sx={{
-                            mt: 3,
+                            // mt: 30,
                             fontSize: 14,
                             color: "text.secondary",
                             fontWeight: 700,
                             whiteSpace: "pre-line",
+                            width: "95%", mx: "auto",
                         }}
                     >
                         정보를 안전하게 보호하기 위해{"\n"}비밀번호를 입력해주세요.
                     </Typography>
 
-                    <Box component="form" onSubmit={handleCheck} sx={{ mt: 4 }}>
+                    <Box component="form" onSubmit={handleCheck} sx={{ mt: 4, width: "95%", mx: "auto", }}>
                         {apiError && (
                             <Typography color="error" variant="body2" sx={{ textAlign: "center", mb: 1 }}>
                                 {apiError}
@@ -200,8 +192,8 @@ export default function MemberCheckPage() {
                             확인
                         </Button>
                     </Box>
-                </Box>
-            </SignInContainer>
+                    </SignInContainer>
         </AppTheme>
+                </Box>
     );
 }

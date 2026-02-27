@@ -8,22 +8,44 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import Visibility from "@mui/icons-material/Visibility";
 import VisibilityOff from "@mui/icons-material/VisibilityOff";
-import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew"; 
+import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import { useNavigate } from "react-router-dom";
 import AppTheme from "../../shared-theme/AppTheme";
 import axios from "axios";
 import { useDispatch } from "react-redux"
+import { styled } from "@mui/material/styles";
+import Stack from "@mui/material/Stack";
 
 import { setUser } from "../../../features/auth/authSlice";
 import { useAppSelector } from "../../../app/hooks";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 
+const SignInContainer = styled(Stack)(({ theme }) => ({
+    height: "auto",
+    overflow: "hidden",
+    padding: theme.spacing(2),
+    position: "relative",
+    [theme.breakpoints.up("sm")]: {
+        padding: theme.spacing(3),
+    },
+    "&::before": {
+        content: '""',
+        display: "block",
+        position: "absolute",
+        zIndex: -1,
+        inset: 0,
+        backgroundImage:
+            "radial-gradient(ellipse at 50% 50%, hsl(210, 100%, 97%), hsl(0, 0%, 100%))",
+        backgroundRepeat: "no-repeat",
+    },
+}));
+
 const inputSx = {
     "& .MuiInputBase-input": {
         fontSize: "0.98rem",
         paddingTop: "0px",
-        paddingBottom: "2px", 
+        paddingBottom: "2px",
     },
     "& .MuiInputBase-input::placeholder": {
         fontSize: "0.88rem",
@@ -55,7 +77,7 @@ const forceSolid = (bg: string, hover: string, color: string) => ({
 const primaryBtnSx = {
     borderRadius: 999,
     paddingTop: "0px",
-    paddingBottom: "2px", 
+    paddingBottom: "2px",
     fontSize: "1rem",
     fontWeight: 700,
     textTransform: "none",
@@ -230,148 +252,151 @@ export default function MemberEditPage() {
     };
 
     return (
-        <AppTheme>
-            <CssBaseline enableColorScheme />
 
-            <Box sx={{ px: 2, pt: 2, width: "100%", maxWidth: 420, mx: "auto", minHeight: "100dvh" }}>
-                {/* 헤더 */}
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <IconButton onClick={() => navigate(-1)} sx={{ p: 0.5 }}>
-                        <ArrowBackIosNewIcon />
-                    </IconButton>
-                    <Typography sx={{ fontSize: 18, fontWeight: 900 }}>회원정보 수정</Typography>
-                </Box>
 
-                <Box component="form" onSubmit={handleSubmit} sx={{ mt: 3 }}>
-                    {apiError && (
-                        <Typography color="error" variant="body2" sx={{ textAlign: "center", mb: 1 }}>
-                            {apiError}
-                        </Typography>
-                    )}
-
-                    {/* 아이디(이메일) - 수정 불가 */}
-                    <Typography sx={{ fontSize: 14, fontWeight: 900, mb: 0.7 }}>아이디</Typography>
-                    <TextField
-                        value={email}
-                        fullWidth
-                        disabled
-                        sx={{
-                            ...inputSx,
-                            "& .MuiOutlinedInput-root": {
-                                borderRadius: 0.6,
-                                backgroundColor: "#d9d9d9",
-                            },
-                            "& .MuiInputBase-input.Mui-disabled": {
-                                WebkitTextFillColor: "#111",
-                            },
-                        }}
-                    />
-
-                    {/* LOCAL일 때만 비번 섹션 노출 */}
-                    {isLocal && (
-                        <>
-                            {/* 비밀번호 변경 */}
-                            <Typography sx={{ mt: 2.5, fontSize: 14, fontWeight: 900, mb: 0.7 }}>비밀번호 변경</Typography>
-                            <TextField
-                                placeholder="숫자+영문+특수기호를 모두 포함한 8~12자"
-                                type={showPw ? "text" : "password"}
-                                fullWidth
-                                sx={inputSx}
-                                value={newPw}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                                    const v = e.target.value;
-                                    setNewPw(v);
-                                    if (pwError) setPwError(validatePw(v));
-                                    if (confirmPw) setConfirmError(validateConfirm(v, confirmPw));
-                                }}
-                                onBlur={() => {
-                                    if (newPw.trim()) setPwError(validatePw(newPw));
-                                }}
-                                error={!!pwError}
-                                helperText={pwError || " "}
-                                InputProps={{
-                                    endAdornment: (
-                                        <InputAdornment position="end">
-                                            <IconButton edge="end" onClick={() => setShowPw((prev) => !prev)} tabIndex={-1}>
-                                                {showPw ? <Visibility /> : <VisibilityOff />}
-                                            </IconButton>
-                                        </InputAdornment>
-                                    ),
-                                }}
-                            />
-
-                            {/* 비밀번호 확인 */}
-                            <Typography sx={{ mt: 1.8, fontSize: 14, fontWeight: 900, mb: 0.7 }}>비밀번호 확인</Typography>
-                            <TextField
-                                placeholder="숫자+영문+특수기호를 모두 포함한 8~12자"
-                                type={showConfirmPw ? "text" : "password"}
-                                fullWidth
-                                sx={{
-                                    ...inputSx,
-                                    ...(isMatch ? { "& .MuiFormHelperText-root": { color: "success.main" } } : {}),
-                                }}
-                                value={confirmPw}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                                    const v = e.target.value;
-                                    setConfirmPw(v);
-                                    setConfirmError(validateConfirm(newPw, v));
-                                }}
-                                onBlur={() => {
-                                    if (confirmPw.trim()) setConfirmError(validateConfirm(newPw, confirmPw));
-                                }}
-                                error={!!confirmError && !isMatch}
-                                helperText={confirmHelper}
-                                InputProps={{
-                                    endAdornment: (
-                                        <InputAdornment position="end">
-                                            <IconButton edge="end" onClick={() => setShowConfirmPw((prev) => !prev)} tabIndex={-1}>
-                                                {showConfirmPw ? <Visibility /> : <VisibilityOff />}
-                                            </IconButton>
-                                        </InputAdornment>
-                                    ),
-                                }}
-                            />
-                        </>
-                    )}
-
-                    {/* 이름 */}
-                    <Typography sx={{ mt: 1.8, fontSize: 14, fontWeight: 900, mb: 0.7 }}>
-                        이름 <span style={{ color: "#d32f2f" }}>*</span>
-                    </Typography>
-                    <TextField
-                        placeholder="이름"
-                        fullWidth
-                        sx={inputSx}
-                        value={name}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setName(e.target.value)}
-                        onBlur={() => {
-                            if (nameChanged) setNameError(validateName(name));
-                            else setNameError("");
-                        }}
-                        error={!!nameError}
-                        helperText={nameError || " "}
-                    />
-
-                    {/* 회원탈퇴(회색) */}
-                    <Typography
-                        sx={{ mt: 2, fontSize: 13, color: "text.disabled", fontWeight: 800, cursor: "pointer" }}
-                        onClick={() => alert("탈퇴를 거절합니다")}
-                    >
-                        회원탈퇴
-                    </Typography>
-
-                    <Button
-                        type="submit"
-                        fullWidth
-                        variant="contained"
-                        disableElevation
-                        sx={{ ...primaryBtnSx, mt: 5, opacity: canSubmit ? 1 : 0.35 }}
-                        disabled={!canSubmit}
-                    >
-                        수정
-                    </Button>
-                </Box>
+        <Box sx={{ mx: "auto", mt: "-4px" }}>
+            {/* 헤더 */}
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <IconButton onClick={() => navigate(-1)} sx={{ p: 0 }}>
+                    <ChevronLeftIcon sx={{ fontSize: 28 }} />
+                </IconButton>
+                <Typography sx={{ fontSize: 20, fontWeight: 900 }}>회원정보 수정</Typography>
             </Box>
-        </AppTheme>
+            <AppTheme>
+                <CssBaseline enableColorScheme />
+                <SignInContainer direction="column" justifyContent="flex-start">
+
+                    <Box component="form" onSubmit={handleSubmit} sx={{ mt: 0 }}>
+                        {apiError && (
+                            <Typography color="error" variant="body2" sx={{ textAlign: "center", mb: 1 }}>
+                                {apiError}
+                            </Typography>
+                        )}
+
+                        {/* 아이디(이메일) - 수정 불가 */}
+                        <Typography sx={{ fontSize: 14, fontWeight: 900, mb: 0.7 }}>아이디</Typography>
+                        <TextField
+                            value={email}
+                            fullWidth
+                            disabled
+                            sx={{
+                                ...inputSx,
+                                "& .MuiOutlinedInput-root": {
+                                    borderRadius: 0.6,
+                                    backgroundColor: "#d9d9d9",
+                                },
+                                "& .MuiInputBase-input.Mui-disabled": {
+                                    WebkitTextFillColor: "#111",
+                                },
+                            }}
+                        />
+
+                        {/* LOCAL일 때만 비번 섹션 노출 */}
+                        {isLocal && (
+                            <>
+                                {/* 비밀번호 변경 */}
+                                <Typography sx={{ mt: 1, fontSize: 14, fontWeight: 900, mb: 0.7 }}>비밀번호 변경</Typography>
+                                <TextField
+                                    placeholder="숫자+영문+특수기호를 모두 포함한 8~12자"
+                                    type={showPw ? "text" : "password"}
+                                    fullWidth
+                                    sx={inputSx}
+                                    value={newPw}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                        const v = e.target.value;
+                                        setNewPw(v);
+                                        if (pwError) setPwError(validatePw(v));
+                                        if (confirmPw) setConfirmError(validateConfirm(v, confirmPw));
+                                    }}
+                                    onBlur={() => {
+                                        if (newPw.trim()) setPwError(validatePw(newPw));
+                                    }}
+                                    error={!!pwError}
+                                    helperText={pwError || " "}
+                                    InputProps={{
+                                        endAdornment: (
+                                            <InputAdornment position="end">
+                                                <IconButton edge="end" onClick={() => setShowPw((prev) => !prev)} tabIndex={-1}>
+                                                    {showPw ? <Visibility /> : <VisibilityOff />}
+                                                </IconButton>
+                                            </InputAdornment>
+                                        ),
+                                    }}
+                                />
+
+                                {/* 비밀번호 확인 */}
+                                <Typography sx={{ mt: 1, fontSize: 14, fontWeight: 900, mb: 0.7 }}>비밀번호 확인</Typography>
+                                <TextField
+                                    placeholder="숫자+영문+특수기호를 모두 포함한 8~12자"
+                                    type={showConfirmPw ? "text" : "password"}
+                                    fullWidth
+                                    sx={{
+                                        ...inputSx,
+                                        ...(isMatch ? { "& .MuiFormHelperText-root": { color: "success.main" } } : {}),
+                                    }}
+                                    value={confirmPw}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                        const v = e.target.value;
+                                        setConfirmPw(v);
+                                        setConfirmError(validateConfirm(newPw, v));
+                                    }}
+                                    onBlur={() => {
+                                        if (confirmPw.trim()) setConfirmError(validateConfirm(newPw, confirmPw));
+                                    }}
+                                    error={!!confirmError && !isMatch}
+                                    helperText={confirmHelper}
+                                    InputProps={{
+                                        endAdornment: (
+                                            <InputAdornment position="end">
+                                                <IconButton edge="end" onClick={() => setShowConfirmPw((prev) => !prev)} tabIndex={-1}>
+                                                    {showConfirmPw ? <Visibility /> : <VisibilityOff />}
+                                                </IconButton>
+                                            </InputAdornment>
+                                        ),
+                                    }}
+                                />
+                            </>
+                        )}
+
+                        {/* 이름 */}
+                        <Typography sx={{ mt: 1.5, fontSize: 14, fontWeight: 900, mb: 0.7 }}>
+                            이름 <span style={{ color: "#d32f2f" }}>*</span>
+                        </Typography>
+                        <TextField
+                            placeholder="이름"
+                            fullWidth
+                            sx={inputSx}
+                            value={name}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setName(e.target.value)}
+                            onBlur={() => {
+                                if (nameChanged) setNameError(validateName(name));
+                                else setNameError("");
+                            }}
+                            error={!!nameError}
+                            helperText={nameError || " "}
+                        />
+
+                        {/* 회원탈퇴(회색) */}
+                        <Typography
+                            sx={{ mt: 1, fontSize: 13, color: "text.disabled", fontWeight: 800, cursor: "pointer" }}
+                            onClick={() => alert("탈퇴를 거절합니다")}
+                        >
+                            회원탈퇴
+                        </Typography>
+
+                        <Button
+                            type="submit"
+                            fullWidth
+                            variant="contained"
+                            disableElevation
+                            sx={{ ...primaryBtnSx, mt: 2, opacity: canSubmit ? 1 : 0.35 }}
+                            disabled={!canSubmit}
+                        >
+                            수정
+                        </Button>
+                    </Box>
+                </SignInContainer>
+            </AppTheme>
+        </Box>
     );
 }

@@ -86,17 +86,17 @@ export default function Home() {
                     <Stack direction="row" alignItems="center" spacing={1.2}>
                         <Box
                             sx={{
-                                width: 36,
-                                height: 36,
+                                width: 30,
+                                height: 30,
                                 borderRadius: "50%",
-                                bgcolor: "#2F80ED",
+                                bgcolor: "#FAAA47",
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
                                 flexShrink: 0,
                             }}
                         >
-                            <Typography fontSize={13} fontWeight={900} color="#fff" lineHeight={1}>
+                            <Typography fontSize={13} fontWeight={900} color="#000000" lineHeight={1}>
                                 {selectedGroup?.division || "-"}
                             </Typography>
                         </Box>

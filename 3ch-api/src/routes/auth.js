@@ -365,7 +365,7 @@ router.post("/login", async (req, res) => {
 
   try {
     const result = await pool.query(
-      "select id, email, password_hash, nickname, name, phone, auth_provider from users where email = $1",
+      "select id, email, password_hash, nickname, name, phone, auth_provider from users where email = $1 and deleted_at is null",
       [email],
     );
 
@@ -423,7 +423,7 @@ router.get("/me", requireAuth, async (req, res) => {
 
   try {
     const result = await pool.query(
-      "select id, email, nickname, name, phone, auth_provider, created_at from users where id = $1",
+      "select id, email, nickname, name, phone, auth_provider, created_at from users where id = $1 and deleted_at is null",
       [userId],
     );
     if (result.rowCount === 0) {
@@ -732,6 +732,95 @@ router.post("/social/complete", async (req, res) => {
     }
 
     return res.json({ ok: true, token, user: updatedUser });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
+});
+
+// 소유 클럽 목록 조회 (탈퇴 전 경고용)
+router.get("/member/owned-groups", requireAuth, async (req, res) => {
+  const userId = Number(req.user.sub);
+  try {
+    const { rows } = await pool.query(
+      `select g.id, g.name
+       from group_members gm
+       join groups g on gm.group_id = g.id
+       where gm.user_id = $1 and gm.role = 'owner'`,
+      [userId]
+    );
+    return res.json({ ok: true, groups: rows });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
+});
+
+// 회원탈퇴
+router.delete("/member", requireAuth, async (req, res) => {
+  const userId = Number(req.user.sub);
+  const { password } = req.body || {};
+
+  try {
+    const { rows, rowCount } = await pool.query(
+      "select auth_provider, password_hash from users where id = $1 and deleted_at is null",
+      [userId]
+    );
+    if (rowCount === 0) {
+      return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
+    }
+
+    const user = rows[0];
+
+    if (user.auth_provider === "local") {
+      if (!password) {
+        return res.status(400).json({ ok: false, error: "PASSWORD_REQUIRED" });
+      }
+      const valid = await bcrypt.compare(password, user.password_hash);
+      if (!valid) {
+        return res.status(401).json({ ok: false, error: "INVALID_CREDENTIALS" });
+      }
+    }
+
+    await pool.query("BEGIN");
+    try {
+      // 모임장/리더가 생성한 추첨 삭제 (cascade로 draw_prizes, draw_winners 삭제)
+      await pool.query(
+        "delete from draws where created_by_id = $1",
+        [userId]
+      );
+
+      // 모임장/리더가 생성한 리그 삭제 (cascade로 teams, matches, participants, draws 삭제)
+      await pool.query(
+        "delete from leagues where created_by_id = $1",
+        [userId]
+      );
+
+      // 클럽장인 클럽 삭제 (cascade로 group_members, leagues 삭제)
+      await pool.query(
+        `delete from groups where id in (
+          select group_id from group_members where user_id = $1 and role = 'owner'
+        )`,
+        [userId]
+      );
+
+      // 나머지 클럽 멤버십 제거
+      await pool.query(
+        "delete from group_members where user_id = $1",
+        [userId]
+      );
+
+      // 유저 소프트 삭제
+      await pool.query(
+        "update users set deleted_at = now() where id = $1",
+        [userId]
+      );
+
+      await pool.query("COMMIT");
+    } catch (txErr) {
+      await pool.query("ROLLBACK");
+      throw txErr;
+    }
+
+    return res.json({ ok: true });
   } catch (e) {
     return res.status(500).json({ ok: false, error: String(e.message || e) });
   }

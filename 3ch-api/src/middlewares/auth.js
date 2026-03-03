@@ -1,20 +1,35 @@
 const jwt = require("jsonwebtoken");
 const pool = require("../db/pool");
 
-function requireAuth(req, res, next) {
+async function requireAuth(req, res, next) {
   const header = req.headers.authorization || "";
   const [type, token] = header.split(" ");
 
   if (type !== "Bearer" || !token) {
     return res.status(401).json({ ok: false, error: "NO_TOKEN" });
   }
+
+  let payload;
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = payload; // { sub: userId, email }
-    return next();
+    payload = jwt.verify(token, process.env.JWT_SECRET);
   } catch (e) {
     return res.status(401).json({ ok: false, error: "INVALID_TOKEN" });
   }
+
+  try {
+    const result = await pool.query(
+      "SELECT id FROM users WHERE id = $1 AND deleted_at IS NULL",
+      [Number(payload.sub)],
+    );
+    if (result.rowCount === 0) {
+      return res.status(401).json({ ok: false, error: "USER_NOT_FOUND" });
+    }
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
+  }
+
+  req.user = payload; // { sub: userId, email }
+  return next();
 }
 
 async function requireAdmin(req, res, next) {

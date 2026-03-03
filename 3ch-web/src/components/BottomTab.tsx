@@ -35,7 +35,7 @@ export default function BottomTab() {
             found = tabs.findIndex((t) => t.path !== "/" && pathname.startsWith(t.path));
         }
 
-        return found >= 0 ? found : 0;
+        return found;
     }, [location.pathname]);
 
     const handleChange = (_: unknown, newValue: number) => {

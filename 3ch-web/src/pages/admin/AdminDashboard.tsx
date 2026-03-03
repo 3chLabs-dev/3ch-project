@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Box, Card, CardContent, CircularProgress, Typography } from "@mui/material";
-import { BarChart, Bar, ResponsiveContainer, Tooltip } from "recharts";
+import { BarChart, Bar, XAxis, ResponsiveContainer, Tooltip } from "recharts";
 import { useAppSelector } from "../../app/hooks";
 
 type Stats = {
@@ -14,8 +14,9 @@ type Stats = {
 };
 
 type TrendRow = {
-  day: string;
+  week_start: string;
   member_cnt: number;
+  withdrawn_cnt: number;
   league_cnt: number;
   group_cnt: number;
   draw_cnt: number;
@@ -28,7 +29,7 @@ const STAT_CARDS: {
   trendKey?: keyof TrendRow;
 }[] = [
   { key: "member_count",    label: "회원가입수", color: "#2F80ED", trendKey: "member_cnt" },
-  { key: "withdrawn_count", label: "회원탈퇴수", color: "#EB5757" },
+  { key: "withdrawn_count", label: "회원탈퇴수", color: "#EB5757", trendKey: "withdrawn_cnt" },
   { key: "league_count",    label: "리그생성수", color: "#27AE60", trendKey: "league_cnt" },
   { key: "group_count",     label: "클럽생성수", color: "#F2994A", trendKey: "group_cnt"  },
   { key: "match_count",     label: "대회생성수", color: "#15ff00" },
@@ -40,11 +41,18 @@ function MiniBarChart({ data, color, trendKey }: { data: TrendRow[]; color: stri
   return (
     <ResponsiveContainer width="100%" height={48}>
       <BarChart data={data} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+        <XAxis dataKey="week_start" hide />
         <Bar dataKey={trendKey as string} fill={color} radius={[2, 2, 0, 0]} />
         <Tooltip
           cursor={{ fill: "rgba(0,0,0,0.04)" }}
           contentStyle={{ fontSize: 11, borderRadius: 6, border: "1px solid #E5E7EB", padding: "2px 8px" }}
-          labelFormatter={(v) => v.toString().slice(5)}
+          labelFormatter={(v) => {
+            const start = new Date(v.toString());
+            const end = new Date(start);
+            end.setDate(end.getDate() + 6);
+            const fmt = (d: Date) => `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
+            return `${fmt(start)} ~ ${fmt(end)}`;
+          }}
           formatter={(v: number | undefined) => [v ?? 0, ""]}
         />
       </BarChart>

@@ -2,6 +2,11 @@ import { useEffect, useMemo, useState, useRef } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import CssBaseline from "@mui/material/CssBaseline";
+import Dialog from "@mui/material/Dialog";
+import DialogActions from "@mui/material/DialogActions";
+import DialogContent from "@mui/material/DialogContent";
+import DialogContentText from "@mui/material/DialogContentText";
+import DialogTitle from "@mui/material/DialogTitle";
 import IconButton from "@mui/material/IconButton";
 import InputAdornment from "@mui/material/InputAdornment";
 import TextField from "@mui/material/TextField";
@@ -16,7 +21,8 @@ import { useDispatch } from "react-redux"
 import { styled } from "@mui/material/styles";
 import Stack from "@mui/material/Stack";
 
-import { setUser } from "../../../features/auth/authSlice";
+import { setUser, logout } from "../../../features/auth/authSlice";
+import { baseApi } from "../../../features/api/baseApi";
 import { useAppSelector } from "../../../app/hooks";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
@@ -150,6 +156,13 @@ export default function MemberEditPage() {
     const [showPw, setShowPw] = useState<boolean>(false);
     const [showConfirmPw, setShowConfirmPw] = useState<boolean>(false);
 
+    // 회원탈퇴
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [deletePassword, setDeletePassword] = useState("");
+    const [deleteLoading, setDeleteLoading] = useState(false);
+    const [deleteError, setDeleteError] = useState("");
+    const [ownedGroups, setOwnedGroups] = useState<{ id: string; name: string }[]>([]);
+
     useEffect(() => {
         setName(originalName || "");
     }, [originalName]);
@@ -247,6 +260,47 @@ export default function MemberEditPage() {
             setApiError("회원정보 수정 중 오류가 발생했습니다.");
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleOpenDeleteDialog = async () => {
+        try {
+            const res = await axios.get(`${apiBaseUrl}/auth/member/owned-groups`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            setOwnedGroups(res.data?.groups ?? []);
+        } catch {
+            setOwnedGroups([]);
+        }
+        setDeletePassword("");
+        setDeleteError("");
+        setDeleteDialogOpen(true);
+    };
+
+    const handleDeleteAccount = async () => {
+        setDeleteError("");
+        if (isLocal && !deletePassword) {
+            setDeleteError("비밀번호를 입력해주세요.");
+            return;
+        }
+        setDeleteLoading(true);
+        try {
+            await axios.delete(`${apiBaseUrl}/auth/member`, {
+                headers: { Authorization: `Bearer ${token}` },
+                data: isLocal ? { password: deletePassword } : undefined,
+            });
+            localStorage.removeItem("token");
+            localStorage.removeItem("user");
+            dispatch(logout());
+            dispatch(baseApi.util.resetApiState());
+            navigate("/", { replace: true });
+        } catch (err: unknown) {
+            const error = err as { response?: { data?: { error?: string } } };
+            const code = error?.response?.data?.error;
+            if (code === "INVALID_CREDENTIALS") setDeleteError("비밀번호가 올바르지 않습니다.");
+            else setDeleteError("탈퇴 처리 중 오류가 발생했습니다.");
+        } finally {
+            setDeleteLoading(false);
         }
     };
 
@@ -378,7 +432,7 @@ export default function MemberEditPage() {
                         {/* 회원탈퇴(회색) */}
                         <Typography
                             sx={{ mt: 1, fontSize: 13, color: "text.disabled", fontWeight: 800, cursor: "pointer" }}
-                            onClick={() => alert("탈퇴를 거절합니다")}
+                            onClick={handleOpenDeleteDialog}
                         >
                             회원탈퇴
                         </Typography>
@@ -396,6 +450,43 @@ export default function MemberEditPage() {
                     </Box>
                 </SignInContainer>
             </AppTheme>
+
+            {/* 회원탈퇴 다이얼로그 */}
+            <Dialog open={deleteDialogOpen} onClose={() => !deleteLoading && setDeleteDialogOpen(false)} fullWidth maxWidth="xs">
+                <DialogTitle sx={{ fontWeight: 800 }}>회원탈퇴</DialogTitle>
+                <DialogContent>
+                    {ownedGroups.length > 0 && (
+                        <DialogContentText sx={{ mb: isLocal ? 2 : 0, color: "error.main", fontSize: 13 }}>
+                            클럽장으로 있는 <b>{ownedGroups.map(g => g.name).join(", ")}</b> 클럽이 함께 삭제됩니다.
+                        </DialogContentText>
+                    )}
+                    <DialogContentText sx={{ mb: isLocal ? 2 : 0, fontSize: 13 }}>
+                        탈퇴하면 계정과 모든 데이터가 삭제됩니다.<br />정말 탈퇴하시겠습니까?
+                    </DialogContentText>
+                    {isLocal && (
+                        <TextField
+                            label="비밀번호 확인"
+                            type="password"
+                            fullWidth
+                            size="small"
+                            value={deletePassword}
+                            onChange={e => setDeletePassword(e.target.value)}
+                            error={!!deleteError}
+                            helperText={deleteError || " "}
+                            autoComplete="current-password"
+                        />
+                    )}
+                    {!isLocal && deleteError && (
+                        <DialogContentText sx={{ color: "error.main", fontSize: 13 }}>{deleteError}</DialogContentText>
+                    )}
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setDeleteDialogOpen(false)} disabled={deleteLoading}>취소</Button>
+                    <Button onClick={handleDeleteAccount} color="error" disabled={deleteLoading}>
+                        {deleteLoading ? "처리 중..." : "탈퇴하기"}
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 }

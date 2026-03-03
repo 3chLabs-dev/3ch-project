@@ -1,5 +1,6 @@
-import { Box, Typography, Stack, Divider, IconButton, List, ListItemButton, ListItemText, Button, Link, Collapse, } from "@mui/material";
+import { Box, Typography, Stack, Divider, IconButton, List, ListItemButton, ListItemText, Button, Link, Collapse, Avatar } from "@mui/material";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import PersonIcon from "@mui/icons-material/Person";
 import { useNavigate } from "react-router-dom";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { logout } from "../../features/auth/authSlice";
@@ -54,21 +55,23 @@ export default function MyPage() {
         <Box>
             {/* ✅ 로그인 상태: 이름(좌) + 회원정보수정(우) / 비로그인: 문구만 */}
             {token ? (
-                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, mt: "-3px" }}>
-                    <Typography sx={{ fontSize: 24, fontWeight: 900, color: "primary.main" }}>
+                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", py: 2.5, gap: 1.2 }}>
+                    <Avatar sx={{ width: 64, height: 64, bgcolor: "primary.main", fontSize: 28, fontWeight: 900 }}>
+                        {displayName.charAt(0)}
+                    </Avatar>
+                    <Typography sx={{ fontSize: 18, fontWeight: 900, color: "text.primary" }}>
                         {displayName}
                     </Typography>
-
                     <Button
                         variant="contained"
                         onClick={handleEditClick}
                         sx={{
-                            height: 32,
-                            px: 1.6,
+                            mt: 0.5,
+                            height: 36,
+                            px: 3,
                             borderRadius: 999,
                             fontWeight: 900,
                             fontSize: 13,
-                            mr: 0.5,
                             bgcolor: "grey.200",
                             color: "text.primary",
                             boxShadow: "none",
@@ -79,27 +82,28 @@ export default function MyPage() {
                     </Button>
                 </Box>
             ) : (
-                <Box sx={{ mt: "-3px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
-                    <Typography sx={{ fontSize: 24, fontWeight: 900 }}>
-                        로그인이 필요합니다
+                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", py: 2.5, gap: 1.2 }}>
+                    <Avatar sx={{ width: 64, height: 64, bgcolor: "grey.100" }}>
+                        <PersonIcon sx={{ fontSize: 38, color: "grey.400" }} />
+                    </Avatar>
+                    <Typography sx={{ fontSize: 15, fontWeight: 700, color: "text.secondary" }}>
+                        로그인 후 이용하세요
                     </Typography>
-
                     <Button
                         variant="contained"
                         onClick={() => navigate("/login")}
                         sx={{
-                            height: 32,
-                            px: 1.6,
+                            mt: 0.5,
+                            height: 40,
+                            px: 5,
                             borderRadius: 999,
                             fontWeight: 900,
-                            fontSize: 13,
-                            mr: 0.5
+                            fontSize: 14,
                         }}
                     >
-                        로그인
+                        로그인 / 회원가입
                     </Button>
                 </Box>
-
             )}
 
 

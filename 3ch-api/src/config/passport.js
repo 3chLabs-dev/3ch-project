@@ -22,12 +22,15 @@ passport.use(
 
         let user = null;
         const existingUser = await pool.query(
-          "select id, email, name, auth_provider, provider_id from users where email = $1",
+          "select id, email, name, auth_provider, provider_id, deleted_at from users where email = $1",
           [email],
         );
 
         if (existingUser.rowCount > 0) {
           user = existingUser.rows[0];
+          if (user.deleted_at) {
+            return done(null, false, { message: "탈퇴한 계정입니다." });
+          }
           if (user.auth_provider === "local") {
             await pool.query(
               "update users set auth_provider = 'google', provider_id = $1 where id = $2",
@@ -80,12 +83,15 @@ passport.use(
 
         let user = null;
         const existingUser = await pool.query(
-          "select id, email, name, auth_provider, provider_id from users where email = $1",
+          "select id, email, name, auth_provider, provider_id, deleted_at from users where email = $1",
           [email],
         );
 
         if (existingUser.rowCount > 0) {
           user = existingUser.rows[0];
+          if (user.deleted_at) {
+            return done(null, false, { message: "탈퇴한 계정입니다." });
+          }
           if (user.auth_provider === "local") {
             await pool.query(
               "update users set auth_provider = 'kakao', provider_id = $1 where id = $2",
@@ -138,12 +144,15 @@ passport.use(
 
         let user = null;
         const existingUser = await pool.query(
-          "select id, email, name, auth_provider, provider_id from users where email = $1",
+          "select id, email, name, auth_provider, provider_id, deleted_at from users where email = $1",
           [email],
         );
 
         if (existingUser.rowCount > 0) {
           user = existingUser.rows[0];
+          if (user.deleted_at) {
+            return done(null, false, { message: "탈퇴한 계정입니다." });
+          }
           if (user.auth_provider === "local") {
             await pool.query(
               "update users set auth_provider = 'naver', provider_id = $1 where id = $2",

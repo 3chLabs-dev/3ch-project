@@ -16,23 +16,28 @@ type Member = {
   name: string | null;
   auth_provider: string;
   created_at: string;
+  deleted_at: string | null;
   role: string | null;
   grade: string | null;
   club_name: string | null;
   sport: string | null;
+  club_count: number;
 };
 
 type ClubOption    = { id: string; name: string; sport: string | null };
-type DetailMember  = Member & { group_id: string | null };
+type ClubDetail    = { group_id: string; club_name: string; sport: string | null; role: string | null; grade: string | null };
+type DetailMember  = Member & { clubs: ClubDetail[] };
 
 type Filters = {
   code: string; sport: string; club: string; role: string;
   email: string; grade: string; name: string; from: string; to: string;
+  status: string;
 };
 
 const EMPTY_FILTERS: Filters = {
   code: "", sport: "", club: "", role: "",
   email: "", grade: "", name: "", from: "", to: "",
+  status: "active",
 };
 
 const ROLE_OPTIONS = [
@@ -80,17 +85,15 @@ export default function AdminMemberPage() {
   const [tempPw,     setTempPw]     = useState("");   // 성공 후 알럿용
 
   // 상세/수정 다이얼로그
-  const [editOpen,    setEditOpen]    = useState(false);
-  const [editMember,  setEditMember]  = useState<DetailMember | null>(null);
-  const [editSport,   setEditSport]   = useState("");
-  const [editGroupId, setEditGroupId] = useState("");
-  const [editRole,    setEditRole]    = useState("");
-  const [editName,    setEditName]    = useState("");
-  const [editGrade,   setEditGrade]   = useState("");
-  const [editClubs,   setEditClubs]   = useState<ClubOption[]>([]);
-  const [editLoading, setEditLoading] = useState(false);
-  const [editSuccess, setEditSuccess] = useState(false);
-  const [editError,   setEditError]   = useState("");
+  const [editOpen,      setEditOpen]      = useState(false);
+  const [editMember,    setEditMember]    = useState<DetailMember | null>(null);
+  const [selectedClub,  setSelectedClub]  = useState<ClubDetail | null>(null);
+  const [editRole,      setEditRole]      = useState("");
+  const [editName,      setEditName]      = useState("");
+  const [editGrade,     setEditGrade]     = useState("");
+  const [editLoading,   setEditLoading]   = useState(false);
+  const [editSuccess,   setEditSuccess]   = useState(false);
+  const [editError,     setEditError]     = useState("");
 
   const fetchMembers = useCallback(async (q: Filters, p: number) => {
     setLoading(true);
@@ -136,6 +139,7 @@ export default function AdminMemberPage() {
   // 상세 다이얼로그 열기
   const openEditDialog = async (id: number) => {
     setEditSuccess(false); setEditError(""); setEditLoading(true); setEditOpen(true);
+    setSelectedClub(null); setEditRole(""); setEditGrade("");
     try {
       const res  = await fetch(`${import.meta.env.VITE_API_BASE_URL}/admin/members/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -144,49 +148,69 @@ export default function AdminMemberPage() {
       if (!data.ok) { setEditError("불러오기 실패"); return; }
       const m = data.member as DetailMember;
       setEditMember(m);
-      setEditSport(m.sport ?? "");
-      setEditGroupId(m.group_id ?? "");
-      setEditRole(m.role ?? "");
       setEditName(m.name ?? "");
-      setEditGrade(m.grade ?? "");
-      fetchClubsFor(m.sport ?? "", setEditClubs);
+      if (m.clubs.length > 0) {
+        setSelectedClub(m.clubs[0]);
+        setEditRole(m.clubs[0].role ?? "");
+        setEditGrade(m.clubs[0].grade ?? "");
+      }
     } catch { setEditError("서버 오류"); }
     finally { setEditLoading(false); }
   };
 
-  const handleEditSportChange = (sport: string) => {
-    setEditSport(sport); setEditGroupId("");
-    fetchClubsFor(sport, setEditClubs);
+  const handleSelectClub = (club: ClubDetail) => {
+    setSelectedClub(club);
+    setEditRole(club.role ?? "");
+    setEditGrade(club.grade ?? "");
   };
 
   const handleEditSave = async () => {
     if (!editMember) return;
     setEditError(""); setEditLoading(true);
     try {
+      const body: Record<string, unknown> = { name: editName };
+      if (selectedClub) {
+        body.group_id = selectedClub.group_id;
+        body.role  = editRole  || undefined;
+        body.grade = editGrade || undefined;
+      }
       const res  = await fetch(`${import.meta.env.VITE_API_BASE_URL}/admin/members/${editMember.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ name: editName, group_id: editGroupId || null, role: editRole || undefined, grade: editGrade || undefined }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!data.ok) { setEditError("수정 실패"); return; }
+      // 로컬 clubs 배열도 업데이트
+      if (selectedClub) {
+        setEditMember((prev) => prev ? {
+          ...prev,
+          clubs: prev.clubs.map((c) =>
+            c.group_id === selectedClub.group_id ? { ...c, role: editRole || null, grade: editGrade || null } : c,
+          ),
+        } : null);
+      }
       setEditSuccess(true);
       fetchMembers(query, page);
     } catch { setEditError("서버 오류"); }
     finally { setEditLoading(false); }
   };
 
-  const handleKickClub = async () => {
-    if (!editMember || !editMember.group_id) return;
-    if (!window.confirm("클럽에서 강퇴하시겠습니까?")) return;
+  const handleKickClub = async (club: ClubDetail) => {
+    if (!editMember) return;
+    if (!window.confirm(`"${club.club_name}"에서 강퇴하시겠습니까?`)) return;
     try {
       await fetch(`${import.meta.env.VITE_API_BASE_URL}/admin/members/${editMember.id}/club`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ group_id: editMember.group_id }),
+        body: JSON.stringify({ group_id: club.group_id }),
       });
-      setEditMember((prev) => prev ? { ...prev, group_id: null, club_name: null, sport: null, role: null, grade: null } : null);
-      setEditGroupId(""); setEditSport(""); setEditRole(""); setEditGrade("");
+      const updated = editMember.clubs.filter((c) => c.group_id !== club.group_id);
+      setEditMember((prev) => prev ? { ...prev, clubs: updated } : null);
+      if (selectedClub?.group_id === club.group_id) {
+        if (updated.length > 0) { handleSelectClub(updated[0]); }
+        else { setSelectedClub(null); setEditRole(""); setEditGrade(""); }
+      }
       fetchMembers(query, page);
     } catch { /* ignore */ }
   };
@@ -310,6 +334,16 @@ export default function AdminMemberPage() {
               onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
             />
           </FilterField>
+          <FilterField label="상태">
+            <Select size="small" fullWidth value={filters.status}
+              sx={{ fontSize: 12 }}
+              onChange={(e: SelectChangeEvent) => setFilters((p) => ({ ...p, status: e.target.value }))}
+            >
+              <MenuItem value="active"    sx={{ fontSize: 12 }}>활성</MenuItem>
+              <MenuItem value="withdrawn" sx={{ fontSize: 12 }}>탈퇴</MenuItem>
+              <MenuItem value=""          sx={{ fontSize: 12 }}>전체</MenuItem>
+            </Select>
+          </FilterField>
           <Box sx={{ gridColumn: "span 2" }}>
             <FilterField label="가입일">
               <Stack direction="row" alignItems="center" spacing={0.6}>
@@ -359,7 +393,7 @@ export default function AdminMemberPage() {
         <Table size="small">
           <TableHead>
             <TableRow sx={{ bgcolor: "#F9FAFB" }}>
-              {["회원코드", "종목", "클럽", "역할", "아이디", "급수", "이름", "가입일"].map((h) => (
+              {["회원코드", "종목", "클럽", "역할", "아이디", "급수", "이름", "가입일", "상태"].map((h) => (
                 <TableCell key={h} sx={{ fontWeight: 800, fontSize: 12, color: "#374151", py: 1.2 }}>{h}</TableCell>
               ))}
             </TableRow>
@@ -367,19 +401,19 @@ export default function AdminMemberPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={8} align="center" sx={{ py: 6 }}>
+                <TableCell colSpan={9} align="center" sx={{ py: 6 }}>
                   <CircularProgress size={28} />
                 </TableCell>
               </TableRow>
             ) : members.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} align="center" sx={{ py: 6, color: "#9CA3AF", fontWeight: 700, fontSize: 13 }}>
+                <TableCell colSpan={9} align="center" sx={{ py: 6, color: "#9CA3AF", fontWeight: 700, fontSize: 13 }}>
                   가입한 회원이 없습니다.
                 </TableCell>
               </TableRow>
             ) : (
               members.map((m) => (
-                <TableRow key={m.id} hover>
+                <TableRow key={m.id} hover sx={{ bgcolor: m.deleted_at ? "#FFF5F5" : undefined }}>
                   <TableCell
                     onClick={() => openEditDialog(m.id)}
                     sx={{ fontSize: 12, fontFamily: "monospace", color: "#2F80ED", cursor: "pointer", fontWeight: 700, "&:hover": { textDecoration: "underline" } }}
@@ -387,7 +421,15 @@ export default function AdminMemberPage() {
                     {m.member_code ?? String(m.id)}
                   </TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{m.sport ?? "-"}</TableCell>
-                  <TableCell sx={{ fontSize: 12 }}>{m.club_name ?? "-"}</TableCell>
+                  <TableCell sx={{ fontSize: 12 }}>
+                    <Stack direction="row" alignItems="center" spacing={0.5}>
+                      <span>{m.club_name ?? "-"}</span>
+                      {m.club_count > 1 && (
+                        <Chip label={`+${m.club_count - 1}`} size="small"
+                          sx={{ height: 16, fontSize: 10, fontWeight: 700, bgcolor: "#E0E7FF", color: "#4338CA", "& .MuiChip-label": { px: 0.6 } }} />
+                      )}
+                    </Stack>
+                  </TableCell>
                   <TableCell sx={{ fontSize: 12 }}>
                     {m.role ? (
                       <Chip label={m.role === "owner" ? "클럽장" : m.role === "admin" ? "관리자" : "일반"}
@@ -398,6 +440,12 @@ export default function AdminMemberPage() {
                   <TableCell sx={{ fontSize: 12 }}>{m.grade ?? "-"}</TableCell>
                   <TableCell sx={{ fontSize: 12, fontWeight: 700 }}>{m.name ?? "-"}</TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{m.created_at.slice(0, 10)}</TableCell>
+                  <TableCell sx={{ fontSize: 12 }}>
+                    {m.deleted_at
+                      ? <Chip label="탈퇴" size="small" sx={{ height: 20, fontSize: 11, fontWeight: 700, bgcolor: "#FEE2E2", color: "#EF4444" }} />
+                      : <Chip label="활성" size="small" sx={{ height: 20, fontSize: 11, fontWeight: 700, bgcolor: "#D1FAE5", color: "#059669" }} />
+                    }
+                  </TableCell>
                 </TableRow>
               ))
             )}
@@ -542,31 +590,54 @@ export default function AdminMemberPage() {
                 </Typography>
               </FormRow>
 
-              {/* 종목/클럽 */}
-              <FormRow label="종목/클럽">
-                <Stack direction="row" spacing={0.8}>
-                  <Select size="small" fullWidth value={editSport} displayEmpty sx={{ fontSize: 13 }}
-                    onChange={(e: SelectChangeEvent) => handleEditSportChange(e.target.value)}
-                  >
-                    {SPORT_OPTIONS.map((o) => <MenuItem key={o.value} value={o.value} sx={{ fontSize: 13 }}>{o.label}</MenuItem>)}
-                  </Select>
-                  <Select size="small" fullWidth value={editGroupId} displayEmpty sx={{ fontSize: 13 }}
-                    onChange={(e: SelectChangeEvent) => setEditGroupId(e.target.value)}
-                  >
-                    <MenuItem value="" sx={{ fontSize: 13 }}>선택</MenuItem>
-                    {editClubs.map((c) => <MenuItem key={c.id} value={c.id} sx={{ fontSize: 13 }}>{c.name}</MenuItem>)}
-                  </Select>
-                </Stack>
+              {/* 가입 클럽 목록 */}
+              <FormRow label="가입 클럽">
+                <Box>
+                  {editMember.clubs.length === 0 ? (
+                    <Typography sx={{ fontSize: 13, color: "#9CA3AF" }}>가입된 클럽 없음</Typography>
+                  ) : (
+                    editMember.clubs.map((club) => (
+                      <Box
+                        key={club.group_id}
+                        onClick={() => handleSelectClub(club)}
+                        sx={{
+                          display: "flex", alignItems: "center", justifyContent: "space-between",
+                          px: 1.5, py: 0.8, mb: 0.5, borderRadius: 1, cursor: "pointer",
+                          border: "1px solid",
+                          borderColor: selectedClub?.group_id === club.group_id ? "#2F80ED" : "#E5E7EB",
+                          bgcolor: selectedClub?.group_id === club.group_id ? "#EFF6FF" : "#FAFAFA",
+                        }}
+                      >
+                        <Box>
+                          <Typography sx={{ fontSize: 12, fontWeight: 700 }}>{club.club_name}</Typography>
+                          <Typography sx={{ fontSize: 11, color: "#6B7280" }}>{club.sport ?? "-"}</Typography>
+                        </Box>
+                        <Stack direction="row" spacing={0.5} alignItems="center">
+                          <Chip
+                            label={club.role === "owner" ? "클럽장" : club.role === "admin" ? "관리자" : "일반"}
+                            size="small" sx={{ height: 20, fontSize: 11, fontWeight: 700 }}
+                          />
+                          <Button size="small" onClick={(e) => { e.stopPropagation(); handleKickClub(club); }}
+                            sx={{ fontSize: 11, color: "#EF4444", p: 0, minWidth: 0, fontWeight: 700 }}>
+                            강퇴
+                          </Button>
+                        </Stack>
+                      </Box>
+                    ))
+                  )}
+                </Box>
               </FormRow>
 
-              {/* 역할 */}
-              <FormRow label="역할">
-                <Select size="small" fullWidth value={editRole} displayEmpty sx={{ fontSize: 13 }}
-                  onChange={(e: SelectChangeEvent) => setEditRole(e.target.value)}
-                >
-                  {ROLE_OPTIONS.map((o) => <MenuItem key={o.value} value={o.value} sx={{ fontSize: 13 }}>{o.label}</MenuItem>)}
-                </Select>
-              </FormRow>
+              {/* 선택된 클럽 역할/급수 */}
+              {selectedClub && (
+                <FormRow label="역할">
+                  <Select size="small" fullWidth value={editRole} displayEmpty sx={{ fontSize: 13 }}
+                    onChange={(e: SelectChangeEvent) => setEditRole(e.target.value)}
+                  >
+                    {ROLE_OPTIONS.map((o) => <MenuItem key={o.value} value={o.value} sx={{ fontSize: 13 }}>{o.label}</MenuItem>)}
+                  </Select>
+                </FormRow>
+              )}
 
               {/* 아이디 (read-only) */}
               <FormRow label="아이디">
@@ -579,11 +650,13 @@ export default function AdminMemberPage() {
                   value={editName} onChange={(e) => setEditName(e.target.value)} />
               </FormRow>
 
-              {/* 급수 */}
-              <FormRow label="급수">
-                <TextField size="small" fullWidth slotProps={{ input: { style: { fontSize: 13 } } }}
-                  value={editGrade} onChange={(e) => setEditGrade(e.target.value)} />
-              </FormRow>
+              {/* 급수 (선택된 클럽) */}
+              {selectedClub && (
+                <FormRow label="급수">
+                  <TextField size="small" fullWidth slotProps={{ input: { style: { fontSize: 13 } } }}
+                    value={editGrade} onChange={(e) => setEditGrade(e.target.value)} />
+                </FormRow>
+              )}
 
               {/* 가입일시 */}
               <FormRow label="가입일시">
@@ -592,12 +665,17 @@ export default function AdminMemberPage() {
                 </Typography>
               </FormRow>
 
+              {/* 탈퇴일시 */}
+              {editMember.deleted_at && (
+                <FormRow label="탈퇴일시">
+                  <Typography sx={{ fontSize: 13, color: "#EF4444", fontWeight: 700 }}>
+                    {editMember.deleted_at.slice(0, 19).replace("T", " ")}
+                  </Typography>
+                </FormRow>
+              )}
+
               {/* 위험 액션 */}
               <Stack direction="row" spacing={2} pt={0.5}>
-                <Button size="small" disabled={!editMember.group_id} onClick={handleKickClub}
-                  sx={{ fontSize: 12, color: editMember.group_id ? "#EF4444" : "#D1D5DB", p: 0, minWidth: 0, fontWeight: 700 }}>
-                  클럽 강퇴
-                </Button>
                 <Button size="small" onClick={handleDeleteAccount}
                   sx={{ fontSize: 12, color: "#9CA3AF", p: 0, minWidth: 0, fontWeight: 700 }}>
                   계정 삭제

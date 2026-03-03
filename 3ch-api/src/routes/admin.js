@@ -61,8 +61,8 @@ router.get('/stats', requireAdmin, async (req, res) => {
     const [totalsResult, trendResult] = await Promise.all([
       pool.query(`
         SELECT
-          (SELECT COUNT(*) FROM users WHERE is_admin = false)::int AS member_count,
-          0::int                                                    AS withdrawn_count,
+          (SELECT COUNT(*) FROM users WHERE is_admin = false AND deleted_at IS NULL)::int     AS member_count,
+          (SELECT COUNT(*) FROM users WHERE is_admin = false AND deleted_at IS NOT NULL)::int AS withdrawn_count,
           (SELECT COUNT(*) FROM leagues)::int                       AS league_count,
           (SELECT COUNT(*) FROM groups)::int                        AS group_count,
           0::int                                                    AS match_count,
@@ -70,21 +70,22 @@ router.get('/stats', requireAdmin, async (req, res) => {
           0::int                                                    AS payment_count
       `),
       pool.query(`
-        WITH dates AS (
+        WITH weeks AS (
           SELECT generate_series(
-            CURRENT_DATE - INTERVAL '6 days',
-            CURRENT_DATE,
-            '1 day'
-          )::date AS day
+            date_trunc('week', CURRENT_DATE) - INTERVAL '7 weeks',
+            date_trunc('week', CURRENT_DATE),
+            '1 week'
+          )::date AS week_start
         )
         SELECT
-          d.day::text,
-          COALESCE((SELECT COUNT(*) FROM users   WHERE is_admin = false AND DATE(created_at) = d.day), 0)::int AS member_cnt,
-          COALESCE((SELECT COUNT(*) FROM leagues WHERE DATE(created_at) = d.day), 0)::int AS league_cnt,
-          COALESCE((SELECT COUNT(*) FROM groups  WHERE DATE(created_at) = d.day), 0)::int AS group_cnt,
-          COALESCE((SELECT COUNT(*) FROM draws   WHERE DATE(created_at) = d.day), 0)::int AS draw_cnt
-        FROM dates d
-        ORDER BY d.day
+          w.week_start::text,
+          COALESCE((SELECT COUNT(*) FROM users   WHERE is_admin = false AND created_at >= w.week_start AND created_at < w.week_start + INTERVAL '7 days'), 0)::int AS member_cnt,
+          COALESCE((SELECT COUNT(*) FROM users   WHERE is_admin = false AND deleted_at  >= w.week_start AND deleted_at  < w.week_start + INTERVAL '7 days'), 0)::int AS withdrawn_cnt,
+          COALESCE((SELECT COUNT(*) FROM leagues WHERE created_at >= w.week_start AND created_at < w.week_start + INTERVAL '7 days'), 0)::int AS league_cnt,
+          COALESCE((SELECT COUNT(*) FROM groups  WHERE created_at >= w.week_start AND created_at < w.week_start + INTERVAL '7 days'), 0)::int AS group_cnt,
+          COALESCE((SELECT COUNT(*) FROM draws   WHERE created_at >= w.week_start AND created_at < w.week_start + INTERVAL '7 days'), 0)::int AS draw_cnt
+        FROM weeks w
+        ORDER BY w.week_start
       `),
     ]);
     return res.json({ ok: true, stats: totalsResult.rows[0], trend: trendResult.rows });
@@ -95,7 +96,7 @@ router.get('/stats', requireAdmin, async (req, res) => {
 
 // GET /admin/members - 회원 목록 (필터 + 페이지네이션)
 router.get('/members', requireAdmin, async (req, res) => {
-  const { code, sport, club, role, email, grade, name, from, to } = req.query;
+  const { code, sport, club, role, email, grade, name, from, to, status } = req.query;
   const page   = Math.max(1, parseInt(req.query.page  || '1',  10));
   const limit  = Math.min(100, Math.max(1, parseInt(req.query.limit || '20', 10)));
   const offset = (page - 1) * limit;
@@ -112,6 +113,8 @@ router.get('/members', requireAdmin, async (req, res) => {
   if (name)  { conditions.push(`u.name ILIKE $${params.push(`%${name}%`)}`); }
   if (from)  { conditions.push(`u.created_at >= $${params.push(from)}`); }
   if (to)    { conditions.push(`u.created_at < ($${params.push(to)}::date + interval '1 day')`); }
+  if (status === 'active')    { conditions.push('u.deleted_at IS NULL'); }
+  if (status === 'withdrawn') { conditions.push('u.deleted_at IS NOT NULL'); }
 
   const baseFrom = `
     FROM users u
@@ -134,9 +137,10 @@ router.get('/members', requireAdmin, async (req, res) => {
     const [dataResult, countResult] = await Promise.all([
       pool.query(
         `SELECT u.id, u.member_code, u.email, u.name, u.auth_provider,
-                u.created_at::text,
+                u.created_at::text, u.deleted_at::text,
                 gm.role, gm.division AS grade,
-                g.name AS club_name, g.sport
+                g.name AS club_name, g.sport,
+                (SELECT COUNT(*)::int FROM group_members WHERE user_id = u.id) AS club_count
          ${baseFrom}
          ORDER BY u.created_at DESC
          LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
@@ -161,27 +165,28 @@ router.get('/members', requireAdmin, async (req, res) => {
 router.get('/members/:id', requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
   try {
-    const result = await pool.query(
-      `SELECT u.id, u.member_code, u.email, u.name, u.auth_provider,
-              u.created_at::text,
-              gm.role, gm.division AS grade, gm.group_id,
-              g.name AS club_name, g.sport
-       FROM users u
-       LEFT JOIN LATERAL (
-         SELECT gm2.role, gm2.division, gm2.group_id
-         FROM group_members gm2
-         WHERE gm2.user_id = u.id
-         ORDER BY gm2.joined_at DESC
-         LIMIT 1
-       ) gm ON true
-       LEFT JOIN groups g ON g.id = gm.group_id
-       WHERE u.id = $1 AND u.is_admin = false`,
-      [id],
-    );
-    if (result.rowCount === 0) {
+    const [userResult, clubsResult] = await Promise.all([
+      pool.query(
+        `SELECT u.id, u.member_code, u.email, u.name, u.auth_provider,
+                u.created_at::text, u.deleted_at::text
+         FROM users u
+         WHERE u.id = $1 AND u.is_admin = false`,
+        [id],
+      ),
+      pool.query(
+        `SELECT gm.group_id::text, gm.role, gm.division AS grade,
+                g.name AS club_name, g.sport
+         FROM group_members gm
+         JOIN groups g ON g.id = gm.group_id
+         WHERE gm.user_id = $1
+         ORDER BY gm.joined_at DESC`,
+        [id],
+      ),
+    ]);
+    if (userResult.rowCount === 0) {
       return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
     }
-    return res.json({ ok: true, member: result.rows[0] });
+    return res.json({ ok: true, member: { ...userResult.rows[0], clubs: clubsResult.rows } });
   } catch (e) {
     return res.status(500).json({ ok: false, error: String(e.message || e) });
   }
@@ -206,17 +211,12 @@ router.put('/members/:id', requireAdmin, async (req, res) => {
           [role || 'member', grade || null, id, group_id],
         );
       } else {
-        // 기존 클럽 탈퇴 후 새 클럽 가입
-        await pool.query('DELETE FROM group_members WHERE user_id = $1', [id]);
         await pool.query(
           `INSERT INTO group_members (group_id, user_id, role, division, joined_at)
            VALUES ($1, $2, $3, $4, NOW())`,
           [group_id, id, role || 'member', grade || null],
         );
       }
-    } else if (group_id === '' || group_id === null) {
-      // 클럽 없음으로 변경 → 전체 탈퇴
-      await pool.query('DELETE FROM group_members WHERE user_id = $1', [id]);
     }
     return res.json({ ok: true });
   } catch (e) {

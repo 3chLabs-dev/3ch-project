@@ -16,8 +16,9 @@ model User {
   phone         String?
   auth_provider String
   provider_id   String?
-  created_at    DateTime @default(now())
-  updated_at    DateTime @default(now()) @updatedAt
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @default(now()) @updatedAt
+  deleted_at    DateTime?
 
   leagues       League[]      @relation("LeagueCreator")
   teams         Team[]        @relation("TeamCreator")
@@ -83,7 +84,7 @@ model League {
   creator         User      @relation("LeagueCreator", fields: [created_by_id], references: [id])
 
   group_id        String?
-  group           Group?    @relation(fields: [group_id], references: [id], onDelete: SetNull)
+  group           Group?    @relation(fields: [group_id], references: [id], onDelete: Cascade)
 
   teams           Team[]
   matches         Match[]

@@ -1,6 +1,5 @@
 import { Box, Typography, Stack, Divider, IconButton, List, ListItemButton, ListItemText, Button, Link, Collapse, } from "@mui/material";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
-// import SettingsIcon from "@mui/icons-material/Settings";
 import { useNavigate } from "react-router-dom";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { logout } from "../../features/auth/authSlice";
@@ -53,24 +52,9 @@ export default function MyPage() {
 
     return (
         <Box>
-            {/* 상단 헤더: 로고(또는 타이틀) + 설정 아이콘 */}
-            {/* <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mt: "-4px" }}>
-                <Typography sx={{ fontSize: 24, fontWeight: 900 }}>
-                    더보기
-                </Typography>
-
-                <IconButton
-                    aria-label="settings"
-                    onClick={() => navigate("/mypage/settings")}
-                    sx={{ ml: 1 }}
-                >
-                    <SettingsIcon />
-                </IconButton>
-            </Box> */}
-
             {/* ✅ 로그인 상태: 이름(좌) + 회원정보수정(우) / 비로그인: 문구만 */}
             {token ? (
-                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, mt: "-5px" }}>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, mt: "-3px" }}>
                     <Typography sx={{ fontSize: 24, fontWeight: 900, color: "primary.main" }}>
                         {displayName}
                     </Typography>
@@ -84,6 +68,7 @@ export default function MyPage() {
                             borderRadius: 999,
                             fontWeight: 900,
                             fontSize: 13,
+                            mr: 1.5,
                             bgcolor: "grey.200",
                             color: "text.primary",
                             boxShadow: "none",
@@ -94,7 +79,7 @@ export default function MyPage() {
                     </Button>
                 </Box>
             ) : (
-                <Box sx={{ mt: 2, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+                <Box sx={{ mt: "-3px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
                     <Typography sx={{ fontSize: 24, fontWeight: 900 }}>
                         로그인이 필요합니다
                     </Typography>
@@ -108,10 +93,7 @@ export default function MyPage() {
                             borderRadius: 999,
                             fontWeight: 900,
                             fontSize: 13,
-                            // bgcolor: "grey.200",
-                            // color: "text.primary",
-                            // boxShadow: "none",
-                            // "&:hover": { bgcolor: "grey.300", boxShadow: "none" },
+                            mr: 1.5
                         }}
                     >
                         로그인

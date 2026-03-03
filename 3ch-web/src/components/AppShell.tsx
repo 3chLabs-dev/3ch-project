@@ -1,6 +1,6 @@
 // AppShell.tsx
-import { Link, Outlet, useLocation } from "react-router-dom";
-import { AppBar, Box, Toolbar, Paper, Select, MenuItem } from "@mui/material";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { AppBar, Box, Toolbar, Paper, Select, MenuItem, IconButton } from "@mui/material";
 import type { SelectChangeEvent } from "@mui/material";
 import BottomTab from "./BottomTab";
 
@@ -11,11 +11,14 @@ import { setToken, setUser } from "../features/auth/authSlice";
 import { setPreferredGroupId } from "../features/league/leagueCreationSlice";
 import { useGetMyGroupsQuery } from "../features/group/groupApi";
 import logo from "../assets/512_우리리그 로고.svg";
+import SettingsIcon from "@mui/icons-material/Settings";
+
 
 
 export default function AppShell() {
     const dispatch = useDispatch();
     const location = useLocation();
+    const navigate = useNavigate();
     const token = useSelector((s: RootState) => s.auth.token);
     const preferredGroupId = useSelector((s: RootState) => s.leagueCreation.preferredGroupId);
     const currentStep = useSelector((s: RootState) => s.leagueCreation.currentStep);
@@ -35,6 +38,8 @@ export default function AppShell() {
     const effectiveGroupId = (preferredGroupId && groups.some((g) => g.id === preferredGroupId))
         ? preferredGroupId
         : groups[0]?.id ?? "";
+
+    const isMyPage = location.pathname === "/mypage";
 
     return (
         <Box sx={{ minHeight: "100dvh", bgcolor: "background.default" }}>
@@ -92,6 +97,16 @@ export default function AppShell() {
                                     <MenuItem key={g.id} value={g.id}>{g.name}</MenuItem>
                                 ))}
                             </Select>
+                        )}
+                        {isMyPage && (
+                        <IconButton
+                            aria-label="settings"
+                            onClick={() => navigate("/mypage/settings")}
+                            size="small"
+                            sx={{ ml: "auto", mr: 2 }}
+                        >
+                            <SettingsIcon sx={{ fontSize: 36 }} />
+                        </IconButton>
                         )}
                     </Toolbar>
                 </AppBar>

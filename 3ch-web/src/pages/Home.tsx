@@ -308,13 +308,13 @@ export default function Home() {
                 </Collapse>
 
                 <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                    <Link href="#" underline="hover" variant="body2" fontWeight={700}>
+                    <Link href="/mypage/terms" underline="hover" variant="body2" fontWeight={700}>
                         이용약관
                     </Link>
                     <Typography variant="body2" color="text.secondary">
                         |
                     </Typography>
-                    <Link href="#" underline="hover" variant="body2" fontWeight={700}>
+                    <Link href="/mypage/privacy" underline="hover" variant="body2" fontWeight={700}>
                         개인정보 처리방침
                     </Link>
                 </Stack>

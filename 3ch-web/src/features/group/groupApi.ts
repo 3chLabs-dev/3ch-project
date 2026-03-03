@@ -27,6 +27,10 @@ export interface CreateGroupRequest {
   region_city?: string;
   region_district?: string;
   founded_at?: string;
+  address?: string;
+  address_detail?: string;
+  lat?: number;
+  lng?: number;
 }
 
 export interface CheckNameResponse {
@@ -70,6 +74,10 @@ export interface GetGroupDetailResponse {
     region_city?: string;
     region_district?: string;
     founded_at?: string;
+    address?: string;
+    address_detail?: string;
+    lat?: number;
+    lng?: number;
     created_at: string;
     creator_name?: string;
   };
@@ -85,6 +93,40 @@ export interface UpdateGroupRequest {
   region_city?: string;
   region_district?: string;
   founded_at?: string;
+  address?: string;
+  address_detail?: string;
+  lat?: number;
+  lng?: number;
+}
+
+export interface GeocodeResponse {
+  ok: boolean;
+  lat?: number;
+  lng?: number;
+  error?: string;
+}
+
+export interface RecommendedClub {
+  id: string;
+  name: string;
+  sport?: string;
+  region_city?: string;
+  region_district?: string;
+  address?: string;
+  member_count: number;
+  distance_km: number;
+}
+
+export interface RecommendGroupsRequest {
+  lat: number;
+  lng: number;
+  sport?: string;
+}
+
+export interface RecommendGroupsResponse {
+  ok: boolean;
+  clubs: RecommendedClub[];
+  message: string | null;
 }
 
 export const groupApi = baseApi.injectEndpoints({
@@ -205,6 +247,18 @@ export const groupApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: ["Group"],
     }),
+
+    geocodeAddress: builder.query<GeocodeResponse, string>({
+      query: (address) => `/group/geocode?address=${encodeURIComponent(address)}`,
+    }),
+
+    recommendGroups: builder.mutation<RecommendGroupsResponse, RecommendGroupsRequest>({
+      query: (body) => ({
+        url: "/group/recommend",
+        method: "POST",
+        body,
+      }),
+    }),
   }),
 });
 
@@ -221,4 +275,6 @@ export const {
   useUpdateGroupMutation,
   useDeleteGroupMutation,
   useLeaveGroupMutation,
+  useLazyGeocodeAddressQuery,
+  useRecommendGroupsMutation,
 } = groupApi;

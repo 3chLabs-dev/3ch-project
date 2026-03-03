@@ -175,6 +175,7 @@ router.get('/members/:id', requireAdmin, async (req, res) => {
       ),
       pool.query(
         `SELECT gm.group_id::text, gm.role, gm.division AS grade,
+                gm.joined_at::text,
                 g.name AS club_name, g.sport
          FROM group_members gm
          JOIN groups g ON g.id = gm.group_id

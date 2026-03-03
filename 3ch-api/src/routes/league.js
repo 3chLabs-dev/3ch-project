@@ -21,6 +21,71 @@ const participantSchema = z.object({
  *   description: 리그 생성/조회/수정 및 참가자 관리 API
  */
 
+/**
+ * @openapi
+ * components:
+ *   schemas:
+ *     League:
+ *       type: object
+ *       properties:
+ *         id:
+ *           type: string
+ *           format: uuid
+ *         name:
+ *           type: string
+ *         description:
+ *           type: string
+ *           nullable: true
+ *         type:
+ *           type: string
+ *         format:
+ *           type: string
+ *           nullable: true
+ *         sport:
+ *           type: string
+ *         start_date:
+ *           type: string
+ *           format: date-time
+ *         status:
+ *           type: string
+ *           enum: [draft, active, completed]
+ *         rules:
+ *           type: string
+ *           nullable: true
+ *         notice:
+ *           type: string
+ *           nullable: true
+ *         recruit_count:
+ *           type: integer
+ *         participant_count:
+ *           type: integer
+ *         group_id:
+ *           type: string
+ *           format: uuid
+ *         created_at:
+ *           type: string
+ *           format: date-time
+ *     LeagueParticipant:
+ *       type: object
+ *       properties:
+ *         id:
+ *           type: string
+ *           format: uuid
+ *         name:
+ *           type: string
+ *         division:
+ *           type: string
+ *         paid:
+ *           type: boolean
+ *         arrived:
+ *           type: boolean
+ *         after:
+ *           type: boolean
+ *         sort_order:
+ *           type: integer
+ *           nullable: true
+ */
+
 const createLeagueSchema = z.object({
   name: z.string().min(1, '리그 이름은 필수입니다.'),
   description: z.string().optional(),

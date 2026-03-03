@@ -17,7 +17,7 @@ import {
 import confetti from "canvas-confetti";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import type { SelectChangeEvent } from "@mui/material";
-import { useCreateGroupMutation, useLazyCheckGroupNameQuery } from "../../features/group/groupApi";
+import { useCreateGroupMutation, useLazyCheckGroupNameQuery, useLazyGeocodeAddressQuery } from "../../features/group/groupApi";
 import { REGION_DATA } from "./regionData";
 import confettiImg from "../../assets/128_축포.png";
 
@@ -26,12 +26,18 @@ export default function GroupCreate() {
     const [createGroup, { isLoading: creating }] = useCreateGroupMutation();
     const [checkName] = useLazyCheckGroupNameQuery();
 
+    const [geocode] = useLazyGeocodeAddressQuery();
+
     const [sport, setSport] = useState("");
     // const [groupType, setGroupType] = useState("");
     const [regionCity, setRegionCity] = useState("");
     const [regionDistrict, setRegionDistrict] = useState("");
     const [groupName, setGroupName] = useState("");
     const [foundedAt, setFoundedAt] = useState("");
+    const [address, setAddress] = useState("");
+    const [addressDetail, setAddressDetail] = useState("");
+    const [lat, setLat] = useState<number | undefined>();
+    const [lng, setLng] = useState<number | undefined>();
 
     const [nameChecked, setNameChecked] = useState<boolean | null>(null); // null=미확인, true=사용가능, false=중복
     const [nameCheckMsg, setNameCheckMsg] = useState("");
@@ -104,6 +110,39 @@ export default function GroupCreate() {
         setFoundedAt(formatted);
     };
 
+    type DaumWindow = Window & { daum?: { Postcode: new (opts: { oncomplete: (d: { address: string; roadAddress: string }) => void }) => { open: () => void } } };
+
+    const openPostcode = () => {
+        const w = window as DaumWindow;
+        new w.daum!.Postcode({
+            oncomplete: async (data) => {
+                const selected = data.roadAddress || data.address;
+                setAddress(selected);
+                setLat(undefined);
+                setLng(undefined);
+                try {
+                    const result = await geocode(selected).unwrap();
+                    if (result.ok && result.lat !== undefined && result.lng !== undefined) {
+                        setLat(result.lat);
+                        setLng(result.lng);
+                    }
+                } catch { /* 좌표 없어도 주소는 저장 */ }
+            },
+        }).open();
+    };
+
+    const handleAddressSearch = () => {
+        const w = window as DaumWindow;
+        if (w.daum?.Postcode) {
+            openPostcode();
+        } else {
+            const script = document.createElement("script");
+            script.src = "https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js";
+            script.onload = openPostcode;
+            document.head.appendChild(script);
+        }
+    };
+
     const handleSubmit = () => {
         if (!canSubmit) return;
         setConfirmOpen(true);
@@ -119,6 +158,10 @@ export default function GroupCreate() {
                 region_city: regionCity,
                 region_district: regionDistrict,
                 founded_at: foundedAt,
+                address: address || undefined,
+                address_detail: addressDetail || undefined,
+                lat,
+                lng,
             }).unwrap();
             setDone(true);
         } catch {
@@ -340,6 +383,38 @@ export default function GroupCreate() {
                         >
                             {nameCheckMsg}
                         </Typography>
+                    )}
+                </Box>
+
+                {/* 주소 */}
+                <Box>
+                    <Typography sx={{ fontWeight: 900, mb: 1 }}>주소 <Typography component="span" sx={{ fontSize: 11, fontWeight: 500, color: "#9CA3AF" }}>(선택)</Typography></Typography>
+                    <Stack direction="row" spacing={1} mb={1}>
+                        <TextField
+                            placeholder="도로명 주소"
+                            size="small"
+                            value={address}
+                            InputProps={{ readOnly: true }}
+                            sx={{ ...inputSx, flex: 1 }}
+                        />
+                        <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={handleAddressSearch}
+                            sx={{ borderRadius: 1, height: 40, fontWeight: 700, whiteSpace: "nowrap" }}
+                        >
+                            주소 검색
+                        </Button>
+                    </Stack>
+                    {address && (
+                        <TextField
+                            placeholder="상세 주소 (동/호수 등)"
+                            size="small"
+                            fullWidth
+                            value={addressDetail}
+                            onChange={(e) => setAddressDetail(e.target.value)}
+                            sx={inputSx}
+                        />
                     )}
                 </Box>
 

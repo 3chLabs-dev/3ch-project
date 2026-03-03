@@ -25,7 +25,7 @@ type Member = {
 };
 
 type ClubOption    = { id: string; name: string; sport: string | null };
-type ClubDetail    = { group_id: string; club_name: string; sport: string | null; role: string | null; grade: string | null };
+type ClubDetail    = { group_id: string; club_name: string; sport: string | null; role: string | null; grade: string | null; joined_at: string | null };
 type DetailMember  = Member & { clubs: ClubDetail[] };
 
 type Filters = {
@@ -661,7 +661,9 @@ export default function AdminMemberPage() {
               {/* 가입일시 */}
               <FormRow label="가입일시">
                 <Typography sx={{ fontSize: 13, color: "#6B7280" }}>
-                  {editMember.created_at.slice(0, 19).replace("T", " ")}
+                  {selectedClub?.joined_at
+                    ? selectedClub.joined_at.slice(0, 19).replace("T", " ")
+                    : editMember.created_at.slice(0, 19).replace("T", " ")}
                 </Typography>
               </FormRow>
 

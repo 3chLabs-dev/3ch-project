@@ -14,6 +14,93 @@ const router = express.Router();
  *   description: 클럽 관리 API - 클럽 생성, 가입, 멤버 관리 등
  */
 
+/**
+ * @openapi
+ * components:
+ *   schemas:
+ *     Group:
+ *       type: object
+ *       properties:
+ *         id:
+ *           type: string
+ *           format: uuid
+ *         name:
+ *           type: string
+ *         description:
+ *           type: string
+ *           nullable: true
+ *         sport:
+ *           type: string
+ *           nullable: true
+ *         type:
+ *           type: string
+ *           nullable: true
+ *         region_city:
+ *           type: string
+ *           nullable: true
+ *         region_district:
+ *           type: string
+ *           nullable: true
+ *         address:
+ *           type: string
+ *           nullable: true
+ *         lat:
+ *           type: number
+ *           nullable: true
+ *         lng:
+ *           type: number
+ *           nullable: true
+ *         member_count:
+ *           type: integer
+ *         role:
+ *           type: string
+ *           enum: [owner, admin, member]
+ *         created_at:
+ *           type: string
+ *           format: date-time
+ *     GroupMember:
+ *       type: object
+ *       properties:
+ *         id:
+ *           type: string
+ *         user_id:
+ *           type: integer
+ *         name:
+ *           type: string
+ *           nullable: true
+ *         email:
+ *           type: string
+ *         role:
+ *           type: string
+ *           enum: [owner, admin, member]
+ *         division:
+ *           type: string
+ *           nullable: true
+ *         joined_at:
+ *           type: string
+ *           format: date-time
+ *     RecommendedClub:
+ *       type: object
+ *       properties:
+ *         id:
+ *           type: string
+ *         name:
+ *           type: string
+ *         sport:
+ *           type: string
+ *           nullable: true
+ *         region_city:
+ *           type: string
+ *           nullable: true
+ *         region_district:
+ *           type: string
+ *           nullable: true
+ *         member_count:
+ *           type: integer
+ *         distance_km:
+ *           type: number
+ */
+
 const createGroupSchema = z.object({
   name: z.string().min(1, '클럽 이름은 필수입니다'),
   description: z.string().optional(),
@@ -21,6 +108,10 @@ const createGroupSchema = z.object({
   region_city: z.string().optional(),
   region_district: z.string().optional(),
   founded_at: z.string().optional(),
+  address: z.string().optional(),
+  address_detail: z.string().optional(),
+  lat: z.number().optional(),
+  lng: z.number().optional(),
 });
 
 /**
@@ -142,7 +233,7 @@ router.get('/group/check-name', requireAuth, async (req, res) => {
 router.post('/group', requireAuth, async (req, res) => {
   const client = await pool.connect();
   try {
-    const { name, description, sport, region_city, region_district, founded_at } = createGroupSchema.parse(req.body);
+    const { name, description, sport, region_city, region_district, founded_at, address, address_detail, lat, lng } = createGroupSchema.parse(req.body);
     const userId = req.user.sub;
     const groupId = randomUUID();
     const memberId = randomUUID();
@@ -150,9 +241,9 @@ router.post('/group', requireAuth, async (req, res) => {
     await client.query('BEGIN');
 
     await client.query(
-      `INSERT INTO groups (id, name, description, sport, region_city, region_district, founded_at, created_by_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [groupId, name, description || null, sport || null, region_city || null, region_district || null, founded_at || null, userId]
+      `INSERT INTO groups (id, name, description, sport, region_city, region_district, founded_at, address, address_detail, lat, lng, created_by_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+      [groupId, name, description || null, sport || null, region_city || null, region_district || null, founded_at || null, address || null, address_detail || null, lat ?? null, lng ?? null, userId]
     );
 
     await client.query(
@@ -446,6 +537,164 @@ router.get('/group', requireAuth, async (req, res) => {
  *       500:
  *         description: 서버 오류
  */
+// 주소 → 좌표 변환 (Kakao 주소 검색 API) - /group/:id 보다 먼저 등록해야 함
+router.get('/group/geocode', requireAuth, async (req, res) => {
+  try {
+    const { address } = req.query;
+    if (!address || !address.trim()) {
+      return res.status(400).json({ ok: false, error: 'ADDRESS_REQUIRED' });
+    }
+
+    const key = process.env.KAKAO_REST_API_KEY;
+    if (!key) {
+      return res.status(500).json({ ok: false, error: 'KAKAO_KEY_NOT_SET' });
+    }
+
+    const url = `https://dapi.kakao.com/v2/local/search/address.json?query=${encodeURIComponent(address.trim())}`;
+    const r = await fetch(url, { headers: { Authorization: `KakaoAK ${key}` } });
+    const data = await r.json();
+
+    const doc = data.documents?.[0];
+    if (!doc) {
+      return res.json({ ok: false, error: 'NOT_FOUND' });
+    }
+
+    return res.json({ ok: true, lat: parseFloat(doc.y), lng: parseFloat(doc.x) });
+  } catch (e) {
+    console.error('Geocode error:', e);
+    return res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
+});
+
+/**
+ * @openapi
+ * /group/recommend:
+ *   post:
+ *     summary: 주변 클럽 GPS 추천
+ *     description: 현재 위치 기준 Haversine 공식으로 가장 가까운 클럽 최대 8개를 반환합니다. 이미 가입한 클럽은 제외됩니다.
+ *     tags: [클럽]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [lat, lng]
+ *             properties:
+ *               lat:
+ *                 type: number
+ *                 description: 위도
+ *               lng:
+ *                 type: number
+ *                 description: 경도
+ *               sport:
+ *                 type: string
+ *                 description: 종목 필터 (선택)
+ *     responses:
+ *       200:
+ *         description: 주변 클럽 목록
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *                 clubs:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                       name:
+ *                         type: string
+ *                       sport:
+ *                         type: string
+ *                       region_city:
+ *                         type: string
+ *                       region_district:
+ *                         type: string
+ *                       member_count:
+ *                         type: integer
+ *                       distance_km:
+ *                         type: number
+ *       400:
+ *         description: lat/lng 누락
+ *       500:
+ *         description: 서버 오류
+ */
+// GPS 기반 AI 클럽 추천
+router.post('/group/recommend', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.sub;
+    const { lat, lng, sport } = req.body;
+
+    if (lat === undefined || lng === undefined) {
+      return res.status(400).json({ ok: false, error: 'LAT_LNG_REQUIRED' });
+    }
+
+    // Haversine 공식으로 주변 클럽 조회 (이미 가입한 클럽 제외)
+    const params = [lat, lng, userId];
+    let paramIdx = 4;
+    let sportCondition = '';
+    if (sport) {
+      sportCondition = `AND g.sport = $${paramIdx++}`;
+      params.push(sport);
+    }
+
+    const { rows: nearbyClubs } = await pool.query(
+      `SELECT g.id, g.name, g.sport, g.region_city, g.region_district, g.address,
+              (SELECT COUNT(*)::int FROM group_members WHERE group_id = g.id) AS member_count,
+              6371 * acos(
+                LEAST(1, cos(radians($1)) * cos(radians(g.lat)) * cos(radians(g.lng) - radians($2))
+                       + sin(radians($1)) * sin(radians(g.lat)))
+              ) AS distance_km
+       FROM groups g
+       WHERE g.lat IS NOT NULL AND g.lng IS NOT NULL
+         AND g.id NOT IN (SELECT group_id FROM group_members WHERE user_id = $3)
+         ${sportCondition}
+       ORDER BY distance_km
+       LIMIT 8`,
+      params
+    );
+
+    return res.json({ ok: true, clubs: nearbyClubs, message: null });
+  } catch (e) {
+    console.error('Recommend error:', e);
+    return res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
+});
+
+/**
+ * @openapi
+ * /group/{id}:
+ *   get:
+ *     summary: 클럽 상세 조회
+ *     description: 클럽 정보와 멤버 목록을 반환합니다. 해당 클럽 멤버만 조회 가능합니다.
+ *     tags: [클럽]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: 클럽 ID
+ *     responses:
+ *       200:
+ *         description: 클럽 상세 정보
+ *       403:
+ *         description: 클럽 멤버가 아님
+ *       404:
+ *         description: 클럽을 찾을 수 없음
+ *       500:
+ *         description: 서버 오류
+ */
 router.get('/group/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
@@ -462,7 +711,7 @@ router.get('/group/:id', requireAuth, async (req, res) => {
 
     const groupResult = await pool.query(
       `SELECT g.id, g.name, g.description, g.sport, g.region_city, g.region_district,
-              g.founded_at, g.created_at, u.name AS creator_name
+              g.founded_at, g.address, g.address_detail, g.lat, g.lng, g.created_at, u.name AS creator_name
        FROM groups g
        LEFT JOIN users u ON g.created_by_id = u.id
        WHERE g.id = $1`,
@@ -946,7 +1195,7 @@ router.patch('/group/:id/member/:userId', requireAuth, requireGroupAdmin, async 
 router.patch('/group/:id', requireAuth, requireGroupOwner, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, sport, region_city, region_district, founded_at } = req.body;
+    const { name, description, sport, region_city, region_district, founded_at, address, address_detail, lat, lng } = req.body;
 
     const updates = [];
     const values = [];
@@ -975,6 +1224,22 @@ router.patch('/group/:id', requireAuth, requireGroupOwner, async (req, res) => {
     if (founded_at !== undefined) {
       updates.push(`founded_at = $${paramIdx++}`);
       values.push(founded_at);
+    }
+    if (address !== undefined) {
+      updates.push(`address = $${paramIdx++}`);
+      values.push(address);
+    }
+    if (address_detail !== undefined) {
+      updates.push(`address_detail = $${paramIdx++}`);
+      values.push(address_detail);
+    }
+    if (lat !== undefined) {
+      updates.push(`lat = $${paramIdx++}`);
+      values.push(lat);
+    }
+    if (lng !== undefined) {
+      updates.push(`lng = $${paramIdx++}`);
+      values.push(lng);
     }
 
     if (updates.length === 0) {

@@ -40,6 +40,11 @@ model Group {
   created_at      DateTime  @default(now())
   updated_at      DateTime  @default(now()) @updatedAt
 
+  address         String?
+  address_detail  String?
+  lat             Float?
+  lng             Float?
+
   created_by_id Int
   creator       User    @relation("GroupCreator", fields: [created_by_id], references: [id])
 

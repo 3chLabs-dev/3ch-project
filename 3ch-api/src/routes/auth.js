@@ -32,6 +32,40 @@ const { generateMemberCode } = require("../utils/memberCodeUtils");
  *   description: 인증 및 회원 관리 API - 회원가입, 로그인, 소셜 로그인 등
  */
 
+/**
+ * @openapi
+ * components:
+ *   schemas:
+ *     User:
+ *       type: object
+ *       properties:
+ *         id:
+ *           type: integer
+ *         email:
+ *           type: string
+ *           format: email
+ *         name:
+ *           type: string
+ *         auth_provider:
+ *           type: string
+ *           enum: [local, google, kakao, naver]
+ *         member_code:
+ *           type: string
+ *         created_at:
+ *           type: string
+ *           format: date-time
+ *     AuthToken:
+ *       type: object
+ *       properties:
+ *         ok:
+ *           type: boolean
+ *         token:
+ *           type: string
+ *           description: JWT 토큰
+ *         user:
+ *           $ref: '#/components/schemas/User'
+ */
+
 // Google Social Login
 /**
  * @openapi
@@ -737,6 +771,37 @@ router.post("/social/complete", async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /auth/member/owned-groups:
+ *   get:
+ *     summary: 내가 클럽장인 클럽 목록
+ *     description: 탈퇴 전 소유한 클럽 목록을 확인하기 위해 사용합니다.
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 클럽장인 클럽 목록
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *                 groups:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                       name:
+ *                         type: string
+ *       500:
+ *         description: 서버 오류
+ */
 // 소유 클럽 목록 조회 (탈퇴 전 경고용)
 router.get("/member/owned-groups", requireAuth, async (req, res) => {
   const userId = Number(req.user.sub);
@@ -754,6 +819,36 @@ router.get("/member/owned-groups", requireAuth, async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /auth/member:
+ *   delete:
+ *     summary: 회원탈퇴
+ *     description: 소프트 삭제 방식으로 탈퇴 처리합니다. 로컬 계정은 비밀번호 확인이 필요합니다. 클럽장인 클럽과 소유한 리그/추첨도 함께 삭제됩니다.
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               password:
+ *                 type: string
+ *                 description: 로컬 계정 탈퇴 시 필수
+ *     responses:
+ *       200:
+ *         description: 탈퇴 성공
+ *       400:
+ *         description: 비밀번호 누락 (로컬 계정)
+ *       401:
+ *         description: 비밀번호 불일치
+ *       404:
+ *         description: 사용자를 찾을 수 없음
+ *       500:
+ *         description: 서버 오류
+ */
 // 회원탈퇴
 router.delete("/member", requireAuth, async (req, res) => {
   const userId = Number(req.user.sub);

@@ -39,6 +39,7 @@ import {
     useUpdateGroupMutation,
     useDeleteGroupMutation,
     useLeaveGroupMutation,
+    useLazyGeocodeAddressQuery,
 } from "../../features/group/groupApi";
 import { useGetLeaguesQuery, useGetLeagueParticipantsQuery, useUpdateParticipantMutation } from "../../features/league/leagueApi";
 import type { LeagueParticipantItem } from "../../features/league/leagueApi";
@@ -72,6 +73,7 @@ export default function GroupManage() {
     const [updateMember] = useUpdateMemberMutation();
     const [removeMember] = useRemoveMemberMutation();
     const [updateGroup, { isLoading: isUpdating }] = useUpdateGroupMutation();
+    const [geocode] = useLazyGeocodeAddressQuery();
     const [deleteGroup, { isLoading: isDeleting }] = useDeleteGroupMutation();
     const [leaveGroup, { isLoading: isLeaving }] = useLeaveGroupMutation();
     const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -93,6 +95,10 @@ export default function GroupManage() {
         region_city: "",
         region_district: "",
         founded_at: "",
+        address: "",
+        address_detail: "",
+        lat: undefined as number | undefined,
+        lng: undefined as number | undefined,
     });
 
     // 현재 클럽의 리그 목록 조회
@@ -151,6 +157,34 @@ export default function GroupManage() {
     const isOwner = myRole === "owner";
     const emoji = group.sport ? (SPORT_EMOJI[group.sport] ?? "🏓") : "🏓";
 
+    type DaumWindow = Window & { daum?: { Postcode: new (opts: { oncomplete: (d: { address: string; roadAddress: string }) => void }) => { open: () => void } } };
+
+    const handleAddressSearch = () => {
+        const w = window as DaumWindow;
+        const open = () => {
+            new w.daum!.Postcode({
+                oncomplete: async (data) => {
+                    const selected = data.roadAddress || data.address;
+                    setFormData((prev) => ({ ...prev, address: selected, lat: undefined, lng: undefined }));
+                    try {
+                        const result = await geocode(selected).unwrap();
+                        if (result.ok && result.lat !== undefined && result.lng !== undefined) {
+                            setFormData((prev) => ({ ...prev, lat: result.lat, lng: result.lng }));
+                        }
+                    } catch { /* 좌표 없어도 주소는 저장 */ }
+                },
+            }).open();
+        };
+        if (w.daum?.Postcode) {
+            open();
+        } else {
+            const script = document.createElement("script");
+            script.src = "https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js";
+            script.onload = open;
+            document.head.appendChild(script);
+        }
+    };
+
     const handleOpenEditDialog = () => {
         if (!group) return; // 데이터가 없으면 다이얼로그를 열지 않음
 
@@ -160,6 +194,10 @@ export default function GroupManage() {
             region_city: group.region_city || "",
             region_district: group.region_district || "",
             founded_at: group.founded_at ? group.founded_at.split('T')[0] : "",
+            address: group.address || "",
+            address_detail: group.address_detail || "",
+            lat: group.lat,
+            lng: group.lng,
         });
         setEditDialogOpen(true);
     };
@@ -725,12 +763,38 @@ export default function GroupManage() {
                             fullWidth
                             size="small"
                             InputLabelProps={{ shrink: true }}
-                            sx={{
-                                "& .MuiInputBase-input": {
-                                    fontSize: 14,
-                                },
-                            }}
+                            sx={{ "& .MuiInputBase-input": { fontSize: 14 } }}
                         />
+
+                        {/* 주소 */}
+                        <Stack direction="row" spacing={1}>
+                            <TextField
+                                label="주소"
+                                value={formData.address}
+                                InputProps={{ readOnly: true }}
+                                fullWidth
+                                size="small"
+                                sx={{ "& .MuiInputBase-input": { fontSize: 14 } }}
+                            />
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                onClick={handleAddressSearch}
+                                sx={{ whiteSpace: "nowrap", height: 40, fontWeight: 700 }}
+                            >
+                                주소 검색
+                            </Button>
+                        </Stack>
+                        {formData.address && (
+                            <TextField
+                                label="상세 주소"
+                                value={formData.address_detail}
+                                onChange={(e) => setFormData({ ...formData, address_detail: e.target.value })}
+                                fullWidth
+                                size="small"
+                                sx={{ "& .MuiInputBase-input": { fontSize: 14 } }}
+                            />
+                        )}
                     </Stack>
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2.5, justifyContent: "space-between" }}>

@@ -68,7 +68,7 @@ export default function MyPage() {
                             borderRadius: 999,
                             fontWeight: 900,
                             fontSize: 13,
-                            mr: 1.5,
+                            mr: 0.5,
                             bgcolor: "grey.200",
                             color: "text.primary",
                             boxShadow: "none",
@@ -93,7 +93,7 @@ export default function MyPage() {
                             borderRadius: 999,
                             fontWeight: 900,
                             fontSize: 13,
-                            mr: 1.5
+                            mr: 0.5
                         }}
                     >
                         로그인

@@ -103,7 +103,7 @@ export default function AppShell() {
                             aria-label="settings"
                             onClick={() => navigate("/mypage/settings")}
                             size="small"
-                            sx={{ ml: "auto", mr: 2 }}
+                            sx={{ ml: "auto", mr: 0.1 }}
                         >
                             <SettingsIcon sx={{ fontSize: 36 }} />
                         </IconButton>

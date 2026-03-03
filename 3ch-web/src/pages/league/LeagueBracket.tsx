@@ -8,7 +8,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
-  Box, Button, CircularProgress, IconButton, Paper, Popover,
+  Box, CircularProgress, IconButton, Paper, Popover,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Tooltip, Typography,
 } from "@mui/material";
@@ -168,14 +168,12 @@ interface BracketRowProps {
   n: number;
   localOrder: LeagueParticipantItem[];
   editMode: boolean;
-  reorderMode: "push" | "swap";
-  swapFirst: number | null;
+  reorderMode: "push";
   onMove: (idx: number, dir: "up" | "down") => void;
-  onSwapClick: (idx: number) => void;
 }
 
 const SortableBracketRow = memo(function SortableBracketRow({
-  participant, rowIdx, n, localOrder, editMode, reorderMode, swapFirst, onMove, onSwapClick,
+  participant, rowIdx, n, localOrder, editMode, onMove,
 }: BracketRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: participant.id, disabled: !editMode });
@@ -197,7 +195,6 @@ const SortableBracketRow = memo(function SortableBracketRow({
         {...(editMode ? { ...attributes, ...listeners } : {})}
       >
         {editMode ? (
-          reorderMode === "push" ? (
             <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
               <IconButton
                 size="small" disabled={rowIdx === 0}
@@ -217,21 +214,6 @@ const SortableBracketRow = memo(function SortableBracketRow({
                 <ArrowDownwardIcon sx={{ fontSize: 13 }} />
               </IconButton>
             </Box>
-          ) : (
-            <Box
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={() => onSwapClick(rowIdx)}
-              sx={{
-                cursor: "pointer",
-                display: "flex", flexDirection: "column", alignItems: "center",
-                bgcolor: swapFirst === rowIdx ? "#BFDBFE" : "transparent",
-                borderRadius: 1, p: 0.5,
-                border: swapFirst === rowIdx ? "1.5px solid #3B82F6" : "1.5px solid transparent",
-              }}
-            >
-              <Typography sx={{ fontSize: 11 }}>{rowIdx + 1}</Typography>
-            </Box>
-          )
         ) : (
           rowIdx + 1
         )}
@@ -286,8 +268,7 @@ export default function LeagueBracket() {
   );
 
   const [editMode, setEditMode]     = useState(false);
-  const [reorderMode, setReorderMode] = useState<"push" | "swap">("push");
-  const [swapFirst, setSwapFirst]   = useState<number | null>(null);
+  const [reorderMode] = useState<"push">("push");
   const [courtMap, setCourtMap]     = useState<Record<number, string>>({});
   const [rulesAnchor, setRulesAnchor] = useState<HTMLButtonElement | null>(null);
   const [landscape, setLandscape]     = useState(false);
@@ -314,21 +295,6 @@ export default function LeagueBracket() {
     });
   }, [setLocalOrder]);
 
-  const handleSwapClick = useCallback((idx: number) => {
-    if (swapFirst === null) {
-      setSwapFirst(idx);
-    } else if (swapFirst === idx) {
-      setSwapFirst(null);
-    } else {
-      setLocalOrder((prev) => {
-        const arr = [...prev];
-        [arr[swapFirst], arr[idx]] = [arr[idx], arr[swapFirst]];
-        return arr;
-      });
-      setSwapFirst(null);
-    }
-  }, [swapFirst, setLocalOrder]);
-
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
@@ -342,7 +308,6 @@ export default function LeagueBracket() {
 
   const toggleEdit = useCallback(() => {
     setEditMode((v) => !v);
-    setSwapFirst(null);
   }, []);
 
   // ── 스케일: dataReady가 true가 될 때 ref가 붙으므로 deps에 포함 ──────────
@@ -456,33 +421,7 @@ export default function LeagueBracket() {
         </Box>
       </Popover>
 
-      {/* ===== 수정 모드 툴바 ===== */}
-      {editMode && (
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, px: 2, py: 0.75, bgcolor: "#F0F9FF", borderBottom: "1px solid #BAE6FD" }}>
-          <Typography sx={{ fontSize: 12, color: "#0369A1", fontWeight: 600 }}>재배치:</Typography>
-          <Button
-            size="small" disableElevation
-            variant={reorderMode === "push" ? "contained" : "outlined"}
-            onClick={() => setReorderMode("push")}
-            sx={{ fontSize: 11, py: 0.25, px: 1, minWidth: 0 }}
-          >
-            밀어내기
-          </Button>
-          <Button
-            size="small" disableElevation
-            variant={reorderMode === "swap" ? "contained" : "outlined"}
-            onClick={() => { setReorderMode("swap"); setSwapFirst(null); }}
-            sx={{ fontSize: 11, py: 0.25, px: 1, minWidth: 0 }}
-          >
-            위치 맞바꾸기
-          </Button>
-          {reorderMode === "swap" && swapFirst !== null && (
-            <Typography sx={{ fontSize: 11, color: "#0369A1" }}>
-              {localOrder[swapFirst]?.name} → 다른 참가자 선택
-            </Typography>
-          )}
-        </Box>
-      )}
+
 
       {/* ===== 대진표 영역 (회전) ===== */}
       <Box
@@ -547,9 +486,7 @@ export default function LeagueBracket() {
                         localOrder={localOrder}
                         editMode={editMode}
                         reorderMode={reorderMode}
-                        swapFirst={swapFirst}
                         onMove={handleMove}
-                        onSwapClick={handleSwapClick}
                       />
                     ))}
                   </TableBody>

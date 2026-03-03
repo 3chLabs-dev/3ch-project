@@ -298,17 +298,18 @@ export default function LeagueStep5Participants() {
               <Box sx={cellCenter}>
                 <Box
                   sx={{
-                    minWidth: 34,
-                    height: 22,
-                    px: 1,
-                    borderRadius: 999,
-                    bgcolor: "#E5E7EB",
-                    display: "flex",
+                    minWidth: 36,
+                    height: 36,
+                    px: 0.8,
+                    lineHeight: 1,
+                    borderRadius: 9999,
+                    bgcolor: "#FAAA47",
+                    display: "inline-flex",
                     alignItems: "center",
                     justifyContent: "center",
                     fontWeight: 900,
-                    fontSize: 12,
-                    color: "#111827",
+                    fontSize: 11,
+                    color: "#000000",
                   }}
                 >
                   {p.division || "-"}

@@ -106,7 +106,7 @@ const DiagonalBase = styled(TableCell)(({ theme }) => ({
   backgroundColor: theme.palette.action.disabledBackground,
 }));
 
-function DiagonalScoreCell() {
+function DiagonalScoreCell({ landscape }: { landscape: boolean }) {
   const ref = useRef<HTMLTableCellElement>(null);
   const [angle, setAngle] = useState(45);
   useLayoutEffect(() => {
@@ -126,7 +126,7 @@ function DiagonalScoreCell() {
     <DiagonalBase
       ref={ref}
       sx={(theme) => ({
-        backgroundImage: `linear-gradient(${angle}deg,transparent 49.5%,${theme.palette.divider} 50%,${theme.palette.divider} 50.5%,transparent 51%)`,
+        backgroundImage: `linear-gradient(${landscape ? angle : -angle}deg,transparent 49.5%,${theme.palette.divider} 50%,${theme.palette.divider} 50.5%,transparent 51%)`,
       })}
     />
   );
@@ -170,10 +170,11 @@ interface BracketRowProps {
   editMode: boolean;
   reorderMode: "push";
   onMove: (idx: number, dir: "up" | "down") => void;
+  landscape: boolean;
 }
 
 const SortableBracketRow = memo(function SortableBracketRow({
-  participant, rowIdx, n, localOrder, editMode, onMove,
+  participant, rowIdx, n, localOrder, editMode, onMove, landscape,
 }: BracketRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: participant.id, disabled: !editMode });
@@ -228,7 +229,7 @@ const SortableBracketRow = memo(function SortableBracketRow({
 
       {localOrder.map((_, colIdx) =>
         rowIdx === colIdx
-          ? <DiagonalScoreCell key={colIdx} />
+          ? <DiagonalScoreCell key={colIdx} landscape={landscape} />
           : <StyledTableCell key={colIdx}><ScoreInput disabled={!editMode} /></StyledTableCell>
       )}
 
@@ -467,7 +468,9 @@ export default function LeagueBracket() {
                     <NameHeaderCell key={p.id}>
                       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0.4, flexWrap: "wrap" }}>
                         <DivBadge division={p.division} />
-                        <span>{p.name}</span>
+                          <Box component="span" sx={{minHeight: landscape ? "" : "70px"}}>
+                            {p.name}
+                          </Box>
                       </Box>
                     </NameHeaderCell>
                   ))}
@@ -487,6 +490,7 @@ export default function LeagueBracket() {
                         editMode={editMode}
                         reorderMode={reorderMode}
                         onMove={handleMove}
+                        landscape={landscape}
                       />
                     ))}
                   </TableBody>

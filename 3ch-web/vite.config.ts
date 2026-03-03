@@ -22,6 +22,20 @@ export default defineConfig({
           { src: "pwa-512-maskable.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
         ],
       },
+      // pwa 제외 요청
+      workbox: {
+        // SPA fallback에서 /api/auth 제외
+        navigateFallbackDenylist: [/^\/api\/auth\//],
+
+        // /api/auth 요청은 무조건 서버로 (캐시 안 함)
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) =>
+              url.pathname.startsWith("/api/auth/"),
+            handler: "NetworkOnly",
+          },
+        ],
+      },
     }),
   ],
 });

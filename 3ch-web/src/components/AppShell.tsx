@@ -98,7 +98,7 @@ export default function AppShell() {
                                 ))}
                             </Select>
                         )}
-                        {isMyPage && (
+                        {isMyPage && token && (
                         <IconButton
                             aria-label="settings"
                             onClick={() => navigate("/mypage/settings")}

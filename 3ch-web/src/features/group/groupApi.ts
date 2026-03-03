@@ -114,7 +114,7 @@ export interface RecommendedClub {
   region_district?: string;
   address?: string;
   member_count: number;
-  distance_km: number;
+  distance_km: number | null;
 }
 
 export interface RecommendGroupsRequest {

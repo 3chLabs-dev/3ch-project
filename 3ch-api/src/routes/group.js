@@ -636,32 +636,57 @@ router.post('/group/recommend', requireAuth, async (req, res) => {
       return res.status(400).json({ ok: false, error: 'LAT_LNG_REQUIRED' });
     }
 
-    // Haversine 공식으로 주변 클럽 조회 (이미 가입한 클럽 제외)
-    const params = [lat, lng, userId];
-    let paramIdx = 4;
+    // Kakao 역지오코딩으로 사용자 시/군/구 조회 (region_city 폴백용)
+    let userCity = null;
+    const kakaoKey = process.env.KAKAO_REST_API_KEY;
+    if (kakaoKey) {
+      try {
+        const geoUrl = `https://dapi.kakao.com/v2/local/geo/coord2regioncode.json?x=${lng}&y=${lat}`;
+        const geoRes = await fetch(geoUrl, { headers: { Authorization: `KakaoAK ${kakaoKey}` } });
+        const geoData = await geoRes.json();
+        const region = geoData.documents?.find((d) => d.region_type === 'B');
+        userCity = region?.region_2depth_name?.split(' ')[0] || null;
+      } catch {
+        // Kakao 실패 시 GPS 좌표 기반만으로 진행
+      }
+    }
+
+    // GPS 좌표 기반 + region_city/region_district 폴백
+    // - region_city = "안양시" 로 저장된 클럽: region_city = $4 매칭
+    // - region_city = "경기도", region_district = "안양시" 로 저장된 클럽: region_district = $4 매칭
+    const params = [lat, lng, userId, userCity];
+    let paramIdx = 5;
     let sportCondition = '';
     if (sport) {
       sportCondition = `AND g.sport = $${paramIdx++}`;
       params.push(sport);
     }
 
-    const { rows: nearbyClubs } = await pool.query(
+    const { rows: clubs } = await pool.query(
       `SELECT g.id, g.name, g.sport, g.region_city, g.region_district, g.address,
               (SELECT COUNT(*)::int FROM group_members WHERE group_id = g.id) AS member_count,
-              6371 * acos(
-                LEAST(1, cos(radians($1)) * cos(radians(g.lat)) * cos(radians(g.lng) - radians($2))
-                       + sin(radians($1)) * sin(radians(g.lat)))
-              ) AS distance_km
+              CASE
+                WHEN g.lat IS NOT NULL AND g.lng IS NOT NULL THEN
+                  6371 * acos(
+                    LEAST(1, cos(radians($1)) * cos(radians(g.lat)) * cos(radians(g.lng) - radians($2))
+                           + sin(radians($1)) * sin(radians(g.lat)))
+                  )
+                ELSE NULL
+              END AS distance_km
        FROM groups g
-       WHERE g.lat IS NOT NULL AND g.lng IS NOT NULL
-         AND g.id NOT IN (SELECT group_id FROM group_members WHERE user_id = $3)
+       WHERE g.id NOT IN (SELECT group_id FROM group_members WHERE user_id = $3)
+         AND (
+           (g.lat IS NOT NULL AND g.lng IS NOT NULL)
+           OR ($4::text IS NOT NULL AND g.region_city = $4)
+           OR ($4::text IS NOT NULL AND g.region_district = $4)
+         )
          ${sportCondition}
-       ORDER BY distance_km
+       ORDER BY distance_km ASC NULLS LAST
        LIMIT 8`,
       params
     );
 
-    return res.json({ ok: true, clubs: nearbyClubs, message: null });
+    return res.json({ ok: true, clubs, message: null });
   } catch (e) {
     console.error('Recommend error:', e);
     return res.status(500).json({ ok: false, error: String(e.message || e) });

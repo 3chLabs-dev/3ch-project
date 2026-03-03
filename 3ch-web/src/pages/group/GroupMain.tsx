@@ -380,7 +380,7 @@ function NearbyGroupCard({ group }: { group: RecommendedClub }) {
                                 <Typography sx={{ fontSize: 11, color: "#6B7280", fontWeight: 600 }}>{region}</Typography>
                             )}
                             <Typography sx={{ fontSize: 11, color: "#2F80ED", fontWeight: 700 }}>
-                                {Number(group.distance_km).toFixed(1)}km
+                                {group.distance_km != null ? `${Number(group.distance_km).toFixed(1)}km` : "지역 기반"}
                             </Typography>
                             <Typography sx={{ fontSize: 11, color: "#6B7280", fontWeight: 600 }}>
                                 회원 {group.member_count}명

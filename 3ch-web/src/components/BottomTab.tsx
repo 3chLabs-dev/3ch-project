@@ -53,10 +53,7 @@ export default function BottomTab() {
         <Paper
             elevation={0}
             sx={{
-                position: "sticky",
-                bottom: 0,
-                left: 0,
-                right: 0,
+                flexShrink: 0,
                 zIndex: 20,
                 borderTop: 1,
                 borderColor: "divider",

@@ -236,7 +236,6 @@ export default function MemberEditPage() {
                 throw new Error("NO_USER_FROM_ME");
             }
 
-            // 🔥 여기 버그 수정 (기존 user 저장하던 거 수정)
             localStorage.setItem("user", JSON.stringify(updatedUser));
             dispatch(setUser(updatedUser));
 

@@ -141,7 +141,7 @@ function DivBadge({ division }: { division?: string | null }) {
       sx={{
         display: "inline-flex", alignItems: "center", justifyContent: "center",
         width: 20, height: 20, borderRadius: "50%",
-        bgcolor: "#2F80ED", color: "#fff",
+        bgcolor: "#FAAA47", color: "#000000",
         fontSize: 9, fontWeight: 900, lineHeight: 1,
         flexShrink: 0, verticalAlign: "middle",
       }}
@@ -446,10 +446,12 @@ export default function LeagueBracket() {
         anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
         transformOrigin={{ vertical: "top", horizontal: "right" }}
       >
-        <Box sx={{ p: 2, maxWidth: 280 }}>
+        <Box sx={{ p: 2, maxWidth: 500 }}>
           <Typography sx={{ fontWeight: 700, fontSize: 13, mb: 0.5 }}>경기 규칙</Typography>
           <Typography sx={{ fontSize: 12, lineHeight: 1.7, whiteSpace: "pre-line" }}>
-            {league.rules || "규칙 정보 없음"}
+            5전 3선승제: "다섯 번의 경기 중 세 번을 먼저 이기면 승리합니다."<br/>
+            3전 2선승제: "세 번의 경기 중 두 번을 먼저 이기면 승리합니다."<br/>
+            3세트제: "세 번의 경기를 모두 해야 합니다. 2대0이 되어도 세 번째 경기를 진행합니다."
           </Typography>
         </Box>
       </Popover>

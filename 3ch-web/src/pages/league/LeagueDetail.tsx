@@ -531,7 +531,7 @@ export default function LeagueDetail() {
                 sx={{ display: "grid", gridTemplateColumns: "56px 1fr 130px", alignItems: "center", px: 1.5, py: 0.9, borderTop: idx === 0 ? "none" : "1px solid #F3F4F6" }}
               >
                 <Box sx={{ display: "flex", justifyContent: "center" }}>
-                  <Box sx={{ display: "inline-flex", alignItems: "center", justifyContent: "center", height: 22, px: 1, borderRadius: 999, bgcolor: "#E5E7EB", fontSize: 11, fontWeight: 900, color: "#111827", minWidth: 28 }}>
+                  <Box sx={{ display: "inline-flex", alignItems: "center", justifyContent: "center", height: 22, px: 1, borderRadius: 999, bgcolor: "#FAAA47", fontSize: 11, fontWeight: 900, color: "#000000", minWidth: 28 }}>
                     {p.division || "-"}
                   </Box>
                 </Box>

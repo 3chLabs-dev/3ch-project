@@ -355,7 +355,12 @@ export default function LeagueBracket() {
       const tw = wrapperTableRef.current.scrollWidth;
       const th = wrapperTableRef.current.scrollHeight;
       if (!tw || !th) return;
-      setScale(Math.min(ww / tw, wh / th));
+      // portrait(writingMode: vertical-rl): 물리적 tw/th가 시각적으로 뒤바뀜
+      // → 시각 너비 = physical height(th), 시각 높이 = physical width(tw)
+      const s = landscape
+        ? Math.min(ww / tw, wh / th)
+        : Math.min(ww / th, wh / tw);
+      setScale(s);
     }
     updateScale();
     const ro = new ResizeObserver(updateScale);
@@ -467,13 +472,9 @@ export default function LeagueBracket() {
       display: "flex",
       flexDirection: "column",
       overflow: "hidden",
-      ...(landscape ? {
-        position: "fixed",
-        inset: 0,
-        zIndex: 1300,
-      } : {
-        height: "100%",
-      }),
+      position: "fixed",
+      inset: 0,
+      zIndex: 1300,
     }}>
 
       {/* ===== 헤더 바 ===== */}

@@ -33,7 +33,7 @@ import { useGetGroupDetailQuery } from "../../features/group/groupApi";
 // ─── 상태 표시 ────────────────────────────────────────────────────────────────
 const STATUS_LABEL: Record<string, string> = {
   pending: "시작",
-  playing: "진행 중",
+  playing: "저장",
   done: "완료",
 };
 const STATUS_COLOR: Record<string, string> = {
@@ -162,7 +162,7 @@ function MatchCard({
               </IconButton>
             )}
             <Box sx={{ minWidth: 32, height: 30, border: "1.5px solid #E5E7EB", borderRadius: 1, display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "#fff" }}>
-              <Typography sx={{ fontWeight: 900, fontSize: 17, color: aWins ? "#DC2626" : "#111827" }}>{sa}</Typography>
+              <Typography sx={{ fontWeight: 900, fontSize: 17, color: aWins ? "#16A34A" : "#111827" }}>{sa}</Typography>
             </Box>
             {canEditScore && (
               <IconButton size="small" onClick={() => handleScore("a", 1)} sx={{ p: 0.3, color: "#2F80ED" }}>
@@ -178,7 +178,7 @@ function MatchCard({
               </IconButton>
             )}
             <Box sx={{ minWidth: 32, height: 30, border: "1.5px solid #E5E7EB", borderRadius: 1, display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "#fff" }}>
-              <Typography sx={{ fontWeight: 900, fontSize: 17, color: bWins ? "#DC2626" : "#111827" }}>{sb}</Typography>
+              <Typography sx={{ fontWeight: 900, fontSize: 17, color: bWins ? "#16A34A" : "#111827" }}>{sb}</Typography>
             </Box>
             {canEditScore && (
               <IconButton size="small" onClick={() => handleScore("b", 1)} sx={{ p: 0.3, color: "#2F80ED" }}>
@@ -187,7 +187,7 @@ function MatchCard({
             )}
           </Box>
 
-          <Stack direction="row" alignItems="center" spacing={0.3} sx={{ flexShrink: 0 }}>
+          <Stack direction="row" alignItems="center" spacing={1.5} sx={{ flexShrink: 0 }}>
             <Button
               size="small"
               onClick={canManage ? handleStatus : undefined}

@@ -1,4 +1,4 @@
-CREATE TABLE notices (
+CREATE TABLE IF NOT EXISTS notices (
   id           SERIAL PRIMARY KEY,
   title        TEXT NOT NULL,
   content      TEXT NOT NULL,

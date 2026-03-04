@@ -482,8 +482,14 @@ export default function LeagueBracket() {
           <ChevronLeftIcon />
         </IconButton>
 
-        <Typography sx={{ flex: 1, fontSize: 12, fontWeight: 600, mx: 0.5, lineHeight: 1.4 }} noWrap>
+        <Typography sx={{ flex: 1, fontSize: 11, fontWeight: 600, mx: 0.5, lineHeight: 1.4 }} noWrap>
           {date} / {league.type} {league.format} / {league.rules}
+          {/* ⓘ 경기 규칙 */}
+          <Tooltip title="경기 규칙 설명">
+            <IconButton size="small" onClick={(e) => setRulesAnchor(rulesAnchor ? null : e.currentTarget)}>
+              <InfoOutlinedIcon sx={{ fontSize: 20 }} />
+            </IconButton>
+          </Tooltip>
         </Typography>
 
         {/* 가로/세로 전환 */}
@@ -493,12 +499,7 @@ export default function LeagueBracket() {
           </IconButton>
         </Tooltip>
 
-        {/* ⓘ 경기 규칙 */}
-        <Tooltip title="경기 규칙 설명">
-          <IconButton size="small" onClick={(e) => setRulesAnchor(rulesAnchor ? null : e.currentTarget)}>
-            <InfoOutlinedIcon sx={{ fontSize: 20 }} />
-          </IconButton>
-        </Tooltip>
+        
 
         {/* 수정 (리그 시작 전만) */}
         {!leagueStarted && (
@@ -528,9 +529,10 @@ export default function LeagueBracket() {
         <Box sx={{ p: 2, maxWidth: 500 }}>
           <Typography sx={{ fontWeight: 700, fontSize: 13, mb: 0.5 }}>경기 규칙</Typography>
           <Typography sx={{ fontSize: 12, lineHeight: 1.7, whiteSpace: "pre-line" }}>
-            5전 3선승제: "다섯 번의 경기 중 세 번을 먼저 이기면 승리합니다."<br/>
-            3전 2선승제: "세 번의 경기 중 두 번을 먼저 이기면 승리합니다."<br/>
-            3세트제: "세 번의 경기를 모두 해야 합니다. 2대0이 되어도 세 번째 경기를 진행합니다."
+            3전 2선승제: 세 번의 경기 중 두 번을 먼저 이기면 승리합니다.<br/>
+            5전 3선승제: 다섯 번의 경기 중 세 번을 먼저 이기면 승리합니다.<br/>
+            7전 4선승제: 일곱 번의 경기 중 네 번을 먼저 이기면 승리합니다.<br/>
+            3세트제: 세 번의 경기를 모두 해야 합니다. 2대0이 되어도 세 번째 경기를 진행합니다.
           </Typography>
         </Box>
       </Popover>
@@ -617,8 +619,8 @@ export default function LeagueBracket() {
           </TableContainer>
 
           {/* ─── 경기 순서 테이블 ─── */}
-          <Box sx={{ mt: 1.5 }}>
-            <TableContainer component={Paper} sx={{ borderRadius: 0 }}>
+          <Box sx={{ mt: landscape ? 1.5 : 0, mr: landscape ? 0 : 1.5 }}>
+            <TableContainer sx={{ borderRadius: 0 }}>
               <Table size="small">
                 <TableBody>
                   {/* 경기 번호 */}

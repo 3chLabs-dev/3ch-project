@@ -46,7 +46,6 @@ export default function PrivacyPolicyPage() {
         <Box
             sx={{
                 width: "100%",
-                maxWidth: 420,
                 mx: "auto",
                 height: "100%",
                 display: "flex",

@@ -11,6 +11,7 @@ const drawRouter = require("./routes/draw");
 const adminRouter = require("./routes/admin");
 const policyRouter = require("./routes/policy");
 const boardRouter  = require("./routes/board");
+const noticeRouter = require("./routes/notice")
 
 const app = express();
 
@@ -46,5 +47,6 @@ app.use("/api", drawRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api", policyRouter);
 app.use("/api/admin/board", boardRouter);
+app.use("/api", noticeRouter);
 
 module.exports = app;

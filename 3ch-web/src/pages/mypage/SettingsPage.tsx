@@ -16,7 +16,6 @@ export default function SettingsPage() {
         <Box
             sx={{
                 width: "100%",
-                maxWidth: 420,
                 mx: "auto",
                 mt: "-4px"
             }}

@@ -458,10 +458,10 @@ router.get('/league/:id/participants', requireAuth, async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT id, league_id, division, name, paid, arrived, "after", created_at
+      `SELECT id, league_id, division, name, paid, arrived, "after", sort_order, created_at
        FROM league_participants
        WHERE league_id = $1
-       ORDER BY division ASC, created_at ASC`,
+       ORDER BY sort_order ASC NULLS LAST, division ASC, created_at ASC`,
       [id],
     );
 
@@ -1254,7 +1254,7 @@ router.post('/league/:id/matches/init', requireAuth, async (req, res) => {
     }
 
     const participants = await pool.query(
-      `SELECT id FROM league_participants WHERE league_id = $1 ORDER BY division ASC, created_at ASC`,
+      `SELECT id FROM league_participants WHERE league_id = $1 ORDER BY sort_order ASC NULLS LAST, division ASC, created_at ASC`,
       [leagueId],
     );
     const ids = participants.rows.map((r) => r.id);
@@ -1282,6 +1282,92 @@ router.post('/league/:id/matches/init', requireAuth, async (req, res) => {
     return res.json({ matches: result.rows });
   } catch (err) {
     console.error('Error initializing matches:', err);
+    return res.status(500).json({ message: '서버 오류' });
+  }
+});
+
+/**
+ * @openapi
+ * /league/{id}/participants/reorder:
+ *   patch:
+ *     summary: 참가자 순서 변경
+ *     description: 참가자 ID 배열을 새 순서로 전달하면 sort_order를 일괄 업데이트합니다. owner/admin만 가능합니다.
+ *     tags: [리그]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: 리그 ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [order]
+ *             properties:
+ *               order:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: uuid
+ *                 description: 새 순서로 정렬된 참가자 ID 배열
+ *     responses:
+ *       200:
+ *         description: 순서 저장 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *       400:
+ *         description: order 배열 누락
+ *       403:
+ *         description: 권한 없음 (owner/admin 아님)
+ *       500:
+ *         description: 서버 오류
+ */
+// PATCH /league/:id/participants/reorder - 씨드 순서 저장 (owner/admin)
+router.patch('/league/:id/participants/reorder', requireAuth, async (req, res) => {
+  const userId = Number(req.user.sub);
+  const leagueId = req.params.id;
+  const { order } = req.body; // string[] - participant IDs in new order
+  if (!Array.isArray(order)) return res.status(400).json({ message: 'order 배열이 필요합니다.' });
+  try {
+    const access = await pool.query(
+      `SELECT l.id FROM leagues l
+       INNER JOIN group_members gm ON gm.group_id = l.group_id
+       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+      [leagueId, userId],
+    );
+    if (access.rowCount === 0) return res.status(403).json({ message: '권한이 없습니다.' });
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (let i = 0; i < order.length; i++) {
+        await client.query(
+          `UPDATE league_participants SET sort_order = $1 WHERE id = $2 AND league_id = $3`,
+          [i + 1, order[i], leagueId],
+        );
+      }
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Error reordering participants:', err);
     return res.status(500).json({ message: '서버 오류' });
   }
 });

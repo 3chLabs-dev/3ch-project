@@ -74,6 +74,7 @@ export interface LeagueParticipantItem {
   paid: boolean;
   arrived: boolean;
   after: boolean;
+  sort_order?: number | null;
   created_at: string;
 }
 
@@ -366,6 +367,15 @@ export const leagueApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: (_result, _error, { leagueId }) => [{ type: "League", id: `matches-${leagueId}` }],
     }),
+
+    reorderLeagueParticipants: builder.mutation<{ ok: boolean }, { leagueId: string; order: string[] }>({
+      query: ({ leagueId, order }) => ({
+        url: `/league/${leagueId}/participants/reorder`,
+        method: "PATCH",
+        body: { order },
+      }),
+      invalidatesTags: (_result, _error, { leagueId }) => [{ type: "League", id: leagueId }],
+    }),
   }),
 });
 
@@ -387,4 +397,5 @@ export const {
   useUpdateLeagueMatchMutation,
   useReorderLeagueMatchesMutation,
   useDeleteLeagueMatchMutation,
+  useReorderLeagueParticipantsMutation,
 } = leagueApi;

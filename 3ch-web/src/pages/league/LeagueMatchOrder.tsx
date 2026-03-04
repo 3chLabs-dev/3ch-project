@@ -65,15 +65,16 @@ function ParticipantLabel({ name, division }: { name: string | null; division: s
 
 // ─── 경기 카드 ────────────────────────────────────────────────────────────────
 function MatchCard({
-  match, index, canManage, leagueId, rules,
+  match, index, canManage, canMember, leagueId, rules,
 }: {
   match: LeagueMatch;
   index: number;
   canManage: boolean;
+  canMember: boolean;
   leagueId: string;
   rules?: string | null;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: match.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: match.id, disabled: !canManage });
   const [updateMatch] = useUpdateLeagueMatchMutation();
   const [deleteMatch] = useDeleteLeagueMatchMutation();
   const courtRef = useRef<HTMLInputElement>(null);
@@ -119,7 +120,7 @@ function MatchCard({
   const sb = match.score_b ?? 0;
   const aWins = !is3set && isDone && sa > sb;
   const bWins = !is3set && isDone && sb > sa;
-  const canEditScore = canManage && (isPlaying || isDone);
+  const canEditScore = canMember && (isPlaying || isDone);
 
   return (
     <Card
@@ -190,8 +191,8 @@ function MatchCard({
           <Stack direction="row" alignItems="center" spacing={1.5} sx={{ flexShrink: 0 }}>
             <Button
               size="small"
-              onClick={canManage ? handleStatus : undefined}
-              disabled={!canManage}
+              onClick={canMember ? handleStatus : undefined}
+              disabled={!canMember}
               sx={{
                 minWidth: "auto", px: 1, py: 0.3, fontSize: 11, fontWeight: 700, borderRadius: 1,
                 bgcolor: STATUS_COLOR[match.status] + "22",
@@ -218,7 +219,7 @@ function MatchCard({
             key={match.court ?? ""}
             placeholder="코트"
             size="small"
-            disabled={!canEditScore}
+            disabled={!canMember}
             onBlur={handleCourtBlur}
             slotProps={{
               input: {
@@ -230,7 +231,7 @@ function MatchCard({
               },
             }}
             sx={{
-              width: 180,
+              width: 100,
               "& .MuiOutlinedInput-root": { borderRadius: 1, bgcolor: "#F9FAFB", height: 32 },
               "& .MuiOutlinedInput-input": { py: 0, fontSize: "0.82rem" },
             }}
@@ -253,6 +254,7 @@ export default function LeagueMatchOrder() {
   const { data: groupData, isLoading: groupLoading } = useGetGroupDetailQuery(groupId, { skip: !groupId });
   const canManage =
     !groupLoading && (groupData?.myRole === "owner" || groupData?.myRole === "admin");
+  const canMember = !groupLoading && !!groupData?.myRole;
 
   const { data: matchData, isLoading: matchLoading } = useGetLeagueMatchesQuery(leagueId, { skip: !leagueId, refetchOnMountOrArgChange: true });
   const [localMatches, setLocalMatches] = useState<LeagueMatch[] | null>(null);
@@ -352,6 +354,7 @@ export default function LeagueMatchOrder() {
                   match={match}
                   index={i}
                   canManage={canManage}
+                  canMember={canMember}
                   leagueId={leagueId}
                   rules={league?.rules}
                 />

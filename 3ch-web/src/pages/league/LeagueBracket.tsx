@@ -8,7 +8,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
-  Box, CircularProgress, IconButton, Paper, Popover,
+  Box, Button, CircularProgress, IconButton, Paper, Popover,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Tooltip, Typography,
 } from "@mui/material";
@@ -29,12 +29,14 @@ import {
   useGetLeagueParticipantsQuery,
   useGetLeagueMatchesQuery,
   useUpdateLeagueMatchMutation,
+  useReorderLeagueParticipantsMutation,
   type LeagueParticipantItem,
   type LeagueMatch,
 } from "../../features/league/leagueApi";
+import { useGetGroupDetailQuery } from "../../features/group/groupApi";
 
 // ─── Styled ────────────────────────────────────────────────────────────────
-const BASE_CELL = { border: "1px solid #ccc", padding: "6px", textAlign: "center" as const, fontSize: 14 };
+const BASE_CELL = { padding: "5px 4px", textAlign: "center" as const, fontSize: 14, border: "1px solid #E5E7EB", borderRadius: "8px" };
 
 const StyledTableCell = styled(TableCell)(() => ({ ...BASE_CELL, width: 65 }));
 
@@ -85,7 +87,8 @@ const DiagonalBase = styled(TableCell)(({ theme }) => ({
   padding: 0,
   textAlign: "center",
   width: 65,
-  border: "1px solid #ccc",
+  border: "1px solid #E5E7EB",
+  borderRadius: "8px",
   backgroundColor: theme.palette.action.disabledBackground,
 }));
 
@@ -180,6 +183,7 @@ interface BracketRowProps {
   localOrder: LeagueParticipantItem[];
   editMode: boolean;
   reorderMode: "push";
+  canManage: boolean;
   onMove: (idx: number, dir: "up" | "down") => void;
   landscape: boolean;
   matchLookup: Map<string, LeagueMatch>;
@@ -193,11 +197,12 @@ interface BracketRowProps {
 }
 
 const SortableBracketRow = memo(function SortableBracketRow({
-  participant, rowIdx, n, localOrder, editMode, onMove, landscape,
+  participant, rowIdx, n, localOrder, editMode, canManage, onMove, landscape,
   matchLookup, wins, losses, rank, tieSetDiff, hasPlayed, leagueId, is3set,
 }: BracketRowProps) {
+  const canDrag = editMode && canManage;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: participant.id, disabled: !editMode });
+    useSortable({ id: participant.id, disabled: !canDrag });
 
   return (
     <TableRow
@@ -212,10 +217,10 @@ const SortableBracketRow = memo(function SortableBracketRow({
     >
       {/* 시드 번호 셀: 드래그 핸들 + 모드별 버튼 */}
       <NumberRowCell
-        sx={{ p: 0.5, ...(editMode && { cursor: "grab", touchAction: "none" }) }}
-        {...(editMode ? { ...attributes, ...listeners } : {})}
+        sx={{ p: 0.5, ...(canDrag && { cursor: "grab", touchAction: "none" }) }}
+        {...(canDrag ? { ...attributes, ...listeners } : {})}
       >
-        {editMode ? (
+        {editMode && canManage ? (
             <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
               <IconButton
                 size="small" disabled={rowIdx === 0}
@@ -288,6 +293,9 @@ export default function LeagueBracket() {
   });
 
   const league = leagueData?.league;
+  const { data: groupData } = useGetGroupDetailQuery(league?.group_id ?? "", { skip: !league?.group_id });
+  const canManage = groupData?.myRole === "owner" || groupData?.myRole === "admin";
+
   const rawParticipants = useMemo(
     () => participantData?.participants ?? [],
     [participantData],
@@ -313,6 +321,8 @@ export default function LeagueBracket() {
   const wrapperTableRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
 
+  const [reorderParticipants] = useReorderLeagueParticipantsMutation();
+
   // ── DnD sensors ──────────────────────────────────────────────────────────
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -326,9 +336,10 @@ export default function LeagueBracket() {
       if (next < 0 || next >= prev.length) return prev;
       const arr = [...prev];
       [arr[idx], arr[next]] = [arr[next], arr[idx]];
+      reorderParticipants({ leagueId: id ?? "", order: arr.map((p) => p.id) });
       return arr;
     });
-  }, [setLocalOrder]);
+  }, [setLocalOrder, reorderParticipants, id]);
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
@@ -337,9 +348,11 @@ export default function LeagueBracket() {
       const oldIdx = prev.findIndex((p) => p.id === active.id);
       const newIdx = prev.findIndex((p) => p.id === over.id);
       if (oldIdx === -1 || newIdx === -1) return prev;
-      return arrayMove(prev, oldIdx, newIdx);
+      const next = arrayMove(prev, oldIdx, newIdx);
+      reorderParticipants({ leagueId: id ?? "", order: next.map((p) => p.id) });
+      return next;
     });
-  }, [setLocalOrder]);
+  }, [setLocalOrder, reorderParticipants, id]);
 
   const toggleEdit = useCallback(() => {
     setEditMode((v) => !v);
@@ -478,43 +491,43 @@ export default function LeagueBracket() {
     }}>
 
       {/* ===== 헤더 바 ===== */}
-      <Box sx={{ display: "flex", alignItems: "center", px: 0.5, py: 0.5, borderBottom: "1px solid #E5E7EB", gap: 0.25 }}>
-        <IconButton size="small" onClick={() => navigate(-1)}>
+      <Box sx={{ display: "flex", alignItems: "center", px: 1, py: 0.75, borderBottom: "1px solid #E5E7EB", gap: 0.5 }}>
+        <IconButton size="small" onClick={() => navigate(-1)} sx={{ flexShrink: 0 }}>
           <ChevronLeftIcon />
         </IconButton>
 
-        <Typography sx={{ flex: 1, fontSize: 11, fontWeight: 600, mx: 0.5, lineHeight: 1.4 }} noWrap>
-          {date} / {league.type} {league.format} / {league.rules}
-          {/* ⓘ 경기 규칙 */}
+        {/* 리그 정보 + ⓘ */}
+        <Box sx={{ flex: 1, display: "flex", alignItems: "center", gap: 0.25, minWidth: 0 }}>
+          <Typography sx={{ fontSize: 11, fontWeight: 600, lineHeight: 1.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {date} / {league.type} {league.format} / {league.rules}
+          </Typography>
           <Tooltip title="경기 규칙 설명">
-            <IconButton size="small" onClick={(e) => setRulesAnchor(rulesAnchor ? null : e.currentTarget)}>
-              <InfoOutlinedIcon sx={{ fontSize: 20 }} />
+            <IconButton size="small" onClick={(e) => setRulesAnchor(rulesAnchor ? null : e.currentTarget)} sx={{ flexShrink: 0, p: 0.25 }}>
+              <InfoOutlinedIcon sx={{ fontSize: 16, color: "#9CA3AF" }} />
             </IconButton>
           </Tooltip>
-        </Typography>
+        </Box>
 
-        {/* 가로/세로 전환 */}
-        <Tooltip title={landscape ? "세로 보기" : "가로 보기"}>
-          <IconButton size="small" onClick={() => setLandscape((v) => !v)}>
-            <ScreenRotationIcon sx={{ fontSize: 20, ...(landscape && { color: "primary.main" }) }} />
-          </IconButton>
-        </Tooltip>
-
-        
-
-        {/* 수정 (리그 시작 전만) */}
+        {/* 수정 버튼 (pill 스타일) */}
         {!leagueStarted && (
-          <Tooltip title={editMode ? "수정 완료" : "대진표 수정"}>
-            <IconButton size="small" onClick={toggleEdit}>
-              {editMode
-                ? <CheckIcon sx={{ fontSize: 20, color: "primary.main" }} />
-                : <EditIcon sx={{ fontSize: 20 }} />}
-            </IconButton>
-          </Tooltip>
+          <Button
+            size="small"
+            variant="contained"
+            startIcon={editMode ? <CheckIcon sx={{ fontSize: 14 }} /> : <EditIcon sx={{ fontSize: 14 }} />}
+            onClick={toggleEdit}
+            sx={{
+              borderRadius: "20px", fontSize: 11, fontWeight: 700, px: 1.5, py: 0.4,
+              textTransform: "none", flexShrink: 0, minWidth: "auto", boxShadow: "none",
+              bgcolor: editMode ? "#10B981" : "#2563EB",
+              "&:hover": { bgcolor: editMode ? "#059669" : "#1D4ED8", boxShadow: "none" },
+            }}
+          >
+            {editMode ? "완료" : "수정"}
+          </Button>
         )}
 
         {/* × 닫기 */}
-        <IconButton size="small" onClick={() => navigate(-1)}>
+        <IconButton size="small" onClick={() => navigate(-1)} sx={{ flexShrink: 0 }}>
           <CloseIcon sx={{ fontSize: 20 }} />
         </IconButton>
       </Box>
@@ -543,8 +556,24 @@ export default function LeagueBracket() {
       {/* ===== 대진표 영역 (회전) ===== */}
       <Box
         ref={wrapperRef}
-        sx={{ flex: 1, overflow: "hidden", position: "relative", minHeight: 0 }}
+        sx={{ flex: 1, overflow: "hidden", position: "relative", minHeight: 0, bgcolor: "#F0F2F5" }}
       >
+        {/* 플로팅 회전 버튼 */}
+        <Tooltip title={landscape ? "세로 보기" : "가로 보기"}>
+          <IconButton
+            onClick={() => setLandscape((v) => !v)}
+            sx={{
+              position: "absolute", bottom: 14, right: 14, zIndex: 10,
+              bgcolor: landscape ? "#2563EB" : "#fff",
+              color: landscape ? "#fff" : "#6B7280",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+              width: 45, height: 45,
+              "&:hover": { bgcolor: landscape ? "#1D4ED8" : "#F3F4F6" },
+            }}
+          >
+            <ScreenRotationIcon sx={{ fontSize: 18 }} />
+          </IconButton>
+        </Tooltip>
         <Box
           ref={wrapperTableRef}
           sx={{
@@ -557,18 +586,22 @@ export default function LeagueBracket() {
             transformOrigin: "top left",
             transform: `scale(${scale})`,
             display: "inline-block",
+            padding: "10px",
           }}
         >
 
           {/* ─── 대진표 테이블 ─── */}
-          <TableContainer component={Paper} sx={{ borderRadius: 0 }}>
-            <Table sx={{ tableLayout: "fixed" }}>
+          <TableContainer component={Paper} elevation={3} sx={{ borderRadius: "10px", overflow: "hidden" }}>
+            <Table sx={{ tableLayout: "fixed", borderCollapse: "separate", borderSpacing: "3px" }}>
               <TableHead>
                 <TableRow>
-                  <NumberHeaderCell rowSpan={2} />
-                  <NumberHeaderCell rowSpan={2} />
+                  <NumberHeaderCell colSpan={2} rowSpan={2} sx={{ fontSize: 9, color: "#9CA3AF", fontWeight: 600, letterSpacing: 0.3 }}>참가명단</NumberHeaderCell>
                   {localOrder.map((_, idx) => (
-                    <NumberHeaderCell key={idx}>{idx + 1}</NumberHeaderCell>
+                    <NumberHeaderCell key={idx}>
+                      <Box sx={{ width: 22, height: 22, borderRadius: "50%", bgcolor: "#3B82F6", color: "white", fontSize: 11, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                        {idx + 1}
+                      </Box>
+                    </NumberHeaderCell>
                   ))}
                   <NumberHeaderCell rowSpan={2} sx={{ bgcolor: "#F0FDF4", color: "#16A34A" }}>승</NumberHeaderCell>
                   <NumberHeaderCell rowSpan={2} sx={{ bgcolor: "#FFF1F2", color: "#DC2626" }}>패</NumberHeaderCell>
@@ -601,6 +634,7 @@ export default function LeagueBracket() {
                         localOrder={localOrder}
                         editMode={editMode}
                         reorderMode={reorderMode}
+                        canManage={canManage}
                         onMove={handleMove}
                         landscape={landscape}
                         matchLookup={matchLookup}
@@ -619,69 +653,39 @@ export default function LeagueBracket() {
             </Table>
           </TableContainer>
 
-          {/* ─── 경기 순서 테이블 ─── */}
+          {/* ─── 경기 순서 (다크 카드) ─── */}
           <Box sx={{ mt: landscape ? 1.5 : 0, mr: landscape ? 0 : 1.5 }}>
-            <TableContainer sx={{ borderRadius: 0 }}>
-              <Table size="small">
-                <TableBody>
-                  {/* 경기 번호 */}
-                  <TableRow>
-                    <TableCell rowSpan={4} sx={{ ...BASE_CELL, width: 32, fontWeight: 700, fontSize: 10, p: "3px 2px", bgcolor: "#F3F4F6", color: "#6B7280" }}>경기{<br />}순서</TableCell>
-                    {games.map(([p1, p2], idx) => {
-                      const m = matchLookup.get(`${localOrder[p1]?.id}__${localOrder[p2]?.id}`);
-                      const isDone = m?.status === "done";
-                      const isPlaying = m?.status === "playing";
-                      return (
-                        <TableCell key={idx} sx={{
-                          ...BASE_CELL, width: 30, fontSize: 10, fontWeight: 700, p: "3px 1px",
-                          bgcolor: isDone ? "#E5E7EB" : isPlaying ? "#DBEAFE" : "#F3F4F6",
-                          color: isDone ? "#9CA3AF" : isPlaying ? "#2F80ED" : "#6B7280",
-                        }}>{idx + 1}</TableCell>
-                      );
-                    })}
-                  </TableRow>
+            <Box sx={{ bgcolor: "#1A1D2E", borderRadius: "12px", px: 1.5, py: 1, display: "flex", alignItems: "center", gap: 1.5, minHeight: 72 }}>
+              {/* 라벨 */}
+              <Box sx={{ flexShrink: 0, textAlign: "center" }}>
+                <Typography sx={{ fontSize: 7, fontWeight: 700, color: "#6B7280", letterSpacing: 1.5 }}>SCHEDULE</Typography>
+                <Typography sx={{ fontSize: 10, fontWeight: 800, color: "#F9FAFB", lineHeight: 1.3 }}>경기{"\n"}순서</Typography>
+              </Box>
 
-                  {/* 선수 A */}
-                  <TableRow>
-                    {games.map(([p1, p2], idx) => {
-                      const m = matchLookup.get(`${localOrder[p1]?.id}__${localOrder[p2]?.id}`);
-                      const isDone = m?.status === "done";
-                      return (
-                        <TableCell key={idx} sx={{ ...BASE_CELL, width: 30, fontSize: 11, fontWeight: 700, p: "2px 1px", color: isDone ? "#9CA3AF" : "inherit" }}>
-                          {p1 + 1}
-                        </TableCell>
-                      );
-                    })}
-                  </TableRow>
-
-                  {/* 선수 B */}
-                  <TableRow>
-                    {games.map(([p1, p2], idx) => {
-                      const m = matchLookup.get(`${localOrder[p1]?.id}__${localOrder[p2]?.id}`);
-                      const isDone = m?.status === "done";
-                      return (
-                        <TableCell key={idx} sx={{ ...BASE_CELL, width: 30, fontSize: 11, fontWeight: 700, p: "2px 1px", color: isDone ? "#9CA3AF" : "inherit" }}>
-                          {p2 + 1}
-                        </TableCell>
-                      );
-                    })}
-                  </TableRow>
-
-                  {/* 코트 (DB에서) */}
-                  <TableRow>
-                    {games.map(([p1, p2], idx) => {
-                      const m = matchLookup.get(`${localOrder[p1]?.id}__${localOrder[p2]?.id}`);
-                      const isDone = m?.status === "done";
-                      return (
-                        <TableCell key={idx} sx={{ ...BASE_CELL, width: 30, p: "2px 1px", color: isDone ? "#9CA3AF" : "#6B7280", fontSize: 11, fontWeight: 700, height: landscape ? "21px" : "21px"  }}>
-                          {m?.court ?? ""}
-                        </TableCell>
-                      );
-                    })}
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </TableContainer>
+              {/* 경기 카드 */}
+              <Box sx={{ display: "flex", gap: 0.75, overflowX: "auto", flex: 1, "&::-webkit-scrollbar": { display: "none" } }}>
+                {games.map(([p1, p2], idx) => {
+                  const m = matchLookup.get(`${localOrder[p1]?.id}__${localOrder[p2]?.id}`);
+                  const isDone = m?.status === "done";
+                  const isPlaying = m?.status === "playing";
+                  const numColor = isDone ? "#6B7280" : isPlaying ? "#60A5FA" : "#F9FAFB";
+                  return (
+                    <Box key={idx} sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.5, flexShrink: 0 }}>
+                      <Box sx={{ bgcolor: isDone ? "#374151" : isPlaying ? "#1E3A5F" : "#2D3748", borderRadius: "5px", px: 1.25, py: 0.75, textAlign: "center", minWidth: 42, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                        <Typography sx={{ color: numColor, fontSize: 14, fontWeight: 800, lineHeight: 1.3 }}>{p1 + 1}</Typography>
+                        <Box sx={{ width: "100%", height: "1px", bgcolor: "#4B5563", my: 0.25 }} />
+                        <Typography sx={{ color: numColor, fontSize: 14, fontWeight: 800, lineHeight: 1.3 }}>{p2 + 1}</Typography>
+                      </Box>
+                      <Box sx={{ bgcolor: m?.court ? (isPlaying ? "#2563EB" : "#374151") : "#1F2937", borderRadius: "100px", px: 0.75, py: 0.15 }}>
+                        <Typography sx={{ fontSize: 8, color: m?.court ? (isPlaying ? "white" : "#9CA3AF") : "#374151", fontWeight: 700, whiteSpace: "nowrap" }}>
+                          {m?.court || "미정"}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  );
+                })}
+              </Box>
+            </Box>
           </Box>
         </Box>
       </Box>

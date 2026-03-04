@@ -573,7 +573,7 @@ export default function LeagueBracket() {
                   <NumberHeaderCell rowSpan={2} sx={{ bgcolor: "#F0FDF4", color: "#16A34A" }}>승</NumberHeaderCell>
                   <NumberHeaderCell rowSpan={2} sx={{ bgcolor: "#FFF1F2", color: "#DC2626" }}>패</NumberHeaderCell>
                   <NumberHeaderCell rowSpan={2}>순위</NumberHeaderCell>
-                  <NumberHeaderCell rowSpan={2}>동점자{<br />}세트 득실</NumberHeaderCell>
+                  <NumberHeaderCell rowSpan={2} sx={{ fontSize: landscape ? "13px" : "14px" }}>동점자{<br />}세트 득실</NumberHeaderCell>
                 </TableRow>
                 <TableRow>
                   {localOrder.map((p) => (
@@ -673,7 +673,7 @@ export default function LeagueBracket() {
                       const m = matchLookup.get(`${localOrder[p1]?.id}__${localOrder[p2]?.id}`);
                       const isDone = m?.status === "done";
                       return (
-                        <TableCell key={idx} sx={{ ...BASE_CELL, width: 30, p: "2px 1px", color: isDone ? "#9CA3AF" : "#6B7280", fontSize: 10 }}>
+                        <TableCell key={idx} sx={{ ...BASE_CELL, width: 30, p: "2px 1px", color: isDone ? "#9CA3AF" : "#6B7280", fontSize: 11, fontWeight: 700, height: landscape ? "21px" : "21px"  }}>
                           {m?.court ?? ""}
                         </TableCell>
                       );

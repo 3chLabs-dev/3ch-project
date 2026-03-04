@@ -84,6 +84,46 @@ const participantSchema = z.object({
  *         sort_order:
  *           type: integer
  *           nullable: true
+ *     LeagueMatch:
+ *       type: object
+ *       properties:
+ *         id:
+ *           type: string
+ *           format: uuid
+ *         match_order:
+ *           type: integer
+ *         participant_a_id:
+ *           type: string
+ *           format: uuid
+ *           nullable: true
+ *         participant_b_id:
+ *           type: string
+ *           format: uuid
+ *           nullable: true
+ *         participant_a_name:
+ *           type: string
+ *           nullable: true
+ *         participant_a_division:
+ *           type: string
+ *           nullable: true
+ *         participant_b_name:
+ *           type: string
+ *           nullable: true
+ *         participant_b_division:
+ *           type: string
+ *           nullable: true
+ *         score_a:
+ *           type: integer
+ *           nullable: true
+ *         score_b:
+ *           type: integer
+ *           nullable: true
+ *         court:
+ *           type: string
+ *           nullable: true
+ *         status:
+ *           type: string
+ *           enum: [pending, playing, done]
  */
 
 const createLeagueSchema = z.object({
@@ -1082,6 +1122,40 @@ function generateRoundRobin(n) {
   return games;
 }
 
+/**
+ * @openapi
+ * /league/{id}/matches:
+ *   get:
+ *     summary: 경기 목록 조회
+ *     description: 리그의 경기 순서 목록을 조회합니다. 클럽 멤버만 접근 가능합니다.
+ *     tags: [리그]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: 리그 ID
+ *     responses:
+ *       200:
+ *         description: 경기 목록 조회 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 matches:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/LeagueMatch'
+ *       403:
+ *         description: 권한 없음
+ *       500:
+ *         description: 서버 오류
+ */
 // GET /league/:id/matches - 경기 목록 조회 (클럽 멤버)
 router.get('/league/:id/matches', requireAuth, async (req, res) => {
   const userId = Number(req.user.sub);
@@ -1115,6 +1189,47 @@ router.get('/league/:id/matches', requireAuth, async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /league/{id}/matches/init:
+ *   post:
+ *     summary: 라운드로빈 경기 자동 생성
+ *     description: 참가자 목록을 기반으로 라운드로빈 경기를 자동 생성합니다. force=true 시 기존 경기 삭제 후 재생성합니다. owner/admin만 가능합니다.
+ *     tags: [리그]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: 리그 ID
+ *       - in: query
+ *         name: force
+ *         schema:
+ *           type: boolean
+ *         description: true이면 기존 경기를 삭제하고 재생성
+ *     responses:
+ *       200:
+ *         description: 경기 생성 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 matches:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/LeagueMatch'
+ *       400:
+ *         description: 이미 경기 존재 또는 참가자 부족
+ *       403:
+ *         description: 권한 없음
+ *       500:
+ *         description: 서버 오류
+ */
 // POST /league/:id/matches/init - 라운드로빈 경기 생성 (owner/admin)
 router.post('/league/:id/matches/init', requireAuth, async (req, res) => {
   const userId = Number(req.user.sub);
@@ -1171,6 +1286,47 @@ router.post('/league/:id/matches/init', requireAuth, async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /league/{id}/matches/reorder:
+ *   patch:
+ *     summary: 경기 순서 변경
+ *     description: 경기 ID 배열을 새 순서로 전달하면 match_order를 일괄 업데이트합니다. owner/admin만 가능합니다.
+ *     tags: [리그]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: 리그 ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [order]
+ *             properties:
+ *               order:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: uuid
+ *                 description: 새 순서로 정렬된 경기 ID 배열
+ *     responses:
+ *       200:
+ *         description: 순서 변경 성공
+ *       400:
+ *         description: order 배열 누락
+ *       403:
+ *         description: 권한 없음
+ *       500:
+ *         description: 서버 오류
+ */
 // PATCH /league/:id/matches/reorder - 순서 변경 (owner/admin)
 router.patch('/league/:id/matches/reorder', requireAuth, async (req, res) => {
   const userId = Number(req.user.sub);
@@ -1209,7 +1365,67 @@ router.patch('/league/:id/matches/reorder', requireAuth, async (req, res) => {
   }
 });
 
-// PATCH /league/:id/matches/:matchId - 점수/코트/상태 업데이트 (owner/admin)
+/**
+ * @openapi
+ * /league/{id}/matches/{matchId}:
+ *   patch:
+ *     summary: 경기 점수/코트/상태 수정
+ *     description: 경기의 점수, 코트, 상태를 부분 업데이트합니다. 클럽 멤버 전체 가능합니다.
+ *     tags: [리그]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: 리그 ID
+ *       - in: path
+ *         name: matchId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: 경기 ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               score_a:
+ *                 type: integer
+ *               score_b:
+ *                 type: integer
+ *               court:
+ *                 type: string
+ *                 nullable: true
+ *               status:
+ *                 type: string
+ *                 enum: [pending, playing, done]
+ *     responses:
+ *       200:
+ *         description: 수정 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 match:
+ *                   $ref: '#/components/schemas/LeagueMatch'
+ *       400:
+ *         description: 변경 필드 없음
+ *       403:
+ *         description: 권한 없음
+ *       404:
+ *         description: 경기 없음
+ *       500:
+ *         description: 서버 오류
+ */
+// PATCH /league/:id/matches/:matchId - 점수/코트/상태 업데이트 (클럽 멤버)
 router.patch('/league/:id/matches/:matchId', requireAuth, async (req, res) => {
   const userId = Number(req.user.sub);
   const leagueId = req.params.id;
@@ -1219,7 +1435,7 @@ router.patch('/league/:id/matches/:matchId', requireAuth, async (req, res) => {
     const access = await pool.query(
       `SELECT l.id FROM leagues l
        INNER JOIN group_members gm ON gm.group_id = l.group_id
-       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+       WHERE l.id = $1 AND gm.user_id = $2`,
       [leagueId, userId],
     );
     if (access.rowCount === 0) return res.status(403).json({ message: '권한이 없습니다.' });
@@ -1245,6 +1461,40 @@ router.patch('/league/:id/matches/:matchId', requireAuth, async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /league/{id}/matches/{matchId}:
+ *   delete:
+ *     summary: 경기 삭제
+ *     description: 경기를 삭제하고 나머지 경기의 match_order를 재정렬합니다. owner/admin만 가능합니다.
+ *     tags: [리그]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: 리그 ID
+ *       - in: path
+ *         name: matchId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: 경기 ID
+ *     responses:
+ *       200:
+ *         description: 삭제 성공
+ *       403:
+ *         description: 권한 없음
+ *       404:
+ *         description: 경기 없음
+ *       500:
+ *         description: 서버 오류
+ */
 // DELETE /league/:id/matches/:matchId - 경기 삭제 (owner/admin)
 router.delete('/league/:id/matches/:matchId', requireAuth, async (req, res) => {
   const userId = Number(req.user.sub);

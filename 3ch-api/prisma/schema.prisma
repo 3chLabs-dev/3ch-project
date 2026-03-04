@@ -16,6 +16,8 @@ model User {
   phone         String?
   auth_provider String
   provider_id   String?
+  is_admin      Boolean   @default(false)
+  member_code   String?   @unique
   created_at    DateTime  @default(now())
   updated_at    DateTime  @default(now()) @updatedAt
   deleted_at    DateTime?
@@ -80,6 +82,8 @@ model League {
   start_date      DateTime
   status          String    @default("draft") // e.g., "draft", "active", "completed"
   rules           String?
+  notice          String?
+  sort_order      String?   @default("부수")
   recruit_count   Int       @default(0)
   participant_count Int     @default(0)
   created_at      DateTime  @default(now())
@@ -94,6 +98,7 @@ model League {
   teams           Team[]
   matches         Match[]
   participants    LeagueParticipant[]
+  league_matches  LeagueMatch[]
   draws           Draw[]
 
   @@map("leagues")
@@ -106,13 +111,39 @@ model LeagueParticipant {
   paid       Boolean  @default(false)
   arrived    Boolean  @default(false)
   after      Boolean  @default(false)
+  sort_order Int?
   created_at DateTime @default(now())
 
   league_id  String
   league     League   @relation(fields: [league_id], references: [id], onDelete: Cascade)
 
+  matches_as_a LeagueMatch[] @relation("MatchParticipantA")
+  matches_as_b LeagueMatch[] @relation("MatchParticipantB")
+
   @@index([league_id])
   @@map("league_participants")
+}
+
+model LeagueMatch {
+  id           String   @id @default(uuid())
+  match_order  Int
+  score_a      Int?
+  score_b      Int?
+  court        String?
+  status       String   @default("pending")
+  created_at   DateTime @default(now())
+
+  league_id    String
+  league       League   @relation(fields: [league_id], references: [id], onDelete: Cascade)
+
+  participant_a_id String?
+  participant_a    LeagueParticipant? @relation("MatchParticipantA", fields: [participant_a_id], references: [id], onDelete: SetNull)
+
+  participant_b_id String?
+  participant_b    LeagueParticipant? @relation("MatchParticipantB", fields: [participant_b_id], references: [id], onDelete: SetNull)
+
+  @@index([league_id])
+  @@map("league_matches")
 }
 
 model Team {
@@ -179,6 +210,7 @@ model Draw {
   creator        User      @relation("DrawCreator", fields: [created_by_id], references: [id])
 
   prizes         DrawPrize[]
+  winners        DrawWinner[]
 
   @@index([league_id])
   @@map("draws")

@@ -23,32 +23,15 @@ import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import ScreenRotationIcon from "@mui/icons-material/ScreenRotation";
 import { formatLeagueDate } from "../../utils/dateUtils";
+import { generateRoundRobin } from "../../utils/leagueUtils";
 import {
   useGetLeagueQuery,
   useGetLeagueParticipantsQuery,
+  useGetLeagueMatchesQuery,
+  useUpdateLeagueMatchMutation,
   type LeagueParticipantItem,
+  type LeagueMatch,
 } from "../../features/league/leagueApi";
-
-// ─── 라운드 경기 순서 생성 ────────────────────────────────────────────
-// 반환값: [positionA, positionB] (0-indexed)
-// 예) 4명 → (0,3),(1,2),(0,2),(1,3),(0,1),(2,3)
-function generateRoundRobin(n: number): Array<[number, number]> {
-  const games: Array<[number, number]> = [];
-  const size = n % 2 === 0 ? n : n + 1; // 홀수면 추가
-  const pos = Array.from({ length: size }, (_, i) => i);
-
-  for (let round = 0; round < size - 1; round++) {
-    for (let i = 0; i < size / 2; i++) {
-      const p1 = pos[i];
-      const p2 = pos[size - 1 - i];
-      if (p1 < n && p2 < n) games.push([p1, p2]); // bye(=n) 제외
-    }
-    // 첫 번째 고정, 나머지 회전
-    const last = pos.splice(size - 1, 1)[0];
-    pos.splice(1, 0, last);
-  }
-  return games;
-}
 
 // ─── Styled ────────────────────────────────────────────────────────────────
 const BASE_CELL = { border: "1px solid #ccc", padding: "6px", textAlign: "center" as const, fontSize: 14 };
@@ -151,15 +134,43 @@ function DivBadge({ division }: { division?: string | null }) {
   );
 }
 
-// ─── Score InputBase helper ────────────────────────────────────────────────
-const ScoreInput = memo(function ScoreInput({ disabled }: { disabled?: boolean }) {
+// ─── 점수 셀 (편집 가능) ───────────────────────────────────────────────────
+function BracketScoreCell({ match, isA, leagueId, is3set }: {
+  match: LeagueMatch | undefined;
+  isA: boolean;
+  leagueId: string;
+  is3set: boolean;
+}) {
+  const [updateMatch] = useUpdateLeagueMatchMutation();
+  const canEdit = match?.status === "playing" || match?.status === "done";
+  const score = canEdit ? ((isA ? match!.score_a : match!.score_b) ?? 0) : null;
+  const opp   = canEdit ? ((isA ? match!.score_b : match!.score_a) ?? 0) : null;
+  const isWinner = !is3set && match?.status === "done" && score !== null && opp !== null && score > opp;
+
+  const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    if (!match || !canEdit) return;
+    const val = Math.max(0, parseInt(e.target.value) || 0);
+    const cur = isA ? match.score_a : match.score_b;
+    if (val !== (cur ?? 0)) {
+      updateMatch({ leagueId, matchId: match.id, updates: isA ? { score_a: val } : { score_b: val } });
+    }
+  };
+
+  if (!canEdit) {
+    return <StyledTableCell>{score !== null ? score : ""}</StyledTableCell>;
+  }
   return (
-    <input
-      disabled={disabled}
-      style={{ textAlign: "center", fontSize: 14, width: 32, height: 28, border: "none", outline: "none", background: "transparent", padding: 0, color: "inherit" }}
-    />
+    <StyledTableCell sx={{ p: 0, color: isWinner ? "#DC2626" : "inherit" }}>
+      <input
+        key={`${match!.id}-${isA}-${score}`}
+        type="number"
+        defaultValue={score ?? 0}
+        onBlur={handleBlur}
+        style={{ textAlign: "center", fontSize: 14, width: "100%", height: 28, border: "none", outline: "none", background: "transparent", padding: 0, color: "inherit", fontWeight: isWinner ? 700 : 400 }}
+      />
+    </StyledTableCell>
   );
-});
+}
 
 // ─── Sortable 행 컴포넌트 ──────────────────────────────────────────────────
 interface BracketRowProps {
@@ -171,10 +182,19 @@ interface BracketRowProps {
   reorderMode: "push";
   onMove: (idx: number, dir: "up" | "down") => void;
   landscape: boolean;
+  matchLookup: Map<string, LeagueMatch>;
+  wins: number;
+  losses: number;
+  rank: number;
+  tieSetDiff: string;
+  hasPlayed: boolean;
+  leagueId: string;
+  is3set: boolean;
 }
 
 const SortableBracketRow = memo(function SortableBracketRow({
   participant, rowIdx, n, localOrder, editMode, onMove, landscape,
+  matchLookup, wins, losses, rank, tieSetDiff, hasPlayed, leagueId, is3set,
 }: BracketRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: participant.id, disabled: !editMode });
@@ -227,16 +247,27 @@ const SortableBracketRow = memo(function SortableBracketRow({
         </Box>
       </BodyHeaderCell>
 
-      {localOrder.map((_, colIdx) =>
-        rowIdx === colIdx
-          ? <DiagonalScoreCell key={colIdx} landscape={landscape} />
-          : <StyledTableCell key={colIdx}><ScoreInput disabled={!editMode} /></StyledTableCell>
-      )}
+      {localOrder.map((colPlayer, colIdx) => {
+        if (rowIdx === colIdx) return <DiagonalScoreCell key={colIdx} landscape={landscape} />;
+        const m = matchLookup.get(`${participant.id}__${colPlayer.id}`);
+        const isA = m?.participant_a_id === participant.id;
+        return (
+          <BracketScoreCell key={colIdx} match={m} isA={isA} leagueId={leagueId} is3set={is3set} />
+        );
+      })}
 
-      <StyledTableCell sx={{ bgcolor: "#F0FDF4" }}><ScoreInput disabled={!editMode} /></StyledTableCell>
-      <StyledTableCell sx={{ bgcolor: "#FFF1F2" }}><ScoreInput disabled={!editMode} /></StyledTableCell>
-      <StyledTableCell><ScoreInput disabled={!editMode} /></StyledTableCell>
-      <StyledTableCell><ScoreInput disabled={!editMode} /></StyledTableCell>
+      <StyledTableCell sx={{ bgcolor: "#F0FDF4", color: wins > 0 ? "#16A34A" : "inherit", fontWeight: wins > 0 ? 700 : 400 }}>
+        {hasPlayed ? wins : ""}
+      </StyledTableCell>
+      <StyledTableCell sx={{ bgcolor: "#FFF1F2", color: losses > 0 ? "#DC2626" : "inherit" }}>
+        {hasPlayed ? losses : ""}
+      </StyledTableCell>
+      <StyledTableCell sx={{ color: rank === 1 && hasPlayed ? "#DC2626" : "inherit", fontWeight: rank === 1 && hasPlayed ? 700 : 400 }}>
+        {hasPlayed ? rank : ""}
+      </StyledTableCell>
+      <StyledTableCell>
+        {tieSetDiff || ""}
+      </StyledTableCell>
     </TableRow>
   );
 });
@@ -248,6 +279,10 @@ export default function LeagueBracket() {
 
   const { data: leagueData, isLoading: leagueLoading } = useGetLeagueQuery(id ?? "", { skip: !id });
   const { data: participantData, isLoading: participantsLoading } = useGetLeagueParticipantsQuery(id ?? "", {
+    skip: !id,
+    pollingInterval: 15000,
+  });
+  const { data: matchData } = useGetLeagueMatchesQuery(id ?? "", {
     skip: !id,
     pollingInterval: 15000,
   });
@@ -270,7 +305,6 @@ export default function LeagueBracket() {
 
   const [editMode, setEditMode]     = useState(false);
   const [reorderMode] = useState<"push">("push");
-  const [courtMap, setCourtMap]     = useState<Record<number, string>>({});
   const [rulesAnchor, setRulesAnchor] = useState<HTMLButtonElement | null>(null);
   const [landscape, setLandscape]     = useState(false);
 
@@ -333,6 +367,85 @@ export default function LeagueBracket() {
 
   const n     = localOrder.length;
   const games = useMemo(() => generateRoundRobin(n), [n]);
+
+  // ── 경기 데이터 연계 ──────────────────────────────────────────────────────
+  const matchLookup = useMemo(() => {
+    const map = new Map<string, LeagueMatch>();
+    for (const m of matchData?.matches ?? []) {
+      if (m.participant_a_id && m.participant_b_id) {
+        map.set(`${m.participant_a_id}__${m.participant_b_id}`, m);
+        map.set(`${m.participant_b_id}__${m.participant_a_id}`, m);
+      }
+    }
+    return map;
+  }, [matchData]);
+
+  const playerStats = useMemo(() => localOrder.map((player) => {
+    let wins = 0, losses = 0;
+    for (const m of matchData?.matches ?? []) {
+      if (m.status !== "done") continue;
+      const isA = m.participant_a_id === player.id;
+      const isB = m.participant_b_id === player.id;
+      if (!isA && !isB) continue;
+      const my = isA ? (m.score_a ?? 0) : (m.score_b ?? 0);
+      const opp = isA ? (m.score_b ?? 0) : (m.score_a ?? 0);
+      if (my > opp) wins++; else losses++;
+    }
+    return { wins, losses, hasPlayed: wins + losses > 0 };
+  }), [localOrder, matchData]);
+
+  const { rankings, tieSetDiffs } = useMemo(() => {
+    const n = localOrder.length;
+    // 동점 그룹 파악
+    const byWins = new Map<number, number[]>();
+    localOrder.forEach((_, i) => {
+      const w = playerStats[i]?.wins ?? 0;
+      if (!byWins.has(w)) byWins.set(w, []);
+      byWins.get(w)!.push(i);
+    });
+
+    // 동점 그룹 내 직접 대결 득실 계산
+    const tieWon = new Array(n).fill(0);
+    const tieLost = new Array(n).fill(0);
+    const isTied = new Array(n).fill(false);
+    for (const group of byWins.values()) {
+      if (group.length < 2) continue;
+      const groupIds = new Set(group.map((i) => localOrder[i].id));
+      for (const i of group) {
+        isTied[i] = true;
+        const player = localOrder[i];
+        for (const m of matchData?.matches ?? []) {
+          if (m.status !== "done") continue;
+          const isA = m.participant_a_id === player.id;
+          const isB = m.participant_b_id === player.id;
+          if (!isA && !isB) continue;
+          const oppId = isA ? m.participant_b_id : m.participant_a_id;
+          if (!oppId || !groupIds.has(oppId)) continue;
+          tieWon[i] += isA ? (m.score_a ?? 0) : (m.score_b ?? 0);
+          tieLost[i] += isA ? (m.score_b ?? 0) : (m.score_a ?? 0);
+        }
+      }
+    }
+
+    const indices = localOrder.map((_, i) => i);
+    indices.sort((a, b) => {
+      const sa = playerStats[a], sb = playerStats[b];
+      if (sa.wins !== sb.wins) return sb.wins - sa.wins;
+      const ratioA = tieLost[a] === 0 ? Infinity : tieWon[a] / tieLost[a];
+      const ratioB = tieLost[b] === 0 ? Infinity : tieWon[b] / tieLost[b];
+      return ratioB - ratioA;
+    });
+    const rankMap = new Array(n).fill(0);
+    indices.forEach((playerIdx, rankIdx) => { rankMap[playerIdx] = rankIdx + 1; });
+
+    const diffs = localOrder.map((_, i) => {
+      if (!isTied[i] || !playerStats[i].hasPlayed) return "";
+      if (tieWon[i] === 0 && tieLost[i] === 0) return "";
+      return `${tieWon[i]}/${tieLost[i]}`;
+    });
+
+    return { rankings: rankMap, tieSetDiffs: diffs };
+  }, [playerStats, localOrder, matchData]);
 
   if (leagueLoading || participantsLoading) {
     return (
@@ -443,10 +556,6 @@ export default function LeagueBracket() {
             display: "inline-block",
           }}
         >
-          {/* 상단 정보 */}
-          <Box sx={{ mb: 2, fontWeight: 600, fontSize: 14 }}>
-            {date} / {league.type} {league.format} / {league.rules}
-          </Box>
 
           {/* ─── 대진표 테이블 ─── */}
           <TableContainer component={Paper} sx={{ borderRadius: 0 }}>
@@ -491,6 +600,14 @@ export default function LeagueBracket() {
                         reorderMode={reorderMode}
                         onMove={handleMove}
                         landscape={landscape}
+                        matchLookup={matchLookup}
+                        wins={playerStats[rowIdx]?.wins ?? 0}
+                        losses={playerStats[rowIdx]?.losses ?? 0}
+                        rank={rankings[rowIdx] ?? 0}
+                        tieSetDiff={tieSetDiffs[rowIdx] ?? ""}
+                        hasPlayed={playerStats[rowIdx]?.hasPlayed ?? false}
+                        leagueId={id ?? ""}
+                        is3set={!!league?.rules?.includes("3세트제")}
                       />
                     ))}
                   </TableBody>
@@ -506,45 +623,58 @@ export default function LeagueBracket() {
                 <TableBody>
                   {/* 경기 번호 */}
                   <TableRow>
-                    <TableCell rowSpan={4} sx={{ ...BASE_CELL, width: 32, fontWeight: 700, fontSize: 10, p: "3px 2px", bgcolor: "#EEF2FF", color: "#4338CA" }}>경기{<br />}순서</TableCell>
-                    {games.map((_, idx) => (
-                      <TableCell key={idx} sx={{ ...BASE_CELL, width: 30, fontSize: 10, fontWeight: 700, p: "3px 1px", bgcolor: "#EEF2FF", color: "#4338CA" }}>{idx + 1}</TableCell>
-                    ))}
+                    <TableCell rowSpan={4} sx={{ ...BASE_CELL, width: 32, fontWeight: 700, fontSize: 10, p: "3px 2px", bgcolor: "#F3F4F6", color: "#6B7280" }}>경기{<br />}순서</TableCell>
+                    {games.map(([p1, p2], idx) => {
+                      const m = matchLookup.get(`${localOrder[p1]?.id}__${localOrder[p2]?.id}`);
+                      const isDone = m?.status === "done";
+                      const isPlaying = m?.status === "playing";
+                      return (
+                        <TableCell key={idx} sx={{
+                          ...BASE_CELL, width: 30, fontSize: 10, fontWeight: 700, p: "3px 1px",
+                          bgcolor: isDone ? "#E5E7EB" : isPlaying ? "#DBEAFE" : "#F3F4F6",
+                          color: isDone ? "#9CA3AF" : isPlaying ? "#2F80ED" : "#6B7280",
+                        }}>{idx + 1}</TableCell>
+                      );
+                    })}
                   </TableRow>
 
                   {/* 선수 A */}
                   <TableRow>
-                    {games.map(([p1], idx) => (
-                      <TableCell key={idx} sx={{ ...BASE_CELL, width: 30, fontSize: 11, fontWeight: 700, p: "2px 1px" }}>
-                        {p1 + 1}
-                      </TableCell>
-                    ))}
+                    {games.map(([p1, p2], idx) => {
+                      const m = matchLookup.get(`${localOrder[p1]?.id}__${localOrder[p2]?.id}`);
+                      const isDone = m?.status === "done";
+                      return (
+                        <TableCell key={idx} sx={{ ...BASE_CELL, width: 30, fontSize: 11, fontWeight: 700, p: "2px 1px", color: isDone ? "#9CA3AF" : "inherit" }}>
+                          {p1 + 1}
+                        </TableCell>
+                      );
+                    })}
                   </TableRow>
 
                   {/* 선수 B */}
                   <TableRow>
-                    {games.map(([, p2], idx) => (
-                      <TableCell key={idx} sx={{ ...BASE_CELL, width: 30, fontSize: 11, fontWeight: 700, p: "2px 1px" }}>
-                        {p2 + 1}
-                      </TableCell>
-                    ))}
+                    {games.map(([p1, p2], idx) => {
+                      const m = matchLookup.get(`${localOrder[p1]?.id}__${localOrder[p2]?.id}`);
+                      const isDone = m?.status === "done";
+                      return (
+                        <TableCell key={idx} sx={{ ...BASE_CELL, width: 30, fontSize: 11, fontWeight: 700, p: "2px 1px", color: isDone ? "#9CA3AF" : "inherit" }}>
+                          {p2 + 1}
+                        </TableCell>
+                      );
+                    })}
                   </TableRow>
 
-                  {/* 코트 입력 */}
+                  {/* 코트 (DB에서) */}
                   <TableRow>
-                    {games.map((_, idx) => (
-                      <TableCell key={idx} sx={{ ...BASE_CELL, width: 30, p: "2px 1px" }}>
-                        <input
-                          placeholder="코트"
-                          disabled={!editMode}
-                          value={courtMap[idx] ?? ""}
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                            setCourtMap((prev) => ({ ...prev, [idx]: e.target.value }))
-                          }
-                          style={{ textAlign: "center", fontSize: 10, width: 28, height: 20, border: "none", outline: "none", background: "transparent", padding: 0, color: "inherit" }}
-                        />
-                      </TableCell>
-                    ))}
+                    {games.map(([p1, p2], idx) => {
+                      const m = matchLookup.get(`${localOrder[p1]?.id}__${localOrder[p2]?.id}`);
+                      const isDone = m?.status === "done";
+                      return (
+                        <TableCell key={idx} sx={{ ...BASE_CELL, width: 30, p: "2px 1px", color: isDone ? "#9CA3AF" : "#6B7280", fontSize: 10 }}>
+                          {m?.court ?? ""}
+                        </TableCell>
+                      );
+                    })}
                   </TableRow>
                 </TableBody>
               </Table>

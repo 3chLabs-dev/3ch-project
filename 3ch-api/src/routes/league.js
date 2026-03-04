@@ -628,7 +628,7 @@ router.get('/league/:id', requireAuth, async (req, res) => {
 
     // 리그 정보 조회
     const leagueResult = await pool.query(
-      `SELECT id, name, description, type, format, sport, start_date, rules, notice, sort_order, status,
+      `SELECT id, name, description, type, format, sport, start_date, rules, status,
               recruit_count, participant_count, group_id, created_by_id, created_at, updated_at
        FROM leagues
        WHERE id = $1`,
@@ -1059,6 +1059,223 @@ router.delete('/league/:leagueId', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Error deleting league:', error);
     return res.status(500).json({ message: '리그 삭제 중 서버 오류' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 경기 순서 (league_matches)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function generateRoundRobin(n) {
+  const games = [];
+  const size = n % 2 === 0 ? n : n + 1;
+  const pos = Array.from({ length: size }, (_, i) => i);
+  for (let round = 0; round < size - 1; round++) {
+    for (let i = 0; i < size / 2; i++) {
+      const p1 = pos[i];
+      const p2 = pos[size - 1 - i];
+      if (p1 < n && p2 < n) games.push([p1, p2]);
+    }
+    const last = pos.splice(size - 1, 1)[0];
+    pos.splice(1, 0, last);
+  }
+  return games;
+}
+
+// GET /league/:id/matches - 경기 목록 조회 (클럽 멤버)
+router.get('/league/:id/matches', requireAuth, async (req, res) => {
+  const userId = Number(req.user.sub);
+  const leagueId = req.params.id;
+  try {
+    const access = await pool.query(
+      `SELECT l.id FROM leagues l
+       INNER JOIN group_members gm ON gm.group_id = l.group_id
+       WHERE l.id = $1 AND gm.user_id = $2`,
+      [leagueId, userId],
+    );
+    if (access.rowCount === 0) return res.status(403).json({ message: '접근 권한이 없습니다.' });
+
+    const result = await pool.query(
+      `SELECT
+         m.id, m.match_order, m.score_a, m.score_b, m.court, m.status,
+         m.participant_a_id, m.participant_b_id,
+         pa.name AS participant_a_name, pa.division AS participant_a_division,
+         pb.name AS participant_b_name, pb.division AS participant_b_division
+       FROM league_matches m
+       LEFT JOIN league_participants pa ON pa.id = m.participant_a_id
+       LEFT JOIN league_participants pb ON pb.id = m.participant_b_id
+       WHERE m.league_id = $1
+       ORDER BY m.match_order ASC`,
+      [leagueId],
+    );
+    return res.json({ matches: result.rows });
+  } catch (err) {
+    console.error('Error fetching matches:', err);
+    return res.status(500).json({ message: '서버 오류' });
+  }
+});
+
+// POST /league/:id/matches/init - 라운드로빈 경기 생성 (owner/admin)
+router.post('/league/:id/matches/init', requireAuth, async (req, res) => {
+  const userId = Number(req.user.sub);
+  const leagueId = req.params.id;
+  try {
+    const access = await pool.query(
+      `SELECT l.id FROM leagues l
+       INNER JOIN group_members gm ON gm.group_id = l.group_id
+       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+      [leagueId, userId],
+    );
+    if (access.rowCount === 0) return res.status(403).json({ message: '권한이 없습니다.' });
+
+    const force = req.query.force === 'true';
+    const existing = await pool.query(
+      `SELECT id FROM league_matches WHERE league_id = $1 LIMIT 1`,
+      [leagueId],
+    );
+    if (existing.rowCount > 0) {
+      if (!force) return res.status(400).json({ message: '이미 경기가 생성되어 있습니다.' });
+      await pool.query(`DELETE FROM league_matches WHERE league_id = $1`, [leagueId]);
+    }
+
+    const participants = await pool.query(
+      `SELECT id FROM league_participants WHERE league_id = $1 ORDER BY division ASC, created_at ASC`,
+      [leagueId],
+    );
+    const ids = participants.rows.map((r) => r.id);
+    if (ids.length < 2) return res.status(400).json({ message: '참가자가 2명 이상이어야 합니다.' });
+
+    const pairs = generateRoundRobin(ids.length);
+    const values = pairs.map((pair, i) => `('${randomUUID()}', '${leagueId}', ${i + 1}, '${ids[pair[0]]}', '${ids[pair[1]]}')`).join(', ');
+    await pool.query(
+      `INSERT INTO league_matches (id, league_id, match_order, participant_a_id, participant_b_id) VALUES ${values}`,
+    );
+
+    const result = await pool.query(
+      `SELECT
+         m.id, m.match_order, m.score_a, m.score_b, m.court, m.status,
+         m.participant_a_id, m.participant_b_id,
+         pa.name AS participant_a_name, pa.division AS participant_a_division,
+         pb.name AS participant_b_name, pb.division AS participant_b_division
+       FROM league_matches m
+       LEFT JOIN league_participants pa ON pa.id = m.participant_a_id
+       LEFT JOIN league_participants pb ON pb.id = m.participant_b_id
+       WHERE m.league_id = $1
+       ORDER BY m.match_order ASC`,
+      [leagueId],
+    );
+    return res.json({ matches: result.rows });
+  } catch (err) {
+    console.error('Error initializing matches:', err);
+    return res.status(500).json({ message: '서버 오류' });
+  }
+});
+
+// PATCH /league/:id/matches/reorder - 순서 변경 (owner/admin)
+router.patch('/league/:id/matches/reorder', requireAuth, async (req, res) => {
+  const userId = Number(req.user.sub);
+  const leagueId = req.params.id;
+  const { order } = req.body; // string[]
+  if (!Array.isArray(order)) return res.status(400).json({ message: 'order 배열이 필요합니다.' });
+  try {
+    const access = await pool.query(
+      `SELECT l.id FROM leagues l
+       INNER JOIN group_members gm ON gm.group_id = l.group_id
+       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+      [leagueId, userId],
+    );
+    if (access.rowCount === 0) return res.status(403).json({ message: '권한이 없습니다.' });
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (let i = 0; i < order.length; i++) {
+        await client.query(
+          `UPDATE league_matches SET match_order = $1 WHERE id = $2 AND league_id = $3`,
+          [i + 1, order[i], leagueId],
+        );
+      }
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Error reordering matches:', err);
+    return res.status(500).json({ message: '서버 오류' });
+  }
+});
+
+// PATCH /league/:id/matches/:matchId - 점수/코트/상태 업데이트 (owner/admin)
+router.patch('/league/:id/matches/:matchId', requireAuth, async (req, res) => {
+  const userId = Number(req.user.sub);
+  const leagueId = req.params.id;
+  const matchId = req.params.matchId;
+  const { score_a, score_b, court, status } = req.body;
+  try {
+    const access = await pool.query(
+      `SELECT l.id FROM leagues l
+       INNER JOIN group_members gm ON gm.group_id = l.group_id
+       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+      [leagueId, userId],
+    );
+    if (access.rowCount === 0) return res.status(403).json({ message: '권한이 없습니다.' });
+
+    const fields = [];
+    const vals = [];
+    if (score_a !== undefined) { fields.push(`score_a = $${vals.length + 1}`); vals.push(score_a); }
+    if (score_b !== undefined) { fields.push(`score_b = $${vals.length + 1}`); vals.push(score_b); }
+    if (court !== undefined) { fields.push(`court = $${vals.length + 1}`); vals.push(court); }
+    if (status !== undefined) { fields.push(`status = $${vals.length + 1}`); vals.push(status); }
+    if (fields.length === 0) return res.status(400).json({ message: '변경할 필드가 없습니다.' });
+
+    vals.push(matchId, leagueId);
+    const result = await pool.query(
+      `UPDATE league_matches SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND league_id = $${vals.length} RETURNING *`,
+      vals,
+    );
+    if (result.rowCount === 0) return res.status(404).json({ message: '경기를 찾을 수 없습니다.' });
+    return res.json({ match: result.rows[0] });
+  } catch (err) {
+    console.error('Error updating match:', err);
+    return res.status(500).json({ message: '서버 오류' });
+  }
+});
+
+// DELETE /league/:id/matches/:matchId - 경기 삭제 (owner/admin)
+router.delete('/league/:id/matches/:matchId', requireAuth, async (req, res) => {
+  const userId = Number(req.user.sub);
+  const leagueId = req.params.id;
+  const matchId = req.params.matchId;
+  try {
+    const access = await pool.query(
+      `SELECT l.id FROM leagues l
+       INNER JOIN group_members gm ON gm.group_id = l.group_id
+       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+      [leagueId, userId],
+    );
+    if (access.rowCount === 0) return res.status(403).json({ message: '권한이 없습니다.' });
+
+    const del = await pool.query(
+      `DELETE FROM league_matches WHERE id = $1 AND league_id = $2 RETURNING id`,
+      [matchId, leagueId],
+    );
+    if (del.rowCount === 0) return res.status(404).json({ message: '경기를 찾을 수 없습니다.' });
+
+    // match_order 재정렬
+    await pool.query(
+      `UPDATE league_matches SET match_order = sub.rn
+       FROM (SELECT id, ROW_NUMBER() OVER (ORDER BY match_order) AS rn FROM league_matches WHERE league_id = $1) sub
+       WHERE league_matches.id = sub.id`,
+      [leagueId],
+    );
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Error deleting match:', err);
+    return res.status(500).json({ message: '서버 오류' });
   }
 });
 

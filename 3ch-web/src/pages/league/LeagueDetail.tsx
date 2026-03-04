@@ -576,13 +576,22 @@ export default function LeagueDetail() {
             경품 추첨
           </Button>
         )}
+        {!isEditing && (canManage || isMember) && (
+          <Button
+            fullWidth variant="outlined" disableElevation
+            sx={{ mt: 1, borderRadius: 1, height: 40, fontWeight: 700 }}
+            onClick={() => navigate(`/league/${id}/matches`)}
+          >
+            경기 순서
+          </Button>
+        )}
         {!isEditing && canManage && (
           <Button
             fullWidth variant="contained" disableElevation
             sx={{ mt: 1, borderRadius: 1, height: 40, fontWeight: 700, bgcolor: "#87B8FF", "&:hover": { bgcolor: "#79AEFF" } }}
             onClick={() => { navigate(`/league/${id}/bracket`) }}
           >
-            대진표 생성하기
+            대진표 확인하기
           </Button>
         )}
       </Box>

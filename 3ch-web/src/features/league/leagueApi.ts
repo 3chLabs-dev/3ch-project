@@ -143,6 +143,32 @@ export interface DeleteParticipantResponse {
   message: string;
 }
 
+export interface LeagueMatch {
+  id: string;
+  match_order: number;
+  participant_a_id: string | null;
+  participant_b_id: string | null;
+  participant_a_name: string | null;
+  participant_a_division: string | null;
+  participant_b_name: string | null;
+  participant_b_division: string | null;
+  score_a: number | null;
+  score_b: number | null;
+  court: string | null;
+  status: "pending" | "playing" | "done";
+}
+
+export interface GetLeagueMatchesResponse {
+  matches: LeagueMatch[];
+}
+
+export interface UpdateMatchRequest {
+  score_a?: number | null;
+  score_b?: number | null;
+  court?: string | null;
+  status?: "pending" | "playing" | "done";
+}
+
 export interface AddParticipantsRequest {
   leagueId: string;
   participants: { division: string; name: string }[];
@@ -292,6 +318,54 @@ export const leagueApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: [{ type: "League", id: "LIST" }],
     }),
+
+    getLeagueMatches: builder.query<GetLeagueMatchesResponse, string>({
+      query: (id) => `/league/${id}/matches`,
+      providesTags: (_result, _error, id) => [{ type: "League", id: `matches-${id}` }],
+    }),
+
+    initLeagueMatches: builder.mutation<GetLeagueMatchesResponse, { id: string; force?: boolean }>({
+      query: ({ id, force }) => ({ url: `/league/${id}/matches/init${force ? "?force=true" : ""}`, method: "POST" }),
+      invalidatesTags: (_result, _error, { id }) => [{ type: "League", id: `matches-${id}` }],
+    }),
+
+    updateLeagueMatch: builder.mutation<
+      { match: LeagueMatch },
+      { leagueId: string; matchId: string; updates: UpdateMatchRequest }
+    >({
+      query: ({ leagueId, matchId, updates }) => ({
+        url: `/league/${leagueId}/matches/${matchId}`,
+        method: "PATCH",
+        body: updates,
+      }),
+      async onQueryStarted({ leagueId, matchId, updates }, { dispatch, queryFulfilled }) {
+        const patch = dispatch(
+          leagueApi.util.updateQueryData("getLeagueMatches", leagueId, (draft) => {
+            const m = draft.matches.find((x) => x.id === matchId);
+            if (m) Object.assign(m, updates);
+          })
+        );
+        try { await queryFulfilled; } catch { patch.undo(); }
+      },
+      invalidatesTags: (_result, _error, { leagueId }) => [{ type: "League", id: `matches-${leagueId}` }],
+    }),
+
+    reorderLeagueMatches: builder.mutation<{ ok: boolean }, { leagueId: string; order: string[] }>({
+      query: ({ leagueId, order }) => ({
+        url: `/league/${leagueId}/matches/reorder`,
+        method: "PATCH",
+        body: { order },
+      }),
+      invalidatesTags: (_result, _error, { leagueId }) => [{ type: "League", id: `matches-${leagueId}` }],
+    }),
+
+    deleteLeagueMatch: builder.mutation<{ ok: boolean }, { leagueId: string; matchId: string }>({
+      query: ({ leagueId, matchId }) => ({
+        url: `/league/${leagueId}/matches/${matchId}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: (_result, _error, { leagueId }) => [{ type: "League", id: `matches-${leagueId}` }],
+    }),
   }),
 });
 
@@ -308,4 +382,9 @@ export const {
   useDeleteParticipantMutation,
   useAddParticipantsMutation,
   useDeleteLeagueMutation,
+  useGetLeagueMatchesQuery,
+  useInitLeagueMatchesMutation,
+  useUpdateLeagueMatchMutation,
+  useReorderLeagueMatchesMutation,
+  useDeleteLeagueMatchMutation,
 } = leagueApi;

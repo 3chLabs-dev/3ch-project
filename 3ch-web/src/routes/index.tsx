@@ -29,6 +29,7 @@ import GroupLeagueManage from "../pages/group/GroupLeagueManage";
 import DrawMain from "../pages/draw/DrawMain";
 import LeagueDetail from "../pages/league/LeagueDetail";
 import LeagueBracket from "../pages/league/LeagueBracket.tsx";
+import LeagueMatchOrder from "../pages/league/LeagueMatchOrder";
 import DrawList from "../pages/draw/DrawList";
 import DrawDetail from "../pages/draw/DrawDetail";
 import MemberCheckPage from "../pages/mypage/userinfo/MemberCheckPage.tsx";
@@ -56,6 +57,7 @@ export const router = createBrowserRouter([
       { path: "/league", element: <LeagueCreationWizard /> },
       { path: "/league/:id", element: <LeagueDetail /> },
       { path: "/league/:id/bracket", element: <LeagueBracket /> },
+      { path: "/league/:id/matches", element: <LeagueMatchOrder /> },
       { path: "/mypage", element: <MyPage />},
       { path: "/auth/success", element: <AuthSuccess />},
       { path: "/auth/fail", element: <AuthFail />},

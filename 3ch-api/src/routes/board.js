@@ -18,7 +18,7 @@ router.get("/notices", async (req, res) => {
   try {
     const [rows, cnt] = await Promise.all([
       pool.query(
-        `SELECT id, title, LEFT(content, 80) AS content_preview, is_published, created_at, updated_at
+        `SELECT id, category, title, LEFT(content, 80) AS content_preview, is_published, created_at, updated_at
          FROM notices ORDER BY id DESC LIMIT $1 OFFSET $2`,
         [limit, offset],
       ),
@@ -43,15 +43,15 @@ router.get("/notices/:id", async (req, res) => {
 
 // POST /admin/board/notices
 router.post("/notices", async (req, res) => {
-  const { title, content, is_published = true } = req.body;
+  const { title, content, category = "안내", is_published = true } = req.body;
   if (!title?.trim() || !content?.trim()) {
     return res.status(400).json({ message: "제목과 내용을 입력하세요." });
   }
   try {
     const r = await pool.query(
-      `INSERT INTO notices (title, content, is_published)
-       VALUES ($1, $2, $3) RETURNING *`,
-      [title.trim(), content.trim(), is_published],
+      `INSERT INTO notices (category, title, content, is_published)
+       VALUES ($1, $2, $3, $4) RETURNING *`,
+      [category, title.trim(), content.trim(), is_published],
     );
     res.status(201).json(r.rows[0]);
   } catch (e) {
@@ -61,15 +61,15 @@ router.post("/notices", async (req, res) => {
 
 // PUT /admin/board/notices/:id
 router.put("/notices/:id", async (req, res) => {
-  const { title, content, is_published } = req.body;
+  const { title, content, category = "안내", is_published } = req.body;
   if (!title?.trim() || !content?.trim()) {
     return res.status(400).json({ message: "제목과 내용을 입력하세요." });
   }
   try {
     const r = await pool.query(
-      `UPDATE notices SET title=$1, content=$2, is_published=$3, updated_at=NOW()
-       WHERE id=$4 RETURNING *`,
-      [title.trim(), content.trim(), is_published ?? true, req.params.id],
+      `UPDATE notices SET category=$1, title=$2, content=$3, is_published=$4, updated_at=NOW()
+       WHERE id=$5 RETURNING *`,
+      [category, title.trim(), content.trim(), is_published ?? true, req.params.id],
     );
     if (r.rowCount === 0) return res.status(404).json({ message: "없음" });
     res.json(r.rows[0]);
@@ -301,4 +301,76 @@ router.delete("/policies/:type/:id", async (req, res) => {
   }
 });
 
+/* ─────────────────────────────────────────
+   문의사항 (어드민)
+───────────────────────────────────────── */
+
+// GET /admin/board/inquiries
+router.get("/inquiries", async (req, res) => {
+  const page  = Math.max(1, parseInt(req.query.page  || "1",  10));
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit || "20", 10)));
+  const offset = (page - 1) * limit;
+  const status = req.query.status; // 'pending' | 'answered' | undefined
+  try {
+    const where = status ? "WHERE i.status = $3" : "";
+    const params = status ? [limit, offset, status] : [limit, offset];
+    const [rows, cnt] = await Promise.all([
+      pool.query(
+        `SELECT i.id, i.category, i.title, i.status, i.created_at, i.replied_at,
+                u.name AS user_name, u.email AS user_email
+         FROM inquiries i
+         JOIN users u ON u.id = i.user_id
+         ${where}
+         ORDER BY i.id DESC LIMIT $1 OFFSET $2`,
+        params,
+      ),
+      pool.query(
+        `SELECT COUNT(*)::int AS total FROM inquiries ${where}`,
+        status ? [status] : [],
+      ),
+    ]);
+    res.json({ inquiries: rows.rows, total: cnt.rows[0].total, page, limit });
+  } catch (e) {
+    res.status(500).json({ message: String(e.message) });
+  }
+});
+
+// GET /admin/board/inquiries/:id
+router.get("/inquiries/:id", async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT i.*, u.name AS user_name, u.email AS user_email
+       FROM inquiries i
+       JOIN users u ON u.id = i.user_id
+       WHERE i.id = $1`,
+      [req.params.id],
+    );
+    if (r.rowCount === 0) return res.status(404).json({ message: "없음" });
+    res.json(r.rows[0]);
+  } catch (e) {
+    res.status(500).json({ message: String(e.message) });
+  }
+});
+
+// PATCH /admin/board/inquiries/:id/reply - 답변 등록
+router.patch("/inquiries/:id/reply", async (req, res) => {
+  const { reply } = req.body;
+  if (!reply?.trim()) {
+    return res.status(400).json({ message: "답변 내용을 입력하세요." });
+  }
+  try {
+    const r = await pool.query(
+      `UPDATE inquiries
+       SET reply=$1, status='answered', replied_at=NOW(), updated_at=NOW()
+       WHERE id=$2 RETURNING *`,
+      [reply.trim(), req.params.id],
+    );
+    if (r.rowCount === 0) return res.status(404).json({ message: "없음" });
+    res.json(r.rows[0]);
+  } catch (e) {
+    res.status(500).json({ message: String(e.message) });
+  }
+});
+
 module.exports = router;
+

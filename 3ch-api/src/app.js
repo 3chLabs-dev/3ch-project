@@ -1,4 +1,5 @@
 const express = require("express");
+const path = require("path");
 const { swaggerUi, swaggerSpec } = require("./config/swagger");
 require("dotenv").config();
 const cors = require("cors");
@@ -12,14 +13,51 @@ const adminRouter = require("./routes/admin");
 const policyRouter = require("./routes/policy");
 const boardRouter  = require("./routes/board");
 const noticeRouter = require("./routes/notice")
+const inquiryRouter = require("./routes/inquiry")
+
+const pool = require("./db/pool");
 
 const app = express();
 
 require("./config/passport");
 const passport = require("passport");
 
+// 시작 시 DB 마이그레이션 (테이블/컬럼 자동 생성)
+(async () => {
+  try {
+    // notices 테이블
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS notices (
+        id           SERIAL PRIMARY KEY,
+        title        VARCHAR(200) NOT NULL,
+        content      TEXT         NOT NULL,
+        is_published BOOLEAN      NOT NULL DEFAULT true,
+        created_at   TIMESTAMPTZ  DEFAULT NOW(),
+        updated_at   TIMESTAMPTZ  DEFAULT NOW()
+      )
+    `);
+    await pool.query(`ALTER TABLE notices ADD COLUMN IF NOT EXISTS category VARCHAR(20) NOT NULL DEFAULT '안내'`);
+
+    // faqs 테이블
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS faqs (
+        id            SERIAL PRIMARY KEY,
+        question      VARCHAR(300) NOT NULL,
+        answer        TEXT         NOT NULL,
+        display_order INT          NOT NULL DEFAULT 0,
+        is_published  BOOLEAN      NOT NULL DEFAULT true,
+        created_at    TIMESTAMPTZ  DEFAULT NOW(),
+        updated_at    TIMESTAMPTZ  DEFAULT NOW()
+      )
+    `);
+  } catch (e) {
+    console.error("DB migration error:", e.message);
+  }
+})();
+
 app.use(express.json());
 app.use(passport.initialize());
+app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
 // CORS
 const corsOptions = {
@@ -48,5 +86,6 @@ app.use("/api/admin", adminRouter);
 app.use("/api", policyRouter);
 app.use("/api/admin/board", boardRouter);
 app.use("/api", noticeRouter);
+app.use("/api", inquiryRouter);
 
 module.exports = app;

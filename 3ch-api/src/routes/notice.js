@@ -12,7 +12,7 @@ router.get("/notices", async (req, res) => {
     try {
         const [rows, cnt] = await Promise.all([
         pool.query(
-        `SELECT id, title, LEFT(content, 80) AS content_preview, created_at
+        `SELECT id, category, title, LEFT(content, 80) AS content_preview, created_at
         FROM notices
         WHERE is_published = true
         ORDER BY id DESC
@@ -45,6 +45,21 @@ router.get("/notices/:id", async (req, res) => {
     res.json(r.rows[0]);
   } catch (e) {
     res.status(500).json({ message: String(e?.message ?? e) });
+  }
+});
+
+// GET /api/faqs - 공개 FAQ 목록
+router.get("/faqs", async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT id, question, answer, display_order
+       FROM faqs
+       WHERE is_published = true
+       ORDER BY display_order ASC, id ASC`,
+    );
+    res.json({ faqs: r.rows });
+  } catch (e) {
+    res.status(500).json({ message: String(e.message) });
   }
 });
 

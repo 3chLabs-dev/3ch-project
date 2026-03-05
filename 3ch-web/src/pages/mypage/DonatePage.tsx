@@ -110,8 +110,8 @@ export default function DonatePage() {
 
                 {/* 계좌 정보 행 */}
                 <Stack divider={<Divider />}>
-                    <InfoRow label="은행" value={BANK} />
                     <InfoRow label="예금주" value={HOLDER} />
+                    <InfoRow label="은행" value={BANK} />
                     <Box sx={{ px: 2.5, py: 2, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <Box>
                             <Typography fontSize={12} color="#9CA3AF" fontWeight={600} sx={{ mb: 0.3 }}>

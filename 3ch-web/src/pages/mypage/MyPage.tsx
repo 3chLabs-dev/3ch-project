@@ -32,7 +32,7 @@ const COMMUNITY_ITEMS = [
 const SUPPORT_ITEMS = [
     { label: "공지사항", to: "/mypage/notice", icon: <CampaignOutlinedIcon fontSize="small" /> },
     { label: "자주 하는 질문", to: "/mypage/faq", icon: <LiveHelpOutlinedIcon fontSize="small" /> },
-    { label: "문의사항", to: "/mypage/inquiry", icon: <QuestionAnswerOutlinedIcon fontSize="small" /> },
+    { label: "1:1 문의", to: "/mypage/inquiry", icon: <QuestionAnswerOutlinedIcon fontSize="small" /> },
 ];
 
 const POLICY_ITEMS = [
@@ -172,7 +172,7 @@ export default function MyPage() {
 
             {/* POLICIES */}
             <Typography fontSize={11} fontWeight={700} color="text.disabled" sx={{ mb: 1, letterSpacing: 1 }}>
-                POLICIES
+                POLICY
             </Typography>
             <Card elevation={0} sx={{ borderRadius: 1.5, mb: 2, overflow: "hidden", bgcolor: "#F5F5F5" }}>
                 <List disablePadding>

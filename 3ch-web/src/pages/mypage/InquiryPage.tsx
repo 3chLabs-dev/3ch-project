@@ -53,6 +53,7 @@ export default function InquiryPage() {
     const fullScreen = useMediaQuery(theme.breakpoints.down("sm"));
 
     const token = useAppSelector((s) => s.auth.token);
+    const user = useAppSelector((s) => s.auth.user);
 
     const [items, setItems] = useState<Inquiry[]>([]);
     const [loading, setLoading] = useState(false);
@@ -69,7 +70,7 @@ export default function InquiryPage() {
     const [emailDomain, setEmailDomain] = useState("naver.com");
     const [emailDomainCustom, setEmailDomainCustom] = useState("");
     const [file, setFile] = useState<File | null>(null);
-    const [agreed, setAgreed] = useState(false);
+    const [wantEmailReply, setWantEmailReply] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState("");
     const [submitted, setSubmitted] = useState(false);
@@ -109,11 +110,26 @@ export default function InquiryPage() {
         setCategory("");
         setTitle("");
         setContent("");
-        setEmailId("");
-        setEmailDomain("naver.com");
-        setEmailDomainCustom("");
+        if (user?.email) {
+            const atIdx = user.email.lastIndexOf("@");
+            const id = user.email.slice(0, atIdx);
+            const domain = user.email.slice(atIdx + 1);
+            setEmailId(id);
+            const known = EMAIL_DOMAINS.find((d) => d !== "직접입력" && d === domain);
+            if (known) {
+                setEmailDomain(known);
+                setEmailDomainCustom("");
+            } else {
+                setEmailDomain("직접입력");
+                setEmailDomainCustom(domain);
+            }
+        } else {
+            setEmailId("");
+            setEmailDomain("naver.com");
+            setEmailDomainCustom("");
+        }
+        setWantEmailReply(true);
         setFile(null);
-        setAgreed(false);
         setSubmitError("");
         setSubmitted(false);
         setWriteOpen(true);
@@ -123,9 +139,8 @@ export default function InquiryPage() {
         if (!category) { setSubmitError("문의 유형을 선택해주세요."); return; }
         if (!title.trim()) { setSubmitError("제목을 입력해주세요."); return; }
         if (!content.trim()) { setSubmitError("문의 내용을 입력해주세요."); return; }
-        if (!agreed) { setSubmitError("개인정보 수집 및 이용에 동의해주세요."); return; }
         const domain = emailDomain === "직접입력" ? emailDomainCustom.trim() : emailDomain;
-        const contactEmail = emailId.trim() && domain ? `${emailId.trim()}@${domain}` : undefined;
+        const contactEmail = wantEmailReply && emailId.trim() && domain ? `${emailId.trim()}@${domain}` : undefined;
         setSubmitting(true);
         setSubmitError("");
         try {
@@ -163,7 +178,7 @@ export default function InquiryPage() {
                 <IconButton onClick={() => navigate(-1)} size="small">
                     <ChevronLeftIcon />
                 </IconButton>
-                <Typography variant="h6" fontWeight={900} flex={1}>문의사항</Typography>
+                <Typography variant="h6" fontWeight={900} flex={1}>1:1 문의</Typography>
                 {token && (
                     <Button
                         size="small"
@@ -183,7 +198,7 @@ export default function InquiryPage() {
                 <Box sx={{ bgcolor: "#EFF6FF", borderRadius: 1.5, px: 2, py: 1.5 }}>
                     <Typography fontSize={13} color="#1D4ED8" fontWeight={600} lineHeight={1.7}>
                         문의하신 내용은 영업일 기준 1~2일 내에 답변드립니다.<br />
-                        답변은 등록하신 연락처 이메일로도 발송됩니다.
+                        이메일 답변을 원하시면 문의 작성 시 이메일 주소를 확인해주세요.
                     </Typography>
                 </Box>
             )}
@@ -465,48 +480,61 @@ export default function InquiryPage() {
                                 </Stack>
                             </Box>
 
-                            {/* 이메일 주소 */}
+                            {/* 이메일로 답변 받기 */}
                             <Box>
-                                <Typography fontSize={12} fontWeight={700} color="text.secondary" sx={{ mb: 0.8 }}>이메일 주소</Typography>
-                                <Stack direction="row" alignItems="center" spacing={0.8}>
-                                    <TextField
-                                        value={emailId}
-                                        onChange={(e) => setEmailId(e.target.value)}
-                                        size="small"
-                                        placeholder="아이디"
-                                        sx={{ flex: 1 }}
-                                        inputProps={{ maxLength: 100 }}
-                                    />
-                                    <Typography color="text.secondary" fontWeight={700}>@</Typography>
-                                    {emailDomain === "직접입력" ? (
+                                <FormControlLabel
+                                        control={
+                                            <Checkbox
+                                                checked={wantEmailReply}
+                                                onChange={(e) => setWantEmailReply(e.target.checked)}
+                                                size="small"
+                                            />
+                                        }
+                                        label={
+                                            <Typography fontSize={13} fontWeight={700}>이메일로 답변 받기</Typography>
+                                        }
+                                />
+                                {wantEmailReply && (
+                                    <Stack direction="row" alignItems="center" spacing={0.8} sx={{ mt: 0.5 }}>
                                         <TextField
-                                            value={emailDomainCustom}
-                                            onChange={(e) => setEmailDomainCustom(e.target.value)}
+                                            value={emailId}
+                                            onChange={(e) => setEmailId(e.target.value)}
                                             size="small"
-                                            placeholder="직접입력"
+                                            placeholder="아이디"
                                             sx={{ flex: 1 }}
                                             inputProps={{ maxLength: 100 }}
                                         />
-                                    ) : (
-                                        <TextField
+                                        <Typography color="text.secondary" fontWeight={700}>@</Typography>
+                                        {emailDomain === "직접입력" ? (
+                                            <TextField
+                                                value={emailDomainCustom}
+                                                onChange={(e) => setEmailDomainCustom(e.target.value)}
+                                                size="small"
+                                                placeholder="직접입력"
+                                                sx={{ flex: 1 }}
+                                                inputProps={{ maxLength: 100 }}
+                                            />
+                                        ) : (
+                                            <TextField
+                                                value={emailDomain}
+                                                size="small"
+                                                sx={{ flex: 1 }}
+                                                slotProps={{ input: { readOnly: true } }}
+                                            />
+                                        )}
+                                        <Select
                                             value={emailDomain}
+                                            onChange={(e) => setEmailDomain(e.target.value)}
                                             size="small"
-                                            sx={{ flex: 1 }}
-                                            slotProps={{ input: { readOnly: true } }}
-                                        />
-                                    )}
-                                    <Select
-                                        value={emailDomain}
-                                        onChange={(e) => setEmailDomain(e.target.value)}
-                                        size="small"
-                                        sx={{ minWidth: 36, "& .MuiSelect-select": { py: "8.5px" } }}
-                                        renderValue={() => "▼"}
-                                    >
-                                        {EMAIL_DOMAINS.map((d) => (
-                                            <MenuItem key={d} value={d}>{d}</MenuItem>
-                                        ))}
-                                    </Select>
-                                </Stack>
+                                            sx={{ minWidth: 36, "& .MuiSelect-select": { py: "8.5px" } }}
+                                            renderValue={() => "▼"}
+                                        >
+                                            {EMAIL_DOMAINS.map((d) => (
+                                                <MenuItem key={d} value={d}>{d}</MenuItem>
+                                            ))}
+                                        </Select>
+                                    </Stack>
+                                )}
                             </Box>
 
                             {/* 제목 */}
@@ -544,7 +572,7 @@ export default function InquiryPage() {
                             </Box>
 
                             {/* 첨부파일 */}
-                            <Box>
+                            <Box sx={{ mt: -1 }}>
                                 <Typography fontSize={12} fontWeight={700} color="text.secondary" sx={{ mb: 0.8 }}>첨부파일</Typography>
                                 <input
                                     ref={fileInputRef}
@@ -561,45 +589,6 @@ export default function InquiryPage() {
                                 >
                                     {file ? file.name : "파일첨부"}
                                 </Button>
-                            </Box>
-
-                            <Divider />
-
-                            {/* 개인정보 동의 */}
-                            <Box>
-                                <FormControlLabel
-                                    control={
-                                        <Checkbox
-                                            checked={agreed}
-                                            onChange={(e) => setAgreed(e.target.checked)}
-                                            size="small"
-                                        />
-                                    }
-                                    label={
-                                        <Typography fontSize={13} fontWeight={700}>
-                                            개인정보 수집 및 이용 동의<Typography component="span" color="error" fontSize={13}>(필수)</Typography>
-                                        </Typography>
-                                    }
-                                />
-                                <Box component="table" sx={{ width: "100%", borderCollapse: "collapse", mt: 1, fontSize: 11 }}>
-                                    <Box component="thead">
-                                        <Box component="tr" sx={{ bgcolor: "#F3F4F6" }}>
-                                            {["수집항목", "수집목적", "보유기간"].map((h) => (
-                                                <Box component="th" key={h} sx={{ border: "1px solid #E5E7EB", px: 1, py: 0.8, fontWeight: 700, color: "#374151", textAlign: "center" }}>{h}</Box>
-                                            ))}
-                                        </Box>
-                                    </Box>
-                                    <Box component="tbody">
-                                        <Box component="tr">
-                                            <Box component="td" sx={{ border: "1px solid #E5E7EB", px: 1, py: 1, color: "#6B7280", textAlign: "center" }}>이메일 주소</Box>
-                                            <Box component="td" sx={{ border: "1px solid #E5E7EB", px: 1, py: 1, color: "#6B7280", textAlign: "center" }}>문의·요청·불편사항 확인 및 처리</Box>
-                                            <Box component="td" sx={{ border: "1px solid #E5E7EB", px: 1, py: 1, color: "#6B7280", textAlign: "center" }}>3년간 보유 후 지체없이 파기</Box>
-                                        </Box>
-                                    </Box>
-                                </Box>
-                                <Typography fontSize={11} color="text.disabled" sx={{ mt: 1, lineHeight: 1.7 }}>
-                                    위 동의를 거부할 권리가 있으며, 동의를 거부하실 경우 문의 처리 및 결과 확인이 제한됩니다. 다구거나 같은 개인정보는 일반적으로 삭제조치 됩니다. 더 자세한 내용은 개인정보 처리방침을 확인해주시기 바랍니다.
-                                </Typography>
                             </Box>
 
                             {submitError && (

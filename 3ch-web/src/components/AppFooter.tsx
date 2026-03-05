@@ -7,6 +7,16 @@ export default function AppFooter() {
 
     return (
         <Box sx={{ pt: 2, pb: 1, px: 0 }}>
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                <Link href="/mypage/guide" underline="hover" variant="body2" fontWeight={800} sx={{ color: "#4F46E5" }}>
+                    이용방법
+                </Link>
+                <Typography variant="body2" color="text.secondary">|</Typography>
+                <Link href="/mypage/terms" underline="hover" variant="body2" fontWeight={700}>이용약관</Link>
+                <Typography variant="body2" color="text.secondary">|</Typography>
+                <Link href="/mypage/privacy" underline="hover" variant="body2" fontWeight={700}>개인정보 처리방침</Link>
+            </Stack>
+
             <Box
                 onClick={() => setBizOpen((v) => !v)}
                 sx={{
@@ -32,17 +42,7 @@ export default function AppFooter() {
                 </Typography>
             </Collapse>
 
-            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                <Link href="/mypage/guide" underline="hover" variant="body2" fontWeight={800} sx={{ color: "#4F46E5" }}>
-                    이용방법
-                </Link>
-                <Typography variant="body2" color="text.secondary">|</Typography>
-                <Link href="/mypage/terms" underline="hover" variant="body2" fontWeight={700}>이용약관</Link>
-                <Typography variant="body2" color="text.secondary">|</Typography>
-                <Link href="/mypage/privacy" underline="hover" variant="body2" fontWeight={700}>개인정보 처리방침</Link>
-            </Stack>
-
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 1.2, display: "block" }}>
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>
                 Copyright 3ch. All rights reserved.
             </Typography>
         </Box>

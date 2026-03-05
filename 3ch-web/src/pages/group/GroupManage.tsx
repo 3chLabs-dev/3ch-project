@@ -999,6 +999,10 @@ export default function GroupManage() {
                                     onClick={() => {
                                         const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
                                         const link = `${appUrl}/club/${id}`;
+                                        const kakaoKey = import.meta.env.VITE_KAKAO_JS_KEY;
+                                        if (window.Kakao && kakaoKey && !window.Kakao.isInitialized()) {
+                                            window.Kakao.init(kakaoKey);
+                                        }
                                         if (window.Kakao?.Share) {
                                             window.Kakao.Share.sendDefault({
                                                 objectType: "feed",

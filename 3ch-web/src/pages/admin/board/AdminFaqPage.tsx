@@ -1,11 +1,12 @@
 import { useState } from "react";
 import {
-  Box, Button, Chip, Dialog, DialogContent, DialogTitle,
+  Box, Button, Chip, Dialog, DialogContent,
   Divider, IconButton, Stack, Switch,
   Table, TableBody, TableCell, TableHead, TableRow,
   TextField, Typography,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
+import LiveHelpOutlinedIcon from "@mui/icons-material/LiveHelpOutlined";
 
 const API = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
@@ -91,11 +92,20 @@ export default function AdminFaqPage() {
       </Stack>
 
       <Box sx={{ border: "1px solid #E5E7EB", borderRadius: 1.5, overflow: "hidden" }}>
-        <Table size="small">
+        <Table size="small" sx={{ tableLayout: "fixed", width: "100%" }}>
+          <colgroup>
+            <col style={{ width: 52 }} />
+            <col style={{ width: "25%" }} />
+            <col />
+            <col style={{ width: 90 }} />
+            <col style={{ width: 100 }} />
+            <col style={{ width: 110 }} />
+          </colgroup>
           <TableHead>
             <TableRow sx={{ bgcolor: "#F9FAFB" }}>
-              {["순서", "질문", "답변 미리보기", "공개", "등록일시", "관리"].map((h) => (
-                <TableCell key={h} sx={{ fontWeight: 800, fontSize: 12, color: "#374151", py: 1.2 }}>{h}</TableCell>
+              {(["순서", "질문", "답변 미리보기", "공개", "등록일시", "관리"] as const).map((h) => (
+                <TableCell key={h} align={h === "공개" || h === "관리" ? "center" : "left"}
+                  sx={{ fontWeight: 800, fontSize: 12, color: "#374151", py: 1.2, whiteSpace: "nowrap" }}>{h}</TableCell>
               ))}
             </TableRow>
           </TableHead>
@@ -108,26 +118,26 @@ export default function AdminFaqPage() {
               </TableRow>
             ) : faqs.map((f) => (
               <TableRow key={f.id} hover>
-                <TableCell sx={{ fontSize: 12, color: "#6B7280", width: 48 }}>{f.display_order}</TableCell>
-                <TableCell sx={{ fontSize: 12, fontWeight: 700, maxWidth: 200 }}>
-                  <Typography sx={{ fontSize: 12, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 200 }}>
+                <TableCell sx={{ fontSize: 12, color: "#6B7280" }}>{f.display_order}</TableCell>
+                <TableCell>
+                  <Typography sx={{ fontSize: 12, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {f.question}
                   </Typography>
                 </TableCell>
-                <TableCell sx={{ fontSize: 12, color: "#6B7280", maxWidth: 240 }}>
-                  <Typography sx={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 240 }}>
+                <TableCell>
+                  <Typography sx={{ fontSize: 12, color: "#6B7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {f.answer_preview}
                   </Typography>
                 </TableCell>
-                <TableCell>
+                <TableCell align="center">
                   <Chip label={f.is_published ? "공개" : "비공개"} size="small"
                     sx={{ fontSize: 11, fontWeight: 700,
                       bgcolor: f.is_published ? "#D1FAE5" : "#F3F4F6",
                       color:   f.is_published ? "#065F46" : "#6B7280" }} />
                 </TableCell>
-                <TableCell sx={{ fontSize: 12, color: "#6B7280" }}>{f.created_at?.slice(0, 10)}</TableCell>
-                <TableCell>
-                  <Stack direction="row" spacing={0.5}>
+                <TableCell sx={{ fontSize: 12, color: "#6B7280", whiteSpace: "nowrap" }}>{f.created_at?.slice(0, 10)}</TableCell>
+                <TableCell align="center" sx={{ whiteSpace: "nowrap" }}>
+                  <Stack direction="row" spacing={0.5} justifyContent="center">
                     <Button size="small" onClick={() => openEdit(f.id)}
                       sx={{ fontSize: 11, fontWeight: 700, minWidth: 0, px: 1 }}>수정</Button>
                     <Button size="small" color="error" onClick={() => handleDelete(f.id)}
@@ -142,42 +152,120 @@ export default function AdminFaqPage() {
 
       {/* 추가/수정 다이얼로그 */}
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="md">
-        <DialogTitle sx={{ fontWeight: 900, fontSize: 16, pr: 5 }}>
-          {editId ? "FAQ 수정" : "FAQ 추가"}
-          <IconButton onClick={() => setDialogOpen(false)} sx={{ position: "absolute", right: 12, top: 10 }}>
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <Divider />
-        <DialogContent sx={{ pt: 2 }}>
-          <Stack spacing={2}>
-            {alert && <Typography sx={{ fontSize: 12, color: "error.main" }}>{alert}</Typography>}
-            <TextField label="질문" size="small" fullWidth value={form.question}
-              onChange={(e) => setForm((p) => ({ ...p, question: e.target.value }))} />
-            <TextField label="답변" size="small" fullWidth multiline rows={8} value={form.answer}
-              onChange={(e) => setForm((p) => ({ ...p, answer: e.target.value }))}
-              slotProps={{ input: { style: { fontSize: 13, fontFamily: "inherit", lineHeight: 1.7 } } }}
-            />
-            <Stack direction="row" spacing={2} alignItems="center">
-              <TextField label="노출 순서" size="small" type="number" sx={{ width: 120 }}
-                value={form.display_order}
-                onChange={(e) => setForm((p) => ({ ...p, display_order: Number(e.target.value) }))} />
-              <Stack direction="row" alignItems="center" spacing={1}>
-                <Switch checked={form.is_published}
-                  onChange={(e) => setForm((p) => ({ ...p, is_published: e.target.checked }))} />
-                <Typography sx={{ fontSize: 13 }}>{form.is_published ? "공개" : "비공개"}</Typography>
+        {/* 헤더 */}
+        <Box sx={{ px: 3, pt: 3, pb: 2.5, borderBottom: "1px solid #E5E7EB" }}>
+          <Stack direction="row" alignItems="center" spacing={1.5}>
+            <Box sx={{
+              width: 36, height: 36, borderRadius: 1.5, flexShrink: 0,
+              bgcolor: "#F0FDF4", display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <LiveHelpOutlinedIcon sx={{ fontSize: 20, color: "#059669" }} />
+            </Box>
+            <Box flex={1}>
+              <Typography fontWeight={900} fontSize={16} color="#1F2937">
+                {editId ? "FAQ 수정" : "FAQ 추가"}
+              </Typography>
+              <Typography fontSize={12} color="#9CA3AF" fontWeight={500} sx={{ mt: 0.2 }}>
+                {editId ? "등록된 FAQ를 수정합니다." : "새로운 자주 하는 질문을 작성합니다."}
+              </Typography>
+            </Box>
+            <IconButton size="small" onClick={() => setDialogOpen(false)} sx={{ color: "#6B7280" }}>
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </Stack>
+        </Box>
+
+        <DialogContent sx={{ px: 3, py: 3 }}>
+          <Stack spacing={3}>
+            {alert && (
+              <Box sx={{ bgcolor: "#FEF2F2", borderRadius: 1, px: 2, py: 1.2, border: "1px solid #FECACA" }}>
+                <Typography fontSize={13} color="#DC2626" fontWeight={600}>{alert}</Typography>
+              </Box>
+            )}
+
+            {/* 질문 */}
+            <Box>
+              <Typography fontSize={12} fontWeight={700} color="#374151" sx={{ mb: 0.8 }}>
+                질문 <Typography component="span" color="error" fontSize={12}>*</Typography>
+              </Typography>
+              <TextField
+                size="small" fullWidth
+                placeholder="자주 하는 질문을 입력하세요."
+                value={form.question}
+                onChange={(e) => setForm((p) => ({ ...p, question: e.target.value }))}
+              />
+            </Box>
+
+            {/* 답변 */}
+            <Box>
+              <Typography fontSize={12} fontWeight={700} color="#374151" sx={{ mb: 0.8 }}>
+                답변 <Typography component="span" color="error" fontSize={12}>*</Typography>
+              </Typography>
+              <TextField
+                size="small" fullWidth multiline rows={8}
+                placeholder="답변 내용을 입력하세요."
+                value={form.answer}
+                onChange={(e) => setForm((p) => ({ ...p, answer: e.target.value }))}
+                slotProps={{ input: { style: { fontSize: 13, fontFamily: "inherit", lineHeight: 1.8 } } }}
+              />
+            </Box>
+
+            {/* 노출순서 + 공개 */}
+            <Box sx={{ bgcolor: "#F9FAFB", borderRadius: 1.5, px: 2.5, py: 2, border: "1px solid #E5E7EB" }}>
+              <Stack direction="row" alignItems="center" justifyContent="space-between">
+                <Stack direction="row" alignItems="center" spacing={2}>
+                  <Box>
+                    <Typography fontSize={12} fontWeight={700} color="#374151" sx={{ mb: 0.6 }}>노출 순서</Typography>
+                    <TextField
+                      size="small" type="number" sx={{ width: 100 }}
+                      value={form.display_order}
+                      onChange={(e) => setForm((p) => ({ ...p, display_order: Number(e.target.value) }))}
+                    />
+                  </Box>
+                  <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
+                  <Box>
+                    <Typography fontSize={13} fontWeight={700} color="#374151">공개 여부</Typography>
+                    <Typography fontSize={12} color="#9CA3AF" sx={{ mt: 0.3 }}>
+                      비공개 시 사용자에게 노출되지 않습니다.
+                    </Typography>
+                  </Box>
+                </Stack>
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <Switch
+                    checked={form.is_published}
+                    onChange={(e) => setForm((p) => ({ ...p, is_published: e.target.checked }))}
+                  />
+                  <Chip
+                    label={form.is_published ? "공개" : "비공개"}
+                    size="small"
+                    sx={{
+                      fontSize: 11, fontWeight: 700, minWidth: 52,
+                      bgcolor: form.is_published ? "#D1FAE5" : "#F3F4F6",
+                      color:   form.is_published ? "#065F46" : "#6B7280",
+                    }}
+                  />
+                </Stack>
               </Stack>
-            </Stack>
+            </Box>
           </Stack>
         </DialogContent>
-        <Divider />
-        <Stack direction="row" justifyContent="flex-end" spacing={1} sx={{ px: 3, py: 1.5 }}>
-          <Button variant="outlined" onClick={() => setDialogOpen(false)} sx={{ fontWeight: 700 }}>취소</Button>
-          <Button variant="contained" disableElevation disabled={saving} onClick={handleSave}
-            sx={{ fontWeight: 700, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}>
-            {editId ? "수정" : "등록"}
-          </Button>
-        </Stack>
+
+        <Box sx={{ px: 3, py: 2, borderTop: "1px solid #E5E7EB", bgcolor: "#F9FAFB" }}>
+          <Stack direction="row" justifyContent="flex-end" spacing={1}>
+            <Button
+              variant="outlined" onClick={() => setDialogOpen(false)}
+              sx={{ fontWeight: 700, borderColor: "#D1D5DB", color: "#374151", "&:hover": { borderColor: "#9CA3AF", bgcolor: "#F3F4F6" } }}
+            >
+              취소
+            </Button>
+            <Button
+              variant="contained" disableElevation disabled={saving} onClick={handleSave}
+              sx={{ fontWeight: 700, px: 3, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}
+            >
+              {saving ? "저장 중..." : editId ? "수정 완료" : "등록"}
+            </Button>
+          </Stack>
+        </Box>
       </Dialog>
     </Box>
   );

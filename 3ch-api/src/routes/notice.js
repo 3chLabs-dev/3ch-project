@@ -29,4 +29,23 @@ router.get("/notices", async (req, res) => {
     }
 });
 
+router.get("/notices/:id", async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) return res.status(400).json({ message: "invalid id" });
+
+  try {
+    const r = await pool.query(
+      `SELECT id, title, content, is_published, created_at, updated_at
+       FROM notices
+       WHERE id = $1 AND is_published = true`,
+      [id]
+    );
+    if (r.rows.length === 0) return res.status(404).json({ message: "not found" });
+
+    res.json(r.rows[0]);
+  } catch (e) {
+    res.status(500).json({ message: String(e?.message ?? e) });
+  }
+});
+
 module.exports = router;

@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Navigate } from "react-router-dom";
 import {
     Box,
     Stack,
@@ -51,8 +51,7 @@ export default function GroupDetail() {
     };
 
     if (!isLoggedIn) {
-        navigate(`/login?redirect=/club/${id}`);
-        return null;
+        return <Navigate to={`/login?redirect=/club/${id}`} replace />;
     }
 
     if (isLoading) {

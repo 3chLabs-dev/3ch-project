@@ -648,17 +648,14 @@ export default function LeagueDetail() {
                     }
                     if (window.Kakao?.Share) {
                       window.Kakao.Share.sendDefault({
-                        objectType: "feed",
-                        content: {
-                          title: `${league?.name ?? "리그"} 참가 초대`,
-                          description: `리그에 참가해보세요!`,
-                          imageUrl: `${appUrl}/og-image.png`,
-                          link: { mobileWebUrl: link, webUrl: link },
-                        },
+                        objectType: "text",
+                        text: `[${league?.name ?? "리그"}] 리그에 참가해보세요!`,
+                        link: { mobileWebUrl: link, webUrl: link },
                         buttons: [{ title: "리그 보기", link: { mobileWebUrl: link, webUrl: link } }],
                       });
                     } else {
-                      alert("카카오 SDK가 로드되지 않았습니다.");
+                      navigator.clipboard?.writeText(link);
+                      alert("링크가 복사되었습니다.");
                     }
                   }}
                   sx={{ width: 56, height: 56, bgcolor: "#FEE500", "&:hover": { bgcolor: "#E6CE00" } }}

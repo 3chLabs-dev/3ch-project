@@ -1005,17 +1005,14 @@ export default function GroupManage() {
                                         }
                                         if (window.Kakao?.Share) {
                                             window.Kakao.Share.sendDefault({
-                                                objectType: "feed",
-                                                content: {
-                                                    title: `${group.name} 클럽 초대`,
-                                                    description: group.description || `${group.sport ?? ""} 클럽에 참여해보세요!`,
-                                                    imageUrl: `${appUrl}/og-image.png`,
-                                                    link: { mobileWebUrl: link, webUrl: link },
-                                                },
+                                                objectType: "text",
+                                                text: `[${group.name}] ${group.description || `${group.sport ?? ""} 클럽에 참여해보세요!`}`,
+                                                link: { mobileWebUrl: link, webUrl: link },
                                                 buttons: [{ title: "클럽 보기", link: { mobileWebUrl: link, webUrl: link } }],
                                             });
                                         } else {
-                                            alert("카카오 SDK가 로드되지 않았습니다.");
+                                            navigator.clipboard?.writeText(link);
+                                            alert("링크가 복사되었습니다.");
                                         }
                                     }}
                                     sx={{ width: 56, height: 56, bgcolor: "#FEE500", "&:hover": { bgcolor: "#E6CE00" } }}

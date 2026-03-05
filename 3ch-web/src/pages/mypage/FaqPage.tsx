@@ -94,7 +94,7 @@ export default function FaqPage() {
                                 </AccordionSummary>
                                 <AccordionDetails sx={{ px: 2.5, pt: 1.5, pb: 2.5, bgcolor: "#F9FAFB" }}>
                                     <Stack direction="row" spacing={1.2} alignItems="flex-start">
-                                        <Typography fontSize={13} fontWeight={700} color="success.main" sx={{ flexShrink: 0, mt: 0.1 }}>
+                                        <Typography fontSize={14} fontWeight={700} color="success.main" sx={{ flexShrink: 0, lineHeight: 1.9 }}>
                                             A
                                         </Typography>
                                         <Typography sx={{ whiteSpace: "pre-line", fontSize: 14, lineHeight: 1.9, color: "text.primary" }}>

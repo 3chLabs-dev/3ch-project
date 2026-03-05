@@ -72,7 +72,7 @@ export default function MyPage() {
     };
 
     return (
-        <Box sx={{ mx: -2, mt: -2, minHeight: "100%", bgcolor: "#ffffff", px: 2, pt: 2, pb: 4 }}>
+        <Box sx={{ mx: -2, mt: -2, bgcolor: "#ffffff", px: 2, pt: 2, pb: 2 }}>
             {/* 프로필 카드 */}
             {token ? (
                 <Card elevation={0} sx={{ borderRadius: 1.5, mb: 2, p: 2.5, bgcolor: "#F5F5F5" }}>

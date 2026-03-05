@@ -623,7 +623,7 @@ export default function GroupManage() {
                     onClick={() => setInviteDialogOpen(true)}
                     sx={{
                         borderRadius: 1,
-                        py: 1.5,
+                        py: 1.2,
                         fontWeight: 900,
                     }}
                 >
@@ -640,7 +640,7 @@ export default function GroupManage() {
                     onClick={() => setLeaveDialogOpen(true)}
                     sx={{
                         borderRadius: 1,
-                        py: 1.5,
+                        py: 1.2,
                         fontWeight: 900,
                     }}
                 >
@@ -997,14 +997,15 @@ export default function GroupManage() {
                             <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.8 }}>
                                 <IconButton
                                     onClick={() => {
-                                        const link = `${window.location.origin}/club/${id}`;
+                                        const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
+                                        const link = `${appUrl}/club/${id}`;
                                         if (window.Kakao?.Share) {
                                             window.Kakao.Share.sendDefault({
                                                 objectType: "feed",
                                                 content: {
                                                     title: `${group.name} 클럽 초대`,
                                                     description: group.description || `${group.sport ?? ""} 클럽에 참여해보세요!`,
-                                                    imageUrl: `${window.location.origin}/128_스몰로고.png`,
+                                                    imageUrl: `${appUrl}/128_스몰로고.png`,
                                                     link: { mobileWebUrl: link, webUrl: link },
                                                 },
                                                 buttons: [{ title: "클럽 보기", link: { mobileWebUrl: link, webUrl: link } }],

@@ -640,14 +640,15 @@ export default function LeagueDetail() {
               <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.8 }}>
                 <IconButton
                   onClick={() => {
-                    const link = `${window.location.origin}/league/${id}`;
+                    const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
+                    const link = `${appUrl}/league/${id}`;
                     if (window.Kakao?.Share) {
                       window.Kakao.Share.sendDefault({
                         objectType: "feed",
                         content: {
                           title: `${league?.name ?? "리그"} 참가 초대`,
                           description: `리그에 참가해보세요!`,
-                          imageUrl: `${window.location.origin}/128_스몰로고.png`,
+                          imageUrl: `${appUrl}/128_스몰로고.png`,
                           link: { mobileWebUrl: link, webUrl: link },
                         },
                         buttons: [{ title: "리그 보기", link: { mobileWebUrl: link, webUrl: link } }],

@@ -129,6 +129,25 @@ export interface RecommendGroupsResponse {
   message: string | null;
 }
 
+export interface GroupMemberDetailResponse {
+  member: {
+    user_id: number;
+    name: string;
+    email: string;
+    role: string;
+    division?: string | null;
+    joined_at: string;
+  };
+  stats: {
+    year: number;
+    attendance: number;
+    wins: number;
+    losses: number;
+    championships: number;
+  };
+  clubs: { id: string; name: string; sport?: string | null; role: string }[];
+}
+
 export const groupApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     getMyGroups: builder.query<GetGroupsResponse, void>({
@@ -259,6 +278,11 @@ export const groupApi = baseApi.injectEndpoints({
         body,
       }),
     }),
+
+    getGroupMemberDetail: builder.query<GroupMemberDetailResponse, { groupId: string; userId: number }>({
+      query: ({ groupId, userId }) => `/group/${groupId}/member/${userId}`,
+      providesTags: (_result, _error, { groupId, userId }) => [{ type: "Group", id: `member-${groupId}-${userId}` }],
+    }),
   }),
 });
 
@@ -277,4 +301,5 @@ export const {
   useLeaveGroupMutation,
   useLazyGeocodeAddressQuery,
   useRecommendGroupsMutation,
+  useGetGroupMemberDetailQuery,
 } = groupApi;

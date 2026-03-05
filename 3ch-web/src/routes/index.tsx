@@ -24,8 +24,10 @@ import MyPage from "../pages/mypage/MyPage.tsx"
 import SocialSignUp from "../pages/sign/SocialSignUp.tsx";
 import GroupMain from "../pages/group/GroupMain";
 import GroupCreate from "../pages/group/GroupCreate";
+import GroupDetail from "../pages/group/GroupDetail";
 import GroupManage from "../pages/group/GroupManage";
 import GroupLeagueManage from "../pages/group/GroupLeagueManage";
+import ClubMemberDetail from "../pages/group/ClubMemberDetail";
 import DrawMain from "../pages/draw/DrawMain";
 import LeagueDetail from "../pages/league/LeagueDetail";
 import LeagueBracket from "../pages/league/LeagueBracket.tsx";
@@ -64,8 +66,10 @@ export const router = createBrowserRouter([
       { path: "/social-signup", element: <SocialSignUp />},
       { path: "/club", element: <GroupMain /> },
       { path: "/club/create", element: <GroupCreate /> },
+      { path: "/club/:id", element: <GroupDetail /> },
       { path: "/club/:id/manage", element: <GroupManage /> },
       { path: "/club/:id/manage/league", element: <GroupLeagueManage /> },
+      { path: "/club/:id/member/:userId", element: <ClubMemberDetail /> },
       { path: "/draw", element: <DrawMain /> },
       { path: "/draw/:leagueId", element: <DrawList /> },
       { path: "/draw/:leagueId/:drawId", element: <DrawDetail /> },

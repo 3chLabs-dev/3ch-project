@@ -725,14 +725,12 @@ router.get('/group/:id', requireAuth, async (req, res) => {
     const { id } = req.params;
     const userId = req.user.sub;
 
-    // 해당 클럽에 속해있는지 확인
+    // 해당 클럽에 속해있는지 확인 (없어도 기본 정보는 반환)
     const memberCheck = await pool.query(
       `SELECT role FROM group_members WHERE group_id = $1 AND user_id = $2`,
       [id, userId]
     );
-    if (memberCheck.rows.length === 0) {
-      return res.status(403).json({ message: '클럽에 속해있지 않습니다' });
-    }
+    const myRole = memberCheck.rows.length > 0 ? memberCheck.rows[0].role : null;
 
     const groupResult = await pool.query(
       `SELECT g.id, g.name, g.description, g.sport, g.region_city, g.region_district,
@@ -746,19 +744,25 @@ router.get('/group/:id', requireAuth, async (req, res) => {
       return res.status(404).json({ message: '클럽을 찾을 수 없습니다' });
     }
 
-    const membersResult = await pool.query(
-      `SELECT gm.id, gm.role, gm.division, gm.joined_at, u.id AS user_id, u.name, u.email
-       FROM group_members gm
-       INNER JOIN users u ON gm.user_id = u.id
-       WHERE gm.group_id = $1
-       ORDER BY gm.joined_at ASC`,
-      [id]
-    );
+    // 멤버 목록 조회 (비가입자는 이메일 제외)
+    const membersQuery = myRole
+      ? `SELECT gm.id, gm.role, gm.division, gm.joined_at, u.id AS user_id, u.name, u.email
+         FROM group_members gm
+         INNER JOIN users u ON gm.user_id = u.id
+         WHERE gm.group_id = $1
+         ORDER BY gm.joined_at ASC`
+      : `SELECT gm.id, gm.role, gm.division, gm.joined_at, u.id AS user_id, u.name
+         FROM group_members gm
+         INNER JOIN users u ON gm.user_id = u.id
+         WHERE gm.group_id = $1
+         ORDER BY gm.joined_at ASC`;
+    const membersResult = await pool.query(membersQuery, [id]);
+    const members = membersResult.rows;
 
     res.status(200).json({
       group: groupResult.rows[0],
-      members: membersResult.rows,
-      myRole: memberCheck.rows[0].role,
+      members,
+      myRole,
     });
   } catch (error) {
     console.error('Error fetching group:', error);
@@ -1418,6 +1422,156 @@ router.delete('/group/:id/member/:userId', requireAuth, requireGroupAdmin, async
   } catch (error) {
     console.error('Error removing member:', error);
     res.status(500).json({ message: '내부 서버 오류' });
+  }
+});
+
+/**
+ * @openapi
+ * /group/{id}/member/{userId}:
+ *   get:
+ *     summary: 클럽 회원 상세 조회
+ *     description: 특정 클럽 회원의 상세 정보(프로필, 올해 리그 통계, 가입한 클럽 목록)를 반환합니다.
+ *     tags: [클럽]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *         description: 클럽 ID
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema: { type: integer }
+ *         description: 조회할 회원의 user_id
+ *     responses:
+ *       200:
+ *         description: 회원 상세 정보
+ *       403:
+ *         description: 권한 없음 (해당 클럽 멤버 아님)
+ *       404:
+ *         description: 회원을 찾을 수 없음
+ *       500:
+ *         description: 서버 오류
+ */
+router.get('/group/:id/member/:userId', requireAuth, async (req, res) => {
+  try {
+    const requesterId = Number(req.user.sub);
+    const { id: groupId, userId: targetUserId } = req.params;
+
+    // 요청자가 이 클럽 멤버인지 확인
+    const accessCheck = await pool.query(
+      `SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      [groupId, requesterId],
+    );
+    if (accessCheck.rowCount === 0) return res.status(403).json({ message: '권한이 없습니다.' });
+
+    // 대상 회원 정보
+    const memberResult = await pool.query(
+      `SELECT gm.role, gm.division, gm.joined_at, u.id AS user_id, u.name, u.email
+       FROM group_members gm
+       JOIN users u ON u.id = gm.user_id
+       WHERE gm.group_id = $1 AND gm.user_id = $2`,
+      [groupId, targetUserId],
+    );
+    if (memberResult.rowCount === 0) return res.status(404).json({ message: '회원을 찾을 수 없습니다.' });
+
+    const member = memberResult.rows[0];
+    const year = new Date().getFullYear();
+
+    // 올해 리그 통계 (이름 매칭, 이 회원이 속한 클럽들의 리그 기준)
+    const statsResult = await pool.query(
+      `WITH member_participants AS (
+         SELECT DISTINCT lp.id AS participant_id, lp.league_id
+         FROM league_participants lp
+         JOIN leagues l ON l.id = lp.league_id
+         JOIN group_members ug ON ug.group_id = l.group_id AND ug.user_id = $1
+         WHERE lp.name = $2 AND EXTRACT(YEAR FROM l.start_date) = $3
+       )
+       SELECT
+         (SELECT COUNT(DISTINCT mp2.league_id) FROM member_participants mp2) AS attendance,
+         COUNT(CASE
+           WHEN (m.participant_a_id = mp.participant_id AND m.score_a > m.score_b) OR
+                (m.participant_b_id = mp.participant_id AND m.score_b > m.score_a) THEN 1
+         END) AS wins,
+         COUNT(CASE
+           WHEN (m.participant_a_id = mp.participant_id AND m.score_a < m.score_b) OR
+                (m.participant_b_id = mp.participant_id AND m.score_b < m.score_a) THEN 1
+         END) AS losses
+       FROM member_participants mp
+       LEFT JOIN league_matches m ON (m.participant_a_id = mp.participant_id OR m.participant_b_id = mp.participant_id)
+         AND m.status = 'done'`,
+      [targetUserId, member.name, year],
+    );
+
+    // 올해 우승 수: 참가한 리그에서 최다 승자인 경우
+    const championResult = await pool.query(
+      `WITH member_participants AS (
+         SELECT DISTINCT lp.id AS participant_id, lp.league_id
+         FROM league_participants lp
+         JOIN leagues l ON l.id = lp.league_id
+         JOIN group_members ug ON ug.group_id = l.group_id AND ug.user_id = $1
+         WHERE lp.name = $2 AND EXTRACT(YEAR FROM l.start_date) = $3
+       ),
+       all_wins AS (
+         SELECT lp.id AS participant_id, lp.league_id,
+           COUNT(CASE
+             WHEN (m.participant_a_id = lp.id AND m.score_a > m.score_b) OR
+                  (m.participant_b_id = lp.id AND m.score_b > m.score_a) THEN 1
+           END) AS wins
+         FROM league_participants lp
+         LEFT JOIN league_matches m ON (m.participant_a_id = lp.id OR m.participant_b_id = lp.id) AND m.status = 'done'
+         WHERE lp.league_id IN (SELECT league_id FROM member_participants)
+         GROUP BY lp.id, lp.league_id
+       ),
+       league_max AS (
+         SELECT league_id, MAX(wins) AS max_wins FROM all_wins GROUP BY league_id
+       ),
+       member_wins AS (
+         SELECT mp.league_id, aw.wins
+         FROM member_participants mp
+         JOIN all_wins aw ON aw.participant_id = mp.participant_id AND aw.league_id = mp.league_id
+       )
+       SELECT COUNT(*) AS championships
+       FROM member_wins mw
+       JOIN league_max lm ON lm.league_id = mw.league_id
+       WHERE mw.wins = lm.max_wins AND mw.wins > 0`,
+      [targetUserId, member.name, year],
+    );
+
+    // 가입한 모든 클럽
+    const clubsResult = await pool.query(
+      `SELECT g.id, g.name, g.sport, gm.role
+       FROM group_members gm
+       JOIN groups g ON g.id = gm.group_id
+       WHERE gm.user_id = $1
+       ORDER BY gm.joined_at ASC`,
+      [targetUserId],
+    );
+
+    const stats = statsResult.rows[0];
+    return res.json({
+      member: {
+        user_id: member.user_id,
+        name: member.name,
+        email: member.email,
+        role: member.role,
+        division: member.division,
+        joined_at: member.joined_at,
+      },
+      stats: {
+        year,
+        attendance: Number(stats.attendance) || 0,
+        wins: Number(stats.wins) || 0,
+        losses: Number(stats.losses) || 0,
+        championships: Number(championResult.rows[0].championships) || 0,
+      },
+      clubs: clubsResult.rows,
+    });
+  } catch (error) {
+    console.error('Error fetching member detail:', error);
+    return res.status(500).json({ message: '서버 오류' });
   }
 });
 

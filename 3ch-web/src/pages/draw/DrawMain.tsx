@@ -507,8 +507,8 @@ function ResultCard({ name, onClick, onHistory }: { name: string; onClick?: () =
       elevation={2}
       sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
     >
-      <CardContent sx={{ py: 1.2, px: 2, "&:last-child": { pb: 1.2 } }}>
-        <Stack direction="row" alignItems="center" justifyContent="space-between">
+      <CardContent sx={{ py: 1.8, px: 2.5, minHeight: 56, display: "flex", alignItems: "center", "&:last-child": { pb: 1.8 } }}>
+        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ width: "100%" }}>
           <Typography fontWeight={800} sx={{ flex: 1, minWidth: 0 }} noWrap>{name}</Typography>
           <Stack direction="row" alignItems="center" spacing={0.5}>
             {onHistory && (

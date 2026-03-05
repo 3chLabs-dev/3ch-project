@@ -1,6 +1,6 @@
 // AppShell.tsx
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { AppBar, Box, Toolbar, Paper, Select, MenuItem, IconButton } from "@mui/material";
+import { AppBar, Box, Toolbar, Paper, Select, MenuItem, IconButton, Stack } from "@mui/material";
 import type { SelectChangeEvent } from "@mui/material";
 import BottomTab from "./BottomTab";
 
@@ -12,6 +12,7 @@ import { setPreferredGroupId } from "../features/league/leagueCreationSlice";
 import { useGetMyGroupsQuery } from "../features/group/groupApi";
 import logo from "../assets/512_우리리그 로고.svg";
 import SettingsIcon from "@mui/icons-material/Settings";
+import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
 
 
 
@@ -99,14 +100,18 @@ export default function AppShell() {
                             </Select>
                         )}
                         {isMyPage && token && (
-                        <IconButton
-                            aria-label="settings"
-                            onClick={() => navigate("/mypage/settings")}
-                            size="small"
-                            sx={{ ml: "auto", mr: 0.1 }}
-                        >
-                            <SettingsIcon sx={{ fontSize: 36 }} />
-                        </IconButton>
+                        <Stack direction="row" sx={{ ml: "auto" }}>
+                            <IconButton aria-label="notifications" size="small">
+                                <NotificationsNoneIcon sx={{ fontSize: 28 }} />
+                            </IconButton>
+                            <IconButton
+                                aria-label="settings"
+                                onClick={() => navigate("/mypage/settings")}
+                                size="small"
+                            >
+                                <SettingsIcon sx={{ fontSize: 28 }} />
+                            </IconButton>
+                        </Stack>
                         )}
                     </Toolbar>
                 </AppBar>

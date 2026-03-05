@@ -13,7 +13,7 @@ import {
 } from "@mui/material";
 import MyLocationIcon from "@mui/icons-material/MyLocation";
 import { useAppSelector } from "../../app/hooks";
-import { useGetMyGroupsQuery, useSearchGroupsQuery, useJoinGroupMutation, useRecommendGroupsMutation } from "../../features/group/groupApi";
+import { useGetMyGroupsQuery, useSearchGroupsQuery, useRecommendGroupsMutation } from "../../features/group/groupApi";
 import type { Group, RecommendedClub } from "../../features/group/groupApi";
 
 const SPORT_EMOJI: Record<string, string> = {
@@ -296,22 +296,15 @@ function GroupCard({ group }: { group: Group }) {
 }
 
 function RecommendedGroupCard({ group }: { group: Omit<Group, "role"> & { id: string } }) {
-    const [joinGroup, { isLoading }] = useJoinGroupMutation();
+    const navigate = useNavigate();
     const emoji = group.sport ? (SPORT_EMOJI[group.sport] ?? "\uD83C\uDFD3") : "\uD83C\uDFD3";
     const region = [group.region_city, group.region_district].filter(Boolean).join(" ");
-
-    const handleJoin = async () => {
-        try {
-            await joinGroup(group.id).unwrap();
-        } catch (error) {
-            console.error("Failed to join group:", error);
-        }
-    };
 
     return (
         <Card
             elevation={2}
-            sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
+            onClick={() => navigate(`/club/${group.id}`)}
+            sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)", cursor: "pointer" }}
         >
             <CardContent sx={{ py: 1.6, px: 2, "&:last-child": { pb: 1.6 } }}>
                 <Stack direction="row" alignItems="center" spacing={1.5}>
@@ -332,21 +325,6 @@ function RecommendedGroupCard({ group }: { group: Omit<Group, "role"> & { id: st
                             }}
                         />
                     )}
-                    <Button
-                        onClick={handleJoin}
-                        disabled={isLoading}
-                        size="small"
-                        variant="contained"
-                        sx={{
-                            borderRadius: 1,
-                            fontWeight: 700,
-                            fontSize: 12,
-                            minWidth: "auto",
-                            px: 1.5,
-                        }}
-                    >
-                        {isLoading ? "가입 중..." : "가입"}
-                    </Button>
                 </Stack>
             </CardContent>
         </Card>
@@ -354,20 +332,16 @@ function RecommendedGroupCard({ group }: { group: Omit<Group, "role"> & { id: st
 }
 
 function NearbyGroupCard({ group }: { group: RecommendedClub }) {
-    const [joinGroup, { isLoading }] = useJoinGroupMutation();
+    const navigate = useNavigate();
     const emoji = group.sport ? (SPORT_EMOJI[group.sport] ?? "\uD83C\uDFD3") : "\uD83C\uDFD3";
     const region = [group.region_city, group.region_district].filter(Boolean).join(" ");
 
-    const handleJoin = async () => {
-        try {
-            await joinGroup(group.id).unwrap();
-        } catch (error) {
-            console.error("Failed to join group:", error);
-        }
-    };
-
     return (
-        <Card elevation={2} sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
+        <Card
+            elevation={2}
+            onClick={() => navigate(`/club/${group.id}`)}
+            sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)", cursor: "pointer" }}
+        >
             <CardContent sx={{ py: 1.6, px: 2, "&:last-child": { pb: 1.6 } }}>
                 <Stack direction="row" alignItems="center" spacing={1.5}>
                     <Typography sx={{ fontSize: 28, lineHeight: 1 }}>{emoji}</Typography>
@@ -387,15 +361,6 @@ function NearbyGroupCard({ group }: { group: RecommendedClub }) {
                             </Typography>
                         </Stack>
                     </Box>
-                    <Button
-                        onClick={handleJoin}
-                        disabled={isLoading}
-                        size="small"
-                        variant="contained"
-                        sx={{ borderRadius: 1, fontWeight: 700, fontSize: 12, minWidth: "auto", px: 1.5 }}
-                    >
-                        {isLoading ? "가입 중..." : "가입"}
-                    </Button>
                 </Stack>
             </CardContent>
         </Card>

@@ -29,6 +29,8 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import EditIcon from "@mui/icons-material/Edit";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
+import SmsOutlinedIcon from "@mui/icons-material/SmsOutlined";
+import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
 import QRCode from "react-qr-code";
 import { useAppSelector } from "../../app/hooks";
 import {
@@ -450,9 +452,9 @@ export default function GroupManage() {
                                         py: 1.5,
                                         px: 2.5,
                                         bgcolor: member.role === "owner"
-                                            ? "rgba(255, 193, 7, 0.08)" // 황금색 배경 for owner
+                                            ? "rgba(255, 193, 7, 0.08)"
                                             : member.role === "admin"
-                                            ? "rgba(33, 150, 243, 0.08)" // 파란색 배경 for admin
+                                            ? "rgba(33, 150, 243, 0.08)"
                                             : "transparent"
                                     }}
                                     secondaryAction={
@@ -468,23 +470,27 @@ export default function GroupManage() {
                                         </Stack>
                                     }
                                 >
-                                    <ListItemText sx={{ flex: 1, textAlign: "center" }}
+                                    <ListItemText sx={{ flex: 1 }}
                                         primary={
-                                            <Typography fontWeight={700} fontSize={14} sx={{textAlign : "left"}}>
+                                            <Typography fontWeight={700} fontSize={14}>
                                                 {getRoleLabel(member.role)}
                                             </Typography>
                                         }
                                     />
-                                    <ListItemText sx={{ flex: 1, textAlign: "center" }}
+                                    <ListItemText sx={{ flex: 1 }}
                                         primary={
-                                            <Typography fontWeight={700} fontSize={14} sx={{textAlign : "left"}}>
+                                            <Typography fontWeight={700} fontSize={14}>
                                                 {member.division}
                                             </Typography>
                                         }
                                     />
-                                    <ListItemText sx={{ flex: 1, textAlign: "center" }}
+                                    <ListItemText sx={{ flex: 1 }}
                                         primary={
-                                            <Typography fontWeight={700} fontSize={14} sx={{textAlign : "left"}}>
+                                            <Typography
+                                                fontWeight={700} fontSize={14}
+                                                onClick={() => navigate(`/club/${id}/member/${member.user_id}`)}
+                                                sx={{ cursor: "pointer", display: "inline", textDecoration: "underline" }}
+                                            >
                                                 {member.name || member.email}
                                             </Typography>
                                         }
@@ -959,7 +965,7 @@ export default function GroupManage() {
                             }}
                         >
                             <QRCode
-                                value={`${window.location.origin}/club/${id}/join`}
+                                value={`${window.location.origin}/club/${id}`}
                                 size={200}
                                 style={{ height: "auto", maxWidth: "100%", width: "100%" }}
                             />
@@ -971,7 +977,7 @@ export default function GroupManage() {
                                 초대 링크
                             </Typography>
                             <TextField
-                                value={`${window.location.origin}/club/${id}/join`}
+                                value={`${window.location.origin}/club/${id}`}
                                 fullWidth
                                 size="small"
                                 InputProps={{
@@ -986,65 +992,68 @@ export default function GroupManage() {
                         </Box>
 
                         {/* 공유 버튼 */}
-                        <Stack direction="row" spacing={1} sx={{ width: "100%" }}>
-                            <Button
-                                variant="outlined"
-                                fullWidth
-                                onClick={() => {
-                                    // KakaoTalk 공유 (추후 구현)
-                                    alert("카카오톡 공유 기능은 준비 중입니다.");
-                                }}
-                                sx={{
-                                    borderRadius: 1,
-                                    py: 1.2,
-                                    fontWeight: 700,
-                                    borderColor: "#FEE500",
-                                    color: "#000",
-                                    "&:hover": {
-                                        borderColor: "#FEE500",
-                                        bgcolor: "rgba(254, 229, 0, 0.1)",
-                                    },
-                                }}
-                            >
-                                카카오톡 공유
-                            </Button>
-                            <Button
-                                variant="outlined"
-                                fullWidth
-                                onClick={() => {
-                                    const link = `${window.location.origin}/club/${id}/join`;
-                                    const message = `${group.name} 클럽에 초대합니다! ${link}`;
-                                    window.location.href = `sms:?body=${encodeURIComponent(message)}`;
-                                }}
-                                sx={{
-                                    borderRadius: 1,
-                                    py: 1.2,
-                                    fontWeight: 700,
-                                }}
-                            >
-                                문자 공유
-                            </Button>
-                            <Button
-                                variant="outlined"
-                                fullWidth
-                                onClick={async () => {
-                                    const link = `${window.location.origin}/club/${id}/join`;
-                                    try {
-                                        await navigator.clipboard.writeText(link);
-                                        alert("링크가 복사되었습니다!");
-                                    } catch (err) {
-                                        console.error("Failed to copy:", err);
-                                        alert("링크 복사에 실패했습니다.");
-                                    }
-                                }}
-                                sx={{
-                                    borderRadius: 1,
-                                    py: 1.2,
-                                    fontWeight: 700,
-                                }}
-                            >
-                                url 복사
-                            </Button>
+                        <Stack direction="row" justifyContent="space-around" sx={{ width: "100%", pt: 0.5 }}>
+                            {/* 카카오톡 */}
+                            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.8 }}>
+                                <IconButton
+                                    onClick={() => {
+                                        const link = `${window.location.origin}/club/${id}`;
+                                        if (window.Kakao?.Share) {
+                                            window.Kakao.Share.sendDefault({
+                                                objectType: "feed",
+                                                content: {
+                                                    title: `${group.name} 클럽 초대`,
+                                                    description: group.description || `${group.sport ?? ""} 클럽에 참여해보세요!`,
+                                                    imageUrl: `${window.location.origin}/128_스몰로고.png`,
+                                                    link: { mobileWebUrl: link, webUrl: link },
+                                                },
+                                                buttons: [{ title: "클럽 보기", link: { mobileWebUrl: link, webUrl: link } }],
+                                            });
+                                        } else {
+                                            alert("카카오 SDK가 로드되지 않았습니다.");
+                                        }
+                                    }}
+                                    sx={{ width: 56, height: 56, bgcolor: "#FEE500", "&:hover": { bgcolor: "#E6CE00" } }}
+                                >
+                                    <Typography fontWeight={900} fontSize={20} lineHeight={1}>K</Typography>
+                                </IconButton>
+                                <Typography fontSize={11} fontWeight={700} color="text.secondary">카카오톡</Typography>
+                            </Box>
+
+                            {/* 문자 */}
+                            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.8 }}>
+                                <IconButton
+                                    onClick={() => {
+                                        const link = `${window.location.origin}/club/${id}`;
+                                        const message = `${group.name} 클럽에 초대합니다! ${link}`;
+                                        window.location.href = `sms:?body=${encodeURIComponent(message)}`;
+                                    }}
+                                    sx={{ width: 56, height: 56, bgcolor: "#4CAF50", color: "#fff", "&:hover": { bgcolor: "#43A047" } }}
+                                >
+                                    <SmsOutlinedIcon />
+                                </IconButton>
+                                <Typography fontSize={11} fontWeight={700} color="text.secondary">문자</Typography>
+                            </Box>
+
+                            {/* 링크 복사 */}
+                            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.8 }}>
+                                <IconButton
+                                    onClick={async () => {
+                                        const link = `${window.location.origin}/club/${id}`;
+                                        try {
+                                            await navigator.clipboard.writeText(link);
+                                            alert("링크가 복사되었습니다!");
+                                        } catch (err) {
+                                            console.error("Failed to copy:", err);
+                                            alert("링크 복사에 실패했습니다.");
+                                        }
+                                    }}
+                                    sx={{ width: 56, height: 56, bgcolor: "#E5E7EB", color: "#374151", "&:hover": { bgcolor: "#D1D5DB" } }}
+                                >
+                                    <ContentCopyOutlinedIcon />
+                                </IconButton>
+                                <Typography fontSize={11} fontWeight={700} color="text.secondary">링크 복사</Typography>
+                            </Box>
                         </Stack>
                     </Stack>
                 </DialogContent>

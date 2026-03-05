@@ -299,7 +299,7 @@ export default function DrawDetail() {
                             <Chip
                               label={w.participant_division}
                               size="small"
-                              sx={{ height: 22, fontWeight: 700 }}
+                              sx={{ borderRadius: 9999, fontWeight: 700, bgcolor: "#FAAA47", color: "#000000", height: 36, minWidth: 36 }}
                             />
                           )}
                           <Typography fontWeight={800} fontSize={15} color={isMe ? "#2F80ED" : undefined}>

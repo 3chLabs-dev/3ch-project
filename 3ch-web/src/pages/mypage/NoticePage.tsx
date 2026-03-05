@@ -1,6 +1,12 @@
-import { useEffect, useState } from "react";
-import { Box, Typography, IconButton, Divider, Stack, Pagination } from "@mui/material";
+import { useEffect, useMemo, useState } from "react";
+import {
+    Box, Typography, IconButton, Divider, Stack, Pagination,
+    Dialog, DialogTitle, DialogContent, DialogActions, Button,
+    useMediaQuery
+} from "@mui/material";
+import { useTheme } from "@mui/material/styles";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
+import ButtonBase from "@mui/material/ButtonBase";
 import { useNavigate } from "react-router-dom";
 
 const API = import.meta.env.VITE_API_BASE_URL ?? "/api";
@@ -12,6 +18,13 @@ type Notice = {
     created_at: string;
 };
 
+type NoticeDetail = {
+    id: number;
+    title: string;
+    content: string;
+    created_at: string
+};
+
 type NoticeListResponse = {
     notices: Notice[];
     total: number;
@@ -20,45 +33,53 @@ type NoticeListResponse = {
 export default function NoticePage() {
     const navigate = useNavigate();
 
+    const theme = useTheme();
+    const fullScreen = useMediaQuery(theme.breakpoints.down("sm"));
+
     const [items, setItems] = useState<Notice[]>([]);
     const [total, setTotal] = useState(0);
     const [page, setPage] = useState(1);
-
     const [loading, setLoading] = useState(false);
-    const [err, setErr] = useState("");
 
-    const load = async (p: number) => {
+
+    const [open, setOpen] = useState<boolean>(false);
+    const [detail, setDetail] = useState<NoticeDetail | null>(null);
+    const [detailLoading, setDetailLoading] = useState<boolean>(false);
+
+    const totalPages = useMemo(() => Math.max(1, Math.ceil(total / LIMIT)), [total]);
+
+    const loadList = async (p: number): Promise<void> => {
         setLoading(true);
-        setErr("");
-
         try {
             const res = await fetch(`${API}/notices?page=${p}&limit=${LIMIT}`);
-
-            if (!res.ok) {
-                const text = await res.text();
-                throw new Error(text || `HTTP ${res.status}`);
-            }
-
-            const data = (await res.json()) as Partial<NoticeListResponse>;
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = (await res.json()) as NoticeListResponse; // 서버 응답 확정이면 OK
             setItems(data.notices ?? []);
             setTotal(data.total ?? 0);
-        } catch {
-            console.error("공지 조회 실패");
-            setItems([]);
-            setTotal(0);
         } finally {
             setLoading(false);
         }
     };
 
+
+    const loadDetail = async (id: number): Promise<void> => {
+        setDetailLoading(true);
+        setDetail(null);
+        setOpen(true);
+        try {
+            const res = await fetch(`${API}/notices/${id}`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = (await res.json()) as NoticeDetail;
+            setDetail(data);
+        } finally {
+            setDetailLoading(false);
+        }
+    };
+
     useEffect(() => {
-        load(page);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        loadList(page);
     }, [page]);
 
-    const onChangePage = (_: unknown, p: number) => {
-        setPage(p);
-    };
 
     return (
         <Box sx={{ width: "100%", mx: "auto", mt: "-4px" }}>
@@ -75,89 +96,87 @@ export default function NoticePage() {
             </Box>
 
             <Box sx={{ mt: 2, mx: 2 }}>
-                {loading ? (
-                    <Typography sx={{ color: "text.secondary", fontSize: 14, py: 2 }}>
-                        불러오는 중...
-                    </Typography>
-                ) : err ? (
-                    <Typography sx={{ color: "error.main", fontSize: 14, py: 2 }}>
-                        {err}
-                    </Typography>
-                ) : items.length === 0 ? (
-                    <Typography sx={{ color: "text.secondary", fontSize: 14, py: 2 }}>
-                        등록된 공지사항이 없습니다.
-                    </Typography>
-                ) : (
-                    <Stack
-                        divider={<Divider />}
-                        sx={{ border: "1px solid", borderColor: "divider" }}
-                    >
-                        {items.map((n) => (
-                            <Box
-                                key={n.id}
-                                sx={{
-                                    px: 1.5,
-                                    py: 1.4,
-                                    display: "flex",
-                                    alignItems: "center",
-                                }}
-                            >
-                                {/* 번호 */}
-                                <Typography
-                                    sx={{
-                                        width: 24,
-                                        fontSize: 12,
-                                        color: "text.secondary",
-                                        mr: 1, // 제목이랑 간격 최소화
-                                        flexShrink: 0,
-                                    }}
-                                >
-                                    {n.id}
-                                </Typography>
+                <Stack divider={<Divider />} sx={{ border: "1px solid", borderColor: "divider", }}>
+                    {items.map((n) => (
+                        <Box key={n.id} sx={{ px: 1.5, py: 1.4, display: "flex", alignItems: "center" }}>
+                            <Typography sx={{ width: 24, fontSize: 12, color: "text.secondary", mr: 1, flexShrink: 0 }}>
+                                {n.id}
+                            </Typography>
 
-                                {/* 제목 */}
-                                <Typography
+                            {/* 제목만 클릭 (ButtonBase로 버튼티 제거) */}
+                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                                <ButtonBase
+                                    onClick={() => loadDetail(n.id)}
+                                    disableRipple
                                     sx={{
-                                        flex: 1,
-                                        fontSize: 14,
-                                        fontWeight: 800,
-                                        overflow: "hidden",
-                                        textOverflow: "ellipsis",
-                                        whiteSpace: "nowrap",
+                                        display: "block",
+                                        width: "100%",
+                                        textAlign: "left",
+                                        p: 0,
+                                        backgroundColor: "transparent",
+                                        "&:hover": { backgroundColor: "transparent" },
                                     }}
                                 >
-                                    {n.title}
-                                </Typography>
-
-                                {/* 작성일 */}
-                                <Typography
-                                    sx={{
-                                        fontSize: 12,
-                                        color: "text.secondary",
-                                        ml: 1.5,
-                                        flexShrink: 0,
-                                    }}
-                                >
-                                    {n.created_at.slice(0, 10)}
-                                </Typography>
+                                    <Typography
+                                        sx={{
+                                            fontSize: 14,
+                                            fontWeight: 800,
+                                            overflow: "hidden",
+                                            textOverflow: "ellipsis",
+                                            whiteSpace: "nowrap",
+                                        }}
+                                    >
+                                        {n.title}
+                                    </Typography>
+                                </ButtonBase>
                             </Box>
-                        ))}
-                    </Stack>
-                )}
 
-                {/* 페이지네이션 */}
-                {!loading && !err && total > LIMIT && (
+                            <Typography sx={{ fontSize: 12, color: "text.secondary", ml: 1.5, flexShrink: 0 }}>
+                                {n.created_at.slice(0, 10)}
+                            </Typography>
+                        </Box>
+                    ))}
+                </Stack>
+
+                {!loading && total > LIMIT && (
                     <Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
-                        <Pagination
-                            count={Math.max(1, Math.ceil(total / LIMIT))}
-                            page={page}
-                            size="small"
-                            shape="rounded"
-                            onChange={onChangePage}
-                        />
+                        <Pagination count={totalPages} page={page} size="small" shape="rounded" onChange={(_, p) => setPage(p)} />
                     </Box>
                 )}
             </Box>
+
+            {/* 상세 다이얼로그 */}
+            <Dialog
+                open={open}
+                onClose={() => setOpen(false)}
+                fullScreen={fullScreen}
+                scroll="paper"
+                fullWidth
+                maxWidth="sm"
+            >
+                <DialogTitle sx={{ fontWeight: 900, textAlign: "center" }}>
+                    {detailLoading ? "불러오는 중..." : detail?.title ?? "공지사항"}
+                </DialogTitle>
+
+                <DialogContent dividers>
+                    {detailLoading ? (
+                        <Typography sx={{ color: "text.secondary", fontSize: 14 }}>불러오는 중...</Typography>
+                    ) : (
+                        <>
+                            <Typography sx={{ fontSize: 12, color: "text.secondary", mb: 1 }}>
+                                {detail?.created_at?.slice(0, 10)}
+                            </Typography>
+                            <Box sx={{ whiteSpace: "pre-line", fontSize: 14, lineHeight: 1.7 }}>
+                                {detail?.content ?? ""}
+                            </Box>
+                        </>
+                    )}
+                </DialogContent>
+
+                <DialogActions>
+                    <Button onClick={() => setOpen(false)}>닫기</Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 }

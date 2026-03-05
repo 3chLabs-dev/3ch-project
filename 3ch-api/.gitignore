@@ -43,3 +43,6 @@ Thumbs.db
 
 # Prisma generated client output
 generated/
+
+# User uploaded files
+uploads/

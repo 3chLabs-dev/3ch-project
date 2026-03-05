@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   Box, Button, Chip, Dialog, DialogContent,
-  Divider, IconButton, Pagination, Stack, Switch,
+  IconButton, Pagination, Stack, Switch,
   Table, TableBody, TableCell, TableHead, TableRow,
   TextField, Typography,
 } from "@mui/material";

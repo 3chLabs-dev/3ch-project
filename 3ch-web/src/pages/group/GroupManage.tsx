@@ -1009,7 +1009,7 @@ export default function GroupManage() {
                                                 content: {
                                                     title: `${group.name} 클럽 초대`,
                                                     description: group.description || `${group.sport ?? ""} 클럽에 참여해보세요!`,
-                                                    imageUrl: `${appUrl}/128_스몰로고.png`,
+                                                    imageUrl: `${appUrl}/512_EN_우리리그.png`,
                                                     link: { mobileWebUrl: link, webUrl: link },
                                                 },
                                                 buttons: [{ title: "클럽 보기", link: { mobileWebUrl: link, webUrl: link } }],

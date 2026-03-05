@@ -23,7 +23,7 @@ app.use(passport.initialize());
 
 // CORS
 const corsOptions = {
-  origin: ["http://localhost:5173", "https://woorileague.com", "https://www.woorileague.com"],
+  origin: ["http://localhost:5173", "http://192.168.45.237:5173", "https://woorileague.com", "https://www.woorileague.com"],
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,

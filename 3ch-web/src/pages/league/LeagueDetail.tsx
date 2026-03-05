@@ -648,9 +648,13 @@ export default function LeagueDetail() {
                     }
                     if (window.Kakao?.Share) {
                       window.Kakao.Share.sendDefault({
-                        objectType: "text",
-                        text: `[${league?.name ?? "리그"}] 리그에 참가해보세요!`,
-                        link: { mobileWebUrl: link, webUrl: link },
+                        objectType: "feed",
+                        content: {
+                          title: league?.name ?? "리그",
+                          description: "리그에 참가해보세요!",
+                          imageUrl: `${appUrl}/og-image.png`,
+                          link: { mobileWebUrl: link, webUrl: link },
+                        },
                         buttons: [{ title: "리그 보기", link: { mobileWebUrl: link, webUrl: link } }],
                       });
                     } else {

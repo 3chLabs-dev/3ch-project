@@ -1005,9 +1005,13 @@ export default function GroupManage() {
                                         }
                                         if (window.Kakao?.Share) {
                                             window.Kakao.Share.sendDefault({
-                                                objectType: "text",
-                                                text: `[${group.name}] ${group.description || `${group.sport ?? ""} 클럽에 참여해보세요!`}`,
-                                                link: { mobileWebUrl: link, webUrl: link },
+                                                objectType: "feed",
+                                                content: {
+                                                    title: group.name,
+                                                    description: group.description || `${group.sport ?? ""} 클럽에 참여해보세요!`,
+                                                    imageUrl: `${appUrl}/og-image.png`,
+                                                    link: { mobileWebUrl: link, webUrl: link },
+                                                },
                                                 buttons: [{ title: "클럽 보기", link: { mobileWebUrl: link, webUrl: link } }],
                                             });
                                         } else {

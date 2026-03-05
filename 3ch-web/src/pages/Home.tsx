@@ -9,14 +9,11 @@ import {
     Card,
     CardContent,
     Button,
-    Link,
-    Collapse,
     IconButton,
     Select,
     MenuItem,
 } from "@mui/material";
 import type { SelectChangeEvent } from "@mui/material";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import TuneIcon from "@mui/icons-material/Tune";
 
 import { useAppDispatch, useAppSelector } from "../app/hooks";
@@ -33,7 +30,6 @@ const SPORT_EMOJI: Record<string, string> = {
 
 export default function Home() {
     const dispatch = useAppDispatch();
-    const [bizOpen, setBizOpen] = useState(false);
 
     const token = useAppSelector((state) => state.auth.token);
     const user = useAppSelector((state) => state.auth.user);
@@ -277,56 +273,6 @@ export default function Home() {
                 </Button>
             )}
 
-            <Box sx={{ pt: 1 }}>
-                <Box
-                    onClick={() => setBizOpen((v) => !v)}
-                    sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        cursor: "pointer",
-                        userSelect: "none",
-                        py: 1,
-                    }}
-                >
-                    <Typography variant="body2" fontWeight={800}>
-                        3ch 사업자 정보
-                    </Typography>
-                    <IconButton size="small" sx={{ transform: bizOpen ? "rotate(180deg)" : "rotate(0deg)" }}>
-                        <ExpandMoreIcon fontSize="small" />
-                    </IconButton>
-                </Box>
-
-                <Collapse in={bizOpen} timeout={180}>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", pb: 1 }}>
-                        대표: 조하진 · 사업자등록번호: 000-00-00000
-                        <br />
-                        주소: 서울특별시 임시주소
-                        <br />
-                        고객센터: 0000-0000 · 이메일: 3chlabs@gmail.com
-                    </Typography>
-                </Collapse>
-
-                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                    <Link href="/mypage/terms" underline="hover" variant="body2" fontWeight={700}>
-                        이용약관
-                    </Link>
-                    <Typography variant="body2" color="text.secondary">
-                        |
-                    </Typography>
-                    <Link href="/mypage/privacy" underline="hover" variant="body2" fontWeight={700}>
-                        개인정보 처리방침
-                    </Link>
-                </Stack>
-
-                <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{ mt: 1.2, display: "block" }}
-                >
-                    Copyright 3ch. All rights reserved.
-                </Typography>
-            </Box>
         </Stack>
     );
 }

@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { AppBar, Box, Toolbar, Paper, Select, MenuItem, IconButton, Stack } from "@mui/material";
 import type { SelectChangeEvent } from "@mui/material";
 import BottomTab from "./BottomTab";
+import AppFooter from "./AppFooter";
 
 import { useEffect, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
@@ -126,6 +127,7 @@ export default function AppShell() {
                     }}
                 >
                     <Outlet />
+                    <AppFooter />
                 </Box>
 
                 <BottomTab />

@@ -198,10 +198,11 @@ export default function AdminMemberPage() {
 
   const handleKickClub = async (club: ClubDetail) => {
     if (!editMember) return;
-    const msg = club.role === "owner"
-      ? `"${club.club_name}"의 클럽장을 강퇴하면 클럽과 관련된 리그·추첨 데이터가 모두 삭제됩니다.\n정말 삭제하시겠습니까?`
-      : `"${club.club_name}"에서 강퇴하시겠습니까?`;
-    if (!window.confirm(msg)) return;
+    if (club.role === "owner") {
+      window.alert("클럽 리더는 강퇴가 불가합니다. 클럽 관리에서 리더를 다른 회원으로 변경 후에 해당 인원을 강퇴시킬 수 있습니다.");
+      return;
+    }
+    if (!window.confirm(`"${club.club_name}"에서 강퇴하시겠습니까?`)) return;
     try {
       await fetch(`${import.meta.env.VITE_API_BASE_URL}/admin/members/${editMember.id}/club`, {
         method: "DELETE",

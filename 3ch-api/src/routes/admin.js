@@ -1,6 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const { z } = require('zod');
+const { randomUUID } = require('crypto');
 const pool = require('../db/pool');
 const { requireAdmin } = require('../middlewares/auth');
 const { signToken } = require('../utils/authUtils');
@@ -161,6 +162,33 @@ router.get('/members', requireAdmin, async (req, res) => {
   }
 });
 
+// GET /admin/members/search - 회원 검색 (이름/이메일 분리, 페이지네이션)
+router.get('/members/search', requireAdmin, async (req, res) => {
+  const { name, email, page = '1', limit = '10' } = req.query;
+  const pageNum  = Math.max(1, parseInt(page,  10) || 1);
+  const limitNum = Math.min(50, parseInt(limit, 10) || 10);
+  const offset   = (pageNum - 1) * limitNum;
+
+  const conditions = ['is_admin = false', 'deleted_at IS NULL'];
+  const params = [];
+  if (name?.trim())  { params.push(`%${name.trim()}%`);  conditions.push(`name  ILIKE $${params.length}`); }
+  if (email?.trim()) { params.push(`%${email.trim()}%`); conditions.push(`email ILIKE $${params.length}`); }
+
+  const where = conditions.join(' AND ');
+  try {
+    const [dataR, countR] = await Promise.all([
+      pool.query(
+        `SELECT id, name, email FROM users WHERE ${where} ORDER BY name LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+        [...params, limitNum, offset],
+      ),
+      pool.query(`SELECT COUNT(*)::int AS total FROM users WHERE ${where}`, params),
+    ]);
+    return res.json({ ok: true, members: dataR.rows, total: countR.rows[0].total });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
+});
+
 // GET /admin/members/:id - 회원 상세
 router.get('/members/:id', requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
@@ -225,56 +253,32 @@ router.put('/members/:id', requireAdmin, async (req, res) => {
   }
 });
 
-// DELETE /admin/members/:id/club - 클럽 강퇴 (클럽장이면 클럽 전체 삭제)
+// DELETE /admin/members/:id/club - 클럽 강퇴 (클럽장은 강퇴 불가)
 router.delete('/members/:id/club', requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
   const { group_id } = req.body;
   if (!group_id) return res.status(400).json({ ok: false, error: 'group_id required' });
 
-  const client = await pool.connect();
   try {
-    await client.query('BEGIN');
-
-    // 해당 멤버의 역할 확인
-    const roleRow = await client.query(
+    const roleRow = await pool.query(
       'SELECT role FROM group_members WHERE user_id = $1 AND group_id = $2',
       [id, group_id],
     );
     const role = roleRow.rows[0]?.role;
 
     if (role === 'owner') {
-      // 클럽장 강퇴 → 클럽 전체 삭제
-      // 1. 해당 클럽의 리그에 속한 추첨(draws) 삭제
-      await client.query(
-        `DELETE FROM draws WHERE league_id IN (SELECT id FROM leagues WHERE group_id = $1)`,
-        [group_id],
-      );
-      // 2. 리그 참가자 삭제
-      await client.query(
-        `DELETE FROM league_participants WHERE league_id IN (SELECT id FROM leagues WHERE group_id = $1)`,
-        [group_id],
-      );
-      // 3. 리그 삭제
-      await client.query(`DELETE FROM leagues WHERE group_id = $1`, [group_id]);
-      // 4. 클럽 멤버 삭제
-      await client.query(`DELETE FROM group_members WHERE group_id = $1`, [group_id]);
-      // 5. 클럽 삭제
-      await client.query(`DELETE FROM groups WHERE id = $1`, [group_id]);
-    } else {
-      // 일반 강퇴 → group_members에서만 제거
-      await client.query(
-        'DELETE FROM group_members WHERE user_id = $1 AND group_id = $2',
-        [id, group_id],
-      );
+      return res.status(400).json({ ok: false, error: '클럽 리더는 강퇴가 불가합니다.' });
     }
 
-    await client.query('COMMIT');
-    return res.json({ ok: true, deleted_club: role === 'owner' });
+    // 일반 강퇴 → group_members에서만 제거
+    await pool.query(
+      'DELETE FROM group_members WHERE user_id = $1 AND group_id = $2',
+      [id, group_id],
+    );
+
+    return res.json({ ok: true });
   } catch (e) {
-    await client.query('ROLLBACK');
     return res.status(500).json({ ok: false, error: String(e.message || e) });
-  } finally {
-    client.release();
   }
 });
 
@@ -356,7 +360,7 @@ router.get('/clubs', requireAdmin, async (req, res) => {
   const conditions = [];
   const params = [];
 
-  if (code)     { conditions.push(`g.id = $${params.push(code)}`); }
+  if (code)     { conditions.push(`g.club_code ILIKE $${params.push(`%${code}%`)}`); }
   if (sport)    { conditions.push(`g.sport ILIKE $${params.push(`%${sport}%`)}`); }
   if (city)     { conditions.push(`g.region_city ILIKE $${params.push(`%${city}%`)}`); }
   if (district) { conditions.push(`g.region_district ILIKE $${params.push(`%${district}%`)}`); }
@@ -380,7 +384,7 @@ router.get('/clubs', requireAdmin, async (req, res) => {
 
     const [dataResult, countResult] = await Promise.all([
       pool.query(
-        `SELECT g.id, g.name, g.sport,
+        `SELECT g.id, g.club_code, g.name, g.sport,
                 g.region_city, g.region_district,
                 g.founded_at::text,
                 g.created_at::text,
@@ -402,6 +406,174 @@ router.get('/clubs', requireAdmin, async (req, res) => {
     });
   } catch (e) {
     return res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
+});
+
+// GET /admin/clubs/:id - 클럽 상세
+router.get('/clubs/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const [clubR, membersR] = await Promise.all([
+      pool.query(
+        `SELECT g.id, g.club_code, g.name, g.sport,
+                g.region_city, g.region_district,
+                g.founded_at::text, g.address, g.address_detail,
+                g.created_at::text,
+                u.id AS leader_id, u.name AS leader_name, u.email AS leader_email
+         FROM groups g
+         LEFT JOIN users u ON u.id = g.created_by_id::integer
+         WHERE g.id = $1`,
+        [id],
+      ),
+      pool.query(
+        `SELECT gm.user_id, gm.role, gm.joined_at::text,
+                u.name, u.email, u.member_code
+         FROM group_members gm
+         JOIN users u ON u.id = gm.user_id
+         WHERE gm.group_id = $1
+         ORDER BY CASE gm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, u.name`,
+        [id],
+      ),
+    ]);
+    if (!clubR.rows[0]) return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
+    return res.json({ ok: true, club: clubR.rows[0], members: membersR.rows });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
+});
+
+// PUT /admin/clubs/:id - 클럽 수정
+router.put('/clubs/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  const { name, sport, region_city, region_district, founded_at, owner_id } = req.body;
+  if (!name?.trim()) return res.status(400).json({ ok: false, error: '클럽명은 필수입니다.' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    await client.query(
+      `UPDATE groups SET name = $1, sport = $2, region_city = $3, region_district = $4, founded_at = $5
+       WHERE id = $6`,
+      [name.trim(), sport?.trim() || null, region_city?.trim() || null, region_district?.trim() || null, founded_at || null, id],
+    );
+
+    if (owner_id) {
+      const newOwnerId = Number(owner_id);
+      // 기존 owner → member 강등
+      await client.query(
+        `UPDATE group_members SET role = 'member' WHERE group_id = $1 AND role = 'owner'`,
+        [id],
+      );
+      // 신규 owner 업서트
+      await client.query(
+        `INSERT INTO group_members (id, group_id, user_id, role)
+         VALUES ($1, $2, $3, 'owner')
+         ON CONFLICT (group_id, user_id) DO UPDATE SET role = 'owner'`,
+        [randomUUID(), id, newOwnerId],
+      );
+      await client.query(`UPDATE groups SET created_by_id = $1 WHERE id = $2`, [newOwnerId, id]);
+    }
+
+    await client.query('COMMIT');
+    return res.json({ ok: true });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    if (e.code === '23505') return res.status(409).json({ ok: false, error: '이미 사용 중인 클럽명입니다.' });
+    return res.status(500).json({ ok: false, error: String(e.message || e) });
+  } finally {
+    client.release();
+  }
+});
+
+// DELETE /admin/clubs/:id - 클럽 강제 삭제 (모든 관련 데이터 삭제)
+router.delete('/clubs/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // 리그 관련 데이터 삭제
+    const leagueIds = (await client.query(`SELECT id FROM leagues WHERE group_id = $1`, [id])).rows.map((r) => r.id);
+    if (leagueIds.length) {
+      await client.query(`DELETE FROM draws              WHERE league_id = ANY($1)`, [leagueIds]);
+      await client.query(`DELETE FROM league_participants WHERE league_id = ANY($1)`, [leagueIds]);
+      await client.query(`DELETE FROM league_matches     WHERE league_id = ANY($1)`, [leagueIds]);
+      await client.query(`DELETE FROM leagues            WHERE id        = ANY($1)`, [leagueIds]);
+    }
+    await client.query(`DELETE FROM group_members WHERE group_id = $1`, [id]);
+    await client.query(`DELETE FROM groups         WHERE id      = $1`, [id]);
+    await client.query('COMMIT');
+    return res.json({ ok: true });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    return res.status(500).json({ ok: false, error: String(e.message || e) });
+  } finally {
+    client.release();
+  }
+});
+
+// GET /admin/clubs/check-name - 클럽명 중복검사 (excludeId: 수정 시 자기 자신 제외)
+router.get('/clubs/check-name', requireAdmin, async (req, res) => {
+  const { name, excludeId } = req.query;
+  if (!name?.trim()) return res.status(400).json({ ok: false, error: '클럽명을 입력하세요.' });
+  try {
+    const r = excludeId
+      ? await pool.query('SELECT id FROM groups WHERE name = $1 AND id <> $2', [name.trim(), excludeId])
+      : await pool.query('SELECT id FROM groups WHERE name = $1', [name.trim()]);
+    return res.json({ ok: true, available: r.rowCount === 0 });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
+});
+
+// POST /admin/clubs - 클럽 생성
+router.post('/clubs', requireAdmin, async (req, res) => {
+  const { name, sport, region_city, region_district, founded_at, address, address_detail, owner_id } = req.body;
+  if (!name?.trim()) return res.status(400).json({ ok: false, error: '클럽명은 필수입니다.' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const ownerId = owner_id ? Number(owner_id) : null;
+
+    const groupId = randomUUID();
+    await client.query(
+      `INSERT INTO groups (id, name, sport, region_city, region_district, founded_at, address, address_detail, created_by_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [groupId, name.trim(), sport?.trim() || null, region_city?.trim() || null, region_district?.trim() || null, founded_at || null, address?.trim() || null, address_detail?.trim() || null, ownerId],
+    );
+
+    if (ownerId) {
+      await client.query(
+        `INSERT INTO group_members (id, group_id, user_id, role) VALUES ($1, $2, $3, 'owner')`,
+        [randomUUID(), groupId, ownerId],
+      );
+    }
+
+    // club_code 생성: C + YYYYMMDD + 4자리 당일 순번
+    const codeResult = await client.query(
+      `WITH ranked AS (
+         SELECT id,
+           'C' || TO_CHAR(created_at, 'YYYYMMDD') ||
+           LPAD(ROW_NUMBER() OVER (PARTITION BY DATE(created_at) ORDER BY created_at, id)::text, 4, '0') AS new_code
+         FROM groups WHERE DATE(created_at) = CURRENT_DATE
+       )
+       UPDATE groups SET club_code = r.new_code FROM ranked r
+       WHERE groups.id = r.id AND groups.id = $1
+       RETURNING club_code`,
+      [groupId],
+    );
+    const clubCode = codeResult.rows[0]?.club_code;
+
+    await client.query('COMMIT');
+    return res.status(201).json({ ok: true, id: groupId, club_code: clubCode });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    if (e.code === '23505') return res.status(409).json({ ok: false, error: '이미 사용 중인 클럽명입니다.' });
+    return res.status(500).json({ ok: false, error: String(e.message || e) });
+  } finally {
+    client.release();
   }
 });
 

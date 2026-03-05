@@ -105,7 +105,7 @@ export const router = createBrowserRouter([
         children: [
           { path: "/admin",        element: <AdminDashboard /> },
           { path: "/admin/member", element: <AdminMemberPage /> },
-          { path: "/admin/club",   element: <AdminClubPage /> },
+          { path: "/admin/club", element: <AdminClubPage /> },
           { path: "/admin/league", element: <AdminLeaguePage /> },
           { path: "/admin/draw",       element: <AdminDrawPage /> },
           { path: "/admin/tournament", element: <AdminTournamentPage /> },

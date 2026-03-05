@@ -88,7 +88,7 @@ export default function AdminInquiryPage() {
 
   return (
     <Box sx={{ p: 3 }}>
-      <Typography sx={{ fontSize: 18, fontWeight: 900, mb: 2, color: "#1F2937" }}>문의사항</Typography>
+      <Typography sx={{ fontSize: 18, fontWeight: 900, mb: 2, color: "#1F2937" }}>1:1 문의</Typography>
 
       <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
         <Typography sx={{ fontSize: 13, color: "#6B7280", fontWeight: 600 }}>

@@ -17,7 +17,7 @@ const MAIN_MENU = [
 const BOARD_MENU = [
   { label: "공지사항",         path: "/admin/board/notice"  },
   { label: "자주 하는 질문",  path: "/admin/board/faq"     },
-  { label: "문의사항",         path: "/admin/board/inquiry" },
+  { label: "1:1 문의",         path: "/admin/board/inquiry" },
   { label: "이용약관",         path: "/admin/board/terms"   },
   { label: "개인정보 처리방침", path: "/admin/board/privacy" },
 ];
@@ -70,7 +70,7 @@ export default function AdminShell() {
   };
 
   return (
-    <Box sx={{ minHeight: "100vh", bgcolor: "#F3F4F6", display: "flex", flexDirection: "column" }}>
+    <Box sx={{ height: "100vh", bgcolor: "#F3F4F6", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       {/* 헤더 */}
       <Box sx={{ bgcolor: "#fff", borderBottom: "1px solid #E5E7EB", px: 3, py: 1.5, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, cursor: "pointer" }} onClick={() => navigate("/admin")}>

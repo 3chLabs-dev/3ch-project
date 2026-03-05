@@ -625,7 +625,7 @@ export default function DrawList() {
                     <Stack key={wi} direction="row" alignItems="center" spacing={1}>
                       <Chip label={`${wi + 1}`} size="small" sx={{ height: 22, fontWeight: 800, minWidth: 28 }} />
                       {w.participant_division !== "-" && (
-                        <Chip label={w.participant_division} size="small" sx={{ height: 22, fontWeight: 700 }} />
+                        <Chip label={w.participant_division} size="small" sx={{ borderRadius: 9999, fontWeight: 700, bgcolor: "#FAAA47", color: "#000000", height: 36, minWidth: 36 }} />
                       )}
                       <Typography fontWeight={800} fontSize={15}>{w.participant_name}</Typography>
                     </Stack>

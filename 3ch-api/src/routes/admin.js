@@ -225,22 +225,56 @@ router.put('/members/:id', requireAdmin, async (req, res) => {
   }
 });
 
-// DELETE /admin/members/:id/club - 클럽 강퇴
+// DELETE /admin/members/:id/club - 클럽 강퇴 (클럽장이면 클럽 전체 삭제)
 router.delete('/members/:id/club', requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
   const { group_id } = req.body;
+  if (!group_id) return res.status(400).json({ ok: false, error: 'group_id required' });
+
+  const client = await pool.connect();
   try {
-    if (group_id) {
-      await pool.query(
+    await client.query('BEGIN');
+
+    // 해당 멤버의 역할 확인
+    const roleRow = await client.query(
+      'SELECT role FROM group_members WHERE user_id = $1 AND group_id = $2',
+      [id, group_id],
+    );
+    const role = roleRow.rows[0]?.role;
+
+    if (role === 'owner') {
+      // 클럽장 강퇴 → 클럽 전체 삭제
+      // 1. 해당 클럽의 리그에 속한 추첨(draws) 삭제
+      await client.query(
+        `DELETE FROM draws WHERE league_id IN (SELECT id FROM leagues WHERE group_id = $1)`,
+        [group_id],
+      );
+      // 2. 리그 참가자 삭제
+      await client.query(
+        `DELETE FROM league_participants WHERE league_id IN (SELECT id FROM leagues WHERE group_id = $1)`,
+        [group_id],
+      );
+      // 3. 리그 삭제
+      await client.query(`DELETE FROM leagues WHERE group_id = $1`, [group_id]);
+      // 4. 클럽 멤버 삭제
+      await client.query(`DELETE FROM group_members WHERE group_id = $1`, [group_id]);
+      // 5. 클럽 삭제
+      await client.query(`DELETE FROM groups WHERE id = $1`, [group_id]);
+    } else {
+      // 일반 강퇴 → group_members에서만 제거
+      await client.query(
         'DELETE FROM group_members WHERE user_id = $1 AND group_id = $2',
         [id, group_id],
       );
-    } else {
-      await pool.query('DELETE FROM group_members WHERE user_id = $1', [id]);
     }
-    return res.json({ ok: true });
+
+    await client.query('COMMIT');
+    return res.json({ ok: true, deleted_club: role === 'owner' });
   } catch (e) {
+    await client.query('ROLLBACK');
     return res.status(500).json({ ok: false, error: String(e.message || e) });
+  } finally {
+    client.release();
   }
 });
 

@@ -109,11 +109,21 @@ export default function AdminPolicyEditorPage({ type, title }: Props) {
       </Stack>
 
       <Box sx={{ border: "1px solid #E5E7EB", borderRadius: 1.5, overflow: "hidden" }}>
-        <Table size="small">
+        <Table size="small" sx={{ tableLayout: "fixed", width: "100%" }}>
+          <colgroup>
+            <col style={{ width: 52 }} />
+            <col style={{ width: "20%" }} />
+            <col style={{ width: "20%" }} />
+            <col />
+            <col style={{ width: 90 }} />
+            <col style={{ width: 100 }} />
+            <col style={{ width: 140 }} />
+          </colgroup>
           <TableHead>
             <TableRow sx={{ bgcolor: "#F9FAFB" }}>
-              {["No", "버전 레이블", "시행일", "내용 미리보기", "상태", "등록일시", "관리"].map((h) => (
-                <TableCell key={h} sx={{ fontWeight: 800, fontSize: 12, color: "#374151", py: 1.2 }}>{h}</TableCell>
+              {(["No", "버전 레이블", "시행일", "내용 미리보기", "상태", "등록일시", "관리"] as const).map((h) => (
+                <TableCell key={h} align={h === "상태" || h === "관리" ? "center" : "left"}
+                  sx={{ fontWeight: 800, fontSize: 12, color: "#374151", py: 1.2 }}>{h}</TableCell>
               ))}
             </TableRow>
           </TableHead>
@@ -127,14 +137,22 @@ export default function AdminPolicyEditorPage({ type, title }: Props) {
             ) : versions.map((v) => (
               <TableRow key={v.id} hover sx={{ bgcolor: v.is_current ? "#F0F9FF" : undefined }}>
                 <TableCell sx={{ fontSize: 12, color: "#6B7280" }}>{v.id}</TableCell>
-                <TableCell sx={{ fontSize: 12, fontWeight: 700 }}>{v.label}</TableCell>
-                <TableCell sx={{ fontSize: 12 }}>{v.effective_date}</TableCell>
-                <TableCell sx={{ maxWidth: 260 }}>
-                  <Typography sx={{ fontSize: 12, color: "#6B7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 260 }}>
-                    {v.body_preview}
+                <TableCell>
+                  <Typography sx={{ fontSize: 12, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {v.label}
                   </Typography>
                 </TableCell>
                 <TableCell>
+                  <Typography sx={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {v.effective_date}
+                  </Typography>
+                </TableCell>
+                <TableCell>
+                  <Typography sx={{ fontSize: 12, color: "#6B7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {v.body_preview}
+                  </Typography>
+                </TableCell>
+                <TableCell align="center">
                   <Chip
                     label={v.is_current ? "현행" : "이전"}
                     size="small"
@@ -143,9 +161,9 @@ export default function AdminPolicyEditorPage({ type, title }: Props) {
                       color:   v.is_current ? "#1D4ED8" : "#6B7280" }}
                   />
                 </TableCell>
-                <TableCell sx={{ fontSize: 12, color: "#6B7280" }}>{v.created_at?.slice(0, 10)}</TableCell>
-                <TableCell>
-                  <Stack direction="row" spacing={0.5}>
+                <TableCell sx={{ fontSize: 12, color: "#6B7280", whiteSpace: "nowrap" }}>{v.created_at?.slice(0, 10)}</TableCell>
+                <TableCell align="center" sx={{ whiteSpace: "nowrap" }}>
+                  <Stack direction="row" spacing={0.5} justifyContent="center">
                     <Button size="small" onClick={() => openEdit(v.id)}
                       sx={{ fontSize: 11, fontWeight: 700, minWidth: 0, px: 1 }}>수정</Button>
                     {!v.is_current && (

@@ -1,14 +1,15 @@
 import {
     Box, Typography, Stack, Divider, List, ListItemButton,
-    ListItemText, ListItemIcon, Button, Card, Chip, Collapse, IconButton, Link,
+    ListItemText, ListItemIcon, Button, Card, Chip,
 } from "@mui/material";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import CampaignOutlinedIcon from "@mui/icons-material/CampaignOutlined";
-import HeadsetMicOutlinedIcon from "@mui/icons-material/HeadsetMicOutlined";
+import QuestionAnswerOutlinedIcon from "@mui/icons-material/QuestionAnswerOutlined";
+import LiveHelpOutlinedIcon from "@mui/icons-material/LiveHelpOutlined";
 import FavoriteBorderIcon from "@mui/icons-material/FavoriteBorder";
 import ArticleOutlinedIcon from "@mui/icons-material/ArticleOutlined";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
 import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
 import { useNavigate } from "react-router-dom";
 import { logout } from "../../features/auth/authSlice";
@@ -16,7 +17,6 @@ import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { baseApi } from "../../features/api/baseApi";
 import { resetLeagueCreation } from "../../features/league/leagueCreationSlice";
 import { useGetMyGroupsQuery } from "../../features/group/groupApi";
-import { useState } from "react";
 
 const ROLE_LABEL: Record<string, string> = {
     owner: "모임장",
@@ -25,9 +25,14 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 const COMMUNITY_ITEMS = [
-    { label: "공지사항", to: "/mypage/notice", icon: <CampaignOutlinedIcon fontSize="small" /> },
-    { label: "고객센터", to: "/mypage/support", icon: <HeadsetMicOutlinedIcon fontSize="small" /> },
+    { label: "이용방법", to: "/mypage/guide", icon: <MenuBookOutlinedIcon fontSize="small" /> },
     { label: "후원하기", to: "/mypage/donate", icon: <FavoriteBorderIcon fontSize="small" /> },
+];
+
+const SUPPORT_ITEMS = [
+    { label: "공지사항", to: "/mypage/notice", icon: <CampaignOutlinedIcon fontSize="small" /> },
+    { label: "자주 하는 질문", to: "/mypage/faq", icon: <LiveHelpOutlinedIcon fontSize="small" /> },
+    { label: "문의사항", to: "/mypage/inquiry", icon: <QuestionAnswerOutlinedIcon fontSize="small" /> },
 ];
 
 const POLICY_ITEMS = [
@@ -46,8 +51,6 @@ export default function MyPage() {
     const { data: groupData } = useGetMyGroupsQuery(undefined, { skip: !token });
     const myFirstGroup = groupData?.groups?.[0];
     const roleLabel = myFirstGroup ? (ROLE_LABEL[myFirstGroup.role] ?? "회원") : null;
-
-    const [bizOpen, setBizOpen] = useState(false);
 
     const handleEditClick = () => {
         if (user?.auth_provider === "local") {
@@ -144,6 +147,29 @@ export default function MyPage() {
                 </List>
             </Card>
 
+            {/* SUPPORT */}
+            <Typography fontSize={11} fontWeight={700} color="text.disabled" sx={{ mb: 1, letterSpacing: 1 }}>
+                SERVICE
+            </Typography>
+            <Card elevation={0} sx={{ borderRadius: 1.5, mb: 2, overflow: "hidden", bgcolor: "#F5F5F5" }}>
+                <List disablePadding>
+                    {SUPPORT_ITEMS.map((item, idx) => (
+                        <Box key={item.to}>
+                            {idx > 0 && <Divider />}
+                            <ListItemButton onClick={() => navigate(item.to)} sx={{ py: 1.5, px: 2 }}>
+                                <ListItemIcon sx={{ minWidth: 36, color: "text.secondary" }}>
+                                    {item.icon}
+                                </ListItemIcon>
+                                <ListItemText
+                                    primary={<Typography fontWeight={700} fontSize={15}>{item.label}</Typography>}
+                                />
+                                <ChevronRightIcon sx={{ color: "text.disabled", fontSize: 20 }} />
+                            </ListItemButton>
+                        </Box>
+                    ))}
+                </List>
+            </Card>
+
             {/* POLICIES */}
             <Typography fontSize={11} fontWeight={700} color="text.disabled" sx={{ mb: 1, letterSpacing: 1 }}>
                 POLICIES
@@ -177,33 +203,6 @@ export default function MyPage() {
                 </Typography>
             )}
 
-            {/* 사업자 정보 */}
-            <Box sx={{ pt: 1 }}>
-                <Box
-                    onClick={() => setBizOpen((v) => !v)}
-                    sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", userSelect: "none", py: 1 }}
-                >
-                    <Typography variant="body2" fontWeight={800}>3ch 사업자 정보</Typography>
-                    <IconButton size="small" sx={{ transform: bizOpen ? "rotate(180deg)" : "rotate(0deg)" }}>
-                        <ExpandMoreIcon fontSize="small" />
-                    </IconButton>
-                </Box>
-                <Collapse in={bizOpen} timeout={180}>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", pb: 1 }}>
-                        대표: 조하진 · 사업자등록번호: 000-00-00000
-                        <br />주소: 서울특별시 임시주소
-                        <br />고객센터: 0000-0000 · 이메일: 3chlabs@gmail.com
-                    </Typography>
-                </Collapse>
-                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                    <Link href="/mypage/terms" underline="hover" variant="body2" fontWeight={700}>이용약관</Link>
-                    <Typography variant="body2" color="text.secondary">|</Typography>
-                    <Link href="/mypage/privacy" underline="hover" variant="body2" fontWeight={700}>개인정보 처리방침</Link>
-                </Stack>
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 1.2, display: "block" }}>
-                    Copyright 3ch. All rights reserved.
-                </Typography>
-            </Box>
         </Box>
     );
 }

@@ -40,6 +40,9 @@ import SettingsPage from "../pages/mypage/SettingsPage.tsx";
 import PasswordHelpPage from "../pages/sign/findPassword/PasswordHelpPage.tsx";
 import PasswordResetRequestPage from "../pages/sign/findPassword/PasswordResetRequestPage.tsx";
 import NoticePage from "../pages/mypage/NoticePage.tsx";
+import InquiryPage from "../pages/mypage/InquiryPage.tsx";
+import FaqPage from "../pages/mypage/FaqPage.tsx";
+import GuidePage from "../pages/mypage/GuidePage.tsx";
 import SupportCenterPage from "../pages/mypage/SupportCenterPage.tsx";
 import DonatePage from "../pages/mypage/DonatePage.tsx";
 import TermsPage from "../pages/mypage/TermsPage.tsx";
@@ -83,6 +86,9 @@ export const router = createBrowserRouter([
       { path: "/mypage/donate", element: <DonatePage />},
       { path: "/mypage/terms", element: <TermsPage />},
       { path: "/mypage/privacy", element: <PrivacyPolicyPage />},
+      { path: "/mypage/inquiry", element: <InquiryPage />},
+      { path: "/mypage/faq", element: <FaqPage />},
+      { path: "/mypage/guide", element: <GuidePage />},
 
 
     //   { path: "/my", element: <My /> },

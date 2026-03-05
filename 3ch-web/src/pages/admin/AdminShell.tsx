@@ -16,10 +16,10 @@ const MAIN_MENU = [
 
 const BOARD_MENU = [
   { label: "공지사항",         path: "/admin/board/notice"  },
-  { label: "FAQ",              path: "/admin/board/faq"     },
+  { label: "자주 하는 질문",  path: "/admin/board/faq"     },
   { label: "문의사항",         path: "/admin/board/inquiry" },
   { label: "이용약관",         path: "/admin/board/terms"   },
-  { label: "개인정보처리방침", path: "/admin/board/privacy" },
+  { label: "개인정보 처리방침", path: "/admin/board/privacy" },
 ];
 
 function SideMenuItem({ label, active, depth = 0, onClick }: {

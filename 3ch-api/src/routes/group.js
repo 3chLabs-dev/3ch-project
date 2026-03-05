@@ -252,6 +252,18 @@ router.post('/group', requireAuth, async (req, res) => {
       [memberId, groupId, userId]
     );
 
+    await client.query(
+      `WITH ranked AS (
+         SELECT id,
+           'C' || TO_CHAR(created_at, 'YYYYMMDD') ||
+           LPAD(ROW_NUMBER() OVER (PARTITION BY DATE(created_at) ORDER BY created_at, id)::text, 4, '0') AS new_code
+         FROM groups WHERE DATE(created_at) = CURRENT_DATE
+       )
+       UPDATE groups SET club_code = r.new_code FROM ranked r
+       WHERE groups.id = r.id AND groups.id = $1`,
+      [groupId]
+    );
+
     await client.query('COMMIT');
 
     res.status(201).json({

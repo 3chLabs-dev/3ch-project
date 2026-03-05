@@ -51,11 +51,8 @@ export default function GroupDetail() {
     };
 
     if (!isLoggedIn) {
-        return (
-            <Box sx={{ p: 2 }}>
-                <Typography>로그인이 필요합니다.</Typography>
-            </Box>
-        );
+        navigate(`/login?redirect=/club/${id}`);
+        return null;
     }
 
     if (isLoading) {

@@ -15,7 +15,7 @@ import { Link as RouterLink } from "react-router-dom";
 import googleAuth from "../util/googleAuth";
 import kakaoAuth from "../util/kakaoAuth";
 import naverAuth from "../util/naverAuth";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import axios from "axios";
 import { useDispatch } from "react-redux";
 import { setToken, setUser } from "../../features/auth/authSlice";
@@ -163,7 +163,9 @@ function SocialBtnInner({
 
 export default function Login(props: Record<string, unknown>) {
   const navigate = useNavigate();
-    const dispatch = useDispatch();
+  const [searchParams] = useSearchParams();
+  const redirectTo = searchParams.get("redirect") || "/";
+  const dispatch = useDispatch();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -216,7 +218,7 @@ try {
       dispatch(setToken(token));
       dispatch(setUser(user));
 
-      navigate("/", { replace: true });
+      navigate(redirectTo, { replace: true });
     } catch (err) {
       console.log("login fail:", err);
       alert("로그인에 실패했습니다. 다시 확인해주세요.");
@@ -264,7 +266,7 @@ useEffect(() => {
         localStorage.setItem("user", JSON.stringify(user));
         dispatch(setUser(user));
 
-        navigate("/", { replace: true });
+        navigate(redirectTo, { replace: true });
       } catch (err) {
         console.log("social me fail:", err);
         localStorage.removeItem("token");
@@ -287,7 +289,7 @@ useEffect(() => {
 
   window.addEventListener("message", handler);
   return () => window.removeEventListener("message", handler);
-}, [navigate, dispatch]);
+}, [navigate, dispatch, redirectTo]);
 
 
   return (

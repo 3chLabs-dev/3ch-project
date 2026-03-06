@@ -12,6 +12,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Discord - 배포 시작 알림
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          status: "🔄 시작"
+          title: "[API] 배포 시작"
+          description: |
+            브랜치: `${{ github.ref_name }}`
+            커밋: ${{ github.event.head_commit.message }}
+            작성자: ${{ github.actor }}
+          color: 0x5865f2
+          nofail: true
+          nodetail: true
+
       - name: Deploy to server
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -37,3 +51,16 @@ jobs:
             pm2 restart 3ch-api || pm2 start src/server.js --name 3ch-api
 
             echo "==> done"
+
+      - name: Discord - 배포 결과 알림
+        uses: sarisia/actions-status-discord@v1
+        if: always()
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          status: ${{ job.status }}
+          title: "[API] 배포 완료"
+          description: |
+            브랜치: `${{ github.ref_name }}`
+            커밋: ${{ github.event.head_commit.message }}
+            작성자: ${{ github.actor }}
+          nofail: true

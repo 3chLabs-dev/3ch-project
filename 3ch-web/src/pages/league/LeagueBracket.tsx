@@ -1,4 +1,5 @@
 import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors,
 } from "@dnd-kit/core";
@@ -479,7 +480,7 @@ export default function LeagueBracket() {
   const date          = formatLeagueDate(league.start_date);
 
   // ── JSX ──────────────────────────────────────────────────────────────────
-  return (
+  return createPortal(
     <Box sx={{
       bgcolor: "#fff",
       display: "flex",
@@ -689,6 +690,7 @@ export default function LeagueBracket() {
           </Box>
         </Box>
       </Box>
-    </Box>
+    </Box>,
+    document.body
   );
 }

@@ -20,7 +20,7 @@ import { resetLeagueCreation } from "../../features/league/leagueCreationSlice";
 import { useGetMyGroupsQuery } from "../../features/group/groupApi";
 
 const ROLE_LABEL: Record<string, string> = {
-    owner: "모임장",
+    owner: "리더",
     admin: "운영진",
     member: "회원",
 };
@@ -111,7 +111,7 @@ export default function MyPage() {
                             <PersonOutlineIcon sx={{ color: "#9CA3AF", fontSize: 26 }} />
                         </Box>
                         <Box flex={1}>
-                            <Typography fontWeight={700} fontSize={15} color="text.secondary">로그인 후 이용하세요</Typography>
+                            <Typography fontWeight={700} fontSize={15} color="text.secondary">로그인을 해주세요.</Typography>
                         </Box>
                         <Button
                             size="small"

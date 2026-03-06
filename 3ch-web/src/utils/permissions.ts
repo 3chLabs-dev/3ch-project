@@ -42,7 +42,7 @@ export const getRoleLabel = (role: string): string => {
   const labels: Record<string, string> = {
     owner: "리더",
     admin: "운영진",
-    member: "일반 멤버",
+    member: "회원",
   };
   return labels[role] || "알 수 없음";
 };

@@ -378,26 +378,26 @@ export default function GroupManage() {
                             }}
                         >
                             <Box>
-                                <Typography fontSize={12} color="text.secondary" fontWeight={600} sx={{textAlign : "center"}}>
+                                <Typography fontSize={12} color="text.secondary" fontWeight={600} sx={{ textAlign: "center" }}>
                                     종목
                                 </Typography>
-                                <Typography fontWeight={800} fontSize={14} sx={{textAlign : "center"}}>
+                                <Typography fontWeight={800} fontSize={14} sx={{ textAlign: "center" }}>
                                     {group.sport || "-"}
                                 </Typography>
                             </Box>
                             <Box>
-                                <Typography fontSize={12} color="text.secondary" fontWeight={600} sx={{textAlign : "center"}}>
+                                <Typography fontSize={12} color="text.secondary" fontWeight={600} sx={{ textAlign: "center" }}>
                                     창단일
                                 </Typography>
-                                <Typography fontWeight={800} fontSize={14} sx={{textAlign : "center"}}>
+                                <Typography fontWeight={800} fontSize={14} sx={{ textAlign: "center" }}>
                                     {group.founded_at ? new Date(group.founded_at).toLocaleDateString("ko-KR").replace(/\. /g, "-").replace(".", "") : "-"}
                                 </Typography>
                             </Box>
                             <Box>
-                                <Typography fontSize={12} color="text.secondary" fontWeight={600} sx={{textAlign : "center"}}>
+                                <Typography fontSize={12} color="text.secondary" fontWeight={600} sx={{ textAlign: "center" }}>
                                     회원수
                                 </Typography>
-                                <Typography fontWeight={800} fontSize={14} sx={{textAlign : "center"}}>
+                                <Typography fontWeight={800} fontSize={14} sx={{ textAlign: "center" }}>
                                     {members.length}
                                 </Typography>
                             </Box>
@@ -432,30 +432,30 @@ export default function GroupManage() {
                     <List disablePadding>
                         <ListItem
                             sx={{
-                            display: "grid",
-                            gridTemplateColumns: "1fr 1fr 1fr",
-                            py: 1.5,
-                            px: 2.5,
-                            spacing: 0.5,
-                            bgcolor: "#f5f5f5"
+                                display: "grid",
+                                gridTemplateColumns: "1fr 1fr 1fr",
+                                py: 1.5,
+                                px: 2.5,
+                                spacing: 0.5,
+                                bgcolor: "#f5f5f5"
                             }}
                         >
-                            <Typography fontWeight={700} fontSize={14} sx={{flex: 1, textAlign : "left"}}>구분</Typography>
-                            <Typography fontWeight={700} fontSize={14} sx={{flex: 1, textAlign : "left"}}>부수</Typography>
-                            <Typography fontWeight={700} fontSize={14} sx={{flex: 1, textAlign : "left"}}>이름</Typography>
+                            <Typography fontWeight={700} fontSize={14} sx={{ flex: 1, textAlign: "left" }}>구분</Typography>
+                            <Typography fontWeight={700} fontSize={14} sx={{ flex: 1, textAlign: "left" }}>부수</Typography>
+                            <Typography fontWeight={700} fontSize={14} sx={{ flex: 1, textAlign: "left" }}>이름</Typography>
                         </ListItem>
                         {members.map((member, idx) => (
                             <Box key={member.id}>
                                 {idx > 0 && <Divider />}
                                 <ListItem
                                     sx={{
-                                        py: 1.5,
+                                        py: 1,
                                         px: 2.5,
                                         bgcolor: member.role === "owner"
                                             ? "rgba(255, 193, 7, 0.08)"
                                             : member.role === "admin"
-                                            ? "rgba(33, 150, 243, 0.08)"
-                                            : "transparent"
+                                                ? "rgba(33, 150, 243, 0.08)"
+                                                : "transparent"
                                     }}
                                     secondaryAction={
                                         <Stack direction="row" spacing={0.5} alignItems="center">
@@ -477,10 +477,27 @@ export default function GroupManage() {
                                             </Typography>
                                         }
                                     />
-                                    <ListItemText sx={{ flex: 1 }}
+                                    <ListItemText
+                                        sx={{ flex: 1 }}
                                         primary={
-                                            <Typography fontWeight={700} fontSize={14}>
-                                                {member.division}
+                                            <Typography
+                                                fontWeight={700}
+                                                fontSize={12}
+                                                sx={{
+                                                    display: "inline-flex",
+                                                    alignItems: "center",
+                                                    justifyContent: "center",
+                                                    minWidth: 35,
+                                                    height: 35,
+                                                    px: 1,
+                                                    borderRadius: "999px",
+                                                    bgcolor: "#F5A623",
+                                                    color: "#000000",
+                                                    lineHeight: 1,
+                                                    whiteSpace: "nowrap",
+                                                }}
+                                            >
+                                                {member.division?.trim() ? member.division : "-"}
                                             </Typography>
                                         }
                                     />
@@ -504,115 +521,115 @@ export default function GroupManage() {
 
             {/* 리그 관리 섹션 */}
             {showLeagueManagement && (
-            <Box ref={leagueManagementRef}>
-                <Typography variant="subtitle1" fontWeight={900} sx={{ mb: 1.5 }}>
-                    리그 관리
-                </Typography>
+                <Box ref={leagueManagementRef}>
+                    <Typography variant="subtitle1" fontWeight={900} sx={{ mb: 1.5 }}>
+                        리그 관리
+                    </Typography>
 
-                {leagues.length > 0 ? (
-                    <Stack spacing={1}>
-                        {leagues.map((league) => (
-                            <Card key={league.id} elevation={2} sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
-                                <CardContent sx={{ p: 0, "&:last-child": { pb: 0 } }}>
-                                    <Box
-                                        onClick={() => handleToggleLeague(league.id)}
-                                        sx={{
-                                            px: 2.5,
-                                            py: 1.8,
-                                            cursor: "pointer",
-                                            "&:hover": { bgcolor: "#F9FAFB" },
-                                        }}
-                                    >
-                                        <Stack direction="row" justifyContent="space-between" alignItems="center">
-                                            <Box flex={1}>
-                                                <Typography fontWeight={700} fontSize={15}>
-                                                    {formatLeagueDate(league.start_date)}
-                                                </Typography>
-                                                <Typography fontSize={12} color="text.secondary" fontWeight={600}>
-                                                    {league.type} · {league.participant_count} / {league.recruit_count}명
-                                                </Typography>
-                                            </Box>
-                                            <IconButton size="small">
-                                                {expandedLeagueId === league.id ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                                            </IconButton>
-                                        </Stack>
-                                    </Box>
-
-                                    {/* 참가자 목록 (확장된 리그만) */}
-                                    <Collapse in={expandedLeagueId === league.id} timeout="auto" unmountOnExit>
-                                        <Divider />
-                                        <Box sx={{ px: 2.5, py: 2 }}>
-                                            <Typography fontSize={13} fontWeight={700} color="text.secondary" sx={{ mb: 1.5 }}>
-                                                참가자 목록
-                                            </Typography>
-
-                                            {isLoadingParticipants ? (
-                                                <Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
-                                                    <CircularProgress size={24} />
+                    {leagues.length > 0 ? (
+                        <Stack spacing={1}>
+                            {leagues.map((league) => (
+                                <Card key={league.id} elevation={2} sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
+                                    <CardContent sx={{ p: 0, "&:last-child": { pb: 0 } }}>
+                                        <Box
+                                            onClick={() => handleToggleLeague(league.id)}
+                                            sx={{
+                                                px: 2.5,
+                                                py: 1.8,
+                                                cursor: "pointer",
+                                                "&:hover": { bgcolor: "#F9FAFB" },
+                                            }}
+                                        >
+                                            <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                                <Box flex={1}>
+                                                    <Typography fontWeight={700} fontSize={15}>
+                                                        {formatLeagueDate(league.start_date)}
+                                                    </Typography>
+                                                    <Typography fontSize={12} color="text.secondary" fontWeight={600}>
+                                                        {league.type} · {league.participant_count} / {league.recruit_count}명
+                                                    </Typography>
                                                 </Box>
-                                            ) : participants.length > 0 ? (
-                                                <Stack spacing={0.8}>
-                                                    {participants.map((participant) => (
-                                                        <Box
-                                                            key={participant.id}
-                                                            onClick={() => canManage && handleOpenParticipantDetail(league.id, participant)}
-                                                            sx={{
-                                                                display: "flex",
-                                                                alignItems: "center",
-                                                                gap: 1.5,
-                                                                px: 1.5,
-                                                                py: 1,
-                                                                borderRadius: 1,
-                                                                bgcolor: "#F9FAFB",
-                                                                cursor: canManage ? "pointer" : "default",
-                                                                "&:hover": canManage ? { bgcolor: "#F3F4F6" } : {},
-                                                            }}
-                                                        >
-                                                            {participant.division && (
-                                                                <Chip
-                                                                    label={participant.division}
-                                                                    size="small"
-                                                                    sx={{ height: 20, fontSize: 11, fontWeight: 800 }}
-                                                                />
-                                                            )}
-                                                            <Typography fontWeight={700} fontSize={14} flex={1}>
-                                                                {participant.name}
-                                                            </Typography>
-                                                            <Stack direction="row" spacing={0.5}>
-                                                                {participant.paid && (
-                                                                    <Chip label="입금" size="small" color="success" sx={{ height: 20, fontSize: 10 }} />
-                                                                )}
-                                                                {participant.arrived && (
-                                                                    <Chip label="도착" size="small" color="primary" sx={{ height: 20, fontSize: 10 }} />
-                                                                )}
-                                                                {participant.after && (
-                                                                    <Chip label="뒷풀이" size="small" color="secondary" sx={{ height: 20, fontSize: 10 }} />
-                                                                )}
-                                                            </Stack>
-                                                        </Box>
-                                                    ))}
-                                                </Stack>
-                                            ) : (
-                                                <Typography fontSize={13} color="text.secondary" textAlign="center" sx={{ py: 2 }}>
-                                                    참가자가 없습니다.
-                                                </Typography>
-                                            )}
+                                                <IconButton size="small">
+                                                    {expandedLeagueId === league.id ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                                                </IconButton>
+                                            </Stack>
                                         </Box>
-                                    </Collapse>
-                                </CardContent>
-                            </Card>
-                        ))}
-                    </Stack>
-                ) : (
-                    <Card elevation={2} sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
-                        <CardContent sx={{ py: 2.5, textAlign: "center" }}>
-                            <Typography color="text.secondary" fontWeight={700}>
-                                개설된 리그가 없습니다.
-                            </Typography>
-                        </CardContent>
-                    </Card>
-                )}
-            </Box>
+
+                                        {/* 참가자 목록 (확장된 리그만) */}
+                                        <Collapse in={expandedLeagueId === league.id} timeout="auto" unmountOnExit>
+                                            <Divider />
+                                            <Box sx={{ px: 2.5, py: 2 }}>
+                                                <Typography fontSize={13} fontWeight={700} color="text.secondary" sx={{ mb: 1.5 }}>
+                                                    참가자 목록
+                                                </Typography>
+
+                                                {isLoadingParticipants ? (
+                                                    <Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
+                                                        <CircularProgress size={24} />
+                                                    </Box>
+                                                ) : participants.length > 0 ? (
+                                                    <Stack spacing={0.8}>
+                                                        {participants.map((participant) => (
+                                                            <Box
+                                                                key={participant.id}
+                                                                onClick={() => canManage && handleOpenParticipantDetail(league.id, participant)}
+                                                                sx={{
+                                                                    display: "flex",
+                                                                    alignItems: "center",
+                                                                    gap: 1.5,
+                                                                    px: 1.5,
+                                                                    py: 1,
+                                                                    borderRadius: 1,
+                                                                    bgcolor: "#F9FAFB",
+                                                                    cursor: canManage ? "pointer" : "default",
+                                                                    "&:hover": canManage ? { bgcolor: "#F3F4F6" } : {},
+                                                                }}
+                                                            >
+                                                                {participant.division && (
+                                                                    <Chip
+                                                                        label={participant.division}
+                                                                        size="small"
+                                                                        sx={{ height: 20, fontSize: 11, fontWeight: 800 }}
+                                                                    />
+                                                                )}
+                                                                <Typography fontWeight={700} fontSize={14} flex={1}>
+                                                                    {participant.name}
+                                                                </Typography>
+                                                                <Stack direction="row" spacing={0.5}>
+                                                                    {participant.paid && (
+                                                                        <Chip label="입금" size="small" color="success" sx={{ height: 20, fontSize: 10 }} />
+                                                                    )}
+                                                                    {participant.arrived && (
+                                                                        <Chip label="도착" size="small" color="primary" sx={{ height: 20, fontSize: 10 }} />
+                                                                    )}
+                                                                    {participant.after && (
+                                                                        <Chip label="뒷풀이" size="small" color="secondary" sx={{ height: 20, fontSize: 10 }} />
+                                                                    )}
+                                                                </Stack>
+                                                            </Box>
+                                                        ))}
+                                                    </Stack>
+                                                ) : (
+                                                    <Typography fontSize={13} color="text.secondary" textAlign="center" sx={{ py: 2 }}>
+                                                        참가자가 없습니다.
+                                                    </Typography>
+                                                )}
+                                            </Box>
+                                        </Collapse>
+                                    </CardContent>
+                                </Card>
+                            ))}
+                        </Stack>
+                    ) : (
+                        <Card elevation={2} sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
+                            <CardContent sx={{ py: 2.5, textAlign: "center" }}>
+                                <Typography color="text.secondary" fontWeight={700}>
+                                    개설된 리그가 없습니다.
+                                </Typography>
+                            </CardContent>
+                        </Card>
+                    )}
+                </Box>
             )}
 
             {canInvite && (

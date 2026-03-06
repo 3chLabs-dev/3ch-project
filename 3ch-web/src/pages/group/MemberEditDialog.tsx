@@ -110,7 +110,7 @@ export default function MemberEditDialog({
               >
                 <MenuItem value="owner">리더</MenuItem>
                 <MenuItem value="admin">운영진</MenuItem>
-                <MenuItem value="member">멤버</MenuItem>
+                <MenuItem value="member">회원</MenuItem>
               </Select>
             </FormControl>
           </Box>

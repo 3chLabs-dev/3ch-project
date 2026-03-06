@@ -18,7 +18,7 @@ import confetti from "canvas-confetti";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import type { SelectChangeEvent } from "@mui/material";
 import { useCreateGroupMutation, useLazyCheckGroupNameQuery, useLazyGeocodeAddressQuery } from "../../features/group/groupApi";
-import { REGION_DATA } from "./regionData";
+import { REGION_DATA, CITY_ALIAS_MAP } from "./regionData";
 import confettiImg from "../../assets/128_축포.png";
 
 export default function GroupCreate() {
@@ -118,6 +118,7 @@ export default function GroupCreate() {
             oncomplete: async (data) => {
                 const selected = data.roadAddress || data.address;
                 setAddress(selected);
+                syncRegionFromAddress(selected);
                 setLat(undefined);
                 setLng(undefined);
                 try {
@@ -130,6 +131,24 @@ export default function GroupCreate() {
             },
         }).open();
     };
+
+    //주소 입력시 단어 보고 매칭
+    const syncRegionFromAddress = (rawAddress: string) => {
+    const tokens = rawAddress.trim().split(/\s+/);
+    if (tokens.length < 2) return;
+
+    const rawCity = tokens[0];
+    const rawDistrict = tokens[1];
+
+    const normalizedCity = CITY_ALIAS_MAP[rawCity];
+    if (!normalizedCity) return;
+
+    const matchedDistrict =
+        (REGION_DATA[normalizedCity] ?? []).find((d) => d === rawDistrict) ?? "";
+
+    setRegionCity(normalizedCity);
+    setRegionDistrict(matchedDistrict);
+};
 
     const handleAddressSearch = () => {
         const w = window as DaumWindow;
@@ -306,6 +325,38 @@ export default function GroupCreate() {
                     </FormControl>
                 </Box> */}
 
+                {/* 주소 */}
+                <Box>
+                    <Typography sx={{ fontWeight: 900, mb: 1 }}>주소 <Typography component="span" sx={{ fontSize: 11, fontWeight: 500, color: "#9CA3AF" }}>(선택)</Typography></Typography>
+                    <Stack direction="row" spacing={1} mb={1}>
+                        <TextField
+                            placeholder="도로명 주소"
+                            size="small"
+                            value={address}
+                            InputProps={{ readOnly: true }}
+                            sx={{ ...inputSx, flex: 1 }}
+                        />
+                        <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={handleAddressSearch}
+                            sx={{ borderRadius: 1, height: 40, fontWeight: 700, whiteSpace: "nowrap" }}
+                        >
+                            주소 검색
+                        </Button>
+                    </Stack>
+                    {address && (
+                        <TextField
+                            placeholder="상세 주소 (동/호수 등)"
+                            size="small"
+                            fullWidth
+                            value={addressDetail}
+                            onChange={(e) => setAddressDetail(e.target.value)}
+                            sx={inputSx}
+                        />
+                    )}
+                </Box>
+
                 {/* 지역 */}
                 <Box>
                     <Typography sx={{ fontWeight: 900, mb: 1 }}>지역</Typography>
@@ -383,38 +434,6 @@ export default function GroupCreate() {
                         >
                             {nameCheckMsg}
                         </Typography>
-                    )}
-                </Box>
-
-                {/* 주소 */}
-                <Box>
-                    <Typography sx={{ fontWeight: 900, mb: 1 }}>주소 <Typography component="span" sx={{ fontSize: 11, fontWeight: 500, color: "#9CA3AF" }}>(선택)</Typography></Typography>
-                    <Stack direction="row" spacing={1} mb={1}>
-                        <TextField
-                            placeholder="도로명 주소"
-                            size="small"
-                            value={address}
-                            InputProps={{ readOnly: true }}
-                            sx={{ ...inputSx, flex: 1 }}
-                        />
-                        <Button
-                            variant="outlined"
-                            size="small"
-                            onClick={handleAddressSearch}
-                            sx={{ borderRadius: 1, height: 40, fontWeight: 700, whiteSpace: "nowrap" }}
-                        >
-                            주소 검색
-                        </Button>
-                    </Stack>
-                    {address && (
-                        <TextField
-                            placeholder="상세 주소 (동/호수 등)"
-                            size="small"
-                            fullWidth
-                            value={addressDetail}
-                            onChange={(e) => setAddressDetail(e.target.value)}
-                            sx={inputSx}
-                        />
                     )}
                 </Box>
 

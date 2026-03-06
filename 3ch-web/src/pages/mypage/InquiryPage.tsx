@@ -435,7 +435,7 @@ export default function InquiryPage() {
                         <QuestionAnswerOutlinedIcon sx={{ fontSize: 22, color: "primary.main", flexShrink: 0 }} />
                         <Typography fontWeight={900} fontSize={16} flex={1}>문의하기</Typography>
                         <IconButton size="small" onClick={() => !submitting && setWriteOpen(false)} sx={{ mr: -1 }}>
-                            <ChevronRightIcon sx={{ transform: "rotate(90deg)" }} />
+                            <CloseIcon fontSize="small" />
                         </IconButton>
                     </Stack>
                 </Box>

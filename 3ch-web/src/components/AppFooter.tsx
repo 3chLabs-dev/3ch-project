@@ -6,7 +6,7 @@ export default function AppFooter() {
     const [bizOpen, setBizOpen] = useState(false);
 
     return (
-        <Box sx={{ pt: 2, pb: 1, px: 0 }}>
+        <Box sx={{ pt: 6, pb: 1, px: 0 }}>
             <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
                 <Link href="/mypage/guide" underline="hover" variant="body2" fontWeight={800} sx={{ color: "#4F46E5" }}>
                     이용방법

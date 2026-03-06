@@ -643,7 +643,7 @@ export default function DrawList() {
           disableElevation
           sx={{ mt: 1, borderRadius: 1, height: 44, fontWeight: 900, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}
         >
-          저장하고 목록으로
+          추첨 결과 저장
         </Button>
       </Stack>
     );

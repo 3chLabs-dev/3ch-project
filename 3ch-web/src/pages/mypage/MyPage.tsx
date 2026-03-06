@@ -10,6 +10,7 @@ import FavoriteBorderIcon from "@mui/icons-material/FavoriteBorder";
 import ArticleOutlinedIcon from "@mui/icons-material/ArticleOutlined";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
+import CreditCardOutlinedIcon from "@mui/icons-material/CreditCardOutlined";
 import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
 import { useNavigate } from "react-router-dom";
 import { logout } from "../../features/auth/authSlice";
@@ -26,6 +27,7 @@ const ROLE_LABEL: Record<string, string> = {
 
 const COMMUNITY_ITEMS = [
     { label: "이용방법", to: "/mypage/guide", icon: <MenuBookOutlinedIcon fontSize="small" /> },
+    { label: "요금제", to: "/mypage/pricing", icon: <CreditCardOutlinedIcon fontSize="small" /> },
     { label: "후원하기", to: "/mypage/donate", icon: <FavoriteBorderIcon fontSize="small" /> },
 ];
 
@@ -124,9 +126,9 @@ export default function MyPage() {
                 </Card>
             )}
 
-            {/* COMMUNITY */}
+            {/* SERVICE */}
             <Typography fontSize={11} fontWeight={700} color="text.disabled" sx={{ mb: 1, letterSpacing: 1 }}>
-                COMMUNITY
+                SERVICE
             </Typography>
             <Card elevation={0} sx={{ borderRadius: 1.5, mb: 2, overflow: "hidden", bgcolor: "#F5F5F5" }}>
                 <List disablePadding>
@@ -147,9 +149,9 @@ export default function MyPage() {
                 </List>
             </Card>
 
-            {/* SUPPORT */}
+            {/* INFORMATION */}
             <Typography fontSize={11} fontWeight={700} color="text.disabled" sx={{ mb: 1, letterSpacing: 1 }}>
-                SERVICE
+                INFORMATION
             </Typography>
             <Card elevation={0} sx={{ borderRadius: 1.5, mb: 2, overflow: "hidden", bgcolor: "#F5F5F5" }}>
                 <List disablePadding>

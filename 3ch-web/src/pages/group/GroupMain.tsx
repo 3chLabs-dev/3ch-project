@@ -156,7 +156,7 @@ export default function GroupMain() {
             {/* AI 클럽 추천 */}
             <Box>
                 <Typography variant="subtitle1" sx={{ fontWeight: 900, mb: 1.5 }}>
-                    AI 클럽 추천
+                    AI 추천 클럽
                 </Typography>
 
                 {!isLoggedIn ? (

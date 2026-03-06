@@ -13,6 +13,7 @@ import AddIcon from "@mui/icons-material/Add";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
+import CloseIcon from "@mui/icons-material/Close";
 import InsertDriveFileOutlinedIcon from "@mui/icons-material/InsertDriveFileOutlined";
 import { useNavigate } from "react-router-dom";
 import { useAppSelector } from "../../app/hooks";
@@ -335,7 +336,7 @@ export default function InquiryPage() {
                             )}
                         </Box>
                         <IconButton size="small" onClick={() => setDetailOpen(false)} sx={{ mt: -0.5, mr: -1 }}>
-                            <ChevronRightIcon sx={{ transform: "rotate(90deg)" }} />
+                            <CloseIcon fontSize="small" />
                         </IconButton>
                     </Stack>
                 </Box>

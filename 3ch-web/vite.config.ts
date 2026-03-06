@@ -24,14 +24,14 @@ export default defineConfig({
       },
       // pwa 제외 요청
       workbox: {
-        // SPA fallback에서 /api/auth 제외
-        navigateFallbackDenylist: [/^\/api\/auth\//],
+        // SPA fallback에서 제외 (서버에서 직접 처리하는 경로)
+        navigateFallbackDenylist: [/^\/api\//, /^\/swagger/],
 
-        // /api/auth 요청은 무조건 서버로 (캐시 안 함)
+        // /api, /swagger 요청은 무조건 서버로 (캐시 안 함)
         runtimeCaching: [
           {
             urlPattern: ({ url }) =>
-              url.pathname.startsWith("/api/auth/"),
+              url.pathname.startsWith("/api/") || url.pathname.startsWith("/swagger"),
             handler: "NetworkOnly",
           },
         ],

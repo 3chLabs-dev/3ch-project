@@ -143,6 +143,12 @@ export default function GroupCreate() {
     const normalizedCity = CITY_ALIAS_MAP[rawCity];
     if (!normalizedCity) return;
 
+    if (normalizedCity === "세종특별자치시") {
+        setRegionCity("세종특별자치시");
+        setRegionDistrict("세종시");
+        return;
+    }
+
     const matchedDistrict =
         (REGION_DATA[normalizedCity] ?? []).find((d) => d === rawDistrict) ?? "";
 

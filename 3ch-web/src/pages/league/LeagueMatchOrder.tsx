@@ -275,13 +275,6 @@ export default function LeagueMatchOrder() {
     });
   }, [matchData, canManage, leagueId, initMatches]);
 
-  const handleReinit = useCallback(() => {
-    if (!window.confirm("기존 경기(점수 포함)가 모두 삭제되고 재생성됩니다. 계속하시겠습니까?")) return;
-    initMatches({ id: leagueId, force: true }).then((res) => {
-      if ("data" in res && res.data) setLocalMatches(res.data.matches);
-    });
-  }, [leagueId, initMatches]);
-
   const handleRefresh = useCallback(() => {
     setLocalMatches(null);
     refetchMatches();

@@ -14,9 +14,12 @@ import type { LeagueFormatValue } from "../../features/league/leagueCreationSlic
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 
 const LeagueFormatOptions = [
-  { value: "single-league", label: "단일리그" },
-  { value: "group-league", label: "조별리그" },
-  { value: "group-and-knockout", label: "조별리그 + 본선리그" },
+  { value: "single-league", label: "단일리그", disabled: false },
+  { value: "group-league", label: "조별리그", disabled: false },
+  { value: "group-and-knockout", label: "조별리그 + 본선리그", disabled: false },
+  { value: "single-league-tournament", label: "단일리그 + 토너먼트", disabled: true },
+  { value: "group-league-tournament", label: "조별리그 + 토너먼트", disabled: true },
+  { value: "upper-lower-tournament", label: "상·하위 토너먼트", disabled: true },
 ] as const;
 
 const LeagueStep3FormatSelection: React.FC = () => {
@@ -50,17 +53,27 @@ const LeagueStep3FormatSelection: React.FC = () => {
           sx={{ display: "flex", gap: 2}}
         >
           {LeagueFormatOptions.map((option) => (
-            <FormControlLabel 
-              key={option.value} 
-              value={option.value} 
-              label={option.label} 
-              control={<Radio />} 
+            <FormControlLabel
+              key={option.value}
+              value={option.value}
+              disabled={option.disabled}
+              label={
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <span>{option.label}</span>
+                  {option.disabled && (
+                    <Typography component="span" sx={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", bgcolor: "#F3F4F6", px: 0.8, py: 0.2, borderRadius: 0.5 }}>
+                      준비중
+                    </Typography>
+                  )}
+                </Box>
+              }
+              control={<Radio />}
               sx={{
                 m: 0,
                 borderRadius: 1,
                 border: "1px solid",
                 borderColor: "grey.300",
-                bgcolor: "background.paper",
+                bgcolor: option.disabled ? "#F9FAFB" : "background.paper",
                 px: 2,
                 py: 2,
                 boxShadow: 1,
@@ -72,7 +85,7 @@ const LeagueStep3FormatSelection: React.FC = () => {
                   fontWeight: 700,
                 },
 
-                ...(selectedFormat === option.value && {
+                ...(!option.disabled && selectedFormat === option.value && {
                   borderColor: "grey.900",
                   boxShadow: 2,
                 }),
@@ -81,9 +94,8 @@ const LeagueStep3FormatSelection: React.FC = () => {
                   p: 0.5,
                 },
 
-                // hover
                 "&:hover": {
-                  borderColor: "grey.700",
+                  borderColor: option.disabled ? "grey.300" : "grey.700",
                 },
               }}
             />

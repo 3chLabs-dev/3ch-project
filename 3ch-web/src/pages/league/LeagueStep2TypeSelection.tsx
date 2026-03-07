@@ -14,11 +14,10 @@ import type { LeagueTypeValue } from "../../features/league/leagueCreationSlice"
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 
 const LeagueTypeOptions = [
-  { value: "singles", label: "단식" },
-  { value: "doubles", label: "복식" },
-  { value: "2-person-team", label: "2인 단체전" },
-  { value: "3-person-team", label: "3인 단체전" },
-  { value: "4-person-team", label: "4인 단체전" },
+  { value: "singles", label: "단식", disabled: false },
+  { value: "doubles", label: "복식", disabled: false },
+  { value: "team", label: "단체전", disabled: true },
+  { value: "exchange", label: "교류전", disabled: true },
 ] as const;
 
 const LeagueStep2TypeSelection: React.FC = () => {
@@ -53,14 +52,24 @@ const LeagueStep2TypeSelection: React.FC = () => {
             <FormControlLabel
               key={option.value}
               value={option.value}
-              label={option.label}
+              label={
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <span>{option.label}</span>
+                  {option.disabled && (
+                    <Typography component="span" sx={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", bgcolor: "#F3F4F6", px: 0.8, py: 0.2, borderRadius: 0.5 }}>
+                      준비중
+                    </Typography>
+                  )}
+                </Box>
+              }
+              disabled={option.disabled}
               control={<Radio />}
               sx={{
                 m: 0,
                 borderRadius: 1,
                 border: "1px solid",
                 borderColor: "grey.300",
-                bgcolor: "background.paper",
+                bgcolor: option.disabled ? "#F9FAFB" : "background.paper",
                 px: 2,
                 py: 2,
                 boxShadow: 1,
@@ -72,7 +81,7 @@ const LeagueStep2TypeSelection: React.FC = () => {
                   fontWeight: 700,
                 },
 
-                ...(selectedType === option.value && {
+                ...(!option.disabled && selectedType === option.value && {
                   borderColor: "grey.900",
                   boxShadow: 2,
                 }),
@@ -81,9 +90,8 @@ const LeagueStep2TypeSelection: React.FC = () => {
                   p: 0.5,
                 },
 
-                // hover
                 "&:hover": {
-                  borderColor: "grey.700",
+                  borderColor: option.disabled ? "grey.300" : "grey.700",
                 },
               }}
             />

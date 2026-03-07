@@ -37,6 +37,9 @@ jobs:
               }]
             }' | curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d @-
 
+      - name: 배포 시작 시각 기록
+        run: echo "DEPLOY_START=$(date +%s)" >> $GITHUB_ENV
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -83,22 +86,29 @@ jobs:
           JOB_STATUS: ${{ job.status }}
           COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
+          ELAPSED=$(( $(date +%s) - $DEPLOY_START ))
+          DURATION="${ELAPSED}초"
+
           if [ "$JOB_STATUS" = "success" ]; then
-            EMOJI="✅"; COLOR=5763719; LABEL="성공"
+            EMOJI="✅"; COLOR=5763719; LABEL="성공"; CONTENT=""
           elif [ "$JOB_STATUS" = "cancelled" ]; then
-            EMOJI="⚠️"; COLOR=16705372; LABEL="취소됨"
+            EMOJI="⚠️"; COLOR=16705372; LABEL="취소됨"; CONTENT=""
           else
-            EMOJI="❌"; COLOR=15548997; LABEL="실패"
+            EMOJI="❌"; COLOR=15548997; LABEL="실패"; CONTENT="@here"
           fi
+
           jq -n \
+            --arg content "$CONTENT" \
             --arg title "$EMOJI  Web 배포 $LABEL" \
             --arg branch "${{ github.ref_name }}" \
             --arg actor "${{ github.actor }}" \
             --arg commit "$COMMIT_MSG" \
+            --arg duration "$DURATION" \
             --arg url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
             --argjson color "$COLOR" \
             '{
               username: "3CH Deploy",
+              content: $content,
               embeds: [{
                 title: $title,
                 url: $url,
@@ -106,6 +116,7 @@ jobs:
                 fields: [
                   {name: "브랜치", value: ("`" + $branch + "`"), inline: true},
                   {name: "작성자", value: $actor, inline: true},
+                  {name: "소요 시간", value: $duration, inline: true},
                   {name: "커밋 메시지", value: $commit, inline: false}
                 ],
                 footer: {text: "GitHub Actions · 3CH"},

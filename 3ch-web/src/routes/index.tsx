@@ -45,6 +45,7 @@ import FaqPage from "../pages/mypage/FaqPage.tsx";
 import GuidePage from "../pages/mypage/GuidePage.tsx";
 import SupportCenterPage from "../pages/mypage/SupportCenterPage.tsx";
 import DonatePage from "../pages/mypage/DonatePage.tsx";
+import PricingPage from "../pages/mypage/PricingPage.tsx";
 import TermsPage from "../pages/mypage/TermsPage.tsx";
 import PrivacyPolicyPage from "../pages/mypage/PrivacyPolicyPage.tsx";
 // import League from "../pages/League";
@@ -89,6 +90,7 @@ export const router = createBrowserRouter([
       { path: "/mypage/inquiry", element: <InquiryPage />},
       { path: "/mypage/faq", element: <FaqPage />},
       { path: "/mypage/guide", element: <GuidePage />},
+      { path: "/mypage/pricing", element: <PricingPage />},
 
 
     //   { path: "/my", element: <My /> },

@@ -44,7 +44,7 @@ const STATUS_COLOR: Record<string, string> = {
 const NEXT_STATUS: Record<string, "pending" | "playing" | "done"> = {
   pending: "playing",
   playing: "done",
-  done: "pending",
+  done: "done",
 };
 
 // ─── 참가자 표시 ──────────────────────────────────────────────────────────────
@@ -93,8 +93,8 @@ function MatchCard({
   }, [match, leagueId, updateMatch]);
 
   const handleStatus = useCallback(() => {
-    const aDiv = match.participant_a_division ? `(${match.participant_a_division}부)` : "";
-    const bDiv = match.participant_b_division ? `(${match.participant_b_division}부)` : "";
+    const aDiv = match.participant_a_division ? `(${match.participant_a_division})` : "";
+    const bDiv = match.participant_b_division ? `(${match.participant_b_division})` : "";
     const aName = match.participant_a_name ?? "?";
     const bName = match.participant_b_name ?? "?";
     const sa = match.score_a ?? 0;
@@ -106,7 +106,7 @@ function MatchCard({
       const msg = `${index + 1}경기\n${aDiv}${aName}(${sa}) VS (${sb})${bDiv}${bName}\n종료되었습니까?`;
       if (!window.confirm(msg)) return;
     }
-    updateMatch({ leagueId, matchId: match.id, updates: { status: NEXT_STATUS[match.status] } });
+    updateMatch({ leagueId, matchId: match.id, updates: { status: NEXT_STATUS[match.status], score_a: sa, score_b: sb } });
   }, [match, index, leagueId, updateMatch]);
 
   const handleDelete = useCallback(() => {
@@ -256,7 +256,7 @@ export default function LeagueMatchOrder() {
     !groupLoading && (groupData?.myRole === "owner" || groupData?.myRole === "admin");
   const canMember = !groupLoading && !!groupData?.myRole;
 
-  const { data: matchData, isLoading: matchLoading } = useGetLeagueMatchesQuery(leagueId, { skip: !leagueId, refetchOnMountOrArgChange: true });
+  const { data: matchData, isLoading: matchLoading, refetch: refetchMatches } = useGetLeagueMatchesQuery(leagueId, { skip: !leagueId, refetchOnMountOrArgChange: true });
   const [localMatches, setLocalMatches] = useState<LeagueMatch[] | null>(null);
   const matches = useMemo(() => localMatches ?? matchData?.matches ?? [], [localMatches, matchData?.matches]);
 
@@ -281,6 +281,11 @@ export default function LeagueMatchOrder() {
       if ("data" in res && res.data) setLocalMatches(res.data.matches);
     });
   }, [leagueId, initMatches]);
+
+  const handleRefresh = useCallback(() => {
+    setLocalMatches(null);
+    refetchMatches();
+  }, [refetchMatches]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -318,7 +323,7 @@ export default function LeagueMatchOrder() {
           경기 순서
         </Typography>
         {canManage && matches.length > 0 && (
-          <IconButton size="small" onClick={handleReinit} disabled={isIniting} sx={{ color: "#9CA3AF" }} title="경기 재생성">
+          <IconButton size="small" onClick={handleRefresh} disabled={matchLoading} sx={{ color: "#9CA3AF" }} title="새로고침">
             <RefreshIcon sx={{ fontSize: 20 }} />
           </IconButton>
         )}

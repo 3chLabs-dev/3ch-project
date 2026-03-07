@@ -15,9 +15,8 @@ export interface LeagueBasicInfo {
 export type LeagueTypeValue =
   | "singles"
   | "doubles"
-  | "2-person-team"
-  | "3-person-team"
-  | "4-person-team";
+  | "team"
+  | "exchange";
 
 export interface LeagueTypeInfo {
   selectedType: LeagueTypeValue;
@@ -27,7 +26,10 @@ export interface LeagueTypeInfo {
 export type LeagueFormatValue =
   | "single-league"
   | "group-league"
-  | "group-and-knockout";
+  | "group-and-knockout"
+  | "single-league-tournament"
+  | "group-league-tournament"
+  | "upper-lower-tournament";
 
 export interface LeagueFormatInfo {
   format: LeagueFormatValue;
@@ -128,9 +130,8 @@ export const createLeague = createAsyncThunk.withTypes<{ state: RootState }>()(
     const typeMap: Record<LeagueTypeValue, string> = {
       singles: "단식",
       doubles: "복식",
-      "2-person-team": "2인 단체전",
-      "3-person-team": "3인 단체전",
-      "4-person-team": "4인 단체전",
+      team: "단체전",
+      exchange: "교류전",
     };
 
     // 리그 규칙 매핑
@@ -146,6 +147,9 @@ export const createLeague = createAsyncThunk.withTypes<{ state: RootState }>()(
       "single-league": "단일리그",
       "group-league": "조별리그",
       "group-and-knockout": "조별리그 + 본선리그",
+      "single-league-tournament": "단일리그 + 토너먼트",
+      "group-league-tournament": "조별리그 + 토너먼트",
+      "upper-lower-tournament": "상·하위 토너먼트",
     };
 
     // ISO 8601 날짜 문자열 생성

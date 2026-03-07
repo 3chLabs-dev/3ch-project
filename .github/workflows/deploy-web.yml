@@ -13,18 +13,32 @@ jobs:
 
     steps:
       - name: Discord - 배포 시작 알림
-        uses: sarisia/actions-status-discord@v1
-        with:
-          webhook: ${{ secrets.DISCORD_WEBHOOK }}
-          status: "🔄 시작"
-          title: "[Web] 배포 시작"
-          description: |
-            브랜치: `${{ github.ref_name }}`
-            커밋: ${{ github.event.head_commit.message }}
-            작성자: ${{ github.actor }}
-          color: 0x5865f2
-          nofail: true
-          nodetail: true
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          jq -n \
+            --arg branch "${{ github.ref_name }}" \
+            --arg actor "${{ github.actor }}" \
+            --arg commit "$COMMIT_MSG" \
+            --arg url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            '{
+              username: "3CH Deploy",
+              embeds: [{
+                title: "🔄  Web 배포 시작",
+                url: $url,
+                color: 5793266,
+                fields: [
+                  {name: "브랜치", value: ("`" + $branch + "`"), inline: true},
+                  {name: "작성자", value: $actor, inline: true},
+                  {name: "커밋 메시지", value: $commit, inline: false}
+                ],
+                footer: {text: "GitHub Actions · 3CH"}
+              }]
+            }' | curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d @-
+
+      - name: 배포 시작 시각 기록
+        run: echo "DEPLOY_START=$(date +%s)" >> $GITHUB_ENV
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -66,14 +80,46 @@ jobs:
             sudo systemctl reload nginx
 
       - name: Discord - 배포 결과 알림
-        uses: sarisia/actions-status-discord@v1
         if: always()
-        with:
-          webhook: ${{ secrets.DISCORD_WEBHOOK }}
-          status: ${{ job.status }}
-          title: "[Web] 배포 완료"
-          description: |
-            브랜치: `${{ github.ref_name }}`
-            커밋: ${{ github.event.head_commit.message }}
-            작성자: ${{ github.actor }}
-          nofail: true
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          JOB_STATUS: ${{ job.status }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          ELAPSED=$(( $(date +%s) - $DEPLOY_START ))
+          DURATION="${ELAPSED}초"
+
+          if [ "$JOB_STATUS" = "success" ]; then
+            EMOJI="✅"; COLOR=5763719; LABEL="성공"; CONTENT=""
+          elif [ "$JOB_STATUS" = "cancelled" ]; then
+            EMOJI="⚠️"; COLOR=16705372; LABEL="취소됨"; CONTENT=""
+          else
+            EMOJI="❌"; COLOR=15548997; LABEL="실패"; CONTENT="@here"
+          fi
+
+          jq -n \
+            --arg content "$CONTENT" \
+            --arg title "$EMOJI  Web 배포 $LABEL" \
+            --arg branch "${{ github.ref_name }}" \
+            --arg actor "${{ github.actor }}" \
+            --arg commit "$COMMIT_MSG" \
+            --arg duration "$DURATION" \
+            --arg url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --argjson color "$COLOR" \
+            '{
+              username: "3CH Deploy",
+              content: $content,
+              embeds: [{
+                title: $title,
+                url: $url,
+                color: $color,
+                fields: [
+                  {name: "브랜치", value: ("`" + $branch + "`"), inline: true},
+                  {name: "작성자", value: $actor, inline: true},
+                  {name: "소요 시간", value: $duration, inline: true},
+                  {name: "커밋 메시지", value: $commit, inline: false}
+                ],
+                footer: {text: "GitHub Actions · 3CH"},
+                timestamp: "${{ github.event.head_commit.timestamp }}"
+              }]
+            }' | curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d @-

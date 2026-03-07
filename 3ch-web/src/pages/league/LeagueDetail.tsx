@@ -27,6 +27,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 import SmsOutlinedIcon from "@mui/icons-material/SmsOutlined";
 import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
+import RefreshIcon from "@mui/icons-material/Refresh";
 import {
   useGetLeagueQuery,
   useGetLeagueParticipantsQuery,
@@ -68,8 +69,20 @@ const inputSx = {
   "& input": { fontSize: 13, fontWeight: 700, p: 0 },
 };
 
-const TYPE_OPTIONS = ["단식", "복식", "2인 단체전", "3인 단체전", "4인 단체전"];
-const FORMAT_OPTIONS = ["단일리그", "조별리그", "조별리그 + 본선리그"];
+const TYPE_OPTIONS = [
+  { label: "단식", disabled: false },
+  { label: "복식", disabled: false },
+  { label: "단체전", disabled: true },
+  { label: "교류전", disabled: true },
+];
+const FORMAT_OPTIONS = [
+  { label: "단일리그", disabled: false },
+  { label: "조별리그", disabled: false },
+  { label: "조별리그 + 본선리그", disabled: false },
+  { label: "단일리그 + 토너먼트", disabled: true },
+  { label: "조별리그 + 토너먼트", disabled: true },
+  { label: "상·하위 토너먼트", disabled: true },
+];
 const RULES_OPTIONS = ["3전 2선승제", "5전 3선승제", "7전 4선승제", "3세트제"];
 const SORT_OPTIONS = ["부수", "이름", "랜덤"];
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, "0"));
@@ -98,10 +111,10 @@ export default function LeagueDetail() {
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
 
-  const { data: leagueData, isLoading: leagueLoading } = useGetLeagueQuery(id ?? "", {
+  const { data: leagueData, isLoading: leagueLoading, refetch: refetchLeague } = useGetLeagueQuery(id ?? "", {
     skip: !id,
   });
-  const { data: participantData, isLoading: participantsLoading } = useGetLeagueParticipantsQuery(
+  const { data: participantData, isLoading: participantsLoading, refetch: refetchParticipants } = useGetLeagueParticipantsQuery(
     id ?? "",
     { skip: !id, pollingInterval: 15000 },
   );
@@ -199,9 +212,12 @@ export default function LeagueDetail() {
     });
   };
 
-  const handleStart = () => {
+  const handleStart = async () => {
     if (!id) return;
-    updateLeague({ id, updates: { status: "active" } });
+    if (league?.status !== "active") {
+      await updateLeague({ id, updates: { status: "active" } });
+    }
+    navigate(`/league/${id}/matches`);
   };
 
   const handleEnterEdit = () => {
@@ -358,7 +374,7 @@ export default function LeagueDetail() {
           {isEditing ? (
             <Select value={editType} onChange={(e) => setEditType(e.target.value)}
               variant="standard" sx={selectSx}>
-              {TYPE_OPTIONS.map((o) => <MenuItem key={o} value={o} sx={{ fontSize: 13 }}>{o}</MenuItem>)}
+              {TYPE_OPTIONS.map((o) => <MenuItem key={o.label} value={o.label} disabled={o.disabled} sx={{ fontSize: 13 }}>{o.label}{o.disabled ? " (준비중)" : ""}</MenuItem>)}
             </Select>
           ) : (
             <Typography sx={valueSx}>{league.type}</Typography>
@@ -371,7 +387,7 @@ export default function LeagueDetail() {
             <Select value={editFormat} onChange={(e) => setEditFormat(e.target.value)}
               variant="standard" displayEmpty sx={selectSx}>
               <MenuItem value="" sx={{ fontSize: 13, color: "#9CA3AF" }}>없음</MenuItem>
-              {FORMAT_OPTIONS.map((o) => <MenuItem key={o} value={o} sx={{ fontSize: 13 }}>{o}</MenuItem>)}
+              {FORMAT_OPTIONS.map((o) => <MenuItem key={o.label} value={o.label} disabled={o.disabled} sx={{ fontSize: 13 }}>{o.label}{o.disabled ? " (준비중)" : ""}</MenuItem>)}
             </Select>
           ) : (
             <Typography sx={valueSx}>{league.format || "-"}</Typography>
@@ -578,22 +594,13 @@ export default function LeagueDetail() {
             경품 추첨
           </Button>
         )}
-        {!isEditing && (canManage || isMember) && (
-          <Button
-            fullWidth variant="outlined" disableElevation
-            sx={{ mt: 1, borderRadius: 1, height: 40, fontWeight: 700 }}
-            onClick={() => navigate(`/league/${id}/matches`)}
-          >
-            경기 순서
-          </Button>
-        )}
         {!isEditing && canManage && (
           <Button
             fullWidth variant="contained" disableElevation
             sx={{ mt: 1, borderRadius: 1, height: 40, fontWeight: 700, bgcolor: "#87B8FF", "&:hover": { bgcolor: "#79AEFF" } }}
             onClick={() => { navigate(`/league/${id}/bracket`) }}
           >
-            대진표 확인하기
+            {league.format ? `${league.format} 대진표 생성하기` : "대진표 생성하기"}
           </Button>
         )}
       </Box>
@@ -851,6 +858,25 @@ export default function LeagueDetail() {
         </Box>
       )}
 
+      {/* 새로고침 플로팅 버튼 */}
+      {!isEditing && (
+        <IconButton
+          onClick={() => { refetchLeague(); refetchParticipants(); }}
+          sx={{
+            position: "fixed",
+            bottom: "calc(56px + env(safe-area-inset-bottom) + 16px)",
+            right: 16,
+            zIndex: 10,
+            bgcolor: "#fff",
+            border: "1px solid #E5E7EB",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+            "&:hover": { bgcolor: "#F9FAFB" },
+          }}
+        >
+          <RefreshIcon sx={{ fontSize: 22, color: "#6B7280" }} />
+        </IconButton>
+      )}
+
       {/* 뷰 모드 리그 시작 버튼 */}
       {!isEditing && canManage && (
         <Button
@@ -858,7 +884,6 @@ export default function LeagueDetail() {
           variant="contained"
           disableElevation
           onClick={handleStart}
-          disabled={league.status === "active"}
           sx={{
             borderRadius: 1,
             height: 40,
@@ -866,7 +891,6 @@ export default function LeagueDetail() {
             fontSize: 14,
             bgcolor: "#2F80ED",
             "&:hover": { bgcolor: "#256FD1" },
-            "&.Mui-disabled": { bgcolor: "#CFE1FB", color: "#fff" },
           }}
         >
           {league.status === "active" ? "리그 진행 중" : "리그 시작"}

@@ -648,51 +648,6 @@ export default function LeagueDetail() {
             {league.format ? `${league.format} 대진표 생성하기` : "대진표 생성하기"}
           </Button>
         )}
-
-        {/* 참가자(회원)용 버튼 */}
-        {!isEditing && !canManage && isMember && (() => {
-          const myParticipant = rawParticipants.find((p) => p.name === myMember?.name);
-          if (league.status === "active") {
-            if (!myParticipant) return null;
-            return (
-              <Button
-                fullWidth variant="contained" disableElevation
-                sx={{ mt: 1.5, borderRadius: 1, height: 44, fontWeight: 900, fontSize: 15, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}
-                onClick={() => navigate(`/league/${id}/matches`)}
-              >
-                리그 진행 중
-              </Button>
-            );
-          }
-          if (myParticipant) {
-            return (
-              <Stack spacing={1} sx={{ mt: 1.5 }}>
-                <Button
-                  fullWidth variant="contained" disableElevation disabled
-                  sx={{ borderRadius: 1, height: 44, fontWeight: 900, fontSize: 15, bgcolor: "#E5E7EB", color: "#9CA3AF", "&.Mui-disabled": { bgcolor: "#E5E7EB", color: "#9CA3AF" } }}
-                >
-                  리그 대기중
-                </Button>
-                <Button
-                  fullWidth variant="outlined" disableElevation
-                  sx={{ borderRadius: 1, height: 36, fontWeight: 700, fontSize: 13, color: "#EF4444", borderColor: "#FCA5A5", "&:hover": { borderColor: "#EF4444", bgcolor: "#FEF2F2" } }}
-                  onClick={() => setCancelJoinConfirm(true)}
-                >
-                  참가신청 취소
-                </Button>
-              </Stack>
-            );
-          }
-          return (
-            <Button
-              fullWidth variant="contained" disableElevation
-              sx={{ mt: 1.5, borderRadius: 1, height: 44, fontWeight: 900, fontSize: 15, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}
-              onClick={handleJoin}
-            >
-              참가 신청
-            </Button>
-          );
-        })()}
       </Box>
 
       <LoadMembersDialog
@@ -981,7 +936,7 @@ export default function LeagueDetail() {
         </IconButton>
       )}
 
-      {/* 뷰 모드 리그 시작 버튼 */}
+      {/* 뷰 모드 리그 시작 버튼 (관리자) */}
       {!isEditing && canManage && (
         <Button
           fullWidth
@@ -1000,6 +955,51 @@ export default function LeagueDetail() {
           {league.status === "active" ? "리그 진행 중" : "리그 시작"}
         </Button>
       )}
+
+      {/* 참가자(회원)용 버튼 */}
+      {!isEditing && !canManage && isMember && (() => {
+        const myParticipant = rawParticipants.find((p) => p.name === myMember?.name);
+        if (league.status === "active") {
+          if (!myParticipant) return null;
+          return (
+            <Button
+              fullWidth variant="contained" disableElevation
+              sx={{ borderRadius: 1, height: 44, fontWeight: 900, fontSize: 15, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}
+              onClick={() => navigate(`/league/${id}/matches`)}
+            >
+              리그 진행 중
+            </Button>
+          );
+        }
+        if (myParticipant) {
+          return (
+            <Stack spacing={1}>
+              <Button
+                fullWidth variant="contained" disableElevation disabled
+                sx={{ borderRadius: 1, height: 44, fontWeight: 900, fontSize: 15, bgcolor: "#E5E7EB", color: "#9CA3AF", "&.Mui-disabled": { bgcolor: "#E5E7EB", color: "#9CA3AF" } }}
+              >
+                리그 대기중
+              </Button>
+              <Button
+                fullWidth variant="outlined" disableElevation
+                sx={{ borderRadius: 1, height: 36, fontWeight: 700, fontSize: 13, color: "#EF4444", borderColor: "#FCA5A5", "&:hover": { borderColor: "#EF4444", bgcolor: "#FEF2F2" } }}
+                onClick={() => setCancelJoinConfirm(true)}
+              >
+                참가신청 취소
+              </Button>
+            </Stack>
+          );
+        }
+        return (
+          <Button
+            fullWidth variant="contained" disableElevation
+            sx={{ borderRadius: 1, height: 44, fontWeight: 900, fontSize: 15, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}
+            onClick={handleJoin}
+          >
+            참가 신청
+          </Button>
+        );
+      })()}
     </Box>
   );
 }

@@ -48,6 +48,15 @@ const NEXT_STATUS: Record<string, "pending" | "playing" | "done"> = {
   done: "done",
 };
 
+function getWinScore(rules?: string | null): number | null {
+  if (!rules) return null;
+  if (rules.includes("3세트제")) return null;
+  if (rules.includes("3전 2선승")) return 2;
+  if (rules.includes("5전 3선승")) return 3;
+  if (rules.includes("7전 4선승")) return 4;
+  return null;
+}
+
 // ─── 참가자 표시 ──────────────────────────────────────────────────────────────
 function ParticipantLabel({ name, division, isMe }: { name: string | null; division: string | null; isMe?: boolean }) {
   return (
@@ -125,11 +134,11 @@ function MatchCard({
 
   const isPlaying = match.status === "playing";
   const isDone = match.status === "done";
-  const is3set = rules?.includes("3세트제");
+  const winScore = getWinScore(rules);
   const sa = match.score_a ?? 0;
   const sb = match.score_b ?? 0;
-  const aWins = !is3set && isDone && sa > sb;
-  const bWins = !is3set && isDone && sb > sa;
+  const aWins = winScore !== null && isDone && sa === winScore;
+  const bWins = winScore !== null && isDone && sb === winScore;
   const canEditScore = canMember && (isPlaying || isDone);
 
   return (
@@ -328,7 +337,7 @@ export default function LeagueMatchOrder() {
         <Typography variant="subtitle1" fontWeight={900} flex={1}>
           경기 순서
         </Typography>
-        {canManage && matches.length > 0 && (
+        {matches.length > 0 && (
           <IconButton size="small" onClick={handleRefresh} disabled={matchLoading} sx={{ color: "#9CA3AF" }} title="새로고침">
             <RefreshIcon sx={{ fontSize: 20 }} />
           </IconButton>

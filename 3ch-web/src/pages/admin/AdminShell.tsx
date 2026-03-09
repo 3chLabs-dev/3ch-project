@@ -86,7 +86,7 @@ export default function AdminShell() {
       </Box>
 
       {/* 바디 */}
-      <Box sx={{ display: "flex", flex: 1 }}>
+      <Box sx={{ display: "flex", flex: 1, minHeight: 0 }}>
         {/* 사이드바 */}
         <Box sx={{ width: 176, bgcolor: "#fff", borderRight: "1px solid #E5E7EB", pt: 2, flexShrink: 0, overflowY: "auto" }}>
           {MAIN_MENU.map((item) => (

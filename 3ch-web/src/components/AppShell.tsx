@@ -13,7 +13,7 @@ import { setPreferredGroupId } from "../features/league/leagueCreationSlice";
 import { useGetMyGroupsQuery } from "../features/group/groupApi";
 import logo from "../assets/512_우리리그 로고.svg";
 import SettingsIcon from "@mui/icons-material/Settings";
-import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
+// import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
 
 
 
@@ -102,9 +102,10 @@ export default function AppShell() {
                         )}
                         {isMyPage && token && (
                         <Stack direction="row" sx={{ ml: "auto" }}>
-                            <IconButton aria-label="notifications" size="small">
+                            {/* 앱 출시후 구현 임시주석 */}
+                            {/* <IconButton aria-label="notifications" size="small">
                                 <NotificationsNoneIcon sx={{ fontSize: 28 }} />
-                            </IconButton>
+                            </IconButton> */}
                             <IconButton
                                 aria-label="settings"
                                 onClick={() => navigate("/mypage/settings")}

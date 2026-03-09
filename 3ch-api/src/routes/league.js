@@ -523,21 +523,26 @@ router.post('/league/:leagueId/participants', requireAuth, async (req, res) => {
     const { leagueId } = req.params;
     const userId = Number(req.user.sub);
 
-    // 권한 확인: 해당 클럽의 owner 또는 admin만 가능
+    // 권한 확인: 해당 클럽의 멤버 이상만 가능 (owner/admin은 다수 추가 가능, member는 본인 1명만)
     const authCheck = await pool.query(
       `SELECT gm.role
        FROM leagues l
        INNER JOIN group_members gm ON gm.group_id = l.group_id
-       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner','admin')`,
+       WHERE l.id = $1 AND gm.user_id = $2`,
       [leagueId, userId],
     );
     if (authCheck.rowCount === 0) {
       return res.status(403).json({ message: '참가자를 추가할 권한이 없습니다.' });
     }
+    const userRole = authCheck.rows[0].role;
+    const isAdmin = userRole === 'owner' || userRole === 'admin';
 
     const rawParticipants = req.body.participants;
     if (!Array.isArray(rawParticipants) || rawParticipants.length === 0) {
       return res.status(400).json({ message: '참가자 목록이 비어있습니다.' });
+    }
+    if (!isAdmin && rawParticipants.length > 1) {
+      return res.status(403).json({ message: '일반 멤버는 본인만 참가 신청할 수 있습니다.' });
     }
 
     const addSchema = z.array(z.object({
@@ -1009,17 +1014,40 @@ router.delete('/league/:leagueId/participants/:participantId', requireAuth, asyn
     const { leagueId, participantId } = req.params;
     const userId = Number(req.user.sub);
 
-    // 권한 확인:
+    // 권한 확인: owner/admin은 누구든 삭제 가능, member는 본인 항목만 삭제 가능
     const accessCheck = await pool.query(
-      `SELECT 1
+      `SELECT gm.role
       FROM leagues l
       INNER JOIN group_members gm ON gm.group_id = l.group_id
-      WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+      WHERE l.id = $1 AND gm.user_id = $2`,
       [leagueId, userId],
     );
 
     if (accessCheck.rowCount === 0) {
       return res.status(403).json({ message: '참가자를 삭제할 권한이 없습니다.' });
+    }
+
+    const userRole = accessCheck.rows[0].role;
+    const isAdmin = userRole === 'owner' || userRole === 'admin';
+
+    if (!isAdmin) {
+      // 멤버는 본인 이름과 일치하는 참가자 항목만 삭제 가능
+      const memberCheck = await pool.query(
+        `SELECT u.name
+        FROM group_members gm
+        INNER JOIN leagues l ON l.group_id = gm.group_id
+        INNER JOIN users u ON u.id = gm.user_id
+        WHERE l.id = $1 AND gm.user_id = $2`,
+        [leagueId, userId],
+      );
+      const memberName = memberCheck.rows[0]?.name;
+      const participantCheck = await pool.query(
+        `SELECT name FROM league_participants WHERE id = $1 AND league_id = $2`,
+        [participantId, leagueId],
+      );
+      if (participantCheck.rowCount === 0 || participantCheck.rows[0].name !== memberName) {
+        return res.status(403).json({ message: '본인의 참가 신청만 취소할 수 있습니다.' });
+      }
     }
 
     // 참가자 삭제 (리그 아이디도 추가 체크)

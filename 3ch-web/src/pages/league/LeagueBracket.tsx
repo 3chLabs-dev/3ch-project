@@ -25,7 +25,6 @@ import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import ScreenRotationIcon from "@mui/icons-material/ScreenRotation";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import { formatLeagueDate } from "../../utils/dateUtils";
-import { generateRoundRobin } from "../../utils/leagueUtils";
 import {
   useGetLeagueQuery,
   useGetLeagueParticipantsQuery,
@@ -396,8 +395,7 @@ export default function LeagueBracket() {
     return () => { ro.disconnect(); window.removeEventListener("resize", updateScale); };
   }, [landscape, dataReady]);
 
-  const n     = localOrder.length;
-  const games = useMemo(() => generateRoundRobin(n), [n]);
+  const n = localOrder.length;
 
   // ── 경기 데이터 연계 ──────────────────────────────────────────────────────
   const matchLookup = useMemo(() => {
@@ -693,21 +691,23 @@ export default function LeagueBracket() {
 
               {/* 경기 카드 */}
               <Box sx={{ display: "flex", gap: 0.75, overflowX: "auto", flex: 1, "&::-webkit-scrollbar": { display: "none" } }}>
-                {games.map(([p1, p2], idx) => {
-                  const m = matchLookup.get(`${localOrder[p1]?.id}__${localOrder[p2]?.id}`);
-                  const isDone = m?.status === "done";
-                  const isPlaying = m?.status === "playing";
+                {(matchData?.matches ?? []).map((m) => {
+                  const p1Idx = localOrder.findIndex((p) => p.id === m.participant_a_id);
+                  const p2Idx = localOrder.findIndex((p) => p.id === m.participant_b_id);
+                  if (p1Idx === -1 || p2Idx === -1) return null;
+                  const isDone = m.status === "done";
+                  const isPlaying = m.status === "playing";
                   const numColor = isDone ? "#6B7280" : isPlaying ? "#60A5FA" : "#F9FAFB";
                   return (
-                    <Box key={idx} sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.5, flexShrink: 0 }}>
+                    <Box key={m.id} sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.5, flexShrink: 0 }}>
                       <Box sx={{ bgcolor: isDone ? "#374151" : isPlaying ? "#1E3A5F" : "#2D3748", borderRadius: "5px", px: 1.25, py: 0.75, textAlign: "center", minWidth: 42, display: "flex", flexDirection: "column", alignItems: "center" }}>
-                        <Typography sx={{ color: numColor, fontSize: 14, fontWeight: 800, lineHeight: 1.3 }}>{p1 + 1}</Typography>
+                        <Typography sx={{ color: numColor, fontSize: 14, fontWeight: 800, lineHeight: 1.3 }}>{p1Idx + 1}</Typography>
                         <Box sx={{ width: "100%", height: "1px", bgcolor: "#4B5563", my: 0.25 }} />
-                        <Typography sx={{ color: numColor, fontSize: 14, fontWeight: 800, lineHeight: 1.3 }}>{p2 + 1}</Typography>
+                        <Typography sx={{ color: numColor, fontSize: 14, fontWeight: 800, lineHeight: 1.3 }}>{p2Idx + 1}</Typography>
                       </Box>
-                      <Box sx={{ bgcolor: m?.court ? (isPlaying ? "#2563EB" : "#374151") : "#1F2937", borderRadius: "100px", px: 0.75, py: 0.15 }}>
-                        <Typography sx={{ fontSize: 8, color: m?.court ? (isPlaying ? "white" : "#9CA3AF") : "#374151", fontWeight: 700, whiteSpace: "nowrap" }}>
-                          {m?.court || "미정"}
+                      <Box sx={{ bgcolor: m.court ? (isPlaying ? "#2563EB" : "#374151") : "#1F2937", borderRadius: "100px", px: 0.75, py: 0.15 }}>
+                        <Typography sx={{ fontSize: 8, color: m.court ? (isPlaying ? "white" : "#9CA3AF") : "#374151", fontWeight: 700, whiteSpace: "nowrap" }}>
+                          {m.court || "미정"}
                         </Typography>
                       </Box>
                     </Box>

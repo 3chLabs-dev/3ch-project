@@ -317,10 +317,10 @@ export default function LeagueBracket() {
 
   const league = leagueData?.league;
   const { data: groupData } = useGetGroupDetailQuery(league?.group_id ?? "", { skip: !league?.group_id });
-  const canManage = groupData?.myRole === "owner" || groupData?.myRole === "admin";
-
   const authUser = useAppSelector((s) => s.auth.user);
-  const myName = groupData?.members?.find((m) => m.user_id === authUser?.id)?.name;
+  const isCreator = !!authUser && league?.created_by_id === authUser.id;
+  const canManage = (groupData?.myRole === "owner" || groupData?.myRole === "admin") || isCreator;
+  const myName = groupData?.members?.find((m) => m.user_id === authUser?.id)?.name ?? authUser?.name ?? null;
 
   const rawParticipants = useMemo(
     () => participantData?.participants ?? [],

@@ -271,12 +271,12 @@ export default function LeagueMatchOrder() {
   const groupId = league?.group_id ?? "";
 
   const { data: groupData, isLoading: groupLoading } = useGetGroupDetailQuery(groupId, { skip: !groupId });
-  const canManage =
-    !groupLoading && (groupData?.myRole === "owner" || groupData?.myRole === "admin");
-  const canMember = !groupLoading && !!groupData?.myRole;
-
   const authUser = useAppSelector((s) => s.auth.user);
-  const myName = groupData?.members?.find((m) => m.user_id === authUser?.id)?.name;
+  const isCreator = !!authUser && league?.created_by_id === authUser?.id;
+  const canManage =
+    (!groupLoading && (groupData?.myRole === "owner" || groupData?.myRole === "admin")) || isCreator;
+  const canMember = (!groupLoading && !!groupData?.myRole) || isCreator;
+  const myName = groupData?.members?.find((m) => m.user_id === authUser?.id)?.name ?? authUser?.name ?? null;
 
   const { data: matchData, isLoading: matchLoading, refetch: refetchMatches } = useGetLeagueMatchesQuery(leagueId, { skip: !leagueId, refetchOnMountOrArgChange: true });
   const [localMatches, setLocalMatches] = useState<LeagueMatch[] | null>(null);

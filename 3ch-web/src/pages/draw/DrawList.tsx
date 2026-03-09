@@ -69,23 +69,23 @@ type ParticipantRow = {
   weight: number;
 };
 
-// function weightedRandomPick(pool: ParticipantRow[], count: number): DrawWinner[] {
-//   const result: DrawWinner[] = [];
-//   const remaining = pool.filter((p) => p.weight > 0);
-//   const pickCount = Math.min(count, remaining.length);
-//   for (let i = 0; i < pickCount; i++) {
-//     const totalWeight = remaining.reduce((sum, p) => sum + p.weight, 0);
-//     let rand = Math.random() * totalWeight;
-//     let idx = remaining.length - 1;
-//     for (let k = 0; k < remaining.length; k++) {
-//       rand -= remaining[k].weight;
-//       if (rand <= 0) { idx = k; break; }
-//     }
-//     result.push({ participant_name: remaining[idx].name, participant_division: remaining[idx].division });
-//     remaining.splice(idx, 1);
-//   }
-//   return result;
-// }
+function weightedRandomPick(pool: ParticipantRow[], count: number): DrawWinner[] {
+  const result: DrawWinner[] = [];
+  const remaining = pool.filter((p) => p.weight > 0);
+  const pickCount = Math.min(count, remaining.length);
+  for (let i = 0; i < pickCount; i++) {
+    const totalWeight = remaining.reduce((sum, p) => sum + p.weight, 0);
+    let rand = Math.random() * totalWeight;
+    let idx = remaining.length - 1;
+    for (let k = 0; k < remaining.length; k++) {
+      rand -= remaining[k].weight;
+      if (rand <= 0) { idx = k; break; }
+    }
+    result.push({ participant_name: remaining[idx].name, participant_division: remaining[idx].division });
+    remaining.splice(idx, 1);
+  }
+  return result;
+}
 
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -263,30 +263,30 @@ export default function DrawList() {
     }));
   };
 
-  // const handleRunDraw = () => {
-  //   if (prizes.length === 0) {
-  //     setAlertMsg("경품을 최소 1개 추가해주세요.");
-  //     return;
-  //   }
-  //   if (participantRows.length === 0) {
-  //     setAlertMsg("참가자가 없습니다.");
-  //     return;
-  //   }
-  //   // 결과를 동기적으로 미리 계산해 state에 저장 후 애니메이션 시작
-  //   const usedNames = new Set<string>();
-  //   const results: PrizeResult[] = [];
-  //   for (const prize of prizes) {
-  //     const pool = participantRows.filter((p) => !usedNames.has(p.name));
-  //     const winners = weightedRandomPick(pool, prize.quantity);
-  //     winners.forEach((w) => usedNames.add(w.participant_name));
-  //     results.push({ ...prize, winners });
-  //   }
-  //   setPrizeResults(results);
-  //   setPhase("animating");
-  //   setTimeout(() => {
-  //     setPhase("done");
-  //   }, 1600);
-  // };
+  const handleRunDraw = () => {
+    if (prizes.length === 0) {
+      setAlertMsg("경품을 최소 1개 추가해주세요.");
+      return;
+    }
+    if (participantRows.length === 0) {
+      setAlertMsg("참가자가 없습니다.");
+      return;
+    }
+    // 결과를 동기적으로 미리 계산해 state에 저장 후 애니메이션 시작
+    const usedNames = new Set<string>();
+    const results: PrizeResult[] = [];
+    for (const prize of prizes) {
+      const pool = participantRows.filter((p) => !usedNames.has(p.name));
+      const winners = weightedRandomPick(pool, prize.quantity);
+      winners.forEach((w) => usedNames.add(w.participant_name));
+      results.push({ ...prize, winners });
+    }
+    setPrizeResults(results);
+    setPhase("animating");
+    setTimeout(() => {
+      setPhase("done");
+    }, 1600);
+  };
 
   const handleSaveAsDraft = async () => {
     if (!leagueId) return;
@@ -330,6 +330,7 @@ export default function DrawList() {
 
     const now = new Date();
     const drawName = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} 추첨`;
+    let newDrawId: string | undefined;
 
     try {
       if (draftId) {
@@ -358,7 +359,7 @@ export default function DrawList() {
             })),
           })),
         }).unwrap();
-        void res.draw_id;
+        newDrawId = res.draw_id;
       }
       refetchDraws();
     } catch {
@@ -374,7 +375,9 @@ export default function DrawList() {
     setParticipantWeights({});
     setPrizesInitialized(false);
     if (draftId) {
-      navigate(`/draw/${leagueId}`, { replace: true });
+      navigate(`/draw/${leagueId}/${draftId}`, { replace: true });
+    } else if (newDrawId) {
+      navigate(`/draw/${leagueId}/${newDrawId}`, { replace: true });
     } else {
       setPhase("list");
     }
@@ -387,17 +390,6 @@ export default function DrawList() {
     } catch {
       setAlertMsg("추첨 삭제에 실패했습니다.");
     }
-  };
-
-  const handleBackToList = () => {
-    if (animationRef.current) { clearInterval(animationRef.current); animationRef.current = null; }
-    // prizes는 sessionStorage에 저장된 상태이므로 지우지 않음 (복귀 시 복원)
-    setPrizeResults([]);
-    setPendingPrizeName("");
-    setPendingQuantity(1);
-    setParticipantWeights({});
-    setPrizesInitialized(false);
-    setPhase("list");
   };
 
   const handleOpenEdit = (e: React.MouseEvent, draw: DrawListItem) => {
@@ -441,14 +433,12 @@ export default function DrawList() {
     await handleDeleteDraw(deleteConfirmDraw.id);
   };
 
-  const fromCreate = searchParams.get("create") === "1";
-
   // ─── 추첨하기 화면 ────────────────────────────────────────
   if (phase === "create") {
     return (
       <Stack spacing={2.2}>
         <Stack direction="row" alignItems="center" spacing={1}>
-          <IconButton onClick={draftId || fromCreate ? () => navigate(-1) : handleBackToList} size="small">
+          <IconButton onClick={draftId ? () => navigate(`/draw/${leagueId}/${draftId}`, { replace: true }) : () => navigate(`/draw/${leagueId}`, { replace: true })} size="small">
             <ArrowBackIcon />
           </IconButton>
           <Typography fontWeight={900} fontSize={20}>{draftId ? "추첨 진행하기" : "경품 추첨"}</Typography>
@@ -569,6 +559,17 @@ export default function DrawList() {
               sx={{ borderRadius: 1, py: 1.1, fontWeight: 700 }}
             >
               {isSavingDraft ? "저장 중..." : "경품 저장"}
+            </Button>
+          )}
+          {draftId && (
+            <Button
+              fullWidth
+              variant="contained"
+              onClick={handleRunDraw}
+              disableElevation
+              sx={{ borderRadius: 1, py: 1.1, fontWeight: 700 }}
+            >
+              자동 추첨
             </Button>
           )}
         </Stack>
@@ -699,7 +700,7 @@ export default function DrawList() {
                       </Typography>
                       <Typography variant="caption" color="text.secondary">·</Typography>
                       <Typography variant="caption" color="text.secondary" fontWeight={700}>
-                        경품 {draw.prize_count}개 · 당첨 {draw.total_quantity}명
+                        경품 {draw.prize_count}개 · {draw.winner_count > 0 ? `당첨 ${draw.winner_count}명` : `${draw.total_quantity}명 예정`}
                       </Typography>
                       {draw.prize_count > 0 && draw.winner_count === 0 && (
                         <Chip

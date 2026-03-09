@@ -37,6 +37,15 @@ import {
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
 import { useAppSelector } from "../../app/hooks";
 
+function getWinScore(rules?: string | null): number | null {
+  if (!rules) return null;
+  if (rules.includes("3세트제")) return null;
+  if (rules.includes("3전 2선승")) return 2;
+  if (rules.includes("5전 3선승")) return 3;
+  if (rules.includes("7전 4선승")) return 4;
+  return null;
+}
+
 // ─── Styled ────────────────────────────────────────────────────────────────
 const BASE_CELL = { padding: "5px 4px", textAlign: "center" as const, fontSize: 14, border: "1px solid #E5E7EB", borderRadius: "8px" };
 
@@ -140,17 +149,17 @@ function DivBadge({ division }: { division?: string | null }) {
 }
 
 // ─── 점수 셀 (편집 가능) ───────────────────────────────────────────────────
-function BracketScoreCell({ match, isA, leagueId, is3set }: {
+function BracketScoreCell({ match, isA, leagueId, winScore }: {
   match: LeagueMatch | undefined;
   isA: boolean;
   leagueId: string;
-  is3set: boolean;
+  winScore: number | null;
 }) {
   const [updateMatch] = useUpdateLeagueMatchMutation();
   const canEdit = match?.status === "playing" || match?.status === "done";
   const score = canEdit ? ((isA ? match!.score_a : match!.score_b) ?? 0) : null;
   const opp   = canEdit ? ((isA ? match!.score_b : match!.score_a) ?? 0) : null;
-  const isWinner = !is3set && match?.status === "done" && score !== null && opp !== null && score > opp;
+  const isWinner = winScore !== null && match?.status === "done" && score !== null && opp !== null && score === winScore;
 
   const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
     if (!match || !canEdit) return;
@@ -165,13 +174,18 @@ function BracketScoreCell({ match, isA, leagueId, is3set }: {
     return <StyledTableCell>{score !== null ? score : ""}</StyledTableCell>;
   }
   return (
-    <StyledTableCell sx={{ p: 0, color: isWinner ? "#DC2626" : "inherit" }}>
+    <StyledTableCell sx={{
+      p: 0,
+      color: isWinner ? "#16A34A" : "inherit",
+      "& input[type=number]": { MozAppearance: "textfield" },
+      "& input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button": { WebkitAppearance: "none", margin: 0 },
+    }}>
       <input
         key={`${match!.id}-${isA}-${score}`}
         type="number"
         defaultValue={score ?? 0}
         onBlur={handleBlur}
-        style={{ textAlign: "center", fontSize: 14, width: "100%", height: 28, border: "none", outline: "none", background: "transparent", padding: 0, color: "inherit", fontWeight: isWinner ? 700 : 400 }}
+        style={{ textAlign: "center", fontSize: 14, width: "100%", height: 28, border: "none", outline: "none", background: "transparent", padding: 0, color: "inherit", fontWeight: isWinner ? 700 : 400, display: "block" }}
       />
     </StyledTableCell>
   );
@@ -195,13 +209,13 @@ interface BracketRowProps {
   tieSetDiff: string;
   hasPlayed: boolean;
   leagueId: string;
-  is3set: boolean;
+  winScore: number | null;
   isMe: boolean;
 }
 
 const SortableBracketRow = memo(function SortableBracketRow({
   participant, rowIdx, n, localOrder, editMode, canManage, onMove, landscape,
-  matchLookup, wins, losses, rank, tieSetDiff, hasPlayed, leagueId, is3set, isMe,
+  matchLookup, wins, losses, rank, tieSetDiff, hasPlayed, leagueId, winScore, isMe,
 }: BracketRowProps) {
   const canDrag = editMode && canManage;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -260,7 +274,7 @@ const SortableBracketRow = memo(function SortableBracketRow({
         const m = matchLookup.get(`${participant.id}__${colPlayer.id}`);
         const isA = m?.participant_a_id === participant.id;
         return (
-          <BracketScoreCell key={colIdx} match={m} isA={isA} leagueId={leagueId} is3set={is3set} />
+          <BracketScoreCell key={colIdx} match={m} isA={isA} leagueId={leagueId} winScore={winScore} />
         );
       })}
 
@@ -303,10 +317,10 @@ export default function LeagueBracket() {
 
   const league = leagueData?.league;
   const { data: groupData } = useGetGroupDetailQuery(league?.group_id ?? "", { skip: !league?.group_id });
-  const canManage = groupData?.myRole === "owner" || groupData?.myRole === "admin";
-
   const authUser = useAppSelector((s) => s.auth.user);
-  const myName = groupData?.members?.find((m) => m.user_id === authUser?.id)?.name;
+  const isCreator = !!authUser && league?.created_by_id === authUser.id;
+  const canManage = (groupData?.myRole === "owner" || groupData?.myRole === "admin") || isCreator;
+  const myName = groupData?.members?.find((m) => m.user_id === authUser?.id)?.name ?? authUser?.name ?? null;
 
   const rawParticipants = useMemo(
     () => participantData?.participants ?? [],
@@ -520,7 +534,7 @@ export default function LeagueBracket() {
         </Box>
 
         {/* 수정 버튼 (pill 스타일) */}
-        {!leagueStarted && (
+        {!leagueStarted && canManage && (
           <Button
             size="small"
             variant="contained"
@@ -635,16 +649,19 @@ export default function LeagueBracket() {
                   <NumberHeaderCell rowSpan={2} sx={{ fontSize: landscape ? "13px" : "14px" }}>동점자{<br />}세트 득실</NumberHeaderCell>
                 </TableRow>
                 <TableRow>
-                  {localOrder.map((p) => (
-                    <NameHeaderCell key={p.id}>
-                      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0.4, flexWrap: "wrap" }}>
-                        <DivBadge division={p.division} />
-                          <Box component="span" sx={{minHeight: landscape ? "" : "70px"}}>
+                  {localOrder.map((p) => {
+                    const isMe = !!myName && p.name === myName;
+                    return (
+                      <NameHeaderCell key={p.id} sx={isMe ? { bgcolor: "#EFF6FF" } : undefined}>
+                        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0.4, flexWrap: "wrap" }}>
+                          <DivBadge division={p.division} />
+                          <Box component="span" sx={{ minHeight: landscape ? "" : "70px", color: isMe ? "#2F80ED" : "inherit", fontWeight: isMe ? 700 : "inherit" }}>
                             {p.name}
                           </Box>
-                      </Box>
-                    </NameHeaderCell>
-                  ))}
+                        </Box>
+                      </NameHeaderCell>
+                    );
+                  })}
                 </TableRow>
               </TableHead>
 
@@ -670,7 +687,7 @@ export default function LeagueBracket() {
                         tieSetDiff={tieSetDiffs[rowIdx] ?? ""}
                         hasPlayed={playerStats[rowIdx]?.hasPlayed ?? false}
                         leagueId={id ?? ""}
-                        is3set={!!league?.rules?.includes("3세트제")}
+                        winScore={getWinScore(league?.rules)}
                         isMe={!!myName && rowPlayer.name === myName}
                       />
                     ))}

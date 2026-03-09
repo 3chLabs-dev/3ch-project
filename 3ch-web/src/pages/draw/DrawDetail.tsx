@@ -259,7 +259,7 @@ export default function DrawDetail() {
                       {prize.prize_name}
                     </Typography>
                     <Chip
-                      label={`${prize.quantity}명`}
+                      label={prize.winners.length > 0 ? `당첨 ${prize.winners.length}명` : `${prize.quantity}명 예정`}
                       size="small"
                       sx={{ height: 22, fontWeight: 700 }}
                     />

@@ -631,41 +631,41 @@ export default function LeagueBracket() {
         >
 
           {/* ─── 대진표 테이블 ─── */}
-          <TableContainer component={Paper} elevation={3} sx={{ borderRadius: "10px", overflow: "hidden" }}>
-            <Table sx={{ tableLayout: "fixed", borderCollapse: "separate", borderSpacing: "3px" }}>
-              <TableHead>
-                <TableRow>
-                  <NumberHeaderCell colSpan={2} rowSpan={2} sx={{ fontSize: 9, color: "#9CA3AF", fontWeight: 600, letterSpacing: 0.3 }}>참가명단</NumberHeaderCell>
-                  {localOrder.map((_, idx) => (
-                    <NumberHeaderCell key={idx}>
-                      <Box sx={{ width: 22, height: 22, borderRadius: "50%", bgcolor: "#3B82F6", color: "white", fontSize: 11, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-                        {idx + 1}
-                      </Box>
-                    </NumberHeaderCell>
-                  ))}
-                  <NumberHeaderCell rowSpan={2} sx={{ bgcolor: "#F0FDF4", color: "#16A34A" }}>승</NumberHeaderCell>
-                  <NumberHeaderCell rowSpan={2} sx={{ bgcolor: "#FFF1F2", color: "#DC2626" }}>패</NumberHeaderCell>
-                  <NumberHeaderCell rowSpan={2}>순위</NumberHeaderCell>
-                  <NumberHeaderCell rowSpan={2} sx={{ fontSize: landscape ? "13px" : "14px" }}>동점자{<br />}세트 득실</NumberHeaderCell>
-                </TableRow>
-                <TableRow>
-                  {localOrder.map((p) => {
-                    const isMe = !!myName && p.name === myName;
-                    return (
-                      <NameHeaderCell key={p.id} sx={isMe ? { bgcolor: "#EFF6FF" } : undefined}>
-                        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0.4, flexWrap: "wrap" }}>
-                          <DivBadge division={p.division} />
-                          <Box component="span" sx={{ minHeight: landscape ? "" : "70px", color: isMe ? "#2F80ED" : "inherit", fontWeight: isMe ? 700 : "inherit" }}>
-                            {p.name}
-                          </Box>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <TableContainer component={Paper} elevation={3} sx={{ borderRadius: "10px", overflow: "hidden" }}>
+              <Table sx={{ tableLayout: "fixed", borderCollapse: "separate", borderSpacing: "3px" }}>
+                <TableHead>
+                  <TableRow>
+                    <NumberHeaderCell colSpan={2} rowSpan={2} sx={{ fontSize: 9, color: "#9CA3AF", fontWeight: 600, letterSpacing: 0.3 }}>참가명단</NumberHeaderCell>
+                    {localOrder.map((_, idx) => (
+                      <NumberHeaderCell key={idx}>
+                        <Box sx={{ width: 22, height: 22, borderRadius: "50%", bgcolor: "#3B82F6", color: "white", fontSize: 11, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                          {idx + 1}
                         </Box>
-                      </NameHeaderCell>
-                    );
-                  })}
-                </TableRow>
-              </TableHead>
+                      </NumberHeaderCell>
+                    ))}
+                    <NumberHeaderCell rowSpan={2} sx={{ bgcolor: "#F0FDF4", color: "#16A34A" }}>승</NumberHeaderCell>
+                    <NumberHeaderCell rowSpan={2} sx={{ bgcolor: "#FFF1F2", color: "#DC2626" }}>패</NumberHeaderCell>
+                    <NumberHeaderCell rowSpan={2}>순위</NumberHeaderCell>
+                    <NumberHeaderCell rowSpan={2} sx={{ fontSize: landscape ? "13px" : "14px" }}>동점자{<br />}세트 득실</NumberHeaderCell>
+                  </TableRow>
+                  <TableRow>
+                    {localOrder.map((p) => {
+                      const isMe = !!myName && p.name === myName;
+                      return (
+                        <NameHeaderCell key={p.id} sx={isMe ? { bgcolor: "#EFF6FF" } : undefined}>
+                          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0.4, flexWrap: "wrap" }}>
+                            <DivBadge division={p.division} />
+                            <Box component="span" sx={{ minHeight: landscape ? "" : "70px", color: isMe ? "#2F80ED" : "inherit", fontWeight: isMe ? 700 : "inherit" }}>
+                              {p.name}
+                            </Box>
+                          </Box>
+                        </NameHeaderCell>
+                      );
+                    })}
+                  </TableRow>
+                </TableHead>
 
-              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                 <SortableContext items={localOrder.map((p) => p.id)} strategy={verticalListSortingStrategy}>
                   <TableBody>
                     {localOrder.map((rowPlayer, rowIdx) => (
@@ -693,9 +693,9 @@ export default function LeagueBracket() {
                     ))}
                   </TableBody>
                 </SortableContext>
-              </DndContext>
-            </Table>
-          </TableContainer>
+              </Table>
+            </TableContainer>
+          </DndContext>
 
           {/* ─── 경기 순서 (다크 카드) ─── */}
           <Box sx={{ mt: landscape ? 1.5 : 0, mr: landscape ? 0 : 1.5 }}>

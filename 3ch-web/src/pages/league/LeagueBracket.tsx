@@ -149,44 +149,61 @@ function DivBadge({ division }: { division?: string | null }) {
 }
 
 // ─── 점수 셀 (편집 가능) ───────────────────────────────────────────────────
-function BracketScoreCell({ match, isA, leagueId, winScore }: {
+function BracketScoreCell({ match, isA, leagueId, winScore, canManage }: {
   match: LeagueMatch | undefined;
   isA: boolean;
   leagueId: string;
   winScore: number | null;
+  canManage: boolean;
 }) {
   const [updateMatch] = useUpdateLeagueMatchMutation();
-  const canEdit = match?.status === "playing" || match?.status === "done";
-  const score = canEdit ? ((isA ? match!.score_a : match!.score_b) ?? 0) : null;
-  const opp   = canEdit ? ((isA ? match!.score_b : match!.score_a) ?? 0) : null;
+  const canEdit = canManage && (match?.status === "playing" || match?.status === "done");
+  const score = (match?.status === "playing" || match?.status === "done")
+    ? ((isA ? match!.score_a : match!.score_b) ?? 0)
+    : null;
+  const opp = (match?.status === "playing" || match?.status === "done")
+    ? ((isA ? match!.score_b : match!.score_a) ?? 0)
+    : null;
   const isWinner = winScore !== null && match?.status === "done" && score !== null && opp !== null && score === winScore;
 
-  const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+  const handleChange = (delta: number) => {
     if (!match || !canEdit) return;
-    const val = Math.max(0, parseInt(e.target.value) || 0);
-    const cur = isA ? match.score_a : match.score_b;
-    if (val !== (cur ?? 0)) {
-      updateMatch({ leagueId, matchId: match.id, updates: isA ? { score_a: val } : { score_b: val } });
-    }
+    const cur = (isA ? match.score_a : match.score_b) ?? 0;
+    const next = Math.max(0, cur + delta);
+    updateMatch({ leagueId, matchId: match.id, updates: isA ? { score_a: next } : { score_b: next } });
   };
 
   if (!canEdit) {
-    return <StyledTableCell>{score !== null ? score : ""}</StyledTableCell>;
+    return (
+      <StyledTableCell sx={{ color: isWinner ? "#16A34A" : "inherit", fontWeight: isWinner ? 700 : 400 }}>
+        {score !== null ? score : ""}
+      </StyledTableCell>
+    );
   }
   return (
-    <StyledTableCell sx={{
-      p: 0,
-      color: isWinner ? "#16A34A" : "inherit",
-      "& input[type=number]": { MozAppearance: "textfield" },
-      "& input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button": { WebkitAppearance: "none", margin: 0 },
-    }}>
-      <input
-        key={`${match!.id}-${isA}-${score}`}
-        type="number"
-        defaultValue={score ?? 0}
-        onBlur={handleBlur}
-        style={{ textAlign: "center", fontSize: 14, width: "100%", height: 28, border: "none", outline: "none", background: "transparent", padding: 0, color: "inherit", fontWeight: isWinner ? 700 : 400, display: "block" }}
-      />
+    <StyledTableCell sx={{ p: 0, color: isWinner ? "#16A34A" : "inherit" }}>
+      <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", py: 0.25 }}>
+        <IconButton
+          size="small"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => handleChange(1)}
+          sx={{ p: 0.2 }}
+        >
+          <ArrowUpwardIcon sx={{ fontSize: 11 }} />
+        </IconButton>
+        <Typography sx={{ fontSize: 14, fontWeight: isWinner ? 700 : 400, lineHeight: 1 }}>
+          {score ?? 0}
+        </Typography>
+        <IconButton
+          size="small"
+          disabled={(score ?? 0) <= 0}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => handleChange(-1)}
+          sx={{ p: 0.2 }}
+        >
+          <ArrowDownwardIcon sx={{ fontSize: 11 }} />
+        </IconButton>
+      </Box>
     </StyledTableCell>
   );
 }
@@ -274,7 +291,7 @@ const SortableBracketRow = memo(function SortableBracketRow({
         const m = matchLookup.get(`${participant.id}__${colPlayer.id}`);
         const isA = m?.participant_a_id === participant.id;
         return (
-          <BracketScoreCell key={colIdx} match={m} isA={isA} leagueId={leagueId} winScore={winScore} />
+          <BracketScoreCell key={colIdx} match={m} isA={isA} leagueId={leagueId} winScore={winScore} canManage={canManage} />
         );
       })}
 

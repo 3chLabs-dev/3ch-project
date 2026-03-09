@@ -23,6 +23,7 @@ import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import ScreenRotationIcon from "@mui/icons-material/ScreenRotation";
+import RefreshIcon from "@mui/icons-material/Refresh";
 import { formatLeagueDate } from "../../utils/dateUtils";
 import { generateRoundRobin } from "../../utils/leagueUtils";
 import {
@@ -35,6 +36,7 @@ import {
   type LeagueMatch,
 } from "../../features/league/leagueApi";
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
+import { useAppSelector } from "../../app/hooks";
 
 // ─── Styled ────────────────────────────────────────────────────────────────
 const BASE_CELL = { padding: "5px 4px", textAlign: "center" as const, fontSize: 14, border: "1px solid #E5E7EB", borderRadius: "8px" };
@@ -195,11 +197,12 @@ interface BracketRowProps {
   hasPlayed: boolean;
   leagueId: string;
   is3set: boolean;
+  isMe: boolean;
 }
 
 const SortableBracketRow = memo(function SortableBracketRow({
   participant, rowIdx, n, localOrder, editMode, canManage, onMove, landscape,
-  matchLookup, wins, losses, rank, tieSetDiff, hasPlayed, leagueId, is3set,
+  matchLookup, wins, losses, rank, tieSetDiff, hasPlayed, leagueId, is3set, isMe,
 }: BracketRowProps) {
   const canDrag = editMode && canManage;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -246,10 +249,10 @@ const SortableBracketRow = memo(function SortableBracketRow({
         )}
       </NumberRowCell>
 
-      <BodyHeaderCell>
+      <BodyHeaderCell sx={isMe ? { bgcolor: "#EFF6FF" } : undefined}>
         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0.4, flexWrap: "wrap" }}>
           <DivBadge division={participant.division} />
-          <span>{participant.name}</span>
+          <span style={isMe ? { color: "#2F80ED", fontWeight: 700 } : undefined}>{participant.name}</span>
         </Box>
       </BodyHeaderCell>
 
@@ -283,19 +286,28 @@ export default function LeagueBracket() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const { data: leagueData, isLoading: leagueLoading } = useGetLeagueQuery(id ?? "", { skip: !id });
-  const { data: participantData, isLoading: participantsLoading } = useGetLeagueParticipantsQuery(id ?? "", {
+  const { data: leagueData, isLoading: leagueLoading, refetch: refetchLeague } = useGetLeagueQuery(id ?? "", { skip: !id });
+  const { data: participantData, isLoading: participantsLoading, refetch: refetchParticipants } = useGetLeagueParticipantsQuery(id ?? "", {
     skip: !id,
     pollingInterval: 15000,
   });
-  const { data: matchData } = useGetLeagueMatchesQuery(id ?? "", {
+  const { data: matchData, refetch: refetchMatches } = useGetLeagueMatchesQuery(id ?? "", {
     skip: !id,
     pollingInterval: 15000,
   });
 
+  const handleRefresh = useCallback(() => {
+    refetchLeague();
+    refetchParticipants();
+    refetchMatches();
+  }, [refetchLeague, refetchParticipants, refetchMatches]);
+
   const league = leagueData?.league;
   const { data: groupData } = useGetGroupDetailQuery(league?.group_id ?? "", { skip: !league?.group_id });
   const canManage = groupData?.myRole === "owner" || groupData?.myRole === "admin";
+
+  const authUser = useAppSelector((s) => s.auth.user);
+  const myName = groupData?.members?.find((m) => m.user_id === authUser?.id)?.name;
 
   const rawParticipants = useMemo(
     () => participantData?.participants ?? [],
@@ -559,7 +571,22 @@ export default function LeagueBracket() {
         ref={wrapperRef}
         sx={{ flex: 1, overflow: "hidden", position: "relative", minHeight: 0, bgcolor: "#F0F2F5" }}
       >
-        {/* 플로팅 회전 버튼 */}
+        {/* 플로팅 버튼 묶음 */}
+        <Tooltip title="새로고침">
+          <IconButton
+            onClick={handleRefresh}
+            sx={{
+              position: "absolute", bottom: 67, right: 14, zIndex: 10,
+              bgcolor: "#fff",
+              color: "#6B7280",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+              width: 45, height: 45,
+              "&:hover": { bgcolor: "#F3F4F6" },
+            }}
+          >
+            <RefreshIcon sx={{ fontSize: 18 }} />
+          </IconButton>
+        </Tooltip>
         <Tooltip title={landscape ? "세로 보기" : "가로 보기"}>
           <IconButton
             onClick={() => setLandscape((v) => !v)}
@@ -646,6 +673,7 @@ export default function LeagueBracket() {
                         hasPlayed={playerStats[rowIdx]?.hasPlayed ?? false}
                         leagueId={id ?? ""}
                         is3set={!!league?.rules?.includes("3세트제")}
+                        isMe={!!myName && rowPlayer.name === myName}
                       />
                     ))}
                   </TableBody>

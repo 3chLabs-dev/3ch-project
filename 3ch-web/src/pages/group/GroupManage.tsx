@@ -62,6 +62,7 @@ export default function GroupManage() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const token = useAppSelector((s) => s.auth.token);
+    const authUser = useAppSelector((s) => s.auth.user);
     const isLoggedIn = !!token;
 
     const { data, isLoading } = useGetGroupDetailQuery(id || "", {
@@ -506,7 +507,7 @@ export default function GroupManage() {
                                             <Typography
                                                 fontWeight={700} fontSize={14}
                                                 onClick={() => navigate(`/club/${id}/member/${member.user_id}`)}
-                                                sx={{ cursor: "pointer", display: "inline", textDecoration: "underline" }}
+                                                sx={{ cursor: "pointer", display: "inline", textDecoration: "underline", color: Number(member.user_id) === Number(authUser?.id) ? "#2F80ED" : "inherit" }}
                                             >
                                                 {member.name || member.email}
                                             </Typography>

@@ -35,9 +35,11 @@ import {
   useUpdateLeagueMutation,
   useAddParticipantsMutation,
   useDeleteLeagueMutation,
+  useDeleteParticipantMutation,
 } from "../../features/league/leagueApi";
 import { toUTCDate, formatLeagueDate, formatLeagueTime } from "../../utils/dateUtils";
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
+import { useAppSelector } from "../../app/hooks";
 import LoadMembersDialog from "./LoadMembersDialog";
 import type { MemberRow } from "./LoadMembersDialog";
 
@@ -110,6 +112,7 @@ export default function LeagueDetail() {
   const [alertSeverity, setAlertSeverity] = useState<"success" | "warning" | "error">("warning");
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [cancelJoinConfirm, setCancelJoinConfirm] = useState(false);
 
   const { data: leagueData, isLoading: leagueLoading, refetch: refetchLeague } = useGetLeagueQuery(id ?? "", {
     skip: !id,
@@ -119,10 +122,13 @@ export default function LeagueDetail() {
     { skip: !id, pollingInterval: 15000 },
   );
 
+  const authUser = useAppSelector((state) => state.auth.user);
+
   const [updateParticipant] = useUpdateParticipantMutation();
   const [updateLeague, { isLoading: saving }] = useUpdateLeagueMutation();
   const [addParticipants] = useAddParticipantsMutation();
   const [deleteLeague] = useDeleteLeagueMutation();
+  const [deleteParticipant] = useDeleteParticipantMutation();
 
   const { data: groupData, isLoading: groupLoading } = useGetGroupDetailQuery(leagueData?.league?.group_id ?? "", {
     skip: !leagueData?.league?.group_id,
@@ -132,12 +138,49 @@ export default function LeagueDetail() {
   const isMember = !groupLoading && !!groupData?.myRole;
 
   const league = leagueData?.league;
-  const rawParticipants = useMemo(() => participantData?.participants ?? [], [participantData]);
+
+  const myMember = useMemo(
+    () => groupData?.members?.find((m) => m.user_id === authUser?.id),
+    [groupData, authUser],
+  );
+
+  const rawParticipants = participantData?.participants ?? [];
+
+  const handleJoin = async () => {
+    if (!id || !myMember) return;
+    try {
+      await addParticipants({
+        leagueId: id,
+        participants: [{ division: myMember.division ?? "", name: myMember.name ?? "" }],
+      }).unwrap();
+      setAlertSeverity("success");
+      setAlertMsg("참가 신청이 완료되었습니다.");
+    } catch {
+      setAlertSeverity("error");
+      setAlertMsg("참가 신청에 실패했습니다.");
+    }
+  };
+
+  const handleCancelJoin = async () => {
+    if (!id) return;
+    const myParticipant = rawParticipants.find((p) => p.name === myMember?.name);
+    if (!myParticipant) return;
+    try {
+      await deleteParticipant({ leagueId: id, participantId: myParticipant.id }).unwrap();
+      setCancelJoinConfirm(false);
+      setAlertSeverity("success");
+      setAlertMsg("리그 참가 신청이 취소되었습니다.");
+    } catch {
+      setCancelJoinConfirm(false);
+      setAlertSeverity("error");
+      setAlertMsg("취소에 실패했습니다.");
+    }
+  };
 
   // 참가자 목록은 항상 부수 오름차순 + 이름 ㄱㄴㄷ 고정
   // (대진 순서는 대진표 생성 시 별도 사용)
   const participants = useMemo(() => {
-    return [...rawParticipants].sort((a, b) => {
+    return [...(participantData?.participants ?? [])].sort((a, b) => {
       const numA = parseInt(a.division ?? "", 10);
       const numB = parseInt(b.division ?? "", 10);
       const aNum = isNaN(numA) ? 9999 : numA;
@@ -145,7 +188,7 @@ export default function LeagueDetail() {
       if (aNum !== bNum) return aNum - bNum;
       return a.name.localeCompare(b.name, "ko");
     });
-  }, [rawParticipants]);
+  }, [participantData?.participants]);
 
   // 뷰 모드 검색 필터
   const filteredParticipants = useMemo(() => {
@@ -543,17 +586,19 @@ export default function LeagueDetail() {
               </Typography>
             </Box>
           ) : (
-            (isEditing ? participants : filteredParticipants).map((p, idx) => (
+            (isEditing ? participants : filteredParticipants).map((p, idx) => {
+              const isMe = !isEditing && p.name === myMember?.name;
+              return (
               <Box
                 key={p.id}
-                sx={{ display: "grid", gridTemplateColumns: "56px 1fr 130px", alignItems: "center", px: 1.5, py: 0.9, borderTop: idx === 0 ? "none" : "1px solid #F3F4F6" }}
+                sx={{ display: "grid", gridTemplateColumns: "56px 1fr 130px", alignItems: "center", px: 1.5, py: 0.9, borderTop: idx === 0 ? "none" : "1px solid #F3F4F6", bgcolor: isMe ? "#EFF6FF" : "transparent" }}
               >
                 <Box sx={{ display: "flex", justifyContent: "center" }}>
                   <Box sx={{ display: "inline-flex", alignItems: "center", justifyContent: "center", height: 36, minWidth: 36, px: 0.8, lineHeight: 1, borderRadius: 9999, bgcolor: "#FAAA47", fontSize: 11, fontWeight: 900, color: "#000000" }}>
                     {p.division || "-"}
                   </Box>
                 </Box>
-                <Typography fontWeight={800} fontSize={14} sx={{ textAlign: "center" }}>{p.name}</Typography>
+                <Typography fontWeight={800} fontSize={14} sx={{ textAlign: "center", color: isMe ? "#2F80ED" : "inherit" }}>{p.name}</Typography>
                 <Stack direction="row" spacing={0.5} justifyContent="center">
                   {(
                     [
@@ -581,7 +626,7 @@ export default function LeagueDetail() {
                   ))}
                 </Stack>
               </Box>
-            ))
+            )})
           )}
         </Box>
 
@@ -603,6 +648,51 @@ export default function LeagueDetail() {
             {league.format ? `${league.format} 대진표 생성하기` : "대진표 생성하기"}
           </Button>
         )}
+
+        {/* 참가자(회원)용 버튼 */}
+        {!isEditing && !canManage && isMember && (() => {
+          const myParticipant = rawParticipants.find((p) => p.name === myMember?.name);
+          if (league.status === "active") {
+            if (!myParticipant) return null;
+            return (
+              <Button
+                fullWidth variant="contained" disableElevation
+                sx={{ mt: 1.5, borderRadius: 1, height: 44, fontWeight: 900, fontSize: 15, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}
+                onClick={() => navigate(`/league/${id}/matches`)}
+              >
+                리그 진행 중
+              </Button>
+            );
+          }
+          if (myParticipant) {
+            return (
+              <Stack spacing={1} sx={{ mt: 1.5 }}>
+                <Button
+                  fullWidth variant="contained" disableElevation disabled
+                  sx={{ borderRadius: 1, height: 44, fontWeight: 900, fontSize: 15, bgcolor: "#E5E7EB", color: "#9CA3AF", "&.Mui-disabled": { bgcolor: "#E5E7EB", color: "#9CA3AF" } }}
+                >
+                  리그 대기중
+                </Button>
+                <Button
+                  fullWidth variant="outlined" disableElevation
+                  sx={{ borderRadius: 1, height: 36, fontWeight: 700, fontSize: 13, color: "#EF4444", borderColor: "#FCA5A5", "&:hover": { borderColor: "#EF4444", bgcolor: "#FEF2F2" } }}
+                  onClick={() => setCancelJoinConfirm(true)}
+                >
+                  참가신청 취소
+                </Button>
+              </Stack>
+            );
+          }
+          return (
+            <Button
+              fullWidth variant="contained" disableElevation
+              sx={{ mt: 1.5, borderRadius: 1, height: 44, fontWeight: 900, fontSize: 15, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}
+              onClick={handleJoin}
+            >
+              참가 신청
+            </Button>
+          );
+        })()}
       </Box>
 
       <LoadMembersDialog
@@ -722,6 +812,20 @@ export default function LeagueDetail() {
             sx={{ borderRadius: 1, px: 3, fontWeight: 700 }}
           >
             닫기
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* 참가신청 취소 확인 다이얼로그 */}
+      <Dialog open={cancelJoinConfirm} onClose={() => setCancelJoinConfirm(false)}>
+        <DialogTitle sx={{ fontWeight: 900, fontSize: 17 }}>참가신청 취소</DialogTitle>
+        <DialogContent>
+          <Typography fontWeight={700}>리그 참가 신청을 취소하겠습니까?</Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
+          <Button onClick={() => setCancelJoinConfirm(false)} sx={{ fontWeight: 700 }}>아니오</Button>
+          <Button variant="contained" color="error" disableElevation sx={{ fontWeight: 700 }} onClick={handleCancelJoin}>
+            취소하기
           </Button>
         </DialogActions>
       </Dialog>

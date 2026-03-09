@@ -97,8 +97,8 @@ router.delete("/notices/:id", async (req, res) => {
 router.get("/faqs", async (req, res) => {
   try {
     const r = await pool.query(
-      `SELECT id, question, LEFT(answer, 80) AS answer_preview, display_order, is_published, created_at
-       FROM faqs ORDER BY display_order ASC, id ASC`,
+      `SELECT id, tab, section, question, LEFT(answer, 80) AS answer_preview, display_order, is_published, created_at
+       FROM faqs ORDER BY tab ASC, section ASC, display_order ASC, id ASC`,
     );
     res.json({ faqs: r.rows });
   } catch (e) {
@@ -119,15 +119,15 @@ router.get("/faqs/:id", async (req, res) => {
 
 // POST /admin/board/faqs
 router.post("/faqs", async (req, res) => {
-  const { question, answer, display_order = 0, is_published = true } = req.body;
+  const { question, answer, tab = "member", section = "", display_order = 0, is_published = true } = req.body;
   if (!question?.trim() || !answer?.trim()) {
     return res.status(400).json({ message: "질문과 답변을 입력하세요." });
   }
   try {
     const r = await pool.query(
-      `INSERT INTO faqs (question, answer, display_order, is_published)
-       VALUES ($1, $2, $3, $4) RETURNING *`,
-      [question.trim(), answer.trim(), display_order, is_published],
+      `INSERT INTO faqs (tab, section, question, answer, display_order, is_published)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [tab, section.trim(), question.trim(), answer.trim(), display_order, is_published],
     );
     res.status(201).json(r.rows[0]);
   } catch (e) {
@@ -137,15 +137,15 @@ router.post("/faqs", async (req, res) => {
 
 // PUT /admin/board/faqs/:id
 router.put("/faqs/:id", async (req, res) => {
-  const { question, answer, display_order, is_published } = req.body;
+  const { question, answer, tab, section, display_order, is_published } = req.body;
   if (!question?.trim() || !answer?.trim()) {
     return res.status(400).json({ message: "질문과 답변을 입력하세요." });
   }
   try {
     const r = await pool.query(
-      `UPDATE faqs SET question=$1, answer=$2, display_order=$3, is_published=$4, updated_at=NOW()
-       WHERE id=$5 RETURNING *`,
-      [question.trim(), answer.trim(), display_order ?? 0, is_published ?? true, req.params.id],
+      `UPDATE faqs SET tab=$1, section=$2, question=$3, answer=$4, display_order=$5, is_published=$6, updated_at=NOW()
+       WHERE id=$7 RETURNING *`,
+      [tab ?? "member", (section ?? "").trim(), question.trim(), answer.trim(), display_order ?? 0, is_published ?? true, req.params.id],
     );
     if (r.rowCount === 0) return res.status(404).json({ message: "없음" });
     res.json(r.rows[0]);

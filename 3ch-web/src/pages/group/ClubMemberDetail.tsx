@@ -60,7 +60,9 @@ export default function ClubMemberDetail() {
             <Box flex={1}>
               <Stack direction="row" alignItems="center" spacing={1}>
                 {member.division && (
-                  <Typography fontWeight={700} fontSize={13} sx={{ color: "#6B7280" }}>{member.division}</Typography>
+                  <Box sx={{ display: "inline-flex", alignItems: "center", justifyContent: "center", height: 36, minWidth: 36, px: 0.8, borderRadius: 9999, bgcolor: "#FAAA47", fontSize: 11, fontWeight: 900, color: "#000000" }}>
+                    {member.division}
+                  </Box>
                 )}
                 <Typography fontWeight={900} fontSize={20}>{member.name}</Typography>
                 <Typography fontSize={13} color="text.secondary">({maskEmail(member.email)})</Typography>

@@ -52,7 +52,7 @@ router.get("/notices/:id", async (req, res) => {
 router.get("/faqs", async (req, res) => {
   try {
     const r = await pool.query(
-      `SELECT id, question, answer, display_order
+      `SELECT id, tab, section, question, answer, display_order
        FROM faqs
        WHERE is_published = true
        ORDER BY display_order ASC, id ASC`,

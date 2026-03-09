@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   Box, Button, Chip, Dialog, DialogContent,
-  Divider, IconButton, Stack, Switch,
+  Divider, IconButton, MenuItem, Select, Stack, Switch,
   Table, TableBody, TableCell, TableHead, TableRow,
   TextField, Typography,
 } from "@mui/material";
@@ -12,6 +12,8 @@ const API = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
 type Faq = {
   id: number;
+  tab: string;
+  section: string;
   question: string;
   answer_preview?: string;
   answer?: string;
@@ -20,8 +22,13 @@ type Faq = {
   created_at: string;
 };
 
-type FormState = { question: string; answer: string; display_order: number; is_published: boolean };
-const EMPTY_FORM: FormState = { question: "", answer: "", display_order: 0, is_published: true };
+type FormState = { tab: string; section: string; question: string; answer: string; display_order: number; is_published: boolean };
+const EMPTY_FORM: FormState = { tab: "member", section: "", question: "", answer: "", display_order: 0, is_published: true };
+
+const TAB_OPTIONS = [
+  { value: "leader", label: "리더 / 운영진" },
+  { value: "member", label: "일반 회원" },
+];
 
 function useAdminToken() {
   return localStorage.getItem("admin_token") ?? "";
@@ -54,7 +61,7 @@ export default function AdminFaqPage() {
     const res  = await fetch(`${API}/admin/board/faqs/${id}`, { headers });
     const data = await res.json();
     setEditId(id);
-    setForm({ question: data.question, answer: data.answer, display_order: data.display_order, is_published: data.is_published });
+    setForm({ tab: data.tab ?? "member", section: data.section ?? "", question: data.question, answer: data.answer, display_order: data.display_order, is_published: data.is_published });
     setAlert("");
     setDialogOpen(true);
   };
@@ -95,7 +102,9 @@ export default function AdminFaqPage() {
         <Table size="small" sx={{ tableLayout: "fixed", width: "100%" }}>
           <colgroup>
             <col style={{ width: 52 }} />
-            <col style={{ width: "25%" }} />
+            <col style={{ width: 110 }} />
+            <col style={{ width: "18%" }} />
+            <col style={{ width: "22%" }} />
             <col />
             <col style={{ width: 90 }} />
             <col style={{ width: 100 }} />
@@ -103,7 +112,7 @@ export default function AdminFaqPage() {
           </colgroup>
           <TableHead>
             <TableRow sx={{ bgcolor: "#F9FAFB" }}>
-              {(["순서", "질문", "답변 미리보기", "공개", "등록일시", "관리"] as const).map((h) => (
+              {(["순서", "탭", "섹션", "질문", "답변 미리보기", "공개", "등록일시", "관리"] as const).map((h) => (
                 <TableCell key={h} align={h === "공개" || h === "관리" ? "center" : "left"}
                   sx={{ fontWeight: 800, fontSize: 12, color: "#374151", py: 1.2, whiteSpace: "nowrap" }}>{h}</TableCell>
               ))}
@@ -112,13 +121,24 @@ export default function AdminFaqPage() {
           <TableBody>
             {faqs.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} align="center" sx={{ py: 6, color: "#9CA3AF", fontSize: 13 }}>
+                <TableCell colSpan={8} align="center" sx={{ py: 6, color: "#9CA3AF", fontSize: 13 }}>
                   등록된 FAQ가 없습니다.
                 </TableCell>
               </TableRow>
             ) : faqs.map((f) => (
               <TableRow key={f.id} hover>
                 <TableCell sx={{ fontSize: 12, color: "#6B7280" }}>{f.display_order}</TableCell>
+                <TableCell>
+                  <Chip label={f.tab === "leader" ? "리더/운영진" : "일반회원"} size="small"
+                    sx={{ fontSize: 11, fontWeight: 700,
+                      bgcolor: f.tab === "leader" ? "#EFF6FF" : "#F0FDF4",
+                      color:   f.tab === "leader" ? "#1D6FBF" : "#065F46" }} />
+                </TableCell>
+                <TableCell>
+                  <Typography sx={{ fontSize: 12, color: "#6B7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {f.section || "-"}
+                  </Typography>
+                </TableCell>
                 <TableCell>
                   <Typography sx={{ fontSize: 12, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {f.question}
@@ -182,6 +202,33 @@ export default function AdminFaqPage() {
                 <Typography fontSize={13} color="#DC2626" fontWeight={600}>{alert}</Typography>
               </Box>
             )}
+
+            {/* 탭 + 섹션 */}
+            <Stack direction="row" spacing={2}>
+              <Box sx={{ width: 160 }}>
+                <Typography fontSize={12} fontWeight={700} color="#374151" sx={{ mb: 0.8 }}>
+                  탭 <Typography component="span" color="error" fontSize={12}>*</Typography>
+                </Typography>
+                <Select
+                  size="small" fullWidth
+                  value={form.tab}
+                  onChange={(e) => setForm((p) => ({ ...p, tab: e.target.value }))}
+                >
+                  {TAB_OPTIONS.map((o) => (
+                    <MenuItem key={o.value} value={o.value} sx={{ fontSize: 13 }}>{o.label}</MenuItem>
+                  ))}
+                </Select>
+              </Box>
+              <Box flex={1}>
+                <Typography fontSize={12} fontWeight={700} color="#374151" sx={{ mb: 0.8 }}>섹션</Typography>
+                <TextField
+                  size="small" fullWidth
+                  placeholder="예: 클럽 만들기 & 멤버 관리"
+                  value={form.section}
+                  onChange={(e) => setForm((p) => ({ ...p, section: e.target.value }))}
+                />
+              </Box>
+            </Stack>
 
             {/* 질문 */}
             <Box>

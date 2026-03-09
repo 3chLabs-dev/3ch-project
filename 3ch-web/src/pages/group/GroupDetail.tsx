@@ -28,6 +28,7 @@ export default function GroupDetail() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const token = useAppSelector((s) => s.auth.token);
+    const authUser = useAppSelector((s) => s.auth.user);
     const isLoggedIn = !!token;
 
     const { data, isLoading } = useGetGroupDetailQuery(id ?? "", {
@@ -201,7 +202,7 @@ export default function GroupDetail() {
                                     />
                                     <ListItemText sx={{ flex: 1 }}
                                         primary={
-                                            <Typography fontWeight={700} fontSize={14}>
+                                            <Typography fontWeight={700} fontSize={14} sx={{ color: Number(member.user_id) === Number(authUser?.id) ? "#2F80ED" : "inherit" }}>
                                                 {member.name || member.email}
                                             </Typography>
                                         }

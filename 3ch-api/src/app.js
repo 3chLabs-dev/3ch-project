@@ -50,6 +50,8 @@ const passport = require("passport");
         updated_at    TIMESTAMPTZ  DEFAULT NOW()
       )
     `);
+    await pool.query(`ALTER TABLE faqs ADD COLUMN IF NOT EXISTS tab     VARCHAR(20)  NOT NULL DEFAULT 'member'`);
+    await pool.query(`ALTER TABLE faqs ADD COLUMN IF NOT EXISTS section VARCHAR(100) NOT NULL DEFAULT ''`);
   } catch (e) {
     console.error("DB migration error:", e.message);
   }

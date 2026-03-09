@@ -29,6 +29,7 @@ import {
   type LeagueMatch,
 } from "../../features/league/leagueApi";
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
+import { useAppSelector } from "../../app/hooks";
 
 // ─── 상태 표시 ────────────────────────────────────────────────────────────────
 const STATUS_LABEL: Record<string, string> = {
@@ -48,7 +49,7 @@ const NEXT_STATUS: Record<string, "pending" | "playing" | "done"> = {
 };
 
 // ─── 참가자 표시 ──────────────────────────────────────────────────────────────
-function ParticipantLabel({ name, division }: { name: string | null; division: string | null }) {
+function ParticipantLabel({ name, division, isMe }: { name: string | null; division: string | null; isMe?: boolean }) {
   return (
     <Stack direction="row" alignItems="center" spacing={0.5}>
       {division && (
@@ -56,7 +57,7 @@ function ParticipantLabel({ name, division }: { name: string | null; division: s
           {division}
         </Box>
       )}
-      <Typography sx={{ fontWeight: 700, fontSize: 14, lineHeight: 1.2 }}>
+      <Typography sx={{ fontWeight: 700, fontSize: 14, lineHeight: 1.2, color: isMe ? "#2F80ED" : "inherit" }}>
         {name ?? "?"}
       </Typography>
     </Stack>
@@ -65,7 +66,7 @@ function ParticipantLabel({ name, division }: { name: string | null; division: s
 
 // ─── 경기 카드 ────────────────────────────────────────────────────────────────
 function MatchCard({
-  match, index, canManage, canMember, leagueId, rules,
+  match, index, canManage, canMember, leagueId, rules, myName,
 }: {
   match: LeagueMatch;
   index: number;
@@ -73,6 +74,7 @@ function MatchCard({
   canMember: boolean;
   leagueId: string;
   rules?: string | null;
+  myName?: string;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: match.id, disabled: !canManage });
   const [updateMatch] = useUpdateLeagueMatchMutation();
@@ -139,9 +141,9 @@ function MatchCard({
         {/* Row 1: 선수 이름 + VS + 삭제 */}
         <Stack direction="row" alignItems="center" mb={1}>
           <Box flex={1} display="flex" justifyContent="center" alignItems="center" gap={1.5} flexWrap="wrap">
-            <ParticipantLabel name={match.participant_a_name} division={match.participant_a_division} />
+            <ParticipantLabel name={match.participant_a_name} division={match.participant_a_division} isMe={!!myName && match.participant_a_name === myName} />
             <Typography sx={{ fontWeight: 900, fontSize: 13, color: "#9CA3AF" }}>VS</Typography>
-            <ParticipantLabel name={match.participant_b_name} division={match.participant_b_division} />
+            <ParticipantLabel name={match.participant_b_name} division={match.participant_b_division} isMe={!!myName && match.participant_b_name === myName} />
           </Box>
           {canManage && (
             <IconButton size="small" onClick={handleDelete} sx={{ color: "#D1D5DB", p: 0.3, flexShrink: 0 }}>
@@ -256,6 +258,9 @@ export default function LeagueMatchOrder() {
     !groupLoading && (groupData?.myRole === "owner" || groupData?.myRole === "admin");
   const canMember = !groupLoading && !!groupData?.myRole;
 
+  const authUser = useAppSelector((s) => s.auth.user);
+  const myName = groupData?.members?.find((m) => m.user_id === authUser?.id)?.name;
+
   const { data: matchData, isLoading: matchLoading, refetch: refetchMatches } = useGetLeagueMatchesQuery(leagueId, { skip: !leagueId, refetchOnMountOrArgChange: true });
   const [localMatches, setLocalMatches] = useState<LeagueMatch[] | null>(null);
   const matches = useMemo(() => localMatches ?? matchData?.matches ?? [], [localMatches, matchData?.matches]);
@@ -355,6 +360,7 @@ export default function LeagueMatchOrder() {
                   canMember={canMember}
                   leagueId={leagueId}
                   rules={league?.rules}
+                  myName={myName}
                 />
               ))}
             </Stack>

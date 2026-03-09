@@ -138,7 +138,7 @@ export default function AdminShell() {
         </Box>
 
         {/* 콘텐츠 */}
-        <Box sx={{ flex: 1, p: 3 }}>
+        <Box sx={{ flex: 1, p: 3, overflow: "auto", minWidth: 0 }}>
           <Box sx={{ bgcolor: "#fff", borderRadius: 2, minHeight: 480, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
             <Outlet />
           </Box>

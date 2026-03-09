@@ -112,8 +112,16 @@ function MatchCard({
   }, [match, index, leagueId, updateMatch]);
 
   const handleDelete = useCallback(() => {
+    const aDiv = match.participant_a_division ? `(${match.participant_a_division})` : "";
+    const bDiv = match.participant_b_division ? `(${match.participant_b_division})` : "";
+    const aName = match.participant_a_name ?? "?";
+    const bName = match.participant_b_name ?? "?";
+    const sa = match.score_a ?? 0;
+    const sb = match.score_b ?? 0;
+    const msg = `${index + 1}경기\n${aDiv}${aName}(${sa}) VS (${sb})${bDiv}${bName}\n경기를 삭제하겠습니까?`;
+    if (!window.confirm(msg)) return;
     deleteMatch({ leagueId, matchId: match.id });
-  }, [match, leagueId, deleteMatch]);
+  }, [match, index, leagueId, deleteMatch]);
 
   const isPlaying = match.status === "playing";
   const isDone = match.status === "done";

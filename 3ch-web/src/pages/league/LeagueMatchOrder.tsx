@@ -377,7 +377,7 @@ export default function LeagueMatchOrder() {
                   canMember={canMember}
                   leagueId={leagueId}
                   rules={league?.rules}
-                  myName={myName}
+                  myName={myName ?? undefined}
                 />
               ))}
             </Stack>

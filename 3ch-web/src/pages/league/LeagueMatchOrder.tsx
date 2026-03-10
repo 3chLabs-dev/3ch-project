@@ -279,26 +279,29 @@ export default function LeagueMatchOrder() {
   const myName = groupData?.members?.find((m) => m.user_id === authUser?.id)?.name ?? authUser?.name ?? null;
 
   const { data: matchData, isLoading: matchLoading, refetch: refetchMatches } = useGetLeagueMatchesQuery(leagueId, { skip: !leagueId, refetchOnMountOrArgChange: true });
-  const [localMatches, setLocalMatches] = useState<LeagueMatch[] | null>(null);
-  const matches = useMemo(() => localMatches ?? matchData?.matches ?? [], [localMatches, matchData?.matches]);
+  // 순서만 로컬에 보관. 경기 데이터는 항상 RTK Query 캐시에서 가져와야 optimistic update가 즉시 반영됨
+  const [localOrder, setLocalOrder] = useState<string[] | null>(null);
+  const matches = useMemo(() => {
+    const serverMatches = matchData?.matches ?? [];
+    if (!localOrder) return serverMatches;
+    return localOrder.map((id) => serverMatches.find((m) => m.id === id)).filter((m): m is LeagueMatch => !!m);
+  }, [localOrder, matchData?.matches]);
 
   const [initMatches, { isLoading: isIniting }] = useInitLeagueMatchesMutation();
   const [reorderMatches] = useReorderLeagueMatchesMutation();
   const initCalledRef = useRef(false);
 
-  // 경기 없고 canManage 확정되면 자동 생성 (한 번만)
+  // 경기 없고 canManage 확정되면 자동 생성 (한 번만) — invalidatesTags로 자동 refetch됨
   useEffect(() => {
     if (!matchData || matchData.matches.length > 0) return;
     if (!canManage) return;
     if (initCalledRef.current) return;
     initCalledRef.current = true;
-    initMatches({ id: leagueId }).then((res) => {
-      if ("data" in res && res.data) setLocalMatches(res.data.matches);
-    });
+    initMatches({ id: leagueId });
   }, [matchData, canManage, leagueId, initMatches]);
 
   const handleRefresh = useCallback(() => {
-    setLocalMatches(null);
+    setLocalOrder(null);
     refetchMatches();
   }, [refetchMatches]);
 
@@ -314,7 +317,7 @@ export default function LeagueMatchOrder() {
     const newIdx = matches.findIndex((m) => m.id === over.id);
     if (oldIdx === -1 || newIdx === -1) return;
     const reordered = arrayMove(matches, oldIdx, newIdx);
-    setLocalMatches(reordered);
+    setLocalOrder(reordered.map((m) => m.id));
     reorderMatches({ leagueId, order: reordered.map((m) => m.id) });
   }, [matches, leagueId, reorderMatches]);
 

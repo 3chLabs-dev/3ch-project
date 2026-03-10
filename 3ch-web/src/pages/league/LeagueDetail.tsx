@@ -148,6 +148,12 @@ export default function LeagueDetail() {
 
   const handleJoin = async () => {
     if (!id || !myMember) return;
+    const isFull = league?.recruit_count != null && rawParticipants.length >= league.recruit_count;
+    if (isFull) {
+      setAlertSeverity("warning");
+      setAlertMsg(`모집 인원(${league!.recruit_count}명)이 마감되었습니다.`);
+      return;
+    }
     try {
       await addParticipants({
         leagueId: id,
@@ -990,13 +996,14 @@ export default function LeagueDetail() {
             </Stack>
           );
         }
+        const isFull = league?.recruit_count != null && rawParticipants.length >= league.recruit_count;
         return (
           <Button
-            fullWidth variant="contained" disableElevation
+            fullWidth variant="contained" disableElevation disabled={isFull}
             sx={{ borderRadius: 1, height: 44, fontWeight: 900, fontSize: 15, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}
             onClick={handleJoin}
           >
-            참가 신청
+            {isFull ? `마감 (${league!.recruit_count}/${league!.recruit_count}명)` : "참가 신청"}
           </Button>
         );
       })()}

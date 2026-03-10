@@ -551,6 +551,20 @@ router.post('/league/:leagueId/participants', requireAuth, async (req, res) => {
     }));
     const participants = addSchema.parse(rawParticipants);
 
+    // 정원 초과 체크
+    const leagueInfo = await pool.query(
+      `SELECT recruit_count, (SELECT COUNT(*) FROM league_participants WHERE league_id = $1) AS current_count
+       FROM leagues WHERE id = $1`,
+      [leagueId],
+    );
+    if (leagueInfo.rowCount === 0) {
+      return res.status(404).json({ message: '리그를 찾을 수 없습니다.' });
+    }
+    const { recruit_count, current_count } = leagueInfo.rows[0];
+    if (recruit_count && Number(current_count) + participants.length > recruit_count) {
+      return res.status(400).json({ message: `모집 인원(${recruit_count}명)을 초과할 수 없습니다.` });
+    }
+
     const inserted = [];
     for (const p of participants) {
       const result = await pool.query(
@@ -1061,6 +1075,14 @@ router.delete('/league/:leagueId/participants/:participantId', requireAuth, asyn
     if (delResult.rows.length === 0) {
       return res.status(404).json({ message: '참가자를 찾을 수 없습니다.' });
     }
+
+    // participant_count 실수 기반으로 갱신
+    await pool.query(
+      `UPDATE leagues SET participant_count = (
+         SELECT COUNT(*) FROM league_participants WHERE league_id = $1
+       ), updated_at = NOW() WHERE id = $1`,
+      [leagueId],
+    );
 
     return res.status(200).json({
       message: '참가자가 삭제되었습니다.',

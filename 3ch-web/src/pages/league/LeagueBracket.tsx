@@ -149,12 +149,13 @@ function DivBadge({ division }: { division?: string | null }) {
 }
 
 // ─── 점수 셀 (편집 가능) ───────────────────────────────────────────────────
-function BracketScoreCell({ match, isA, leagueId, winScore, canManage }: {
+function BracketScoreCell({ match, isA, leagueId, winScore, canManage, landscape }: {
   match: LeagueMatch | undefined;
   isA: boolean;
   leagueId: string;
   winScore: number | null;
   canManage: boolean;
+  landscape: boolean;
 }) {
   const [updateMatch] = useUpdateLeagueMatchMutation();
   const canEdit = canManage && (match?.status === "playing" || match?.status === "done");
@@ -180,14 +181,17 @@ function BracketScoreCell({ match, isA, leagueId, winScore, canManage }: {
       </StyledTableCell>
     );
   }
+  // 디폴트(가로) 모드는 writingMode: vertical-rl 로 테이블이 회전되어
+  // 화살표 아이콘도 ← → 로 보이므로, writingMode를 재설정해 ↑↓ 로 표시
+  const btnPadding = landscape ? 0.2 : 0.5;
   return (
     <StyledTableCell sx={{ p: 0, color: isWinner ? "#16A34A" : "inherit" }}>
-      <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", py: 0.25 }}>
+      <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", py: 0.25, ...(!landscape && { writingMode: "horizontal-tb" }) }}>
         <IconButton
           size="small"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={() => handleChange(1)}
-          sx={{ p: 0.2 }}
+          sx={{ p: btnPadding }}
         >
           <ArrowUpwardIcon sx={{ fontSize: 11 }} />
         </IconButton>
@@ -199,7 +203,7 @@ function BracketScoreCell({ match, isA, leagueId, winScore, canManage }: {
           disabled={(score ?? 0) <= 0}
           onPointerDown={(e) => e.stopPropagation()}
           onClick={() => handleChange(-1)}
-          sx={{ p: 0.2 }}
+          sx={{ p: btnPadding }}
         >
           <ArrowDownwardIcon sx={{ fontSize: 11 }} />
         </IconButton>
@@ -291,7 +295,7 @@ const SortableBracketRow = memo(function SortableBracketRow({
         const m = matchLookup.get(`${participant.id}__${colPlayer.id}`);
         const isA = m?.participant_a_id === participant.id;
         return (
-          <BracketScoreCell key={colIdx} match={m} isA={isA} leagueId={leagueId} winScore={winScore} canManage={canManage} />
+          <BracketScoreCell key={colIdx} match={m} isA={isA} leagueId={leagueId} winScore={winScore} canManage={canManage} landscape={landscape} />
         );
       })}
 

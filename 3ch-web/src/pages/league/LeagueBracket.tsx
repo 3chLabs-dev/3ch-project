@@ -198,7 +198,7 @@ function BracketScoreCell({ match, isA, leagueId, winScore, canManage, landscape
           >
             <ArrowDownwardIcon sx={{ fontSize: 11, transform: "rotate(90deg)" }} />
           </IconButton>
-          <Typography sx={{ fontSize: 14, fontWeight: isWinner ? 700 : 400, lineHeight: 1 }}>
+          <Typography sx={{ fontSize: 14, fontWeight: isWinner ? 700 : 400, lineHeight: 1, transform: "rotate(90deg)" }}>
             {score ?? 0}
           </Typography>
           <IconButton

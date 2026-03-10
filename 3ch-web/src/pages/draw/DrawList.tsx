@@ -526,7 +526,7 @@ export default function DrawList() {
               {participantRows.map((row) => (
                 <Stack key={row.id} direction="row" alignItems="center" sx={{ px: 0.5, opacity: row.weight === 0 ? 0.35 : 1 }}>
                   <Box sx={{ width: 52 }}>
-                    <Chip label={row.division} size="small" sx={{ fontSize:10, display: "inline-flex", borderRadius: 9999, height: 36, minWidth: 36, fontWeight: 800, bgcolor: "#FAAA47", color: "#000000"}} />
+                    <Chip label={row.division} size="small" sx={{ fontSize: 10, display: "inline-flex", borderRadius: 9999, height: 36, minWidth: 36, fontWeight: 800, bgcolor: "#FAAA47", color: "#000000" }} />
                   </Box>
                   <Typography sx={{ flex: 1, fontWeight: 800, fontSize: 15, textDecoration: row.weight === 0 ? "line-through" : "none" }}>{row.name}</Typography>
                   <Stack direction="row" alignItems="center" spacing={0.5} sx={{ width: 72, justifyContent: "center" }}>
@@ -549,7 +549,7 @@ export default function DrawList() {
         <Divider sx={{ my: 0.5 }} />
 
         <Stack direction="row" spacing={1}>
-          {!draftId && (
+          {!draftId ? (
             <Button
               fullWidth
               variant="outlined"
@@ -560,18 +560,17 @@ export default function DrawList() {
             >
               {isSavingDraft ? "저장 중..." : "경품 저장"}
             </Button>
-          )}
-          {draftId && (
-            <Button
-              fullWidth
-              variant="contained"
-              onClick={handleRunDraw}
-              disableElevation
-              sx={{ borderRadius: 1, py: 1.1, fontWeight: 700 }}
-            >
-              자동 추첨
-            </Button>
-          )}
+          ) : ( 
+                      <Button
+            fullWidth
+            variant="contained"
+            onClick={handleRunDraw}
+            disableElevation
+            sx={{ borderRadius: 1, py: 1.1, fontWeight: 700 }}
+          >
+            자동 추첨
+          </Button>
+  )}
         </Stack>
 
         <Snackbar open={!!alertMsg} autoHideDuration={2500} onClose={() => setAlertMsg("")} anchorOrigin={{ vertical: "bottom", horizontal: "center" }}>

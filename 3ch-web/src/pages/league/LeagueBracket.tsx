@@ -181,12 +181,41 @@ function BracketScoreCell({ match, isA, leagueId, winScore, canManage, landscape
       </StyledTableCell>
     );
   }
-  // 디폴트(가로) 모드는 writingMode: vertical-rl 로 테이블이 회전되어
-  // 화살표 아이콘도 ← → 로 보이므로, writingMode를 재설정해 ↑↓ 로 표시
+  // 세로 모드(landscape): ↑ score ↓ 세로 배치
+  // 디폴트 모드(!landscape): writingMode 재설정 후 ← score → 가로 배치
+  // (← = 감소, → = 증가 / 화살표 90° 회전으로 방향 표현)
   const btnPadding = landscape ? 0.2 : 0.5;
+  if (!landscape) {
+    return (
+      <StyledTableCell sx={{ p: 0, color: isWinner ? "#16A34A" : "inherit", verticalAlign: "middle" }}>
+        <Box sx={{ display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "center", writingMode: "horizontal-tb", px: 0.5, height: "100%" }}>
+          <IconButton
+            size="small"
+            disabled={(score ?? 0) <= 0}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={() => handleChange(-1)}
+            sx={{ p: btnPadding }}
+          >
+            <ArrowDownwardIcon sx={{ fontSize: 11, transform: "rotate(90deg)" }} />
+          </IconButton>
+          <Typography sx={{ fontSize: 14, fontWeight: isWinner ? 700 : 400, lineHeight: 1 }}>
+            {score ?? 0}
+          </Typography>
+          <IconButton
+            size="small"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={() => handleChange(1)}
+            sx={{ p: btnPadding }}
+          >
+            <ArrowUpwardIcon sx={{ fontSize: 11, transform: "rotate(90deg)" }} />
+          </IconButton>
+        </Box>
+      </StyledTableCell>
+    );
+  }
   return (
     <StyledTableCell sx={{ p: 0, color: isWinner ? "#16A34A" : "inherit" }}>
-      <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", py: 0.25, ...(!landscape && { writingMode: "horizontal-tb" }) }}>
+      <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", py: 0.25 }}>
         <IconButton
           size="small"
           onPointerDown={(e) => e.stopPropagation()}

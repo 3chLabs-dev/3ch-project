@@ -651,7 +651,7 @@ export default function LeagueDetail() {
             sx={{ mt: 1, borderRadius: 1, height: 40, fontWeight: 700, bgcolor: "#87B8FF", "&:hover": { bgcolor: "#79AEFF" } }}
             onClick={() => { navigate(`/league/${id}/bracket`) }}
           >
-            {league.format ? `${league.format} 대진표 보기 / 조편성 보기` : "대진표 보기 / 조편성 보기"}
+            {league.format ? `${league.format} 대진표 보기` : "대진표 보기"}
           </Button>
         )}
       </Box>

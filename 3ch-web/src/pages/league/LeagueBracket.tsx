@@ -67,6 +67,12 @@ function getWinScore(rules?: string | null): number | null {
   return null;
 }
 
+const NEXT_STATUS: Record<string, "pending" | "playing" | "done"> = {
+  pending: "playing",
+  playing: "done",
+  done: "done",
+};
+
 // ─── Styled 셀 ────────────────────────────────────────────────────────────────
 // 모든 셀의 공통 베이스 스타일 (padding / 정렬 / 테두리)
 const BASE_CELL = { padding: "5px 4px", textAlign: "center" as const, fontSize: 14, border: "1px solid #E5E7EB", borderRadius: "8px" };
@@ -464,11 +470,33 @@ function useMatchStats(localOrder: LeagueParticipantItem[], matches: LeagueMatch
  * - landscape: 테이블 아래에 세로로 붙음 (mt: 1.5)
  * - portrait:  테이블 오른쪽에 가로로 붙음 (mr: 1.5)
  */
-function MatchSchedulePanel({ matches, localOrder, landscape }: {
+function MatchSchedulePanel({ matches, localOrder, landscape, leagueId }: {
   matches: LeagueMatch[];
   localOrder: LeagueParticipantItem[];
   landscape: boolean;
+  leagueId: string;
 }) {
+  const [updateMatch] = useUpdateLeagueMatchMutation();
+
+  const handleStatus = useCallback((match: LeagueMatch, index: number) => {
+  const aDiv = match.participant_a_division ? `(${match.participant_a_division})` : "";
+  const bDiv = match.participant_b_division ? `(${match.participant_b_division})` : "";
+  const aName = match.participant_a_name ?? "?";
+  const bName = match.participant_b_name ?? "?";
+  const sa = match.score_a ?? 0;
+  const sb = match.score_b ?? 0;
+
+  if (match.status === "pending") {
+    const msg = `${index + 1}경기\n${aDiv}${aName}(${sa}) VS (${sb})${bDiv}${bName}\n시작하겠습니까?`;
+    if (!window.confirm(msg)) return;
+  } else if (match.status === "playing") {
+    const msg = `${index + 1}경기\n${aDiv}${aName}(${sa}) VS (${sb})${bDiv}${bName}\n종료되었습니까?`;
+    if (!window.confirm(msg)) return;
+  }
+
+  updateMatch({ leagueId, matchId: match.id, updates: { status: NEXT_STATUS[match.status], score_a: sa, score_b: sb } });
+
+}, [leagueId, updateMatch]);
   return (
     <Box sx={{ mt: landscape ? 1.5 : 0, mr: landscape ? 0 : 1.5 }}>
       <Box sx={{ bgcolor: COLOR.darkCard, borderRadius: "12px", px: 1.5, py: 1, display: "flex", alignItems: "center", gap: 1.5, minHeight: 72 }}>
@@ -481,7 +509,7 @@ function MatchSchedulePanel({ matches, localOrder, landscape }: {
 
         {/* 가로 스크롤 가능한 경기 카드 목록 */}
         <Box sx={{ display: "flex", gap: 0.75, overflowX: "auto", flex: 1, "&::-webkit-scrollbar": { display: "none" } }}>
-          {matches.map((m) => {
+          {matches.map((m, i) => {
             const p1Idx = localOrder.findIndex((p) => p.id === m.participant_a_id);
             const p2Idx = localOrder.findIndex((p) => p.id === m.participant_b_id);
             // 참가자 목록에 없는 경기는 표시 생략
@@ -496,7 +524,7 @@ function MatchSchedulePanel({ matches, localOrder, landscape }: {
             const courtColor = m.court ? (isPlaying ? "white" : "#9CA3AF") : "#374151";
 
             return (
-              <Box key={m.id} sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.5, flexShrink: 0 }}>
+              <Box key={m.id} onClick={() => handleStatus(m, i)} sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.5, flexShrink: 0 }}>
                 {/* 시드 번호 카드 */}
                 <Box sx={{ bgcolor: cardBg, borderRadius: "5px", px: 1.25, py: 0.75, textAlign: "center", minWidth: 42, display: "flex", flexDirection: "column", alignItems: "center" }}>
                   <Typography sx={{ color: numColor, fontSize: 14, fontWeight: 800, lineHeight: 1.3 }}>{p1Idx + 1}</Typography>
@@ -850,7 +878,7 @@ export default function LeagueBracket() {
           </DndContext>
 
           {/* 경기 순서 패널 */}
-          <MatchSchedulePanel matches={matches} localOrder={localOrder} landscape={landscape} />
+          <MatchSchedulePanel matches={matches} localOrder={localOrder} landscape={landscape} leagueId={id ?? ""} />
         </Box>
       </Box>
     </Box>,

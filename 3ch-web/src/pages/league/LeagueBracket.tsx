@@ -313,10 +313,12 @@ const SortableBracketRow = memo(function SortableBracketRow({
           ) : (
             // 세로(portrait): writingMode 상속으로 인한 90° 회전 보정
             // BracketScoreCell portrait 처리와 동일한 방식
+            // portrait에서 부모 vertical-rl이 90° 회전 → 물리적 좌=시각적 상, 물리적 우=시각적 하
+            // 따라서 시각적으로 ↑(위)가 먼저 보이려면 물리적으로 down을 먼저 배치
             <Box sx={{ display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "center", writingMode: "horizontal-tb", px: 0.25, height: "100%" }}>
-              <ScoreButton icon="up"   padding={0.25} rotate disabled={rowIdx === 0}     onClick={() => onMove(rowIdx, "up")} />
-              <Typography sx={{ fontSize: 11, lineHeight: 1, transform: "rotate(90deg)" }}>{rowIdx + 1}</Typography>
               <ScoreButton icon="down" padding={0.25} rotate disabled={rowIdx === n - 1} onClick={() => onMove(rowIdx, "down")} />
+              <Typography sx={{ fontSize: 11, lineHeight: 1, transform: "rotate(90deg)" }}>{rowIdx + 1}</Typography>
+              <ScoreButton icon="up"   padding={0.25} rotate disabled={rowIdx === 0}     onClick={() => onMove(rowIdx, "up")} />
             </Box>
           )
         ) : (

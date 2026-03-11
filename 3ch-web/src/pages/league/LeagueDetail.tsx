@@ -645,7 +645,7 @@ export default function LeagueDetail() {
             경품 추첨
           </Button>
         )}
-        {!isEditing && league.status === "active" && (
+        {((!isEditing && league.status === "active") || !isEditing && canManage) && (
           <Button
             fullWidth variant="contained" disableElevation
             sx={{ mt: 1, borderRadius: 1, height: 40, fontWeight: 700, bgcolor: "#87B8FF", "&:hover": { bgcolor: "#79AEFF" } }}

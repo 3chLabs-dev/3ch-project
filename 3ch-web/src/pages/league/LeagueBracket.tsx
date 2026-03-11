@@ -37,62 +37,52 @@ import {
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
 import { useAppSelector } from "../../app/hooks";
 
+// ─── 색상 상수 ────────────────────────────────────────────────────────────────
+// 매직 컬러 문자열을 한 곳에서 관리. 디자인 변경 시 여기만 수정하면 됨
+const COLOR = {
+  win:         "#16A34A", // 승리 (초록)
+  loss:        "#DC2626", // 패배 / 1위 (빨강)
+  primary:     "#2563EB", // 주요 액션 버튼
+  divBadge:    "#FAAA47", // 부수 배지 배경 (주황)
+  myHighlight: "#EFF6FF", // 내 행 하이라이트 (연파랑 배경)
+  myText:      "#2F80ED", // 내 이름 텍스트 색
+  darkCard:    "#1A1D2E", // 경기 순서 패널 배경
+} as const;
+
+// ─── 유틸 ─────────────────────────────────────────────────────────────────────
+/**
+ * 경기 규칙 문자열에서 "선승 점수"를 반환한다.
+ * - 3세트제: null (선승 개념 없음, 무조건 3세트 진행)
+ * - 3전 2선승: 2
+ * - 5전 3선승: 3
+ * - 7전 4선승: 4
+ * BracketScoreCell에서 이 값을 이용해 승리한 선수의 점수를 초록색 볼드로 표시
+ */
 function getWinScore(rules?: string | null): number | null {
   if (!rules) return null;
-  if (rules.includes("3세트제")) return null;
-  if (rules.includes("3전 2선승")) return 2;
-  if (rules.includes("5전 3선승")) return 3;
-  if (rules.includes("7전 4선승")) return 4;
+  if (rules.includes("3세트제"))    return null;
+  if (rules.includes("3전 2선승"))  return 2;
+  if (rules.includes("5전 3선승"))  return 3;
+  if (rules.includes("7전 4선승"))  return 4;
   return null;
 }
 
-// ─── Styled ────────────────────────────────────────────────────────────────
+// ─── Styled 셀 ────────────────────────────────────────────────────────────────
+// 모든 셀의 공통 베이스 스타일 (padding / 정렬 / 테두리)
 const BASE_CELL = { padding: "5px 4px", textAlign: "center" as const, fontSize: 14, border: "1px solid #E5E7EB", borderRadius: "8px" };
 
-const StyledTableCell = styled(TableCell)(() => ({ ...BASE_CELL, width: 65 }));
+const StyledTableCell  = styled(TableCell)(() => ({ ...BASE_CELL, width: 65 }));
+// 헤더 1행: 시드 번호 (파란 원) / 승·패·순위 등 집계 컬럼 헤더
+const NumberHeaderCell = styled(TableCell)(({ theme }) => ({ ...BASE_CELL, width: 65, fontWeight: 600, backgroundColor: theme.palette.grey[200], whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }));
+// 바디 행의 시드 번호 셀 (드래그 핸들 겸용)
+const NumberRowCell    = styled(TableCell)(({ theme }) => ({ ...BASE_CELL, width: 65, fontWeight: 600, backgroundColor: theme.palette.grey[200] }));
+// 헤더 2행: 열 방향 참가자 이름 (세로 텍스트 환경에서 최소 높이 확보)
+const NameHeaderCell   = styled(TableCell)(({ theme }) => ({ ...BASE_CELL, width: 65, maxWidth: 65, fontWeight: 500, fontSize: 11, backgroundColor: theme.palette.grey[100], whiteSpace: "normal", wordBreak: "keep-all", lineHeight: 1.3 }));
+// 바디 행의 행 방향 참가자 이름 셀
+const BodyHeaderCell   = styled(TableCell)(({ theme }) => ({ ...BASE_CELL, width: 65, maxWidth: 65, fontWeight: 600, fontSize: 11, backgroundColor: theme.palette.grey[100], whiteSpace: "normal", wordBreak: "keep-all", lineHeight: 1.3 }));
 
-const NumberHeaderCell = styled(TableCell)(({ theme }) => ({
-  ...BASE_CELL,
-  width: 65,
-  fontWeight: 600,
-  backgroundColor: theme.palette.grey[200],
-  whiteSpace: "nowrap",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-}));
-
-const NumberRowCell = styled(TableCell)(({ theme }) => ({
-  ...BASE_CELL,
-  width: 65,
-  fontWeight: 600,
-  backgroundColor: theme.palette.grey[200],
-}));
-
-const NameHeaderCell = styled(TableCell)(({ theme }) => ({
-  ...BASE_CELL,
-  width: 65,
-  maxWidth: 65,
-  fontWeight: 500,
-  fontSize: 11,
-  backgroundColor: theme.palette.grey[100],
-  whiteSpace: "normal",
-  wordBreak: "keep-all",
-  lineHeight: 1.3,
-}));
-
-const BodyHeaderCell = styled(TableCell)(({ theme }) => ({
-  ...BASE_CELL,
-  width: 65,
-  maxWidth: 65,
-  fontWeight: 600,
-  fontSize: 11,
-  backgroundColor: theme.palette.grey[100],
-  whiteSpace: "normal",
-  wordBreak: "keep-all",
-  lineHeight: 1.3,
-}));
-
-// ─── 대각선 셀 ─────────────────────────────────────────────────────────────
+// ─── 대각선 셀 ────────────────────────────────────────────────────────────────
+// 같은 참가자끼리 교차하는 셀 (자기 자신과의 대결은 없으므로 대각선 빗금 처리)
 const DiagonalBase = styled(TableCell)(({ theme }) => ({
   position: "relative",
   padding: 0,
@@ -103,22 +93,28 @@ const DiagonalBase = styled(TableCell)(({ theme }) => ({
   backgroundColor: theme.palette.action.disabledBackground,
 }));
 
+/**
+ * 대각선 빗금 셀
+ * - ResizeObserver로 셀의 실제 크기를 측정해 빗금 각도(angle)를 동적 계산
+ * - landscape=true: 양수 각도 / false: 음수 각도 (writingMode 90° 회전에 대응)
+ */
 function DiagonalScoreCell({ landscape }: { landscape: boolean }) {
   const ref = useRef<HTMLTableCellElement>(null);
   const [angle, setAngle] = useState(45);
+
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
     const calc = () => {
       const { offsetWidth: w, offsetHeight: h } = el;
-      if (!w || !h) return;
-      setAngle((Math.atan(h / w) * 180) / Math.PI);
+      if (w && h) setAngle((Math.atan(h / w) * 180) / Math.PI);
     };
     calc();
     const ro = new ResizeObserver(calc);
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
   return (
     <DiagonalBase
       ref={ref}
@@ -129,7 +125,9 @@ function DiagonalScoreCell({ landscape }: { landscape: boolean }) {
   );
 }
 
-// ─── 부 배지 ───────────────────────────────────────────────────────────────
+// ─── 부 배지 ──────────────────────────────────────────────────────────────────
+// 참가자 이름 옆에 표시하는 "부수" 원형 배지 (예: 3부 → "3")
+// division이 없으면 렌더링하지 않음
 function DivBadge({ division }: { division?: string | null }) {
   if (!division) return null;
   return (
@@ -138,7 +136,7 @@ function DivBadge({ division }: { division?: string | null }) {
       sx={{
         display: "inline-flex", alignItems: "center", justifyContent: "center",
         width: 20, height: 20, borderRadius: "50%",
-        bgcolor: "#FAAA47", color: "#000000",
+        bgcolor: COLOR.divBadge, color: "#000",
         fontSize: 9, fontWeight: 900, lineHeight: 1,
         flexShrink: 0, verticalAlign: "middle",
       }}
@@ -148,121 +146,138 @@ function DivBadge({ division }: { division?: string | null }) {
   );
 }
 
-// ─── 점수 셀 (편집 가능) ───────────────────────────────────────────────────
+// ─── 점수 조정 버튼 (공통) ────────────────────────────────────────────────────
+// BracketScoreCell(점수 조정)과 SortableBracketRow(시드 순서 이동)에서 공통 사용
+// - rotate=true: writingMode가 90° 회전된 portrait 모드에서 화살표 방향 보정
+// - onPointerDown stopPropagation: DnD 드래그 이벤트와 충돌 방지
+function ScoreButton({ icon, disabled, padding, rotate, onClick }: {
+  icon: "up" | "down";
+  disabled?: boolean;
+  padding: number;
+  rotate?: boolean;
+  onClick: () => void;
+}) {
+  const Icon = icon === "up" ? ArrowUpwardIcon : ArrowDownwardIcon;
+  return (
+    <IconButton
+      size="small"
+      disabled={disabled}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={onClick}
+      sx={{ p: padding }}
+    >
+      <Icon sx={{ fontSize: 11, ...(rotate && { transform: "rotate(90deg)" }) }} />
+    </IconButton>
+  );
+}
+
+// ─── 점수 셀 (편집 가능) ──────────────────────────────────────────────────────
+/**
+ * 대진표의 각 교차 점수 셀
+ *
+ * 표시 조건:
+ * - match가 없거나 pending 상태: 빈 칸
+ * - playing / done 상태: 점수 표시
+ *
+ * 편집 조건 (canEdit = canManage && isActive):
+ * - 관리자/오너/리그 생성자만 편집 가능
+ * - playing 또는 done 상태인 경기만 편집 가능 (pending은 불가)
+ * - editMode(시드 순서 수정 모드)와는 무관하게 항상 편집 가능
+ *
+ * 방향별 레이아웃:
+ * - landscape(가로): ↑ 점수 ↓ 세로 배치
+ * - portrait(세로, writingMode 적용): ← 점수 → 가로 배치 + 아이콘 90° 회전
+ */
 function BracketScoreCell({ match, isA, leagueId, winScore, canManage, landscape }: {
   match: LeagueMatch | undefined;
-  isA: boolean;
+  isA: boolean;         // 현재 행 참가자가 해당 경기의 A선수인지 여부
   leagueId: string;
-  winScore: number | null;
+  winScore: number | null; // 선승 기준 점수 (null이면 선승제 아님)
   canManage: boolean;
   landscape: boolean;
 }) {
   const [updateMatch] = useUpdateLeagueMatchMutation();
-  const canEdit = canManage && (match?.status === "playing" || match?.status === "done");
-  const score = (match?.status === "playing" || match?.status === "done")
-    ? ((isA ? match!.score_a : match!.score_b) ?? 0)
-    : null;
-  const opp = (match?.status === "playing" || match?.status === "done")
-    ? ((isA ? match!.score_b : match!.score_a) ?? 0)
-    : null;
-  const isWinner = winScore !== null && match?.status === "done" && score !== null && opp !== null && score === winScore;
+
+  const isActive = match?.status === "playing" || match?.status === "done";
+  const score    = isActive ? ((isA ? match!.score_a : match!.score_b) ?? 0) : null;
+  const oppScore = isActive ? ((isA ? match!.score_b : match!.score_a) ?? 0) : null;
+  // 선승제에서 정확히 winScore 점을 획득한 경우 → 승자 스타일 적용
+  const isWinner = winScore !== null && match?.status === "done" && score !== null && oppScore !== null && score === winScore;
+  const canEdit  = canManage && isActive;
 
   const handleChange = (delta: number) => {
     if (!match || !canEdit) return;
-    const cur = (isA ? match.score_a : match.score_b) ?? 0;
-    const next = Math.max(0, cur + delta);
+    const cur  = (isA ? match.score_a : match.score_b) ?? 0;
+    const next = Math.max(0, cur + delta); // 0 미만 방지
     updateMatch({ leagueId, matchId: match.id, updates: isA ? { score_a: next } : { score_b: next } });
   };
 
+  const winnerStyle = { color: isWinner ? COLOR.win : "inherit", fontWeight: isWinner ? 700 : 400 };
+
+  // 편집 불가: 점수 숫자만 표시 (빈 칸 또는 숫자)
   if (!canEdit) {
-    return (
-      <StyledTableCell sx={{ color: isWinner ? "#16A34A" : "inherit", fontWeight: isWinner ? 700 : 400 }}>
-        {score !== null ? score : ""}
-      </StyledTableCell>
-    );
+    return <StyledTableCell sx={winnerStyle}>{score !== null ? score : ""}</StyledTableCell>;
   }
-  // 세로 모드(landscape): ↑ score ↓ 세로 배치
-  // 디폴트 모드(!landscape): writingMode 재설정 후 ← score → 가로 배치
-  // (← = 감소, → = 증가 / 화살표 90° 회전으로 방향 표현)
+
   const btnPadding = landscape ? 0.2 : 0.5;
-  if (!landscape) {
+
+  // 가로(landscape) 모드: 위·아래 화살표로 점수 조정
+  if (landscape) {
     return (
-      <StyledTableCell sx={{ p: 0, color: isWinner ? "#16A34A" : "inherit", verticalAlign: "middle" }}>
-        <Box sx={{ display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "center", writingMode: "horizontal-tb", px: 0.5, height: "100%" }}>
-          <IconButton
-            size="small"
-            disabled={(score ?? 0) <= 0}
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={() => handleChange(-1)}
-            sx={{ p: btnPadding }}
-          >
-            <ArrowDownwardIcon sx={{ fontSize: 11, transform: "rotate(90deg)" }} />
-          </IconButton>
-          <Typography sx={{ fontSize: 14, fontWeight: isWinner ? 700 : 400, lineHeight: 1, transform: "rotate(90deg)" }}>
-            {score ?? 0}
-          </Typography>
-          <IconButton
-            size="small"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={() => handleChange(1)}
-            sx={{ p: btnPadding }}
-          >
-            <ArrowUpwardIcon sx={{ fontSize: 11, transform: "rotate(90deg)" }} />
-          </IconButton>
+      <StyledTableCell sx={{ p: 0, ...winnerStyle }}>
+        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", py: 0.25 }}>
+          <ScoreButton icon="up"   padding={btnPadding} onClick={() => handleChange(1)} />
+          <Typography sx={{ fontSize: 14, ...winnerStyle, lineHeight: 1 }}>{score ?? 0}</Typography>
+          <ScoreButton icon="down" padding={btnPadding} disabled={(score ?? 0) <= 0} onClick={() => handleChange(-1)} />
         </Box>
       </StyledTableCell>
     );
   }
+
+  // 세로(portrait) 모드: writingMode="vertical-rl"로 인해 물리적으로 90° 회전된 상태
+  // → 내부 요소를 horizontal-tb로 되돌리고, 아이콘도 90° 보정해서 시각적으로 좌우 화살표처럼 보이게 함
   return (
-    <StyledTableCell sx={{ p: 0, color: isWinner ? "#16A34A" : "inherit" }}>
-      <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", py: 0.25 }}>
-        <IconButton
-          size="small"
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={() => handleChange(1)}
-          sx={{ p: btnPadding }}
-        >
-          <ArrowUpwardIcon sx={{ fontSize: 11 }} />
-        </IconButton>
-        <Typography sx={{ fontSize: 14, fontWeight: isWinner ? 700 : 400, lineHeight: 1 }}>
-          {score ?? 0}
-        </Typography>
-        <IconButton
-          size="small"
-          disabled={(score ?? 0) <= 0}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={() => handleChange(-1)}
-          sx={{ p: btnPadding }}
-        >
-          <ArrowDownwardIcon sx={{ fontSize: 11 }} />
-        </IconButton>
+    <StyledTableCell sx={{ p: 0, color: isWinner ? COLOR.win : "inherit", verticalAlign: "middle" }}>
+      <Box sx={{ display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "center", writingMode: "horizontal-tb", px: 0.5, height: "100%" }}>
+        <ScoreButton icon="down" padding={btnPadding} rotate disabled={(score ?? 0) <= 0} onClick={() => handleChange(-1)} />
+        <Typography sx={{ fontSize: 14, ...winnerStyle, lineHeight: 1, transform: "rotate(90deg)" }}>{score ?? 0}</Typography>
+        <ScoreButton icon="up"   padding={btnPadding} rotate onClick={() => handleChange(1)} />
       </Box>
     </StyledTableCell>
   );
 }
 
-// ─── Sortable 행 컴포넌트 ──────────────────────────────────────────────────
+// ─── Sortable 행 ──────────────────────────────────────────────────────────────
 interface BracketRowProps {
   participant: LeagueParticipantItem;
-  rowIdx: number;
-  n: number;
-  localOrder: LeagueParticipantItem[];
-  editMode: boolean;
-  reorderMode: "push";
-  canManage: boolean;
-  onMove: (idx: number, dir: "up" | "down") => void;
+  rowIdx: number;       // 현재 행의 인덱스 (0-based)
+  n: number;            // 전체 참가자 수 (첫/마지막 행 이동 비활성화에 사용)
+  localOrder: LeagueParticipantItem[]; // 현재 표시 순서 (열 헤더와 동기화용)
+  editMode: boolean;    // 시드 순서 편집 모드 여부
+  canManage: boolean;   // 관리 권한 (오너/어드민/생성자)
+  onMove: (idx: number, dir: "up" | "down") => void; // 버튼 클릭 이동 핸들러
   landscape: boolean;
-  matchLookup: Map<string, LeagueMatch>;
+  matchLookup: Map<string, LeagueMatch>; // "aId__bId" 키로 경기 빠르게 조회
   wins: number;
   losses: number;
   rank: number;
-  tieSetDiff: string;
-  hasPlayed: boolean;
+  tieSetDiff: string;   // 동점자 처리용 직접 대결 득실 (예: "5/3")
+  hasPlayed: boolean;   // 한 경기라도 완료되었는지 (false면 집계 셀 빈 칸)
   leagueId: string;
   winScore: number | null;
-  isMe: boolean;
+  isMe: boolean;        // 현재 로그인 유저와 동일 여부 (하이라이트 용)
 }
 
+/**
+ * 대진표 한 행 (참가자 1명)
+ *
+ * memo 적용: matchLookup / playerStats 등 부모에서 useMemo로 관리되므로
+ * 관련 없는 다른 참가자 행이 리렌더링되지 않도록 방지
+ *
+ * 드래그 앤 드롭:
+ * - editMode && canManage일 때만 드래그 활성화 (useSortable disabled 옵션)
+ * - 시드 번호 셀 자체가 드래그 핸들 역할을 겸함
+ */
 const SortableBracketRow = memo(function SortableBracketRow({
   participant, rowIdx, n, localOrder, editMode, canManage, onMove, landscape,
   matchLookup, wins, losses, rank, tieSetDiff, hasPlayed, leagueId, winScore, isMe,
@@ -277,135 +292,317 @@ const SortableBracketRow = memo(function SortableBracketRow({
       sx={{
         transform: CSS.Transform.toString(transform),
         transition,
-        opacity: isDragging ? 0.4 : 1,
+        opacity: isDragging ? 0.4 : 1,   // 드래그 중인 행 반투명
         zIndex: isDragging ? 99 : "auto",
         bgcolor: isDragging ? "action.hover" : "inherit",
       }}
     >
-      {/* 시드 번호 셀: 드래그 핸들 + 모드별 버튼 */}
+      {/* 시드 번호 셀: 편집 모드에서는 ↑↓ 버튼 + 드래그 핸들로 전환 */}
       <NumberRowCell
         sx={{ p: 0.5, ...(canDrag && { cursor: "grab", touchAction: "none" }) }}
         {...(canDrag ? { ...attributes, ...listeners } : {})}
       >
         {editMode && canManage ? (
-            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-              <IconButton
-                size="small" disabled={rowIdx === 0}
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={() => onMove(rowIdx, "up")}
-                sx={{ p: 0.25 }}
-              >
-                <ArrowUpwardIcon sx={{ fontSize: 13 }} />
-              </IconButton>
-              <Typography sx={{ fontSize: 11, lineHeight: 1 }}>{rowIdx + 1}</Typography>
-              <IconButton
-                size="small" disabled={rowIdx === n - 1}
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={() => onMove(rowIdx, "down")}
-                sx={{ p: 0.25 }}
-              >
-                <ArrowDownwardIcon sx={{ fontSize: 13 }} />
-              </IconButton>
-            </Box>
+          <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+            <ScoreButton icon="up"   padding={0.25} disabled={rowIdx === 0}     onClick={() => onMove(rowIdx, "up")} />
+            <Typography sx={{ fontSize: 11, lineHeight: 1 }}>{rowIdx + 1}</Typography>
+            <ScoreButton icon="down" padding={0.25} disabled={rowIdx === n - 1} onClick={() => onMove(rowIdx, "down")} />
+          </Box>
         ) : (
           rowIdx + 1
         )}
       </NumberRowCell>
 
-      <BodyHeaderCell sx={isMe ? { bgcolor: "#EFF6FF" } : undefined}>
+      {/* 행 방향 이름: 본인이면 파란 텍스트 + 연파랑 배경 */}
+      <BodyHeaderCell sx={isMe ? { bgcolor: COLOR.myHighlight } : undefined}>
         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0.4, flexWrap: "wrap" }}>
           <DivBadge division={participant.division} />
-          <span style={isMe ? { color: "#2F80ED", fontWeight: 700 } : undefined}>{participant.name}</span>
+          <span style={isMe ? { color: COLOR.myText, fontWeight: 700 } : undefined}>{participant.name}</span>
         </Box>
       </BodyHeaderCell>
 
+      {/* 점수 셀: 같은 인덱스(자기 자신)는 대각선 셀, 나머지는 점수 편집 셀 */}
       {localOrder.map((colPlayer, colIdx) => {
         if (rowIdx === colIdx) return <DiagonalScoreCell key={colIdx} landscape={landscape} />;
-        const m = matchLookup.get(`${participant.id}__${colPlayer.id}`);
+        const m   = matchLookup.get(`${participant.id}__${colPlayer.id}`);
         const isA = m?.participant_a_id === participant.id;
         return (
           <BracketScoreCell key={colIdx} match={m} isA={isA} leagueId={leagueId} winScore={winScore} canManage={canManage} landscape={landscape} />
         );
       })}
 
-      <StyledTableCell sx={{ bgcolor: "#F0FDF4", color: wins > 0 ? "#16A34A" : "inherit", fontWeight: wins > 0 ? 700 : 400 }}>
+      {/* 집계 셀: 한 경기도 완료 전(hasPlayed=false)이면 빈 칸으로 표시 */}
+      <StyledTableCell sx={{ bgcolor: "#F0FDF4", color: wins > 0 ? COLOR.win : "inherit", fontWeight: wins > 0 ? 700 : 400 }}>
         {hasPlayed ? wins : ""}
       </StyledTableCell>
-      <StyledTableCell sx={{ bgcolor: "#FFF1F2", color: losses > 0 ? "#DC2626" : "inherit" }}>
+      <StyledTableCell sx={{ bgcolor: "#FFF1F2", color: losses > 0 ? COLOR.loss : "inherit" }}>
         {hasPlayed ? losses : ""}
       </StyledTableCell>
-      <StyledTableCell sx={{ color: rank === 1 && hasPlayed ? "#DC2626" : "inherit", fontWeight: rank === 1 && hasPlayed ? 700 : 400 }}>
+      {/* 1위는 빨간 볼드로 강조 */}
+      <StyledTableCell sx={{ color: rank === 1 && hasPlayed ? COLOR.loss : "inherit", fontWeight: rank === 1 && hasPlayed ? 700 : 400 }}>
         {hasPlayed ? rank : ""}
       </StyledTableCell>
-      <StyledTableCell>
-        {tieSetDiff || ""}
-      </StyledTableCell>
+      {/* 동점자 직접 대결 득실 (동점이 없으면 빈 칸) */}
+      <StyledTableCell>{tieSetDiff || ""}</StyledTableCell>
     </TableRow>
   );
 });
 
-// ──────────────────────────────────────────────────────────────────────────
+// ─── 커스텀 훅: 경기 통계 / 순위 계산 ───────────────────────────────────────
+/**
+ * 참가자별 승/패 집계 + 동점자 처리 순위를 계산한다.
+ *
+ * 순위 결정 우선순위:
+ * 1. 승수 많은 순
+ * 2. 동점자끼리 직접 대결 세트 득실비 (tieWon / tieLost) 높은 순
+ *
+ * tieSetDiffs: 동점 그룹에 속한 참가자만 "득/실" 형식으로 반환, 나머지는 빈 문자열
+ */
+function useMatchStats(localOrder: LeagueParticipantItem[], matches: LeagueMatch[]) {
+  // 1단계: 참가자별 승/패 집계
+  const playerStats = useMemo(() => localOrder.map((player) => {
+    let wins = 0, losses = 0;
+    for (const m of matches) {
+      if (m.status !== "done") continue;
+      const isA = m.participant_a_id === player.id;
+      const isB = m.participant_b_id === player.id;
+      if (!isA && !isB) continue;
+      const my  = isA ? (m.score_a ?? 0) : (m.score_b ?? 0);
+      const opp = isA ? (m.score_b ?? 0) : (m.score_a ?? 0);
+      if (my > opp) wins++; else losses++;
+    }
+    return { wins, losses, hasPlayed: wins + losses > 0 };
+  }), [localOrder, matches]);
+
+  // 2단계: 동점자 처리 후 순위 결정
+  const { rankings, tieSetDiffs } = useMemo(() => {
+    const count = localOrder.length;
+
+    // 승수별로 참가자 인덱스 그룹핑 (동점 그룹 파악)
+    const byWins = new Map<number, number[]>();
+    localOrder.forEach((_, i) => {
+      const w = playerStats[i]?.wins ?? 0;
+      if (!byWins.has(w)) byWins.set(w, []);
+      byWins.get(w)!.push(i);
+    });
+
+    // 동점 그룹 내에서만 직접 대결 세트 득/실 계산
+    const tieWon  = new Array(count).fill(0);
+    const tieLost = new Array(count).fill(0);
+    const isTied  = new Array(count).fill(false);
+
+    for (const group of byWins.values()) {
+      if (group.length < 2) continue; // 단독 승수면 동점 처리 불필요
+      const groupIds = new Set(group.map((i) => localOrder[i].id));
+      for (const i of group) {
+        isTied[i] = true;
+        const player = localOrder[i];
+        for (const m of matches) {
+          if (m.status !== "done") continue;
+          const isA   = m.participant_a_id === player.id;
+          const isB   = m.participant_b_id === player.id;
+          if (!isA && !isB) continue;
+          const oppId = isA ? m.participant_b_id : m.participant_a_id;
+          if (!oppId || !groupIds.has(oppId)) continue; // 같은 동점 그룹과의 대결만 집계
+          tieWon[i]  += isA ? (m.score_a ?? 0) : (m.score_b ?? 0);
+          tieLost[i] += isA ? (m.score_b ?? 0) : (m.score_a ?? 0);
+        }
+      }
+    }
+
+    // 최종 정렬: 승수 → 직접 대결 득실비
+    const indices = localOrder.map((_, i) => i);
+    indices.sort((a, b) => {
+      const sa = playerStats[a], sb = playerStats[b];
+      if (sa.wins !== sb.wins) return sb.wins - sa.wins;
+      const ratioA = tieLost[a] === 0 ? Infinity : tieWon[a] / tieLost[a];
+      const ratioB = tieLost[b] === 0 ? Infinity : tieWon[b] / tieLost[b];
+      return ratioB - ratioA;
+    });
+
+    // 정렬 결과를 인덱스 → 순위 매핑으로 변환
+    const rankMap = new Array(count).fill(0);
+    indices.forEach((playerIdx, rankIdx) => { rankMap[playerIdx] = rankIdx + 1; });
+
+    // 동점자 득실 표시 문자열 ("득/실", 동점 아니거나 미경기면 빈 문자열)
+    const diffs = localOrder.map((_, i) => {
+      if (!isTied[i] || !playerStats[i].hasPlayed) return "";
+      if (tieWon[i] === 0 && tieLost[i] === 0) return "";
+      return `${tieWon[i]}/${tieLost[i]}`;
+    });
+
+    return { rankings: rankMap, tieSetDiffs: diffs };
+  }, [playerStats, localOrder, matches]);
+
+  return { playerStats, rankings, tieSetDiffs };
+}
+
+// ─── 경기 순서 패널 ───────────────────────────────────────────────────────────
+/**
+ * 대진표 하단의 경기 순서 카드 패널 (다크 테마)
+ *
+ * 각 카드: 시드 번호 쌍(p1 vs p2) + 코트 배지
+ * 상태별 색상:
+ * - pending: 흰 텍스트 / 어두운 카드
+ * - playing: 파란 텍스트 + 파란 코트 배지
+ * - done:    회색 텍스트 (흐림 처리)
+ *
+ * 방향별 마진:
+ * - landscape: 테이블 아래에 세로로 붙음 (mt: 1.5)
+ * - portrait:  테이블 오른쪽에 가로로 붙음 (mr: 1.5)
+ */
+function MatchSchedulePanel({ matches, localOrder, landscape }: {
+  matches: LeagueMatch[];
+  localOrder: LeagueParticipantItem[];
+  landscape: boolean;
+}) {
+  return (
+    <Box sx={{ mt: landscape ? 1.5 : 0, mr: landscape ? 0 : 1.5 }}>
+      <Box sx={{ bgcolor: COLOR.darkCard, borderRadius: "12px", px: 1.5, py: 1, display: "flex", alignItems: "center", gap: 1.5, minHeight: 72 }}>
+
+        {/* 라벨 */}
+        <Box sx={{ flexShrink: 0, textAlign: "center" }}>
+          <Typography sx={{ fontSize: 7, fontWeight: 700, color: "#6B7280", letterSpacing: 1.5 }}>SCHEDULE</Typography>
+          <Typography sx={{ fontSize: 10, fontWeight: 800, color: "#F9FAFB", lineHeight: 1.3 }}>경기{"\n"}순서</Typography>
+        </Box>
+
+        {/* 가로 스크롤 가능한 경기 카드 목록 */}
+        <Box sx={{ display: "flex", gap: 0.75, overflowX: "auto", flex: 1, "&::-webkit-scrollbar": { display: "none" } }}>
+          {matches.map((m) => {
+            const p1Idx = localOrder.findIndex((p) => p.id === m.participant_a_id);
+            const p2Idx = localOrder.findIndex((p) => p.id === m.participant_b_id);
+            // 참가자 목록에 없는 경기는 표시 생략
+            if (p1Idx === -1 || p2Idx === -1) return null;
+
+            const isDone    = m.status === "done";
+            const isPlaying = m.status === "playing";
+            // 상태별 색상 결정
+            const numColor   = isDone ? "#6B7280" : isPlaying ? "#60A5FA" : "#F9FAFB";
+            const cardBg     = isDone ? "#374151" : isPlaying ? "#1E3A5F" : "#2D3748";
+            const courtBg    = m.court ? (isPlaying ? COLOR.primary : "#374151") : "#1F2937";
+            const courtColor = m.court ? (isPlaying ? "white" : "#9CA3AF") : "#374151";
+
+            return (
+              <Box key={m.id} sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.5, flexShrink: 0 }}>
+                {/* 시드 번호 카드 */}
+                <Box sx={{ bgcolor: cardBg, borderRadius: "5px", px: 1.25, py: 0.75, textAlign: "center", minWidth: 42, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                  <Typography sx={{ color: numColor, fontSize: 14, fontWeight: 800, lineHeight: 1.3 }}>{p1Idx + 1}</Typography>
+                  <Box sx={{ width: "100%", height: "1px", bgcolor: "#4B5563", my: 0.25 }} />
+                  <Typography sx={{ color: numColor, fontSize: 14, fontWeight: 800, lineHeight: 1.3 }}>{p2Idx + 1}</Typography>
+                </Box>
+                {/* 코트 배지: 코트 미배정이면 글자색=배경색(사실상 투명하게) */}
+                <Box sx={{ bgcolor: courtBg, borderRadius: "100px", px: 0.75, py: 0.15 }}>
+                  <Typography sx={{ fontSize: 8, color: courtColor, fontWeight: 700, whiteSpace: "nowrap" }}>
+                    {m.court || "미정"}
+                  </Typography>
+                </Box>
+              </Box>
+            );
+          })}
+        </Box>
+      </Box>
+    </Box>
+  );
+}
+
+// ─── 메인 컴포넌트 ────────────────────────────────────────────────────────────
+/**
+ * 리그 대진표 페이지
+ *
+ * document.body에 Portal로 렌더링 → 전체화면(fixed) 오버레이 형태
+ * 라우트: /league/:id/bracket
+ *
+ * 주요 기능:
+ * 1. 리그 참가자 간 라운드로빈 대진표 표시
+ * 2. 점수 편집 (canManage && 경기 상태가 playing/done인 경우)
+ * 3. 시드 순서 편집 (수정 버튼 클릭 → editMode, 드래그 또는 ↑↓ 버튼)
+ * 4. 승/패/순위/동점자 세트 득실 자동 집계
+ * 5. landscape(가로) ↔ portrait(세로, writingMode 활용) 전환
+ * 6. 15초 폴링으로 실시간 경기 데이터 갱신
+ */
 export default function LeagueBracket() {
-  const { id } = useParams<{ id: string }>();
+  const { id }   = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const { data: leagueData, isLoading: leagueLoading, refetch: refetchLeague } = useGetLeagueQuery(id ?? "", { skip: !id });
-  const { data: participantData, isLoading: participantsLoading, refetch: refetchParticipants } = useGetLeagueParticipantsQuery(id ?? "", {
-    skip: !id,
-    pollingInterval: 15000,
-  });
-  const { data: matchData, refetch: refetchMatches } = useGetLeagueMatchesQuery(id ?? "", {
-    skip: !id,
-    pollingInterval: 15000,
-  });
+  // ── 데이터 페칭 ──────────────────────────────────────────────────────────
+  // 참가자·경기는 15초마다 자동 갱신 (실시간 점수 반영)
+  const { data: leagueData, isLoading: leagueLoading, refetch: refetchLeague } =
+    useGetLeagueQuery(id ?? "", { skip: !id });
+  const { data: participantData, isLoading: participantsLoading, refetch: refetchParticipants } =
+    useGetLeagueParticipantsQuery(id ?? "", { skip: !id, pollingInterval: 15000 });
+  const { data: matchData, refetch: refetchMatches } =
+    useGetLeagueMatchesQuery(id ?? "", { skip: !id, pollingInterval: 15000 });
 
-  const handleRefresh = useCallback(() => {
-    refetchLeague();
-    refetchParticipants();
-    refetchMatches();
-  }, [refetchLeague, refetchParticipants, refetchMatches]);
+  const league          = leagueData?.league;
+  // useMemo로 감싸서 matchData 객체 참조가 바뀔 때만 재생성 (불필요한 하위 useMemo 재실행 방지)
+  const matches         = useMemo(() => matchData?.matches ?? [], [matchData]);
+  const rawParticipants = useMemo(() => participantData?.participants ?? [], [participantData]);
 
-  const league = leagueData?.league;
+  // ── 권한 ─────────────────────────────────────────────────────────────────
+  // canManage: 점수 편집 + 시드 순서 변경 가능 여부
   const { data: groupData } = useGetGroupDetailQuery(league?.group_id ?? "", { skip: !league?.group_id });
-  const authUser = useAppSelector((s) => s.auth.user);
+  const authUser  = useAppSelector((s) => s.auth.user);
   const isCreator = !!authUser && league?.created_by_id === authUser.id;
-  const canManage = (groupData?.myRole === "owner" || groupData?.myRole === "admin") || isCreator;
-  const myName = groupData?.members?.find((m) => m.user_id === authUser?.id)?.name ?? authUser?.name ?? null;
+  const canManage = groupData?.myRole === "owner" || groupData?.myRole === "admin" || isCreator;
+  // 그룹 멤버 이름 우선, 없으면 계정 이름으로 대진표 내 본인 행 하이라이트
+  const myName    = groupData?.members?.find((m) => m.user_id === authUser?.id)?.name ?? authUser?.name ?? null;
 
-  const rawParticipants = useMemo(
-    () => participantData?.participants ?? [],
-    [participantData],
-  );
-
-  // ── 로컬 상태 ────────────────────────────────────────────────────────────
-  // editOrder: null = 사용자가 아직 순서를 바꾸지 않음 → rawParticipants 그대로 사용
-  const [editOrder, setEditOrder]   = useState<typeof rawParticipants | null>(null);
-  const localOrder                  = editOrder ?? rawParticipants;
+  // ── 참가자 순서 상태 ──────────────────────────────────────────────────────
+  // editOrder=null: 서버 데이터(rawParticipants) 그대로 사용
+  // editOrder≠null: 사용자가 순서를 변경한 로컬 상태 (서버에도 즉시 반영)
+  const [editOrder, setEditOrder] = useState<typeof rawParticipants | null>(null);
+  const localOrder = editOrder ?? rawParticipants;
   const setLocalOrder = useCallback(
     (fn: (prev: typeof rawParticipants) => typeof rawParticipants) =>
       setEditOrder((prev) => fn(prev ?? rawParticipants)),
     [rawParticipants],
   );
 
-  const [editMode, setEditMode]     = useState(false);
-  const [reorderMode] = useState<"push">("push");
+  // ── UI 상태 ───────────────────────────────────────────────────────────────
+  // editMode: 시드 번호 순서 변경 모드 (점수 편집과는 별개)
+  const [editMode, setEditMode]       = useState(false);
+  // rulesAnchor: 경기 규칙 Popover 앵커 (null이면 닫힘)
   const [rulesAnchor, setRulesAnchor] = useState<HTMLButtonElement | null>(null);
+  // landscape: false=세로(writingMode 회전) / true=가로(일반 layout)
   const [landscape, setLandscape]     = useState(false);
 
-  // ── 스케일 계산 ──────────────────────────────────────────────────────────
-  const wrapperRef      = useRef<HTMLDivElement>(null);
-  const wrapperTableRef = useRef<HTMLDivElement>(null);
+  // ── 스케일 계산 ───────────────────────────────────────────────────────────
+  // 참가자 수에 따라 테이블이 화면보다 클 수 있으므로 CSS scale로 축소 fit
+  // portrait 모드는 writingMode로 90° 회전되어 있어 물리적 tw/th가 시각 기준과 반전됨
+  const wrapperRef      = useRef<HTMLDivElement>(null);  // 화면 영역 ref
+  const wrapperTableRef = useRef<HTMLDivElement>(null);  // 테이블 실제 크기 ref
   const [scale, setScale] = useState(1);
+  const dataReady = !!league && rawParticipants.length > 0; // 데이터 로드 완료 여부 (useLayoutEffect deps)
 
+  useLayoutEffect(() => {
+    const updateScale = () => {
+      if (!wrapperRef.current || !wrapperTableRef.current) return;
+      const ww = wrapperRef.current.clientWidth;
+      const wh = wrapperRef.current.clientHeight;
+      const tw = wrapperTableRef.current.scrollWidth;
+      const th = wrapperTableRef.current.scrollHeight;
+      if (!tw || !th) return;
+      // landscape: 물리 크기 = 시각 크기
+      // portrait:  writingMode 90° 회전 → 시각 너비=th, 시각 높이=tw
+      setScale(landscape ? Math.min(ww / tw, wh / th) : Math.min(ww / th, wh / tw));
+    };
+
+    updateScale();
+    const ro = new ResizeObserver(updateScale);
+    if (wrapperRef.current)      ro.observe(wrapperRef.current);
+    if (wrapperTableRef.current) ro.observe(wrapperTableRef.current);
+    window.addEventListener("resize", updateScale);
+    return () => { ro.disconnect(); window.removeEventListener("resize", updateScale); };
+  }, [landscape, dataReady]);
+
+  // ── DnD 순서 변경 ─────────────────────────────────────────────────────────
   const [reorderParticipants] = useReorderLeagueParticipantsMutation();
-
-  // ── DnD sensors ──────────────────────────────────────────────────────────
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(TouchSensor,   { activationConstraint: { delay: 200, tolerance: 5 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),   // 마우스: 8px 이상 이동 시 드래그 시작
+    useSensor(TouchSensor,   { activationConstraint: { delay: 200, tolerance: 5 } }), // 터치: 200ms 롱프레스 후 드래그
   );
 
-  // ── 재배치 핸들러 (useCallback → SortableBracketRow memo 효과) ───────────
+  // 버튼 ↑↓ 클릭으로 한 칸 이동 (인접 요소와 swap 후 서버에 전체 순서 저장)
   const handleMove = useCallback((idx: number, dir: "up" | "down") => {
     setLocalOrder((prev) => {
       const next = idx + (dir === "up" ? -1 : 1);
@@ -417,6 +614,7 @@ export default function LeagueBracket() {
     });
   }, [setLocalOrder, reorderParticipants, id]);
 
+  // 드래그 앤 드롭으로 임의 위치 이동 (arrayMove 후 서버에 전체 순서 저장)
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
@@ -430,116 +628,30 @@ export default function LeagueBracket() {
     });
   }, [setLocalOrder, reorderParticipants, id]);
 
-  const toggleEdit = useCallback(() => {
-    setEditMode((v) => !v);
-  }, []);
+  // 수동 새로고침: 리그·참가자·경기 3개 쿼리 동시 refetch
+  const handleRefresh = useCallback(() => {
+    refetchLeague();
+    refetchParticipants();
+    refetchMatches();
+  }, [refetchLeague, refetchParticipants, refetchMatches]);
 
-  // ── 스케일: dataReady가 true가 될 때 ref가 붙으므로 deps에 포함 ──────────
-  const dataReady = !!league && rawParticipants.length > 0;
-  useLayoutEffect(() => {
-    function updateScale() {
-      if (!wrapperRef.current || !wrapperTableRef.current) return;
-      const ww = wrapperRef.current.clientWidth;
-      const wh = wrapperRef.current.clientHeight;
-      const tw = wrapperTableRef.current.scrollWidth;
-      const th = wrapperTableRef.current.scrollHeight;
-      if (!tw || !th) return;
-      // portrait(writingMode: vertical-rl): 물리적 tw/th가 시각적으로 뒤바뀜
-      // → 시각 너비 = physical height(th), 시각 높이 = physical width(tw)
-      const s = landscape
-        ? Math.min(ww / tw, wh / th)
-        : Math.min(ww / th, wh / tw);
-      setScale(s);
-    }
-    updateScale();
-    const ro = new ResizeObserver(updateScale);
-    if (wrapperRef.current) ro.observe(wrapperRef.current);
-    if (wrapperTableRef.current) ro.observe(wrapperTableRef.current);
-    window.addEventListener("resize", updateScale);
-    return () => { ro.disconnect(); window.removeEventListener("resize", updateScale); };
-  }, [landscape, dataReady]);
-
-  const n = localOrder.length;
-
-  // ── 경기 데이터 연계 ──────────────────────────────────────────────────────
+  // ── 경기 데이터 ───────────────────────────────────────────────────────────
+  // matchLookup: "aId__bId" 또는 "bId__aId" 양방향 키로 O(1) 조회
+  // (행·열 참가자 ID 조합이 a/b 순서와 무관하게 매칭되도록 양방향 저장)
   const matchLookup = useMemo(() => {
     const map = new Map<string, LeagueMatch>();
-    for (const m of matchData?.matches ?? []) {
+    for (const m of matches) {
       if (m.participant_a_id && m.participant_b_id) {
         map.set(`${m.participant_a_id}__${m.participant_b_id}`, m);
         map.set(`${m.participant_b_id}__${m.participant_a_id}`, m);
       }
     }
     return map;
-  }, [matchData]);
+  }, [matches]);
 
-  const playerStats = useMemo(() => localOrder.map((player) => {
-    let wins = 0, losses = 0;
-    for (const m of matchData?.matches ?? []) {
-      if (m.status !== "done") continue;
-      const isA = m.participant_a_id === player.id;
-      const isB = m.participant_b_id === player.id;
-      if (!isA && !isB) continue;
-      const my = isA ? (m.score_a ?? 0) : (m.score_b ?? 0);
-      const opp = isA ? (m.score_b ?? 0) : (m.score_a ?? 0);
-      if (my > opp) wins++; else losses++;
-    }
-    return { wins, losses, hasPlayed: wins + losses > 0 };
-  }), [localOrder, matchData]);
+  const { playerStats, rankings, tieSetDiffs } = useMatchStats(localOrder, matches);
 
-  const { rankings, tieSetDiffs } = useMemo(() => {
-    const n = localOrder.length;
-    // 동점 그룹 파악
-    const byWins = new Map<number, number[]>();
-    localOrder.forEach((_, i) => {
-      const w = playerStats[i]?.wins ?? 0;
-      if (!byWins.has(w)) byWins.set(w, []);
-      byWins.get(w)!.push(i);
-    });
-
-    // 동점 그룹 내 직접 대결 득실 계산
-    const tieWon = new Array(n).fill(0);
-    const tieLost = new Array(n).fill(0);
-    const isTied = new Array(n).fill(false);
-    for (const group of byWins.values()) {
-      if (group.length < 2) continue;
-      const groupIds = new Set(group.map((i) => localOrder[i].id));
-      for (const i of group) {
-        isTied[i] = true;
-        const player = localOrder[i];
-        for (const m of matchData?.matches ?? []) {
-          if (m.status !== "done") continue;
-          const isA = m.participant_a_id === player.id;
-          const isB = m.participant_b_id === player.id;
-          if (!isA && !isB) continue;
-          const oppId = isA ? m.participant_b_id : m.participant_a_id;
-          if (!oppId || !groupIds.has(oppId)) continue;
-          tieWon[i] += isA ? (m.score_a ?? 0) : (m.score_b ?? 0);
-          tieLost[i] += isA ? (m.score_b ?? 0) : (m.score_a ?? 0);
-        }
-      }
-    }
-
-    const indices = localOrder.map((_, i) => i);
-    indices.sort((a, b) => {
-      const sa = playerStats[a], sb = playerStats[b];
-      if (sa.wins !== sb.wins) return sb.wins - sa.wins;
-      const ratioA = tieLost[a] === 0 ? Infinity : tieWon[a] / tieLost[a];
-      const ratioB = tieLost[b] === 0 ? Infinity : tieWon[b] / tieLost[b];
-      return ratioB - ratioA;
-    });
-    const rankMap = new Array(n).fill(0);
-    indices.forEach((playerIdx, rankIdx) => { rankMap[playerIdx] = rankIdx + 1; });
-
-    const diffs = localOrder.map((_, i) => {
-      if (!isTied[i] || !playerStats[i].hasPlayed) return "";
-      if (tieWon[i] === 0 && tieLost[i] === 0) return "";
-      return `${tieWon[i]}/${tieLost[i]}`;
-    });
-
-    return { rankings: rankMap, tieSetDiffs: diffs };
-  }, [playerStats, localOrder, matchData]);
-
+  // ── 로딩 / 빈 상태 ───────────────────────────────────────────────────────
   if (leagueLoading || participantsLoading) {
     return (
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", pt: 8 }}>
@@ -547,23 +659,16 @@ export default function LeagueBracket() {
       </Box>
     );
   }
-
   if (!league || rawParticipants.length === 0) return null;
 
-  const leagueStarted = league.status === "completed";
+  const n             = localOrder.length;
+  const leagueStarted = league.status === "completed"; // 완료 상태면 수정 버튼 숨김
   const date          = formatLeagueDate(league.start_date);
+  const winScore      = getWinScore(league.rules);
 
-  // ── JSX ──────────────────────────────────────────────────────────────────
+  // ── JSX ───────────────────────────────────────────────────────────────────
   return createPortal(
-    <Box sx={{
-      bgcolor: "#fff",
-      display: "flex",
-      flexDirection: "column",
-      overflow: "hidden",
-      position: "fixed",
-      inset: 0,
-      zIndex: 1300,
-    }}>
+    <Box sx={{ bgcolor: "#fff", display: "flex", flexDirection: "column", overflow: "hidden", position: "fixed", inset: 0, zIndex: 1300 }}>
 
       {/* ===== 헤더 바 ===== */}
       <Box sx={{ display: "flex", alignItems: "center", px: 1, py: 0.75, borderBottom: "1px solid #E5E7EB", gap: 0.5 }}>
@@ -571,7 +676,7 @@ export default function LeagueBracket() {
           <ChevronLeftIcon />
         </IconButton>
 
-        {/* 리그 정보 + ⓘ */}
+        {/* 리그 정보 요약 + 규칙 설명 버튼 */}
         <Box sx={{ flex: 1, display: "flex", alignItems: "center", gap: 0.25, minWidth: 0 }}>
           <Typography sx={{ fontSize: 11, fontWeight: 600, lineHeight: 1.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {date} / {league.type} {league.format} / {league.rules}
@@ -583,17 +688,17 @@ export default function LeagueBracket() {
           </Tooltip>
         </Box>
 
-        {/* 수정 버튼 (pill 스타일) */}
+        {/* 수정 버튼: 리그 완료 전 + 관리 권한자에게만 표시 */}
         {!leagueStarted && canManage && (
           <Button
             size="small"
             variant="contained"
             startIcon={editMode ? <CheckIcon sx={{ fontSize: 14 }} /> : <EditIcon sx={{ fontSize: 14 }} />}
-            onClick={toggleEdit}
+            onClick={() => setEditMode((v) => !v)}
             sx={{
               borderRadius: "20px", fontSize: 11, fontWeight: 700, px: 1.5, py: 0.4,
               textTransform: "none", flexShrink: 0, minWidth: "auto", boxShadow: "none",
-              bgcolor: editMode ? "#10B981" : "#2563EB",
+              bgcolor: editMode ? "#10B981" : COLOR.primary,
               "&:hover": { bgcolor: editMode ? "#059669" : "#1D4ED8", boxShadow: "none" },
             }}
           >
@@ -601,7 +706,7 @@ export default function LeagueBracket() {
           </Button>
         )}
 
-        {/* × 닫기 */}
+        {/* 닫기 (뒤로 이동) */}
         <IconButton size="small" onClick={() => navigate(-1)} sx={{ flexShrink: 0 }}>
           <CloseIcon sx={{ fontSize: 20 }} />
         </IconButton>
@@ -613,7 +718,7 @@ export default function LeagueBracket() {
         anchorEl={rulesAnchor}
         onClose={() => setRulesAnchor(null)}
         anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-        transformOrigin={{ vertical: "top", horizontal: "right" }}
+        transformOrigin={{ vertical: "top",    horizontal: "right" }}
       >
         <Box sx={{ p: 2, maxWidth: 500 }}>
           <Typography sx={{ fontWeight: 700, fontSize: 13, mb: 0.5 }}>경기 규칙</Typography>
@@ -626,65 +731,47 @@ export default function LeagueBracket() {
         </Box>
       </Popover>
 
+      {/* ===== 대진표 영역 ===== */}
+      <Box ref={wrapperRef} sx={{ flex: 1, overflow: "hidden", position: "relative", minHeight: 0, bgcolor: "#F0F2F5" }}>
 
-
-      {/* ===== 대진표 영역 (회전) ===== */}
-      <Box
-        ref={wrapperRef}
-        sx={{ flex: 1, overflow: "hidden", position: "relative", minHeight: 0, bgcolor: "#F0F2F5" }}
-      >
-        {/* 플로팅 버튼 묶음 */}
+        {/* 플로팅 버튼 (우하단 고정) */}
         <Tooltip title="새로고침">
           <IconButton
             onClick={handleRefresh}
-            sx={{
-              position: "absolute", bottom: 67, right: 14, zIndex: 10,
-              bgcolor: "#fff",
-              color: "#6B7280",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-              width: 45, height: 45,
-              "&:hover": { bgcolor: "#F3F4F6" },
-            }}
+            sx={{ position: "absolute", bottom: 67, right: 14, zIndex: 10, bgcolor: "#fff", color: "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: "#F3F4F6" } }}
           >
             <RefreshIcon sx={{ fontSize: 18 }} />
           </IconButton>
         </Tooltip>
+        {/* landscape 상태일 때 파란 배경으로 현재 모드 표시 */}
         <Tooltip title={landscape ? "세로 보기" : "가로 보기"}>
           <IconButton
             onClick={() => setLandscape((v) => !v)}
-            sx={{
-              position: "absolute", bottom: 14, right: 14, zIndex: 10,
-              bgcolor: landscape ? "#2563EB" : "#fff",
-              color: landscape ? "#fff" : "#6B7280",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-              width: 45, height: 45,
-              "&:hover": { bgcolor: landscape ? "#1D4ED8" : "#F3F4F6" },
-            }}
+            sx={{ position: "absolute", bottom: 14, right: 14, zIndex: 10, bgcolor: landscape ? COLOR.primary : "#fff", color: landscape ? "#fff" : "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: landscape ? "#1D4ED8" : "#F3F4F6" } }}
           >
             <ScreenRotationIcon sx={{ fontSize: 18 }} />
           </IconButton>
         </Tooltip>
+
+        {/* 대진표 + 경기 순서 (scale 변환 컨테이너) */}
         <Box
           ref={wrapperTableRef}
           sx={{
-            // portrait: writingMode로 90° 회전해서 세로화면에 맞춤
-            // landscape: 전체 Box가 rotate(-90deg) 되므로 writingMode 불필요
-            ...(!landscape && {
-              writingMode: "vertical-rl",
-              textOrientation: "sideways",
-            }),
+            // portrait 모드: writingMode로 콘텐츠 전체를 90° 회전 → 세로 화면에서도 가로 테이블을 표시
+            // landscape 모드: 일반 layout, scale만 적용
+            ...(!landscape && { writingMode: "vertical-rl", textOrientation: "sideways" }),
             transformOrigin: "top left",
             transform: `scale(${scale})`,
             display: "inline-block",
             padding: "10px",
           }}
         >
-
-          {/* ─── 대진표 테이블 ─── */}
+          {/* 대진표 테이블 (DnD 컨텍스트 내부) */}
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <TableContainer component={Paper} elevation={3} sx={{ borderRadius: "10px", overflow: "hidden" }}>
               <Table sx={{ tableLayout: "fixed", borderCollapse: "separate", borderSpacing: "3px" }}>
                 <TableHead>
+                  {/* 1행: 시드 번호 원형 배지 (열 헤더) */}
                   <TableRow>
                     <NumberHeaderCell colSpan={2} rowSpan={2} sx={{ fontSize: 9, color: "#9CA3AF", fontWeight: 600, letterSpacing: 0.3 }}>참가명단</NumberHeaderCell>
                     {localOrder.map((_, idx) => (
@@ -694,19 +781,21 @@ export default function LeagueBracket() {
                         </Box>
                       </NumberHeaderCell>
                     ))}
-                    <NumberHeaderCell rowSpan={2} sx={{ bgcolor: "#F0FDF4", color: "#16A34A" }}>승</NumberHeaderCell>
-                    <NumberHeaderCell rowSpan={2} sx={{ bgcolor: "#FFF1F2", color: "#DC2626" }}>패</NumberHeaderCell>
+                    <NumberHeaderCell rowSpan={2} sx={{ bgcolor: "#F0FDF4", color: COLOR.win }}>승</NumberHeaderCell>
+                    <NumberHeaderCell rowSpan={2} sx={{ bgcolor: "#FFF1F2", color: COLOR.loss }}>패</NumberHeaderCell>
                     <NumberHeaderCell rowSpan={2}>순위</NumberHeaderCell>
                     <NumberHeaderCell rowSpan={2} sx={{ fontSize: landscape ? "13px" : "14px" }}>동점자{<br />}세트 득실</NumberHeaderCell>
                   </TableRow>
+                  {/* 2행: 참가자 이름 (열 헤더, portrait에서 세로로 표시) */}
                   <TableRow>
                     {localOrder.map((p) => {
                       const isMe = !!myName && p.name === myName;
                       return (
-                        <NameHeaderCell key={p.id} sx={isMe ? { bgcolor: "#EFF6FF" } : undefined}>
+                        <NameHeaderCell key={p.id} sx={isMe ? { bgcolor: COLOR.myHighlight } : undefined}>
                           <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0.4, flexWrap: "wrap" }}>
                             <DivBadge division={p.division} />
-                            <Box component="span" sx={{ minHeight: landscape ? "" : "70px", color: isMe ? "#2F80ED" : "inherit", fontWeight: isMe ? 700 : "inherit" }}>
+                            {/* portrait: minHeight로 세로 공간 확보 */}
+                            <Box component="span" sx={{ minHeight: landscape ? "" : "70px", color: isMe ? COLOR.myText : "inherit", fontWeight: isMe ? 700 : "inherit" }}>
                               {p.name}
                             </Box>
                           </Box>
@@ -716,6 +805,7 @@ export default function LeagueBracket() {
                   </TableRow>
                 </TableHead>
 
+                {/* 바디: 참가자별 행 (SortableContext로 DnD 순서 관리) */}
                 <SortableContext items={localOrder.map((p) => p.id)} strategy={verticalListSortingStrategy}>
                   <TableBody>
                     {localOrder.map((rowPlayer, rowIdx) => (
@@ -726,7 +816,6 @@ export default function LeagueBracket() {
                         n={n}
                         localOrder={localOrder}
                         editMode={editMode}
-                        reorderMode={reorderMode}
                         canManage={canManage}
                         onMove={handleMove}
                         landscape={landscape}
@@ -737,7 +826,7 @@ export default function LeagueBracket() {
                         tieSetDiff={tieSetDiffs[rowIdx] ?? ""}
                         hasPlayed={playerStats[rowIdx]?.hasPlayed ?? false}
                         leagueId={id ?? ""}
-                        winScore={getWinScore(league?.rules)}
+                        winScore={winScore}
                         isMe={!!myName && rowPlayer.name === myName}
                       />
                     ))}
@@ -747,42 +836,8 @@ export default function LeagueBracket() {
             </TableContainer>
           </DndContext>
 
-          {/* ─── 경기 순서 (다크 카드) ─── */}
-          <Box sx={{ mt: landscape ? 1.5 : 0, mr: landscape ? 0 : 1.5 }}>
-            <Box sx={{ bgcolor: "#1A1D2E", borderRadius: "12px", px: 1.5, py: 1, display: "flex", alignItems: "center", gap: 1.5, minHeight: 72 }}>
-              {/* 라벨 */}
-              <Box sx={{ flexShrink: 0, textAlign: "center" }}>
-                <Typography sx={{ fontSize: 7, fontWeight: 700, color: "#6B7280", letterSpacing: 1.5 }}>SCHEDULE</Typography>
-                <Typography sx={{ fontSize: 10, fontWeight: 800, color: "#F9FAFB", lineHeight: 1.3 }}>경기{"\n"}순서</Typography>
-              </Box>
-
-              {/* 경기 카드 */}
-              <Box sx={{ display: "flex", gap: 0.75, overflowX: "auto", flex: 1, "&::-webkit-scrollbar": { display: "none" } }}>
-                {(matchData?.matches ?? []).map((m) => {
-                  const p1Idx = localOrder.findIndex((p) => p.id === m.participant_a_id);
-                  const p2Idx = localOrder.findIndex((p) => p.id === m.participant_b_id);
-                  if (p1Idx === -1 || p2Idx === -1) return null;
-                  const isDone = m.status === "done";
-                  const isPlaying = m.status === "playing";
-                  const numColor = isDone ? "#6B7280" : isPlaying ? "#60A5FA" : "#F9FAFB";
-                  return (
-                    <Box key={m.id} sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.5, flexShrink: 0 }}>
-                      <Box sx={{ bgcolor: isDone ? "#374151" : isPlaying ? "#1E3A5F" : "#2D3748", borderRadius: "5px", px: 1.25, py: 0.75, textAlign: "center", minWidth: 42, display: "flex", flexDirection: "column", alignItems: "center" }}>
-                        <Typography sx={{ color: numColor, fontSize: 14, fontWeight: 800, lineHeight: 1.3 }}>{p1Idx + 1}</Typography>
-                        <Box sx={{ width: "100%", height: "1px", bgcolor: "#4B5563", my: 0.25 }} />
-                        <Typography sx={{ color: numColor, fontSize: 14, fontWeight: 800, lineHeight: 1.3 }}>{p2Idx + 1}</Typography>
-                      </Box>
-                      <Box sx={{ bgcolor: m.court ? (isPlaying ? "#2563EB" : "#374151") : "#1F2937", borderRadius: "100px", px: 0.75, py: 0.15 }}>
-                        <Typography sx={{ fontSize: 8, color: m.court ? (isPlaying ? "white" : "#9CA3AF") : "#374151", fontWeight: 700, whiteSpace: "nowrap" }}>
-                          {m.court || "미정"}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  );
-                })}
-              </Box>
-            </Box>
-          </Box>
+          {/* 경기 순서 패널 */}
+          <MatchSchedulePanel matches={matches} localOrder={localOrder} landscape={landscape} />
         </Box>
       </Box>
     </Box>,

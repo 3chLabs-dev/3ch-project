@@ -303,11 +303,22 @@ const SortableBracketRow = memo(function SortableBracketRow({
         {...(canDrag ? { ...attributes, ...listeners } : {})}
       >
         {editMode && canManage ? (
-          <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <ScoreButton icon="up"   padding={0.25} disabled={rowIdx === 0}     onClick={() => onMove(rowIdx, "up")} />
-            <Typography sx={{ fontSize: 11, lineHeight: 1 }}>{rowIdx + 1}</Typography>
-            <ScoreButton icon="down" padding={0.25} disabled={rowIdx === n - 1} onClick={() => onMove(rowIdx, "down")} />
-          </Box>
+          landscape ? (
+            // 가로(landscape): 위·아래 화살표 세로 배치
+            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+              <ScoreButton icon="up"   padding={0.25} disabled={rowIdx === 0}     onClick={() => onMove(rowIdx, "up")} />
+              <Typography sx={{ fontSize: 11, lineHeight: 1 }}>{rowIdx + 1}</Typography>
+              <ScoreButton icon="down" padding={0.25} disabled={rowIdx === n - 1} onClick={() => onMove(rowIdx, "down")} />
+            </Box>
+          ) : (
+            // 세로(portrait): writingMode 상속으로 인한 90° 회전 보정
+            // BracketScoreCell portrait 처리와 동일한 방식
+            <Box sx={{ display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "center", writingMode: "horizontal-tb", px: 0.25, height: "100%" }}>
+              <ScoreButton icon="up"   padding={0.25} rotate disabled={rowIdx === 0}     onClick={() => onMove(rowIdx, "up")} />
+              <Typography sx={{ fontSize: 11, lineHeight: 1, transform: "rotate(90deg)" }}>{rowIdx + 1}</Typography>
+              <ScoreButton icon="down" padding={0.25} rotate disabled={rowIdx === n - 1} onClick={() => onMove(rowIdx, "down")} />
+            </Box>
+          )
         ) : (
           rowIdx + 1
         )}

@@ -456,6 +456,25 @@ function MatchSchedulePanel({ matches, localOrder, landscape }: {
   localOrder: LeagueParticipantItem[];
   landscape: boolean;
 }) {
+  // const [updateMatch] = useUpdateLeagueMatchMutation();
+
+  // const handleStatus = useCallback(() => {
+  //     const aDiv = matches.participant_a_division ? `(${match.participant_a_division})` : "";
+  //     const bDiv = match.participant_b_division ? `(${match.participant_b_division})` : "";
+  //     const aName = match.participant_a_name ?? "?";
+  //     const bName = match.participant_b_name ?? "?";
+  //     const sa = match.score_a ?? 0;
+  //     const sb = match.score_b ?? 0;
+  //     if (match.status === "pending") {
+  //       const msg = `${index + 1}경기\n${aDiv}${aName}(${sa}) VS (${sb})${bDiv}${bName}\n시작하겠습니까?`;
+  //       if (!window.confirm(msg)) return;
+  //     } else if (match.status === "playing") {
+  //       const msg = `${index + 1}경기\n${aDiv}${aName}(${sa}) VS (${sb})${bDiv}${bName}\n종료되었습니까?`;
+  //       if (!window.confirm(msg)) return;
+  //     }
+  //     updateMatch({ leagueId, matchId: match.id, updates: { status: NEXT_STATUS[match.status], score_a: sa, score_b: sb } });
+  //   }, [match, index, leagueId, updateMatch]);
+
   return (
     <Box sx={{ mt: landscape ? 1.5 : 0, mr: landscape ? 0 : 1.5 }}>
       <Box sx={{ bgcolor: COLOR.darkCard, borderRadius: "12px", px: 1.5, py: 1, display: "flex", alignItems: "center", gap: 1.5, minHeight: 72 }}>

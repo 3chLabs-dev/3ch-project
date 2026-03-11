@@ -651,7 +651,9 @@ export default function LeagueDetail() {
             sx={{ mt: 1, borderRadius: 1, height: 40, fontWeight: 700, bgcolor: "#87B8FF", "&:hover": { bgcolor: "#79AEFF" } }}
             onClick={() => { navigate(`/league/${id}/bracket`) }}
           >
-            {league.format ? `${league.format} 대진표 보기` : "대진표 보기"}
+            {canManage && league.format && league.status === "draft" ? `${league.format} 대진표 생성` : ""}
+            {canManage && league.format && league.status === "active" ? `${league.format} 대진표 보기` : ""}
+            {!canManage && league.format ? `${league.format} 대진표 보기` : ""}
           </Button>
         )}
       </Box>

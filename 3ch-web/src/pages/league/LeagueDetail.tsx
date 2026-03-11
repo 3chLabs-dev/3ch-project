@@ -645,13 +645,13 @@ export default function LeagueDetail() {
             경품 추첨
           </Button>
         )}
-        {!isEditing && canManage && (
+        {!isEditing && league.status === "active" && (
           <Button
             fullWidth variant="contained" disableElevation
             sx={{ mt: 1, borderRadius: 1, height: 40, fontWeight: 700, bgcolor: "#87B8FF", "&:hover": { bgcolor: "#79AEFF" } }}
             onClick={() => { navigate(`/league/${id}/bracket`) }}
           >
-            {league.format ? `${league.format} 대진표 생성하기` : "대진표 생성하기"}
+            {league.format ? `${league.format} 대진표 보기 / 조편성 보기` : "대진표 보기 / 조편성 보기"}
           </Button>
         )}
       </Box>

@@ -113,6 +113,8 @@ export default function LeagueDetail() {
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [cancelJoinConfirm, setCancelJoinConfirm] = useState(false);
+  const [deleteParticipantTarget, setDeleteParticipantTarget] = useState<{ id: string; division: string; name: string } | null>(null);
+  const [editingParticipants, setEditingParticipants] = useState<Record<string, { division: string; name: string }>>({});
 
   const { data: leagueData, isLoading: leagueLoading, refetch: refetchLeague } = useGetLeagueQuery(id ?? "", {
     skip: !id,
@@ -239,7 +241,7 @@ export default function LeagueDetail() {
     try {
       await addParticipants({
         leagueId: id,
-        participants: selected.map((m) => ({ division: m.division, name: m.name })),
+        participants: selected.map((m) => ({ division: m.division, name: m.name, member_id: m.member_id })),
       }).unwrap();
     } catch {
       setAlertSeverity("error");
@@ -283,7 +285,29 @@ export default function LeagueDetail() {
     setNotice(league.notice ?? "");
     setEditSortOrder(league.sort_order ?? "부수");
     setEditRecruitCount(league.recruit_count ?? 20);
+    const editMap: Record<string, { division: string; name: string }> = {};
+    participants.forEach((p) => { editMap[p.id] = { division: p.division ?? "", name: p.name }; });
+    setEditingParticipants(editMap);
     setIsEditing(true);
+  };
+
+  const handleParticipantFieldBlur = (participantId: string, field: "division" | "name", originalValue: string) => {
+    if (!id) return;
+    const current = (editingParticipants[participantId]?.[field] ?? "").trim();
+    if (current === originalValue.trim()) return;
+    updateParticipant({ leagueId: id, participantId, updates: { [field]: current } });
+  };
+
+  const handleDeleteParticipant = async () => {
+    if (!id || !deleteParticipantTarget) return;
+    try {
+      await deleteParticipant({ leagueId: id, participantId: deleteParticipantTarget.id }).unwrap();
+      setDeleteParticipantTarget(null);
+    } catch {
+      setAlertSeverity("error");
+      setAlertMsg("참가자 삭제에 실패했습니다.");
+      setDeleteParticipantTarget(null);
+    }
   };
 
   const handleSaveEdit = async () => {
@@ -537,22 +561,23 @@ export default function LeagueDetail() {
 
         <Box sx={{ bgcolor: "#fff", borderRadius: 1, border: "1px solid #E5E7EB", overflow: "hidden" }}>
           {/* 테이블 헤더 */}
-          <Box sx={{ display: "grid", gridTemplateColumns: "56px 1fr 130px", px: 1.5, py: 0.8, bgcolor: "#F9FAFB", borderBottom: "1px solid #E5E7EB" }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: isEditing ? "64px 1fr 40px 56px" : "56px 1fr 130px", px: 1.5, py: 0.8, bgcolor: "#F9FAFB", borderBottom: "1px solid #E5E7EB" }}>
             <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#6B7280", textAlign: "center" }}>부수</Typography>
             <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#6B7280", textAlign: "center" }}>이름</Typography>
+            {isEditing && <Box />}
             <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#6B7280", textAlign: "center" }}>상태</Typography>
           </Box>
 
           {/* 수정 모드: 수기입력 행 (헤더 바로 아래) */}
           {isEditing && (
             <>
-              <Box sx={{ display: "grid", gridTemplateColumns: "56px 1fr 130px", gap: 0.8, px: 1.5, py: 0.8, borderBottom: "1px solid #E5E7EB" }}>
+              <Box sx={{ display: "grid", gridTemplateColumns: "64px 1fr 40px 56px", gap: 0.8, px: 1.5, py: 0.8, borderBottom: "1px solid #E5E7EB" }}>
                 <TextField
                   placeholder="부수"
                   value={inputDivision}
                   onChange={(e) => setInputDivision(e.target.value)}
                   size="small"
-                  sx={{ "& .MuiOutlinedInput-root": { borderRadius: 0.6, height: 30, bgcolor: "#fff" }, "& input": { fontSize: 13, py: 0.3 } }}
+                  sx={{ "& .MuiOutlinedInput-root": { borderRadius: 0.6, height: 30, bgcolor: "#fff" }, "& input": { fontSize: 12, py: 0.3, textAlign: "center" } }}
                 />
                 <TextField
                   placeholder="이름"
@@ -560,8 +585,9 @@ export default function LeagueDetail() {
                   onChange={(e) => setInputName(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") handleAddParticipant(); }}
                   size="small"
-                  sx={{ "& .MuiOutlinedInput-root": { borderRadius: 0.6, height: 30, bgcolor: "#fff" }, "& input": { fontSize: 13, py: 0.3 } }}
+                  sx={{ mx: 0.5, "& .MuiOutlinedInput-root": { borderRadius: 0.6, height: 30, bgcolor: "#fff" }, "& input": { fontSize: 13, py: 0.3 } }}
                 />
+                <Box />
                 <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center" }}>
                   <Button
                     variant="contained"
@@ -569,7 +595,7 @@ export default function LeagueDetail() {
                     onClick={handleAddParticipant}
                     disabled={!inputName.trim()}
                     sx={{
-                      borderRadius: 0.6, height: 30, px: 1.5, fontWeight: 900, fontSize: 12, minWidth: 0,
+                      borderRadius: 0.6, height: 30, px: 1, fontWeight: 900, fontSize: 12, minWidth: 0, width: "100%",
                       bgcolor: "#BDBDBD", "&:hover": { bgcolor: "#BDBDBD" },
                       "&.Mui-disabled": { bgcolor: "#E5E7EB", color: "#fff" },
                     }}
@@ -594,43 +620,99 @@ export default function LeagueDetail() {
           ) : (
             (isEditing ? participants : filteredParticipants).map((p, idx) => {
               const isMe = !isEditing && p.name === myMember?.name;
+              const isManual = p.member_id == null;
+              const editDiv = editingParticipants[p.id]?.division ?? p.division ?? "";
+              const editName = editingParticipants[p.id]?.name ?? p.name;
               return (
               <Box
                 key={p.id}
-                sx={{ display: "grid", gridTemplateColumns: "56px 1fr 130px", alignItems: "center", px: 1.5, py: 0.9, borderTop: idx === 0 ? "none" : "1px solid #F3F4F6", bgcolor: isMe ? "#EFF6FF" : "transparent" }}
+                sx={{ display: "grid", gridTemplateColumns: isEditing ? "64px 1fr 40px 56px" : "56px 1fr 130px", alignItems: "center", px: 1.5, py: 0.9, borderTop: idx === 0 ? "none" : "1px solid #F3F4F6", bgcolor: isMe ? "#EFF6FF" : "transparent" }}
               >
-                <Box sx={{ display: "flex", justifyContent: "center" }}>
-                  <Box sx={{ display: "inline-flex", alignItems: "center", justifyContent: "center", height: 36, minWidth: 36, px: 0.8, lineHeight: 1, borderRadius: 9999, bgcolor: "#FAAA47", fontSize: 11, fontWeight: 900, color: "#000000" }}>
-                    {p.division || "-"}
-                  </Box>
-                </Box>
-                <Typography fontWeight={800} fontSize={14} sx={{ textAlign: "center", color: isMe ? "#2F80ED" : "inherit" }}>{p.name}</Typography>
-                <Stack direction="row" spacing={0.5} justifyContent="center">
-                  {(
-                    [
-                      { key: "paid",    label: "입금",   value: p.paid,    on: { border: "#27AE60", bgcolor: "#ECFDF5", color: "#16A34A" } },
-                      { key: "arrived", label: "도착",   value: p.arrived, on: { border: "#2F80ED", bgcolor: "#EFF6FF", color: "#1D6FBF" } },
-                      { key: "after",   label: "뒷풀이", value: p.after,   on: { border: "#9C27B0", bgcolor: "#F3E5F5", color: "#7B1FA2" } },
-                    ] as const
-                  ).map(({ key, label, value, on }) => (
-                    <Box
-                      key={key}
-                      onClick={() => isMember && handleToggle(p.id, key, value)}
-                      sx={{
-                        height: 24, px: 0.8, borderRadius: 0.6,
-                        border: `1px solid ${value ? on.border : "#D1D5DB"}`,
-                        bgcolor: value ? on.bgcolor : "#F9FAFB",
-                        color: value ? on.color : "#9CA3AF",
-                        fontSize: 11, fontWeight: 700,
-                        cursor: isMember ? "pointer" : "default",
-                        display: "flex", alignItems: "center", userSelect: "none", whiteSpace: "nowrap",
-                        "&:hover": { opacity: isMember ? 0.8 : 1 },
-                      }}
-                    >
-                      {label}
+                {/* 부수 */}
+                {isEditing ? (
+                  <TextField
+                    value={editDiv}
+                    onChange={(e) => setEditingParticipants((prev) => ({ ...prev, [p.id]: { ...prev[p.id] ?? { division: p.division ?? "", name: p.name }, division: e.target.value } }))}
+                    onBlur={() => handleParticipantFieldBlur(p.id, "division", p.division ?? "")}
+                    size="small" placeholder="부수"
+                    disabled={!isManual}
+                    sx={{ "& .MuiOutlinedInput-root": { borderRadius: 0.6, height: 30, bgcolor: "#fff" }, "& input": { fontSize: 12, py: 0.3, px: 0.8, textAlign: "center" } }}
+                  />
+                ) : (
+                  <Box sx={{ display: "flex", justifyContent: "center" }}>
+                    <Box sx={{ display: "inline-flex", alignItems: "center", justifyContent: "center", height: 36, minWidth: 36, px: 0.8, lineHeight: 1, borderRadius: 9999, bgcolor: "#FAAA47", fontSize: 11, fontWeight: 900, color: "#000000" }}>
+                      {p.division || "-"}
                     </Box>
-                  ))}
-                </Stack>
+                  </Box>
+                )}
+
+                {/* 이름 */}
+                {isEditing ? (
+                  <TextField
+                    value={editName}
+                    onChange={(e) => setEditingParticipants((prev) => ({ ...prev, [p.id]: { ...prev[p.id] ?? { division: p.division ?? "", name: p.name }, name: e.target.value } }))}
+                    onBlur={() => handleParticipantFieldBlur(p.id, "name", p.name)}
+                    size="small"
+                    disabled={!isManual}
+                    sx={{ mx: 0.5, "& .MuiOutlinedInput-root": { borderRadius: 0.6, height: 30, bgcolor: "#fff" }, "& input": { fontSize: 13, py: 0.3 } }}
+                  />
+                ) : (
+                  <Typography fontWeight={800} fontSize={14} sx={{ textAlign: "center", color: isMe ? "#2F80ED" : "inherit" }}>{p.name}</Typography>
+                )}
+
+                {/* 구분 배지 */}
+                {isEditing && (
+                  <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center" }}>
+                    <Box sx={{
+                      px: 0.6, py: 0.3, borderRadius: 0.5, fontSize: 10, fontWeight: 700, lineHeight: 1, userSelect: "none",
+                      ...(isManual
+                        ? { bgcolor: "#F3F4F6", color: "#6B7280", border: "1px solid #D1D5DB" }
+                        : { bgcolor: "#EFF6FF", color: "#1D6FBF", border: "1px solid #BFDBFE" }),
+                    }}>
+                      {isManual ? "수동" : "클럽"}
+                    </Box>
+                  </Box>
+                )}
+
+                {/* 상태 / 삭제 */}
+                {isEditing ? (
+                  <Box sx={{ display: "flex", justifyContent: "center" }}>
+                    <Button
+                      size="small" variant="outlined" color="error"
+                      onClick={() => setDeleteParticipantTarget({ id: p.id, division: p.division ?? "", name: p.name })}
+                      sx={{ height: 28, minWidth: 0, px: 1, fontSize: 12, fontWeight: 700, borderRadius: 0.6 }}
+                    >
+                      삭제
+                    </Button>
+                  </Box>
+                ) : (
+                  <Stack direction="row" spacing={0.5} justifyContent="center">
+                    {(
+                      [
+                        { key: "paid",    label: "입금",   value: p.paid,    on: { border: "#27AE60", bgcolor: "#ECFDF5", color: "#16A34A" } },
+                        { key: "arrived", label: "도착",   value: p.arrived, on: { border: "#2F80ED", bgcolor: "#EFF6FF", color: "#1D6FBF" } },
+                        { key: "after",   label: "뒷풀이", value: p.after,   on: { border: "#9C27B0", bgcolor: "#F3E5F5", color: "#7B1FA2" } },
+                      ] as const
+                    ).map(({ key, label, value, on }) => (
+                      <Box
+                        key={key}
+                        onClick={() => isMember && handleToggle(p.id, key, value)}
+                        sx={{
+                          height: 24, px: 0.8, borderRadius: 0.6,
+                          border: `1px solid ${value ? on.border : "#D1D5DB"}`,
+                          bgcolor: value ? on.bgcolor : "#F9FAFB",
+                          color: value ? on.color : "#9CA3AF",
+                          fontSize: 11, fontWeight: 700,
+                          cursor: isMember ? "pointer" : "default",
+                          display: "flex", alignItems: "center", userSelect: "none", whiteSpace: "nowrap",
+                          "&:hover": { opacity: isMember ? 0.8 : 1 },
+                        }}
+                      >
+                        {label}
+                      </Box>
+                    ))}
+                  </Stack>
+                )}
               </Box>
             )})
           )}
@@ -651,7 +733,9 @@ export default function LeagueDetail() {
             sx={{ mt: 1, borderRadius: 1, height: 40, fontWeight: 700, bgcolor: "#87B8FF", "&:hover": { bgcolor: "#79AEFF" } }}
             onClick={() => { navigate(`/league/${id}/bracket`) }}
           >
-            {league.format ? `${league.format} 대진표 보기 / 조편성 보기` : "대진표 보기 / 조편성 보기"}
+            {canManage && league.format && league.status === "draft" ? `${league.format} 대진표 생성` : ""}
+            {canManage && league.format && league.status === "active" ? `${league.format} 대진표 보기` : ""}
+            {!canManage && league.format ? `${league.format} 대진표 보기` : ""}
           </Button>
         )}
       </Box>
@@ -773,6 +857,23 @@ export default function LeagueDetail() {
             sx={{ borderRadius: 1, px: 3, fontWeight: 700 }}
           >
             닫기
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* 참가자 삭제 확인 다이얼로그 */}
+      <Dialog open={!!deleteParticipantTarget} onClose={() => setDeleteParticipantTarget(null)}>
+        <DialogTitle sx={{ fontWeight: 900, fontSize: 17 }}>참가자 삭제</DialogTitle>
+        <DialogContent>
+          <Typography fontWeight={700}>
+            {deleteParticipantTarget?.division ? `(${deleteParticipantTarget.division}부) ` : ""}
+            {deleteParticipantTarget?.name} 님을 참가자 명단에서 삭제하겠습니까?
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
+          <Button onClick={() => setDeleteParticipantTarget(null)} sx={{ fontWeight: 700 }}>취소</Button>
+          <Button variant="contained" color="error" disableElevation sx={{ fontWeight: 700 }} onClick={handleDeleteParticipant}>
+            확인
           </Button>
         </DialogActions>
       </Dialog>

@@ -22,7 +22,8 @@ import { useAppSelector } from "../../app/hooks";
 import axios from "axios";
 
 export type MemberRow = {
-    id: string;
+    id: string;         // user_id (string)
+    member_id: number;  // user_id (number) — 불러오기 참가자 식별용
     division: string;
     name: string;
 };
@@ -102,6 +103,7 @@ export default function LoadMembersDialog({
 
                 const memberRows: MemberRow[] = members.map((m) => ({
                     id: String(m.user_id),
+                    member_id: m.user_id,
                     division: (m.division ?? "").trim(),
                     name: (m.name ?? m.email ?? "").trim(),
                 }));

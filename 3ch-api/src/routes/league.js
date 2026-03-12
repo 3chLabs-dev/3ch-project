@@ -9,6 +9,7 @@ const router = express.Router();
 const participantSchema = z.object({
   division: z.string().default(''),
   name: z.string().min(1, '참가자 이름은 필수입니다.'),
+  member_id: z.number().int().nullable().optional(),
   paid: z.boolean().default(false),
   arrived: z.boolean().default(false),
   after: z.boolean().default(false),
@@ -381,9 +382,9 @@ router.post('/league', requireAuth, async (req, res) => {
 
     for (const p of participants) {
       await client.query(
-        `INSERT INTO league_participants (id, league_id, division, name, paid, arrived, "after")
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [randomUUID(), leagueId, p.division ?? '', p.name, p.paid ?? false, p.arrived ?? false, p.after ?? false],
+        `INSERT INTO league_participants (id, league_id, division, name, member_id, paid, arrived, "after")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [randomUUID(), leagueId, p.division ?? '', p.name, p.member_id ?? null, p.paid ?? false, p.arrived ?? false, p.after ?? false],
       );
     }
 
@@ -458,7 +459,7 @@ router.get('/league/:id/participants', requireAuth, async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT id, league_id, division, name, paid, arrived, "after", sort_order, created_at
+      `SELECT id, league_id, division, name, member_id, paid, arrived, "after", sort_order, created_at
        FROM league_participants
        WHERE league_id = $1
        ORDER BY sort_order ASC NULLS LAST, division ASC, created_at ASC`,
@@ -548,6 +549,7 @@ router.post('/league/:leagueId/participants', requireAuth, async (req, res) => {
     const addSchema = z.array(z.object({
       division: z.string().default(''),
       name: z.string().min(1, '이름은 필수입니다.'),
+      member_id: z.number().int().nullable().optional(),
     }));
     const participants = addSchema.parse(rawParticipants);
 
@@ -568,10 +570,10 @@ router.post('/league/:leagueId/participants', requireAuth, async (req, res) => {
     const inserted = [];
     for (const p of participants) {
       const result = await pool.query(
-        `INSERT INTO league_participants (id, league_id, division, name, paid, arrived, "after")
-         VALUES ($1, $2, $3, $4, false, false, false)
-         RETURNING id, league_id, division, name, paid, arrived, "after", created_at`,
-        [randomUUID(), leagueId, p.division, p.name],
+        `INSERT INTO league_participants (id, league_id, division, name, member_id, paid, arrived, "after")
+         VALUES ($1, $2, $3, $4, $5, false, false, false)
+         RETURNING id, league_id, division, name, member_id, paid, arrived, "after", created_at`,
+        [randomUUID(), leagueId, p.division, p.name, p.member_id ?? null],
       );
       inserted.push(result.rows[0]);
     }
@@ -909,6 +911,17 @@ router.put('/league/:leagueId/participants/:participantId', requireAuth, async (
 
     const updates = updateSchema.parse(req.body);
 
+    // 클럽 불러오기 참가자(member_id 존재)는 division/name 수정 불가
+    if (updates.division !== undefined || updates.name !== undefined) {
+      const memberCheck = await pool.query(
+        `SELECT member_id FROM league_participants WHERE id = $1 AND league_id = $2`,
+        [participantId, leagueId],
+      );
+      if (memberCheck.rows[0]?.member_id != null) {
+        return res.status(403).json({ message: '클럽에서 불러온 참가자는 부수·이름을 수정할 수 없습니다.' });
+      }
+    }
+
     const fields = [];
     const values = [];
     let queryIndex = 1;
@@ -933,7 +946,7 @@ router.put('/league/:leagueId/participants/:participantId', requireAuth, async (
       UPDATE league_participants
       SET ${fields.join(', ')}
       WHERE id = $${queryIndex} AND league_id = $${queryIndex + 1}
-      RETURNING id, league_id, division, name, paid, arrived, "after", created_at;
+      RETURNING id, league_id, division, name, member_id, paid, arrived, "after", created_at;
     `;
 
     const result = await pool.query(updateQuery, values);

@@ -50,6 +50,7 @@ export interface LeagueRulesInfo {
 export interface Participant {
   division: string;
   name: string;
+  member_id?: number | null;
   paid: boolean;
   arrived: boolean;
   after: boolean;
@@ -164,6 +165,7 @@ export const createLeague = createAsyncThunk.withTypes<{ state: RootState }>()(
     const participants = (s.step5Participants?.participants ?? []).map((p) => ({
       division: p.division,
       name: p.name,
+      member_id: p.member_id ?? null,
       paid: p.paid,
       arrived: p.arrived,
       after: p.after,

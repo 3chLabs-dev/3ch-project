@@ -17,6 +17,7 @@ export function mergeMembers(
       map.set(k, {
         division: m.division,
         name: m.name,
+        member_id: m.member_id,
         paid: false,
         arrived: false,
         after: false,

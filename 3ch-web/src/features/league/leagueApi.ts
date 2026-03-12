@@ -71,6 +71,7 @@ export interface LeagueParticipantItem {
   league_id: string;
   division?: string | null;
   name: string;
+  member_id?: number | null;
   paid: boolean;
   arrived: boolean;
   after: boolean;
@@ -172,7 +173,7 @@ export interface UpdateMatchRequest {
 
 export interface AddParticipantsRequest {
   leagueId: string;
-  participants: { division: string; name: string }[];
+  participants: { division: string; name: string; member_id?: number | null }[];
 }
 
 export interface AddParticipantsResponse {

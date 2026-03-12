@@ -108,6 +108,7 @@ model LeagueParticipant {
   id         String   @id @default(uuid())
   division   String?
   name       String
+  member_id  Int?
   paid       Boolean  @default(false)
   arrived    Boolean  @default(false)
   after      Boolean  @default(false)

@@ -866,7 +866,7 @@ export default function LeagueDetail() {
         <DialogTitle sx={{ fontWeight: 900, fontSize: 17 }}>참가자 삭제</DialogTitle>
         <DialogContent>
           <Typography fontWeight={700}>
-            {deleteParticipantTarget?.division ? `(${deleteParticipantTarget.division}부) ` : ""}
+            {deleteParticipantTarget?.division ? `(${deleteParticipantTarget.division}) ` : ""}
             {deleteParticipantTarget?.name} 님을 참가자 명단에서 삭제하겠습니까?
           </Typography>
         </DialogContent>

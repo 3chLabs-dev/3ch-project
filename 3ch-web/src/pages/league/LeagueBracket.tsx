@@ -24,6 +24,8 @@ import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import ScreenRotationIcon from "@mui/icons-material/ScreenRotation";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import ZoomInIcon from "@mui/icons-material/ZoomIn";
+import ZoomOutIcon from "@mui/icons-material/ZoomOut";
 import { formatLeagueDate } from "../../utils/dateUtils";
 import {
   useGetLeagueQuery,
@@ -96,6 +98,7 @@ const DiagonalBase = styled(TableCell)(({ theme }) => ({
   width: 65,
   border: "1px solid #E5E7EB",
   borderRadius: "8px",
+  overflow: "hidden",
   backgroundColor: theme.palette.action.disabledBackground,
 }));
 
@@ -612,7 +615,10 @@ export default function LeagueBracket() {
   // portrait 모드는 writingMode로 90° 회전되어 있어 물리적 tw/th가 시각 기준과 반전됨
   const wrapperRef      = useRef<HTMLDivElement>(null);  // 화면 영역 ref
   const wrapperTableRef = useRef<HTMLDivElement>(null);  // 테이블 실제 크기 ref
-  const [scale, setScale] = useState(1);
+  const [autoFitScale, setAutoFitScale] = useState(1);  // 화면에 딱 맞는 자동 스케일
+  const [naturalTw, setNaturalTw]       = useState(0);  // 테이블 원본(비스케일) 너비
+  const [naturalTh, setNaturalTh]       = useState(0);  // 테이블 원본(비스케일) 높이
+  const [userZoom, setUserZoom]         = useState(1);  // 사용자 줌 배율 (1 = 자동 fit)
   const dataReady = !!league && rawParticipants.length > 0; // 데이터 로드 완료 여부 (useLayoutEffect deps)
 
   useLayoutEffect(() => {
@@ -625,7 +631,9 @@ export default function LeagueBracket() {
       if (!tw || !th) return;
       // landscape: 물리 크기 = 시각 크기
       // portrait:  writingMode 90° 회전 → 시각 너비=th, 시각 높이=tw
-      setScale(landscape ? Math.min(ww / tw, wh / th) : Math.min(ww / th, wh / tw));
+      setAutoFitScale(landscape ? Math.min(ww / tw, wh / th) : Math.min(ww / th, wh / tw));
+      setNaturalTw(tw);
+      setNaturalTh(th);
     };
 
     updateScale();
@@ -706,10 +714,15 @@ export default function LeagueBracket() {
   const leagueStarted = league.status === "completed"; // 완료 상태면 수정 버튼 숨김
   const date          = formatLeagueDate(league.start_date);
   const winScore      = getWinScore(league.rules);
+  const appliedScale  = autoFitScale * userZoom;
+  // 줌 > 1이면 테이블이 화면을 초과 → 스크롤 가능하도록 시각적 크기를 spacer로 잡아줌
+  // portrait: 90° 회전이므로 시각 너비=naturalTh, 시각 높이=naturalTw
+  const visualW = naturalTw > 0 ? (landscape ? naturalTw : naturalTh) * appliedScale : 0;
+  const visualH = naturalTh > 0 ? (landscape ? naturalTh : naturalTw) * appliedScale : 0;
 
   // ── JSX ───────────────────────────────────────────────────────────────────
   return createPortal(
-    <Box sx={{ bgcolor: "#fff", display: "flex", flexDirection: "column", overflow: "hidden", position: "fixed", inset: 0, zIndex: 1300 }}>
+    <Box sx={{ bgcolor: "#fff", display: "flex", flexDirection: "column", overflow: "hidden", position: "fixed", inset: 0, zIndex: 9999 }}>
 
       {/* ===== 헤더 바 ===== */}
       <Box sx={{ display: "flex", alignItems: "center", px: 1, py: 0.75, borderBottom: "1px solid #E5E7EB", gap: 0.5 }}>
@@ -775,38 +788,27 @@ export default function LeagueBracket() {
       {/* ===== 대진표 영역 ===== */}
       <Box ref={wrapperRef} sx={{ flex: 1, overflow: "hidden", position: "relative", minHeight: 0, bgcolor: "#F0F2F5" }}>
 
-        {/* 플로팅 버튼 (우하단 고정) */}
-        <Tooltip title="새로고침">
-          <IconButton
-            onClick={handleRefresh}
-            sx={{ position: "absolute", bottom: 67, right: 14, zIndex: 10, bgcolor: "#fff", color: "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: "#F3F4F6" } }}
-          >
-            <RefreshIcon sx={{ fontSize: 18 }} />
-          </IconButton>
-        </Tooltip>
-        {/* landscape 상태일 때 파란 배경으로 현재 모드 표시 */}
-        <Tooltip title={landscape ? "세로 보기" : "가로 보기"}>
-          <IconButton
-            onClick={() => setLandscape((v) => !v)}
-            sx={{ position: "absolute", bottom: 14, right: 14, zIndex: 10, bgcolor: landscape ? COLOR.primary : "#fff", color: landscape ? "#fff" : "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: landscape ? "#1D4ED8" : "#F3F4F6" } }}
-          >
-            <ScreenRotationIcon sx={{ fontSize: 18 }} />
-          </IconButton>
-        </Tooltip>
-
-        {/* 대진표 + 경기 순서 (scale 변환 컨테이너) */}
-        <Box
-          ref={wrapperTableRef}
-          sx={{
-            // portrait 모드: writingMode로 콘텐츠 전체를 90° 회전 → 세로 화면에서도 가로 테이블을 표시
-            // landscape 모드: 일반 layout, scale만 적용
-            ...(!landscape && { writingMode: "vertical-rl", textOrientation: "sideways" }),
-            transformOrigin: "top left",
-            transform: `scale(${scale})`,
-            display: "inline-block",
-            padding: "10px",
-          }}
-        >
+        {/* 스크롤 가능한 내부 컨테이너: 줌 > 1이면 테이블이 화면을 초과해 스크롤 발생 */}
+        <Box sx={{ position: "absolute", inset: 0, overflow: userZoom > 1 ? "auto" : "hidden" }}>
+          {/* spacer: CSS transform은 레이아웃 크기에 영향을 안 주므로
+              시각적 크기만큼 spacer를 두어 스크롤 범위를 확보 */}
+          <Box sx={{ width: visualW || "100%", height: visualH || "100%", minWidth: "100%", minHeight: "100%", position: "relative", flexShrink: 0 }}>
+            {/* 대진표 + 경기 순서 (scale 변환 컨테이너) */}
+            <Box
+              ref={wrapperTableRef}
+              sx={{
+                // portrait 모드: writingMode로 콘텐츠 전체를 90° 회전 → 세로 화면에서도 가로 테이블을 표시
+                // landscape 모드: 일반 layout, scale만 적용
+                ...(!landscape && { writingMode: "vertical-rl", textOrientation: "sideways" }),
+                transformOrigin: "top left",
+                transform: `scale(${appliedScale})`,
+                display: "inline-block",
+                padding: "10px",
+                position: "absolute",
+                top: 0,
+                left: 0,
+              }}
+            >
           {/* 대진표 테이블 (DnD 컨텍스트 내부) */}
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <TableContainer component={Paper} elevation={3} sx={{ borderRadius: "10px", overflow: "hidden" }}>
@@ -879,8 +881,37 @@ export default function LeagueBracket() {
 
           {/* 경기 순서 패널 */}
           <MatchSchedulePanel matches={matches} localOrder={localOrder} landscape={landscape} leagueId={id ?? ""} />
+            </Box>{/* /wrapperTableRef */}
+          </Box>{/* /spacer */}
+        </Box>{/* /scrollableInner */}
+
+        {/* 플로팅 버튼들 (position: absolute, wrapperRef 기준 → 스크롤 영역 위에 고정) */}
+
+        {/* 줌 컨트롤: 세로 모드=열(＋/％/－), 가로 모드=행(＋ ％ －) */}
+        <Box sx={{ position: "absolute", bottom: 126, right: 14, zIndex: 10, bgcolor: "#fff", borderRadius: 2, boxShadow: "0 2px 8px rgba(0,0,0,0.15)", display: "flex", flexDirection: landscape ? "row" : "column", alignItems: "center", p: 0.25 }}>
+          <IconButton size="small" onClick={() => setUserZoom((z) => Math.min(2.5, +(z + 0.25).toFixed(2)))}>
+            <ZoomInIcon sx={{ fontSize: 18 }} />
+          </IconButton>
+          <Typography sx={{ fontSize: 9, fontWeight: 700, color: "#6B7280", lineHeight: 1, mx: landscape ? 0.25 : 0, my: landscape ? 0 : 0.25 }}>
+            {Math.round(userZoom * 100)}%
+          </Typography>
+          <IconButton size="small" disabled={userZoom <= 0.5} onClick={() => setUserZoom((z) => Math.max(0.5, +(z - 0.25).toFixed(2)))}>
+            <ZoomOutIcon sx={{ fontSize: 18 }} />
+          </IconButton>
         </Box>
-      </Box>
+
+        <Tooltip title="새로고침">
+          <IconButton onClick={handleRefresh} sx={{ position: "absolute", bottom: 67, right: 14, zIndex: 10, bgcolor: "#fff", color: "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: "#F3F4F6" } }}>
+            <RefreshIcon sx={{ fontSize: 18 }} />
+          </IconButton>
+        </Tooltip>
+        <Tooltip title={landscape ? "세로 보기" : "가로 보기"}>
+          <IconButton onClick={() => setLandscape((v) => !v)} sx={{ position: "absolute", bottom: 14, right: 14, zIndex: 10, bgcolor: landscape ? COLOR.primary : "#fff", color: landscape ? "#fff" : "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: landscape ? "#1D4ED8" : "#F3F4F6" } }}>
+            <ScreenRotationIcon sx={{ fontSize: 18 }} />
+          </IconButton>
+        </Tooltip>
+
+      </Box>{/* /wrapperRef */}
     </Box>,
     document.body
   );

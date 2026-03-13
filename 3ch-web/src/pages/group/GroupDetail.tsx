@@ -106,47 +106,10 @@ export default function GroupDetail() {
                             </Box>
                         </Stack>
 
-                        {/* 기본 정보 */}
-                        <Stack
-                            direction="row"
-                            sx={{
-                                bgcolor: "#F9FAFB",
-                                borderRadius: 1,
-                                px: 2,
-                                py: 1.5,
-                                display: "grid",
-                                gridTemplateColumns: "1fr 1fr 1fr",
-                                alignItems: "center",
-                                textAlign: "center",
-                            }}
-                        >
-                            <Box>
-                                <Typography fontSize={12} color="text.secondary" fontWeight={600} sx={{ textAlign: "center" }}>
-                                    종목
-                                </Typography>
-                                <Typography fontWeight={800} fontSize={14} sx={{ textAlign: "center" }}>
-                                    {group.sport || "-"}
-                                </Typography>
-                            </Box>
-                            <Box>
-                                <Typography fontSize={12} color="text.secondary" fontWeight={600} sx={{ textAlign: "center" }}>
-                                    창단일
-                                </Typography>
-                                <Typography fontWeight={800} fontSize={14} sx={{ textAlign: "center" }}>
-                                    {group.founded_at
-                                        ? new Date(group.founded_at).toLocaleDateString("ko-KR").replace(/\. /g, "-").replace(".", "")
-                                        : "-"}
-                                </Typography>
-                            </Box>
-                            <Box>
-                                <Typography fontSize={12} color="text.secondary" fontWeight={600} sx={{ textAlign: "center" }}>
-                                    회원수
-                                </Typography>
-                                <Typography fontWeight={800} fontSize={14} sx={{ textAlign: "center" }}>
-                                    {members.length}
-                                </Typography>
-                            </Box>
-                        </Stack>
+                        {/* 클럽 소개 */}
+                        <Typography fontSize={14} color={group.description ? "text.secondary" : "#C0C0C0"} sx={{ whiteSpace: "pre-line", lineHeight: 1.7 }}>
+                            {group.description || "클럽 소개를 작성해보세요."}
+                        </Typography>
                     </Stack>
                 </CardContent>
             </Card>
@@ -154,7 +117,7 @@ export default function GroupDetail() {
             {/* 클럽 회원 섹션 */}
             <Box>
                 <Typography variant="subtitle1" fontWeight={900} sx={{ mb: 1.5 }}>
-                    클럽 회원
+                    클럽 회원 ({members.length}명)
                 </Typography>
 
                 <Card elevation={2} sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>

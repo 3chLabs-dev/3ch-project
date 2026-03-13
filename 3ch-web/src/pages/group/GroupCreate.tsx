@@ -33,7 +33,7 @@ export default function GroupCreate() {
     const [regionCity, setRegionCity] = useState("");
     const [regionDistrict, setRegionDistrict] = useState("");
     const [groupName, setGroupName] = useState("");
-    const [foundedAt, setFoundedAt] = useState("");
+    const [description, setDescription] = useState("");
     const [address, setAddress] = useState("");
     const [addressDetail, setAddressDetail] = useState("");
     const [lat, setLat] = useState<number | undefined>();
@@ -66,8 +66,7 @@ export default function GroupCreate() {
         regionCity.trim() !== "" &&
         regionDistrict.trim() !== "" &&
         groupName.trim() !== "" &&
-        nameChecked === true &&
-        foundedAt.length === 10;
+        nameChecked === true;
 
     const handleCityChange = (e: SelectChangeEvent<string>) => {
         setRegionCity(e.target.value);
@@ -99,16 +98,6 @@ export default function GroupCreate() {
         }
     };
 
-    const handleFoundedAtChange = (val: string) => {
-        // 숫자와 하이픈만 허용, 자동 하이픈 삽입
-        const digits = val.replace(/[^\d]/g, "");
-        let formatted = "";
-        for (let i = 0; i < digits.length && i < 8; i++) {
-            if (i === 4 || i === 6) formatted += "-";
-            formatted += digits[i];
-        }
-        setFoundedAt(formatted);
-    };
 
     type DaumWindow = Window & { daum?: { Postcode: new (opts: { oncomplete: (d: { address: string; roadAddress: string }) => void }) => { open: () => void } } };
 
@@ -182,7 +171,7 @@ export default function GroupCreate() {
                 // type: groupType,
                 region_city: regionCity,
                 region_district: regionDistrict,
-                founded_at: foundedAt,
+                description: description || undefined,
                 address: address || undefined,
                 address_detail: addressDetail || undefined,
                 lat,
@@ -443,17 +432,20 @@ export default function GroupCreate() {
                     )}
                 </Box>
 
-                {/* 클럽 창단일 */}
+                {/* 클럽 소개 */}
                 <Box>
-                    <Typography sx={{ fontWeight: 900, mb: 1 }}>클럽 창단일</Typography>
+                    <Typography sx={{ fontWeight: 900, mb: 1 }}>클럽 소개 <Typography component="span" sx={{ fontSize: 11, fontWeight: 500, color: "#9CA3AF" }}>(선택)</Typography></Typography>
                     <TextField
-                        placeholder="YYYY-MM-DD"
-                        size="small"
+                        placeholder="클럽 소개를 작성해보세요."
                         fullWidth
-                        value={foundedAt}
-                        onChange={(e) => handleFoundedAtChange(e.target.value)}
-                        inputProps={{ maxLength: 10, inputMode: "numeric" }}
-                        sx={inputSx}
+                        multiline
+                        rows={4}
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        sx={{
+                            "& .MuiOutlinedInput-root": { borderRadius: 1, bgcolor: "#fff" },
+                            "& .MuiOutlinedInput-input": { fontSize: "0.95rem" },
+                        }}
                     />
                 </Box>
 

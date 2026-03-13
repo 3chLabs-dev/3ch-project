@@ -182,7 +182,7 @@ export default function GroupLeagueManage() {
                             <Chip
                               label={participant.division || "-"}
                               size="small"
-                              sx={{ height: 20, fontSize: 11, fontWeight: 800 }}
+                              sx={{ height: 28, minWidth: 28, borderRadius: 9999, fontSize: 11, fontWeight: 800, bgcolor: "#FAAA47", color: "#000000" }}
                             />
                             <Typography fontWeight={700} fontSize={14} flex={1}>
                               {participant.name}

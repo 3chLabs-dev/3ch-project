@@ -275,16 +275,6 @@ export default function AdminClubPage() {
     }
   };
 
-  const handleAddFounded = (val: string) => {
-    const digits = val.replace(/[^\d]/g, "");
-    let formatted = "";
-    for (let i = 0; i < digits.length && i < 8; i++) {
-      if (i === 4 || i === 6) formatted += "-";
-      formatted += digits[i];
-    }
-    setAddFounded(formatted);
-  };
-
   const canAdd =
     !!addSport && !!addRegionCity && !!addRegionDist &&
     !!addName.trim() && addNameChecked === true && addFounded.length === 10;
@@ -319,6 +309,7 @@ export default function AdminClubPage() {
   };
 
   const fetchClubs = useCallback(async (q: Filters, p: number) => {
+    if (!token) return;
     setLoading(true);
     const params = new URLSearchParams({ page: String(p), limit: String(LIMIT) });
     (Object.entries(q) as [string, string][]).forEach(([k, v]) => { if (v) params.set(k, v); });
@@ -456,7 +447,7 @@ export default function AdminClubPage() {
         <Table size="small">
           <TableHead>
             <TableRow sx={{ bgcolor: "#F9FAFB" }}>
-              {["클럽코드", "종목", "지역", "클럽명", "리더", "창단일", "생성일시"].map((h) => (
+              {["클럽코드", "종목", "지역", "클럽명", "리더", "생성일시"].map((h) => (
                 <TableCell key={h} sx={{ fontWeight: 800, fontSize: 12, color: "#374151", py: 1.2 }}>{h}</TableCell>
               ))}
             </TableRow>
@@ -493,7 +484,6 @@ export default function AdminClubPage() {
                     <TableCell sx={{ fontSize: 12 }}>{region}</TableCell>
                     <TableCell sx={{ fontSize: 12, fontWeight: 700 }}>{c.name}</TableCell>
                     <TableCell sx={{ fontSize: 12 }}>{c.leader_name ?? "-"}</TableCell>
-                    <TableCell sx={{ fontSize: 12 }}>{c.founded_at ? c.founded_at.slice(0, 10) : "-"}</TableCell>
                     <TableCell sx={{ fontSize: 12 }}>{c.created_at.slice(0, 10)}</TableCell>
                   </TableRow>
                 );
@@ -597,12 +587,6 @@ export default function AdminClubPage() {
                     inputProps={{ maxLength: 200 }} />
                 )}
               </Stack>
-            </AddFormRow>
-
-            <AddFormRow label="창단일" required>
-              <TextField size="small" fullWidth placeholder="YYYY-MM-DD"
-                value={addFounded} onChange={(e) => handleAddFounded(e.target.value)}
-                inputProps={{ maxLength: 10, inputMode: "numeric" }} />
             </AddFormRow>
 
             {addError && (
@@ -713,13 +697,6 @@ export default function AdminClubPage() {
                   onClick={() => openLeaderPick("edit")}
                   sx={{ cursor: "pointer", "& .MuiOutlinedInput-root": { cursor: "pointer" } }}
                 />
-              </AddFormRow>
-
-              <AddFormRow label="창단일" required>
-                <TextField size="small" fullWidth placeholder="YYYY-MM-DD"
-                  value={editFounded}
-                  onChange={(e) => { const digits = e.target.value.replace(/[^\d]/g, ""); let f = ""; for (let i = 0; i < digits.length && i < 8; i++) { if (i === 4 || i === 6) f += "-"; f += digits[i]; } setEditFounded(f); }}
-                  inputProps={{ maxLength: 10, inputMode: "numeric" }} />
               </AddFormRow>
 
               <AddFormRow label="생성일시" plain>

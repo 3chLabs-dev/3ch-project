@@ -97,7 +97,7 @@ export default function GroupManage() {
         sport: "",
         region_city: "",
         region_district: "",
-        founded_at: "",
+        description: "",
         address: "",
         address_detail: "",
         lat: undefined as number | undefined,
@@ -196,7 +196,7 @@ export default function GroupManage() {
             sport: group.sport || "",
             region_city: group.region_city || "",
             region_district: group.region_district || "",
-            founded_at: group.founded_at ? group.founded_at.split('T')[0] : "",
+            description: group.description || "",
             address: group.address || "",
             address_detail: group.address_detail || "",
             lat: group.lat,
@@ -363,46 +363,10 @@ export default function GroupManage() {
                             </Box>
                         </Stack>
 
-                        {/* 기본 정보 */}
-                        <Stack
-                            direction="row"
-                            // spacing={3}
-                            sx={{
-                                bgcolor: "#F9FAFB",
-                                borderRadius: 1,
-                                px: 2,
-                                py: 1.5,
-                                display: "grid",
-                                gridTemplateColumns: "1fr 1fr 1fr",
-                                alignItems: "center",
-                                textAlign: "center"
-                            }}
-                        >
-                            <Box>
-                                <Typography fontSize={12} color="text.secondary" fontWeight={600} sx={{ textAlign: "center" }}>
-                                    종목
-                                </Typography>
-                                <Typography fontWeight={800} fontSize={14} sx={{ textAlign: "center" }}>
-                                    {group.sport || "-"}
-                                </Typography>
-                            </Box>
-                            <Box>
-                                <Typography fontSize={12} color="text.secondary" fontWeight={600} sx={{ textAlign: "center" }}>
-                                    창단일
-                                </Typography>
-                                <Typography fontWeight={800} fontSize={14} sx={{ textAlign: "center" }}>
-                                    {group.founded_at ? new Date(group.founded_at).toLocaleDateString("ko-KR").replace(/\. /g, "-").replace(".", "") : "-"}
-                                </Typography>
-                            </Box>
-                            <Box>
-                                <Typography fontSize={12} color="text.secondary" fontWeight={600} sx={{ textAlign: "center" }}>
-                                    회원수
-                                </Typography>
-                                <Typography fontWeight={800} fontSize={14} sx={{ textAlign: "center" }}>
-                                    {members.length}
-                                </Typography>
-                            </Box>
-                        </Stack>
+                        {/* 클럽 소개 */}
+                        <Typography fontSize={14} color={group.description ? "text.secondary" : "#C0C0C0"} sx={{ whiteSpace: "pre-line", lineHeight: 1.7 }}>
+                            {group.description || "클럽 소개를 작성해보세요."}
+                        </Typography>
 
                         {/* 리그·대회 개최내역 */}
                         <Button
@@ -426,7 +390,7 @@ export default function GroupManage() {
             {/* 클럽 회원 섹션 */}
             <Box>
                 <Typography variant="subtitle1" fontWeight={900} sx={{ mb: 1.5 }}>
-                    클럽 회원
+                    클럽 회원 ({members.length}명)
                 </Typography>
 
                 <Card elevation={2} sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
@@ -713,6 +677,38 @@ export default function GroupManage() {
                             </Select>
                         </FormControl>
 
+                        {/* 주소 */}
+                        <Stack direction="row" spacing={1}>
+                            <TextField
+                                label="주소"
+                                value={formData.address}
+                                slotProps={{ input: { readOnly: true } }}
+                                fullWidth
+                                size="small"
+                                sx={{ "& .MuiInputBase-input": { fontSize: 14 } }}
+                            />
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                onClick={handleAddressSearch}
+                                sx={{ whiteSpace: "nowrap", height: 40, fontWeight: 700 }}
+                            >
+                                주소 검색
+                            </Button>
+                        </Stack>
+                        {formData.address && (
+                            <TextField
+                                label="상세 주소"
+                                value={formData.address_detail}
+                                onChange={(e) => setFormData({ ...formData, address_detail: e.target.value })}
+                                fullWidth
+                                size="small"
+                                placeholder="동/호수 등"
+                                slotProps={{ inputLabel: { shrink: true } }}
+                                sx={{ "& .MuiInputBase-input": { fontSize: 14 } }}
+                            />
+                        )}
+
                         {/* 지역 */}
                         <Stack direction="row" spacing={1}>
                             <FormControl fullWidth size="small">
@@ -778,47 +774,18 @@ export default function GroupManage() {
                             }}
                         />
 
-                        {/* 창단일 */}
+                        {/* 클럽 소개 */}
                         <TextField
-                            label="창단일"
-                            type="date"
-                            value={formData.founded_at}
-                            onChange={(e) => setFormData({ ...formData, founded_at: e.target.value })}
+                            label="클럽 소개 (선택)"
+                            value={formData.description}
+                            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                             fullWidth
-                            size="small"
-                            InputLabelProps={{ shrink: true }}
+                            multiline
+                            rows={4}
+                            placeholder="클럽 소개를 작성해보세요."
+                            slotProps={{ inputLabel: { shrink: true } }}
                             sx={{ "& .MuiInputBase-input": { fontSize: 14 } }}
                         />
-
-                        {/* 주소 */}
-                        <Stack direction="row" spacing={1}>
-                            <TextField
-                                label="주소"
-                                value={formData.address}
-                                InputProps={{ readOnly: true }}
-                                fullWidth
-                                size="small"
-                                sx={{ "& .MuiInputBase-input": { fontSize: 14 } }}
-                            />
-                            <Button
-                                variant="outlined"
-                                size="small"
-                                onClick={handleAddressSearch}
-                                sx={{ whiteSpace: "nowrap", height: 40, fontWeight: 700 }}
-                            >
-                                주소 검색
-                            </Button>
-                        </Stack>
-                        {formData.address && (
-                            <TextField
-                                label="상세 주소"
-                                value={formData.address_detail}
-                                onChange={(e) => setFormData({ ...formData, address_detail: e.target.value })}
-                                fullWidth
-                                size="small"
-                                sx={{ "& .MuiInputBase-input": { fontSize: 14 } }}
-                            />
-                        )}
                     </Stack>
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2.5, justifyContent: "space-between" }}>

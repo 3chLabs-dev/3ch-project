@@ -13,7 +13,6 @@ import { setPreferredGroupId } from "../features/league/leagueCreationSlice";
 import { useGetMyGroupsQuery } from "../features/group/groupApi";
 import logo from "../assets/512_우리리그 로고.svg";
 import SettingsIcon from "@mui/icons-material/Settings";
-import homeLogo from "../assets/192_화이트_우리리그.png"
 import homeHeaderBg from "../assets/메인 배너_900x700_버튼X.png"
 // import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
 
@@ -182,7 +181,7 @@ export default function AppShell() {
                                 backgroundRepeat: "no-repeat",
                             }}
                         >
-                            <Box
+                            {/* <Box
                                 component={Link}
                                 to="/"
                                 sx={{
@@ -197,7 +196,7 @@ export default function AppShell() {
                                 }}
                             >
                                 <img src={homeLogo} alt="우리리그" style={{ height: 20 }} />
-                            </Box>
+                            </Box> */}
 
                             <Box
                                 sx={{

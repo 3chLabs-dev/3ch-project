@@ -18,6 +18,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Avatar,
 } from "@mui/material";
 import QRCode from "react-qr-code";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -640,9 +641,9 @@ export default function LeagueDetail() {
                   />
                 ) : (
                   <Box sx={{ display: "flex", justifyContent: "center" }}>
-                    <Box sx={{ display: "inline-flex", alignItems: "center", justifyContent: "center", height: 36, minWidth: 36, px: 0.8, lineHeight: 1, borderRadius: 9999, bgcolor: "#FAAA47", fontSize: 11, fontWeight: 900, color: "#000000" }}>
+                    <Avatar sx={{ width: 36, height: 36, bgcolor: "#FAAA47", color: "#000000", fontSize: 11, fontWeight: 900 }}>
                       {p.division || "-"}
-                    </Box>
+                    </Avatar>
                   </Box>
                 )}
 

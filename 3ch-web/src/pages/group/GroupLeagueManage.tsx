@@ -12,6 +12,7 @@ import {
   Collapse,
   Chip,
   CircularProgress,
+  Avatar,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -179,11 +180,9 @@ export default function GroupLeagueManage() {
                               "&:hover": { bgcolor: "#F3F4F6" },
                             }}
                           >
-                            <Chip
-                              label={participant.division || "-"}
-                              size="small"
-                              sx={{ height: 28, minWidth: 28, borderRadius: 9999, fontSize: 11, fontWeight: 800, bgcolor: "#FAAA47", color: "#000000" }}
-                            />
+                            <Avatar sx={{ width: 36, height: 36, bgcolor: "#FAAA47", color: "#000000", fontSize: 11, fontWeight: 900 }}>
+                              {participant.division || "-"}
+                            </Avatar>
                             <Typography fontWeight={700} fontSize={14} flex={1}>
                               {participant.name}
                             </Typography>

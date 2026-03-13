@@ -224,7 +224,7 @@ export default function AppShell() {
                             </Box>
 
                             <Box
-                                onClick={() => navigate(token ? "/league" : "/signin")}
+                                onClick={() => navigate(token ? "/league" : "/login")}
                                 sx={{
                                     position: "absolute",
                                     left: "50%",

@@ -16,7 +16,8 @@ export type LeagueTypeValue =
   | "singles"
   | "doubles"
   | "team"
-  | "exchange";
+  | "club_battle"
+  | "club_exchange";
 
 export interface LeagueTypeInfo {
   selectedType: LeagueTypeValue;
@@ -132,7 +133,8 @@ export const createLeague = createAsyncThunk.withTypes<{ state: RootState }>()(
       singles: "단식",
       doubles: "복식",
       team: "단체전",
-      exchange: "교류전",
+      club_battle: "클럽 대항전",
+      club_exchange: "클럽 교류전",
     };
 
     // 리그 규칙 매핑

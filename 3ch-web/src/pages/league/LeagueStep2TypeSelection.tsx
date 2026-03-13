@@ -16,8 +16,9 @@ import { useAppDispatch, useAppSelector } from "../../app/hooks";
 const LeagueTypeOptions = [
   { value: "singles", label: "단식", disabled: false },
   { value: "doubles", label: "복식", disabled: false },
-  { value: "team", label: "단체전", disabled: true },
-  { value: "exchange", label: "교류전", disabled: true },
+  { value: "team", label: "단체전", disabled: false },
+  { value: "club_battle", label: "클럽 대항전", disabled: true },
+  { value: "club_exchange", label: "클럽 교류전", disabled: true },
 ] as const;
 
 const LeagueStep2TypeSelection: React.FC = () => {

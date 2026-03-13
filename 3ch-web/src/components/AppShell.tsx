@@ -14,6 +14,7 @@ import { useGetMyGroupsQuery } from "../features/group/groupApi";
 import logo from "../assets/512_우리리그 로고.svg";
 import SettingsIcon from "@mui/icons-material/Settings";
 import homeLogo from "../assets/192_화이트_우리리그.png"
+import homeHeaderBg from "../assets/메인 배너_900x700_버튼X.png"
 // import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
 
 const APP_BAR_H = 56;
@@ -170,10 +171,12 @@ export default function AppShell() {
                     {isHome && (
                         <Box
                             ref={bannerRef}
+                            // onClick={() => navigate(token ? "/league" : "/signin")}
                             sx={{
                                 position: "relative",
                                 aspectRatio: "3 / 2",
-                                backgroundColor: "#0e0e49",
+                                // backgroundColor: "#0e0e49",
+                                backgroundImage: `url(${homeHeaderBg})`,
                                 backgroundSize: "cover",
                                 backgroundPosition: "center",
                                 backgroundRepeat: "no-repeat",
@@ -184,14 +187,16 @@ export default function AppShell() {
                                 to="/"
                                 sx={{
                                     position: "absolute",
-                                    top: 15.75,
-                                    left: 23.75,
+                                    // top: 15.75,
+                                    // left: 23.75,
+                                    top: "4%",
+                                    left: "6%",
                                     display: "flex",
                                     alignItems: "center",
                                     textDecoration: "none",
                                 }}
                             >
-                                <img src={homeLogo} alt="우리리그" style={{ height: 32 }} />
+                                <img src={homeLogo} alt="우리리그" style={{ height: 20 }} />
                             </Box>
 
                             <Box
@@ -205,7 +210,7 @@ export default function AppShell() {
                                     width: "78%",
                                 }}
                             >
-                                <Box sx={{ fontSize: 13, fontWeight: 700, mb: 0.3 }}>
+                                {/* <Box sx={{ fontSize: 13, fontWeight: 700, mb: 0.3 }}>
                                     우리의 리그가 시작되는 곳
                                 </Box>
                                 <Box sx={{ fontSize: 34, fontWeight: 900, lineHeight: 1.05, mb: 0.8 }}>
@@ -215,7 +220,7 @@ export default function AppShell() {
                                     자동화된 시스템으로 리그·대회를 쉽고 빠르게 만들고
                                     <br />
                                     모든 경기를 한눈에 관리하세요.
-                                </Box>
+                                </Box> */}
                             </Box>
 
                             <Box
@@ -225,12 +230,12 @@ export default function AppShell() {
                                     left: "50%",
                                     bottom: 24,
                                     transform: "translateX(-50%)",
-                                    px: 3,
-                                    py: 1,
+                                    px: 4.8,
+                                    py: 1.3,
                                     borderRadius: 9999,
                                     bgcolor: "#D9D9D9",
                                     color: "#1464d2",
-                                    fontSize: 15,
+                                    fontSize: 20,
                                     fontWeight: 900,
                                     lineHeight: 1,
                                     cursor: "pointer",

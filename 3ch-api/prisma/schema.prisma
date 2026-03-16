@@ -46,6 +46,7 @@ model Group {
   address_detail  String?
   lat             Float?
   lng             Float?
+  club_code       String?   @unique
 
   created_by_id Int
   creator       User    @relation("GroupCreator", fields: [created_by_id], references: [id])
@@ -86,6 +87,7 @@ model League {
   sort_order      String?   @default("부수")
   recruit_count   Int       @default(0)
   participant_count Int     @default(0)
+  league_code     String?   @unique
   created_at      DateTime  @default(now())
   updated_at      DateTime  @default(now()) @updatedAt
 
@@ -202,6 +204,7 @@ model Match {
 model Draw {
   id             String    @id @default(dbgenerated("gen_random_uuid()::text"))
   name           String
+  draw_code      String?   @unique
   created_at     DateTime  @default(now())
 
   league_id      String

@@ -7,6 +7,10 @@ import {
   CardContent,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
   IconButton,
   LinearProgress,
@@ -18,6 +22,7 @@ import {
 } from "@mui/material";
 import type { SelectChangeEvent } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import CloseIcon from "@mui/icons-material/Close";
 import TuneIcon from "@mui/icons-material/Tune";
 import CachedIcon from "@mui/icons-material/Cached";
 import HistoryIcon from "@mui/icons-material/History";
@@ -44,7 +49,26 @@ type DrawResult = {
 type DrawSourceItem = {
   id: string;
   name: string;
+  start_date?: string;
 };
+
+type QuickRange = "1w" | "1m" | "3m" | "6m" | "1y" | null;
+
+function addDays(date: Date, days: number) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function addMonths(date: Date, months: number) {
+  const d = new Date(date);
+  d.setMonth(d.getMonth() + months);
+  return d;
+}
+
+function formatDate(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
 
 export default function DrawMain() {
   const dispatch = useAppDispatch();
@@ -63,6 +87,9 @@ export default function DrawMain() {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const selectedSourceLeagueId = null;
   const [phase, setPhase] = useState<DrawPhase>("list");
+  const [leagueFilterOpen, setLeagueFilterOpen] = useState(false);
+  const [leagueFilterStart, setLeagueFilterStart] = useState("");
+  const [leagueFilterEnd, setLeagueFilterEnd] = useState("");
   const animationRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -110,9 +137,20 @@ export default function DrawMain() {
     { skip: !isLoggedIn || !effectiveSelectedGroupId, refetchOnMountOrArgChange: true },
   );
   const leagueSources = useMemo<DrawSourceItem[]>(
-    () => (leagueData?.leagues ?? []).map((l) => ({ id: l.id, name: l.name })),
+    () => (leagueData?.leagues ?? []).map((l) => ({ id: l.id, name: l.name, start_date: l.start_date })),
     [leagueData],
   );
+
+  const filteredLeagueSources = useMemo(() => {
+    if (!leagueFilterStart && !leagueFilterEnd) return leagueSources;
+    return leagueSources.filter((l) => {
+      if (!l.start_date) return true;
+      const d = l.start_date.slice(0, 10);
+      if (leagueFilterStart && d < leagueFilterStart) return false;
+      if (leagueFilterEnd && d > leagueFilterEnd) return false;
+      return true;
+    });
+  }, [leagueSources, leagueFilterStart, leagueFilterEnd]);
 
   const tournamentDraws = useMemo(
     () => results.filter((r) => r.groupId === effectiveSelectedGroupId && r.type === "tournament"),
@@ -413,14 +451,18 @@ export default function DrawMain() {
         )}
       </Stack>
 
-      <SectionHeader title="리그 추첨" />
+      <SectionHeader
+        title="리그 추첨"
+        onFilterClick={() => setLeagueFilterOpen(true)}
+        filterActive={!!(leagueFilterStart || leagueFilterEnd)}
+      />
       {!isLoggedIn ? (
         <EmptyCard text="로그인 후 이용할 수 있습니다." />
       ) : myGroups.length === 0 ? (
         <EmptyCard text="가입된 클럽이 없습니다." />
-      ) : leagueSources.length > 0 ? (
+      ) : filteredLeagueSources.length > 0 ? (
         <Stack spacing={1}>
-          {leagueSources.map((item) => (
+          {filteredLeagueSources.map((item) => (
             <LeagueResultCard
               key={item.id}
               item={item}
@@ -432,6 +474,18 @@ export default function DrawMain() {
       ) : (
         <EmptyCard text="개설된 리그가 없습니다." />
       )}
+
+      <DrawLeagueFilterDialog
+        key={leagueFilterOpen ? "open" : "closed"}
+        open={leagueFilterOpen}
+        onClose={() => setLeagueFilterOpen(false)}
+        startDate={leagueFilterStart}
+        endDate={leagueFilterEnd}
+        onApply={(start, end) => {
+          setLeagueFilterStart(start);
+          setLeagueFilterEnd(end);
+        }}
+      />
 
       <SectionHeader title="대회 추첨" />
       {!isLoggedIn ? (
@@ -449,15 +503,19 @@ export default function DrawMain() {
   );
 }
 
-function SectionHeader({ title }: { title: string }) {
+function SectionHeader({ title, onFilterClick, filterActive }: { title: string; onFilterClick?: () => void; filterActive?: boolean }) {
   return (
     <Stack direction="row" justifyContent="space-between" alignItems="center">
       <Typography variant="subtitle1" fontWeight={900}>
         {title}
       </Typography>
-      <IconButton size="small">
-        <TuneIcon fontSize="small" />
-      </IconButton>
+      {onFilterClick ? (
+        <IconButton size="small" onClick={onFilterClick} sx={filterActive ? { color: "#2F80ED" } : undefined}>
+          <TuneIcon fontSize="small" />
+        </IconButton>
+      ) : (
+        <Box sx={{ width: 32, height: 32 }} />
+      )}
     </Stack>
   );
 }
@@ -530,5 +588,156 @@ function ResultCard({ name, onClick, onHistory }: { name: string; onClick?: () =
         </Stack>
       </CardContent>
     </Card>
+  );
+}
+
+const chipButtonSx = (active: boolean) => ({
+  minWidth: 0,
+  px: 1.6,
+  py: 0.6,
+  borderRadius: 0.6,
+  fontSize: 12,
+  fontWeight: 400,
+  lineHeight: 1,
+  border: `1px solid ${active ? "#2F80ED" : "#D1D5DB"}`,
+  backgroundColor: active ? "#EFF6FF" : "#F9FAFB",
+  color: active ? "#1D6FBF" : "#6B7280",
+  "&:hover": { backgroundColor: active ? "#E6F0FF" : "#F3F4F6" },
+});
+
+const dateInputSx = {
+  "& .MuiOutlinedInput-root": { borderRadius: 0.6, bgcolor: "#fff", height: 32, minWidth: 0 },
+  "& .MuiOutlinedInput-input": { py: 0.5, fontSize: "0.95rem", minWidth: 0 },
+};
+
+function DrawLeagueFilterDialog({
+  open,
+  onClose,
+  startDate,
+  endDate,
+  onApply,
+}: {
+  open: boolean;
+  onClose: () => void;
+  startDate: string;
+  endDate: string;
+  onApply: (start: string, end: string) => void;
+}) {
+  const startRef = useRef<HTMLInputElement | null>(null);
+  const endRef = useRef<HTMLInputElement | null>(null);
+  const [localStart, setLocalStart] = useState(startDate);
+  const [localEnd, setLocalEnd] = useState(endDate);
+  const [quickRange, setQuickRange] = useState<QuickRange>(null);
+  const today = useMemo(() => new Date(), []);
+
+
+  const handleQuick = (range: QuickRange) => {
+    setQuickRange(range);
+    const end = formatDate(today);
+    let start = "";
+    switch (range) {
+      case "1w": start = formatDate(addDays(today, -7)); break;
+      case "1m": start = formatDate(addMonths(today, -1)); break;
+      case "3m": start = formatDate(addMonths(today, -3)); break;
+      case "6m": start = formatDate(addMonths(today, -6)); break;
+      case "1y": start = formatDate(addMonths(today, -12)); break;
+      default: return;
+    }
+    setLocalStart(start);
+    setLocalEnd(end);
+  };
+
+  const handleReset = () => {
+    setLocalStart("");
+    setLocalEnd("");
+    setQuickRange(null);
+    onApply("", "");
+    onClose();
+  };
+
+  const handleApply = () => {
+    onApply(localStart, localEnd);
+    onClose();
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      fullWidth
+      maxWidth="xs"
+      PaperProps={{ sx: { borderRadius: 1, overflow: "hidden", maxWidth: 430 } }}
+    >
+      <DialogTitle sx={{ pb: 1 }}>
+        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <Typography sx={{ fontWeight: 900, fontSize: 18 }}>추첨 기간 필터</Typography>
+          <IconButton onClick={onClose} size="small">
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </Box>
+      </DialogTitle>
+
+      <Divider />
+
+      <DialogContent sx={{ pt: 2 }}>
+        <Stack spacing={2}>
+          <Stack direction="row" alignItems="center" spacing={1.5}>
+            <Typography sx={{ minWidth: 30, fontWeight: 800, fontSize: 14, color: "#6B7280" }}>기간</Typography>
+            <Box sx={{ flex: 1, minWidth: 0, cursor: "pointer" }} onClick={() => startRef.current?.showPicker?.()}>
+              <TextField
+                inputRef={startRef}
+                type="date"
+                value={localStart}
+                onChange={(e) => { setLocalStart(e.target.value); setQuickRange(null); }}
+                fullWidth
+                sx={dateInputSx}
+              />
+            </Box>
+            <Typography fontWeight={900}>~</Typography>
+            <Box sx={{ flex: 1, minWidth: 0, cursor: "pointer" }} onClick={() => endRef.current?.showPicker?.()}>
+              <TextField
+                inputRef={endRef}
+                type="date"
+                value={localEnd}
+                onChange={(e) => { setLocalEnd(e.target.value); setQuickRange(null); }}
+                fullWidth
+                sx={dateInputSx}
+              />
+            </Box>
+          </Stack>
+
+          <Stack direction="row" spacing={0.8} pl={0} flexWrap="wrap">
+            {(["1w", "1m", "3m", "6m", "1y"] as QuickRange[]).map((r) => (
+              <Button key={r} sx={chipButtonSx(quickRange === r)} onClick={() => handleQuick(r)}>
+                {r === "1w" ? "일주일" : r === "1m" ? "1개월" : r === "3m" ? "3개월" : r === "6m" ? "6개월" : "1년"}
+              </Button>
+            ))}
+          </Stack>
+        </Stack>
+      </DialogContent>
+
+      <DialogActions sx={{ px: 2, pb: 2 }}>
+        <Stack direction="row" spacing={1.5} sx={{ width: "100%" }}>
+          <Button
+            fullWidth
+            variant="contained"
+            disableElevation
+            onClick={handleReset}
+            sx={{ borderRadius: 1, height: 40, fontWeight: 900, bgcolor: "#BDBDBD", "&:hover": { bgcolor: "#AFAFAF" } }}
+          >
+            초기화
+          </Button>
+          <Button
+            fullWidth
+            variant="contained"
+            disableElevation
+            onClick={handleApply}
+            sx={{ borderRadius: 1, height: 40, fontWeight: 900, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}
+          >
+            완료
+          </Button>
+        </Stack>
+      </DialogActions>
+    </Dialog>
   );
 }

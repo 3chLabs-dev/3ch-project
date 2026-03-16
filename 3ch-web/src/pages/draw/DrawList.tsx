@@ -160,7 +160,7 @@ export default function DrawList() {
   );
   const canManage = !groupLoading && (groupData?.myRole === "owner" || groupData?.myRole === "admin");
 
-  const { data: participantData, isLoading: loadingParticipants } = useGetLeagueParticipantsQuery(
+  const { data: participantData } = useGetLeagueParticipantsQuery(
     leagueId ?? "",
     { skip: !leagueId || phase !== "create", refetchOnMountOrArgChange: true },
   );
@@ -254,13 +254,6 @@ export default function DrawList() {
 
   const handleRemovePrize = (id: string) => {
     setPrizes((prev) => prev.filter((p) => p.id !== id));
-  };
-
-  const handleWeightChange = (participantId: string, delta: number) => {
-    setParticipantWeights((prev) => ({
-      ...prev,
-      [participantId]: Math.max(0, (prev[participantId] ?? 1) + delta),
-    }));
   };
 
   const handleRunDraw = () => {

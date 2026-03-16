@@ -10,7 +10,7 @@ import type { SelectChangeEvent } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import SearchIcon from "@mui/icons-material/Search";
 import { useAppSelector } from "../../app/hooks";
-import { REGION_DATA } from "../group/regionData";
+import { REGION_DATA, CITY_ALIAS_MAP } from "../group/regionData";
 
 type Club = {
   id: string;
@@ -68,7 +68,7 @@ export default function AdminClubPage() {
   const [addNameMsg,      setAddNameMsg]      = useState("");
   const [addAddress,      setAddAddress]      = useState("");
   const [addAddressDet,   setAddAddressDet]   = useState("");
-  const [addFounded,      setAddFounded]      = useState("");
+  const [addDescription,  setAddDescription]  = useState("");
   const [addLeader,       setAddLeader]       = useState<{ id: number; name: string; email: string } | null>(null);
   const [leaderPickOpen,    setLeaderPickOpen]    = useState(false);
   const [leaderPickFor,     setLeaderPickFor]     = useState<"add" | "edit">("add");
@@ -94,7 +94,9 @@ export default function AdminClubPage() {
   const [editNameChecked, setEditNameChecked] = useState<boolean | null>(null);
   const [editNameMsg,     setEditNameMsg]     = useState("");
   const [editLeader,      setEditLeader]      = useState<{ id: number; name: string; email: string } | null>(null);
-  const [editFounded,     setEditFounded]     = useState("");
+  const [editAddress,     setEditAddress]     = useState("");
+  const [editAddressDet,  setEditAddressDet]  = useState("");
+  const [editDescription, setEditDescription] = useState("");
   const [editCreatedAt,   setEditCreatedAt]   = useState("");
   const [editFetching,    setEditFetching]    = useState(false);
   const [editLoading,     setEditLoading]     = useState(false);
@@ -104,15 +106,40 @@ export default function AdminClubPage() {
   const addDistricts  = addRegionCity ? (REGION_DATA[addRegionCity] ?? []) : [];
   const editDistricts = editCity      ? (REGION_DATA[editCity]      ?? []) : [];
 
-  type DaumWindow = Window & { daum?: { Postcode: new (opts: { oncomplete: (d: { address: string; roadAddress: string }) => void }) => { open: () => void } } };
+  type DaumPostcodeData = {
+    address: string;
+    roadAddress: string;
+    sido: string;
+    sigungu: string;
+  };
+  type DaumWindow = Window & { daum?: { Postcode: new (opts: { oncomplete: (d: DaumPostcodeData) => void }) => { open: () => void } } };
 
-  const handleAddressSearch = () => {
+  const handleAddressSearch = (ctx: "add" | "edit") => {
     const openPostcode = () => {
       const w = window as DaumWindow;
       new w.daum!.Postcode({
         oncomplete: (data) => {
-          setAddAddress(data.roadAddress || data.address);
-          setAddAddressDet("");
+          const addr = data.roadAddress || data.address;
+          const mappedCity = CITY_ALIAS_MAP[data.sido] ?? data.sido;
+          const sigungu = data.sigungu;
+          const districts: string[] = REGION_DATA[mappedCity] ?? [];
+          const matchedDist = districts.find((d) => sigungu.includes(d) || d.includes(sigungu)) ?? "";
+
+          if (ctx === "add") {
+            setAddAddress(addr);
+            setAddAddressDet("");
+            if (mappedCity && REGION_DATA[mappedCity]) {
+              setAddRegionCity(mappedCity);
+              setAddRegionDist(matchedDist);
+            }
+          } else {
+            setEditAddress(addr);
+            setEditAddressDet("");
+            if (mappedCity && REGION_DATA[mappedCity]) {
+              setEditCity(mappedCity);
+              setEditDist(matchedDist);
+            }
+          }
         },
       }).open();
     };
@@ -130,7 +157,7 @@ export default function AdminClubPage() {
   const openAdd = () => {
     setAddSport(""); setAddRegionCity(""); setAddRegionDist("");
     setAddName(""); setAddNameChecked(null); setAddNameMsg("");
-    setAddAddress(""); setAddAddressDet(""); setAddFounded("");
+    setAddAddress(""); setAddAddressDet(""); setAddDescription("");
     setAddLeader(null);
     setAddError("");
     setAddOpen(true);
@@ -185,7 +212,8 @@ export default function AdminClubPage() {
       setEditClubCode(c.club_code ?? "");
       setEditOrigName(c.name); setEditName(c.name);
       setEditSport(c.sport ?? ""); setEditCity(c.region_city ?? ""); setEditDist(c.region_district ?? "");
-      setEditFounded(c.founded_at ? c.founded_at.slice(0, 10) : "");
+      setEditAddress(c.address ?? ""); setEditAddressDet(c.address_detail ?? "");
+      setEditDescription(c.description ?? "");
       setEditCreatedAt(c.created_at ? c.created_at.slice(0, 19).replace("T", " ") : "");
       setEditNameChecked(null); setEditNameMsg("");
       setEditLeader(c.leader_id ? { id: c.leader_id, name: c.leader_name ?? "", email: c.leader_email ?? "" } : null);
@@ -208,7 +236,7 @@ export default function AdminClubPage() {
   };
 
   const canEdit =
-    !!editSport && !!editCity && !!editDist && !!editName.trim() && editFounded.length === 10 &&
+    !!editSport && !!editCity && !!editDist && !!editName.trim() &&
     (editName.trim() === editOrigName || editNameChecked === true);
 
   const handleEdit = async () => {
@@ -221,7 +249,9 @@ export default function AdminClubPage() {
         body: JSON.stringify({
           name: editName.trim(), sport: editSport,
           region_city: editCity, region_district: editDist,
-          founded_at: editFounded,
+          address: editAddress.trim() || undefined,
+          address_detail: editAddressDet.trim() || undefined,
+          description: editDescription.trim() || undefined,
           owner_id: editLeader?.id ?? undefined,
         }),
       });
@@ -277,7 +307,7 @@ export default function AdminClubPage() {
 
   const canAdd =
     !!addSport && !!addRegionCity && !!addRegionDist &&
-    !!addName.trim() && addNameChecked === true && addFounded.length === 10;
+    !!addName.trim() && addNameChecked === true;
 
   const handleAdd = async () => {
     if (!canAdd) { setAddError("필수 항목을 모두 입력해주세요."); return; }
@@ -292,9 +322,9 @@ export default function AdminClubPage() {
           sport: addSport,
           region_city: addRegionCity,
           region_district: addRegionDist,
-          founded_at: addFounded,
           address: addAddress.trim() || undefined,
           address_detail: addAddressDet.trim() || undefined,
+          description: addDescription.trim() || undefined,
           owner_id: addLeader?.id ?? undefined,
         }),
       });
@@ -500,6 +530,7 @@ export default function AdminClubPage() {
             size="small" shape="rounded" />
         </Stack>
       )}
+
       {/* 클럽 추가 다이얼로그 */}
       <Dialog open={addOpen} onClose={() => !addLoading && setAddOpen(false)} fullWidth maxWidth="xs">
         <DialogTitle sx={{ fontWeight: 900, fontSize: 15, pb: 0 }}>클럽 추가</DialogTitle>
@@ -516,6 +547,24 @@ export default function AdminClubPage() {
                   ))}
                 </Select>
               </FormControl>
+            </AddFormRow>
+
+            <AddFormRow label="주소">
+              <Stack spacing={0.8}>
+                <Stack direction="row" spacing={0.8}>
+                  <TextField size="small" sx={{ flex: 1 }} placeholder="도로명 주소"
+                    value={addAddress} slotProps={{ input: { readOnly: true } }} />
+                  <Button variant="outlined" size="small" onClick={() => handleAddressSearch("add")}
+                    sx={{ fontWeight: 700, whiteSpace: "nowrap", fontSize: 12, px: 1.5 }}>
+                    검색
+                  </Button>
+                </Stack>
+                {addAddress && (
+                  <TextField size="small" fullWidth placeholder="상세 주소 (동/호수 등)"
+                    value={addAddressDet} onChange={(e) => setAddAddressDet(e.target.value)}
+                    inputProps={{ maxLength: 200 }} />
+                )}
+              </Stack>
             </AddFormRow>
 
             <AddFormRow label="지역" required>
@@ -571,22 +620,14 @@ export default function AdminClubPage() {
               />
             </AddFormRow>
 
-            <AddFormRow label="주소">
-              <Stack spacing={0.8}>
-                <Stack direction="row" spacing={0.8}>
-                  <TextField size="small" sx={{ flex: 1 }} placeholder="도로명 주소"
-                    value={addAddress} slotProps={{ input: { readOnly: true } }} />
-                  <Button variant="outlined" size="small" onClick={handleAddressSearch}
-                    sx={{ fontWeight: 700, whiteSpace: "nowrap", fontSize: 12, px: 1.5 }}>
-                    검색
-                  </Button>
-                </Stack>
-                {addAddress && (
-                  <TextField size="small" fullWidth placeholder="상세 주소 (동/호수 등)"
-                    value={addAddressDet} onChange={(e) => setAddAddressDet(e.target.value)}
-                    inputProps={{ maxLength: 200 }} />
-                )}
-              </Stack>
+            <AddFormRow label="클럽 소개">
+              <TextField
+                fullWidth multiline rows={4}
+                placeholder="클럽 소개 작성"
+                value={addDescription}
+                onChange={(e) => setAddDescription(e.target.value)}
+                inputProps={{ maxLength: 1000, style: { fontSize: 13 } }}
+              />
             </AddFormRow>
 
             {addError && (
@@ -640,6 +681,24 @@ export default function AdminClubPage() {
                     ))}
                   </Select>
                 </FormControl>
+              </AddFormRow>
+
+              <AddFormRow label="주소">
+                <Stack spacing={0.8}>
+                  <Stack direction="row" spacing={0.8}>
+                    <TextField size="small" sx={{ flex: 1 }} placeholder="도로명 주소"
+                      value={editAddress} slotProps={{ input: { readOnly: true } }} />
+                    <Button variant="outlined" size="small" onClick={() => handleAddressSearch("edit")}
+                      sx={{ fontWeight: 700, whiteSpace: "nowrap", fontSize: 12, px: 1.5 }}>
+                      검색
+                    </Button>
+                  </Stack>
+                  {editAddress && (
+                    <TextField size="small" fullWidth placeholder="상세 주소 (동/호수 등)"
+                      value={editAddressDet} onChange={(e) => setEditAddressDet(e.target.value)}
+                      inputProps={{ maxLength: 200 }} />
+                  )}
+                </Stack>
               </AddFormRow>
 
               <AddFormRow label="지역" required>
@@ -696,6 +755,16 @@ export default function AdminClubPage() {
                   slotProps={{ input: { readOnly: true, endAdornment: <SearchIcon sx={{ fontSize: 16, color: "#9CA3AF" }} /> } }}
                   onClick={() => openLeaderPick("edit")}
                   sx={{ cursor: "pointer", "& .MuiOutlinedInput-root": { cursor: "pointer" } }}
+                />
+              </AddFormRow>
+
+              <AddFormRow label="클럽 소개">
+                <TextField
+                  fullWidth multiline rows={4}
+                  placeholder="클럽 소개 작성"
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  inputProps={{ maxLength: 1000, style: { fontSize: 13 } }}
                 />
               </AddFormRow>
 
@@ -816,7 +885,7 @@ export default function AdminClubPage() {
 function AddFormRow({ label, required, plain, children }: { label: string; required?: boolean; plain?: boolean; children: React.ReactNode }) {
   return (
     <Stack direction="row" alignItems={plain ? "center" : "flex-start"} spacing={2}>
-      <Typography sx={{ fontSize: 13, fontWeight: 700, color: "#374151", width: 52, flexShrink: 0, pt: plain ? 0 : 0.9 }}>
+      <Typography sx={{ fontSize: 13, fontWeight: 700, color: "#374151", width: 52, flexShrink: 0, pt: plain ? 0 : 0.9, whiteSpace: "nowrap" }}>
         {label}{required && <Typography component="span" color="error" fontSize={12}> *</Typography>}
       </Typography>
       <Box sx={{ flex: 1 }}>{children}</Box>

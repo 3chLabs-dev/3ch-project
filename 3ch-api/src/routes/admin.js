@@ -417,7 +417,7 @@ router.get('/clubs/:id', requireAdmin, async (req, res) => {
       pool.query(
         `SELECT g.id, g.club_code, g.name, g.sport,
                 g.region_city, g.region_district,
-                g.founded_at::text, g.address, g.address_detail,
+                g.founded_at::text, g.address, g.address_detail, g.description,
                 g.created_at::text,
                 u.id AS leader_id, u.name AS leader_name, u.email AS leader_email
          FROM groups g
@@ -445,7 +445,7 @@ router.get('/clubs/:id', requireAdmin, async (req, res) => {
 // PUT /admin/clubs/:id - 클럽 수정
 router.put('/clubs/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const { name, sport, region_city, region_district, founded_at, owner_id } = req.body;
+  const { name, sport, region_city, region_district, founded_at, address, address_detail, description, owner_id } = req.body;
   if (!name?.trim()) return res.status(400).json({ ok: false, error: '클럽명은 필수입니다.' });
 
   const client = await pool.connect();
@@ -453,9 +453,11 @@ router.put('/clubs/:id', requireAdmin, async (req, res) => {
     await client.query('BEGIN');
 
     await client.query(
-      `UPDATE groups SET name = $1, sport = $2, region_city = $3, region_district = $4, founded_at = $5
-       WHERE id = $6`,
-      [name.trim(), sport?.trim() || null, region_city?.trim() || null, region_district?.trim() || null, founded_at || null, id],
+      `UPDATE groups SET name = $1, sport = $2, region_city = $3, region_district = $4, founded_at = $5,
+              address = $6, address_detail = $7, description = $8
+       WHERE id = $9`,
+      [name.trim(), sport?.trim() || null, region_city?.trim() || null, region_district?.trim() || null, founded_at || null,
+       address?.trim() || null, address_detail?.trim() || null, description?.trim() || null, id],
     );
 
     if (owner_id) {
@@ -528,7 +530,7 @@ router.get('/clubs/check-name', requireAdmin, async (req, res) => {
 
 // POST /admin/clubs - 클럽 생성
 router.post('/clubs', requireAdmin, async (req, res) => {
-  const { name, sport, region_city, region_district, founded_at, address, address_detail, owner_id } = req.body;
+  const { name, sport, region_city, region_district, founded_at, address, address_detail, description, owner_id } = req.body;
   if (!name?.trim()) return res.status(400).json({ ok: false, error: '클럽명은 필수입니다.' });
 
   const client = await pool.connect();
@@ -539,9 +541,9 @@ router.post('/clubs', requireAdmin, async (req, res) => {
 
     const groupId = randomUUID();
     await client.query(
-      `INSERT INTO groups (id, name, sport, region_city, region_district, founded_at, address, address_detail, created_by_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [groupId, name.trim(), sport?.trim() || null, region_city?.trim() || null, region_district?.trim() || null, founded_at || null, address?.trim() || null, address_detail?.trim() || null, ownerId],
+      `INSERT INTO groups (id, name, sport, region_city, region_district, founded_at, address, address_detail, description, created_by_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [groupId, name.trim(), sport?.trim() || null, region_city?.trim() || null, region_district?.trim() || null, founded_at || null, address?.trim() || null, address_detail?.trim() || null, description?.trim() || null, ownerId],
     );
 
     if (ownerId) {

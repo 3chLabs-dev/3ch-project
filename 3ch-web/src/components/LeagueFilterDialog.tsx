@@ -1,9 +1,11 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, } from "react";
 import {
     Box,
     Button,
     Dialog,
     DialogContent,
+    DialogTitle,
+    DialogActions,
     IconButton,
     Stack,
     TextField,
@@ -11,29 +13,32 @@ import {
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 
-type LeagueStatus = "all" | "scheduled" | "completed" | "cancelled";
+type LeagueStatus = "active" | "scheduled" | "completed";
 type QuickRange = "1w" | "1m" | "3m" | "6m" | "1y" | null;
 
 interface LeagueFilterDialogProps {
     open: boolean;
     onClose: () => void;
-    onApply?: (filters: {
+    startDate: string;
+    endDate: string;
+    status: LeagueStatus[];
+    onApply: (filters: {
         startDate: string;
         endDate: string;
-        status: LeagueStatus;
+        status: LeagueStatus[];
     }) => void;
 }
 
 const inputSx = {
-  "& .MuiOutlinedInput-root": {
-    borderRadius: 0.6,
-    bgcolor: "#fff",
-    height: 32,
-  },
-  "& .MuiOutlinedInput-input": {
-    py: 0.5,
-    fontSize: "0.95rem",
-  },
+    "& .MuiOutlinedInput-root": {
+        borderRadius: 0.6,
+        bgcolor: "#fff",
+        height: 32,
+    },
+    "& .MuiOutlinedInput-input": {
+        py: 0.5,
+        fontSize: "0.95rem",
+    },
 };
 
 const chipButtonSx = (active: boolean) => ({
@@ -76,55 +81,82 @@ function formatDate(date: Date) {
 export default function LeagueFilterDialog({
     open,
     onClose,
+    startDate,
+    endDate,
+    status,
     onApply,
 }: LeagueFilterDialogProps) {
     const startDateRef = useRef<HTMLInputElement | null>(null);
     const endDateRef = useRef<HTMLInputElement | null>(null);
 
-    const [startDate, setStartDate] = useState("");
-    const [endDate, setEndDate] = useState("");
-    const [status, setStatus] = useState<LeagueStatus>("all");
+    const [localStatus, setLocalStatus] = useState<LeagueStatus[]>(status);
+    const [localStart, setLocalStart] = useState(startDate);
+    const [localEnd, setLocalEnd] = useState(endDate);
     const [quickRange, setQuickRange] = useState<QuickRange>(null);
 
     const today = useMemo(() => new Date(), []);
 
-    const handleQuickRange = (range: QuickRange) => {
-        setQuickRange(range);
+const handleQuickRange = (range: QuickRange) => {
+    if (quickRange === range) {
+        setQuickRange(null);
+        setLocalStart("");
+        setLocalEnd("");
+        return;
+    }
 
-        const end = formatDate(today);
-        let start = "";
+    setQuickRange(range);
 
-        switch (range) {
-            case "1w":
-                start = formatDate(addDaysToDate(today, -7));
-                break;
-            case "1m":
-                start = formatDate(addMonthsToDate(today, -1));
-                break;
-            case "3m":
-                start = formatDate(addMonthsToDate(today, -3));
-                break;
-            case "6m":
-                start = formatDate(addMonthsToDate(today, -6));
-                break;
-            case "1y":
-                start = formatDate(addMonthsToDate(today, -12));
-                break;
-            default:
-                return;
-        }
+    const end = formatDate(today);
+    let start = "";
 
-        setStartDate(start);
-        setEndDate(end);
-    };
+    switch (range) {
+        case "1w":
+            start = formatDate(addDaysToDate(today, -7));
+            break;
+        case "1m":
+            start = formatDate(addMonthsToDate(today, -1));
+            break;
+        case "3m":
+            start = formatDate(addMonthsToDate(today, -3));
+            break;
+        case "6m":
+            start = formatDate(addMonthsToDate(today, -6));
+            break;
+        case "1y":
+            start = formatDate(addMonthsToDate(today, -12));
+            break;
+        default:
+            return;
+    }
+
+    setLocalStart(start);
+    setLocalEnd(end);
+};
 
     const handleApply = () => {
         onApply?.({
-            startDate,
-            endDate,
-            status,
+            startDate: localStart,
+            endDate: localEnd,
+            status: localStatus,
         });
         onClose();
+    };
+
+    const handleReset = () => {
+        onApply({
+            startDate: "",
+            endDate: "",
+            status: ["scheduled", "active"],
+        });
+        onClose();
+    };
+
+    const toggleStatus = (value: LeagueStatus) => {
+        setLocalStatus((prev) =>
+            prev.includes(value)
+                ? prev.filter((item) => item !== value)
+                : [...prev, value]
+        );
     };
 
     return (
@@ -142,60 +174,54 @@ export default function LeagueFilterDialog({
                 },
             }}
         >
-            <DialogContent sx={{ px: 3, py: 2.5 }}>
-                    <Stack spacing={2.5}>
-                        <Stack direction="row" alignItems="flex-start" justifyContent="space-between">
-                            <Typography fontSize={22} fontWeight={900}>
-                                리그 일정 필터
+
+            <DialogTitle sx={{ pb: 1 }}>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <Typography sx={{ fontWeight: 900, fontSize: 18 }}>리그 일정 필터</Typography>
+                    <IconButton onClick={onClose} size="small">
+                        <CloseIcon fontSize="small" />
+                    </IconButton>
+                </Box>
+            </DialogTitle>
+            <DialogContent sx={{ pt: 2 }}>
+                <Stack spacing={2}>
+
+                    <Box sx={{ borderTop: "1px solid #D9D9D9", pt: 2 }}>
+                        <Stack direction="row" alignItems="center" spacing={1.5}>
+                            <Typography sx={{ minWidth: 30, fontWeight: 800, fontSize: 14, color: "#6B7280" }}>
+                                기간
                             </Typography>
 
-                            <IconButton onClick={onClose} sx={{ p: 0.5 }}>
-                                <CloseIcon sx={{ fontSize: 24, color: "#111" }} />
-                            </IconButton>
+                            <Box sx={{ flex: 1, minWidth: 0, cursor: "pointer" }} onClick={() => startDateRef.current?.showPicker?.()}>
+                                <TextField
+                                    inputRef={startDateRef}
+                                    type="date"
+                                    value={localStart}
+                                    onChange={(e) => {
+                                        setLocalStart(e.target.value);
+                                        setQuickRange(null);
+                                    }}
+                                    fullWidth
+                                    sx={inputSx}
+                                />
+                            </Box>
+
+                            <Typography fontWeight={900}>~</Typography>
+
+                            <Box sx={{ flex: 1, minWidth: 0, cursor: "pointer" }} onClick={() => endDateRef.current?.showPicker?.()}>
+                                <TextField
+                                    inputRef={endDateRef}
+                                    type="date"
+                                    value={localEnd}
+                                    onChange={(e) => {
+                                        setLocalEnd(e.target.value);
+                                        setQuickRange(null);
+                                    }}
+                                    fullWidth
+                                    sx={inputSx}
+                                />
+                            </Box>
                         </Stack>
-
-                        <Box sx={{ borderTop: "1px solid #D9D9D9", pt: 2 }}>
-                            <Stack direction="row" alignItems="center" spacing={1.5}>
-                                <Typography sx={{ minWidth: 30, fontWeight: 800, fontSize: 14 }}>
-                                    기간
-                                </Typography>
-
-                                <Box
-                                    sx={{ flex: 1, cursor: "pointer" }}
-                                    onClick={() => startDateRef.current?.showPicker?.()}
-                                >
-                                    <TextField
-                                        inputRef={startDateRef}
-                                        type="date"
-                                        value={startDate}
-                                        onChange={(e) => {
-                                            setStartDate(e.target.value);
-                                            setQuickRange(null);
-                                        }}
-                                        fullWidth
-                                        sx={inputSx}
-                                    />
-                                </Box>
-
-                                <Typography fontWeight={900}>~</Typography>
-
-                                <Box
-                                    sx={{ flex: 1, cursor: "pointer" }}
-                                    onClick={() => endDateRef.current?.showPicker?.()}
-                                >
-                                    <TextField
-                                        inputRef={endDateRef}
-                                        type="date"
-                                        value={endDate}
-                                        onChange={(e) => {
-                                            setEndDate(e.target.value);
-                                            setQuickRange(null);
-                                        }}
-                                        fullWidth
-                                        sx={inputSx}
-                                    />
-                                </Box>
-                            </Stack>
 
                         <Stack direction="row" spacing={0.8} pl={5.1} mt={1.5} flexWrap="wrap">
                             <Button sx={chipButtonSx(quickRange === "1w")} onClick={() => handleQuickRange("1w")}>
@@ -218,26 +244,28 @@ export default function LeagueFilterDialog({
 
                     <Box sx={{ borderTop: "1px solid #D9D9D9", pt: 2 }}>
                         <Stack direction="row" alignItems="center" spacing={1.5}>
-                            <Typography sx={{ minWidth: 30, fontWeight: 800, fontSize: 14 }}>
+                            <Typography sx={{ minWidth: 30, fontWeight: 800, fontSize: 14, color: "#6B7280" }}>
                                 상태
                             </Typography>
 
                             <Stack direction="row" spacing={0.8} flexWrap="wrap">
                                 <Button
-                                    sx={chipButtonSx(status === "all")}
-                                    onClick={() => setStatus("all")}
+                                    sx={chipButtonSx(localStatus.includes("active"))}
+                                    onClick={() => toggleStatus("active")}
                                 >
-                                    전체
+                                    진행중
                                 </Button>
+
                                 <Button
-                                    sx={chipButtonSx(status === "scheduled")}
-                                    onClick={() => setStatus("scheduled")}
+                                    sx={chipButtonSx(localStatus.includes("scheduled"))}
+                                    onClick={() => toggleStatus("scheduled")}
                                 >
                                     예정
                                 </Button>
+
                                 <Button
-                                    sx={chipButtonSx(status === "completed")}
-                                    onClick={() => setStatus("completed")}
+                                    sx={chipButtonSx(localStatus.includes("completed"))}
+                                    onClick={() => toggleStatus("completed")}
                                 >
                                     종료
                                 </Button>
@@ -245,26 +273,30 @@ export default function LeagueFilterDialog({
                         </Stack>
                     </Box>
                     <Box sx={{ borderTop: "1px solid #D9D9D9", pt: 2 }}></Box>
-                    
-
-                    <Box sx={{ pt: 8 }}>
-                        <Button
-                            fullWidth
-                            variant="contained"
-                            onClick={handleApply}
-                            sx={{
-                                borderRadius: 999,
-                                py: 1.6,
-                                fontWeight: 900,
-                                fontSize: 18,
-                                boxShadow: "none",
-                            }}
-                        >
-                            완료
-                        </Button>
-                    </Box>
                 </Stack>
             </DialogContent>
+            <DialogActions sx={{ px: 2, pb: 2 }}>
+                <Stack direction="row" spacing={1.5} sx={{ width: "100%" }}>
+                    <Button
+                        fullWidth
+                        variant="contained"
+                        disableElevation
+                        onClick={handleReset}
+                        sx={{ borderRadius: 1, height: 40, fontWeight: 900, bgcolor: "#BDBDBD", "&:hover": { bgcolor: "#AFAFAF" } }}
+                    >
+                        초기화
+                    </Button>
+                    <Button
+                        fullWidth
+                        variant="contained"
+                        disableElevation
+                        onClick={handleApply}
+                        sx={{ borderRadius: 1, height: 40, fontWeight: 900, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}
+                    >
+                        완료
+                    </Button>
+                </Stack>
+            </DialogActions>
         </Dialog>
     );
 }

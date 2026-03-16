@@ -21,6 +21,7 @@ import { useGetLeaguesQuery } from "../features/league/leagueApi";
 import type { LeagueListItem } from "../features/league/leagueApi";
 import { useGetMyGroupsQuery } from "../features/group/groupApi";
 import { setPreferredGroupId } from "../features/league/leagueCreationSlice";
+import LeagueFilterDialog from "../components/LeagueFilterDialog.tsx";
 
 const SPORT_EMOJI: Record<string, string> = {
     "탁구": "🏓",
@@ -35,6 +36,9 @@ export default function Home() {
     const user = useAppSelector((state) => state.auth.user);
     const preferredGroupId = useAppSelector((state) => state.leagueCreation.preferredGroupId);
     const isLoggedIn = !!token;
+
+    const [filterOpen, setFilterOpen] = useState(false);
+
 
     const { data: groupData } = useGetMyGroupsQuery(undefined, {
         skip: !isLoggedIn,
@@ -218,7 +222,10 @@ export default function Home() {
             )}
 
             {/* 리그 일정 */}
-            <SectionHeader title="리그 일정" />
+            <LeagueSectionHeader
+                title="리그 일정"
+                onFilterClick={leagueData && leagueData.leagues.length > 0 ? () => setFilterOpen(true) : undefined}
+            />
             {!isLoggedIn || !hasGroups ? (
                 <SoftCard>
                     <Typography textAlign="center" color="text.secondary" fontWeight={700}>
@@ -236,6 +243,7 @@ export default function Home() {
                     {leagueData.leagues.map((league) => (
                         <LeagueCard key={league.id} league={league} />
                     ))}
+
                 </Stack>
             ) : (
                 <SoftCard>
@@ -244,6 +252,11 @@ export default function Home() {
                     </Typography>
                 </SoftCard>
             )}
+            <LeagueFilterDialog
+                open={filterOpen}
+                onClose={() => setFilterOpen(false)}
+            />
+
             {isLoggedIn && isAdmin && (
                 <Button
                     component={RouterLink}
@@ -273,6 +286,28 @@ export default function Home() {
                 </Button>
             )}
 
+        </Stack>
+    );
+}
+
+type LeagueSectionHeaderProps = {
+    title: string;
+    onFilterClick?: () => void;
+};
+
+function LeagueSectionHeader({ title, onFilterClick }: LeagueSectionHeaderProps) {
+    return (
+        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 0.5 }}>
+            <Typography variant="subtitle1" fontWeight={900}>
+                {title}
+            </Typography>
+            {onFilterClick ? (
+                <IconButton size="small" onClick={onFilterClick} sx={{ width: 32, height: 32 }}>
+                    <TuneIcon fontSize="small" />
+                </IconButton>
+            ) : (
+                <Box sx={{ width: 32, height: 32 }} />
+            )}
         </Stack>
     );
 }

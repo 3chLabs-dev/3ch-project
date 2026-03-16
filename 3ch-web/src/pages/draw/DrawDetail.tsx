@@ -125,26 +125,6 @@ export default function DrawDetail() {
     tick();
   }
 
-  function handleDrawPrize(prize: DrawPrizeItem) {
-    const pool = getEligiblePool(prize.id);
-    if (pool.length === 0) {
-      setAlertMsg("추첨 가능한 참가자가 없습니다.");
-      return;
-    }
-    if (pool.length < prize.quantity) {
-      setAlertMsg(`참가자(${pool.length}명)가 당첨자 수(${prize.quantity}명)보다 적습니다.`);
-      return;
-    }
-    const shuffled = [...pool].sort(() => Math.random() - 0.5);
-    const selected: PendingWinner[] = shuffled.slice(0, prize.quantity).map((p) => ({
-      participant_name: p.name,
-      participant_division: p.division ?? null,
-    }));
-    setDrawingPrize(prize);
-    setPendingWinners(selected);
-    runAnimation(pool, selected);
-  }
-
   function handleRedraw() {
     if (!drawingPrize) return;
     clearAnimTimer();
@@ -268,7 +248,7 @@ export default function DrawDetail() {
                         variant={prize.winners.length > 0 ? "outlined" : "contained"}
                         size="small"
                         disableElevation
-                        onClick={() => handleDrawPrize(prize)}
+                        onClick={() => navigate(`/draw/${leagueId}?draftId=${draw.id}`)}
                         sx={{ borderRadius: 1, fontWeight: 700, minWidth: 56, height: 28, fontSize: 12 }}
                       >
                         {prize.winners.length > 0 ? "재추첨" : "추첨"}

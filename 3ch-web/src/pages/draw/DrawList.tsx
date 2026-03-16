@@ -160,7 +160,7 @@ export default function DrawList() {
   );
   const canManage = !groupLoading && (groupData?.myRole === "owner" || groupData?.myRole === "admin");
 
-  const { data: participantData } = useGetLeagueParticipantsQuery(
+  const { data: participantData, isLoading: loadingParticipants } = useGetLeagueParticipantsQuery(
     leagueId ?? "",
     { skip: !leagueId || phase !== "create", refetchOnMountOrArgChange: true },
   );
@@ -254,6 +254,13 @@ export default function DrawList() {
 
   const handleRemovePrize = (id: string) => {
     setPrizes((prev) => prev.filter((p) => p.id !== id));
+  };
+
+  const handleWeightChange = (participantId: string, delta: number) => {
+    setParticipantWeights((prev) => ({
+      ...prev,
+      [participantId]: Math.max(0, (prev[participantId] ?? 1) + delta),
+    }));
   };
 
   const handleRunDraw = () => {
@@ -495,6 +502,53 @@ export default function DrawList() {
             ))}
           </Stack>
         )}
+
+        {draftId && (
+          <>
+            <Divider sx={{ my: 0.5 }} />
+            <Typography fontWeight={800} fontSize={14}>참가자</Typography>
+            {loadingParticipants ? (
+              <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+                <CircularProgress size={32} />
+              </Box>
+            ) : participantRows.length === 0 ? (
+              <Typography sx={{ color: "#6B7280", textAlign: "center", py: 3, fontWeight: 700 }}>
+                참가자가 없습니다.
+              </Typography>
+            ) : (
+              <>
+                <Stack direction="row" sx={{ px: 0.5 }}>
+                  <Typography variant="caption" sx={{ width: 52, color: "text.secondary", fontWeight: 700 }}>부수</Typography>
+                  <Typography variant="caption" sx={{ flex: 1, color: "text.secondary", fontWeight: 700 }}>이름</Typography>
+                  <Typography variant="caption" sx={{ width: 72, color: "text.secondary", fontWeight: 700, textAlign: "center" }}>가중치</Typography>
+                </Stack>
+                <Divider />
+                <Stack spacing={0.8}>
+                  {participantRows.map((row) => (
+                    <Stack key={row.id} direction="row" alignItems="center" sx={{ px: 0.5, opacity: row.weight === 0 ? 0.35 : 1 }}>
+                      <Box sx={{ width: 52 }}>
+                        <Chip label={row.division} size="small" sx={{ fontSize: 10, display: "inline-flex", borderRadius: 9999, height: 36, minWidth: 36, fontWeight: 800, bgcolor: "#FAAA47", color: "#000000" }} />
+                      </Box>
+                      <Typography sx={{ flex: 1, fontWeight: 800, fontSize: 15, textDecoration: row.weight === 0 ? "line-through" : "none" }}>{row.name}</Typography>
+                      <Stack direction="row" alignItems="center" spacing={0.5} sx={{ width: 72, justifyContent: "center" }}>
+                        <Box
+                          onClick={() => handleWeightChange(row.id, -1)}
+                          sx={{ width: 22, height: 22, border: "1px solid #BDBDBD", borderRadius: 0.5, display: "grid", placeItems: "center", fontSize: 16, fontWeight: 900, cursor: "pointer", userSelect: "none", "&:hover": { bgcolor: "#F3F4F6" } }}
+                        >-</Box>
+                        <Typography sx={{ fontWeight: 900, minWidth: 16, textAlign: "center" }}>{row.weight}</Typography>
+                        <Box
+                          onClick={() => handleWeightChange(row.id, 1)}
+                          sx={{ width: 22, height: 22, border: "1px solid #BDBDBD", borderRadius: 0.5, display: "grid", placeItems: "center", fontSize: 16, fontWeight: 900, cursor: "pointer", userSelect: "none", "&:hover": { bgcolor: "#F3F4F6" } }}
+                        >+</Box>
+                      </Stack>
+                    </Stack>
+                  ))}
+                </Stack>
+              </>
+            )}
+          </>
+        )}
+        
 
         <Divider sx={{ my: 0.5 }} />
 

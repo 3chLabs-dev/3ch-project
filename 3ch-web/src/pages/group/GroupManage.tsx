@@ -104,11 +104,12 @@ export default function GroupManage() {
         lng: undefined as number | undefined,
     });
 
-    // 현재 클럽의 리그 목록 조회
+    // 현재 클럽의 리그 목록 조회 (URL 파라미터가 club_code일 수 있으므로 fetch된 UUID 사용)
+    const groupUuid = data?.group?.id;
     const { data: leagueData } = useGetLeaguesQuery(
-        id ? { group_id: id } : undefined,
+        groupUuid ? { group_id: groupUuid } : undefined,
         {
-            skip: !isLoggedIn || !id,
+            skip: !isLoggedIn || !groupUuid,
             refetchOnMountOrArgChange: true,
             refetchOnFocus: true,
             refetchOnReconnect: true,
@@ -651,7 +652,7 @@ export default function GroupManage() {
                         {/* 클럽코드 */}
                         <TextField
                             label="클럽코드"
-                            value={group.id}
+                            value={group.club_code ?? "-"}
                             disabled
                             fullWidth
                             size="small"

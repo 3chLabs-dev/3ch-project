@@ -3,8 +3,24 @@ const { z } = require('zod');
 const { randomUUID } = require('crypto');
 const pool = require('../db/pool');
 const { requireAuth } = require('../middlewares/auth');
+const { buildLeagueCode } = require('../utils/clubCodeUtils');
 
 const router = express.Router();
+
+// league_code(AAA260316 01 형식)로 요청 시 실제 UUID로 자동 변환
+router.param('id', async (req, _res, next, id) => {
+  if (/^[A-Z]{3}\d{6}\d{2}$/.test(id)) {
+    try {
+      const result = await pool.query('SELECT id FROM leagues WHERE league_code = $1', [id]);
+      if (result.rows.length > 0) {
+        req.params.id = result.rows[0].id;
+      }
+    } catch (e) {
+      // 변환 실패 시 원본 id 유지
+    }
+  }
+  next();
+});
 
 const participantSchema = z.object({
   division: z.string().default(''),
@@ -250,7 +266,7 @@ router.get('/league', async (req, res) => {
     const listParams = [...params, limit, offset];
     const result = await pool.query(
       `SELECT l.id, l.name, l.description, l.type, l.sport, l.start_date, l.status,
-              l.recruit_count, l.participant_count, l.group_id, l.created_at,
+              l.recruit_count, l.participant_count, l.group_id, l.created_at, l.league_code,
               u.name AS creator_name,
               g.name AS group_name
        FROM leagues l
@@ -379,6 +395,21 @@ router.post('/league', requireAuth, async (req, res) => {
        RETURNING id, name, description, type, format, sport, start_date, status, rules, notice, sort_order, recruit_count, participant_count, group_id, created_at, updated_at;`,
       [leagueId, name, description, type, format, sport, start_date, rules, sort_order ?? null, recruit_count, participant_count, group_id, userId],
     );
+
+    // 리그 코드 생성: {클럽코드}{YYMMDD}{순번2자리}
+    if (group_id) {
+      const groupRow = await client.query(`SELECT club_code FROM groups WHERE id = $1`, [group_id]);
+      const clubCode = groupRow.rows[0]?.club_code;
+      if (clubCode) {
+        const seqRow = await client.query(
+          `SELECT COUNT(*) AS cnt FROM leagues WHERE group_id = $1 AND DATE(start_date) = DATE($2::timestamptz)`,
+          [group_id, start_date],
+        );
+        const seq = parseInt(seqRow.rows[0].cnt, 10); // INSERT 후라서 현재 리그 포함
+        const leagueCode = buildLeagueCode(clubCode, start_date, seq);
+        await client.query(`UPDATE leagues SET league_code = $1 WHERE id = $2`, [leagueCode, leagueId]);
+      }
+    }
 
     for (const p of participants) {
       await client.query(

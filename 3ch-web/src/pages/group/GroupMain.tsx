@@ -263,7 +263,7 @@ function GroupCard({ group }: { group: Group }) {
     return (
         <Card
             elevation={2}
-            onClick={() => navigate(`/club/${group.id}/manage`)}
+            onClick={() => navigate(`/club/${group.club_code ?? group.id}/manage`)}
             sx={{
                 borderRadius: 1,
                 boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
@@ -303,7 +303,7 @@ function RecommendedGroupCard({ group }: { group: Omit<Group, "role"> & { id: st
     return (
         <Card
             elevation={2}
-            onClick={() => navigate(`/club/${group.id}`)}
+            onClick={() => navigate(`/club/${group.club_code ?? group.id}`)}
             sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)", cursor: "pointer" }}
         >
             <CardContent sx={{ py: 1.6, px: 2, "&:last-child": { pb: 1.6 } }}>
@@ -339,7 +339,7 @@ function NearbyGroupCard({ group }: { group: RecommendedClub }) {
     return (
         <Card
             elevation={2}
-            onClick={() => navigate(`/club/${group.id}`)}
+            onClick={() => navigate(`/club/${group.club_code ?? group.id}`)}
             sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)", cursor: "pointer" }}
         >
             <CardContent sx={{ py: 1.6, px: 2, "&:last-child": { pb: 1.6 } }}>

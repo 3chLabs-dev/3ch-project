@@ -3,10 +3,33 @@ const router = express.Router();
 const pool = require('../db/pool');
 const { requireAuth } = require('../middlewares/auth');
 const { z } = require('zod');
+const { buildDrawCode } = require('../utils/clubCodeUtils');
 
 // ─────────────────────────────────────────────────────────
 // 추첨 (draws) 독립 라우터  /api/draw/...
 // ─────────────────────────────────────────────────────────
+
+// league_code로 요청 시 league UUID로 자동 변환
+router.param('leagueId', async (req, _res, next, id) => {
+  if (/^[A-Z]{3}\d{6}\d{2}$/.test(id)) {
+    try {
+      const result = await pool.query('SELECT id FROM leagues WHERE league_code = $1', [id]);
+      if (result.rows.length > 0) req.params.leagueId = result.rows[0].id;
+    } catch { /* 변환 실패 시 원본 유지 */ }
+  }
+  next();
+});
+
+// draw_code로 요청 시 draw UUID로 자동 변환
+router.param('drawId', async (req, _res, next, id) => {
+  if (/^[A-Z]{3}\d{6}\d{4}$/.test(id)) {
+    try {
+      const result = await pool.query('SELECT id FROM draws WHERE draw_code = $1', [id]);
+      if (result.rows.length > 0) req.params.drawId = result.rows[0].id;
+    } catch { /* 변환 실패 시 원본 유지 */ }
+  }
+  next();
+});
 
 /**
  * @swagger
@@ -113,7 +136,7 @@ router.get('/draw/:leagueId', requireAuth, async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT d.id, d.name, d.created_at, u.name AS creator_name,
+      `SELECT d.id, d.name, d.created_at, d.draw_code, u.name AS creator_name,
               COUNT(DISTINCT dp.id) AS prize_count,
               COALESCE((SELECT SUM(quantity) FROM draw_prizes WHERE draw_id = d.id), 0) AS total_quantity,
               COUNT(DISTINCT dw.id) AS winner_count
@@ -122,7 +145,7 @@ router.get('/draw/:leagueId', requireAuth, async (req, res) => {
        LEFT JOIN draw_prizes dp ON dp.draw_id = d.id
        LEFT JOIN draw_winners dw ON dw.draw_id = d.id
        WHERE d.league_id = $1
-       GROUP BY d.id, d.name, d.created_at, u.name
+       GROUP BY d.id, d.name, d.created_at, d.draw_code, u.name
        ORDER BY d.created_at DESC`,
       [leagueId],
     );
@@ -245,6 +268,18 @@ router.post('/draw/:leagueId', requireAuth, async (req, res) => {
     );
     const drawId = drawResult.rows[0].id;
 
+    // 추첨 코드 생성: {리그코드}{순번2자리}
+    const leagueRow = await client.query(`SELECT league_code FROM leagues WHERE id = $1`, [leagueId]);
+    const leagueCode = leagueRow.rows[0]?.league_code;
+    if (leagueCode) {
+      const seqRow = await client.query(
+        `SELECT COUNT(*) AS cnt FROM draws WHERE league_id = $1`,
+        [leagueId],
+      );
+      const seq = parseInt(seqRow.rows[0].cnt, 10); // INSERT 후라서 현재 추첨 포함
+      await client.query(`UPDATE draws SET draw_code = $1 WHERE id = $2`, [buildDrawCode(leagueCode, seq), drawId]);
+    }
+
     for (let i = 0; i < prizes.length; i++) {
       const prize = prizes[i];
       const prizeResult = await client.query(
@@ -264,7 +299,8 @@ router.post('/draw/:leagueId', requireAuth, async (req, res) => {
 
     await client.query('COMMIT');
 
-    return res.status(201).json({ message: '추첨이 저장되었습니다.', draw_id: drawId });
+    const codeRow = await client.query(`SELECT draw_code FROM draws WHERE id = $1`, [drawId]);
+    return res.status(201).json({ message: '추첨이 저장되었습니다.', draw_id: drawId, draw_code: codeRow.rows[0]?.draw_code ?? null });
   } catch (error) {
     await client.query('ROLLBACK');
     if (error instanceof z.ZodError) {

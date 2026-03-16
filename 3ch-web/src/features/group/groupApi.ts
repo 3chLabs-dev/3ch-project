@@ -3,6 +3,7 @@ import { baseApi } from "../api/baseApi";
 export interface Group {
   id: string;
   name: string;
+  club_code?: string;
   description?: string;
   sport?: string;
   type?: string;
@@ -68,6 +69,7 @@ export interface GetGroupDetailResponse {
   group: {
     id: string;
     name: string;
+    club_code?: string;
     description?: string;
     sport?: string;
     type?: string;
@@ -109,6 +111,7 @@ export interface GeocodeResponse {
 export interface RecommendedClub {
   id: string;
   name: string;
+  club_code?: string;
   sport?: string;
   region_city?: string;
   region_district?: string;

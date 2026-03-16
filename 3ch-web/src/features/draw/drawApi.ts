@@ -5,6 +5,7 @@ import { baseApi } from "../api/baseApi";
 export interface DrawListItem {
   id: string;
   name: string;
+  draw_code?: string;
   created_at: string;
   prize_count: number;
   total_quantity: number;
@@ -55,6 +56,7 @@ export interface CreateDrawRequest {
 export interface CreateDrawResponse {
   message: string;
   draw_id: string;
+  draw_code?: string;
 }
 
 export interface UpdateDrawRequest {

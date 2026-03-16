@@ -32,6 +32,7 @@ export interface UpdateLeagueRequest {
 export interface League {
   id: string;
   name: string;
+  league_code?: string;
   description?: string;
   type: string;
   format?: string;

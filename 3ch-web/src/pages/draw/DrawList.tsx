@@ -359,7 +359,7 @@ export default function DrawList() {
             })),
           })),
         }).unwrap();
-        newDrawId = res.draw_id;
+        newDrawId = res.draw_code ?? res.draw_id;
       }
       refetchDraws();
     } catch {
@@ -691,7 +691,7 @@ export default function DrawList() {
               key={draw.id}
               elevation={2}
               sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)", cursor: "pointer" }}
-              onClick={() => navigate(`/draw/${leagueId}/${draw.id}`)}
+              onClick={() => navigate(`/draw/${leagueId}/${draw.draw_code ?? draw.id}`)}
             >
               <CardContent sx={{ py: 1.5, px: 2, "&:last-child": { pb: 1.5 } }}>
                 <Stack direction="row" alignItems="center" justifyContent="space-between">

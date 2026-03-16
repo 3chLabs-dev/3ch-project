@@ -4,8 +4,24 @@ const { randomUUID } = require('crypto');
 const pool = require('../db/pool');
 const { requireAuth } = require('../middlewares/auth');
 const { requireGroupAdmin, requireGroupOwner } = require('../middlewares/permissions');
+const { generateClubCode } = require('../utils/clubCodeUtils');
 
 const router = express.Router();
+
+// club_code(AAA 형식)로 요청 시 실제 UUID로 자동 변환
+router.param('id', async (req, _res, next, id) => {
+  if (/^[A-Z]{3}$/.test(id)) {
+    try {
+      const result = await pool.query('SELECT id FROM groups WHERE club_code = $1', [id]);
+      if (result.rows.length > 0) {
+        req.params.id = result.rows[0].id;
+      }
+    } catch (e) {
+      // 변환 실패 시 원본 id 유지
+    }
+  }
+  next();
+});
 
 /**
  * @openapi
@@ -252,17 +268,8 @@ router.post('/group', requireAuth, async (req, res) => {
       [memberId, groupId, userId]
     );
 
-    await client.query(
-      `WITH ranked AS (
-         SELECT id,
-           'C' || TO_CHAR(created_at, 'YYYYMMDD') ||
-           LPAD(ROW_NUMBER() OVER (PARTITION BY DATE(created_at) ORDER BY created_at, id)::text, 4, '0') AS new_code
-         FROM groups WHERE DATE(created_at) = CURRENT_DATE
-       )
-       UPDATE groups SET club_code = r.new_code FROM ranked r
-       WHERE groups.id = r.id AND groups.id = $1`,
-      [groupId]
-    );
+    const clubCode = await generateClubCode(client);
+    await client.query(`UPDATE groups SET club_code = $1 WHERE id = $2`, [clubCode, groupId]);
 
     await client.query('COMMIT');
 
@@ -465,7 +472,7 @@ router.get('/group', requireAuth, async (req, res) => {
 
     const result = await pool.query(
       `SELECT g.id, g.name, g.description, g.sport, g.region_city, g.region_district, g.created_at,
-              gm.role, gm.division,
+              g.club_code, gm.role, gm.division,
               u.name AS creator_name,
               (SELECT COUNT(*) FROM group_members WHERE group_id = g.id)::int AS member_count
        FROM groups g
@@ -746,7 +753,8 @@ router.get('/group/:id', requireAuth, async (req, res) => {
 
     const groupResult = await pool.query(
       `SELECT g.id, g.name, g.description, g.sport, g.region_city, g.region_district,
-              g.founded_at, g.address, g.address_detail, g.lat, g.lng, g.created_at, u.name AS creator_name
+              g.founded_at, g.address, g.address_detail, g.lat, g.lng, g.created_at,
+              g.club_code, u.name AS creator_name
        FROM groups g
        LEFT JOIN users u ON g.created_by_id = u.id
        WHERE g.id = $1`,

@@ -6,6 +6,7 @@ const pool = require('../db/pool');
 const { requireAdmin } = require('../middlewares/auth');
 const { signToken } = require('../utils/authUtils');
 const { generateMemberCode } = require('../utils/memberCodeUtils');
+const { generateClubCode } = require('../utils/clubCodeUtils');
 
 const router = express.Router();
 
@@ -553,20 +554,8 @@ router.post('/clubs', requireAdmin, async (req, res) => {
       );
     }
 
-    // club_code 생성: C + YYYYMMDD + 4자리 당일 순번
-    const codeResult = await client.query(
-      `WITH ranked AS (
-         SELECT id,
-           'C' || TO_CHAR(created_at, 'YYYYMMDD') ||
-           LPAD(ROW_NUMBER() OVER (PARTITION BY DATE(created_at) ORDER BY created_at, id)::text, 4, '0') AS new_code
-         FROM groups WHERE DATE(created_at) = CURRENT_DATE
-       )
-       UPDATE groups SET club_code = r.new_code FROM ranked r
-       WHERE groups.id = r.id AND groups.id = $1
-       RETURNING club_code`,
-      [groupId],
-    );
-    const clubCode = codeResult.rows[0]?.club_code;
+    const clubCode = await generateClubCode(client);
+    await client.query(`UPDATE groups SET club_code = $1 WHERE id = $2`, [clubCode, groupId]);
 
     await client.query('COMMIT');
     return res.status(201).json({ ok: true, id: groupId, club_code: clubCode });

@@ -19,6 +19,7 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import { useAppSelector } from "../../app/hooks";
 import { useGetLeaguesQuery, useGetLeagueParticipantsQuery, useUpdateParticipantMutation, useDeleteParticipantMutation } from "../../features/league/leagueApi";
+import { useGetGroupDetailQuery } from "../../features/group/groupApi";
 import type { LeagueParticipantItem } from "../../features/league/leagueApi";
 import ParticipantDetailDialog from "../league/ParticipantDetailDialog";
 import type { Participant } from "../../features/league/leagueCreationSlice";
@@ -33,10 +34,13 @@ export default function GroupLeagueManage() {
   const [participantDetailOpen, setParticipantDetailOpen] = useState(false);
   const [selectedParticipant, setSelectedParticipant] = useState<{ leagueId: string; participant: LeagueParticipantItem } | null>(null);
 
+  const { data: groupDetail } = useGetGroupDetailQuery(id || "", { skip: !id });
+  const groupUuid = groupDetail?.group?.id;
+
   const { data: leagueData } = useGetLeaguesQuery(
-    id ? { group_id: id } : undefined,
+    groupUuid ? { group_id: groupUuid } : undefined,
     {
-      skip: !isLoggedIn || !id,
+      skip: !isLoggedIn || !groupUuid,
       refetchOnMountOrArgChange: true,
       refetchOnFocus: true,
       refetchOnReconnect: true,

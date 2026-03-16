@@ -49,6 +49,7 @@ type DrawResult = {
 type DrawSourceItem = {
   id: string;
   name: string;
+  league_code?: string;
   start_date?: string;
 };
 
@@ -137,7 +138,7 @@ export default function DrawMain() {
     { skip: !isLoggedIn || !effectiveSelectedGroupId, refetchOnMountOrArgChange: true },
   );
   const leagueSources = useMemo<DrawSourceItem[]>(
-    () => (leagueData?.leagues ?? []).map((l) => ({ id: l.id, name: l.name, start_date: l.start_date })),
+    () => (leagueData?.leagues ?? []).map((l) => ({ id: l.id, name: l.name, league_code: l.league_code, start_date: l.start_date })),
     [leagueData],
   );
 
@@ -544,7 +545,7 @@ function EmptyCard({ text }: { text: string }) {
 }
 
 function LeagueResultCard({ item, canCreate, navigate }: {
-  item: { id: string; name: string };
+  item: { id: string; name: string; league_code?: string };
   canCreate: boolean;
   navigate: (path: string) => void;
 }) {
@@ -553,8 +554,8 @@ function LeagueResultCard({ item, canCreate, navigate }: {
   return (
     <ResultCard
       name={item.name}
-      onClick={canCreate ? () => navigate(`/draw/${item.id}?create=1`) : undefined}
-      onHistory={hasDraws ? () => navigate(`/draw/${item.id}`) : undefined}
+      onClick={canCreate ? () => navigate(`/draw/${item.league_code ?? item.id}?create=1`) : undefined}
+      onHistory={hasDraws ? () => navigate(`/draw/${item.league_code ?? item.id}`) : undefined}
     />
   );
 }

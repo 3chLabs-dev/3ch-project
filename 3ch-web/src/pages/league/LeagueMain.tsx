@@ -178,7 +178,7 @@ function LeagueCard({ league }: { league: LeagueListItem }) {
   return (
     <Card
       elevation={2}
-      onClick={() => navigate(`/league/${league.id}`)}
+      onClick={() => navigate(`/league/${league.league_code ?? league.id}`)}
       sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)", cursor: "pointer" }}
     >
       <CardContent sx={{ py: 1.8, px: 2.5, "&:last-child": { pb: 1.8 } }}>

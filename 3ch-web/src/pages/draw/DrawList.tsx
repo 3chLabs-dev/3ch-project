@@ -131,6 +131,15 @@ export default function DrawList() {
 
   const draftId = searchParams.get("draftId");
   const [phase, setPhase] = useState<Phase>(searchParams.get("create") === "1" || !!draftId ? "create" : "list");
+
+  useEffect(() => {
+    if( draftId ){
+      setPhase("create");
+    } else {
+      setPhase("list");
+    }
+  }, [draftId]);
+  
   const [prizes, setPrizes] = useState<PrizeInput[]>(() => {
     // draftId가 있으면 API에서 로드하므로 sessionStorage 무시
     if (draftId || !leagueId) return [];
@@ -691,7 +700,7 @@ export default function DrawList() {
               key={draw.id}
               elevation={2}
               sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)", cursor: "pointer" }}
-              onClick={() => navigate(`/draw/${leagueId}/${draw.draw_code ?? draw.id}`)}
+              onClick={() => navigate(`/draw/${leagueId}?draftId=${draw.id}`)}
             >
               <CardContent sx={{ py: 1.5, px: 2, "&:last-child": { pb: 1.5 } }}>
                 <Stack direction="row" alignItems="center" justifyContent="space-between">

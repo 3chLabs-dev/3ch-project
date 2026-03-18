@@ -275,7 +275,7 @@ export default function LeagueMatchOrder() {
   const isCreator = !!authUser && league?.created_by_id === authUser?.id;
   const canManage =
     (!groupLoading && (groupData?.myRole === "owner" || groupData?.myRole === "admin")) || isCreator;
-  const canMember = (!groupLoading && !!groupData?.myRole) || isCreator;
+  const canMember = (!groupLoading && !!groupData?.myRole) || isCreator || league?.join_permission === "public";
   const myName = groupData?.members?.find((m) => m.user_id === authUser?.id)?.name ?? authUser?.name ?? null;
 
   const { data: matchData, isLoading: matchLoading, refetch: refetchMatches } = useGetLeagueMatchesQuery(leagueId, { skip: !leagueId, refetchOnMountOrArgChange: true });

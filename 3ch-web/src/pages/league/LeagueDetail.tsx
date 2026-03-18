@@ -147,6 +147,9 @@ export default function LeagueDetail() {
 
   const league = leagueData?.league;
 
+  const isPublicLeague = league?.join_permission === "public";
+  const canInteract = isMember || isPublicLeague;
+
   const myMember = useMemo(
     () => groupData?.members?.find((m) => m.user_id === authUser?.id),
     [groupData, authUser],
@@ -388,7 +391,7 @@ export default function LeagueDetail() {
                 <EditOutlinedIcon fontSize="small" />
               </IconButton>
             )}
-            {isMember && (
+            {canInteract && (
               <IconButton size="small" onClick={() => setShareDialogOpen(true)}>
                 <IosShareIcon fontSize="small" />
               </IconButton>
@@ -713,16 +716,16 @@ export default function LeagueDetail() {
                     ).map(({ key, label, value, on }) => (
                       <Box
                         key={key}
-                        onClick={() => isMember && handleToggle(p.id, key, value)}
+                        onClick={() => canInteract && handleToggle(p.id, key, value)}
                         sx={{
                           height: 24, px: 0.8, borderRadius: 0.6,
                           border: `1px solid ${value ? on.border : "#D1D5DB"}`,
                           bgcolor: value ? on.bgcolor : "#F9FAFB",
                           color: value ? on.color : "#9CA3AF",
                           fontSize: 11, fontWeight: 700,
-                          cursor: isMember ? "pointer" : "default",
+                          cursor: canInteract ? "pointer" : "default",
                           display: "flex", alignItems: "center", userSelect: "none", whiteSpace: "nowrap",
-                          "&:hover": { opacity: isMember ? 0.8 : 1 },
+                          "&:hover": { opacity: canInteract ? 0.8 : 1 },
                         }}
                       >
                         {label}
@@ -735,7 +738,7 @@ export default function LeagueDetail() {
           )}
         </Box>
 
-        {!isEditing && isMember && (
+        {!isEditing && canInteract && (
           <Button
             fullWidth variant="outlined" disableElevation
             sx={{ mt: 1.5, borderRadius: 1, height: 40, fontWeight: 700 }}

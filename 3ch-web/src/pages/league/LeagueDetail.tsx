@@ -1183,7 +1183,7 @@ export default function LeagueDetail() {
 
       {/* 비회원 + public: 참가 신청 가능 */}
       {!isEditing && !canManage && !isMember && league?.join_permission === "public" && (() => {
-        const myEntry = rawParticipants.find((p) => p.name === authUser?.name);
+        const myEntry = myName ? rawParticipants.find((p) => p.name === myName) : null;
         if (league.status === "active") {
           return (
             <Button fullWidth variant="contained" disableElevation

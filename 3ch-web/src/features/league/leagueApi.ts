@@ -24,6 +24,7 @@ export interface UpdateLeagueRequest {
   sort_order?: string;
   recruit_count?: number;
   status?: "draft" | "active" | "completed";
+  join_permission?: "public" | "club_only";
 }
 
 /**
@@ -43,6 +44,7 @@ export interface League {
   sort_order?: string;
   recruit_count?: number;
   participant_count?: number;
+  join_permission?: "public" | "club_only";
   group_id?: string;
   status: "draft" | "active" | "completed";
   created_by_id: number;

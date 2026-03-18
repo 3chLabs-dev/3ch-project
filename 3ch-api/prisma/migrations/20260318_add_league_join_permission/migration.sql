@@ -1,0 +1,2 @@
+ALTER TABLE leagues
+  ADD COLUMN IF NOT EXISTS join_permission VARCHAR(20) NOT NULL DEFAULT 'public';

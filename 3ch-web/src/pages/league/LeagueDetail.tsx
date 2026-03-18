@@ -19,6 +19,8 @@ import {
   DialogContent,
   DialogActions,
   Avatar,
+  ToggleButtonGroup,
+  ToggleButton,
 } from "@mui/material";
 import QRCode from "react-qr-code";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -114,6 +116,9 @@ export default function LeagueDetail() {
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [cancelJoinConfirm, setCancelJoinConfirm] = useState(false);
+  const [guestJoinOpen, setGuestJoinOpen] = useState(false);
+  const [guestName, setGuestName] = useState("");
+  const [guestDivision, setGuestDivision] = useState("");
   const [deleteParticipantTarget, setDeleteParticipantTarget] = useState<{ id: string; division: string; name: string } | null>(null);
   const [editingParticipants, setEditingParticipants] = useState<Record<string, { division: string; name: string }>>({});
 
@@ -149,24 +154,35 @@ export default function LeagueDetail() {
 
   const rawParticipants = participantData?.participants ?? [];
 
-  const handleJoin = async () => {
-    if (!id || !myMember) return;
+  const handleJoin = async (name?: string, division?: string) => {
+    if (!id) return;
     const isFull = league?.recruit_count != null && rawParticipants.length >= league.recruit_count;
     if (isFull) {
       setAlertSeverity("warning");
       setAlertMsg(`모집 인원(${league!.recruit_count}명)이 마감되었습니다.`);
       return;
     }
+    const participantName = name ?? myMember?.name ?? "";
+    const participantDivision = division ?? myMember?.division ?? "";
+    if (!participantName) {
+      setAlertSeverity("error");
+      setAlertMsg("이름을 입력해주세요.");
+      return;
+    }
     try {
       await addParticipants({
         leagueId: id,
-        participants: [{ division: myMember.division ?? "", name: myMember.name ?? "" }],
+        participants: [{ division: participantDivision, name: participantName }],
       }).unwrap();
       setAlertSeverity("success");
       setAlertMsg("참가 신청이 완료되었습니다.");
-    } catch {
+      setGuestJoinOpen(false);
+      setGuestName("");
+      setGuestDivision("");
+    } catch (err: unknown) {
+      const msg = (err as { data?: { message?: string } })?.data?.message;
       setAlertSeverity("error");
-      setAlertMsg("참가 신청에 실패했습니다.");
+      setAlertMsg(msg ?? "참가 신청에 실패했습니다.");
     }
   };
 
@@ -759,6 +775,26 @@ export default function LeagueDetail() {
         <DialogTitle sx={{ fontWeight: 900, pb: 1 }}>리그 공유</DialogTitle>
         <DialogContent>
           <Stack spacing={3} sx={{ pt: 1, alignItems: "center" }}>
+            {canManage && (
+              <Box sx={{ width: "100%" }}>
+                <Typography fontSize={12} color="text.secondary" fontWeight={600} sx={{ mb: 0.8 }}>
+                  참가 권한
+                </Typography>
+                <ToggleButtonGroup
+                  value={league?.join_permission ?? "public"}
+                  exclusive
+                  onChange={(_e, val) => {
+                    if (val && id) updateLeague({ id, updates: { join_permission: val } });
+                  }}
+                  size="small"
+                  fullWidth
+                  sx={{ "& .MuiToggleButton-root": { fontWeight: 700, fontSize: 13, py: 0.8 } }}
+                >
+                  <ToggleButton value="public">아무나</ToggleButton>
+                  <ToggleButton value="club_only">클럽 회원만</ToggleButton>
+                </ToggleButtonGroup>
+              </Box>
+            )}
             <Box sx={{ p: 2, bgcolor: "#fff", borderRadius: 1, border: "1px solid #E0E0E0" }}>
               <QRCode
                 value={`${window.location.origin}/league/${id}`}
@@ -833,7 +869,19 @@ export default function LeagueDetail() {
                   onClick={async () => {
                     const link = `${window.location.origin}/league/${id}`;
                     try {
-                      await navigator.clipboard.writeText(link);
+                      if (navigator.clipboard?.writeText) {
+                        await navigator.clipboard.writeText(link);
+                      } else {
+                        const el = document.createElement("textarea");
+                        el.value = link;
+                        el.style.position = "fixed";
+                        el.style.opacity = "0";
+                        document.body.appendChild(el);
+                        el.focus();
+                        el.select();
+                        document.execCommand("copy");
+                        document.body.removeChild(el);
+                      }
                       setAlertSeverity("success");
                       setAlertMsg("링크가 복사되었습니다!");
                       setShareDialogOpen(false);
@@ -924,6 +972,57 @@ export default function LeagueDetail() {
             }}
           >
             삭제
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* 비회원 참가 신청 다이얼로그 */}
+      <Dialog
+        open={guestJoinOpen}
+        onClose={() => { setGuestJoinOpen(false); setGuestName(""); setGuestDivision(""); }}
+        maxWidth="xs"
+        fullWidth
+        slotProps={{ paper: { sx: { borderRadius: 1, mx: 2, overflow: "hidden" } } }}
+      >
+        <DialogTitle sx={{ fontWeight: 900, pb: 1 }}>참가 신청</DialogTitle>
+        <Divider />
+        <DialogContent sx={{ pt: 2 }}>
+          <Stack spacing={2}>
+            <TextField
+              label="부수"
+              value={guestDivision}
+              onChange={(e) => setGuestDivision(e.target.value)}
+              fullWidth
+              size="small"
+              placeholder="예: 3부"
+            />
+            <TextField
+              label="이름"
+              value={guestName}
+              onChange={(e) => setGuestName(e.target.value)}
+              fullWidth
+              size="small"
+              autoFocus
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 2, pb: 2, gap: 1 }}>
+          <Button
+            onClick={() => { setGuestJoinOpen(false); setGuestName(""); setGuestDivision(""); }}
+            variant="outlined"
+            disableElevation
+            sx={{ borderRadius: 1, fontWeight: 700 }}
+          >
+            취소
+          </Button>
+          <Button
+            onClick={() => handleJoin(guestName.trim(), guestDivision.trim())}
+            variant="contained"
+            disableElevation
+            disabled={!guestName.trim()}
+            sx={{ borderRadius: 1, fontWeight: 700 }}
+          >
+            신청
           </Button>
         </DialogActions>
       </Dialog>
@@ -1064,7 +1163,51 @@ export default function LeagueDetail() {
         </Button>
       )}
 
-      {/* 참가자(회원)용 버튼 */}
+      {/* 비회원 + club_only: 차단 메시지 */}
+      {!isEditing && !canManage && !isMember && league?.join_permission === "club_only" && (
+        <Button
+          fullWidth variant="contained" disableElevation disabled
+          sx={{ borderRadius: 1, height: 44, fontWeight: 900, fontSize: 15, bgcolor: "#E5E7EB", color: "#9CA3AF", "&.Mui-disabled": { bgcolor: "#E5E7EB", color: "#9CA3AF" } }}
+        >
+          클럽 회원만 참가 가능
+        </Button>
+      )}
+
+      {/* 비회원 + public: 참가 신청 가능 */}
+      {!isEditing && !canManage && !isMember && league?.join_permission === "public" && (() => {
+        const myEntry = rawParticipants.find((p) => p.name === authUser?.name);
+        if (league.status === "active") {
+          if (!myEntry) return null;
+          return (
+            <Button fullWidth variant="contained" disableElevation
+              sx={{ borderRadius: 1, height: 44, fontWeight: 900, fontSize: 15, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}
+              onClick={() => navigate(`/league/${id}/matches`)}
+            >
+              리그 진행 중
+            </Button>
+          );
+        }
+        if (myEntry) {
+          return (
+            <Button fullWidth variant="contained" disableElevation disabled
+              sx={{ borderRadius: 1, height: 44, fontWeight: 900, fontSize: 15, bgcolor: "#E5E7EB", color: "#9CA3AF", "&.Mui-disabled": { bgcolor: "#E5E7EB", color: "#9CA3AF" } }}
+            >
+              리그 대기중
+            </Button>
+          );
+        }
+        const isFull = league?.recruit_count != null && rawParticipants.length >= league.recruit_count;
+        return (
+          <Button fullWidth variant="contained" disableElevation disabled={isFull}
+            sx={{ borderRadius: 1, height: 44, fontWeight: 900, fontSize: 15, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}
+            onClick={() => setGuestJoinOpen(true)}
+          >
+            {isFull ? `마감 (${league!.recruit_count}/${league!.recruit_count}명)` : "참가 신청"}
+          </Button>
+        );
+      })()}
+
+      {/* 참가자(클럽 회원)용 버튼 */}
       {!isEditing && !canManage && isMember && (() => {
         const myParticipant = rawParticipants.find((p) => p.name === myMember?.name);
         if (league.status === "active") {
@@ -1103,7 +1246,7 @@ export default function LeagueDetail() {
           <Button
             fullWidth variant="contained" disableElevation disabled={isFull}
             sx={{ borderRadius: 1, height: 44, fontWeight: 900, fontSize: 15, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}
-            onClick={handleJoin}
+            onClick={() => handleJoin()}
           >
             {isFull ? `마감 (${league!.recruit_count}/${league!.recruit_count}명)` : "참가 신청"}
           </Button>

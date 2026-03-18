@@ -2,7 +2,7 @@
 const { z } = require('zod');
 const { randomUUID } = require('crypto');
 const pool = require('../db/pool');
-const { requireAuth } = require('../middlewares/auth');
+const { requireAuth, optionalAuth } = require('../middlewares/auth');
 const { buildLeagueCode } = require('../utils/clubCodeUtils');
 
 const router = express.Router();
@@ -12,12 +12,18 @@ router.param('id', async (req, _res, next, id) => {
   if (/^[A-Z]{3}\d{6}\d{2}$/.test(id)) {
     try {
       const result = await pool.query('SELECT id FROM leagues WHERE league_code = $1', [id]);
-      if (result.rows.length > 0) {
-        req.params.id = result.rows[0].id;
-      }
-    } catch (e) {
-      // 변환 실패 시 원본 id 유지
-    }
+      if (result.rows.length > 0) req.params.id = result.rows[0].id;
+    } catch (e) { /* 변환 실패 시 원본 id 유지 */ }
+  }
+  next();
+});
+
+router.param('leagueId', async (req, _res, next, id) => {
+  if (/^[A-Z]{3}\d{6}\d{2}$/.test(id)) {
+    try {
+      const result = await pool.query('SELECT id FROM leagues WHERE league_code = $1', [id]);
+      if (result.rows.length > 0) req.params.leagueId = result.rows[0].id;
+    } catch (e) { /* 변환 실패 시 원본 id 유지 */ }
   }
   next();
 });
@@ -170,6 +176,7 @@ const updateLeagueSchema = z.object({
   sort_order: z.string().optional(),
   recruit_count: z.number().int().min(1).optional(),
   status: z.enum(['draft', 'active', 'completed']).optional(),
+  join_permission: z.enum(['public', 'club_only']).optional(),
 });
 
 /**
@@ -472,21 +479,32 @@ router.post('/league', requireAuth, async (req, res) => {
  *       500:
  *         description: 서버 오류
  */
-router.get('/league/:id/participants', requireAuth, async (req, res) => {
+router.get('/league/:id/participants', optionalAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = Number(req.user.sub);
 
-    const accessCheck = await pool.query(
-      `SELECT 1
-       FROM leagues l
-       INNER JOIN group_members gm ON gm.group_id = l.group_id
-       WHERE l.id = $1 AND gm.user_id = $2`,
-      [id, userId],
+    // join_permission이 club_only이면 클럽 회원만 참가자 목록 조회 가능
+    const leagueRow = await pool.query(
+      `SELECT join_permission FROM leagues WHERE id = $1`,
+      [id],
     );
+    if (leagueRow.rowCount === 0) {
+      return res.status(404).json({ message: '리그를 찾을 수 없습니다.' });
+    }
+    const joinPermission = leagueRow.rows[0].join_permission;
 
-    if (accessCheck.rowCount === 0) {
-      return res.status(403).json({ message: '해당 리그 참가자 목록을 조회할 권한이 없습니다.' });
+    if (joinPermission === 'club_only') {
+      const userId = req.user ? Number(req.user.sub) : null;
+      if (!userId) return res.status(403).json({ message: '클럽 회원만 조회할 수 있습니다.' });
+      const accessCheck = await pool.query(
+        `SELECT 1 FROM leagues l
+         INNER JOIN group_members gm ON gm.group_id = l.group_id
+         WHERE l.id = $1 AND gm.user_id = $2`,
+        [id, userId],
+      );
+      if (accessCheck.rowCount === 0) {
+        return res.status(403).json({ message: '클럽 회원만 조회할 수 있습니다.' });
+      }
     }
 
     const result = await pool.query(
@@ -550,31 +568,50 @@ router.get('/league/:id/participants', requireAuth, async (req, res) => {
  *       500:
  *         description: 서버 오류
  */
-router.post('/league/:leagueId/participants', requireAuth, async (req, res) => {
+router.post('/league/:leagueId/participants', optionalAuth, async (req, res) => {
   try {
     const { leagueId } = req.params;
-    const userId = Number(req.user.sub);
+    const userId = req.user ? Number(req.user.sub) : null;
 
-    // 권한 확인: 해당 클럽의 멤버 이상만 가능 (owner/admin은 다수 추가 가능, member는 본인 1명만)
-    const authCheck = await pool.query(
-      `SELECT gm.role
-       FROM leagues l
-       INNER JOIN group_members gm ON gm.group_id = l.group_id
-       WHERE l.id = $1 AND gm.user_id = $2`,
-      [leagueId, userId],
+    // 리그의 join_permission 확인
+    const leaguePermRow = await pool.query(
+      `SELECT join_permission FROM leagues WHERE id = $1`,
+      [leagueId],
     );
-    if (authCheck.rowCount === 0) {
-      return res.status(403).json({ message: '참가자를 추가할 권한이 없습니다.' });
+    if (leaguePermRow.rowCount === 0) {
+      return res.status(404).json({ message: '리그를 찾을 수 없습니다.' });
     }
-    const userRole = authCheck.rows[0].role;
-    const isAdmin = userRole === 'owner' || userRole === 'admin';
+    const joinPermission = leaguePermRow.rows[0].join_permission;
+
+    // 클럽 회원 여부 확인 (로그인한 경우에만)
+    let isAdmin = false;
+    let isClubMember = false;
+    if (userId) {
+      const authCheck = await pool.query(
+        `SELECT gm.role
+         FROM leagues l
+         INNER JOIN group_members gm ON gm.group_id = l.group_id
+         WHERE l.id = $1 AND gm.user_id = $2`,
+        [leagueId, userId],
+      );
+      const userRole = authCheck.rows[0]?.role ?? null;
+      isAdmin = userRole === 'owner' || userRole === 'admin';
+      isClubMember = authCheck.rowCount > 0;
+    }
+
+    // club_only: 로그인 + 클럽 회원만 허용
+    if (joinPermission === 'club_only') {
+      if (!userId) return res.status(401).json({ message: '로그인이 필요합니다.' });
+      if (!isClubMember) return res.status(403).json({ message: '클럽 회원만 참가할 수 있습니다.' });
+    }
 
     const rawParticipants = req.body.participants;
     if (!Array.isArray(rawParticipants) || rawParticipants.length === 0) {
       return res.status(400).json({ message: '참가자 목록이 비어있습니다.' });
     }
+    // 관리자가 아니면 1명만 신청 가능
     if (!isAdmin && rawParticipants.length > 1) {
-      return res.status(403).json({ message: '일반 멤버는 본인만 참가 신청할 수 있습니다.' });
+      return res.status(403).json({ message: '본인만 참가 신청할 수 있습니다.' });
     }
 
     const addSchema = z.array(z.object({
@@ -714,14 +751,14 @@ router.post('/league/:leagueId/participants', requireAuth, async (req, res) => {
  *       500:
  *         description: 서버 오류
  */
-router.get('/league/:id', requireAuth, async (req, res) => {
+router.get('/league/:id', optionalAuth, async (req, res) => {
   try {
     const { id } = req.params;
 
     // 리그 정보 조회
     const leagueResult = await pool.query(
       `SELECT id, name, description, type, format, sport, start_date, rules, status,
-              recruit_count, participant_count, group_id, created_by_id, created_at, updated_at
+              recruit_count, participant_count, join_permission, group_id, created_by_id, created_at, updated_at
        FROM leagues
        WHERE id = $1`,
       [id],
@@ -829,7 +866,7 @@ router.put('/league/:id', requireAuth, async (req, res) => {
       UPDATE leagues
       SET ${fields.join(', ')}, updated_at = NOW()
       WHERE id = $${queryIndex}
-      RETURNING id, name, description, type, format, sport, start_date, rules, notice, sort_order, status, recruit_count, participant_count, created_by_id, created_at, updated_at;
+      RETURNING id, name, description, type, format, sport, start_date, rules, notice, sort_order, status, recruit_count, participant_count, join_permission, created_by_id, created_at, updated_at;
     `;
 
     const result = await pool.query(updateQuery, values);

@@ -793,8 +793,8 @@ export default function LeagueDetail() {
                   fullWidth
                   sx={{ "& .MuiToggleButton-root": { fontWeight: 700, fontSize: 13, py: 0.8 } }}
                 >
-                  <ToggleButton value="public">아무나</ToggleButton>
-                  <ToggleButton value="club_only">클럽 회원만</ToggleButton>
+                  <ToggleButton value="public">링크가 있는 모든 사람</ToggleButton>
+                  <ToggleButton value="club_only">클럽에 가입한 회원만</ToggleButton>
                 </ToggleButtonGroup>
               </Box>
             )}

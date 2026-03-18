@@ -156,6 +156,7 @@ export default function LeagueDetail() {
     () => groupData?.members?.find((m) => m.user_id === authUser?.id),
     [groupData, authUser],
   );
+  const myName = myMember?.name ?? authUser?.name ?? (id ? localStorage.getItem(`guestName_${id}`) : null) ?? null;
 
   const rawParticipants = participantData?.participants ?? [];
 
@@ -181,6 +182,8 @@ export default function LeagueDetail() {
       }).unwrap();
       setAlertSeverity("success");
       setAlertMsg("참가 신청이 완료되었습니다.");
+      // 비로그인 게스트 하이라이트용: 입력한 이름을 리그별로 저장
+      if (!authUser && id) localStorage.setItem(`guestName_${id}`, participantName);
       setGuestJoinOpen(false);
       setGuestName("");
       setGuestDivision("");
@@ -641,7 +644,7 @@ export default function LeagueDetail() {
             </Box>
           ) : (
             (isEditing ? participants : filteredParticipants).map((p, idx) => {
-              const isMe = !isEditing && p.name === myMember?.name;
+              const isMe = !isEditing && !!myName && p.name === myName;
               const isManual = p.member_id == null;
               const editDiv = editingParticipants[p.id]?.division ?? p.division ?? "";
               const editName = editingParticipants[p.id]?.name ?? p.name;
@@ -795,8 +798,8 @@ export default function LeagueDetail() {
                   fullWidth
                   sx={{ "& .MuiToggleButton-root": { fontWeight: 700, fontSize: 13, py: 0.8 } }}
                 >
-                  <ToggleButton value="public" sx={{ gap: 0.5 }}><LanguageIcon sx={{ fontSize: 16 }} />링크가 있는 모든 사람</ToggleButton>
                   <ToggleButton value="club_only" sx={{ gap: 0.5 }}><LockOutlinedIcon sx={{ fontSize: 16 }} />클럽에 가입한 회원만</ToggleButton>
+                  <ToggleButton value="public" sx={{ gap: 0.5 }}><LanguageIcon sx={{ fontSize: 16 }} />링크가 있는 모든 사람</ToggleButton>
                 </ToggleButtonGroup>
               </Box>
             )}
@@ -1180,9 +1183,8 @@ export default function LeagueDetail() {
 
       {/* 비회원 + public: 참가 신청 가능 */}
       {!isEditing && !canManage && !isMember && league?.join_permission === "public" && (() => {
-        const myEntry = rawParticipants.find((p) => p.name === authUser?.name);
+        const myEntry = myName ? rawParticipants.find((p) => p.name === myName) : null;
         if (league.status === "active") {
-          if (!myEntry) return null;
           return (
             <Button fullWidth variant="contained" disableElevation
               sx={{ borderRadius: 1, height: 44, fontWeight: 900, fontSize: 15, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}

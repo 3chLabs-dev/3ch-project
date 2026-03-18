@@ -590,8 +590,11 @@ export default function LeagueBracket() {
   const isCreator = !!authUser && league?.created_by_id === authUser.id;
   const canManage = groupData?.myRole === "owner" || groupData?.myRole === "admin" || isCreator;
   const canScore = canManage || league?.join_permission === "public";
-  // 그룹 멤버 이름 우선, 없으면 계정 이름으로 대진표 내 본인 행 하이라이트
-  const myName    = groupData?.members?.find((m) => m.user_id === authUser?.id)?.name ?? authUser?.name ?? null;
+  // 그룹 멤버 이름 우선, 없으면 계정 이름, 비로그인 게스트는 localStorage 저장 이름 사용
+  const myName    = groupData?.members?.find((m) => m.user_id === authUser?.id)?.name
+    ?? authUser?.name
+    ?? (id ? localStorage.getItem(`guestName_${id}`) : null)
+    ?? null;
 
   // ── 참가자 순서 상태 ──────────────────────────────────────────────────────
   // editOrder=null: 서버 데이터(rawParticipants) 그대로 사용

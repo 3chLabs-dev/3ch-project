@@ -73,7 +73,7 @@ export default function LeagueStep5Participants() {
 
   const isFull = recruitCount !== "" && participants.length >= recruitCount;
   const canAdd = useMemo(() => Boolean(division.trim() && name.trim()), [division, name]);
-  const canNext = participants.length > 0;
+  const canNext = recruitCount !== "" && sortOrder !== "";
 
   const handleCancelDelete = () => {
     setOpenCancelDialog(false);
@@ -148,7 +148,7 @@ export default function LeagueStep5Participants() {
       <Stack direction="row" spacing={3} sx={{ mb: 4 }}>
         <Box>
           <Typography sx={{ fontSize: 22, fontWeight: 900, mb: 1 }}>
-            모집 인원
+            모집 인원 <Box component="span" sx={{ color: "#EF4444", fontSize: 18 }}>*</Box>
           </Typography>
           <FormControl sx={{ width: 140 }}>
             <Select
@@ -180,7 +180,7 @@ export default function LeagueStep5Participants() {
 
         <Box>
           <Typography sx={{ fontSize: 22, fontWeight: 900, mb: 1 }}>
-            대진 순서
+            대진 순서 <Box component="span" sx={{ color: "#EF4444", fontSize: 18 }}>*</Box>
           </Typography>
           <FormControl sx={{ width: 140 }}>
             <Select

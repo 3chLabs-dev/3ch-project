@@ -1,4 +1,4 @@
-import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors,
@@ -263,7 +263,8 @@ interface BracketRowProps {
   n: number;            // 전체 참가자 수 (첫/마지막 행 이동 비활성화에 사용)
   localOrder: LeagueParticipantItem[]; // 현재 표시 순서 (열 헤더와 동기화용)
   editMode: boolean;    // 시드 순서 편집 모드 여부
-  canManage: boolean;   // 관리 권한 (오너/어드민/생성자)
+  canManage: boolean;   // 관리 권한 (오너/어드민/생성자) - 드래그 전용
+  canScore: boolean;    // 점수 편집 권한 (canManage || public 리그)
   onMove: (idx: number, dir: "up" | "down") => void; // 버튼 클릭 이동 핸들러
   landscape: boolean;
   matchLookup: Map<string, LeagueMatch>; // "aId__bId" 키로 경기 빠르게 조회
@@ -288,7 +289,7 @@ interface BracketRowProps {
  * - 시드 번호 셀 자체가 드래그 핸들 역할을 겸함
  */
 const SortableBracketRow = memo(function SortableBracketRow({
-  participant, rowIdx, n, localOrder, editMode, canManage, onMove, landscape,
+  participant, rowIdx, n, localOrder, editMode, canManage, canScore, onMove, landscape,
   matchLookup, wins, losses, rank, tieSetDiff, hasPlayed, leagueId, winScore, isMe,
 }: BracketRowProps) {
   const canDrag = editMode && canManage;
@@ -349,7 +350,7 @@ const SortableBracketRow = memo(function SortableBracketRow({
         const m   = matchLookup.get(`${participant.id}__${colPlayer.id}`);
         const isA = m?.participant_a_id === participant.id;
         return (
-          <BracketScoreCell key={colIdx} match={m} isA={isA} leagueId={leagueId} winScore={winScore} canManage={canManage} landscape={landscape} />
+          <BracketScoreCell key={colIdx} match={m} isA={isA} leagueId={leagueId} winScore={winScore} canManage={canScore} landscape={landscape} />
         );
       })}
 
@@ -588,6 +589,7 @@ export default function LeagueBracket() {
   const authUser  = useAppSelector((s) => s.auth.user);
   const isCreator = !!authUser && league?.created_by_id === authUser.id;
   const canManage = groupData?.myRole === "owner" || groupData?.myRole === "admin" || isCreator;
+  const canScore = canManage || league?.join_permission === "public";
   // 그룹 멤버 이름 우선, 없으면 계정 이름으로 대진표 내 본인 행 하이라이트
   const myName    = groupData?.members?.find((m) => m.user_id === authUser?.id)?.name ?? authUser?.name ?? null;
 
@@ -620,6 +622,20 @@ export default function LeagueBracket() {
   const [naturalTh, setNaturalTh]       = useState(0);  // 테이블 원본(비스케일) 높이
   const [userZoom, setUserZoom]         = useState(1);  // 사용자 줌 배율 (1 = 자동 fit)
   const dataReady = !!league && rawParticipants.length > 0; // 데이터 로드 완료 여부 (useLayoutEffect deps)
+
+  // 기기 실제 회전 감지 → landscape 자동 동기화 + userZoom 리셋
+  useEffect(() => {
+    const syncOrientation = () => {
+      const isLandscape = window.matchMedia("(orientation: landscape)").matches;
+      setLandscape(isLandscape);
+      setUserZoom(1);
+    };
+    const mq = window.matchMedia("(orientation: landscape)");
+    mq.addEventListener("change", syncOrientation);
+    // 최초 진입 시 기기 방향에 맞게 초기화
+    syncOrientation();
+    return () => mq.removeEventListener("change", syncOrientation);
+  }, []);
 
   useLayoutEffect(() => {
     const updateScale = () => {
@@ -860,6 +876,7 @@ export default function LeagueBracket() {
                         localOrder={localOrder}
                         editMode={editMode}
                         canManage={canManage}
+                        canScore={canScore}
                         onMove={handleMove}
                         landscape={landscape}
                         matchLookup={matchLookup}
@@ -887,12 +904,12 @@ export default function LeagueBracket() {
 
         {/* 플로팅 버튼들 (position: absolute, wrapperRef 기준 → 스크롤 영역 위에 고정) */}
 
-        {/* 줌 컨트롤: 세로 모드=열(＋/％/－), 가로 모드=행(＋ ％ －) */}
-        <Box sx={{ position: "absolute", bottom: 126, right: 14, zIndex: 10, bgcolor: "#fff", borderRadius: 2, boxShadow: "0 2px 8px rgba(0,0,0,0.15)", display: "flex", flexDirection: landscape ? "row" : "column", alignItems: "center", p: 0.25 }}>
+        {/* 줌 컨트롤: portrait=세로(writing-mode 회전), landscape=가로 */}
+        <Box sx={{ position: "absolute", bottom: 126, right: 14, zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: "#fff", borderRadius: 2, boxShadow: "0 2px 8px rgba(0,0,0,0.15)", display: "flex", flexDirection: "column", alignItems: "center", p: 0.25 }}>
           <IconButton size="small" onClick={() => setUserZoom((z) => Math.min(2.5, +(z + 0.25).toFixed(2)))}>
             <ZoomInIcon sx={{ fontSize: 18 }} />
           </IconButton>
-          <Typography sx={{ fontSize: 9, fontWeight: 700, color: "#6B7280", lineHeight: 1, mx: landscape ? 0.25 : 0, my: landscape ? 0 : 0.25 }}>
+          <Typography sx={{ fontSize: 9, fontWeight: 700, color: "#6B7280", lineHeight: 1, my: 0.25 }}>
             {Math.round(userZoom * 100)}%
           </Typography>
           <IconButton size="small" disabled={userZoom <= 0.5} onClick={() => setUserZoom((z) => Math.max(0.5, +(z - 0.25).toFixed(2)))}>
@@ -901,12 +918,12 @@ export default function LeagueBracket() {
         </Box>
 
         <Tooltip title="새로고침">
-          <IconButton onClick={handleRefresh} sx={{ position: "absolute", bottom: 67, right: 14, zIndex: 10, bgcolor: "#fff", color: "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: "#F3F4F6" } }}>
+          <IconButton onClick={handleRefresh} sx={{ position: "absolute", bottom: 67, right: 14, zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: "#fff", color: "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: "#F3F4F6" } }}>
             <RefreshIcon sx={{ fontSize: 18 }} />
           </IconButton>
         </Tooltip>
         <Tooltip title={landscape ? "세로 보기" : "가로 보기"}>
-          <IconButton onClick={() => setLandscape((v) => !v)} sx={{ position: "absolute", bottom: 14, right: 14, zIndex: 10, bgcolor: landscape ? COLOR.primary : "#fff", color: landscape ? "#fff" : "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: landscape ? "#1D4ED8" : "#F3F4F6" } }}>
+          <IconButton onClick={() => { setLandscape((v) => !v); setUserZoom(1); }} sx={{ position: "absolute", bottom: 14, right: 14, zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: landscape ? COLOR.primary : "#fff", color: landscape ? "#fff" : "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: landscape ? "#1D4ED8" : "#F3F4F6" } }}>
             <ScreenRotationIcon sx={{ fontSize: 18 }} />
           </IconButton>
         </Tooltip>

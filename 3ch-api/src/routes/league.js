@@ -950,22 +950,28 @@ router.put('/league/:id', requireAuth, async (req, res) => {
  *       500:
  *         description: 서버 오류
  */
-router.put('/league/:leagueId/participants/:participantId', requireAuth, async (req, res) => {
+router.put('/league/:leagueId/participants/:participantId', optionalAuth, async (req, res) => {
   try {
     const { leagueId, participantId } = req.params;
-    const userId = Number(req.user.sub);
+    const userId = req.user ? Number(req.user.sub) : null;
 
-    // 권한 확인: 클럽 멤버(owner, admin, member) 모두 가능
-    const accessCheck = await pool.query(
-      `SELECT 1
-       FROM leagues l
-       INNER JOIN group_members gm ON gm.group_id = l.group_id
-       WHERE l.id = $1 AND gm.user_id = $2`,
-      [leagueId, userId],
-    );
+    // join_permission 확인
+    const leagueRow = await pool.query(`SELECT join_permission FROM leagues WHERE id = $1`, [leagueId]);
+    if (leagueRow.rowCount === 0) return res.status(404).json({ message: '리그를 찾을 수 없습니다.' });
+    const joinPermission = leagueRow.rows[0].join_permission;
 
-    if (accessCheck.rowCount === 0) {
-      return res.status(403).json({ message: '참가자를 수정할 권한이 없습니다.' });
+    if (userId) {
+      if (joinPermission === 'club_only') {
+        const accessCheck = await pool.query(
+          `SELECT 1 FROM leagues l INNER JOIN group_members gm ON gm.group_id = l.group_id WHERE l.id = $1 AND gm.user_id = $2`,
+          [leagueId, userId],
+        );
+        if (accessCheck.rowCount === 0) {
+          return res.status(403).json({ message: '클럽 회원만 수정할 수 있습니다.' });
+        }
+      }
+    } else if (joinPermission === 'club_only') {
+      return res.status(401).json({ message: '로그인이 필요합니다.' });
     }
 
     // 업데이트할 필드 검증
@@ -1287,18 +1293,25 @@ function generateRoundRobin(n) {
  *       500:
  *         description: 서버 오류
  */
-// GET /league/:id/matches - 경기 목록 조회 (클럽 멤버)
-router.get('/league/:id/matches', requireAuth, async (req, res) => {
-  const userId = Number(req.user.sub);
+// GET /league/:id/matches - 경기 목록 조회 (public 리그는 누구나, club_only는 클럽 멤버)
+router.get('/league/:id/matches', optionalAuth, async (req, res) => {
   const leagueId = req.params.id;
   try {
-    const access = await pool.query(
-      `SELECT l.id FROM leagues l
-       INNER JOIN group_members gm ON gm.group_id = l.group_id
-       WHERE l.id = $1 AND gm.user_id = $2`,
-      [leagueId, userId],
-    );
-    if (access.rowCount === 0) return res.status(403).json({ message: '접근 권한이 없습니다.' });
+    // join_permission 확인
+    const leagueRow = await pool.query(`SELECT join_permission FROM leagues WHERE id = $1`, [leagueId]);
+    if (leagueRow.rowCount === 0) return res.status(404).json({ message: '리그를 찾을 수 없습니다.' });
+    const joinPermission = leagueRow.rows[0].join_permission;
+
+    if (joinPermission === 'club_only') {
+      const userId = req.user ? Number(req.user.sub) : null;
+      if (!userId) return res.status(401).json({ message: '로그인이 필요합니다.' });
+      const accessCheck = await pool.query(
+        `SELECT 1 FROM leagues l INNER JOIN group_members gm ON gm.group_id = l.group_id WHERE l.id = $1 AND gm.user_id = $2`,
+        [leagueId, userId],
+      );
+      if (accessCheck.rowCount === 0) return res.status(403).json({ message: '클럽 회원만 조회할 수 있습니다.' });
+    }
+    // public이면 누구나 통과
 
     const result = await pool.query(
       `SELECT
@@ -1642,20 +1655,26 @@ router.patch('/league/:id/matches/reorder', requireAuth, async (req, res) => {
  *       500:
  *         description: 서버 오류
  */
-// PATCH /league/:id/matches/:matchId - 점수/코트/상태 업데이트 (클럽 멤버)
-router.patch('/league/:id/matches/:matchId', requireAuth, async (req, res) => {
-  const userId = Number(req.user.sub);
-  const leagueId = req.params.id;
-  const matchId = req.params.matchId;
+// PATCH /league/:id/matches/:matchId - 점수/코트/상태 업데이트 (public 리그는 누구나, club_only는 클럽 멤버)
+router.patch('/league/:id/matches/:matchId', optionalAuth, async (req, res) => {
+  const { id, matchId } = req.params;
+  const leagueId = id;
   const { score_a, score_b, court, status } = req.body;
   try {
-    const access = await pool.query(
-      `SELECT l.id FROM leagues l
-       INNER JOIN group_members gm ON gm.group_id = l.group_id
-       WHERE l.id = $1 AND gm.user_id = $2`,
-      [leagueId, userId],
-    );
-    if (access.rowCount === 0) return res.status(403).json({ message: '권한이 없습니다.' });
+    // join_permission 확인
+    const leagueRow = await pool.query(`SELECT join_permission FROM leagues WHERE id = $1`, [leagueId]);
+    if (leagueRow.rowCount === 0) return res.status(404).json({ message: '리그를 찾을 수 없습니다.' });
+    const joinPermission = leagueRow.rows[0].join_permission;
+
+    if (joinPermission === 'club_only') {
+      const userId = req.user ? Number(req.user.sub) : null;
+      if (!userId) return res.status(401).json({ message: '로그인이 필요합니다.' });
+      const accessCheck = await pool.query(
+        `SELECT 1 FROM leagues l INNER JOIN group_members gm ON gm.group_id = l.group_id WHERE l.id = $1 AND gm.user_id = $2`,
+        [leagueId, userId],
+      );
+      if (accessCheck.rowCount === 0) return res.status(403).json({ message: '클럽 회원만 수정할 수 있습니다.' });
+    }
 
     const fields = [];
     const vals = [];

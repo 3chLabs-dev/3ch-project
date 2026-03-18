@@ -31,6 +31,8 @@ import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 import SmsOutlinedIcon from "@mui/icons-material/SmsOutlined";
 import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
+import LanguageIcon from "@mui/icons-material/Language";
 import {
   useGetLeagueQuery,
   useGetLeagueParticipantsQuery,
@@ -793,8 +795,8 @@ export default function LeagueDetail() {
                   fullWidth
                   sx={{ "& .MuiToggleButton-root": { fontWeight: 700, fontSize: 13, py: 0.8 } }}
                 >
-                  <ToggleButton value="public">링크가 있는 모든 사람</ToggleButton>
-                  <ToggleButton value="club_only">클럽에 가입한 회원만</ToggleButton>
+                  <ToggleButton value="public" sx={{ gap: 0.5 }}><LanguageIcon sx={{ fontSize: 16 }} />링크가 있는 모든 사람</ToggleButton>
+                  <ToggleButton value="club_only" sx={{ gap: 0.5 }}><LockOutlinedIcon sx={{ fontSize: 16 }} />클럽에 가입한 회원만</ToggleButton>
                 </ToggleButtonGroup>
               </Box>
             )}

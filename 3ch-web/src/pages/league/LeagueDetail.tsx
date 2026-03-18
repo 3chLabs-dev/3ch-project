@@ -181,6 +181,8 @@ export default function LeagueDetail() {
       }).unwrap();
       setAlertSeverity("success");
       setAlertMsg("참가 신청이 완료되었습니다.");
+      // 비로그인 게스트 하이라이트용: 입력한 이름을 리그별로 저장
+      if (!authUser && id) localStorage.setItem(`guestName_${id}`, participantName);
       setGuestJoinOpen(false);
       setGuestName("");
       setGuestDivision("");

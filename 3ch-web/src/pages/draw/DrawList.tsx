@@ -447,7 +447,7 @@ export default function DrawList() {
     return (
       <Stack spacing={2.2}>
         <Stack direction="row" alignItems="center" spacing={1}>
-          <IconButton onClick={draftId ? () => navigate(`/draw/${leagueId}/${draftId}`, { replace: true }) : () => navigate(`/draw/${leagueId}`, { replace: true })} size="small">
+          <IconButton onClick={() => navigate(`/draw/${leagueId}`, { replace: true })} size="small">
             <ArrowBackIcon />
           </IconButton>
           <Typography fontWeight={900} fontSize={20}>{draftId ? "추첨 진행하기" : "경품 추첨"}</Typography>
@@ -729,6 +729,7 @@ export default function DrawList() {
                         <IconButton onClick={(e) => handleOpenEdit(e, draw)} sx={{ color: "#9CA3AF", p: 1 }}>
                           <EditOutlinedIcon fontSize="small" />
                         </IconButton>
+                        {/* 이 부분에 개별 추첨 버튼 추가해야 함 */}
                         <IconButton onClick={(e) => { e.stopPropagation(); setDeleteConfirmDraw(draw); }} sx={{ color: "#9CA3AF", p: 1 }}>
                           <DeleteOutlineIcon fontSize="small" />
                         </IconButton>

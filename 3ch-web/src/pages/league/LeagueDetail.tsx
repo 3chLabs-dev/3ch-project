@@ -156,6 +156,7 @@ export default function LeagueDetail() {
     () => groupData?.members?.find((m) => m.user_id === authUser?.id),
     [groupData, authUser],
   );
+  const myName = myMember?.name ?? authUser?.name ?? (id ? localStorage.getItem(`guestName_${id}`) : null) ?? null;
 
   const rawParticipants = participantData?.participants ?? [];
 
@@ -643,7 +644,7 @@ export default function LeagueDetail() {
             </Box>
           ) : (
             (isEditing ? participants : filteredParticipants).map((p, idx) => {
-              const isMe = !isEditing && p.name === myMember?.name;
+              const isMe = !isEditing && !!myName && p.name === myName;
               const isManual = p.member_id == null;
               const editDiv = editingParticipants[p.id]?.division ?? p.division ?? "";
               const editName = editingParticipants[p.id]?.name ?? p.name;

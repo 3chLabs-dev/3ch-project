@@ -60,4 +60,17 @@ async function requireAdmin(req, res, next) {
   }
 }
 
-module.exports = { requireAuth, requireAdmin };
+// 토큰이 있으면 req.user 세팅, 없어도 통과 (공개 조회용)
+async function optionalAuth(req, _res, next) {
+  const header = req.headers.authorization || "";
+  const [type, token] = header.split(" ");
+  if (type === "Bearer" && token) {
+    try {
+      const payload = jwt.verify(token, process.env.JWT_SECRET);
+      req.user = payload;
+    } catch { /* 토큰 만료/오류 시 무시 */ }
+  }
+  next();
+}
+
+module.exports = { requireAuth, requireAdmin, optionalAuth };

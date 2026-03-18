@@ -87,8 +87,9 @@ model League {
   sort_order      String?   @default("부수")
   recruit_count   Int       @default(0)
   participant_count Int     @default(0)
-  league_code     String?   @unique
-  created_at      DateTime  @default(now())
+  league_code      String?   @unique
+  join_permission  String    @default("public") // "public" | "club_only"
+  created_at       DateTime  @default(now())
   updated_at      DateTime  @default(now()) @updatedAt
 
   created_by_id   Int

@@ -276,7 +276,10 @@ export default function LeagueMatchOrder() {
   const canManage =
     (!groupLoading && (groupData?.myRole === "owner" || groupData?.myRole === "admin")) || isCreator;
   const canMember = (!groupLoading && !!groupData?.myRole) || isCreator || league?.join_permission === "public";
-  const myName = groupData?.members?.find((m) => m.user_id === authUser?.id)?.name ?? authUser?.name ?? null;
+  const myName = groupData?.members?.find((m) => m.user_id === authUser?.id)?.name
+    ?? authUser?.name
+    ?? (leagueId ? localStorage.getItem(`guestName_${leagueId}`) : null)
+    ?? null;
 
   const { data: matchData, isLoading: matchLoading, refetch: refetchMatches } = useGetLeagueMatchesQuery(leagueId, { skip: !leagueId, refetchOnMountOrArgChange: true });
   // 순서만 로컬에 보관. 경기 데이터는 항상 RTK Query 캐시에서 가져와야 optimistic update가 즉시 반영됨

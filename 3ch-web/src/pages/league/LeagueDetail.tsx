@@ -795,8 +795,8 @@ export default function LeagueDetail() {
                   fullWidth
                   sx={{ "& .MuiToggleButton-root": { fontWeight: 700, fontSize: 13, py: 0.8 } }}
                 >
-                  <ToggleButton value="public" sx={{ gap: 0.5 }}><LanguageIcon sx={{ fontSize: 16 }} />링크가 있는 모든 사람</ToggleButton>
                   <ToggleButton value="club_only" sx={{ gap: 0.5 }}><LockOutlinedIcon sx={{ fontSize: 16 }} />클럽에 가입한 회원만</ToggleButton>
+                  <ToggleButton value="public" sx={{ gap: 0.5 }}><LanguageIcon sx={{ fontSize: 16 }} />링크가 있는 모든 사람</ToggleButton>
                 </ToggleButtonGroup>
               </Box>
             )}
@@ -1182,7 +1182,6 @@ export default function LeagueDetail() {
       {!isEditing && !canManage && !isMember && league?.join_permission === "public" && (() => {
         const myEntry = rawParticipants.find((p) => p.name === authUser?.name);
         if (league.status === "active") {
-          if (!myEntry) return null;
           return (
             <Button fullWidth variant="contained" disableElevation
               sx={{ borderRadius: 1, height: 44, fontWeight: 900, fontSize: 15, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}

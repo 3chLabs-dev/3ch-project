@@ -73,7 +73,7 @@ export default function LeagueStep5Participants() {
 
   const isFull = recruitCount !== "" && participants.length >= recruitCount;
   const canAdd = useMemo(() => Boolean(division.trim() && name.trim()), [division, name]);
-  const canNext = participants.length > 0;
+  const canNext = recruitCount !== "" && sortOrder !== "";
 
   const handleCancelDelete = () => {
     setOpenCancelDialog(false);

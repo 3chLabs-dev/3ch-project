@@ -644,9 +644,10 @@ export default function LeagueBracket() {
       if (!tw || !th) return;
       // landscape: 물리 크기 = 시각 크기
       // portrait:  writingMode 90° 회전 → 시각 너비=th, 시각 높이=tw
-      // 1을 초과하면 테이블이 화면보다 작다는 뜻 → 키울 필요 없이 1로 고정
-      // (1 초과 시 scale UP → overflow:hidden 상태에서 잘려 보이는 버그 방지)
-      setAutoFitScale(Math.min(1, landscape ? Math.min(ww / tw, wh / th) : Math.min(ww / th, wh / tw)));
+      // landscape: 가로/세로 모두 fit (min)
+      // portrait: 높이를 꽉 채우는 스케일 기준 (너비 초과 시 가로 스크롤)
+      // 1 초과 방지: 테이블이 화면보다 작을 때 scale UP 금지
+      setAutoFitScale(Math.min(1, landscape ? Math.min(ww / tw, wh / th) : wh / tw));
       setNaturalTw(tw);
       setNaturalTh(th);
     };
@@ -818,7 +819,6 @@ export default function LeagueBracket() {
                 transformOrigin: "top left",
                 transform: `scale(${appliedScale})`,
                 display: "inline-block",
-                padding: "10px",
                 position: "absolute",
                 top: 0,
                 left: 0,

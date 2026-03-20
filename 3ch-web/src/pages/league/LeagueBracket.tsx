@@ -650,7 +650,9 @@ export default function LeagueBracket() {
       if (!tw || !th) return;
       // landscape: 물리 크기 = 시각 크기
       // portrait:  writingMode 90° 회전 → 시각 너비=th, 시각 높이=tw
-      setAutoFitScale(landscape ? Math.min(ww / tw, wh / th) : Math.min(ww / th, wh / tw));
+      // 1을 초과하면 테이블이 화면보다 작다는 뜻 → 키울 필요 없이 1로 고정
+      // (1 초과 시 scale UP → overflow:hidden 상태에서 잘려 보이는 버그 방지)
+      setAutoFitScale(Math.min(1, landscape ? Math.min(ww / tw, wh / th) : Math.min(ww / th, wh / tw)));
       setNaturalTw(tw);
       setNaturalTh(th);
     };
@@ -807,8 +809,8 @@ export default function LeagueBracket() {
       {/* ===== 대진표 영역 ===== */}
       <Box ref={wrapperRef} sx={{ flex: 1, overflow: "hidden", position: "relative", minHeight: 0, bgcolor: "#F0F2F5" }}>
 
-        {/* 스크롤 가능한 내부 컨테이너: 줌 > 1이면 테이블이 화면을 초과해 스크롤 발생 */}
-        <Box sx={{ position: "absolute", inset: 0, overflow: userZoom > 1 ? "auto" : "hidden" }}>
+        {/* 스크롤 가능한 내부 컨테이너: appliedScale > 1(줌 인) 또는 autoFitScale=1(화면이 큼) 시 스크롤 허용 */}
+        <Box sx={{ position: "absolute", inset: 0, overflow: userZoom > 1 || autoFitScale >= 1 ? "auto" : "hidden" }}>
           {/* spacer: CSS transform은 레이아웃 크기에 영향을 안 주므로
               시각적 크기만큼 spacer를 두어 스크롤 범위를 확보 */}
           <Box sx={{ width: visualW || "100%", height: visualH || "100%", minWidth: "100%", minHeight: "100%", position: "relative", flexShrink: 0 }}>

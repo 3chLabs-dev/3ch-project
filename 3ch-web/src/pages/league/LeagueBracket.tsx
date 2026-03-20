@@ -159,10 +159,9 @@ function DivBadge({ division }: { division?: string | null }) {
 // BracketScoreCell(점수 조정)과 SortableBracketRow(시드 순서 이동)에서 공통 사용
 // - rotate=true: writingMode가 90° 회전된 portrait 모드에서 화살표 방향 보정
 // - onPointerDown stopPropagation: DnD 드래그 이벤트와 충돌 방지
-function ScoreButton({ icon, disabled, padding, rotate, onClick }: {
+function ScoreButton({ icon, disabled, rotate, onClick }: {
   icon: "up" | "down";
   disabled?: boolean;
-  padding: number;
   rotate?: boolean;
   onClick: () => void;
 }) {
@@ -173,9 +172,9 @@ function ScoreButton({ icon, disabled, padding, rotate, onClick }: {
       disabled={disabled}
       onPointerDown={(e) => e.stopPropagation()}
       onClick={onClick}
-      sx={{ p: padding }}
+      sx={{ p: 0.75, minWidth: 28, minHeight: 28 }}
     >
-      <Icon sx={{ fontSize: 11, ...(rotate && { transform: "rotate(90deg)" }) }} />
+      <Icon sx={{ fontSize: 16, ...(rotate && { transform: "rotate(90deg)" }) }} />
     </IconButton>
   );
 }
@@ -228,30 +227,25 @@ function BracketScoreCell({ match, isA, leagueId, winScore, canManage, landscape
     return <StyledTableCell sx={winnerStyle}>{score !== null ? score : ""}</StyledTableCell>;
   }
 
-  const btnPadding = landscape ? 0.2 : 0.5;
+  // landscape / portrait 공통: [↓] 점수 [↑] 가로 배치, 좌우 여백 있게
+  const inner = (
+    <Box sx={{
+      display: "flex", flexDirection: "row", alignItems: "center",
+      justifyContent: "space-between",
+      ...(landscape ? {} : { writingMode: "horizontal-tb" }),
+      px: 0.25, height: "100%", gap: 0.25,
+    }}>
+      <ScoreButton icon="down" disabled={(score ?? 0) <= 0} rotate={!landscape} onClick={() => handleChange(-1)} />
+      <Typography sx={{ fontSize: 14, fontWeight: 600, ...winnerStyle, lineHeight: 1, ...(landscape ? {} : { transform: "rotate(90deg)" }), minWidth: 14, textAlign: "center" }}>
+        {score ?? 0}
+      </Typography>
+      <ScoreButton icon="up" rotate={!landscape} onClick={() => handleChange(1)} />
+    </Box>
+  );
 
-  // 가로(landscape) 모드: 위·아래 화살표로 점수 조정
-  if (landscape) {
-    return (
-      <StyledTableCell sx={{ p: 0, ...winnerStyle }}>
-        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", py: 0.25 }}>
-          <ScoreButton icon="up"   padding={btnPadding} onClick={() => handleChange(1)} />
-          <Typography sx={{ fontSize: 14, ...winnerStyle, lineHeight: 1 }}>{score ?? 0}</Typography>
-          <ScoreButton icon="down" padding={btnPadding} disabled={(score ?? 0) <= 0} onClick={() => handleChange(-1)} />
-        </Box>
-      </StyledTableCell>
-    );
-  }
-
-  // 세로(portrait) 모드: writingMode="vertical-rl"로 인해 물리적으로 90° 회전된 상태
-  // → 내부 요소를 horizontal-tb로 되돌리고, 아이콘도 90° 보정해서 시각적으로 좌우 화살표처럼 보이게 함
   return (
-    <StyledTableCell sx={{ p: 0, color: isWinner ? COLOR.win : "inherit", verticalAlign: "middle" }}>
-      <Box sx={{ display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "center", writingMode: "horizontal-tb", px: 0.5, height: "100%" }}>
-        <ScoreButton icon="down" padding={btnPadding} rotate disabled={(score ?? 0) <= 0} onClick={() => handleChange(-1)} />
-        <Typography sx={{ fontSize: 14, ...winnerStyle, lineHeight: 1, transform: "rotate(90deg)" }}>{score ?? 0}</Typography>
-        <ScoreButton icon="up"   padding={btnPadding} rotate onClick={() => handleChange(1)} />
-      </Box>
+    <StyledTableCell sx={{ p: 0, verticalAlign: "middle", ...winnerStyle }}>
+      {inner}
     </StyledTableCell>
   );
 }
@@ -316,9 +310,9 @@ const SortableBracketRow = memo(function SortableBracketRow({
           landscape ? (
             // 가로(landscape): 위·아래 화살표 세로 배치
             <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-              <ScoreButton icon="up"   padding={0.25} disabled={rowIdx === 0}     onClick={() => onMove(rowIdx, "up")} />
+              <ScoreButton icon="up"   disabled={rowIdx === 0}     onClick={() => onMove(rowIdx, "up")} />
               <Typography sx={{ fontSize: 11, lineHeight: 1 }}>{rowIdx + 1}</Typography>
-              <ScoreButton icon="down" padding={0.25} disabled={rowIdx === n - 1} onClick={() => onMove(rowIdx, "down")} />
+              <ScoreButton icon="down" disabled={rowIdx === n - 1} onClick={() => onMove(rowIdx, "down")} />
             </Box>
           ) : (
             // 세로(portrait): writingMode 상속으로 인한 90° 회전 보정
@@ -326,9 +320,9 @@ const SortableBracketRow = memo(function SortableBracketRow({
             // portrait에서 부모 vertical-rl이 90° 회전 → 물리적 좌=시각적 상, 물리적 우=시각적 하
             // 따라서 시각적으로 ↑(위)가 먼저 보이려면 물리적으로 down을 먼저 배치
             <Box sx={{ display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "center", writingMode: "horizontal-tb", px: 0.25, height: "100%" }}>
-              <ScoreButton icon="down" padding={0.25} rotate disabled={rowIdx === n - 1} onClick={() => onMove(rowIdx, "down")} />
+              <ScoreButton icon="down" rotate disabled={rowIdx === n - 1} onClick={() => onMove(rowIdx, "down")} />
               <Typography sx={{ fontSize: 11, lineHeight: 1, transform: "rotate(90deg)" }}>{rowIdx + 1}</Typography>
-              <ScoreButton icon="up"   padding={0.25} rotate disabled={rowIdx === 0}     onClick={() => onMove(rowIdx, "up")} />
+              <ScoreButton icon="up"   rotate disabled={rowIdx === 0}     onClick={() => onMove(rowIdx, "up")} />
             </Box>
           )
         ) : (

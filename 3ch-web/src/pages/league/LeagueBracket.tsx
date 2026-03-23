@@ -859,8 +859,8 @@ export default function LeagueBracket() {
       {/* ===== 대진표 영역 ===== */}
       <Box ref={wrapperRef} sx={{ flex: 1, overflow: "hidden", position: "relative", minHeight: 0, bgcolor: "#F0F2F5" }}>
 
-        {/* 스크롤 가능한 내부 컨테이너: appliedScale > 1(줌 인) 또는 autoFitScale=1(화면이 큼) 시 스크롤 허용 */}
-        <Box sx={{ position: "absolute", inset: 0, overflow: userZoom > 1 || autoFitScale >= 1 ? "auto" : "hidden" }}>
+        {/* 스크롤 가능한 내부 컨테이너: spacer가 실제로 넘칠 때만 scrollbar 등장 (overflow:auto는 항상 켜두기) */}
+        <Box sx={{ position: "absolute", inset: 0, overflow: "auto" }}>
           {/* spacer: CSS transform은 레이아웃 크기에 영향을 안 주므로
               시각적 크기만큼 spacer를 두어 스크롤 범위를 확보 */}
           <Box sx={{ width: visualW || "100%", height: visualH || "100%", minWidth: "100%", minHeight: "100%", position: "relative", flexShrink: 0 }}>

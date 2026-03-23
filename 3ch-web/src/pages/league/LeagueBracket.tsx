@@ -621,7 +621,8 @@ export default function LeagueBracket() {
   // portrait 모드는 writingMode로 90° 회전되어 있어 물리적 tw/th가 시각 기준과 반전됨
   const wrapperRef      = useRef<HTMLDivElement>(null);  // 화면 영역 ref
   const wrapperTableRef = useRef<HTMLDivElement>(null);  // 전체 transform 컨테이너 ref
-  const tableOnlyRef    = useRef<HTMLDivElement>(null);  // 스케일 계산용: 테이블만 (schedule 제외)
+  const tableOnlyRef    = useRef<HTMLDivElement>(null);  // portrait 스케일 계산용 (writingMode 왜곡 우회)
+  const scheduleRef     = useRef<HTMLDivElement>(null);  // schedule 오버레이 높이 측정용
   const [autoFitScale, setAutoFitScale] = useState(1);  // 화면에 딱 맞는 자동 스케일
   const [naturalTw, setNaturalTw]       = useState(0);  // 테이블 원본(비스케일) 너비
   const [naturalTh, setNaturalTh]       = useState(0);  // 테이블 원본(비스케일) 높이
@@ -650,13 +651,12 @@ export default function LeagueBracket() {
       const tw = wrapperTableRef.current.scrollWidth;
       const th = wrapperTableRef.current.scrollHeight;
       if (!tw || !th) return;
-      // 스케일은 테이블만 기준으로 계산 (schedule 패널은 제외)
-      // → schedule 카드가 늘어나도 대진표 크기가 줄어들지 않음
-      const stw = tableOnlyRef.current?.scrollWidth  ?? tw;
-      const sth = tableOnlyRef.current?.scrollHeight ?? th;
-      // landscape: 가로/세로 중 작은 비율 기준 fit (상한 없음)
-      // portrait:  writingMode 90° 회전 → 시각 너비=sth, ww/sth로 가로 채우기
-      setAutoFitScale(landscape ? Math.min(ww / stw, wh / sth) : ww / sth);
+      // schedule 패널은 오버레이로 분리 → wrapperTableRef는 테이블만 포함
+      // portrait: writingMode가 scrollHeight를 왜곡하므로 tableOnlyRef로 보정
+      const sth = (!landscape && tableOnlyRef.current) ? tableOnlyRef.current.scrollHeight : th;
+      // schedule 오버레이 높이만큼 빼야 마지막 행이 가려지지 않음
+      const sh = scheduleRef.current?.offsetHeight ?? 0;
+      setAutoFitScale(landscape ? Math.min(ww / tw, (wh - sh) / th) : ww / sth);
       setNaturalTw(tw);
       setNaturalTh(th);
     };
@@ -666,6 +666,7 @@ export default function LeagueBracket() {
     if (wrapperRef.current)      ro.observe(wrapperRef.current);
     if (wrapperTableRef.current) ro.observe(wrapperTableRef.current);
     if (tableOnlyRef.current)    ro.observe(tableOnlyRef.current);
+    if (scheduleRef.current)     ro.observe(scheduleRef.current);
     window.addEventListener("resize", updateScale);
     return () => { ro.disconnect(); window.removeEventListener("resize", updateScale); };
   }, [landscape, dataReady]);
@@ -866,7 +867,7 @@ export default function LeagueBracket() {
         <Box sx={{ position: "absolute", inset: 0, overflow: "auto" }}>
           {/* spacer: CSS transform은 레이아웃 크기에 영향을 안 주므로
               시각적 크기만큼 spacer를 두어 스크롤 범위를 확보 */}
-          <Box sx={{ width: visualW || "100%", height: visualH || "100%", minWidth: "100%", minHeight: "100%", position: "relative", flexShrink: 0 }}>
+          <Box sx={{ width: visualW || "100%", height: visualH || "100%", minWidth: "100%", minHeight: "100%", position: "relative", flexShrink: 0, pb: `${(scheduleRef.current?.offsetHeight ?? 0)}px` }}>
             {/* 대진표 + 경기 순서 (scale 변환 컨테이너) */}
             <Box
               ref={wrapperTableRef}
@@ -953,11 +954,14 @@ export default function LeagueBracket() {
             </TableContainer>
           </DndContext>
 
-          {/* 경기 순서 패널 */}
-          <MatchSchedulePanel matches={matches} localOrder={localOrder} landscape={landscape} leagueId={id ?? ""} />
             </Box>{/* /wrapperTableRef */}
           </Box>{/* /spacer */}
         </Box>{/* /scrollableInner */}
+
+        {/* 경기 순서 패널: 오버레이 고정 (scale 계산에서 분리) */}
+        <Box ref={scheduleRef} sx={{ position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 5 }}>
+          <MatchSchedulePanel matches={matches} localOrder={localOrder} landscape={landscape} leagueId={id ?? ""} />
+        </Box>
 
         {/* 플로팅 버튼들 (position: absolute, wrapperRef 기준 → 스크롤 영역 위에 고정) */}
 

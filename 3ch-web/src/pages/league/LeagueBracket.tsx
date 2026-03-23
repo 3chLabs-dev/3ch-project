@@ -238,7 +238,7 @@ function BracketScoreCell({ match, isA, leagueId, winScore, canManage, landscape
       px: 0.25, height: "100%", gap: 0.25,
     }}>
       <ScoreButton icon="down" disabled={(score ?? 0) <= 0} rotate={!landscape} onClick={() => handleChange(-1)} />
-      <Typography sx={{ fontSize: 14, fontWeight: 600, ...winnerStyle, lineHeight: 1, ...(landscape ? {} : { transform: "rotate(90deg)" }), minWidth: 14, textAlign: "center" }}>
+      <Typography sx={{ fontSize: 14, ...winnerStyle, lineHeight: 1, ...(landscape ? {} : { transform: "rotate(90deg)" }), minWidth: 14, textAlign: "center" }}>
         {score ?? 0}
       </Typography>
       <ScoreButton icon="up" rotate={!landscape} onClick={() => handleChange(1)} />
@@ -718,12 +718,12 @@ export default function LeagueBracket() {
       const canvas = await html2canvas(clone, { scale: 2, useCORS: true });
       const a = document.createElement("a");
       a.href = canvas.toDataURL("image/png");
-      a.download = `대진표_${league?.title ?? "bracket"}.png`;
+      a.download = `대진표_${league?.name ?? "bracket"}.png`;
       a.click();
     } finally {
       document.body.removeChild(clone);
     }
-  }, [league?.title]);
+  }, [league?.name]);
 
   // 인쇄: 이미지로 캡처 후 새 창 인쇄
   const handlePrint = useCallback(async () => {

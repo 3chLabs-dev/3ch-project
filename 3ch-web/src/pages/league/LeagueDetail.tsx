@@ -849,7 +849,7 @@ export default function LeagueDetail() {
                       alert("링크가 복사되었습니다.");
                     }
                   }}
-                  sx={{ width: 56, height: 56, bgcolor: "#FEE500", "&:hover": { bgcolor: "#E6CE00" }, p: 0, overflow: "hidden", borderRadius: "12px !important" }}
+                  sx={{ width: 56, height: 56, bgcolor: "#FEE500", "&:hover": { bgcolor: "#E6CE00" }, p: 0, overflow: "hidden" }}
                 >
                   <Box component="img" src="/kakao-logo.png" alt="카카오톡" sx={{ width: 40, height: 40, objectFit: "contain" }} />
                 </IconButton>

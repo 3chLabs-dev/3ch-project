@@ -26,7 +26,7 @@ export default function GuestHome() {
                     title="간편한 리그 생성"
                     description={
                         <>
-                            클릭 몇 번만으로 3분 안에 리그를 뚝딱
+                            클릭 몇 번만으로 30초 안에 리그를 뚝딱
                             <br />
                             비슷스한 규칙, 리그에 참가할 수 있습니다.
                         </>

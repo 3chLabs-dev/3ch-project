@@ -67,6 +67,7 @@ export default function LeagueMainBody() {
   const filteredLeagues = useMemo(() => {
     const leagues = leagueData?.leagues ?? [];
     const now = new Date();
+    now.setHours(0, 0, 0, 0);
 
     return leagues.filter((league) => {
       if (!league.start_date) return false;

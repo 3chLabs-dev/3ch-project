@@ -209,7 +209,9 @@ export default function DrawList() {
           id: generateLocalId(),
           prize_name: p.prize_name,
           quantity: p.quantity,
-          winners: [],
+          winners: (p.winners ?? []).map(w => ({
+          participant_name: w.participant_name,
+          participant_division: w.participant_division ?? "",})),
         })),
       );
       setPrizesInitialized(true);
@@ -267,28 +269,41 @@ export default function DrawList() {
     setPrizes((prev) => prev.filter((p) => p.id !== id));
   };
 
-//   const handleSingleDraw = (prizeId: string) => {
-//   const usedNames = new Set(
-//     prizes.flatMap((p) => p.winners.map((w) => w.participant_name))
-//   );
+  const handleRunSingleDraw = (selectedPrize: PrizeInput) => {
+    if (participantRows.length === 0) {
+      setAlertMsg("참가자가 없습니다.");
+      return;
+    }
 
-//   setPrizes((prev) =>
-//     prev.map((p) => {
-//       if (p.id !== prizeId) return p;
+    const usedNames = new Set<string>();
 
-//       const pool = participantRows.filter(
-//         (row) => !usedNames.has(row.name)
-//       );
+    // (만약 기존 결과에서 이미 당첨된 사람 제외하고 싶다면)
+    prizes.forEach(prize => {
+      prize.winners.forEach(w => usedNames.add(w.participant_name));
+    });
 
-//       const winners = weightedRandomPick(pool, p.quantity);
+    const pool = participantRows.filter((p) => !usedNames.has(p.name));
+    const winners = weightedRandomPick(pool, selectedPrize.quantity);
+    
+    const results: PrizeResult[] = prizes.map(prize => {
+      if (prize.id === selectedPrize.id) {
+        return {
+          ...prize,
+          winners,
+        };
+      }
 
-//       return {
-//         ...p,
-//         winners,
-//       };
-//     })
-//   );
-// };
+      return prize; // 기존 그대로 유지
+    });
+
+    setPrizeResults(results);
+    setPhase("animating");
+    setTimeout(() => {
+      setPhase("done");
+    }, 1600);
+  };
+
+  
 
   const handleWeightChange = (participantId: string, delta: number) => {
     setParticipantWeights((prev) => ({
@@ -408,6 +423,7 @@ export default function DrawList() {
     setPendingQuantity(1);
     setParticipantWeights({});
     setPrizesInitialized(false);
+    // (수정)이 부분에서 다시 원래 화면으로 돌아가야 하는거 추가해야함
     if (draftId) {
       navigate(`/draw/${leagueId}/${draftId}`, { replace: true });
     } else if (newDrawId) {
@@ -533,7 +549,7 @@ export default function DrawList() {
                           variant={prize.winners.length > 0 ? "outlined" : "contained"}
                           size="small"
                           disableElevation
-                          // onClick={() => handleSingleDraw(prize.id)}
+                          onClick={() => handleRunSingleDraw(prize)}
                           sx={{ borderRadius: 1, fontWeight: 700, minWidth: 56, height: 28, fontSize: 12 }}
                         >
                           {prize.winners.length > 0 ? "재추첨" : "추첨"}

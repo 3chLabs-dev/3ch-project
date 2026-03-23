@@ -1,5 +1,9 @@
 import { useState } from "react";
 import { Box, Button, Stack, Typography } from "@mui/material";
+import icon1 from "../../public/128_첫번째 아이콘.png"
+import icon2 from "../../public/128_두번째 아이콘.png"
+import icon3 from "../../public/128_세번째 아이콘.png"
+
 
 type GuideTab = "create" | "join";
 
@@ -19,39 +23,48 @@ export default function GuestHome() {
         >
             <Stack sx={{}}>
                 <Typography sx={{ mx: 2, fontSize: 24, fontWeight: 800, color: "#111827", mb: 2.5 }}>
-                    우리리그란?
+                    리그·대회 운영, 한 번에 해결
                 </Typography>
 
                 <FeatureCard
-                    title="간편한 리그 생성"
+                    icon={icon1}
+                    title="리그·대회 생성, 단 30초면 충분합니다"
                     description={
                         <>
-                            클릭 몇 번만으로 30초 안에 리그를 뚝딱
+                            클릭 몇 번이면 생성 완료!
                             <br />
-                            비슷스한 규칙, 리그에 참가할 수 있습니다.
+                            리그·대회를 간편하게 공유할 수 있고
+                            <br />
+                            누구나 쉽게 참가할 수 있습니다.
                         </>
                     }
                 />
 
                 <FeatureCard
-                    title="자동화된 경기 운영"
+                    icon={icon2}
+                    title="리그·대회는 자동으로 돌아갑니다"
                     description={
                         <>
-                            경기 순서 자동 배정
+                            경기 순서 자동 매칭부터
                             <br />
-                            점수판 생성 및 실시간 순위 업데이트
+                            대진표 생성, 실시간 순위 업데이트까지!
+                            <br />
+                            운영자는 신경 쓸 것 없이 경기에만 집중하세요.
                         </>
                     }
                     bgColor="#F3F4F6"
                 />
 
                 <FeatureCard
-                    title="간편한 경기결과 등록"
+                    icon={icon3}
+                    title="간편하게 경기 결과 등록하세요"
                     description={
                         <>
-                            참가자끼리 본여서 확인하는 리그 진행현황
+                            참가자 각자의 휴대폰에서
                             <br />
-                            조 편성 결과, 대진표, 경기결과 입력 가능
+                            조 편성, 대진표, 경기 결과까지 한눈에 확인!
+                            <br />
+                            누구나 쉽게 입력하고, 실시간으로 확인해 보세요.
                         </>
                     }
                 />
@@ -90,7 +103,26 @@ export default function GuestHome() {
                             mb: 1.5,
                         }}
                     >
-                        {guideTab === "create" ? "리그 생성 GIF 영역" : "리그 참가 GIF 영역"}
+                        <video
+                            key={guideTab}
+                            controls
+                            playsInline
+                            preload="metadata"
+                            style={{
+                                width: "100%",
+                                height: "100%",
+                                objectFit: "contain",
+                            }}
+                        >
+                            <source
+                                src={
+                                    guideTab === "create"
+                                        ? "/videos/리그 생성_동영상.mp4"
+                                        : "/videos/리그 참가_동영상.mp4"
+                                }
+                                type="video/mp4"
+                            />
+                        </video>
                     </Box>
 
                     <Box sx={{ mx: 2 }}>
@@ -166,10 +198,12 @@ export default function GuestHome() {
 }
 
 function FeatureCard({
+    icon,
     title,
     description,
     bgColor = "#DBEAFE",
 }: {
+    icon: string;
     title: string;
     description: React.ReactNode;
     bgColor?: string;
@@ -183,13 +217,15 @@ function FeatureCard({
                 backgroundColor: bgColor,
             }}
         >
-            <Stack direction="row" spacing={1.5} alignItems="flex-start" sx={{ mx: 2, mt: 2, mb: 2 }}>
+            <Stack direction="column" spacing={1.5} alignItems="flex-start" sx={{ mx: 1, mt: 0.5, mb: 0.5 }}>
                 <Box
+                    component="img"
+                    src={icon}
                     sx={{
                         width: 32,
                         height: 32,
                         borderRadius: 0,
-                        backgroundColor: "#D1D5DB",
+                        // backgroundColor: "#213555",
                         flexShrink: 0,
                         mt: 0.2,
                     }}

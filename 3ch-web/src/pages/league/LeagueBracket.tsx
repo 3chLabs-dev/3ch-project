@@ -22,6 +22,8 @@ import CheckIcon from "@mui/icons-material/Check";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
+import AddIcon from "@mui/icons-material/Add";
+import RemoveIcon from "@mui/icons-material/Remove";
 import ScreenRotationIcon from "@mui/icons-material/ScreenRotation";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import ZoomInIcon from "@mui/icons-material/ZoomIn";
@@ -161,13 +163,16 @@ function DivBadge({ division }: { division?: string | null }) {
 // BracketScoreCell(점수 조정)과 SortableBracketRow(시드 순서 이동)에서 공통 사용
 // - rotate=true: writingMode가 90° 회전된 portrait 모드에서 화살표 방향 보정
 // - onPointerDown stopPropagation: DnD 드래그 이벤트와 충돌 방지
-function ScoreButton({ icon, disabled, rotate, onClick }: {
+function ScoreButton({ icon, disabled, rotate, variant = "order", onClick }: {
   icon: "up" | "down";
   disabled?: boolean;
   rotate?: boolean;
+  variant?: "score" | "order";
   onClick: () => void;
 }) {
-  const Icon = icon === "up" ? ArrowUpwardIcon : ArrowDownwardIcon;
+  const Icon = variant === "score"
+    ? (icon === "up" ? AddIcon : RemoveIcon)
+    : (icon === "up" ? ArrowUpwardIcon : ArrowDownwardIcon);
   return (
     <IconButton
       size="small"
@@ -237,11 +242,11 @@ function BracketScoreCell({ match, isA, leagueId, winScore, canManage, landscape
       ...(landscape ? {} : { writingMode: "horizontal-tb" }),
       px: 0.25, height: "100%", gap: 0.25,
     }}>
-      <ScoreButton icon="down" disabled={(score ?? 0) <= 0} rotate={!landscape} onClick={() => handleChange(-1)} />
+      <ScoreButton icon="down" variant="score" disabled={(score ?? 0) <= 0} rotate={!landscape} onClick={() => handleChange(-1)} />
       <Typography sx={{ fontSize: 14, ...winnerStyle, lineHeight: 1, ...(landscape ? {} : { transform: "rotate(90deg)" }), minWidth: 14, textAlign: "center" }}>
         {score ?? 0}
       </Typography>
-      <ScoreButton icon="up" rotate={!landscape} onClick={() => handleChange(1)} />
+      <ScoreButton icon="up" variant="score" rotate={!landscape} onClick={() => handleChange(1)} />
     </Box>
   );
 

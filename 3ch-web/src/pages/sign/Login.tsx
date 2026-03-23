@@ -20,9 +20,9 @@ import axios from "axios";
 import { useDispatch } from "react-redux";
 import { setToken, setUser } from "../../features/auth/authSlice";
 
-import emailIcon from "../../icon/free-icon-email-5812886.png";
-import kakaoIcon from "../../icon/free-icon-kakao-talk-3991999.png";
-import naverIcon from "../../icon/naver-icon.png";
+import emailIcon from "../../../public/free-icon-email-5812886.png";
+import kakaoIcon from "../../../public/free-icon-kakao-talk-3991999.png";
+import naverIcon from "../../../public/naver-icon.png";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
 

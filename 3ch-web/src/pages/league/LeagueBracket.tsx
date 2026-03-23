@@ -650,13 +650,13 @@ export default function LeagueBracket() {
       const tw = wrapperTableRef.current.scrollWidth;
       const th = wrapperTableRef.current.scrollHeight;
       if (!tw || !th) return;
-      // landscape: 가로/세로 중 작은 비율 기준 fit → overflow 없이 화면에 꽉 맞춤 (상한 없음)
-      // portrait:  writingMode 90° 회전 → 시각 너비=th, 시각 높이=tw
-      //            schedule 패널이 vertical-rl에서 scrollHeight를 왜곡하므로 테이블만 측정
-      const thForScale = (!landscape && tableOnlyRef.current)
-        ? tableOnlyRef.current.scrollHeight
-        : th;
-      setAutoFitScale(landscape ? Math.min(ww / tw, wh / th) : ww / thForScale);
+      // 스케일은 테이블만 기준으로 계산 (schedule 패널은 제외)
+      // → schedule 카드가 늘어나도 대진표 크기가 줄어들지 않음
+      const stw = tableOnlyRef.current?.scrollWidth  ?? tw;
+      const sth = tableOnlyRef.current?.scrollHeight ?? th;
+      // landscape: 가로/세로 중 작은 비율 기준 fit (상한 없음)
+      // portrait:  writingMode 90° 회전 → 시각 너비=sth, ww/sth로 가로 채우기
+      setAutoFitScale(landscape ? Math.min(ww / stw, wh / sth) : ww / sth);
       setNaturalTw(tw);
       setNaturalTh(th);
     };

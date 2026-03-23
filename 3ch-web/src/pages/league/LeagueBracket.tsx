@@ -649,12 +649,10 @@ export default function LeagueBracket() {
       const tw = wrapperTableRef.current.scrollWidth;
       const th = wrapperTableRef.current.scrollHeight;
       if (!tw || !th) return;
-      // landscape: 물리 크기 = 시각 크기
+      // landscape: 가로/세로 중 작은 비율 기준 fit → overflow 없이 화면에 꽉 맞춤 (상한 없음)
       // portrait:  writingMode 90° 회전 → 시각 너비=th, 시각 높이=tw
-      // landscape: 가로/세로 모두 fit (min)
-      // portrait: 높이를 꽉 채우는 스케일 기준 (너비 초과 시 가로 스크롤)
-      // 1 초과 방지: 테이블이 화면보다 작을 때 scale UP 금지
-      setAutoFitScale(Math.min(1, landscape ? Math.min(ww / tw, wh / th) : wh / tw));
+      //            ww/th: 시각 가로를 꽉 채우는 스케일. 넘치는 시각 높이는 세로 스크롤
+      setAutoFitScale(landscape ? Math.min(ww / tw, wh / th) : ww / th);
       setNaturalTw(tw);
       setNaturalTh(th);
     };
@@ -859,8 +857,8 @@ export default function LeagueBracket() {
       {/* ===== 대진표 영역 ===== */}
       <Box ref={wrapperRef} sx={{ flex: 1, overflow: "hidden", position: "relative", minHeight: 0, bgcolor: "#F0F2F5" }}>
 
-        {/* 스크롤 가능한 내부 컨테이너: appliedScale > 1(줌 인) 또는 autoFitScale=1(화면이 큼) 시 스크롤 허용 */}
-        <Box sx={{ position: "absolute", inset: 0, overflow: userZoom > 1 || autoFitScale >= 1 ? "auto" : "hidden" }}>
+        {/* 스크롤 가능한 내부 컨테이너: spacer가 실제로 넘칠 때만 scrollbar 등장 (overflow:auto는 항상 켜두기) */}
+        <Box sx={{ position: "absolute", inset: 0, overflow: "auto" }}>
           {/* spacer: CSS transform은 레이아웃 크기에 영향을 안 주므로
               시각적 크기만큼 spacer를 두어 스크롤 범위를 확보 */}
           <Box sx={{ width: visualW || "100%", height: visualH || "100%", minWidth: "100%", minHeight: "100%", position: "relative", flexShrink: 0 }}>

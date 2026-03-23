@@ -22,10 +22,14 @@ import CheckIcon from "@mui/icons-material/Check";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
+import AddIcon from "@mui/icons-material/Add";
+import RemoveIcon from "@mui/icons-material/Remove";
 import ScreenRotationIcon from "@mui/icons-material/ScreenRotation";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import ZoomInIcon from "@mui/icons-material/ZoomIn";
 import ZoomOutIcon from "@mui/icons-material/ZoomOut";
+import DownloadIcon from "@mui/icons-material/Download";
+import PrintIcon from "@mui/icons-material/Print";
 import { formatLeagueDate } from "../../utils/dateUtils";
 import {
   useGetLeagueQuery,
@@ -159,23 +163,25 @@ function DivBadge({ division }: { division?: string | null }) {
 // BracketScoreCell(점수 조정)과 SortableBracketRow(시드 순서 이동)에서 공통 사용
 // - rotate=true: writingMode가 90° 회전된 portrait 모드에서 화살표 방향 보정
 // - onPointerDown stopPropagation: DnD 드래그 이벤트와 충돌 방지
-function ScoreButton({ icon, disabled, padding, rotate, onClick }: {
+function ScoreButton({ icon, disabled, rotate, variant = "order", onClick }: {
   icon: "up" | "down";
   disabled?: boolean;
-  padding: number;
   rotate?: boolean;
+  variant?: "score" | "order";
   onClick: () => void;
 }) {
-  const Icon = icon === "up" ? ArrowUpwardIcon : ArrowDownwardIcon;
+  const Icon = variant === "score"
+    ? (icon === "up" ? AddIcon : RemoveIcon)
+    : (icon === "up" ? ArrowUpwardIcon : ArrowDownwardIcon);
   return (
     <IconButton
       size="small"
       disabled={disabled}
       onPointerDown={(e) => e.stopPropagation()}
       onClick={onClick}
-      sx={{ p: padding }}
+      sx={{ p: 0.75, minWidth: 28, minHeight: 28 }}
     >
-      <Icon sx={{ fontSize: 11, ...(rotate && { transform: "rotate(90deg)" }) }} />
+      <Icon sx={{ fontSize: 16, ...(rotate && { transform: "rotate(90deg)" }) }} />
     </IconButton>
   );
 }
@@ -228,30 +234,25 @@ function BracketScoreCell({ match, isA, leagueId, winScore, canManage, landscape
     return <StyledTableCell sx={winnerStyle}>{score !== null ? score : ""}</StyledTableCell>;
   }
 
-  const btnPadding = landscape ? 0.2 : 0.5;
+  // landscape / portrait 공통: [↓] 점수 [↑] 가로 배치, 좌우 여백 있게
+  const inner = (
+    <Box sx={{
+      display: "flex", flexDirection: "row", alignItems: "center",
+      justifyContent: "space-between",
+      ...(landscape ? {} : { writingMode: "horizontal-tb" }),
+      px: 0.25, height: "100%", gap: 0.25,
+    }}>
+      <ScoreButton icon="down" variant="score" disabled={(score ?? 0) <= 0} rotate={!landscape} onClick={() => handleChange(-1)} />
+      <Typography sx={{ fontSize: 14, ...winnerStyle, lineHeight: 1, ...(landscape ? {} : { transform: "rotate(90deg)" }), minWidth: 14, textAlign: "center" }}>
+        {score ?? 0}
+      </Typography>
+      <ScoreButton icon="up" variant="score" rotate={!landscape} onClick={() => handleChange(1)} />
+    </Box>
+  );
 
-  // 가로(landscape) 모드: 위·아래 화살표로 점수 조정
-  if (landscape) {
-    return (
-      <StyledTableCell sx={{ p: 0, ...winnerStyle }}>
-        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", py: 0.25 }}>
-          <ScoreButton icon="up"   padding={btnPadding} onClick={() => handleChange(1)} />
-          <Typography sx={{ fontSize: 14, ...winnerStyle, lineHeight: 1 }}>{score ?? 0}</Typography>
-          <ScoreButton icon="down" padding={btnPadding} disabled={(score ?? 0) <= 0} onClick={() => handleChange(-1)} />
-        </Box>
-      </StyledTableCell>
-    );
-  }
-
-  // 세로(portrait) 모드: writingMode="vertical-rl"로 인해 물리적으로 90° 회전된 상태
-  // → 내부 요소를 horizontal-tb로 되돌리고, 아이콘도 90° 보정해서 시각적으로 좌우 화살표처럼 보이게 함
   return (
-    <StyledTableCell sx={{ p: 0, color: isWinner ? COLOR.win : "inherit", verticalAlign: "middle" }}>
-      <Box sx={{ display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "center", writingMode: "horizontal-tb", px: 0.5, height: "100%" }}>
-        <ScoreButton icon="down" padding={btnPadding} rotate disabled={(score ?? 0) <= 0} onClick={() => handleChange(-1)} />
-        <Typography sx={{ fontSize: 14, ...winnerStyle, lineHeight: 1, transform: "rotate(90deg)" }}>{score ?? 0}</Typography>
-        <ScoreButton icon="up"   padding={btnPadding} rotate onClick={() => handleChange(1)} />
-      </Box>
+    <StyledTableCell sx={{ p: 0, verticalAlign: "middle", ...winnerStyle }}>
+      {inner}
     </StyledTableCell>
   );
 }
@@ -316,9 +317,9 @@ const SortableBracketRow = memo(function SortableBracketRow({
           landscape ? (
             // 가로(landscape): 위·아래 화살표 세로 배치
             <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-              <ScoreButton icon="up"   padding={0.25} disabled={rowIdx === 0}     onClick={() => onMove(rowIdx, "up")} />
+              <ScoreButton icon="up"   disabled={rowIdx === 0}     onClick={() => onMove(rowIdx, "up")} />
               <Typography sx={{ fontSize: 11, lineHeight: 1 }}>{rowIdx + 1}</Typography>
-              <ScoreButton icon="down" padding={0.25} disabled={rowIdx === n - 1} onClick={() => onMove(rowIdx, "down")} />
+              <ScoreButton icon="down" disabled={rowIdx === n - 1} onClick={() => onMove(rowIdx, "down")} />
             </Box>
           ) : (
             // 세로(portrait): writingMode 상속으로 인한 90° 회전 보정
@@ -326,9 +327,9 @@ const SortableBracketRow = memo(function SortableBracketRow({
             // portrait에서 부모 vertical-rl이 90° 회전 → 물리적 좌=시각적 상, 물리적 우=시각적 하
             // 따라서 시각적으로 ↑(위)가 먼저 보이려면 물리적으로 down을 먼저 배치
             <Box sx={{ display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "center", writingMode: "horizontal-tb", px: 0.25, height: "100%" }}>
-              <ScoreButton icon="down" padding={0.25} rotate disabled={rowIdx === n - 1} onClick={() => onMove(rowIdx, "down")} />
+              <ScoreButton icon="down" rotate disabled={rowIdx === n - 1} onClick={() => onMove(rowIdx, "down")} />
               <Typography sx={{ fontSize: 11, lineHeight: 1, transform: "rotate(90deg)" }}>{rowIdx + 1}</Typography>
-              <ScoreButton icon="up"   padding={0.25} rotate disabled={rowIdx === 0}     onClick={() => onMove(rowIdx, "up")} />
+              <ScoreButton icon="up"   rotate disabled={rowIdx === 0}     onClick={() => onMove(rowIdx, "up")} />
             </Box>
           )
         ) : (
@@ -650,7 +651,10 @@ export default function LeagueBracket() {
       if (!tw || !th) return;
       // landscape: 물리 크기 = 시각 크기
       // portrait:  writingMode 90° 회전 → 시각 너비=th, 시각 높이=tw
-      setAutoFitScale(landscape ? Math.min(ww / tw, wh / th) : Math.min(ww / th, wh / tw));
+      // landscape: 가로/세로 모두 fit (min)
+      // portrait: 높이를 꽉 채우는 스케일 기준 (너비 초과 시 가로 스크롤)
+      // 1 초과 방지: 테이블이 화면보다 작을 때 scale UP 금지
+      setAutoFitScale(Math.min(1, landscape ? Math.min(ww / tw, wh / th) : wh / tw));
       setNaturalTw(tw);
       setNaturalTh(th);
     };
@@ -702,6 +706,54 @@ export default function LeagueBracket() {
     refetchParticipants();
     refetchMatches();
   }, [refetchLeague, refetchParticipants, refetchMatches]);
+
+  // 이미지 저장: 테이블을 가로 방향으로 캡처 후 PNG 다운로드
+  const handleSaveImage = useCallback(async () => {
+    const el = wrapperTableRef.current;
+    if (!el) return;
+    const clone = el.cloneNode(true) as HTMLElement;
+    clone.style.transform = "none";
+    clone.style.writingMode = "horizontal-tb";
+    clone.style.position = "fixed";
+    clone.style.top = "-99999px";
+    clone.style.left = "0";
+    document.body.appendChild(clone);
+    try {
+      const html2canvas = (await import("html2canvas")).default;
+      const canvas = await html2canvas(clone, { scale: 2, useCORS: true });
+      const a = document.createElement("a");
+      a.href = canvas.toDataURL("image/png");
+      a.download = `대진표_${league?.name ?? "bracket"}.png`;
+      a.click();
+    } finally {
+      document.body.removeChild(clone);
+    }
+  }, [league?.name]);
+
+  // 인쇄: 이미지로 캡처 후 새 창 인쇄
+  const handlePrint = useCallback(async () => {
+    const el = wrapperTableRef.current;
+    if (!el) return;
+    const clone = el.cloneNode(true) as HTMLElement;
+    clone.style.transform = "none";
+    clone.style.writingMode = "horizontal-tb";
+    clone.style.position = "fixed";
+    clone.style.top = "-99999px";
+    clone.style.left = "0";
+    document.body.appendChild(clone);
+    try {
+      const html2canvas = (await import("html2canvas")).default;
+      const canvas = await html2canvas(clone, { scale: 2, useCORS: true });
+      const win = window.open("", "_blank");
+      if (!win) return;
+      win.document.write(`<html><head><title>대진표</title><style>body{margin:0}img{max-width:100%}@media print{body{margin:0}}</style></head><body><img src="${canvas.toDataURL("image/png")}" /></body></html>`);
+      win.document.close();
+      win.focus();
+      win.onload = () => { win.print(); };
+    } finally {
+      document.body.removeChild(clone);
+    }
+  }, []);
 
   // ── 경기 데이터 ───────────────────────────────────────────────────────────
   // matchLookup: "aId__bId" 또는 "bId__aId" 양방향 키로 O(1) 조회
@@ -807,8 +859,8 @@ export default function LeagueBracket() {
       {/* ===== 대진표 영역 ===== */}
       <Box ref={wrapperRef} sx={{ flex: 1, overflow: "hidden", position: "relative", minHeight: 0, bgcolor: "#F0F2F5" }}>
 
-        {/* 스크롤 가능한 내부 컨테이너: 줌 > 1이면 테이블이 화면을 초과해 스크롤 발생 */}
-        <Box sx={{ position: "absolute", inset: 0, overflow: userZoom > 1 ? "auto" : "hidden" }}>
+        {/* 스크롤 가능한 내부 컨테이너: appliedScale > 1(줌 인) 또는 autoFitScale=1(화면이 큼) 시 스크롤 허용 */}
+        <Box sx={{ position: "absolute", inset: 0, overflow: userZoom > 1 || autoFitScale >= 1 ? "auto" : "hidden" }}>
           {/* spacer: CSS transform은 레이아웃 크기에 영향을 안 주므로
               시각적 크기만큼 spacer를 두어 스크롤 범위를 확보 */}
           <Box sx={{ width: visualW || "100%", height: visualH || "100%", minWidth: "100%", minHeight: "100%", position: "relative", flexShrink: 0 }}>
@@ -822,7 +874,6 @@ export default function LeagueBracket() {
                 transformOrigin: "top left",
                 transform: `scale(${appliedScale})`,
                 display: "inline-block",
-                padding: "10px",
                 position: "absolute",
                 top: 0,
                 left: 0,
@@ -906,6 +957,20 @@ export default function LeagueBracket() {
         </Box>{/* /scrollableInner */}
 
         {/* 플로팅 버튼들 (position: absolute, wrapperRef 기준 → 스크롤 영역 위에 고정) */}
+
+        {/* 이미지 저장 / 인쇄 버튼 */}
+        <Box sx={{ position: "absolute", bottom: 220, right: 14, zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: "#fff", borderRadius: 2, boxShadow: "0 2px 8px rgba(0,0,0,0.15)", display: "flex", flexDirection: "column", alignItems: "center", p: 0.25 }}>
+          <Tooltip title="이미지 저장">
+            <IconButton size="small" onClick={handleSaveImage}>
+              <DownloadIcon sx={{ fontSize: 18, ...(landscape ? {} : { transform: "rotate(90deg)" }) }} />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="인쇄">
+            <IconButton size="small" onClick={handlePrint}>
+              <PrintIcon sx={{ fontSize: 18, ...(landscape ? {} : { transform: "rotate(90deg)" }) }} />
+            </IconButton>
+          </Tooltip>
+        </Box>
 
         {/* 줌 컨트롤: portrait=세로(writing-mode 회전), landscape=가로 */}
         <Box sx={{ position: "absolute", bottom: 126, right: 14, zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: "#fff", borderRadius: 2, boxShadow: "0 2px 8px rgba(0,0,0,0.15)", display: "flex", flexDirection: "column", alignItems: "center", p: 0.25 }}>

@@ -1,6 +1,6 @@
 // AppShell.tsx
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { AppBar, Box, Toolbar, Paper, Select, MenuItem, IconButton, Stack } from "@mui/material";
+import { AppBar, Box, Toolbar, Paper, Select, MenuItem, IconButton, Stack, Button } from "@mui/material";
 import type { SelectChangeEvent } from "@mui/material";
 import BottomTab from "./BottomTab";
 import AppFooter from "./AppFooter";
@@ -152,6 +152,18 @@ export default function AppShell() {
                                 </IconButton>
                             </Stack>
                         )}
+                        { !token && isHome && (
+                            <Stack direction="row" sx={{ ml: "auto" }}>
+                            <Button
+                            variant="contained"
+                            disableElevation
+                            onClick={() => navigate("/login")}
+                            sx={{ borderRadius: 1.5, fontWeight: 700, fontSize: 16, px: 1.5, whiteSpace: "nowrap" ,width: 100}}
+                        >
+                            로그인
+                        </Button>
+                            </Stack>
+                        )}  
                     </Toolbar>
                 </AppBar>
 

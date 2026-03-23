@@ -22,6 +22,7 @@ import type { LeagueListItem } from "../features/league/leagueApi";
 import { useGetMyGroupsQuery } from "../features/group/groupApi";
 import { setPreferredGroupId } from "../features/league/leagueCreationSlice";
 import LeagueFilterDialog from "../components/LeagueFilterDialog.tsx";
+import GuestHome from "../components/GuestHome.tsx";
 
 const SPORT_EMOJI: Record<string, string> = {
     "탁구": "🏓",
@@ -113,7 +114,9 @@ export default function Home() {
             return false;
         });
     }, [leagueData, leagueFilterStart, leagueFilterEnd, leagueFilterStatus]);
-
+if(!user) {
+    return (<GuestHome />)
+}
     return (
         <Stack spacing={2.5}>
             {/* 사용자명 + 클럽 선택 */}
@@ -424,3 +427,6 @@ function SoftCard({ children }: { children: React.ReactNode }) {
         </Card>
     );
 }
+
+
+

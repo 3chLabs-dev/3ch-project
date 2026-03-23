@@ -51,6 +51,7 @@ type PrizeInput = {
   id: string;
   prize_name: string;
   quantity: number;
+  winners: DrawWinner[];
 };
 
 type DrawWinner = {
@@ -208,6 +209,7 @@ export default function DrawList() {
           id: generateLocalId(),
           prize_name: p.prize_name,
           quantity: p.quantity,
+          winners: [],
         })),
       );
       setPrizesInitialized(true);
@@ -255,7 +257,7 @@ export default function DrawList() {
     }
     setPrizes((prev) => [
       ...prev,
-      { id: generateLocalId(), prize_name: pendingPrizeName.trim(), quantity: pendingQuantity },
+      { id: generateLocalId(), prize_name: pendingPrizeName.trim(), quantity: pendingQuantity, winners: [], },
     ]);
     setPendingPrizeName("");
     setPendingQuantity(1);
@@ -265,13 +267,36 @@ export default function DrawList() {
     setPrizes((prev) => prev.filter((p) => p.id !== id));
   };
 
+//   const handleSingleDraw = (prizeId: string) => {
+//   const usedNames = new Set(
+//     prizes.flatMap((p) => p.winners.map((w) => w.participant_name))
+//   );
+
+//   setPrizes((prev) =>
+//     prev.map((p) => {
+//       if (p.id !== prizeId) return p;
+
+//       const pool = participantRows.filter(
+//         (row) => !usedNames.has(row.name)
+//       );
+
+//       const winners = weightedRandomPick(pool, p.quantity);
+
+//       return {
+//         ...p,
+//         winners,
+//       };
+//     })
+//   );
+// };
+
   const handleWeightChange = (participantId: string, delta: number) => {
     setParticipantWeights((prev) => ({
       ...prev,
       [participantId]: Math.max(0, (prev[participantId] ?? 1) + delta),
     }));
   };
-
+// 이부분 참고하면 될듯
   const handleRunDraw = () => {
     if (prizes.length === 0) {
       setAlertMsg("경품을 최소 1개 추가해주세요.");
@@ -447,7 +472,7 @@ export default function DrawList() {
     return (
       <Stack spacing={2.2}>
         <Stack direction="row" alignItems="center" spacing={1}>
-          <IconButton onClick={draftId ? () => navigate(`/draw/${leagueId}/${draftId}`, { replace: true }) : () => navigate(`/draw/${leagueId}`, { replace: true })} size="small">
+          <IconButton onClick={() => navigate(`/draw/${leagueId}`, { replace: true })} size="small">
             <ArrowBackIcon />
           </IconButton>
           <Typography fontWeight={900} fontSize={20}>{draftId ? "추첨 진행하기" : "경품 추첨"}</Typography>
@@ -502,9 +527,22 @@ export default function DrawList() {
                       <Typography fontWeight={800} fontSize={15}>{prize.prize_name}</Typography>
                       <Chip label={`${prize.quantity}명`} size="small" sx={{ height: 22, fontWeight: 700 }} />
                     </Stack>
-                    <IconButton size="small" onClick={() => handleRemovePrize(prize.id)}>
-                      <DeleteOutlineIcon fontSize="small" sx={{ color: "#9CA3AF" }} />
-                    </IconButton>
+                    <Stack direction="row" alignItems="center" spacing={0.5}>
+                      {canManage && (
+                        <Button
+                          variant={prize.winners.length > 0 ? "outlined" : "contained"}
+                          size="small"
+                          disableElevation
+                          // onClick={() => handleSingleDraw(prize.id)}
+                          sx={{ borderRadius: 1, fontWeight: 700, minWidth: 56, height: 28, fontSize: 12 }}
+                        >
+                          {prize.winners.length > 0 ? "재추첨" : "추첨"}
+                        </Button>
+                      )}
+                      <IconButton size="small" onClick={() => handleRemovePrize(prize.id)}>
+                        <DeleteOutlineIcon fontSize="small" sx={{ color: "#9CA3AF" }} />
+                      </IconButton>
+                    </Stack>
                   </Stack>
                 </CardContent>
               </Card>

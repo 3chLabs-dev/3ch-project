@@ -20,7 +20,7 @@ import { useAppSelector } from "../../app/hooks";
 
 const API = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
-const CATEGORIES = ["서비스 이용", "버그 신고", "계정 문의", "결제 문의", "기타"] as const;
+const CATEGORIES = ["서비스 이용", "버그 신고", "계정 문의", "결제 문의", "제휴 문의", "기타"] as const;
 type Category = typeof CATEGORIES[number];
 
 const EMAIL_DOMAINS = ["naver.com", "gmail.com", "daum.net", "kakao.com", "nate.com", "hotmail.com", "직접입력"] as const;

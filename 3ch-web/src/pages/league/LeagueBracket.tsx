@@ -620,7 +620,8 @@ export default function LeagueBracket() {
   // 참가자 수에 따라 테이블이 화면보다 클 수 있으므로 CSS scale로 축소 fit
   // portrait 모드는 writingMode로 90° 회전되어 있어 물리적 tw/th가 시각 기준과 반전됨
   const wrapperRef      = useRef<HTMLDivElement>(null);  // 화면 영역 ref
-  const wrapperTableRef = useRef<HTMLDivElement>(null);  // 테이블 실제 크기 ref
+  const wrapperTableRef = useRef<HTMLDivElement>(null);  // 전체 transform 컨테이너 ref
+  const tableOnlyRef    = useRef<HTMLDivElement>(null);  // 스케일 계산용: 테이블만 (schedule 제외)
   const [autoFitScale, setAutoFitScale] = useState(1);  // 화면에 딱 맞는 자동 스케일
   const [naturalTw, setNaturalTw]       = useState(0);  // 테이블 원본(비스케일) 너비
   const [naturalTh, setNaturalTh]       = useState(0);  // 테이블 원본(비스케일) 높이
@@ -651,8 +652,11 @@ export default function LeagueBracket() {
       if (!tw || !th) return;
       // landscape: 가로/세로 중 작은 비율 기준 fit → overflow 없이 화면에 꽉 맞춤 (상한 없음)
       // portrait:  writingMode 90° 회전 → 시각 너비=th, 시각 높이=tw
-      //            ww/th: 시각 가로를 꽉 채우는 스케일. 넘치는 시각 높이는 세로 스크롤
-      setAutoFitScale(landscape ? Math.min(ww / tw, wh / th) : ww / th);
+      //            schedule 패널이 vertical-rl에서 scrollHeight를 왜곡하므로 테이블만 측정
+      const thForScale = (!landscape && tableOnlyRef.current)
+        ? tableOnlyRef.current.scrollHeight
+        : th;
+      setAutoFitScale(landscape ? Math.min(ww / tw, wh / th) : ww / thForScale);
       setNaturalTw(tw);
       setNaturalTh(th);
     };
@@ -661,6 +665,7 @@ export default function LeagueBracket() {
     const ro = new ResizeObserver(updateScale);
     if (wrapperRef.current)      ro.observe(wrapperRef.current);
     if (wrapperTableRef.current) ro.observe(wrapperTableRef.current);
+    if (tableOnlyRef.current)    ro.observe(tableOnlyRef.current);
     window.addEventListener("resize", updateScale);
     return () => { ro.disconnect(); window.removeEventListener("resize", updateScale); };
   }, [landscape, dataReady]);
@@ -879,7 +884,7 @@ export default function LeagueBracket() {
             >
           {/* 대진표 테이블 (DnD 컨텍스트 내부) */}
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <TableContainer component={Paper} elevation={3} sx={{ borderRadius: "10px", overflow: "hidden" }}>
+            <TableContainer ref={tableOnlyRef} component={Paper} elevation={3} sx={{ borderRadius: "10px", overflow: "hidden" }}>
               <Table sx={{ tableLayout: "fixed", borderCollapse: "separate", borderSpacing: "3px" }}>
                 <TableHead>
                   {/* 1행: 시드 번호 원형 배지 (열 헤더) */}

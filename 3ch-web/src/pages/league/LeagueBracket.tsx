@@ -26,6 +26,8 @@ import ScreenRotationIcon from "@mui/icons-material/ScreenRotation";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import ZoomInIcon from "@mui/icons-material/ZoomIn";
 import ZoomOutIcon from "@mui/icons-material/ZoomOut";
+import DownloadIcon from "@mui/icons-material/Download";
+import PrintIcon from "@mui/icons-material/Print";
 import { formatLeagueDate } from "../../utils/dateUtils";
 import {
   useGetLeagueQuery,
@@ -700,6 +702,54 @@ export default function LeagueBracket() {
     refetchMatches();
   }, [refetchLeague, refetchParticipants, refetchMatches]);
 
+  // 이미지 저장: 테이블을 가로 방향으로 캡처 후 PNG 다운로드
+  const handleSaveImage = useCallback(async () => {
+    const el = wrapperTableRef.current;
+    if (!el) return;
+    const clone = el.cloneNode(true) as HTMLElement;
+    clone.style.transform = "none";
+    clone.style.writingMode = "horizontal-tb";
+    clone.style.position = "fixed";
+    clone.style.top = "-99999px";
+    clone.style.left = "0";
+    document.body.appendChild(clone);
+    try {
+      const html2canvas = (await import("html2canvas")).default;
+      const canvas = await html2canvas(clone, { scale: 2, useCORS: true });
+      const a = document.createElement("a");
+      a.href = canvas.toDataURL("image/png");
+      a.download = `대진표_${league?.title ?? "bracket"}.png`;
+      a.click();
+    } finally {
+      document.body.removeChild(clone);
+    }
+  }, [league?.title]);
+
+  // 인쇄: 이미지로 캡처 후 새 창 인쇄
+  const handlePrint = useCallback(async () => {
+    const el = wrapperTableRef.current;
+    if (!el) return;
+    const clone = el.cloneNode(true) as HTMLElement;
+    clone.style.transform = "none";
+    clone.style.writingMode = "horizontal-tb";
+    clone.style.position = "fixed";
+    clone.style.top = "-99999px";
+    clone.style.left = "0";
+    document.body.appendChild(clone);
+    try {
+      const html2canvas = (await import("html2canvas")).default;
+      const canvas = await html2canvas(clone, { scale: 2, useCORS: true });
+      const win = window.open("", "_blank");
+      if (!win) return;
+      win.document.write(`<html><head><title>대진표</title><style>body{margin:0}img{max-width:100%}@media print{body{margin:0}}</style></head><body><img src="${canvas.toDataURL("image/png")}" /></body></html>`);
+      win.document.close();
+      win.focus();
+      win.onload = () => { win.print(); };
+    } finally {
+      document.body.removeChild(clone);
+    }
+  }, []);
+
   // ── 경기 데이터 ───────────────────────────────────────────────────────────
   // matchLookup: "aId__bId" 또는 "bId__aId" 양방향 키로 O(1) 조회
   // (행·열 참가자 ID 조합이 a/b 순서와 무관하게 매칭되도록 양방향 저장)
@@ -902,6 +952,20 @@ export default function LeagueBracket() {
         </Box>{/* /scrollableInner */}
 
         {/* 플로팅 버튼들 (position: absolute, wrapperRef 기준 → 스크롤 영역 위에 고정) */}
+
+        {/* 이미지 저장 / 인쇄 버튼 */}
+        <Box sx={{ position: "absolute", bottom: 220, right: 14, zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: "#fff", borderRadius: 2, boxShadow: "0 2px 8px rgba(0,0,0,0.15)", display: "flex", flexDirection: "column", alignItems: "center", p: 0.25 }}>
+          <Tooltip title="이미지 저장">
+            <IconButton size="small" onClick={handleSaveImage}>
+              <DownloadIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="인쇄">
+            <IconButton size="small" onClick={handlePrint}>
+              <PrintIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          </Tooltip>
+        </Box>
 
         {/* 줌 컨트롤: portrait=세로(writing-mode 회전), landscape=가로 */}
         <Box sx={{ position: "absolute", bottom: 126, right: 14, zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: "#fff", borderRadius: 2, boxShadow: "0 2px 8px rgba(0,0,0,0.15)", display: "flex", flexDirection: "column", alignItems: "center", p: 0.25 }}>

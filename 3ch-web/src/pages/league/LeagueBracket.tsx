@@ -957,12 +957,12 @@ export default function LeagueBracket() {
         <Box sx={{ position: "absolute", bottom: 220, right: 14, zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: "#fff", borderRadius: 2, boxShadow: "0 2px 8px rgba(0,0,0,0.15)", display: "flex", flexDirection: "column", alignItems: "center", p: 0.25 }}>
           <Tooltip title="이미지 저장">
             <IconButton size="small" onClick={handleSaveImage}>
-              <DownloadIcon sx={{ fontSize: 18 }} />
+              <DownloadIcon sx={{ fontSize: 18, ...(landscape ? {} : { transform: "rotate(90deg)" }) }} />
             </IconButton>
           </Tooltip>
           <Tooltip title="인쇄">
             <IconButton size="small" onClick={handlePrint}>
-              <PrintIcon sx={{ fontSize: 18 }} />
+              <PrintIcon sx={{ fontSize: 18, ...(landscape ? {} : { transform: "rotate(90deg)" }) }} />
             </IconButton>
           </Tooltip>
         </Box>

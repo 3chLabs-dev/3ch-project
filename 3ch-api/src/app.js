@@ -13,7 +13,8 @@ const adminRouter = require("./routes/admin");
 const policyRouter = require("./routes/policy");
 const boardRouter  = require("./routes/board");
 const noticeRouter = require("./routes/notice")
-const inquiryRouter = require("./routes/inquiry")
+const inquiryRouter  = require("./routes/inquiry")
+const paymentRouter  = require("./routes/payment")
 
 const pool = require("./db/pool");
 
@@ -52,6 +53,19 @@ const passport = require("passport");
     `);
     await pool.query(`ALTER TABLE faqs ADD COLUMN IF NOT EXISTS tab     VARCHAR(20)  NOT NULL DEFAULT 'member'`);
     await pool.query(`ALTER TABLE faqs ADD COLUMN IF NOT EXISTS section VARCHAR(100) NOT NULL DEFAULT ''`);
+
+    // guides 테이블
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS guides (
+        id            SERIAL PRIMARY KEY,
+        tab           VARCHAR(20)  NOT NULL,
+        section       VARCHAR(100) NOT NULL,
+        content       TEXT         NOT NULL,
+        display_order INT          NOT NULL DEFAULT 0,
+        created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+        updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+      )
+    `);
   } catch (e) {
     console.error("DB migration error:", e.message);
   }
@@ -89,5 +103,6 @@ app.use("/api", policyRouter);
 app.use("/api/admin/board", boardRouter);
 app.use("/api", noticeRouter);
 app.use("/api", inquiryRouter);
+app.use("/api", paymentRouter);
 
 module.exports = app;

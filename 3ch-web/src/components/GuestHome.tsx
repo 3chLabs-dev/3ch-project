@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Box, Button, Stack, Typography } from "@mui/material";
-import icon1 from "../../public/128_첫번째 아이콘.png"
-import icon2 from "../../public/128_두번째 아이콘.png"
-import icon3 from "../../public/128_세번째 아이콘.png"
+const icon1 = "/128_첫번째 아이콘.png";
+const icon2 = "/128_두번째 아이콘.png";
+const icon3 = "/128_세번째 아이콘.png";
 
 
 type GuideTab = "create" | "join";

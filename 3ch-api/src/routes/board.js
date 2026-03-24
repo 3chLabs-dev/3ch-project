@@ -372,5 +372,86 @@ router.patch("/inquiries/:id/reply", async (req, res) => {
   }
 });
 
+/* ─────────────────────────────────────────
+   이용방법
+───────────────────────────────────────── */
+
+// GET /admin/board/guide
+router.get("/guide", async (req, res) => {
+  const page  = Math.max(1, parseInt(req.query.page  || "1",  10));
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit || "20", 10)));
+  const offset = (page - 1) * limit;
+  try {
+    const [rows, cnt] = await Promise.all([
+      pool.query(
+        `SELECT id, tab, section, LEFT(content, 100) AS content_preview, display_order, created_at
+         FROM guides ORDER BY tab, display_order, id DESC LIMIT $1 OFFSET $2`,
+        [limit, offset],
+      ),
+      pool.query("SELECT COUNT(*)::int AS total FROM guides"),
+    ]);
+    res.json({ guides: rows.rows, total: cnt.rows[0].total, page, limit });
+  } catch (e) {
+    res.status(500).json({ message: String(e.message) });
+  }
+});
+
+// GET /admin/board/guide/:id
+router.get("/guide/:id", async (req, res) => {
+  try {
+    const r = await pool.query("SELECT * FROM guides WHERE id = $1", [req.params.id]);
+    if (r.rowCount === 0) return res.status(404).json({ message: "없음" });
+    res.json(r.rows[0]);
+  } catch (e) {
+    res.status(500).json({ message: String(e.message) });
+  }
+});
+
+// POST /admin/board/guide
+router.post("/guide", async (req, res) => {
+  const { tab, section, content, display_order = 0 } = req.body;
+  if (!tab?.trim() || !section?.trim() || !content?.trim()) {
+    return res.status(400).json({ message: "탭, 섹션, 내용을 입력하세요." });
+  }
+  try {
+    const r = await pool.query(
+      `INSERT INTO guides (tab, section, content, display_order) VALUES ($1, $2, $3, $4) RETURNING *`,
+      [tab.trim(), section.trim(), content.trim(), display_order],
+    );
+    res.status(201).json(r.rows[0]);
+  } catch (e) {
+    res.status(500).json({ message: String(e.message) });
+  }
+});
+
+// PUT /admin/board/guide/:id
+router.put("/guide/:id", async (req, res) => {
+  const { tab, section, content, display_order } = req.body;
+  if (!tab?.trim() || !section?.trim() || !content?.trim()) {
+    return res.status(400).json({ message: "탭, 섹션, 내용을 입력하세요." });
+  }
+  try {
+    const r = await pool.query(
+      `UPDATE guides SET tab=$1, section=$2, content=$3, display_order=$4, updated_at=NOW()
+       WHERE id=$5 RETURNING *`,
+      [tab.trim(), section.trim(), content.trim(), display_order ?? 0, req.params.id],
+    );
+    if (r.rowCount === 0) return res.status(404).json({ message: "없음" });
+    res.json(r.rows[0]);
+  } catch (e) {
+    res.status(500).json({ message: String(e.message) });
+  }
+});
+
+// DELETE /admin/board/guide/:id
+router.delete("/guide/:id", async (req, res) => {
+  try {
+    await pool.query("DELETE FROM guides WHERE id = $1", [req.params.id]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ message: String(e.message) });
+  }
+});
+
 module.exports = router;
 

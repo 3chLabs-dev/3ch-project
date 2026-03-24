@@ -1,7 +1,9 @@
 import { useState } from "react";
 import {
   Box, Typography, IconButton, Stack, Button, Tabs, Tab, Divider,
+  Dialog, DialogContent,
 } from "@mui/material";
+import ScienceOutlinedIcon from "@mui/icons-material/ScienceOutlined";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import CheckIcon from "@mui/icons-material/Check";
@@ -113,7 +115,7 @@ const NOTICES = [
 ];
 
 // ─── 플랜 카드 ────────────────────────────────────────────────────────────────
-function PlanCard({ plan }: { plan: typeof PLANS[0] }) {
+function PlanCard({ plan, onBuy }: { plan: typeof PLANS[0]; onBuy?: () => void }) {
   return (
     <Box
       sx={{
@@ -202,12 +204,13 @@ function PlanCard({ plan }: { plan: typeof PLANS[0] }) {
         variant="contained"
         disableElevation
         disabled={plan.buttonDisabled}
+        onClick={onBuy}
         sx={{
           borderRadius: 1.5,
           height: 44,
           fontWeight: 800,
           fontSize: 14,
-          bgcolor: plan.buttonDisabled ? plan.buttonColor : plan.buttonColor,
+          bgcolor: plan.buttonColor,
           color: plan.buttonTextColor,
           "&:hover": { bgcolor: plan.buttonColor, filter: "brightness(0.95)" },
           "&.Mui-disabled": { bgcolor: plan.buttonColor, color: plan.buttonTextColor, opacity: 1 },
@@ -219,13 +222,40 @@ function PlanCard({ plan }: { plan: typeof PLANS[0] }) {
   );
 }
 
+const PLAN_AMOUNT: Record<string, number> = { basic: 4900, pro: 9900, premium: 19900 };
+
 // ─── 메인 페이지 ─────────────────────────────────────────────────────────────
 export default function PricingPage() {
   const navigate = useNavigate();
   const [tab, setTab] = useState(0);
+  const [testNoticeOpen, setTestNoticeOpen] = useState(true);
+
+  const handleBuy = (planId: string, planName: string) => {
+    navigate(`/payment/checkout?plan=${planId}&amount=${PLAN_AMOUNT[planId]}&name=${encodeURIComponent(planName)}`);
+  };
 
   return (
     <Stack sx={{ width: "100%", mx: "auto", mt: "-4px" }}>
+
+      {/* 테스트 환경 안내 다이얼로그 */}
+      <Dialog open={testNoticeOpen} maxWidth="xs" fullWidth>
+        <DialogContent sx={{ p: 3, textAlign: "center" }}>
+          <ScienceOutlinedIcon sx={{ fontSize: 48, color: "#F59E0B", mb: 1 }} />
+          <Typography fontWeight={900} fontSize={17} sx={{ mb: 1 }}>테스트 중인 환경입니다</Typography>
+          <Typography fontSize={13} color="text.secondary" lineHeight={1.8} sx={{ mb: 3 }}>
+            현재 요금제 결제 기능은 테스트 중입니다.<br />
+            실제 금액이 청구되지 않으니 안심하고 이용하세요.
+          </Typography>
+          <Button
+            fullWidth variant="contained" disableElevation
+            onClick={() => setTestNoticeOpen(false)}
+            sx={{ borderRadius: 1.5, fontWeight: 800, height: 44, bgcolor: "#111827", "&:hover": { bgcolor: "#374151" } }}
+          >
+            확인
+          </Button>
+        </DialogContent>
+      </Dialog>
+
       {/* 헤더 */}
       <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
         <IconButton onClick={() => navigate(-1)} size="small">
@@ -274,7 +304,7 @@ export default function PricingPage() {
 
           {/* 플랜 카드 목록 */}
           {PLANS.map((plan) => (
-            <PlanCard key={plan.id} plan={plan} />
+            <PlanCard key={plan.id} plan={plan} onBuy={plan.buttonDisabled ? undefined : () => handleBuy(plan.id, plan.name)} />
           ))}
 
           {/* 안내사항 */}

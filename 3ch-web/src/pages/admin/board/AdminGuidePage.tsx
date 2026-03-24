@@ -117,49 +117,61 @@ export default function AdminGuidePage() {
         <Typography sx={{ fontSize: 13, color: "#6B7280", fontWeight: 600 }}>
           총 <b>{total}</b>개
         </Typography>
-        <Button variant="contained" disableElevation onClick={openAdd}
+        <Button variant="contained" size="small" disableElevation onClick={openAdd}
           sx={{ fontWeight: 700, borderRadius: 1, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}>
           신규추가
         </Button>
       </Stack>
 
       {/* 목록 테이블 */}
-      <Table size="small">
-        <TableHead>
-          <TableRow sx={{ bgcolor: "#F9FAFB" }}>
-            {["순서", "탭", "섹션", "내용 미리보기", "등록일시", "관리"].map((h) => (
-              <TableCell key={h} sx={{ fontWeight: 700, fontSize: 13 }}>{h}</TableCell>
+      <Box sx={{ border: "1px solid #E5E7EB", borderRadius: 1.5, overflow: "hidden" }}>
+        <Table size="small" sx={{ tableLayout: "fixed", width: "100%" }}>
+          <TableHead>
+            <TableRow sx={{ bgcolor: "#F9FAFB" }}>
+              {["순서", "탭", "섹션", "내용 미리보기", "등록일시", "관리"].map((h) => (
+                <TableCell key={h} sx={{ fontWeight: 800, fontSize: 12, color: "#374151", py: 1.2, whiteSpace: "nowrap" }}>{h}</TableCell>
+              ))}
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {guides.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} align="center" sx={{ py: 6, color: "#9CA3AF", fontSize: 13 }}>
+                  등록된 이용방법이 없습니다.
+                </TableCell>
+              </TableRow>
+            ) : guides.map((g, i) => (
+              <TableRow key={g.id} hover>
+                <TableCell sx={{ fontSize: 12, color: "#6B7280" }}>{(page - 1) * LIMIT + i + 1}</TableCell>
+                <TableCell>
+                  <Box component="span" sx={{
+                    display: "inline-block", px: 1, py: 0.3, borderRadius: 1,
+                    fontSize: 11, fontWeight: 700,
+                    ...(g.tab === "leader"
+                      ? { bgcolor: "#EFF6FF", color: "#1D4ED8" }
+                      : { bgcolor: "#F0FDF4", color: "#15803D" }),
+                  }}>
+                    {TABS.find((t) => t.value === g.tab)?.label ?? g.tab}
+                  </Box>
+                </TableCell>
+                <TableCell sx={{ fontSize: 12, fontWeight: 600 }}>{g.section}</TableCell>
+                <TableCell sx={{ fontSize: 12, color: "#6B7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {g.content_preview}
+                </TableCell>
+                <TableCell sx={{ fontSize: 12, color: "#6B7280", whiteSpace: "nowrap" }}>{fmtDate(g.created_at)}</TableCell>
+                <TableCell align="center" sx={{ whiteSpace: "nowrap" }}>
+                  <Stack direction="row" spacing={1} justifyContent="center">
+                    <Typography onClick={() => openEdit(g.id)}
+                      sx={{ fontSize: 12, color: "#2F80ED", cursor: "pointer", fontWeight: 700 }}>수정</Typography>
+                    <Typography onClick={() => handleDelete(g.id)}
+                      sx={{ fontSize: 12, color: "#EF4444", cursor: "pointer", fontWeight: 700 }}>삭제</Typography>
+                  </Stack>
+                </TableCell>
+              </TableRow>
             ))}
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {guides.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={6} align="center" sx={{ py: 5, color: "#9CA3AF", fontSize: 13 }}>
-                등록된 이용방법이 없습니다.
-              </TableCell>
-            </TableRow>
-          ) : guides.map((g, i) => (
-            <TableRow key={g.id} hover>
-              <TableCell sx={{ fontSize: 13 }}>{(page - 1) * LIMIT + i + 1}</TableCell>
-              <TableCell sx={{ fontSize: 13 }}>{TABS.find((t) => t.value === g.tab)?.label ?? g.tab}</TableCell>
-              <TableCell sx={{ fontSize: 13 }}>{g.section}</TableCell>
-              <TableCell sx={{ fontSize: 12, color: "#6B7280", maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {g.content_preview}
-              </TableCell>
-              <TableCell sx={{ fontSize: 13 }}>{fmtDate(g.created_at)}</TableCell>
-              <TableCell>
-                <Stack direction="row" spacing={1}>
-                  <Typography onClick={() => openEdit(g.id)}
-                    sx={{ fontSize: 13, color: "#2F80ED", cursor: "pointer", fontWeight: 700 }}>수정</Typography>
-                  <Typography onClick={() => handleDelete(g.id)}
-                    sx={{ fontSize: 13, color: "#EF4444", cursor: "pointer", fontWeight: 700 }}>삭제</Typography>
-                </Stack>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableBody>
+        </Table>
+      </Box>
 
       {/* 페이지네이션 */}
       {total > LIMIT && (

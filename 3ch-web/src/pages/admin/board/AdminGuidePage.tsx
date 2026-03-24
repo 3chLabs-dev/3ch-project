@@ -111,8 +111,12 @@ export default function AdminGuidePage() {
 
   return (
     <Box sx={{ p: 3 }}>
-      {/* 헤더 */}
-      <Stack direction="row" alignItems="center" justifyContent="flex-end" sx={{ mb: 2 }}>
+      <Typography sx={{ fontSize: 18, fontWeight: 900, mb: 2, color: "#1F2937" }}>이용방법</Typography>
+
+      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
+        <Typography sx={{ fontSize: 13, color: "#6B7280", fontWeight: 600 }}>
+          총 <b>{total}</b>개
+        </Typography>
         <Button variant="contained" disableElevation onClick={openAdd}
           sx={{ fontWeight: 700, borderRadius: 1, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}>
           신규추가

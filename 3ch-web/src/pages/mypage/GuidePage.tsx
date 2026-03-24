@@ -17,19 +17,24 @@ type Guide = { id: number; tab: string; section: string; content: string };
 
 export default function GuidePage() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState<"leader" | "member">("member");
-  const [section, setSection] = useState(SECTIONS.member[0]);
+  const [tab, setTab] = useState<"leader" | "member">("leader");
+  const [section, setSection] = useState(SECTIONS.leader[0]);
   const [guides, setGuides] = useState<Guide[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setLoading(true);
-    axios.get(`${API}/guides?tab=${tab}`)
-      .then((r) => setGuides(r.data.guides ?? []))
-      .finally(() => setLoading(false));
+    let cancelled = false;
+    axios.get(`${API}/guides?tab=${tab}`).then((r) => {
+      if (!cancelled) {
+        setGuides(r.data.guides ?? []);
+        setLoading(false);
+      }
+    });
+    return () => { cancelled = true; };
   }, [tab]);
 
   const handleTabChange = (t: "leader" | "member") => {
+    setLoading(true);
     setTab(t);
     setSection(SECTIONS[t][0]);
   };
@@ -49,19 +54,28 @@ export default function GuidePage() {
 
       {/* 탭 */}
       <Stack direction="row" spacing={1}>
-        <Button fullWidth variant={tab === "member" ? "contained" : "outlined"} disableElevation
-          onClick={() => handleTabChange("member")} startIcon={<PersonOutlineIcon />}
-          sx={{ borderRadius: 1.5, fontWeight: 700, fontSize: 13,
-            ...(tab === "member" ? {} : { borderColor: "#E5E7EB", color: "text.secondary" }) }}>
-          일반 회원
-        </Button>
         <Button fullWidth variant={tab === "leader" ? "contained" : "outlined"} disableElevation
           onClick={() => handleTabChange("leader")} startIcon={<ManageAccountsOutlinedIcon />}
           sx={{ borderRadius: 1.5, fontWeight: 700, fontSize: 13,
             ...(tab === "leader" ? {} : { borderColor: "#E5E7EB", color: "text.secondary" }) }}>
           리더 / 운영진
         </Button>
+        <Button fullWidth variant={tab === "member" ? "contained" : "outlined"} disableElevation
+          onClick={() => handleTabChange("member")} startIcon={<PersonOutlineIcon />}
+          sx={{ borderRadius: 1.5, fontWeight: 700, fontSize: 13,
+            ...(tab === "member" ? {} : { borderColor: "#E5E7EB", color: "text.secondary" }) }}>
+          일반 회원
+        </Button>
       </Stack>
+
+      {/* 안내 배너 */}
+      <Box sx={{ bgcolor: tab === "leader" ? "#F0FDF4" : "#EFF6FF", borderRadius: 1.5, px: 2, py: 1.5 }}>
+        <Typography fontSize={13} color={tab === "leader" ? "#065F46" : "#1D4ED8"} fontWeight={600} lineHeight={1.7} sx={{ whiteSpace: "pre-line" }}>
+          {tab === "leader"
+            ? "클럽 리더 / 운영진을 위한 이용방법 안내입니다.\n클럽 생성부터 추첨 진행까지 확인해보세요."
+            : "일반 회원을 위한 이용방법 안내입니다.\n클럽 가입부터 추첨 확인 방법을 확인해보세요."}
+        </Typography>
+      </Box>
 
       {/* 섹션 버튼 */}
       <Stack direction="row" spacing={0.8} sx={{ flexWrap: "wrap", gap: 0.8 }}>

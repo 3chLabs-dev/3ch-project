@@ -63,4 +63,21 @@ router.get("/faqs", async (req, res) => {
   }
 });
 
+// GET /api/guides?tab=leader|member - 공개 이용방법 목록
+router.get("/guides", async (req, res) => {
+  const { tab } = req.query;
+  try {
+    const r = await pool.query(
+      `SELECT id, tab, section, content, display_order
+       FROM guides
+       ${tab ? "WHERE tab = $1" : ""}
+       ORDER BY display_order ASC, id ASC`,
+      tab ? [tab] : [],
+    );
+    res.json({ guides: r.rows });
+  } catch (e) {
+    res.status(500).json({ message: String(e.message) });
+  }
+});
+
 module.exports = router;

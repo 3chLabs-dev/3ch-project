@@ -18,6 +18,7 @@ const BOARD_MENU = [
   { label: "공지사항",         path: "/admin/board/notice"  },
   { label: "자주 하는 질문",  path: "/admin/board/faq"     },
   { label: "1:1 문의",         path: "/admin/board/inquiry" },
+  { label: "이용방법",         path: "/admin/board/guide"   },
   { label: "이용약관",         path: "/admin/board/terms"   },
   { label: "개인정보 처리방침", path: "/admin/board/privacy" },
 ];

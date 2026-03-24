@@ -14,6 +14,7 @@ import AdminFaqPage from "../pages/admin/board/AdminFaqPage";
 import AdminInquiryPage from "../pages/admin/board/AdminInquiryPage";
 import AdminTermsPage from "../pages/admin/board/AdminTermsPage";
 import AdminPrivacyPage from "../pages/admin/board/AdminPrivacyPage";
+import AdminGuidePage from "../pages/admin/board/AdminGuidePage";
 import Home from "../pages/Home";
 import Login from "../pages/sign/Login";
 import SignUp from "../pages/sign/SignUp";
@@ -46,6 +47,9 @@ import GuidePage from "../pages/mypage/GuidePage.tsx";
 import SupportCenterPage from "../pages/mypage/SupportCenterPage.tsx";
 import DonatePage from "../pages/mypage/DonatePage.tsx";
 import PricingPage from "../pages/mypage/PricingPage.tsx";
+import PaymentSuccess from "../pages/payment/PaymentSuccess.tsx";
+import PaymentFail from "../pages/payment/PaymentFail.tsx";
+import PaymentCheckout from "../pages/payment/PaymentCheckout.tsx";
 import TermsPage from "../pages/mypage/TermsPage.tsx";
 import PrivacyPolicyPage from "../pages/mypage/PrivacyPolicyPage.tsx";
 // import League from "../pages/League";
@@ -91,6 +95,9 @@ export const router = createBrowserRouter([
       { path: "/mypage/faq", element: <FaqPage />},
       { path: "/mypage/guide", element: <GuidePage />},
       { path: "/mypage/pricing", element: <PricingPage />},
+      { path: "/payment/checkout", element: <PaymentCheckout /> },
+      { path: "/payment/success", element: <PaymentSuccess /> },
+      { path: "/payment/fail",    element: <PaymentFail /> },
 
 
     //   { path: "/my", element: <My /> },
@@ -114,6 +121,7 @@ export const router = createBrowserRouter([
           { path: "/admin/board/notice",  element: <AdminNoticePage /> },
           { path: "/admin/board/faq",     element: <AdminFaqPage /> },
           { path: "/admin/board/inquiry", element: <AdminInquiryPage /> },
+          { path: "/admin/board/guide",   element: <AdminGuidePage /> },
           { path: "/admin/board/terms",   element: <AdminTermsPage /> },
           { path: "/admin/board/privacy", element: <AdminPrivacyPage /> },
         ],

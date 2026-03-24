@@ -33,13 +33,12 @@ type Guide = {
 type FormState = { tab: TabValue; section: string; content: string; display_order: number };
 const EMPTY_FORM: FormState = { tab: "leader", section: "클럽 생성", content: "", display_order: 0 };
 
-function useAdminAxios() {
+function authHeaders() {
   const token = localStorage.getItem("admin_token") ?? "";
-  return axios.create({ baseURL: API, headers: { Authorization: `Bearer ${token}` } });
+  return { Authorization: `Bearer ${token}` };
 }
 
 export default function AdminGuidePage() {
-  const api = useAdminAxios();
 
   const [guides, setGuides]     = useState<Guide[]>([]);
   const [total, setTotal]       = useState(0);
@@ -55,7 +54,7 @@ export default function AdminGuidePage() {
 
   const load = async (p = page) => {
     try {
-      const { data } = await api.get(`/admin/board/guide?page=${p}&limit=${LIMIT}`);
+      const { data } = await axios.get(`${API}/admin/board/guide?page=${p}&limit=${LIMIT}`, { headers: authHeaders() });
       setGuides(data.guides ?? []);
       setTotal(data.total ?? 0);
     } catch {
@@ -75,7 +74,7 @@ export default function AdminGuidePage() {
   };
 
   const openEdit = async (id: number) => {
-    const { data } = await api.get(`/admin/board/guide/${id}`);
+    const { data } = await axios.get(`${API}/admin/board/guide/${id}`, { headers: authHeaders() });
     setEditId(id);
     setForm({ tab: data.tab, section: data.section, content: data.content, display_order: data.display_order ?? 0 });
     setAlert("");
@@ -86,8 +85,8 @@ export default function AdminGuidePage() {
     if (!form.content.trim()) { setAlert("내용을 입력하세요."); return; }
     setSaving(true);
     try {
-      if (editId) await api.put(`/admin/board/guide/${editId}`, form);
-      else        await api.post("/admin/board/guide", form);
+      if (editId) await axios.put(`${API}/admin/board/guide/${editId}`, form, { headers: authHeaders() });
+      else        await axios.post(`${API}/admin/board/guide`, form, { headers: authHeaders() });
       setDialogOpen(false);
       load(editId ? page : 1);
     } catch (e: unknown) {
@@ -100,7 +99,7 @@ export default function AdminGuidePage() {
 
   const handleDelete = async (id: number) => {
     if (!confirm("삭제하시겠습니까?")) return;
-    await api.delete(`/admin/board/guide/${id}`);
+    await axios.delete(`${API}/admin/board/guide/${id}`, { headers: authHeaders() });
     load(page);
   };
 

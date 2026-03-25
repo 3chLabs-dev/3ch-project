@@ -15,6 +15,7 @@ const boardRouter  = require("./routes/board");
 const noticeRouter = require("./routes/notice")
 const inquiryRouter  = require("./routes/inquiry")
 const paymentRouter  = require("./routes/payment")
+const userRouter = require("./routes/user")
 
 const pool = require("./db/pool");
 
@@ -66,6 +67,9 @@ const passport = require("passport");
         updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
       )
     `);
+
+    // user preferences 컬럼
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS preferences JSONB NOT NULL DEFAULT '{}'`);
   } catch (e) {
     console.error("DB migration error:", e.message);
   }
@@ -105,5 +109,6 @@ app.use("/api/admin/board", boardRouter);
 app.use("/api", noticeRouter);
 app.use("/api", inquiryRouter);
 app.use("/api", paymentRouter);
+app.use("/api", userRouter);
 
 module.exports = app;

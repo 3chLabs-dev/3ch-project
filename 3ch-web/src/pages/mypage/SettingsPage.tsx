@@ -1,19 +1,23 @@
 import {
-    Box, Card, Divider, IconButton, Stack, Switch, Typography,
+    Box, Card, CircularProgress, Divider, IconButton, Stack, Switch, Typography,
 } from "@mui/material";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import GridViewOutlinedIcon from "@mui/icons-material/GridViewOutlined";
 import SportsOutlinedIcon from "@mui/icons-material/SportsOutlined";
 import EmojiEventsOutlinedIcon from "@mui/icons-material/EmojiEventsOutlined";
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useGetPreferencesQuery, useUpdatePreferencesMutation } from "../../features/user/userApi";
+import type { UserPreferences } from "../../features/user/userApi";
 
 export default function SettingsPage() {
     const navigate = useNavigate();
+    const { data: prefs, isLoading } = useGetPreferencesQuery();
+    const [updatePreferences] = useUpdatePreferencesMutation();
 
-    const [showGroup, setShowGroup] = useState(false);
-    const [showGame, setShowGame]   = useState(true);
-    const [showWin, setShowWin]     = useState(true);
+    const handleToggle = (key: keyof UserPreferences) => {
+        if (!prefs) return;
+        updatePreferences({ ...prefs, [key]: !prefs[key] });
+    };
 
     return (
         <Stack spacing={2.5} sx={{ width: "100%", mx: "auto", mt: "-4px" }}>
@@ -31,34 +35,40 @@ export default function SettingsPage() {
                     sx={{ px: 0.5, mb: 1, letterSpacing: 0.8, textTransform: "uppercase" }}>
                     홈 화면 표시
                 </Typography>
-                <Card elevation={2} sx={{ borderRadius: 1.5, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
-                    <SettingItem
-                        icon={<GridViewOutlinedIcon sx={{ fontSize: 20, color: "#6366F1" }} />}
-                        iconBg="#EEF2FF"
-                        label="나의 조편성 표시"
-                        desc="홈 화면에 내가 배정된 조편성 정보를 표시합니다."
-                        checked={showGroup}
-                        onChange={() => setShowGroup((v) => !v)}
-                    />
-                    <Divider />
-                    <SettingItem
-                        icon={<SportsOutlinedIcon sx={{ fontSize: 20, color: "#2F80ED" }} />}
-                        iconBg="#EFF6FF"
-                        label="나의 경기 표시"
-                        desc="홈 화면에 예정된 내 경기 일정을 표시합니다."
-                        checked={showGame}
-                        onChange={() => setShowGame((v) => !v)}
-                    />
-                    <Divider />
-                    <SettingItem
-                        icon={<EmojiEventsOutlinedIcon sx={{ fontSize: 20, color: "#D97706" }} />}
-                        iconBg="#FFFBEB"
-                        label="나의 당첨내역 표시"
-                        desc="홈 화면에 추첨 당첨 내역을 표시합니다."
-                        checked={showWin}
-                        onChange={() => setShowWin((v) => !v)}
-                    />
-                </Card>
+                {isLoading ? (
+                    <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+                        <CircularProgress size={24} />
+                    </Box>
+                ) : (
+                    <Card elevation={2} sx={{ borderRadius: 1.5, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
+                        <SettingItem
+                            icon={<GridViewOutlinedIcon sx={{ fontSize: 20, color: "#6366F1" }} />}
+                            iconBg="#EEF2FF"
+                            label="나의 조편성 표시"
+                            desc="홈 화면에 내가 배정된 조편성 정보를 표시합니다."
+                            checked={prefs?.show_group ?? false}
+                            onChange={() => handleToggle("show_group")}
+                        />
+                        <Divider />
+                        <SettingItem
+                            icon={<SportsOutlinedIcon sx={{ fontSize: 20, color: "#2F80ED" }} />}
+                            iconBg="#EFF6FF"
+                            label="나의 경기 표시"
+                            desc="홈 화면에 예정된 내 경기 일정을 표시합니다."
+                            checked={prefs?.show_game ?? true}
+                            onChange={() => handleToggle("show_game")}
+                        />
+                        <Divider />
+                        <SettingItem
+                            icon={<EmojiEventsOutlinedIcon sx={{ fontSize: 20, color: "#D97706" }} />}
+                            iconBg="#FFFBEB"
+                            label="나의 당첨내역 표시"
+                            desc="홈 화면에 추첨 당첨 내역을 표시합니다."
+                            checked={prefs?.show_win ?? true}
+                            onChange={() => handleToggle("show_win")}
+                        />
+                    </Card>
+                )}
             </Box>
         </Stack>
     );

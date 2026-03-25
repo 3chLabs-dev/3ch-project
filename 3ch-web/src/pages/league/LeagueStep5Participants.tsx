@@ -145,6 +145,10 @@ export default function LeagueStep5Participants() {
 
   return (
     <Box sx={{ px: 2.5, pt: 2 }}>
+      <Typography sx={{ fontSize: 22, fontWeight: 900, mb: 2 }}>
+                리그 참가인원
+        </Typography>
+        <Box sx={{ borderTop: "1px solid #D9DDE6", mb: 1}}></Box>
       <Stack direction="row" spacing={3} sx={{ mb: 4 }}>
         <Box>
           <Typography sx={{ fontSize: 22, fontWeight: 900, mb: 1 }}>
@@ -180,7 +184,7 @@ export default function LeagueStep5Participants() {
 
         <Box>
           <Typography sx={{ fontSize: 22, fontWeight: 900, mb: 1 }}>
-            대진 순서 <Box component="span" sx={{ color: "#EF4444", fontSize: 18 }}>*</Box>
+            정렬 방식 <Box component="span" sx={{ color: "#EF4444", fontSize: 18 }}>*</Box>
           </Typography>
           <FormControl sx={{ width: 140 }}>
             <Select
@@ -211,7 +215,7 @@ export default function LeagueStep5Participants() {
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 0.8 }}>
         <Stack direction="row" spacing={1} alignItems="baseline">
           <Typography sx={{ fontSize: 22, fontWeight: 900, mb: 1 }}>
-            리그 참가자
+            참가자 사전 등록
           </Typography>          {recruitCount !== "" && (
             <Typography sx={{ fontSize: 14, fontWeight: 700, color: isFull ? "#E53935" : "#6B7280" }}>
               {participants.length}/{recruitCount}

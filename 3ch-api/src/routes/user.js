@@ -262,6 +262,7 @@ router.get("/user/me/home-summary", requireAuth, async (req, res) => {
         AND m.status != 'done'
         ${groupId ? "AND l.group_id = $2" : ""}
       ORDER BY l.start_date ASC, m.match_order ASC
+      LIMIT 10
     `;
     const matchesResult = await pool.query(matchesQuery, groupId ? [userId, groupId] : [userId]);
 

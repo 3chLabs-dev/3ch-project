@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Box, Button, Stack, Typography } from "@mui/material";
+import { useNavigate } from "react-router-dom";
 const icon1 = "/128_첫번째 아이콘.png";
 const icon2 = "/128_두번째 아이콘.png";
 const icon3 = "/128_세번째 아이콘.png";
@@ -9,12 +10,13 @@ type GuideTab = "create" | "join";
 
 export default function GuestHome() {
     const [guideTab, setGuideTab] = useState<GuideTab>("create");
+    const navigate = useNavigate();
 
     return (
         <Box
             sx={{
                 px: 0,
-                pt: 2,
+                pt: 1,
                 pb: 4,
                 mx: -2,
                 // backgroundColor: "#F3F4F6",
@@ -22,7 +24,7 @@ export default function GuestHome() {
             }}
         >
             <Stack sx={{}}>
-                <Typography sx={{ mx: 2, fontSize: 24, fontWeight: 800, color: "#111827", mb: 2.5 }}>
+                <Typography sx={{ mx: 6.5, fontSize: 24, fontWeight: 800, color: "#111827", mb: 2.5 }}>
                     리그·대회 운영, 한 번에 해결
                 </Typography>
 
@@ -85,7 +87,7 @@ export default function GuestHome() {
                         우리리그에서는 이렇게 진행됩니다
                     </Typography>
 
-                    <Box sx={{ mb: 2, px: 2 }}>
+                    <Box sx={{ mb: 3.5, px: 2 }}>
                         <GuideTabGroup value={guideTab} onChange={setGuideTab} />
                     </Box>
 
@@ -98,7 +100,7 @@ export default function GuestHome() {
                             alignItems: "center",
                             justifyContent: "center",
                             color: "#4B5563",
-                            fontSize: 18,
+                            fontSize: 19,
                             fontWeight: 700,
                             mb: 1.5,
                         }}
@@ -128,25 +130,26 @@ export default function GuestHome() {
                     <Box sx={{ mx: 2 }}>
                         <Typography
                             sx={{
-                                fontSize: 14,
+                                fontSize: 19,
                                 fontWeight: 700,
                                 color: "#374151",
+                                mt: 2,
                                 mb: 0.5,
                             }}
                         >
-                            {guideTab === "create" ? "리그 생성 흐름" : "리그 참가 흐름"}
+                            {guideTab === "create" ? "리그 생성 과정" : "리그 참가 과정"}
                         </Typography>
 
                         <Typography
                             sx={{
-                                fontSize: 13,
+                                fontSize: 15,
                                 lineHeight: 1.6,
                                 color: "#6B7280",
                             }}
                         >
                             {guideTab === "create"
-                                ? "리그를 만들고 참가자를 등록한 뒤 경기 일정과 결과를 관리할 수 있습니다."
-                                : "초대 코드나 참여 기능을 통해 리그에 참가하고 경기 일정과 결과를 확인할 수 있습니다."}
+                                ? "리그 옵션을 단계별로 선택하여 다양한 종류의 리그를 생성하고 관리할 수 있습니다."
+                                : "간편하게 리그 참가 신청을 하고, 실시간으로 경기 순서와 결과를 확인할 수 있습니다."}
                         </Typography>
                     </Box>
                 </Box>
@@ -164,7 +167,8 @@ export default function GuestHome() {
                         sx={{
                             mt: 3,
                             mb: 1.2,
-                            fontSize: 18,
+                            textAlign: "center",
+                            fontSize: 24,
                             fontWeight: 800,
                             color: "#111827",
                         }}
@@ -175,6 +179,7 @@ export default function GuestHome() {
                     <Button
                         fullWidth
                         variant="outlined"
+                        onClick={() => navigate("/mypage/inquiry")}
                         sx={{
                             mb: 3,
                             height: 40,
@@ -183,6 +188,7 @@ export default function GuestHome() {
                             borderColor: "#60A5FA",
                             color: "#2563EB",
                             fontWeight: 700,
+                            fontSize: 19,
                             "&:hover": {
                                 borderColor: "#3B82F6",
                                 backgroundColor: "#F8FAFC",
@@ -211,7 +217,7 @@ function FeatureCard({
     return (
         <Box
             sx={{
-                px: 2,
+                px: 5.5,
                 py: 2,
                 // borderRadius: 0.6,
                 backgroundColor: bgColor,

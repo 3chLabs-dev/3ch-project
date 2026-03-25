@@ -9,19 +9,17 @@ import {
     Card,
     CardContent,
     Button,
-    IconButton,
     Select,
     MenuItem,
 } from "@mui/material";
 import type { SelectChangeEvent } from "@mui/material";
-import TuneIcon from "@mui/icons-material/Tune";
 
 import { useAppDispatch, useAppSelector } from "../app/hooks";
 import { useGetLeaguesQuery } from "../features/league/leagueApi";
 import type { LeagueListItem } from "../features/league/leagueApi";
 import { useGetMyGroupsQuery } from "../features/group/groupApi";
 import { setPreferredGroupId } from "../features/league/leagueCreationSlice";
-import LeagueFilterDialog from "../components/LeagueFilterDialog.tsx";
+// import LeagueFilterDialog from "../components/LeagueFilterDialog.tsx";
 import GuestHome from "../components/GuestHome.tsx";
 
 const SPORT_EMOJI: Record<string, string> = {
@@ -30,7 +28,7 @@ const SPORT_EMOJI: Record<string, string> = {
     "테니스": "🎾",
 };
 
-type LeagueStatus = "scheduled" | "active" | "completed";
+// type LeagueStatus = "scheduled" | "active" | "completed";
 
 export default function Home() {
     const dispatch = useAppDispatch();
@@ -39,16 +37,7 @@ export default function Home() {
     const user = useAppSelector((state) => state.auth.user);
     const preferredGroupId = useAppSelector((state) => state.leagueCreation.preferredGroupId);
     const isLoggedIn = !!token;
-
-    //필터
-    const [filterOpen, setFilterOpen] = useState(false);
-    const [leagueFilterStart, setLeagueFilterStart] = useState("");
-    const [leagueFilterEnd, setLeagueFilterEnd] = useState("");
-    const [leagueFilterStatus, setLeagueFilterStatus] = useState<LeagueStatus[]>([
-        "scheduled",
-        "active",
-    ]);
-
+    const navigate = useNavigate();
 
     const { data: groupData } = useGetMyGroupsQuery(undefined, {
         skip: !isLoggedIn,
@@ -88,8 +77,8 @@ export default function Home() {
         { skip: !isLoggedIn || !effectiveSelectedGroupId, refetchOnMountOrArgChange: true }
     );
 
-    // 필터 조건
-    const filteredLeagues = useMemo(() => {
+
+    const activeLeagues = useMemo(() => {
         const leagues = leagueData?.leagues ?? [];
         const now = new Date();
         now.setHours(0, 0, 0, 0);
@@ -98,28 +87,29 @@ export default function Home() {
             if (!league.start_date) return false;
 
             const startAt = new Date(league.start_date);
-            const dateOnly = league.start_date.slice(0, 10);
-
-            if (leagueFilterStart && dateOnly < leagueFilterStart) return false;
-            if (leagueFilterEnd && dateOnly > leagueFilterEnd) return false;
-            if (leagueFilterStatus.length === 0) return true;
-            
-            const isScheduled = league.status === "draft" && startAt >= now;
-            const isActive = league.status === "active" && startAt >= now;
-            const isCompleted = league.status === "completed" || startAt < now;
-
-            if (isScheduled && leagueFilterStatus.includes("scheduled")) return true;
-            if (isActive && leagueFilterStatus.includes("active")) return true;
-            if (isCompleted && leagueFilterStatus.includes("completed")) return true;
-
-            return false;
+            return league.status === "active" && startAt >= now;
         });
-    }, [leagueData, leagueFilterStart, leagueFilterEnd, leagueFilterStatus]);
-if(!user) {
-    return (<GuestHome />)
-}
+    }, [leagueData]);
+
+    const scheduledLeagues = useMemo(() => {
+        const leagues = leagueData?.leagues ?? [];
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+
+        return leagues.filter((league) => {
+            if (!league.start_date) return false;
+
+            const startAt = new Date(league.start_date);
+            return league.status === "draft" && startAt >= now;
+        });
+    }, [leagueData]);
+
+    if (!user) {
+        return (<GuestHome />)
+    }
     return (
-        <Stack spacing={2.5}>
+        <Box>
+        <Stack spacing={2.5} sx={{mb: 2}}>
             {/* 사용자명 + 클럽 선택 */}
             {isLoggedIn && (
                 <Stack direction="row" alignItems="center" justifyContent="space-between">
@@ -260,137 +250,191 @@ if(!user) {
                     </Stack>
                 </SoftCard>
             )}
-
-            {/* 리그 일정 */}
-            <LeagueSectionHeader
-                title="리그 일정"
-                onFilterClick={leagueData && leagueData.leagues.length > 0 ? () => setFilterOpen(true) : undefined}
-            />
-            {!isLoggedIn || !hasGroups ? (
-                <SoftCard>
-                    <Typography textAlign="center" color="text.secondary" fontWeight={700}>
-                        {!isLoggedIn ? "로그인 후 확인할 수 있습니다." : "클럽에 가입하면 리그 일정을 확인할 수 있습니다."}
-                    </Typography>
-                </SoftCard>
-            ) : leagueLoading ? (
-                <SoftCard>
-                    <Typography textAlign="center" color="text.secondary" fontWeight={700}>
-                        로딩 중...
-                    </Typography>
-                </SoftCard>
-            ) : leagueData && leagueData.leagues.length > 0 ? (
-                filteredLeagues.length > 0 ? (
+            </Stack>
+            
+        <Box sx={{ mx: -2}}>
+            <Stack spacing={2.5}>
+            {/* 진행중 리그 대회 */}
+            <Box
+                sx={{
+                    mt: 3,
+                    px: 2,
+                    py: 2,
+                    // borderRadius: 0.6,
+                    backgroundColor: "#DBEAFE",
+                }}
+            >
+                <SectionHeader
+                    title="진행중인 리그·대회"
+                />
+                {!isLoggedIn || !hasGroups ? (
+                    <Box sx={{ mt: 2, mb: 2, px: 2, py: 2, }}>
+                        <Typography textAlign="center" color="text.secondary" fontWeight={700}>
+                            {!isLoggedIn ? "로그인 후 확인할 수 있습니다." : "클럽에 가입하면 진행중 일정을 확인할 수 있습니다."}
+                        </Typography>
+                    </Box>
+                ) : leagueLoading ? (
+                    <Box sx={{ mt: 2, mb: 2, px: 2, py: 2, }}>
+                        <Typography textAlign="center" color="text.secondary" fontWeight={700}>
+                            로딩 중...
+                        </Typography>
+                    </Box>
+                ) : activeLeagues.length > 0 ? (
+                        <Box sx={{ mt: 2, mb: 2, py: 2, }}>
                     <Stack spacing={1}>
-                        {filteredLeagues.map((league) => (
+                        {activeLeagues.map((league) => (
+                            <LeagueCard key={league.id} league={league} goToMatches />
+                        ))}
+                    </Stack>
+                        </Box>
+                ) : (
+                    <Box sx={{ mt: 2, mb: 2, py: 2, }}>
+                        <SoftCard>
+                        <Typography textAlign="center" color="text.secondary" fontWeight={700}>
+                            개설된 리그·대회가 없습니다.
+                        </Typography>
+                        </SoftCard>
+                    </Box>
+                )}
+
+            </Box>
+            {/* 다음 리그 대회 */}
+            <Box
+                sx={{
+                    mt: 3,
+                    px: 2,
+                    py: 2,
+                    // borderRadius: 0.6,
+                    // backgroundColor: "#DBEAFE",
+                }}
+            >
+                <SectionHeader
+                    title="다음 리그·대회"
+                />
+                {!isLoggedIn || !hasGroups ? (
+                    <Box sx={{ mt: 2, mb: 2, px: 2, py: 2, }}>
+                        <Typography textAlign="center" color="text.secondary" fontWeight={700}>
+                            {!isLoggedIn ? "로그인 후 확인할 수 있습니다." : "클럽에 가입하면 일정을 확인할 수 있습니다."}
+                        </Typography>
+                    </Box>
+                ) : leagueLoading ? (
+                    <Box sx={{ mt: 2, mb: 2, px: 2, py: 2, }}>
+                        <Typography textAlign="center" color="text.secondary" fontWeight={700}>
+                            로딩 중...
+                        </Typography>
+                    </Box>
+                ) : scheduledLeagues.length > 0 ? (
+                        <Box sx={{ mt: 1, mb: 1, py: 1, }}>
+                    <Stack spacing={2}>
+                        {scheduledLeagues.map((league) => (
                             <LeagueCard key={league.id} league={league} />
                         ))}
                     </Stack>
-                    ) : (
+                        </Box>
+                ) : (
+                    <Box sx={{ mt: 2, mb: 2, py: 2, }}>
                         <SoftCard>
-                            <Typography textAlign="center" color="text.secondary" fontWeight={700}>
-                                조건에 맞는 리그가 없습니다.
-                            </Typography>
+                        <Typography textAlign="center" color="text.secondary" fontWeight={700}>
+                            개설된 리그·대회가 없습니다.
+                        </Typography>
                         </SoftCard>
-                    )
-            ) : (
-                <SoftCard>
-                    <Typography textAlign="center" color="text.secondary" fontWeight={700}>
-                        개설된 리그가 없습니다.
+                    </Box>
+                )}
+
+                {isLoggedIn && isAdmin && (
+                    <Button
+                        component={RouterLink}
+                        to="/league"
+                        variant="contained"
+                        fullWidth
+                        sx={{ borderRadius: 1, fontWeight: 700, mt: 1 }}
+                    >
+                        리그·대회 일정 전체보기
+                    </Button>
+                )}
+            </Box>
+
+
+            <Box sx={{ mx: -2 }}>
+                <Box
+                    sx={{
+                        mt: 3,
+                        px: 2,
+                        py: 2,
+                        // borderRadius: 0.6,
+                        backgroundColor: "#DBEAFE",
+                    }}
+                >
+                    <Typography
+                        sx={{
+                            mt: 3,
+                            mb: 1.2,
+                            textAlign: "center",
+                            fontSize: 24,
+                            fontWeight: 800,
+                            color: "#111827",
+                        }}
+                    >
+                        우리리그와 함께 해보세요
                     </Typography>
-                </SoftCard>
-            )}
-            <LeagueFilterDialog
-                key={filterOpen ? "open" : "closed"}
-                open={filterOpen}
-                onClose={() => setFilterOpen(false)}
-                startDate={leagueFilterStart}
-                endDate={leagueFilterEnd}
-                status={leagueFilterStatus}
-                onApply={({ startDate, endDate, status }) => {
-                    setLeagueFilterStart(startDate);
-                    setLeagueFilterEnd(endDate);
-                    setLeagueFilterStatus(status);
-                }}
-            />
 
-            {isLoggedIn && isAdmin && (
-                <Button
-                    component={RouterLink}
-                    to="/league"
-                    variant="contained"
-                    fullWidth
-                    sx={{ borderRadius: 1, fontWeight: 700 }}
-                >
-                    신규 생성
-                </Button>
-            )}
-
-            {/* 대회 일정 */}
-            <SectionHeader title="대회 일정" />
-            <SoftCard>
-                <Typography textAlign="center" color="text.secondary" fontWeight={700}>
-                    {!isLoggedIn ? "로그인 후 확인할 수 있습니다." : !hasGroups ? "클럽에 가입하면 대회 일정을 확인할 수 있습니다." : "개설된 대회가 없습니다."}
-                </Typography>
-            </SoftCard>
-            {isLoggedIn && (
-                <Button
-                    variant="contained"
-                    fullWidth
-                    sx={{ borderRadius: 1, fontWeight: 700 }}
-                >
-                    신규 생성
-                </Button>
-            )}
-
+                    <Button
+                        fullWidth
+                        variant="outlined"
+                        onClick={() => navigate("/mypage/inquiry")}
+                        sx={{
+                            mb: 3,
+                            height: 40,
+                            borderRadius: 9999,
+                            backgroundColor: "#FFFFFF",
+                            borderColor: "#60A5FA",
+                            color: "#2563EB",
+                            fontWeight: 700,
+                            "&:hover": {
+                                borderColor: "#3B82F6",
+                                backgroundColor: "#F8FAFC",
+                            },
+                        }}
+                    >
+                        제휴 문의
+                    </Button>
+                </Box>
+            </Box>
         </Stack>
-    );
-}
+        </Box>
 
-type LeagueSectionHeaderProps = {
-    title: string;
-    onFilterClick?: () => void;
-};
-
-function LeagueSectionHeader({ title, onFilterClick }: LeagueSectionHeaderProps) {
-    return (
-        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 0.5 }}>
-            <Typography variant="subtitle1" fontWeight={900}>
-                {title}
-            </Typography>
-            {onFilterClick ? (
-                <IconButton size="small" onClick={onFilterClick} sx={{ width: 32, height: 32 }}>
-                    <TuneIcon fontSize="small" />
-                </IconButton>
-            ) : (
-                <Box sx={{ width: 32, height: 32 }} />
-            )}
-        </Stack>
+        </Box>
     );
 }
 
 function SectionHeader({ title }: { title: string }) {
     return (
         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 0.5 }}>
-            <Typography variant="subtitle1" fontWeight={900}>
+            <Typography variant="subtitle1" fontWeight={900} fontSize={19}>
                 {title}
             </Typography>
-            <IconButton size="small">
+            {/* <IconButton size="small">
                 <TuneIcon fontSize="small" />
-            </IconButton>
+            </IconButton> */}
         </Stack>
     );
 }
 
 
-function LeagueCard({ league }: { league: LeagueListItem }) {
+function LeagueCard({ league, goToMatches = false,}: { league: LeagueListItem; goToMatches?: boolean; }) {
     const navigate = useNavigate();
+
+        const targetPath = goToMatches
+        ? `/league/${league.league_code ?? league.id}/matches`
+        : `/league/${league.league_code ?? league.id}`;
     return (
         <Card
             elevation={2}
-            onClick={() => navigate(`/league/${league.league_code ?? league.id}`)}
-            sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)", cursor: "pointer" }}
+            onClick={() => navigate(targetPath)}
+            sx={{  borderRadius: 0.6, boxShadow: "0 4px 12px rgba(0,0,0,0.08)", cursor: "pointer" 
+            }}
         >
-            <CardContent sx={{ py: 1.8, px: 2.5, "&:last-child": { pb: 1.8 } }}>
+            <CardContent sx={{ py: 1, px: 2.5, "&:last-child": { pb: 1 } }}>
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
                     <Typography fontWeight={700} fontSize={15}>
                         {formatLeagueDate(league.start_date)}

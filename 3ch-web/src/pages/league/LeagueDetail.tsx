@@ -506,7 +506,7 @@ export default function LeagueDetail() {
         </Box>
         <Divider sx={{ borderColor: "#F3F4F6" }} />
         <Box sx={infoRowSx}>
-          <Typography sx={labelSx}>대진 순서</Typography>
+          <Typography sx={labelSx}>정렬</Typography>
           {isEditing ? (
             <Select value={editSortOrder} onChange={(e) => setEditSortOrder(e.target.value)}
               variant="standard" sx={selectSx}>

@@ -145,6 +145,10 @@ export default function LeagueStep5Participants() {
 
   return (
     <Box sx={{ px: 2.5, pt: 2 }}>
+      <Typography sx={{ fontSize: 22, fontWeight: 900, mb: 2 }}>
+                리그 규칙
+        </Typography>
+        <Box sx={{ borderTop: "1px solid #D9DDE6", mb: 1}}></Box>
       <Stack direction="row" spacing={3} sx={{ mb: 4 }}>
         <Box>
           <Typography sx={{ fontSize: 22, fontWeight: 900, mb: 1 }}>

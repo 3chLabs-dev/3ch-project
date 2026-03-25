@@ -556,6 +556,84 @@ router.get('/group', requireAuth, async (req, res) => {
  *       500:
  *         description: 서버 오류
  */
+/**
+ * @openapi
+ * /group/geocode:
+ *   get:
+ *     summary: 주소를 좌표로 변환 (Geocoding)
+ *     description: Kakao 주소 검색 API를 이용해 주소 문자열을 위도/경도 좌표로 변환합니다. /group/:id 보다 먼저 등록되어야 합니다.
+ *     tags: [클럽]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: address
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 변환할 주소 문자열
+ *         example: 서울특별시 강남구 테헤란로 427
+ *     responses:
+ *       200:
+ *         description: 좌표 변환 성공 또는 주소를 찾을 수 없음
+ *         content:
+ *           application/json:
+ *             schema:
+ *               oneOf:
+ *                 - type: object
+ *                   description: 변환 성공
+ *                   properties:
+ *                     ok:
+ *                       type: boolean
+ *                       example: true
+ *                     lat:
+ *                       type: number
+ *                       format: float
+ *                       description: 위도
+ *                       example: 37.5665
+ *                     lng:
+ *                       type: number
+ *                       format: float
+ *                       description: 경도
+ *                       example: 126.9780
+ *                 - type: object
+ *                   description: 주소를 찾을 수 없음
+ *                   properties:
+ *                     ok:
+ *                       type: boolean
+ *                       example: false
+ *                     error:
+ *                       type: string
+ *                       example: NOT_FOUND
+ *       400:
+ *         description: address 파라미터 누락
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *                   example: false
+ *                 error:
+ *                   type: string
+ *                   example: ADDRESS_REQUIRED
+ *       401:
+ *         description: 인증 필요
+ *       500:
+ *         description: Kakao API 키 미설정 또는 서버 오류
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *                   example: false
+ *                 error:
+ *                   type: string
+ *                   example: KAKAO_KEY_NOT_SET
+ */
 // 주소 → 좌표 변환 (Kakao 주소 검색 API) - /group/:id 보다 먼저 등록해야 함
 router.get('/group/geocode', requireAuth, async (req, res) => {
   try {

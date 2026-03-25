@@ -6,6 +6,13 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 
+/**
+ * @openapi
+ * tags:
+ *   name: 문의
+ *   description: 1:1 문의 접수 및 조회 API
+ */
+
 // 업로드 디렉토리 보장
 const uploadDir = path.join(__dirname, "../../uploads/inquiries");
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
@@ -46,6 +53,88 @@ async function ensureTable() {
 }
 ensureTable().catch(console.error);
 
+/**
+ * @openapi
+ * /inquiries:
+ *   post:
+ *     summary: 문의 작성
+ *     description: 로그인한 사용자가 1:1 문의를 접수합니다. 첨부 파일(최대 10MB)을 함께 전송할 수 있습니다.
+ *     tags: [문의]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - title
+ *               - content
+ *             properties:
+ *               category:
+ *                 type: string
+ *                 description: 문의 유형 (기본값 '기타')
+ *                 example: 서비스 이용
+ *               title:
+ *                 type: string
+ *                 maxLength: 200
+ *                 description: 문의 제목
+ *               content:
+ *                 type: string
+ *                 description: 문의 내용
+ *               contact_email:
+ *                 type: string
+ *                 format: email
+ *                 description: 회신 받을 이메일 (선택)
+ *               phone:
+ *                 type: string
+ *                 description: 연락처 (선택)
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *                 description: 첨부 파일 (선택, 최대 10MB)
+ *     responses:
+ *       201:
+ *         description: 문의 접수 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id:
+ *                   type: integer
+ *                 category:
+ *                   type: string
+ *                 title:
+ *                   type: string
+ *                 status:
+ *                   type: string
+ *                   example: pending
+ *                 created_at:
+ *                   type: string
+ *                   format: date-time
+ *       400:
+ *         description: 필수 항목 누락 (제목 또는 내용)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *       401:
+ *         description: 인증 필요
+ *       500:
+ *         description: 서버 오류
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ */
 // POST /api/inquiries - 문의 작성
 router.post("/inquiries", requireAuth, upload.single("file"), async (req, res) => {
   const { category, title, content, contact_email, phone } = req.body;
@@ -75,6 +164,57 @@ router.post("/inquiries", requireAuth, upload.single("file"), async (req, res) =
   }
 });
 
+/**
+ * @openapi
+ * /inquiries/my:
+ *   get:
+ *     summary: 내 문의 목록 조회
+ *     description: 로그인한 사용자 본인이 접수한 문의 목록을 최신순으로 반환합니다.
+ *     tags: [문의]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 문의 목록 반환 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 inquiries:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: integer
+ *                       category:
+ *                         type: string
+ *                       title:
+ *                         type: string
+ *                       status:
+ *                         type: string
+ *                         description: 처리 상태 (pending / answered 등)
+ *                         example: pending
+ *                       created_at:
+ *                         type: string
+ *                         format: date-time
+ *                       replied_at:
+ *                         type: string
+ *                         format: date-time
+ *                         nullable: true
+ *       401:
+ *         description: 인증 필요
+ *       500:
+ *         description: 서버 오류
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ */
 // GET /api/inquiries/my - 내 문의 목록
 router.get("/inquiries/my", requireAuth, async (req, res) => {
   try {
@@ -91,6 +231,93 @@ router.get("/inquiries/my", requireAuth, async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /inquiries/my/{id}:
+ *   get:
+ *     summary: 내 문의 상세 조회
+ *     description: 로그인한 사용자 본인이 접수한 특정 문의의 상세 내용과 답변을 반환합니다.
+ *     tags: [문의]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 문의 ID
+ *     responses:
+ *       200:
+ *         description: 문의 상세 반환 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id:
+ *                   type: integer
+ *                 category:
+ *                   type: string
+ *                 title:
+ *                   type: string
+ *                 content:
+ *                   type: string
+ *                 contact_email:
+ *                   type: string
+ *                   format: email
+ *                   nullable: true
+ *                 phone:
+ *                   type: string
+ *                   nullable: true
+ *                 attachment_path:
+ *                   type: string
+ *                   nullable: true
+ *                   description: 첨부 파일 경로 (/uploads/inquiries/...)
+ *                 status:
+ *                   type: string
+ *                   example: pending
+ *                 reply:
+ *                   type: string
+ *                   nullable: true
+ *                   description: 관리자 답변 내용
+ *                 replied_at:
+ *                   type: string
+ *                   format: date-time
+ *                   nullable: true
+ *                 created_at:
+ *                   type: string
+ *                   format: date-time
+ *       400:
+ *         description: 잘못된 ID 형식
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *       401:
+ *         description: 인증 필요
+ *       404:
+ *         description: 문의를 찾을 수 없거나 접근 권한 없음
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *       500:
+ *         description: 서버 오류
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ */
 // GET /api/inquiries/my/:id - 내 문의 상세
 router.get("/inquiries/my/:id", requireAuth, async (req, res) => {
   const id = parseInt(req.params.id, 10);

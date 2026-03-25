@@ -15,6 +15,35 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+/**
+ * @openapi
+ * /api/admin/login:
+ *   post:
+ *     summary: 관리자 로그인
+ *     tags: [관리자]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, password]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: 로그인 성공, JWT 토큰 반환
+ *       400:
+ *         description: 유효성 검사 실패
+ *       401:
+ *         description: 잘못된 자격증명
+ *       403:
+ *         description: 관리자 권한 없음
+ */
 // POST /admin/login
 router.post('/login', async (req, res) => {
   const parsed = loginSchema.safeParse(req.body);
@@ -57,6 +86,20 @@ router.post('/login', async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/stats:
+ *   get:
+ *     summary: 대시보드 통계 조회
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 전체 통계(회원수, 리그수 등) 및 최근 8주 주간 추세 반환
+ *       401:
+ *         description: 인증 실패
+ */
 // GET /admin/stats - 대시보드 통계
 router.get('/stats', requireAdmin, async (req, res) => {
   try {
@@ -96,6 +139,58 @@ router.get('/stats', requireAdmin, async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/members:
+ *   get:
+ *     summary: 회원 목록 조회 (필터 + 페이지네이션)
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 20, maximum: 100 }
+ *       - in: query
+ *         name: name
+ *         schema: { type: string }
+ *       - in: query
+ *         name: email
+ *         schema: { type: string }
+ *       - in: query
+ *         name: code
+ *         schema: { type: integer }
+ *         description: 회원 ID
+ *       - in: query
+ *         name: sport
+ *         schema: { type: string }
+ *       - in: query
+ *         name: club
+ *         schema: { type: string }
+ *       - in: query
+ *         name: role
+ *         schema: { type: string }
+ *       - in: query
+ *         name: grade
+ *         schema: { type: string }
+ *       - in: query
+ *         name: from
+ *         schema: { type: string, format: date }
+ *       - in: query
+ *         name: to
+ *         schema: { type: string, format: date }
+ *       - in: query
+ *         name: status
+ *         schema: { type: string, enum: [active, withdrawn] }
+ *     responses:
+ *       200:
+ *         description: 회원 목록 및 페이지 정보 반환
+ *       401:
+ *         description: 인증 실패
+ */
 // GET /admin/members - 회원 목록 (필터 + 페이지네이션)
 router.get('/members', requireAdmin, async (req, res) => {
   const { code, sport, club, role, email, grade, name, from, to, status } = req.query;
@@ -163,6 +258,33 @@ router.get('/members', requireAdmin, async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/members/search:
+ *   get:
+ *     summary: 회원 검색 (이름/이메일)
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: name
+ *         schema: { type: string }
+ *       - in: query
+ *         name: email
+ *         schema: { type: string }
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 10, maximum: 50 }
+ *     responses:
+ *       200:
+ *         description: 검색된 회원 목록 반환
+ *       401:
+ *         description: 인증 실패
+ */
 // GET /admin/members/search - 회원 검색 (이름/이메일 분리, 페이지네이션)
 router.get('/members/search', requireAdmin, async (req, res) => {
   const { name, email, page = '1', limit = '10' } = req.query;
@@ -190,6 +312,27 @@ router.get('/members/search', requireAdmin, async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/members/{id}:
+ *   get:
+ *     summary: 회원 상세 조회
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 회원 정보 및 소속 클럽 목록 반환
+ *       401:
+ *         description: 인증 실패
+ *       404:
+ *         description: 회원 없음
+ */
 // GET /admin/members/:id - 회원 상세
 router.get('/members/:id', requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
@@ -222,6 +365,39 @@ router.get('/members/:id', requireAdmin, async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/members/{id}:
+ *   put:
+ *     summary: 회원 정보 수정
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               group_id:
+ *                 type: string
+ *               role:
+ *                 type: string
+ *               grade:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: 수정 완료
+ *       401:
+ *         description: 인증 실패
+ */
 // PUT /admin/members/:id - 회원 정보 수정
 router.put('/members/:id', requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
@@ -254,6 +430,37 @@ router.put('/members/:id', requireAdmin, async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/members/{id}/club:
+ *   delete:
+ *     summary: 회원 클럽 강퇴
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [group_id]
+ *             properties:
+ *               group_id:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: 강퇴 완료
+ *       400:
+ *         description: group_id 누락 또는 클럽장 강퇴 불가
+ *       401:
+ *         description: 인증 실패
+ */
 // DELETE /admin/members/:id/club - 클럽 강퇴 (클럽장은 강퇴 불가)
 router.delete('/members/:id/club', requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
@@ -283,6 +490,25 @@ router.delete('/members/:id/club', requireAdmin, async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/members/{id}:
+ *   delete:
+ *     summary: 회원 계정 삭제
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 삭제 완료
+ *       401:
+ *         description: 인증 실패
+ */
 // DELETE /admin/members/:id - 계정 삭제
 router.delete('/members/:id', requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
@@ -294,6 +520,43 @@ router.delete('/members/:id', requireAdmin, async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/members:
+ *   post:
+ *     summary: 회원 신규 추가
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, name]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               name:
+ *                 type: string
+ *               group_id:
+ *                 type: string
+ *               role:
+ *                 type: string
+ *               grade:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: 회원 생성 완료, 임시 비밀번호 포함
+ *       400:
+ *         description: 필수 필드 누락
+ *       401:
+ *         description: 인증 실패
+ *       409:
+ *         description: 이메일 중복
+ */
 // POST /admin/members - 회원 신규 추가
 router.post('/members', requireAdmin, async (req, res) => {
   const { email, name, group_id, role, grade } = req.body;
@@ -334,6 +597,25 @@ router.post('/members', requireAdmin, async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/clubs-list:
+ *   get:
+ *     summary: 클럽 드롭다운용 전체 목록
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: sport
+ *         schema: { type: string }
+ *         description: 종목 필터
+ *     responses:
+ *       200:
+ *         description: 클럽 id/name/sport 목록 반환
+ *       401:
+ *         description: 인증 실패
+ */
 // GET /admin/clubs-list - 클럽 드롭다운용 전체 목록
 router.get('/clubs-list', requireAdmin, async (req, res) => {
   const { sport } = req.query;
@@ -351,6 +633,54 @@ router.get('/clubs-list', requireAdmin, async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/clubs:
+ *   get:
+ *     summary: 클럽 목록 조회 (필터 + 페이지네이션)
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 20, maximum: 100 }
+ *       - in: query
+ *         name: code
+ *         schema: { type: string }
+ *         description: 클럽 코드
+ *       - in: query
+ *         name: sport
+ *         schema: { type: string }
+ *       - in: query
+ *         name: city
+ *         schema: { type: string }
+ *       - in: query
+ *         name: district
+ *         schema: { type: string }
+ *       - in: query
+ *         name: club
+ *         schema: { type: string }
+ *         description: 클럽명
+ *       - in: query
+ *         name: leader
+ *         schema: { type: string }
+ *         description: 클럽장 이름
+ *       - in: query
+ *         name: from
+ *         schema: { type: string, format: date }
+ *       - in: query
+ *         name: to
+ *         schema: { type: string, format: date }
+ *     responses:
+ *       200:
+ *         description: 클럽 목록 및 페이지 정보 반환
+ *       401:
+ *         description: 인증 실패
+ */
 // GET /admin/clubs - 클럽 목록 (필터 + 페이지네이션)
 router.get('/clubs', requireAdmin, async (req, res) => {
   const { code, sport, city, district, club, leader, from, to } = req.query;
@@ -410,6 +740,27 @@ router.get('/clubs', requireAdmin, async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/clubs/{id}:
+ *   get:
+ *     summary: 클럽 상세 조회
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: 클럽 정보 및 멤버 목록 반환
+ *       401:
+ *         description: 인증 실패
+ *       404:
+ *         description: 클럽 없음
+ */
 // GET /admin/clubs/:id - 클럽 상세
 router.get('/clubs/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
@@ -443,6 +794,56 @@ router.get('/clubs/:id', requireAdmin, async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/clubs/{id}:
+ *   put:
+ *     summary: 클럽 정보 수정
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [name]
+ *             properties:
+ *               name:
+ *                 type: string
+ *               sport:
+ *                 type: string
+ *               region_city:
+ *                 type: string
+ *               region_district:
+ *                 type: string
+ *               founded_at:
+ *                 type: string
+ *                 format: date
+ *               address:
+ *                 type: string
+ *               address_detail:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               owner_id:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: 수정 완료
+ *       400:
+ *         description: 클럽명 필수
+ *       401:
+ *         description: 인증 실패
+ *       409:
+ *         description: 클럽명 중복
+ */
 // PUT /admin/clubs/:id - 클럽 수정
 router.put('/clubs/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
@@ -489,6 +890,25 @@ router.put('/clubs/:id', requireAdmin, async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/clubs/{id}:
+ *   delete:
+ *     summary: 클럽 강제 삭제 (관련 데이터 일괄 삭제)
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: 삭제 완료
+ *       401:
+ *         description: 인증 실패
+ */
 // DELETE /admin/clubs/:id - 클럽 강제 삭제 (모든 관련 데이터 삭제)
 router.delete('/clubs/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
@@ -515,6 +935,31 @@ router.delete('/clubs/:id', requireAdmin, async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/clubs/check-name:
+ *   get:
+ *     summary: 클럽명 중복 확인
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: name
+ *         required: true
+ *         schema: { type: string }
+ *       - in: query
+ *         name: excludeId
+ *         schema: { type: string }
+ *         description: 수정 시 자기 자신 제외
+ *     responses:
+ *       200:
+ *         description: available 여부 반환
+ *       400:
+ *         description: 클럽명 누락
+ *       401:
+ *         description: 인증 실패
+ */
 // GET /admin/clubs/check-name - 클럽명 중복검사 (excludeId: 수정 시 자기 자신 제외)
 router.get('/clubs/check-name', requireAdmin, async (req, res) => {
   const { name, excludeId } = req.query;
@@ -529,6 +974,51 @@ router.get('/clubs/check-name', requireAdmin, async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/clubs:
+ *   post:
+ *     summary: 클럽 생성
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [name]
+ *             properties:
+ *               name:
+ *                 type: string
+ *               sport:
+ *                 type: string
+ *               region_city:
+ *                 type: string
+ *               region_district:
+ *                 type: string
+ *               founded_at:
+ *                 type: string
+ *                 format: date
+ *               address:
+ *                 type: string
+ *               address_detail:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               owner_id:
+ *                 type: integer
+ *     responses:
+ *       201:
+ *         description: 클럽 생성 완료, 클럽 id 및 club_code 반환
+ *       400:
+ *         description: 클럽명 필수
+ *       401:
+ *         description: 인증 실패
+ *       409:
+ *         description: 클럽명 중복
+ */
 // POST /admin/clubs - 클럽 생성
 router.post('/clubs', requireAdmin, async (req, res) => {
   const { name, sport, region_city, region_district, founded_at, address, address_detail, description, owner_id } = req.body;
@@ -568,6 +1058,57 @@ router.post('/clubs', requireAdmin, async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/leagues:
+ *   get:
+ *     summary: 리그 목록 조회 (필터 + 페이지네이션)
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 20, maximum: 100 }
+ *       - in: query
+ *         name: code
+ *         schema: { type: string }
+ *         description: 리그 ID
+ *       - in: query
+ *         name: sport
+ *         schema: { type: string }
+ *       - in: query
+ *         name: club
+ *         schema: { type: string }
+ *       - in: query
+ *         name: type
+ *         schema: { type: string }
+ *       - in: query
+ *         name: creator
+ *         schema: { type: string }
+ *       - in: query
+ *         name: league_from
+ *         schema: { type: string, format: date }
+ *       - in: query
+ *         name: league_to
+ *         schema: { type: string, format: date }
+ *       - in: query
+ *         name: from
+ *         schema: { type: string, format: date }
+ *         description: 생성일 시작
+ *       - in: query
+ *         name: to
+ *         schema: { type: string, format: date }
+ *         description: 생성일 종료
+ *     responses:
+ *       200:
+ *         description: 리그 목록 및 페이지 정보 반환
+ *       401:
+ *         description: 인증 실패
+ */
 // GET /admin/leagues - 리그 목록 (필터 + 페이지네이션)
 router.get('/leagues', requireAdmin, async (req, res) => {
   const { code, sport, club, type, creator, league_from, league_to, from, to } = req.query;
@@ -629,6 +1170,58 @@ router.get('/leagues', requireAdmin, async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/draws:
+ *   get:
+ *     summary: 추첨 목록 조회 (필터 + 페이지네이션)
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 20, maximum: 100 }
+ *       - in: query
+ *         name: code
+ *         schema: { type: string }
+ *         description: 추첨 ID
+ *       - in: query
+ *         name: sport
+ *         schema: { type: string }
+ *       - in: query
+ *         name: club
+ *         schema: { type: string }
+ *       - in: query
+ *         name: creator
+ *         schema: { type: string }
+ *       - in: query
+ *         name: league_from
+ *         schema: { type: string, format: date }
+ *       - in: query
+ *         name: league_to
+ *         schema: { type: string, format: date }
+ *       - in: query
+ *         name: event_from
+ *         schema: { type: string, format: date }
+ *       - in: query
+ *         name: event_to
+ *         schema: { type: string, format: date }
+ *       - in: query
+ *         name: from
+ *         schema: { type: string, format: date }
+ *       - in: query
+ *         name: to
+ *         schema: { type: string, format: date }
+ *     responses:
+ *       200:
+ *         description: 추첨 목록 및 페이지 정보 반환
+ *       401:
+ *         description: 인증 실패
+ */
 // GET /admin/draws - 추첨 목록 (필터 + 페이지네이션)
 router.get('/draws', requireAdmin, async (req, res) => {
   const { code, sport, club, creator, league_from, league_to, event_from, event_to, from, to } = req.query;
@@ -694,11 +1287,41 @@ router.get('/draws', requireAdmin, async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/tournaments:
+ *   get:
+ *     summary: 대회 목록 조회 (미구현 - placeholder)
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 빈 목록 반환 (미구현)
+ *       401:
+ *         description: 인증 실패
+ */
 // GET /admin/tournaments - 대회 목록 (미구현 - placeholder)
 router.get('/tournaments', requireAdmin, async (_req, res) => {
   return res.json({ ok: true, tournaments: [], total: 0, page: 1, limit: 20 });
 });
 
+/**
+ * @openapi
+ * /api/admin/me:
+ *   get:
+ *     summary: 관리자 본인 정보 확인
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 관리자 사용자 정보 반환
+ *       401:
+ *         description: 인증 실패
+ *       404:
+ *         description: 사용자 없음
+ */
 // GET /admin/me - 어드민 본인 확인
 router.get('/me', requireAdmin, async (req, res) => {
   try {

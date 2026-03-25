@@ -16,7 +16,17 @@ const swaggerSpec = swaggerJSDoc({
       },
     },
   },
-  apis: [path.join(__dirname, "..", "routes", "*.js")],
+  apis: [
+    "auth",
+    "league",
+    "group",
+    "draw",
+    "notice",
+    "inquiry",
+    "payment",
+    "policy",
+    "user",
+  ].map((name) => path.join(__dirname, "..", "routes", `${name}.js`)),
 });
 
 module.exports = { swaggerUi, swaggerSpec };

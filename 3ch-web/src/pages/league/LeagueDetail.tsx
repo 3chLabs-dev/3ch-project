@@ -76,6 +76,16 @@ const inputSx = {
   "& input": { fontSize: 13, fontWeight: 700, p: 0 },
 };
 
+const floatingBoxSx = {
+  position: "fixed",
+  bottom: "calc(56px + env(safe-area-inset-bottom))",
+  left: "50%",
+  transform: "translateX(-50%)",
+  width: "min(calc(100% - 32px), 398px)",
+  pb: 1,
+  zIndex: 10,
+} as const;
+
 const TYPE_OPTIONS = [
   { label: "단식", disabled: false },
   { label: "복식", disabled: false },
@@ -506,7 +516,7 @@ export default function LeagueDetail() {
         </Box>
         <Divider sx={{ borderColor: "#F3F4F6" }} />
         <Box sx={infoRowSx}>
-          <Typography sx={labelSx}>정렬</Typography>
+          <Typography sx={labelSx}>정 렬</Typography>
           {isEditing ? (
             <Select value={editSortOrder} onChange={(e) => setEditSortOrder(e.target.value)}
               variant="standard" sx={selectSx}>
@@ -1153,23 +1163,35 @@ export default function LeagueDetail() {
 
       {/* 뷰 모드 리그 시작 버튼 (관리자) */}
       {!isEditing && canManage && (
-        <Button
-          fullWidth
-          variant="contained"
-          disableElevation
-          onClick={handleStart}
-          sx={{
-            borderRadius: 1,
-            height: 40,
-            fontWeight: 700,
-            fontSize: 14,
-            bgcolor: "#2F80ED",
-            "&:hover": { bgcolor: "#256FD1" },
-          }}
-        >
-          {league.status === "active" ? "리그 진행 중" : "리그 시작"}
-        </Button>
-      )}
+  <Box
+    sx={{
+    position: "fixed",
+    bottom: "calc(56px + env(safe-area-inset-bottom))",
+    left: "50%",
+    transform: "translateX(-50%)",
+    width: "min(calc(100% - 32px), 398px)",
+    pb: 1,
+    zIndex: 10,
+    }}
+  >
+    <Button
+      fullWidth
+      variant="contained"
+      disableElevation
+      onClick={handleStart}
+      sx={{
+        borderRadius: 1,
+        height: 40,
+        fontWeight: 700,
+        fontSize: 15,
+        bgcolor: "#2F80ED",
+        "&:hover": { bgcolor: "#256FD1" },
+      }}
+    >
+      {league.status === "active" ? "리그 진행 중" : "리그 시작"}
+    </Button>
+  </Box>
+)}
 
       {/* 비회원 + club_only: 차단 메시지 */}
       {!isEditing && !canManage && !isMember && league?.join_permission === "club_only" && (
@@ -1186,31 +1208,37 @@ export default function LeagueDetail() {
         const myEntry = myName ? rawParticipants.find((p) => p.name === myName) : null;
         if (league.status === "active") {
           return (
+            <Box sx={floatingBoxSx}>
             <Button fullWidth variant="contained" disableElevation
               sx={{ borderRadius: 1, height: 44, fontWeight: 900, fontSize: 15, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}
               onClick={() => navigate(`/league/${id}/matches`)}
             >
               리그 진행 중
             </Button>
+            </Box>
           );
         }
         if (myEntry) {
           return (
+            <Box sx={floatingBoxSx}>
             <Button fullWidth variant="contained" disableElevation disabled
               sx={{ borderRadius: 1, height: 44, fontWeight: 900, fontSize: 15, bgcolor: "#E5E7EB", color: "#9CA3AF", "&.Mui-disabled": { bgcolor: "#E5E7EB", color: "#9CA3AF" } }}
             >
               리그 대기중
             </Button>
+            </Box>
           );
         }
         const isFull = league?.recruit_count != null && rawParticipants.length >= league.recruit_count;
         return (
+          <Box sx={floatingBoxSx}>
           <Button fullWidth variant="contained" disableElevation disabled={isFull}
             sx={{ borderRadius: 1, height: 44, fontWeight: 900, fontSize: 15, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}
             onClick={() => setGuestJoinOpen(true)}
           >
             {isFull ? `마감 (${league!.recruit_count}/${league!.recruit_count}명)` : "참가 신청"}
           </Button>
+          </Box>
         );
       })()}
 
@@ -1220,6 +1248,7 @@ export default function LeagueDetail() {
         if (league.status === "active") {
           if (!myParticipant) return null;
           return (
+            <Box sx={floatingBoxSx}>
             <Button
               fullWidth variant="contained" disableElevation
               sx={{ borderRadius: 1, height: 44, fontWeight: 900, fontSize: 15, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}
@@ -1227,17 +1256,20 @@ export default function LeagueDetail() {
             >
               리그 진행 중
             </Button>
+          </Box>
           );
         }
         if (myParticipant) {
           return (
             <Stack spacing={1}>
+              <Box sx={floatingBoxSx}>
               <Button
                 fullWidth variant="contained" disableElevation disabled
                 sx={{ borderRadius: 1, height: 44, fontWeight: 900, fontSize: 15, bgcolor: "#E5E7EB", color: "#9CA3AF", "&.Mui-disabled": { bgcolor: "#E5E7EB", color: "#9CA3AF" } }}
               >
                 리그 대기중
               </Button>
+              </Box>
               <Button
                 fullWidth variant="outlined" disableElevation
                 sx={{ borderRadius: 1, height: 36, fontWeight: 700, fontSize: 13, color: "#EF4444", borderColor: "#FCA5A5", "&:hover": { borderColor: "#EF4444", bgcolor: "#FEF2F2" } }}
@@ -1250,6 +1282,7 @@ export default function LeagueDetail() {
         }
         const isFull = league?.recruit_count != null && rawParticipants.length >= league.recruit_count;
         return (
+          <Box sx={floatingBoxSx}>
           <Button
             fullWidth variant="contained" disableElevation disabled={isFull}
             sx={{ borderRadius: 1, height: 44, fontWeight: 900, fontSize: 15, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}
@@ -1257,6 +1290,7 @@ export default function LeagueDetail() {
           >
             {isFull ? `마감 (${league!.recruit_count}/${league!.recruit_count}명)` : "참가 신청"}
           </Button>
+          </Box>
         );
       })()}
     </Box>

@@ -41,9 +41,13 @@ import {
   useUpdateDrawMutation,
   useRunDrawMutation,
   useGetDrawDetailQuery,
+  useDrawPrizeWinnersMutation,
 } from "../../features/draw/drawApi";
 import type { DrawListItem } from "../../features/draw/drawApi";
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
+
+// Animation delay steps (ms): fast → slow
+const ANIM_STEPS = [50,50,50,50,50,50,50,50,50,50,50,50,50,50,50,80,110,150,200,280,400,600];
 
 type Phase = "list" | "create" | "animating" | "done";
 
@@ -124,11 +128,68 @@ function formatDateTime(iso: string) {
   return `${y}-${m}-${day} ${h}:${min}:${sec}`;
 }
 
+type PendingWinner = { participant_name: string; participant_division: string | null };
+
 export default function DrawList() {
-  const { leagueId } = useParams<{ leagueId: string }>();
+  const { leagueId } = useParams<{ leagueId: string; }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const animationRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [drawingPrize, setDrawingPrize] = useState<PrizeInput | null>(null);
+  const [animPhase, setAnimPhase] = useState<"spinning" | "result">("spinning");
+  const [rollingName, setRollingName] = useState("");
+  const [pendingWinners, setPendingWinners] = useState<PendingWinner[]>([]);
+  const [isSavingWinner, setIsSavingWinner] = useState(false);
+
+  const [confirmState, setConfirmState] = useState<{
+  message: string;
+  onConfirm: () => void;
+} | null>(null);
+
+  const animTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function handleRedraw() {
+    if (!drawingPrize) return;
+    clearAnimTimer();
+    const pool = getEligiblePool(drawingPrize.id);
+    const shuffled = [...pool].sort(() => Math.random() - 0.5);
+    const selected: PendingWinner[] = shuffled.slice(0, drawingPrize.quantity).map((p) => ({
+      participant_name: p.name,
+      participant_division: p.division ?? null,
+    }));
+    setPendingWinners(selected);
+    runAnimation(pool, selected);
+  }
+
+  function handleCloseDialog() {
+    clearAnimTimer();
+    setDrawingPrize(null);
+    setAnimPhase("spinning");
+    setRollingName("");
+    setPendingWinners([]);
+    setIsSavingWinner(false);
+  }
+
+  function runAnimation(pool: { name: string }[], selected: PendingWinner[]) {
+      setAnimPhase("spinning");
+      const names = pool.map((p) => p.name);
+      let stepIdx = 0;
+  
+      function tick() {
+        if (stepIdx >= ANIM_STEPS.length) {
+          setRollingName(selected[0]?.participant_name ?? "");
+          setAnimPhase("result");
+          setTimeout(() => {
+            confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+          }, 50);
+          return;
+        }
+        setRollingName(names[Math.floor(Math.random() * names.length)]);
+        animTimerRef.current = setTimeout(tick, ANIM_STEPS[stepIdx++]);
+      }
+  
+      tick();
+    }
 
   const draftId = searchParams.get("draftId");
   const [phase, setPhase] = useState<Phase>(searchParams.get("create") === "1" || !!draftId ? "create" : "list");
@@ -140,6 +201,13 @@ export default function DrawList() {
       setPhase("list");
     }
   }, [draftId]);
+
+  function clearAnimTimer() {
+    if (animTimerRef.current !== null) {
+      clearTimeout(animTimerRef.current);
+      animTimerRef.current = null;
+    }
+  }
   
   const [prizes, setPrizes] = useState<PrizeInput[]>(() => {
     // draftId가 있으면 API에서 로드하므로 sessionStorage 무시
@@ -159,7 +227,6 @@ export default function DrawList() {
   const [participantWeights, setParticipantWeights] = useState<Record<string, number>>({});
   const [alertMsg, setAlertMsg] = useState("");
   const [isSavingDraft, setIsSavingDraft] = useState(false);
-  const [prizesInitialized, setPrizesInitialized] = useState(false);
 
   const { data: leagueData } = useGetLeagueQuery(leagueId ?? "", { skip: !leagueId });
   const league = leagueData?.league;
@@ -174,6 +241,19 @@ export default function DrawList() {
     leagueId ?? "",
     { skip: !leagueId || phase !== "create", refetchOnMountOrArgChange: true },
   );
+
+  const [drawPrizeWinners] = useDrawPrizeWinnersMutation();
+
+  function getEligiblePool(targetPrizeId: string) {
+    const participants = participantData?.participants ?? [];
+    const otherWinnerNames = new Set<string>();
+    (draftData?.prizes ?? []).forEach((p) => {
+      if (p.id !== targetPrizeId) {
+        p.winners.forEach((w) => otherWinnerNames.add(w.participant_name));
+      }
+    });
+    return participants.filter((p) => !otherWinnerNames.has(p.name));
+  }
 
   const participantRows = useMemo<ParticipantRow[]>(() => {
     const loaded = participantData?.participants ?? [];
@@ -196,17 +276,17 @@ export default function DrawList() {
   const [updateDraw] = useUpdateDrawMutation();
   const [runDraw] = useRunDrawMutation();
 
-  const { data: draftData } = useGetDrawDetailQuery(
+  const { data: draftData, refetch: refetchDetail } = useGetDrawDetailQuery(
     { leagueId: leagueId ?? "", drawId: draftId ?? "" },
     { skip: !draftId || !leagueId },
   );
 
   // draftId로 진입 시 기존 경품 사전 로드
   useEffect(() => {
-    if (draftData && draftId && !prizesInitialized && phase === "create") {
+    if (draftData && draftId && phase === "create") {
       setPrizes(
         draftData.prizes.map((p) => ({
-          id: generateLocalId(),
+          id: p.id,
           prize_name: p.prize_name,
           quantity: p.quantity,
           winners: (p.winners ?? []).map(w => ({
@@ -214,9 +294,8 @@ export default function DrawList() {
           participant_division: w.participant_division ?? "",})),
         })),
       );
-      setPrizesInitialized(true);
     }
-  }, [draftData, draftId, prizesInitialized, phase]);
+  }, [draftData, draftId, phase]);
 
   // prizes 변경 시 sessionStorage 자동 저장 (draftId 없을 때만)
   useEffect(() => {
@@ -270,40 +349,67 @@ export default function DrawList() {
   };
 
   const handleRunSingleDraw = (selectedPrize: PrizeInput) => {
-    if (participantRows.length === 0) {
-      setAlertMsg("참가자가 없습니다.");
-      return;
-    }
-
-    const usedNames = new Set<string>();
-
-    // (만약 기존 결과에서 이미 당첨된 사람 제외하고 싶다면)
-    prizes.forEach(prize => {
-      prize.winners.forEach(w => usedNames.add(w.participant_name));
-    });
-
-    const pool = participantRows.filter((p) => !usedNames.has(p.name));
-    const winners = weightedRandomPick(pool, selectedPrize.quantity);
+    setConfirmState({
+      message: "추첨을 진행하시겠습니까?",
+      onConfirm: () => {
+        if (participantRows.length === 0) {
+          setAlertMsg("참가자가 없습니다.");
+          return;
+        }
     
-    const results: PrizeResult[] = prizes.map(prize => {
-      if (prize.id === selectedPrize.id) {
-        return {
-          ...prize,
-          winners,
-        };
+        const usedNames = new Set<string>();
+    
+        // (만약 기존 결과에서 이미 당첨된 사람 제외하고 싶다면)
+        prizes.forEach(prize => {
+          prize.winners.forEach(w => usedNames.add(w.participant_name));
+        });
+    
+        const pool = participantRows.filter((p) => !usedNames.has(p.name));
+        const winners = weightedRandomPick(pool, selectedPrize.quantity);
+        
+        const results: PrizeResult[] = prizes.map(prize => {
+          if (prize.id === selectedPrize.id) {
+            return {
+              ...prize,
+              winners,
+            };
+          }
+    
+          return prize; // 기존 그대로 유지
+        });
+    
+        const resultDrawingPrize: PrizeInput ={
+          id: selectedPrize.id,
+          prize_name: selectedPrize.prize_name,
+          quantity: selectedPrize.quantity,
+          winners: winners,
+        }
+    
+        setPrizeResults(results);
+        setPendingWinners(winners);
+        setDrawingPrize(resultDrawingPrize);
+        runAnimation(pool, winners);
       }
-
-      return prize; // 기존 그대로 유지
     });
-
-    setPrizeResults(results);
-    setPhase("animating");
-    setTimeout(() => {
-      setPhase("done");
-    }, 1600);
   };
 
-  
+  async function handleSaveWinner() {
+    if (!drawingPrize || !leagueId || !draftId) return;
+    setIsSavingWinner(true);
+    try {
+      await drawPrizeWinners({
+        leagueId,
+        drawId: draftId,
+        prizeId: drawingPrize.id,
+        winners: pendingWinners,
+      }).unwrap();
+      refetchDetail();
+      handleCloseDialog();
+    } catch {
+      setAlertMsg("저장 중 오류가 발생했습니다.");
+      setIsSavingWinner(false);
+    }
+  }
 
   const handleWeightChange = (participantId: string, delta: number) => {
     setParticipantWeights((prev) => ({
@@ -311,7 +417,7 @@ export default function DrawList() {
       [participantId]: Math.max(0, (prev[participantId] ?? 1) + delta),
     }));
   };
-// 이부분 참고하면 될듯
+
   const handleRunDraw = () => {
     if (prizes.length === 0) {
       setAlertMsg("경품을 최소 1개 추가해주세요.");
@@ -369,10 +475,10 @@ export default function DrawList() {
     setPendingPrizeName("");
     setPendingQuantity(1);
     setParticipantWeights({});
-    setPrizesInitialized(false);
     setPhase("list");
   };
 
+  // nak 이게 추첨내용 최종 저장하는 로직
   const handleSaveAndReturn = async () => {
     if (!leagueId) return;
     if (animationRef.current) { clearInterval(animationRef.current); animationRef.current = null; }
@@ -422,7 +528,6 @@ export default function DrawList() {
     setPendingPrizeName("");
     setPendingQuantity(1);
     setParticipantWeights({});
-    setPrizesInitialized(false);
     // (수정)이 부분에서 다시 원래 화면으로 돌아가야 하는거 추가해야함
     if (draftId) {
       navigate(`/draw/${leagueId}/${draftId}`, { replace: true });
@@ -486,6 +591,7 @@ export default function DrawList() {
   // ─── 추첨하기 화면 ────────────────────────────────────────
   if (phase === "create") {
     return (
+      <>
       <Stack spacing={2.2}>
         <Stack direction="row" alignItems="center" spacing={1}>
           <IconButton onClick={() => navigate(`/draw/${leagueId}`, { replace: true })} size="small">
@@ -560,6 +666,22 @@ export default function DrawList() {
                       </IconButton>
                     </Stack>
                   </Stack>
+                  <Divider sx={{ mb: 1 }} />
+                  {prize.winners.length === 0 ? (
+                    <Typography color="text.secondary" fontSize={13} fontWeight={700}>당첨자 없음 (참가자 부족)</Typography>
+                  ) : (
+                    <Stack spacing={0.6}>
+                      {prize.winners.map((w, wi) => (
+                        <Stack key={wi} direction="row" alignItems="center" spacing={1}>
+                          <Chip label={`${wi + 1}`} size="small" sx={{ height: 22, fontWeight: 800, minWidth: 28 }} />
+                          {w.participant_division !== "-" && (
+                            <Chip label={w.participant_division} size="small" sx={{ borderRadius: 9999, fontWeight: 700, bgcolor: "#FAAA47", color: "#000000", height: 36, minWidth: 36 }} />
+                          )}
+                          <Typography fontWeight={800} fontSize={15}>{w.participant_name}</Typography>
+                        </Stack>
+                      ))}
+                    </Stack>
+                  )}
                 </CardContent>
               </Card>
             ))}
@@ -640,10 +762,121 @@ export default function DrawList() {
   )}
         </Stack>
 
-        <Snackbar open={!!alertMsg} autoHideDuration={2500} onClose={() => setAlertMsg("")} anchorOrigin={{ vertical: "bottom", horizontal: "center" }}>
-          <Alert severity="warning" onClose={() => setAlertMsg("")} sx={{ fontWeight: 700 }}>{alertMsg}</Alert>
+        <Snackbar open={!!alertMsg || !!confirmState} autoHideDuration={confirmState ? null : 2500} onClose={() => {setAlertMsg(""); setConfirmState(null);}} anchorOrigin={{ vertical: "bottom", horizontal: "center" }}>
+          <Alert severity="warning"
+            onClose={() => {
+              setAlertMsg("");
+              setConfirmState(null);
+            }}
+            sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}
+            action={
+              confirmState ? (
+                <>
+                  <Button
+                    color="inherit"
+                    size="small"
+                    onClick={() => {
+                      confirmState.onConfirm();
+                      setConfirmState(null);
+                    }}
+                  >
+                    확인
+                  </Button>
+                  <Button
+                    color="inherit"
+                    size="small"
+                    onClick={() => setConfirmState(null)}
+                  >
+                    취소
+                  </Button>
+                </>
+              ) : null
+            }
+          >
+            {confirmState?.message || alertMsg}
+          </Alert>
         </Snackbar>
       </Stack>
+      {/* 슬롯머신 추첨 다이얼로그 */}
+      <Dialog
+        open={!!drawingPrize}
+        onClose={animPhase === "result" ? handleCloseDialog : undefined}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 800, pb: 0 }}>
+          {drawingPrize?.prize_name}
+        </DialogTitle>
+        <DialogContent sx={{ textAlign: "center" }}>
+          {animPhase === "spinning" ? (
+            <Box sx={{ py: 4 }}>
+              <Typography
+                fontSize={38}
+                fontWeight={900}
+                sx={{
+                  filter: "blur(2px)",
+                  color: "primary.main",
+                  letterSpacing: 1,
+                  userSelect: "none",
+                  minHeight: 52,
+                }}
+              >
+                {rollingName}
+              </Typography>
+              <Typography color="text.secondary" fontSize={13} mt={2}>
+                추첨 중...
+              </Typography>
+            </Box>
+          ) : (
+            <Stack spacing={1.5} alignItems="center" sx={{ py: 3 }}>
+              {pendingWinners.map((w, i) => (
+                <Box
+                  key={i}
+                  sx={{
+                    bgcolor: "#EEF2FF",
+                    borderRadius: 2,
+                    px: 4,
+                    py: 1.5,
+                    width: "100%",
+                    textAlign: "center",
+                  }}
+                >
+                  {w.participant_division && (
+                    <Typography fontSize={12} color="text.secondary" fontWeight={700}>
+                      {w.participant_division}
+                    </Typography>
+                  )}
+                  <Typography fontSize={28} fontWeight={900} color="#2F80ED">
+                    {w.participant_name}
+                  </Typography>
+                </Box>
+              ))}
+            </Stack>
+          )}
+        </DialogContent>
+        {animPhase === "result" && (
+          <DialogActions sx={{ px: 2, pb: 2, gap: 1 }}>
+            <Button
+              variant="outlined"
+              onClick={handleRedraw}
+              disabled={isSavingWinner}
+              sx={{ fontWeight: 700, flex: 1 }}
+            >
+              다시 추첨
+            </Button>
+            <Button
+              variant="contained"
+              disableElevation
+              onClick={handleSaveWinner}
+              disabled={isSavingWinner}
+              sx={{ fontWeight: 700, flex: 1 }}
+            >
+              {isSavingWinner ? "저장 중..." : "저장"}
+            </Button>
+          </DialogActions>
+        )}
+      </Dialog>
+      </>
     );
   }
 

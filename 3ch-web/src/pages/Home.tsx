@@ -268,10 +268,12 @@ export default function Home() {
                     title="진행중인 리그·대회"
                 />
                 {!isLoggedIn || !hasGroups ? (
-                    <Box sx={{ mt: 2, mb: 2, px: 2, py: 2, }}>
+                    <Box sx={{ mt: 2, mb: 2, py: 2, }}>
+                        <SoftCard>
                         <Typography textAlign="center" color="text.secondary" fontWeight={700}>
                             {!isLoggedIn ? "로그인 후 확인할 수 있습니다." : "클럽에 가입하면 진행중 일정을 확인할 수 있습니다."}
                         </Typography>
+                        </SoftCard>
                     </Box>
                 ) : leagueLoading ? (
                     <Box sx={{ mt: 2, mb: 2, px: 2, py: 2, }}>
@@ -312,10 +314,12 @@ export default function Home() {
                     title="다음 리그·대회"
                 />
                 {!isLoggedIn || !hasGroups ? (
-                    <Box sx={{ mt: 2, mb: 2, px: 2, py: 2, }}>
+                    <Box sx={{ mt: 2, mb: 2, py: 2, }}>
+                        <SoftCard>
                         <Typography textAlign="center" color="text.secondary" fontWeight={700}>
                             {!isLoggedIn ? "로그인 후 확인할 수 있습니다." : "클럽에 가입하면 일정을 확인할 수 있습니다."}
                         </Typography>
+                        </SoftCard>
                     </Box>
                 ) : leagueLoading ? (
                     <Box sx={{ mt: 2, mb: 2, px: 2, py: 2, }}>
@@ -434,7 +438,7 @@ function LeagueCard({ league, goToMatches = false,}: { league: LeagueListItem; g
             sx={{  borderRadius: 0.6, boxShadow: "0 4px 12px rgba(0,0,0,0.08)", cursor: "pointer" 
             }}
         >
-            <CardContent sx={{ py: 1, px: 2.5, "&:last-child": { pb: 1 } }}>
+            <CardContent sx={{ py: 1.8, px: 2.5, "&:last-child": { pb: 1.8 } }}>
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
                     <Typography fontWeight={700} fontSize={15}>
                         {formatLeagueDate(league.start_date)}

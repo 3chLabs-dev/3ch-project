@@ -244,6 +244,7 @@ export default function AppShell() {
                                     px: 4.8,
                                     py: 1.3,
                                     borderRadius: 9999,
+                                    boxShadow: "0 4px 12px rgba(0,0,0,0.30)",
                                     bgcolor: "#D9D9D9",
                                     color: "#1464d2",
                                     fontSize: 20,

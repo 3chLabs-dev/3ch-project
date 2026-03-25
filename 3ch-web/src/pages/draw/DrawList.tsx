@@ -353,7 +353,7 @@ export default function DrawList() {
       message: "추첨을 진행하시겠습니까?",
       onConfirm: () => {
         if (participantRows.length === 0) {
-          setAlertMsg("참가자가 없습니다.");
+          setAlertMsg("참가자가 없습니다. 리그 참가자를 먼저 등록해주세요.");
           return;
         }
     
@@ -668,7 +668,7 @@ export default function DrawList() {
                   </Stack>
                   <Divider sx={{ mb: 1 }} />
                   {prize.winners.length === 0 ? (
-                    <Typography color="text.secondary" fontSize={13} fontWeight={700}>당첨자 없음 (참가자 부족)</Typography>
+                    <Typography color="text.secondary" fontSize={13} fontWeight={700}>추첨 전</Typography>
                   ) : (
                     <Stack spacing={0.6}>
                       {prize.winners.map((w, wi) => (

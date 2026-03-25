@@ -10,6 +10,38 @@ router.use(requireAdmin);
    공지사항
 ───────────────────────────────────────── */
 
+/**
+ * @openapi
+ * /api/admin/board/notices:
+ *   get:
+ *     summary: 공지사항 목록 조회 (관리자)
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 20, maximum: 50 }
+ *     responses:
+ *       200:
+ *         description: 공지사항 목록
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 notices: { type: array, items: { type: object } }
+ *                 total: { type: integer }
+ *                 page: { type: integer }
+ *                 limit: { type: integer }
+ *       401:
+ *         description: 인증 실패
+ *       500:
+ *         description: 서버 오류
+ */
 // GET /admin/board/notices
 router.get("/notices", async (req, res) => {
   const page  = Math.max(1, parseInt(req.query.page  || "1",  10));
@@ -30,6 +62,32 @@ router.get("/notices", async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/board/notices/{id}:
+ *   get:
+ *     summary: 공지사항 상세 조회 (관리자)
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 공지사항 상세
+ *         content:
+ *           application/json:
+ *             schema: { type: object }
+ *       401:
+ *         description: 인증 실패
+ *       404:
+ *         description: 없음
+ *       500:
+ *         description: 서버 오류
+ */
 // GET /admin/board/notices/:id
 router.get("/notices/:id", async (req, res) => {
   try {
@@ -41,6 +99,39 @@ router.get("/notices/:id", async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/board/notices:
+ *   post:
+ *     summary: 공지사항 생성 (관리자)
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [title, content]
+ *             properties:
+ *               title: { type: string }
+ *               content: { type: string }
+ *               category: { type: string, default: 안내 }
+ *               is_published: { type: boolean, default: true }
+ *     responses:
+ *       201:
+ *         description: 생성된 공지사항
+ *         content:
+ *           application/json:
+ *             schema: { type: object }
+ *       400:
+ *         description: 필수 항목 누락
+ *       401:
+ *         description: 인증 실패
+ *       500:
+ *         description: 서버 오류
+ */
 // POST /admin/board/notices
 router.post("/notices", async (req, res) => {
   const { title, content, category = "안내", is_published = true } = req.body;
@@ -59,6 +150,46 @@ router.post("/notices", async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/board/notices/{id}:
+ *   put:
+ *     summary: 공지사항 수정 (관리자)
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [title, content]
+ *             properties:
+ *               title: { type: string }
+ *               content: { type: string }
+ *               category: { type: string, default: 안내 }
+ *               is_published: { type: boolean }
+ *     responses:
+ *       200:
+ *         description: 수정된 공지사항
+ *         content:
+ *           application/json:
+ *             schema: { type: object }
+ *       400:
+ *         description: 필수 항목 누락
+ *       401:
+ *         description: 인증 실패
+ *       404:
+ *         description: 없음
+ *       500:
+ *         description: 서버 오류
+ */
 // PUT /admin/board/notices/:id
 router.put("/notices/:id", async (req, res) => {
   const { title, content, category = "안내", is_published } = req.body;
@@ -78,6 +209,35 @@ router.put("/notices/:id", async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/board/notices/{id}:
+ *   delete:
+ *     summary: 공지사항 삭제 (관리자)
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 삭제 완료
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message: { type: string }
+ *       401:
+ *         description: 인증 실패
+ *       404:
+ *         description: 없음
+ *       500:
+ *         description: 서버 오류
+ */
 // DELETE /admin/board/notices/:id
 router.delete("/notices/:id", async (req, res) => {
   try {
@@ -93,6 +253,28 @@ router.delete("/notices/:id", async (req, res) => {
    FAQ
 ───────────────────────────────────────── */
 
+/**
+ * @openapi
+ * /api/admin/board/faqs:
+ *   get:
+ *     summary: FAQ 목록 조회 (관리자)
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: FAQ 목록
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 faqs: { type: array, items: { type: object } }
+ *       401:
+ *         description: 인증 실패
+ *       500:
+ *         description: 서버 오류
+ */
 // GET /admin/board/faqs
 router.get("/faqs", async (req, res) => {
   try {
@@ -106,6 +288,32 @@ router.get("/faqs", async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/board/faqs/{id}:
+ *   get:
+ *     summary: FAQ 상세 조회 (관리자)
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: FAQ 상세
+ *         content:
+ *           application/json:
+ *             schema: { type: object }
+ *       401:
+ *         description: 인증 실패
+ *       404:
+ *         description: 없음
+ *       500:
+ *         description: 서버 오류
+ */
 // GET /admin/board/faqs/:id
 router.get("/faqs/:id", async (req, res) => {
   try {
@@ -117,6 +325,41 @@ router.get("/faqs/:id", async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/board/faqs:
+ *   post:
+ *     summary: FAQ 생성 (관리자)
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [question, answer]
+ *             properties:
+ *               question: { type: string }
+ *               answer: { type: string }
+ *               tab: { type: string, default: member }
+ *               section: { type: string, default: "" }
+ *               display_order: { type: integer, default: 0 }
+ *               is_published: { type: boolean, default: true }
+ *     responses:
+ *       201:
+ *         description: 생성된 FAQ
+ *         content:
+ *           application/json:
+ *             schema: { type: object }
+ *       400:
+ *         description: 필수 항목 누락
+ *       401:
+ *         description: 인증 실패
+ *       500:
+ *         description: 서버 오류
+ */
 // POST /admin/board/faqs
 router.post("/faqs", async (req, res) => {
   const { question, answer, tab = "member", section = "", display_order = 0, is_published = true } = req.body;
@@ -135,6 +378,48 @@ router.post("/faqs", async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/board/faqs/{id}:
+ *   put:
+ *     summary: FAQ 수정 (관리자)
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [question, answer]
+ *             properties:
+ *               question: { type: string }
+ *               answer: { type: string }
+ *               tab: { type: string }
+ *               section: { type: string }
+ *               display_order: { type: integer }
+ *               is_published: { type: boolean }
+ *     responses:
+ *       200:
+ *         description: 수정된 FAQ
+ *         content:
+ *           application/json:
+ *             schema: { type: object }
+ *       400:
+ *         description: 필수 항목 누락
+ *       401:
+ *         description: 인증 실패
+ *       404:
+ *         description: 없음
+ *       500:
+ *         description: 서버 오류
+ */
 // PUT /admin/board/faqs/:id
 router.put("/faqs/:id", async (req, res) => {
   const { question, answer, tab, section, display_order, is_published } = req.body;
@@ -154,6 +439,35 @@ router.put("/faqs/:id", async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/board/faqs/{id}:
+ *   delete:
+ *     summary: FAQ 삭제 (관리자)
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 삭제 완료
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message: { type: string }
+ *       401:
+ *         description: 인증 실패
+ *       404:
+ *         description: 없음
+ *       500:
+ *         description: 서버 오류
+ */
 // DELETE /admin/board/faqs/:id
 router.delete("/faqs/:id", async (req, res) => {
   try {
@@ -171,6 +485,38 @@ router.delete("/faqs/:id", async (req, res) => {
 
 const VALID_TYPES = ["terms", "privacy"];
 
+/**
+ * @openapi
+ * /api/admin/board/policies/{type}:
+ *   get:
+ *     summary: 약관 버전 목록 조회 (관리자)
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: type
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [terms, privacy]
+ *         description: 약관 유형
+ *     responses:
+ *       200:
+ *         description: 약관 버전 목록
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 versions: { type: array, items: { type: object } }
+ *       400:
+ *         description: 잘못된 타입
+ *       401:
+ *         description: 인증 실패
+ *       500:
+ *         description: 서버 오류
+ */
 // GET /admin/board/policies/:type
 router.get("/policies/:type", async (req, res) => {
   const { type } = req.params;
@@ -187,6 +533,40 @@ router.get("/policies/:type", async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/board/policies/{type}/{id}:
+ *   get:
+ *     summary: 약관 버전 상세 조회 (관리자)
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: type
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [terms, privacy]
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 약관 버전 상세
+ *         content:
+ *           application/json:
+ *             schema: { type: object }
+ *       400:
+ *         description: 잘못된 타입
+ *       401:
+ *         description: 인증 실패
+ *       404:
+ *         description: 없음
+ *       500:
+ *         description: 서버 오류
+ */
 // GET /admin/board/policies/:type/:id
 router.get("/policies/:type/:id", async (req, res) => {
   const { type, id } = req.params;
@@ -203,6 +583,46 @@ router.get("/policies/:type/:id", async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/board/policies/{type}:
+ *   post:
+ *     summary: 약관 신규 버전 생성 (관리자)
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: type
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [terms, privacy]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [label, effective_date, body]
+ *             properties:
+ *               label: { type: string, description: 버전 레이블 }
+ *               effective_date: { type: string, description: 시행일 (YYYY-MM-DD) }
+ *               body: { type: string, description: 약관 본문 }
+ *               set_current: { type: boolean, default: false, description: 현행 버전으로 설정 여부 }
+ *     responses:
+ *       201:
+ *         description: 생성된 약관 버전
+ *         content:
+ *           application/json:
+ *             schema: { type: object }
+ *       400:
+ *         description: 잘못된 타입 또는 필수 항목 누락
+ *       401:
+ *         description: 인증 실패
+ *       500:
+ *         description: 서버 오류
+ */
 // POST /admin/board/policies/:type  (신규 버전 추가)
 router.post("/policies/:type", async (req, res) => {
   const { type } = req.params;
@@ -235,6 +655,51 @@ router.post("/policies/:type", async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/board/policies/{type}/{id}:
+ *   put:
+ *     summary: 약관 버전 내용 수정 (관리자)
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: type
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [terms, privacy]
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [label, effective_date, body]
+ *             properties:
+ *               label: { type: string }
+ *               effective_date: { type: string }
+ *               body: { type: string }
+ *     responses:
+ *       200:
+ *         description: 수정된 약관 버전
+ *         content:
+ *           application/json:
+ *             schema: { type: object }
+ *       400:
+ *         description: 잘못된 타입 또는 필수 항목 누락
+ *       401:
+ *         description: 인증 실패
+ *       404:
+ *         description: 없음
+ *       500:
+ *         description: 서버 오류
+ */
 // PUT /admin/board/policies/:type/:id  (내용 수정)
 router.put("/policies/:type/:id", async (req, res) => {
   const { type, id } = req.params;
@@ -256,6 +721,40 @@ router.put("/policies/:type/:id", async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/board/policies/{type}/{id}/set-current:
+ *   patch:
+ *     summary: 약관 현행 버전으로 설정 (관리자)
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: type
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [terms, privacy]
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 현행으로 설정된 약관 버전
+ *         content:
+ *           application/json:
+ *             schema: { type: object }
+ *       400:
+ *         description: 잘못된 타입
+ *       401:
+ *         description: 인증 실패
+ *       404:
+ *         description: 없음
+ *       500:
+ *         description: 서버 오류
+ */
 // PATCH /admin/board/policies/:type/:id/set-current  (현행으로 설정)
 router.patch("/policies/:type/:id/set-current", async (req, res) => {
   const { type, id } = req.params;
@@ -282,6 +781,43 @@ router.patch("/policies/:type/:id/set-current", async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/board/policies/{type}/{id}:
+ *   delete:
+ *     summary: 약관 버전 삭제 (관리자)
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: type
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [terms, privacy]
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 삭제 완료
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message: { type: string }
+ *       400:
+ *         description: 잘못된 타입 또는 현행 버전 삭제 시도
+ *       401:
+ *         description: 인증 실패
+ *       404:
+ *         description: 없음
+ *       500:
+ *         description: 서버 오류
+ */
 // DELETE /admin/board/policies/:type/:id
 router.delete("/policies/:type/:id", async (req, res) => {
   const { type, id } = req.params;
@@ -305,6 +841,44 @@ router.delete("/policies/:type/:id", async (req, res) => {
    문의사항 (어드민)
 ───────────────────────────────────────── */
 
+/**
+ * @openapi
+ * /api/admin/board/inquiries:
+ *   get:
+ *     summary: 문의사항 목록 조회 (관리자)
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 20, maximum: 50 }
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [pending, answered]
+ *         description: 상태 필터 (생략 시 전체)
+ *     responses:
+ *       200:
+ *         description: 문의사항 목록
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 inquiries: { type: array, items: { type: object } }
+ *                 total: { type: integer }
+ *                 page: { type: integer }
+ *                 limit: { type: integer }
+ *       401:
+ *         description: 인증 실패
+ *       500:
+ *         description: 서버 오류
+ */
 // GET /admin/board/inquiries
 router.get("/inquiries", async (req, res) => {
   const page  = Math.max(1, parseInt(req.query.page  || "1",  10));
@@ -335,6 +909,32 @@ router.get("/inquiries", async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/board/inquiries/{id}:
+ *   get:
+ *     summary: 문의사항 상세 조회 (관리자)
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 문의사항 상세 (작성자 정보 포함)
+ *         content:
+ *           application/json:
+ *             schema: { type: object }
+ *       401:
+ *         description: 인증 실패
+ *       404:
+ *         description: 없음
+ *       500:
+ *         description: 서버 오류
+ */
 // GET /admin/board/inquiries/:id
 router.get("/inquiries/:id", async (req, res) => {
   try {
@@ -352,6 +952,43 @@ router.get("/inquiries/:id", async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/board/inquiries/{id}/reply:
+ *   patch:
+ *     summary: 문의사항 답변 등록 (관리자)
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [reply]
+ *             properties:
+ *               reply: { type: string, description: 답변 내용 }
+ *     responses:
+ *       200:
+ *         description: 답변이 등록된 문의사항 (status가 answered로 변경됨)
+ *         content:
+ *           application/json:
+ *             schema: { type: object }
+ *       400:
+ *         description: 답변 내용 누락
+ *       401:
+ *         description: 인증 실패
+ *       404:
+ *         description: 없음
+ *       500:
+ *         description: 서버 오류
+ */
 // PATCH /admin/board/inquiries/:id/reply - 답변 등록
 router.patch("/inquiries/:id/reply", async (req, res) => {
   const { reply } = req.body;
@@ -376,6 +1013,38 @@ router.patch("/inquiries/:id/reply", async (req, res) => {
    이용방법
 ───────────────────────────────────────── */
 
+/**
+ * @openapi
+ * /api/admin/board/guide:
+ *   get:
+ *     summary: 이용방법 목록 조회 (관리자)
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 20, maximum: 50 }
+ *     responses:
+ *       200:
+ *         description: 이용방법 목록
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 guides: { type: array, items: { type: object } }
+ *                 total: { type: integer }
+ *                 page: { type: integer }
+ *                 limit: { type: integer }
+ *       401:
+ *         description: 인증 실패
+ *       500:
+ *         description: 서버 오류
+ */
 // GET /admin/board/guide
 router.get("/guide", async (req, res) => {
   const page  = Math.max(1, parseInt(req.query.page  || "1",  10));
@@ -396,6 +1065,32 @@ router.get("/guide", async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/board/guide/{id}:
+ *   get:
+ *     summary: 이용방법 상세 조회 (관리자)
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 이용방법 상세
+ *         content:
+ *           application/json:
+ *             schema: { type: object }
+ *       401:
+ *         description: 인증 실패
+ *       404:
+ *         description: 없음
+ *       500:
+ *         description: 서버 오류
+ */
 // GET /admin/board/guide/:id
 router.get("/guide/:id", async (req, res) => {
   try {
@@ -407,6 +1102,39 @@ router.get("/guide/:id", async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/board/guide:
+ *   post:
+ *     summary: 이용방법 생성 (관리자)
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [tab, section, content]
+ *             properties:
+ *               tab: { type: string, description: 탭 구분 }
+ *               section: { type: string, description: 섹션 구분 }
+ *               content: { type: string, description: 내용 }
+ *               display_order: { type: integer, default: 0 }
+ *     responses:
+ *       201:
+ *         description: 생성된 이용방법
+ *         content:
+ *           application/json:
+ *             schema: { type: object }
+ *       400:
+ *         description: 필수 항목 누락
+ *       401:
+ *         description: 인증 실패
+ *       500:
+ *         description: 서버 오류
+ */
 // POST /admin/board/guide
 router.post("/guide", async (req, res) => {
   const { tab, section, content, display_order = 0 } = req.body;
@@ -424,6 +1152,46 @@ router.post("/guide", async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/board/guide/{id}:
+ *   put:
+ *     summary: 이용방법 수정 (관리자)
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [tab, section, content]
+ *             properties:
+ *               tab: { type: string }
+ *               section: { type: string }
+ *               content: { type: string }
+ *               display_order: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 수정된 이용방법
+ *         content:
+ *           application/json:
+ *             schema: { type: object }
+ *       400:
+ *         description: 필수 항목 누락
+ *       401:
+ *         description: 인증 실패
+ *       404:
+ *         description: 없음
+ *       500:
+ *         description: 서버 오류
+ */
 // PUT /admin/board/guide/:id
 router.put("/guide/:id", async (req, res) => {
   const { tab, section, content, display_order } = req.body;
@@ -443,6 +1211,33 @@ router.put("/guide/:id", async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/admin/board/guide/{id}:
+ *   delete:
+ *     summary: 이용방법 삭제 (관리자)
+ *     tags: [관리자]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 삭제 완료
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok: { type: boolean }
+ *       401:
+ *         description: 인증 실패
+ *       500:
+ *         description: 서버 오류
+ */
 // DELETE /admin/board/guide/:id
 router.delete("/guide/:id", async (req, res) => {
   try {
@@ -454,4 +1249,3 @@ router.delete("/guide/:id", async (req, res) => {
 });
 
 module.exports = router;
-

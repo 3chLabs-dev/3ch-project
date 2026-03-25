@@ -37,6 +37,7 @@ export default function Home() {
     const user = useAppSelector((state) => state.auth.user);
     const preferredGroupId = useAppSelector((state) => state.leagueCreation.preferredGroupId);
     const isLoggedIn = !!token;
+    const navigate = useNavigate();
 
     const { data: groupData } = useGetMyGroupsQuery(undefined, {
         skip: !isLoggedIn,
@@ -380,6 +381,7 @@ export default function Home() {
                     <Button
                         fullWidth
                         variant="outlined"
+                        onClick={() => navigate("/mypage/inquiry")}
                         sx={{
                             mb: 3,
                             height: 40,

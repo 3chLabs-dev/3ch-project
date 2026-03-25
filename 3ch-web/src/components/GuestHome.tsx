@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Box, Button, Stack, Typography } from "@mui/material";
+import { useNavigate } from "react-router-dom";
 const icon1 = "/128_첫번째 아이콘.png";
 const icon2 = "/128_두번째 아이콘.png";
 const icon3 = "/128_세번째 아이콘.png";
@@ -9,12 +10,13 @@ type GuideTab = "create" | "join";
 
 export default function GuestHome() {
     const [guideTab, setGuideTab] = useState<GuideTab>("create");
+    const navigate = useNavigate();
 
     return (
         <Box
             sx={{
                 px: 0,
-                pt: 2,
+                pt: 1,
                 pb: 4,
                 mx: -2,
                 // backgroundColor: "#F3F4F6",
@@ -85,7 +87,7 @@ export default function GuestHome() {
                         우리리그에서는 이렇게 진행됩니다
                     </Typography>
 
-                    <Box sx={{ mb: 2, px: 2 }}>
+                    <Box sx={{ mb: 3.5, px: 2 }}>
                         <GuideTabGroup value={guideTab} onChange={setGuideTab} />
                     </Box>
 
@@ -131,6 +133,7 @@ export default function GuestHome() {
                                 fontSize: 19,
                                 fontWeight: 700,
                                 color: "#374151",
+                                mt: 2,
                                 mb: 0.5,
                             }}
                         >
@@ -176,6 +179,7 @@ export default function GuestHome() {
                     <Button
                         fullWidth
                         variant="outlined"
+                        onClick={() => navigate("/mypage/inquiry")}
                         sx={{
                             mb: 3,
                             height: 40,

@@ -503,17 +503,27 @@ function MatchSchedulePanel({ matches, localOrder, landscape, leagueId }: {
 
 }, [leagueId, updateMatch]);
   return (
-    <Box sx={{ mt: landscape ? 1.5 : 0, mr: landscape ? 0 : 1.5 }}>
-      <Box sx={{ bgcolor: COLOR.darkCard, borderRadius: "12px", px: 1.5, py: 1, display: "flex", alignItems: "center", gap: 1.5, minHeight: 72 }}>
+    <Box sx={{ height: landscape ? "auto" : "100%" }}>
+      <Box sx={{
+        bgcolor: COLOR.darkCard, borderRadius: "12px", gap: 1.5,
+        display: "flex", alignItems: "center",
+        ...(landscape
+          ? { px: 1.5, py: 1, flexDirection: "row", minHeight: 72 }
+          : { px: 1, py: 1.5, flexDirection: "column", minWidth: 72, height: "100%" }),
+      }}>
 
         {/* 라벨 */}
         <Box sx={{ flexShrink: 0, textAlign: "center" }}>
           <Typography sx={{ fontSize: 7, fontWeight: 700, color: "#6B7280", letterSpacing: 1.5 }}>SCHEDULE</Typography>
-          <Typography sx={{ fontSize: 10, fontWeight: 800, color: "#F9FAFB", lineHeight: 1.3 }}>경기{"\n"}순서</Typography>
+          <Typography sx={{ fontSize: 10, fontWeight: 800, color: "#F9FAFB", lineHeight: 1.3, whiteSpace: "pre-line" }}>{"경기\n순서"}</Typography>
         </Box>
 
-        {/* 가로 스크롤 가능한 경기 카드 목록 */}
-        <Box sx={{ display: "flex", gap: 0.75, overflowX: "auto", flex: 1, "&::-webkit-scrollbar": { display: "none" } }}>
+        {/* 경기 카드 목록: landscape=가로스크롤, portrait=세로스크롤 */}
+        <Box sx={{
+          display: "flex", gap: 0.75, flex: 1,
+          ...(landscape ? { flexDirection: "row", overflowX: "auto" } : { flexDirection: "column", overflowY: "auto" }),
+          "&::-webkit-scrollbar": { display: "none" },
+        }}>
           {matches.map((m, i) => {
             const p1Idx = localOrder.findIndex((p) => p.id === m.participant_a_id);
             const p2Idx = localOrder.findIndex((p) => p.id === m.participant_b_id);
@@ -655,8 +665,11 @@ export default function LeagueBracket() {
       // portrait: writingMode가 scrollHeight를 왜곡하므로 tableOnlyRef로 보정
       const sth = (!landscape && tableOnlyRef.current) ? tableOnlyRef.current.scrollHeight : th;
       // schedule 오버레이 높이만큼 빼야 마지막 행이 가려지지 않음
-      const sh = scheduleRef.current?.offsetHeight ?? 0;
-      setAutoFitScale(landscape ? Math.min(ww / tw, (wh - sh) / th) : ww / sth);
+      // landscape: 하단 오버레이 높이 / portrait: 우측 오버레이 너비
+      const sh = scheduleRef.current
+        ? (landscape ? scheduleRef.current.offsetHeight : scheduleRef.current.offsetWidth)
+        : 0;
+      setAutoFitScale(landscape ? Math.min(ww / tw, (wh - sh) / th) : (ww - sh) / sth);
       setNaturalTw(tw);
       setNaturalTh(th);
     };
@@ -867,7 +880,14 @@ export default function LeagueBracket() {
         <Box sx={{ position: "absolute", inset: 0, overflow: "auto" }}>
           {/* spacer: CSS transform은 레이아웃 크기에 영향을 안 주므로
               시각적 크기만큼 spacer를 두어 스크롤 범위를 확보 */}
-          <Box sx={{ width: visualW || "100%", height: visualH || "100%", minWidth: "100%", minHeight: "100%", position: "relative", flexShrink: 0, pb: `${(scheduleRef.current?.offsetHeight ?? 0)}px` }}>
+          <Box sx={{
+            width: visualW || "100%", height: visualH || "100%",
+            minWidth: "100%", minHeight: "100%",
+            position: "relative", flexShrink: 0,
+            // landscape: 하단 패널 높이만큼 하단 여백 / portrait: 우측 패널 너비만큼 우측 여백
+            pb: landscape ? `${scheduleRef.current?.offsetHeight ?? 0}px` : 0,
+            pr: landscape ? 0 : `${scheduleRef.current?.offsetWidth ?? 0}px`,
+          }}>
             {/* 대진표 + 경기 순서 (scale 변환 컨테이너) */}
             <Box
               ref={wrapperTableRef}
@@ -958,8 +978,12 @@ export default function LeagueBracket() {
           </Box>{/* /spacer */}
         </Box>{/* /scrollableInner */}
 
-        {/* 경기 순서 패널: 오버레이 고정 (scale 계산에서 분리) */}
-        <Box ref={scheduleRef} sx={{ position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 5 }}>
+        {/* 경기 순서 패널: 오버레이 고정 (scale 계산에서 분리)
+            landscape: 하단 가로 바 / portrait: 우측 세로 바 */}
+        <Box ref={scheduleRef} sx={{
+          position: "absolute", zIndex: 5,
+          ...(landscape ? { bottom: 0, left: 0, right: 0 } : { top: 0, bottom: 0, right: 0 }),
+        }}>
           <MatchSchedulePanel matches={matches} localOrder={localOrder} landscape={landscape} leagueId={id ?? ""} />
         </Box>
 

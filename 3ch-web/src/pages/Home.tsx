@@ -4,6 +4,7 @@ import { formatLeagueDate } from "../utils/dateUtils";
 import { Link as RouterLink, useNavigate } from "react-router-dom";
 import {
     Box,
+    Chip,
     Stack,
     Typography,
     Card,
@@ -12,9 +13,14 @@ import {
     Select,
     MenuItem,
 } from "@mui/material";
+import GridViewOutlinedIcon from "@mui/icons-material/GridViewOutlined";
+import SportsOutlinedIcon from "@mui/icons-material/SportsOutlined";
+import EmojiEventsOutlinedIcon from "@mui/icons-material/EmojiEventsOutlined";
 import type { SelectChangeEvent } from "@mui/material";
 
 import { useAppDispatch, useAppSelector } from "../app/hooks";
+import { useGetPreferencesQuery, useGetHomeSummaryQuery } from "../features/user/userApi";
+import type { MyGroupItem, MyMatchItem, MyWinItem } from "../features/user/userApi";
 import { useGetLeaguesQuery } from "../features/league/leagueApi";
 import type { LeagueListItem } from "../features/league/leagueApi";
 import { useGetMyGroupsQuery } from "../features/group/groupApi";
@@ -38,6 +44,8 @@ export default function Home() {
     const preferredGroupId = useAppSelector((state) => state.leagueCreation.preferredGroupId);
     const isLoggedIn = !!token;
     const navigate = useNavigate();
+
+    const { data: preferences } = useGetPreferencesQuery(undefined, { skip: !isLoggedIn });
 
     const { data: groupData } = useGetMyGroupsQuery(undefined, {
         skip: !isLoggedIn,
@@ -77,6 +85,11 @@ export default function Home() {
         { skip: !isLoggedIn || !effectiveSelectedGroupId, refetchOnMountOrArgChange: true }
     );
 
+    const showSummary = isLoggedIn && (preferences?.show_group || preferences?.show_game || preferences?.show_win);
+    const { data: homeSummary } = useGetHomeSummaryQuery(
+        { groupId: effectiveSelectedGroupId },
+        { skip: !showSummary || !effectiveSelectedGroupId, refetchOnMountOrArgChange: true }
+    );
 
     const activeLeagues = useMemo(() => {
         const leagues = leagueData?.leagues ?? [];
@@ -251,9 +264,85 @@ export default function Home() {
                 </SoftCard>
             )}
             </Stack>
-            
+
         <Box sx={{ mx: -2}}>
             <Stack spacing={2.5}>
+
+            {/* 나의 조편성 */}
+            {isLoggedIn && preferences?.show_group && (
+                <Box sx={{ mt: 3, px: 2, py: 2, backgroundColor: "#F5F3FF" }}>
+                    <SectionHeader
+                        title="나의 조편성"
+                        icon={<GridViewOutlinedIcon sx={{ fontSize: 18, color: "#6366F1", mr: 0.5 }} />}
+                    />
+                    <Box sx={{ mt: 2, mb: 1 }}>
+                        {!homeSummary || homeSummary.my_groups.length === 0 ? (
+                            <SoftCard>
+                                <Typography textAlign="center" color="text.secondary" fontWeight={700}>
+                                    배정된 조편성이 없습니다.
+                                </Typography>
+                            </SoftCard>
+                        ) : (
+                            <Stack spacing={1}>
+                                {homeSummary.my_groups.map((item) => (
+                                    <MyGroupCard key={item.league_id} item={item} navigate={navigate} />
+                                ))}
+                            </Stack>
+                        )}
+                    </Box>
+                </Box>
+            )}
+
+            {/* 나의 경기 */}
+            {isLoggedIn && preferences?.show_game && (
+                <Box sx={{ mt: 3, px: 2, py: 2, backgroundColor: "#EFF6FF" }}>
+                    <SectionHeader
+                        title="나의 경기"
+                        icon={<SportsOutlinedIcon sx={{ fontSize: 18, color: "#2F80ED", mr: 0.5 }} />}
+                    />
+                    <Box sx={{ mt: 2, mb: 1 }}>
+                        {!homeSummary || homeSummary.my_matches.length === 0 ? (
+                            <SoftCard>
+                                <Typography textAlign="center" color="text.secondary" fontWeight={700}>
+                                    예정된 경기가 없습니다.
+                                </Typography>
+                            </SoftCard>
+                        ) : (
+                            <Stack spacing={1}>
+                                {homeSummary.my_matches.map((item) => (
+                                    <MyMatchCard key={item.match_id} item={item} navigate={navigate} />
+                                ))}
+                            </Stack>
+                        )}
+                    </Box>
+                </Box>
+            )}
+
+            {/* 나의 당첨내역 */}
+            {isLoggedIn && preferences?.show_win && (
+                <Box sx={{ mt: 3, px: 2, py: 2, backgroundColor: "#FFFBEB" }}>
+                    <SectionHeader
+                        title="나의 당첨내역"
+                        icon={<EmojiEventsOutlinedIcon sx={{ fontSize: 18, color: "#D97706", mr: 0.5 }} />}
+                    />
+                    <Box sx={{ mt: 2, mb: 1 }}>
+                        {!homeSummary || homeSummary.my_wins.length === 0 ? (
+                            <SoftCard>
+                                <Typography textAlign="center" color="text.secondary" fontWeight={700}>
+                                    당첨 내역이 없습니다.
+                                </Typography>
+                            </SoftCard>
+                        ) : (
+                            <Stack spacing={1}>
+                                {homeSummary.my_wins.map((item, idx) => (
+                                    <MyWinCard key={idx} item={item} navigate={navigate} />
+                                ))}
+                            </Stack>
+                        )}
+                    </Box>
+                </Box>
+            )}
+
             {/* 진행중 리그 대회 */}
             <Box
                 sx={{
@@ -411,19 +500,114 @@ export default function Home() {
     );
 }
 
-function SectionHeader({ title }: { title: string }) {
+function SectionHeader({ title, icon }: { title: string; icon?: React.ReactNode }) {
     return (
         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 0.5 }}>
-            <Typography variant="subtitle1" fontWeight={900} fontSize={19}>
-                {title}
-            </Typography>
-            {/* <IconButton size="small">
-                <TuneIcon fontSize="small" />
-            </IconButton> */}
+            <Stack direction="row" alignItems="center">
+                {icon}
+                <Typography variant="subtitle1" fontWeight={900} fontSize={19}>
+                    {title}
+                </Typography>
+            </Stack>
         </Stack>
     );
 }
 
+function MyGroupCard({ item, navigate }: { item: MyGroupItem; navigate: (path: string) => void }) {
+    return (
+        <Card
+            elevation={2}
+            onClick={() => navigate(`/league/${item.league_code ?? item.league_id}/bracket`)}
+            sx={{ borderRadius: 0.6, boxShadow: "0 4px 12px rgba(0,0,0,0.08)", cursor: "pointer" }}
+        >
+            <CardContent sx={{ py: 1.6, px: 2.5, "&:last-child": { pb: 1.6 } }}>
+                <Stack direction="row" alignItems="center" justifyContent="space-between">
+                    <Typography fontWeight={700} fontSize={14} noWrap flex={1} mr={1}>
+                        {item.league_name}
+                    </Typography>
+                    {item.division ? (
+                        <Chip
+                            label={item.division}
+                            size="small"
+                            sx={{ bgcolor: "#EEF2FF", color: "#6366F1", fontWeight: 700, fontSize: 12 }}
+                        />
+                    ) : (
+                        <Typography fontSize={12} color="text.secondary" fontWeight={600}>미배정</Typography>
+                    )}
+                </Stack>
+            </CardContent>
+        </Card>
+    );
+}
+
+function MyMatchCard({ item, navigate }: { item: MyMatchItem; navigate: (path: string) => void }) {
+    const statusLabel = item.status === "playing" ? "진행중" : "대기";
+    const statusColor = item.status === "playing" ? "#16A34A" : "#6B7280";
+
+    return (
+        <Card
+            elevation={2}
+            onClick={() => navigate(`/league/${item.league_code ?? item.league_id}/matches`)}
+            sx={{ borderRadius: 0.6, boxShadow: "0 4px 12px rgba(0,0,0,0.08)", cursor: "pointer" }}
+        >
+            <CardContent sx={{ py: 1.6, px: 2.5, "&:last-child": { pb: 1.6 } }}>
+                <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+                    <Stack flex={1} minWidth={0}>
+                        <Typography fontWeight={700} fontSize={13} color="text.secondary" noWrap>
+                            {item.league_name}
+                        </Typography>
+                        <Stack direction="row" alignItems="center" spacing={0.8} mt={0.4}>
+                            <Typography fontWeight={800} fontSize={14}>
+                                {item.my_division ?? "나"}
+                            </Typography>
+                            <Typography fontWeight={700} fontSize={12} color="text.secondary">vs</Typography>
+                            <Typography fontWeight={700} fontSize={14}>
+                                {item.opponent_name ?? "?"}
+                                {item.opponent_division ? ` (${item.opponent_division})` : ""}
+                            </Typography>
+                        </Stack>
+                    </Stack>
+                    <Stack alignItems="flex-end" spacing={0.3}>
+                        <Typography fontSize={11} fontWeight={700} sx={{ color: statusColor }}>
+                            {statusLabel}
+                        </Typography>
+                        <Typography fontSize={13} fontWeight={700} color="text.secondary">
+                            {item.match_order}번 경기
+                        </Typography>
+                    </Stack>
+                </Stack>
+            </CardContent>
+        </Card>
+    );
+}
+
+function MyWinCard({ item, navigate }: { item: MyWinItem; navigate: (path: string) => void }) {
+    return (
+        <Card
+            elevation={2}
+            onClick={() => navigate(`/league/${item.league_code ?? item.league_id}`)}
+            sx={{ borderRadius: 0.6, boxShadow: "0 4px 12px rgba(0,0,0,0.08)", cursor: "pointer" }}
+        >
+            <CardContent sx={{ py: 1.6, px: 2.5, "&:last-child": { pb: 1.6 } }}>
+                <Stack direction="row" alignItems="center" justifyContent="space-between">
+                    <Stack flex={1} minWidth={0}>
+                        <Typography fontWeight={700} fontSize={13} color="text.secondary" noWrap>
+                            {item.league_name} · {item.draw_name}
+                        </Typography>
+                        <Typography fontWeight={800} fontSize={14} mt={0.3}>
+                            {item.prize_name}
+                        </Typography>
+                    </Stack>
+                    <Chip
+                        label="당첨"
+                        size="small"
+                        sx={{ bgcolor: "#FEF3C7", color: "#D97706", fontWeight: 700, fontSize: 12 }}
+                    />
+                </Stack>
+            </CardContent>
+        </Card>
+    );
+}
 
 function LeagueCard({ league, goToMatches = false,}: { league: LeagueListItem; goToMatches?: boolean; }) {
     const navigate = useNavigate();
@@ -435,7 +619,7 @@ function LeagueCard({ league, goToMatches = false,}: { league: LeagueListItem; g
         <Card
             elevation={2}
             onClick={() => navigate(targetPath)}
-            sx={{  borderRadius: 0.6, boxShadow: "0 4px 12px rgba(0,0,0,0.08)", cursor: "pointer" 
+            sx={{  borderRadius: 0.6, boxShadow: "0 4px 12px rgba(0,0,0,0.08)", cursor: "pointer"
             }}
         >
             <CardContent sx={{ py: 1.8, px: 2.5, "&:last-child": { pb: 1.8 } }}>
@@ -476,6 +660,5 @@ function SoftCard({ children }: { children: React.ReactNode }) {
         </Card>
     );
 }
-
 
 

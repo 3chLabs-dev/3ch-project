@@ -87,7 +87,7 @@ export default function GuestHome() {
                         우리리그에서는 이렇게 진행됩니다
                     </Typography>
 
-                    <Box sx={{ mb: 3.5, px: 2 }}>
+                    <Box sx={{ mb: 2.5, px: 2 }}>
                         <GuideTabGroup value={guideTab} onChange={setGuideTab} />
                     </Box>
 
@@ -133,7 +133,7 @@ export default function GuestHome() {
                                 fontSize: 19,
                                 fontWeight: 700,
                                 color: "#374151",
-                                mt: 2,
+                                mt: 2.5,
                                 mb: 0.5,
                             }}
                         >
@@ -188,7 +188,7 @@ export default function GuestHome() {
                             borderColor: "#60A5FA",
                             color: "#2563EB",
                             fontWeight: 700,
-                            fontSize: 19,
+                            fontSize: 14,
                             "&:hover": {
                                 borderColor: "#3B82F6",
                                 backgroundColor: "#F8FAFC",
@@ -275,7 +275,9 @@ function GuideTabGroup({
         <Box
             sx={{
                 display: "flex",
-                width: "100%",
+                height: 34,
+                width: "80%",
+                mx: "auto",
                 border: "1px solid #CFCFCF",
                 borderRadius: 9999,
                 overflow: "hidden",
@@ -286,10 +288,13 @@ function GuideTabGroup({
                 onClick={() => onChange("create")}
                 sx={{
                     flex: 1,
-                    height: 44,
+                    height: "100%",
+                    minHeight: 0,
                     borderRadius: 0,
-                    fontSize: 20,
-                    fontWeight: 800,
+                    fontSize: 17,
+                    fontWeight: 500,
+                    alignItems: "center",
+                    justifyContent: "center",
                     color: "#222222",
                     backgroundColor: value === "create" ? "#D9D9D9" : "#FFFFFF",
                     "&:hover": {
@@ -306,10 +311,12 @@ function GuideTabGroup({
                 onClick={() => onChange("join")}
                 sx={{
                     flex: 1,
-                    height: 44,
+                    height: "100%",
                     borderRadius: 0,
-                    fontSize: 20,
-                    fontWeight: 800,
+                    fontSize: 17,
+                    fontWeight: 500,
+                    alignItems: "center",
+                    justifyContent: "center",
                     color: "#222222",
                     backgroundColor: value === "join" ? "#D9D9D9" : "#FFFFFF",
                     "&:hover": {

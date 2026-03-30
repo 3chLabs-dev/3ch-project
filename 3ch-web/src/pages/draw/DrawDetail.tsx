@@ -48,6 +48,8 @@ type PendingWinner = { participant_name: string; participant_division: string | 
 export default function DrawDetail() {
   const { leagueId, drawId } = useParams<{ leagueId: string; drawId: string }>();
   const navigate = useNavigate();
+  const [openMyWinDialog, setOpenMyWinDialog] = useState(false);
+  const hasCheckedRef = useRef(false); // 1회 실행용
 
   const { data, isLoading, error } = useGetDrawDetailQuery(
     { leagueId: leagueId ?? "", drawId: drawId ?? "" },
@@ -69,6 +71,22 @@ export default function DrawDetail() {
   });
 
   const [drawPrizeWinners] = useDrawPrizeWinnersMutation();
+
+  useEffect(() => {
+    if (!data || !myName) return;
+    if (hasCheckedRef.current) return; // 🔥 한 번만 실행
+
+    // 내가 당첨자인지 확인
+    const isMeWinner = data.prizes.some(prize =>
+      prize.winners?.some(w => w.participant_name === myName)
+    );
+
+    if (isMeWinner) {
+      setOpenMyWinDialog(true);
+    }
+
+    hasCheckedRef.current = true;
+  }, [data, myName]);  
 
   // Animation state
   const [drawingPrize, setDrawingPrize] = useState<DrawPrizeItem | null>(null);
@@ -375,6 +393,24 @@ export default function DrawDetail() {
             </Button>
           </DialogActions>
         )}
+      </Dialog>
+
+      <Dialog open={openMyWinDialog} onClose={() => setOpenMyWinDialog(false)}>
+        <DialogTitle sx={{ fontWeight: 900 }}>
+          🎉 축하합니다!
+        </DialogTitle>
+
+        <DialogContent>
+          <Typography fontWeight={700}>
+            당첨되셨습니다 👏
+          </Typography>
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={() => setOpenMyWinDialog(false)}>
+            확인
+          </Button>
+        </DialogActions>
       </Dialog>
 
       <Snackbar

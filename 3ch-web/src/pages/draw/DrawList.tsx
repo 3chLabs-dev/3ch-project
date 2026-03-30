@@ -142,9 +142,17 @@ export default function DrawList() {
   const [isSavingWinner, setIsSavingWinner] = useState(false);
 
   const [confirmState, setConfirmState] = useState<{
-  message: string;
-  onConfirm: () => void;
-} | null>(null);
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
+
+  const [dialogConfirmState, setDialogConfirmState] = useState<{
+    open: boolean;
+    prize: PrizeInput | null;
+  }>({
+    open: false,
+    prize: null,
+  });
 
   const animTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -365,48 +373,43 @@ export default function DrawList() {
   };
 
   const handleRunSingleDraw = (selectedPrize: PrizeInput) => {
-    setConfirmState({
-      message: "추첨을 진행하시겠습니까?",
-      onConfirm: () => {
-        if (participantRows.length === 0) {
-          setAlertMsg("참가자가 없습니다. 리그 참가자를 먼저 등록해주세요.");
-          return;
-        }
-    
-        const usedNames = new Set<string>();
-    
-        // (만약 기존 결과에서 이미 당첨된 사람 제외하고 싶다면)
-        prizes.forEach(prize => {
-          prize.winners.forEach(w => usedNames.add(w.participant_name));
-        });
-    
-        const pool = participantRows.filter((p) => !usedNames.has(p.name));
-        const winners = weightedRandomPick(pool, selectedPrize.quantity);
-        
-        const results: PrizeResult[] = prizes.map(prize => {
-          if (prize.id === selectedPrize.id) {
-            return {
-              ...prize,
-              winners,
-            };
-          }
-    
-          return prize; // 기존 그대로 유지
-        });
-    
-        const resultDrawingPrize: PrizeInput ={
-          id: selectedPrize.id,
-          prize_name: selectedPrize.prize_name,
-          quantity: selectedPrize.quantity,
-          winners: winners,
-        }
-    
-        setPrizeResults(results);
-        setPendingWinners(winners);
-        setDrawingPrize(resultDrawingPrize);
-        runAnimation(pool, winners);
-      }
+    if (participantRows.length === 0) {
+      setAlertMsg("참가자가 없습니다. 리그 참가자를 먼저 등록해주세요.");
+      return;
+    }
+
+    const usedNames = new Set<string>();
+
+    // (만약 기존 결과에서 이미 당첨된 사람 제외하고 싶다면)
+    prizes.forEach(prize => {
+      prize.winners.forEach(w => usedNames.add(w.participant_name));
     });
+
+    const pool = participantRows.filter((p) => !usedNames.has(p.name));
+    const winners = weightedRandomPick(pool, selectedPrize.quantity);
+    
+    const results: PrizeResult[] = prizes.map(prize => {
+      if (prize.id === selectedPrize.id) {
+        return {
+          ...prize,
+          winners,
+        };
+      }
+
+      return prize; // 기존 그대로 유지
+    });
+
+    const resultDrawingPrize: PrizeInput ={
+      id: selectedPrize.id,
+      prize_name: selectedPrize.prize_name,
+      quantity: selectedPrize.quantity,
+      winners: winners,
+    }
+
+    setPrizeResults(results);
+    setPendingWinners(winners);
+    setDrawingPrize(resultDrawingPrize);
+    runAnimation(pool, winners);
   };
 
   async function handleSaveWinner() {
@@ -671,7 +674,7 @@ export default function DrawList() {
                           variant={prize.winners.length > 0 ? "outlined" : "contained"}
                           size="small"
                           disableElevation
-                          onClick={() => handleRunSingleDraw(prize)}
+                          onClick={() => setDialogConfirmState({open: true, prize: prize,})}
                           sx={{ borderRadius: 1, fontWeight: 700, minWidth: 56, height: 28, fontSize: 12 }}
                         >
                           {prize.winners.length > 0 ? "재추첨" : "추첨"}
@@ -777,41 +780,40 @@ export default function DrawList() {
           </Button>
   )}
         </Stack>
-
-        <Snackbar open={!!alertMsg || !!confirmState} autoHideDuration={confirmState ? null : 2500} onClose={() => {setAlertMsg(""); setConfirmState(null);}} anchorOrigin={{ vertical: "bottom", horizontal: "center" }}>
-          <Alert severity="warning"
-            onClose={() => {
-              setAlertMsg("");
-              setConfirmState(null);
-            }}
-            sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}
-            action={
-              confirmState ? (
-                <>
-                  <Button
-                    color="inherit"
-                    size="small"
-                    onClick={() => {
-                      confirmState.onConfirm();
-                      setConfirmState(null);
-                    }}
-                  >
-                    확인
-                  </Button>
-                  <Button
-                    color="inherit"
-                    size="small"
-                    onClick={() => setConfirmState(null)}
-                  >
-                    취소
-                  </Button>
-                </>
-              ) : null
-            }
-          >
-            {confirmState?.message || alertMsg}
-          </Alert>
-        </Snackbar>
+          <Snackbar open={!!alertMsg || !!confirmState} autoHideDuration={confirmState ? null : 2500} onClose={() => {setAlertMsg(""); setConfirmState(null);}} anchorOrigin={{ vertical: "bottom", horizontal: "center" }} sx={{ zIndex: (theme) => theme.zIndex.modal + 1, }}>
+            <Alert severity="warning"
+              onClose={() => {
+                setAlertMsg("");
+                setConfirmState(null);
+              }}
+              sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}
+              action={
+                confirmState ? (
+                  <>
+                    <Button
+                      color="inherit"
+                      size="small"
+                      onClick={() => {
+                        confirmState.onConfirm();
+                        setConfirmState(null);
+                      }}
+                    >
+                      확인
+                    </Button>
+                    <Button
+                      color="inherit"
+                      size="small"
+                      onClick={() => setConfirmState(null)}
+                    >
+                      취소
+                    </Button>
+                  </>
+                ) : null
+              }
+            >
+              {confirmState?.message || alertMsg}
+            </Alert>
+          </Snackbar>
       </Stack>
       {/* 슬롯머신 추첨 다이얼로그 */}
       <Dialog
@@ -891,6 +893,38 @@ export default function DrawList() {
             </Button>
           </DialogActions>
         )}
+      </Dialog>
+      {/* 개별추첨 진행 다이얼로그 */}
+      <Dialog
+        open={dialogConfirmState.open}
+        onClose={() => setDialogConfirmState({ open: false, prize: null })}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 900, pb: 1 }}>
+
+        </DialogTitle>
+        <DialogContent>
+            <Typography>
+                {dialogConfirmState.prize?.prize_name}({dialogConfirmState.prize?.quantity}명) 추첨을 시작하겠습니까?
+            </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+            <Button
+                onClick={() => setDialogConfirmState({ open: false, prize: null })}
+                sx={{ borderRadius: 1, px: 3, fontWeight: 700, color: "text.secondary" }}
+            >
+                취소
+            </Button>
+            <Button
+                onClick={() => { if (!dialogConfirmState.prize) return;
+                                  handleRunSingleDraw(dialogConfirmState.prize);
+                                  setDialogConfirmState({ open: false, prize: null });
+                                }}
+            >
+                확인
+            </Button>
+        </DialogActions>
       </Dialog>
       </>
     );

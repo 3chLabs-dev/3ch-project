@@ -385,7 +385,7 @@ function EmptyCard({ text }: { text: string }) {
                 textAlign: "center",
                 "&:last-child": { pb: 2.5 },
             }}>
-                <Typography color="text.secondary" fontWeight={700} fontSize={14}>
+                <Typography color="text.secondary" fontWeight={700} fontSize={16}>
                     {text}
                 </Typography>
             </CardContent>

@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link as RouterLink, useNavigate, } from "react-router-dom";
 import {
   Box,
   Button,
@@ -75,7 +75,7 @@ export default function DrawMain() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const token = useAppSelector((s) => s.auth.token);
-  const user = useAppSelector((s) => s.auth.user);
+  // const user = useAppSelector((s) => s.auth.user);
   const preferredGroupId = useAppSelector((s) => s.leagueCreation.preferredGroupId);
   const isLoggedIn = !!token;
 
@@ -200,6 +200,23 @@ export default function DrawMain() {
   if (phase === "create") {
     return (
       <Stack spacing={2.2}>
+            {/* 로그인 유도 */}
+            {!isLoggedIn && (
+              <SoftCard>
+                <Stack alignItems="center" spacing={1.2}>
+                  <Typography fontWeight={800}>로그인을 해주세요.</Typography>
+                  <Button
+                    component={RouterLink}
+                    to="/login"
+                    variant="contained"
+                    size="medium"
+                    sx={{ px: 3, borderRadius: 1 }}
+                  >
+                    로그인
+                  </Button>
+                </Stack>
+              </SoftCard>
+            )}
         <Stack direction="row" alignItems="center" spacing={1}>
           <IconButton onClick={() => setPhase("list")} size="small">
             <ArrowBackIcon />
@@ -422,7 +439,7 @@ export default function DrawMain() {
     <Stack spacing={2.2}>
       <Stack direction="row" alignItems="center" justifyContent="space-between">
         <Typography variant="h5" fontWeight={900} lineHeight={1.1}>
-          {user?.name || user?.email || "우리리그"}
+          {/* {user?.name || user?.email} */}
         </Typography>
         {myGroups.length > 1 && (
           <Select
@@ -458,7 +475,7 @@ export default function DrawMain() {
         filterActive={!!(leagueFilterStart || leagueFilterEnd)}
       />
       {!isLoggedIn ? (
-        <EmptyCard text="로그인 후 이용할 수 있습니다." />
+        <EmptyCard text="로그인 후 확인할 수 있습니다." />
       ) : myGroups.length === 0 ? (
         <EmptyCard text="가입된 클럽이 없습니다." />
       ) : filteredLeagueSources.length > 0 ? (
@@ -490,7 +507,7 @@ export default function DrawMain() {
 
       <SectionHeader title="대회 추첨" />
       {!isLoggedIn ? (
-        <EmptyCard text="로그인 후 이용할 수 있습니다." />
+        <EmptyCard text="로그인 후 확인할 수 있습니다." />
       ) : tournamentDraws.length > 0 ? (
         <Stack spacing={1}>
           {tournamentDraws.map((d) => (
@@ -740,5 +757,20 @@ function DrawLeagueFilterDialog({
         </Stack>
       </DialogActions>
     </Dialog>
+  );
+}
+
+function SoftCard({ children }: { children: React.ReactNode }) {
+  return (
+    <Card elevation={2} sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
+      <CardContent sx={{
+        minHeight: 80,
+        py: 2.5, px: 2,
+        display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center",
+        "&:last-child": { pb: 2.5 },
+      }}>
+        {children}
+      </CardContent>
+    </Card>
   );
 }

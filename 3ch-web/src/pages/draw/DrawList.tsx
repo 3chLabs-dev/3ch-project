@@ -194,14 +194,6 @@ export default function DrawList() {
   const draftId = searchParams.get("draftId");
   const [phase, setPhase] = useState<Phase>(searchParams.get("create") === "1" || !!draftId ? "create" : "list");
 
-  useEffect(() => {
-    if( draftId ){
-      setPhase("create");
-    } else {
-      setPhase("list");
-    }
-  }, [draftId]);
-
   function clearAnimTimer() {
     if (animTimerRef.current !== null) {
       clearTimeout(animTimerRef.current);
@@ -236,6 +228,18 @@ export default function DrawList() {
     { skip: !league?.group_id },
   );
   const canManage = !groupLoading && (groupData?.myRole === "owner" || groupData?.myRole === "admin");
+
+  useEffect(() => {
+    if( draftId ){
+      if( canManage ) {
+        setPhase("create");
+      } else {
+        navigate(`/draw/${leagueId}/${draftId}`, { replace: true });
+      }
+    } else {
+      setPhase("list");
+    }
+  }, [draftId, canManage, navigate, leagueId]);
 
   const { data: participantData, isLoading: loadingParticipants } = useGetLeagueParticipantsQuery(
     leagueId ?? "",
@@ -283,8 +287,20 @@ export default function DrawList() {
 
   // draftId로 진입 시 기존 경품 사전 로드
   useEffect(() => {
-    if (draftData && draftId && phase === "create") {
+    if (draftData && draftId) {
+      // create 용 화면 데이터 셋팅
       setPrizes(
+        draftData.prizes.map((p) => ({
+          id: p.id,
+          prize_name: p.prize_name,
+          quantity: p.quantity,
+          winners: (p.winners ?? []).map(w => ({
+          participant_name: w.participant_name,
+          participant_division: w.participant_division ?? "",})),
+        })),
+      );
+      // done 용 화면 데이터 셋팅
+      setPrizeResults(
         draftData.prizes.map((p) => ({
           id: p.id,
           prize_name: p.prize_name,
@@ -589,7 +605,7 @@ export default function DrawList() {
   };
 
   // ─── 추첨하기 화면 ────────────────────────────────────────
-  if (phase === "create") {
+  if (phase === "create" && canManage) {
     return (
       <>
       <Stack spacing={2.2}>

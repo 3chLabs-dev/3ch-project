@@ -200,23 +200,6 @@ export default function DrawMain() {
   if (phase === "create") {
     return (
       <Stack spacing={2.2}>
-            {/* 로그인 유도 */}
-            {!isLoggedIn && (
-              <SoftCard>
-                <Stack alignItems="center" spacing={1.2}>
-                  <Typography fontWeight={800}>로그인을 해주세요.</Typography>
-                  <Button
-                    component={RouterLink}
-                    to="/login"
-                    variant="contained"
-                    size="medium"
-                    sx={{ px: 3, borderRadius: 1 }}
-                  >
-                    로그인
-                  </Button>
-                </Stack>
-              </SoftCard>
-            )}
         <Stack direction="row" alignItems="center" spacing={1}>
           <IconButton onClick={() => setPhase("list")} size="small">
             <ArrowBackIcon />
@@ -419,7 +402,7 @@ export default function DrawMain() {
           {/* <Typography sx={{ fontSize: 156, lineHeight: 1, mb: 4 }}>🎉</Typography> */}
           {/* <Typography sx={{ fontSize: 16, fontWeight: 900, color: "#2F80ED" }}>축하합니다!</Typography> */}
         </Box>
-        <Button fullWidth variant="contained" onClick={() => { if (animationRef.current) { clearInterval(animationRef.current); animationRef.current = null; } setPhase("list"); }} 
+        <Button fullWidth variant="contained" onClick={() => { if (animationRef.current) { clearInterval(animationRef.current); animationRef.current = null; } setPhase("list"); }}
           sx={{
             mt: 3,
             borderRadius: 1,
@@ -468,6 +451,24 @@ export default function DrawMain() {
           </Select>
         )}
       </Stack>
+
+      {/* 로그인 유도 */}
+      {!isLoggedIn && (
+        <SoftCard>
+          <Stack alignItems="center" spacing={1.2}>
+            <Typography fontWeight={800}>로그인을 해주세요.</Typography>
+            <Button
+              component={RouterLink}
+              to="/login"
+              variant="contained"
+              size="medium"
+              sx={{ px: 3, borderRadius: 1 }}
+            >
+              로그인
+            </Button>
+          </Stack>
+        </SoftCard>
+      )}
 
       <SectionHeader
         title="리그 추첨"

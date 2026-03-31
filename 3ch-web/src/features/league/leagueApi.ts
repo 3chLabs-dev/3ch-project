@@ -25,6 +25,8 @@ export interface UpdateLeagueRequest {
   recruit_count?: number;
   status?: "draft" | "active" | "completed";
   join_permission?: "public" | "club_only";
+  tournament_seeding?: string;
+  tournament_advancement?: string;
 }
 
 /**
@@ -47,6 +49,8 @@ export interface League {
   join_permission?: "public" | "club_only";
   group_id?: string;
   status: "draft" | "active" | "completed";
+  tournament_seeding?: string;
+  tournament_advancement?: string;
   created_by_id: number;
   created_at: string;
   updated_at: string;
@@ -161,6 +165,21 @@ export interface LeagueMatch {
   score_b: number | null;
   court: string | null;
   status: "pending" | "playing" | "done";
+  bracket?: string | null;
+  round_number?: number | null;
+  match_label?: string | null;
+  next_match_id?: string | null;
+  next_slot?: string | null;
+  loser_next_match_id?: string | null;
+  loser_next_slot?: string | null;
+}
+
+export interface InitTournamentRequest {
+  leagueId: string;
+  bracket_size: number;
+  seeding?: string;
+  advancement?: string;
+  force?: boolean;
 }
 
 export interface GetLeagueMatchesResponse {
@@ -380,6 +399,43 @@ export const leagueApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: (_result, _error, { leagueId }) => [{ type: "League", id: leagueId }],
     }),
+
+    deleteAllLeagueMatches: builder.mutation<{ ok: boolean }, { leagueId: string }>({
+      query: ({ leagueId }) => ({
+        url: `/league/${leagueId}/matches`,
+        method: "DELETE",
+      }),
+      invalidatesTags: (_result, _error, { leagueId }) => [
+        { type: "League", id: `matches-${leagueId}` },
+        { type: "League", id: leagueId },
+        { type: "League", id: "LIST" },
+      ],
+    }),
+
+    initTournamentMatches: builder.mutation<GetLeagueMatchesResponse, InitTournamentRequest>({
+      query: ({ leagueId, bracket_size, seeding, advancement, force }) => ({
+        url: `/league/${leagueId}/matches/init-tournament`,
+        method: "POST",
+        body: { bracket_size, seeding, advancement, force },
+      }),
+      invalidatesTags: (_result, _error, { leagueId }) => [
+        { type: "League", id: `matches-${leagueId}` },
+        { type: "League", id: leagueId },
+        { type: "League", id: "LIST" },
+      ],
+    }),
+
+    assignMatchParticipant: builder.mutation<
+      { match: LeagueMatch },
+      { leagueId: string; matchId: string; participant_a_id?: string | null; participant_b_id?: string | null }
+    >({
+      query: ({ leagueId, matchId, participant_a_id, participant_b_id }) => ({
+        url: `/league/${leagueId}/matches/${matchId}`,
+        method: "PATCH",
+        body: { participant_a_id, participant_b_id },
+      }),
+      invalidatesTags: (_result, _error, { leagueId }) => [{ type: "League", id: `matches-${leagueId}` }],
+    }),
   }),
 });
 
@@ -402,4 +458,7 @@ export const {
   useReorderLeagueMatchesMutation,
   useDeleteLeagueMatchMutation,
   useReorderLeagueParticipantsMutation,
+  useDeleteAllLeagueMatchesMutation,
+  useInitTournamentMatchesMutation,
+  useAssignMatchParticipantMutation,
 } = leagueApi;

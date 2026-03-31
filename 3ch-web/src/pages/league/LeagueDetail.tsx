@@ -98,7 +98,16 @@ const FORMAT_OPTIONS = [
   { label: "조별리그 + 본선리그", disabled: false },
   { label: "단일리그 + 토너먼트", disabled: true },
   { label: "조별리그 + 토너먼트", disabled: true },
-  { label: "상·하위 토너먼트", disabled: true },
+  { label: "상·하위 토너먼트", disabled: false },
+];
+const TOURNAMENT_SEEDING_OPTIONS = [
+  { value: "manual", label: "수동" },
+  { value: "seed",   label: "시드" },
+  { value: "random", label: "랜덤" },
+];
+const TOURNAMENT_ADVANCEMENT_OPTIONS = [
+  { value: "upper-only",  label: "상위만" },
+  { value: "upper-lower", label: "상·하위" },
 ];
 const RULES_OPTIONS = ["3전 2선승제", "5전 3선승제", "7전 4선승제", "3세트제"];
 const SORT_OPTIONS = ["부수", "이름", "랜덤"];
@@ -118,6 +127,8 @@ export default function LeagueDetail() {
   const [editFormat, setEditFormat] = useState("");
   const [editRules, setEditRules] = useState("");
   const [editSortOrder, setEditSortOrder] = useState("부수");
+  const [editTournamentSeeding, setEditTournamentSeeding] = useState("seed");
+  const [editTournamentAdvancement, setEditTournamentAdvancement] = useState("upper-lower");
   const [editRecruitCount, setEditRecruitCount] = useState(20);
   const [searchQuery, setSearchQuery] = useState("");
   const [inputDivision, setInputDivision] = useState("");
@@ -244,12 +255,6 @@ export default function LeagueDetail() {
 
   const handleAddParticipant = async () => {
     if (!id || !inputName.trim()) return;
-    const isFull = league?.recruit_count != null && rawParticipants.length >= league.recruit_count;
-    if (isFull) {
-      setAlertSeverity("warning");
-      setAlertMsg(`모집 인원(${league!.recruit_count}명)을 초과할 수 없습니다.`);
-      return;
-    }
     try {
       await addParticipants({
         leagueId: id,
@@ -257,9 +262,10 @@ export default function LeagueDetail() {
       }).unwrap();
       setInputDivision("");
       setInputName("");
-    } catch {
-      setAlertSeverity("error");
-      setAlertMsg("참가자 추가에 실패했습니다.");
+    } catch (e: unknown) {
+      const msg = (e as { data?: { message?: string } })?.data?.message;
+      setAlertSeverity("warning");
+      setAlertMsg(msg ?? "참가자 추가에 실패했습니다.");
     }
   };
 
@@ -320,6 +326,8 @@ export default function LeagueDetail() {
     setNotice(league.notice ?? "");
     setEditSortOrder(league.sort_order ?? "부수");
     setEditRecruitCount(league.recruit_count ?? 20);
+    setEditTournamentSeeding(league.tournament_seeding ?? "seed");
+    setEditTournamentAdvancement(league.tournament_advancement ?? "upper-lower");
     const editMap: Record<string, { division: string; name: string }> = {};
     participants.forEach((p) => { editMap[p.id] = { division: p.division ?? "", name: p.name }; });
     setEditingParticipants(editMap);
@@ -360,8 +368,13 @@ export default function LeagueDetail() {
           notice: notice || undefined,
           sort_order: editSortOrder,
           recruit_count: editRecruitCount,
+          ...(editFormat === "상·하위 토너먼트" && {
+            tournament_seeding: editTournamentSeeding,
+            tournament_advancement: editTournamentAdvancement,
+          }),
         },
       }).unwrap();
+      await refetchLeague();
       setIsEditing(false);
       setAlertSeverity("success");
       setAlertMsg("수정되었습니다.");
@@ -526,6 +539,37 @@ export default function LeagueDetail() {
             <Typography sx={valueSx}>{league.sort_order ?? "부수"}</Typography>
           )}
         </Box>
+        {/* 토너먼트 옵션: 상·하위 토너먼트일 때만 표시 */}
+        {(isEditing ? editFormat : league.format) === "상·하위 토너먼트" && (<>
+          <Divider sx={{ borderColor: "#F3F4F6" }} />
+          <Box sx={infoRowSx}>
+            <Typography sx={labelSx}>편 성</Typography>
+            {isEditing ? (
+              <Select value={editTournamentSeeding} onChange={(e) => setEditTournamentSeeding(e.target.value)}
+                variant="standard" sx={selectSx}>
+                {TOURNAMENT_SEEDING_OPTIONS.map((o) => <MenuItem key={o.value} value={o.value} sx={{ fontSize: 13 }}>{o.label}</MenuItem>)}
+              </Select>
+            ) : (
+              <Typography sx={valueSx}>
+                {TOURNAMENT_SEEDING_OPTIONS.find((o) => o.value === league.tournament_seeding)?.label ?? "미설정"}
+              </Typography>
+            )}
+          </Box>
+          <Divider sx={{ borderColor: "#F3F4F6" }} />
+          <Box sx={infoRowSx}>
+            <Typography sx={labelSx}>진 출</Typography>
+            {isEditing ? (
+              <Select value={editTournamentAdvancement} onChange={(e) => setEditTournamentAdvancement(e.target.value)}
+                variant="standard" sx={selectSx}>
+                {TOURNAMENT_ADVANCEMENT_OPTIONS.map((o) => <MenuItem key={o.value} value={o.value} sx={{ fontSize: 13 }}>{o.label}</MenuItem>)}
+              </Select>
+            ) : (
+              <Typography sx={valueSx}>
+                {TOURNAMENT_ADVANCEMENT_OPTIONS.find((o) => o.value === league.tournament_advancement)?.label ?? "미설정"}
+              </Typography>
+            )}
+          </Box>
+        </>)}
       </Box>
 
       {/* 참가자 */}
@@ -766,7 +810,13 @@ export default function LeagueDetail() {
           <Button
             fullWidth variant="contained" disableElevation
             sx={{ mt: 1, borderRadius: 1, height: 40, fontWeight: 700, bgcolor: "#87B8FF", "&:hover": { bgcolor: "#79AEFF" } }}
-            onClick={() => { navigate(`/league/${id}/bracket`) }}
+            onClick={() => {
+              if (league.format?.includes("토너먼트")) {
+                navigate(`/league/${id}/tournament`);
+              } else {
+                navigate(`/league/${id}/bracket`);
+              }
+            }}
           >
             {canManage && league.format && league.status === "draft" ? `${league.format} 대진표 생성` : ""}
             {canManage && league.format && league.status === "active" ? `${league.format} 대진표 보기` : ""}

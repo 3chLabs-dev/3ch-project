@@ -13,6 +13,7 @@ import { setStep, setStep4Rules } from "../../features/league/leagueCreationSlic
 import type { LeagueRuleValue } from "../../features/league/leagueCreationSlice";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 
+
 const LeagueRulesOptions = [
   { value: "best-of-3", label: "3전 2선승제" },
   { value: "best-of-5", label: "5전 3선승제" },
@@ -23,13 +24,15 @@ const LeagueRulesOptions = [
 const LeagueStep4Rules: React.FC = () => {
   const dispatch = useAppDispatch();
   const existingRule = useAppSelector((s) => s.leagueCreation.step4Rules?.rule ?? "");
+  const format = useAppSelector((s) => s.leagueCreation.step3Format?.format);
 
   const [selectedRule, setSelectedRule] = useState<LeagueRuleValue | "">(existingRule);
 
   const handleNext = () => {
     if (!selectedRule) return;
     dispatch(setStep4Rules({ rule: selectedRule }));
-    dispatch(setStep(5));
+    // 상·하위 토너먼트는 옵션 설정 단계(step 8)로, 나머지는 참가자(step 5)로
+    dispatch(setStep(format === "upper-lower-tournament" ? 8 : 5));
   };
 
   const handlePrev = () => {

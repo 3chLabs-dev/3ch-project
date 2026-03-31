@@ -390,7 +390,7 @@ export default function LeagueMatchOrder() {
       )}
 
       <Tooltip title="상단으로">
-        <IconButton onClick={scrollToTop} sx={{ position: "absolute", bottom: 67, right: 70, zIndex: 10, bgcolor: "#fff", color: "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: "#F3F4F6" } }}>
+        <IconButton onClick={scrollToTop} sx={{ position: "absolute", bottom: 117, right: 14, zIndex: 10, bgcolor: "#fff", color: "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: "#F3F4F6" } }}>
           <ArrowUpwardIcon sx={{ fontSize: 18 }} />
         </IconButton>
       </Tooltip>

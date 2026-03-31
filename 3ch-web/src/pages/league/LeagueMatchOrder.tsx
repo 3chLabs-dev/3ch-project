@@ -10,10 +10,11 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   Box, Button, Card, CardContent, CircularProgress,
-  IconButton, InputAdornment, Stack, TextField, Typography,
+  IconButton, InputAdornment, Stack, TextField, Typography, Tooltip,
 } from "@mui/material";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import DragHandleIcon from "@mui/icons-material/DragHandle";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
@@ -30,6 +31,7 @@ import {
 } from "../../features/league/leagueApi";
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
 import { useAppSelector } from "../../app/hooks";
+import { useOutletContext } from "react-router-dom";
 
 // ─── 상태 표시 ────────────────────────────────────────────────────────────────
 const STATUS_LABEL: Record<string, string> = {
@@ -265,6 +267,7 @@ function MatchCard({
 export default function LeagueMatchOrder() {
   const { id: leagueId = "" } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { scrollToTop } = useOutletContext<{ scrollToTop: () => void }>();
 
   const { data: leagueData } = useGetLeagueQuery(leagueId, { skip: !leagueId });
   const league = leagueData?.league;
@@ -332,7 +335,7 @@ export default function LeagueMatchOrder() {
       </Box>
     );
   }
-
+  
   return (
     <Stack spacing={2}>
       {/* 상단 헤더 */}
@@ -343,11 +346,6 @@ export default function LeagueMatchOrder() {
         <Typography variant="subtitle1" fontWeight={900} flex={1}>
           경기 순서
         </Typography>
-        {matches.length > 0 && (
-          <IconButton size="small" onClick={handleRefresh} disabled={matchLoading} sx={{ color: "#9CA3AF" }} title="새로고침">
-            <RefreshIcon sx={{ fontSize: 20 }} />
-          </IconButton>
-        )}
         <Button
           size="small"
           variant="outlined"
@@ -390,6 +388,18 @@ export default function LeagueMatchOrder() {
           </SortableContext>
         </DndContext>
       )}
+
+      <Tooltip title="상단으로">
+        <IconButton onClick={scrollToTop} sx={{ position: "absolute", bottom: 67, right: 70, zIndex: 10, bgcolor: "#fff", color: "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: "#F3F4F6" } }}>
+          <ArrowUpwardIcon sx={{ fontSize: 18 }} />
+        </IconButton>
+      </Tooltip>
+
+      <Tooltip title="새로고침">
+        <IconButton onClick={handleRefresh} sx={{ position: "absolute", bottom: 67, right: 14, zIndex: 10, bgcolor: "#fff", color: "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: "#F3F4F6" } }}>
+          <RefreshIcon sx={{ fontSize: 18 }} />
+        </IconButton>
+      </Tooltip>
     </Stack>
   );
 }

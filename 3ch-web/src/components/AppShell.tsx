@@ -158,7 +158,7 @@ export default function AppShell() {
                             variant="contained"
                             disableElevation
                             onClick={() => navigate("/login")}
-                            sx={{ borderRadius: 1.5, fontWeight: 700, fontSize: 16, px: 1.5, whiteSpace: "nowrap" ,width: 100}}
+                            sx={{ borderRadius: 1.5, fontWeight: 700, fontSize: 14, px: 1.5, whiteSpace: "nowrap" ,width: 85,}}
                         >
                             로그인
                         </Button>
@@ -248,7 +248,7 @@ export default function AppShell() {
                                     bgcolor: "#D9D9D9",
                                     color: "#1464d2",
                                     fontSize: 20,
-                                    fontWeight: 900,
+                                    fontWeight: 500,
                                     lineHeight: 1,
                                     cursor: "pointer",
                                     whiteSpace: "nowrap",

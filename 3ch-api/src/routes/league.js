@@ -7,6 +7,247 @@ const { buildLeagueCode } = require('../utils/clubCodeUtils');
 
 const router = express.Router();
 
+// 토너먼트 옵션 컬럼 자동 추가
+pool.query(`
+  ALTER TABLE leagues
+    ADD COLUMN IF NOT EXISTS tournament_seeding TEXT,
+    ADD COLUMN IF NOT EXISTS tournament_advancement TEXT
+`).catch((e) => console.error('leagues 컬럼 추가 실패:', e.message));
+
+// 토너먼트 경기 컬럼 자동 추가
+pool.query(`
+  ALTER TABLE league_matches
+    ADD COLUMN IF NOT EXISTS bracket TEXT,
+    ADD COLUMN IF NOT EXISTS round_number INT,
+    ADD COLUMN IF NOT EXISTS match_label TEXT,
+    ADD COLUMN IF NOT EXISTS next_match_id TEXT,
+    ADD COLUMN IF NOT EXISTS next_slot TEXT,
+    ADD COLUMN IF NOT EXISTS loser_next_match_id TEXT,
+    ADD COLUMN IF NOT EXISTS loser_next_slot TEXT
+`).catch((e) => console.error('league_matches 컬럼 추가 실패:', e.message));
+
+// ─── 토너먼트 브래킷 생성 유틸 ───────────────────────────────────────────────
+
+/**
+ * 표준 토너먼트 시드 배치
+ * seededBracket(16) = [1,16, 8,9, 5,12, 4,13, 3,14, 6,11, 7,10, 2,15]
+ * - 1 vs 2는 결승, 1-4는 준결승, 1-8은 8강에서 대결
+ */
+function seededBracket(n) {
+  function buildPrimary(size) {
+    if (size === 2) return [1];
+    const prev = buildPrimary(size / 2);
+    const half = size / 2;
+    const result = [];
+    for (let i = 0; i < prev.length; i++) {
+      const s = prev[i];
+      const comp = half + 1 - s;
+      if (i % 2 === 0) { result.push(s, comp); }
+      else             { result.push(comp, s); }
+    }
+    return result;
+  }
+  const primary = buildPrimary(n);
+  const result = [];
+  for (const s of primary) result.push(s, n + 1 - s);
+  return result;
+}
+
+function roundName(size) {
+  if (size === 2) return '결승';
+  return `${size}강`;
+}
+
+function getSingleElimLabels(bracketSize) {
+  const labels = [];
+  for (let s = bracketSize; s >= 2; s /= 2) labels.push(roundName(s));
+  return labels;
+}
+
+/**
+ * 단일 토너먼트(상위만) 매치 생성
+ * @returns {Array} matches (id 미포함 – 삽입 시 UUID 생성)
+ */
+function buildSingleElimMatches(bracketSize, participants) {
+  const numRounds = Math.log2(bracketSize);
+  const labels = getSingleElimLabels(bracketSize);
+
+  // 각 라운드별 UUID 미리 생성
+  const roundIds = [];
+  for (let r = 0; r < numRounds; r++) {
+    const cnt = bracketSize / Math.pow(2, r + 1);
+    roundIds.push(Array.from({ length: cnt }, () => randomUUID()));
+  }
+
+  const slots = seededBracket(bracketSize).map((seed) => participants[seed - 1] ?? null);
+  const matches = [];
+
+  for (let r = 0; r < numRounds; r++) {
+    const ids = roundIds[r];
+    const nextIds = r + 1 < numRounds ? roundIds[r + 1] : null;
+
+    for (let m = 0; m < ids.length; m++) {
+      matches.push({
+        id: ids[m],
+        bracket: 'upper',
+        round_number: r + 1,
+        match_label: labels[r],
+        match_order: matches.length + 1,
+        participant_a_id: r === 0 ? (slots[m * 2]?.id ?? null) : null,
+        participant_b_id: r === 0 ? (slots[m * 2 + 1]?.id ?? null) : null,
+        next_match_id: nextIds ? nextIds[Math.floor(m / 2)] : null,
+        next_slot: nextIds ? (m % 2 === 0 ? 'a' : 'b') : null,
+        loser_next_match_id: null,
+        loser_next_slot: null,
+      });
+    }
+  }
+  return matches;
+}
+
+/**
+ * 조별 단일 토너먼트 매치 생성
+ * - 같은 부수(조) 선수는 1라운드에서 만나지 않음
+ * - 각 조 1위는 다음 조 2위와 대전 (ChatGPT createGroupBracket 참고)
+ * @param {number} bracketSize
+ * @param {Record<string, Array<{id:string}|null>>} groupedParticipants  division → [1위, 2위, ...]
+ */
+function buildGroupBracket(bracketSize, groupedParticipants) {
+  const numRounds = Math.log2(bracketSize);
+  const labels = getSingleElimLabels(bracketSize);
+
+  const groupKeys = Object.keys(groupedParticipants).sort();
+  const len = groupKeys.length;
+
+  // R1 슬롯 구성: 조[i] 1위 vs 조[(i+1)%len] 2위
+  const r1Slots = [];
+  for (let i = 0; i < bracketSize / 2; i++) {
+    const gIdx = i % len;
+    const nextGIdx = (gIdx + 1) % len;
+    r1Slots.push(
+      groupedParticipants[groupKeys[gIdx]]?.[0]?.id ?? null,
+      groupedParticipants[groupKeys[nextGIdx]]?.[1]?.id ?? null,
+    );
+  }
+  while (r1Slots.length < bracketSize) r1Slots.push(null);
+
+  const roundIds = [];
+  for (let r = 0; r < numRounds; r++) {
+    const cnt = bracketSize / Math.pow(2, r + 1);
+    roundIds.push(Array.from({ length: cnt }, () => randomUUID()));
+  }
+
+  const matches = [];
+  for (let r = 0; r < numRounds; r++) {
+    const ids = roundIds[r];
+    const nextIds = r + 1 < numRounds ? roundIds[r + 1] : null;
+    for (let m = 0; m < ids.length; m++) {
+      matches.push({
+        id: ids[m],
+        bracket: 'upper',
+        round_number: r + 1,
+        match_label: labels[r],
+        match_order: matches.length + 1,
+        participant_a_id: r === 0 ? r1Slots[m * 2] : null,
+        participant_b_id: r === 0 ? r1Slots[m * 2 + 1] : null,
+        next_match_id: nextIds ? nextIds[Math.floor(m / 2)] : null,
+        next_slot: nextIds ? (m % 2 === 0 ? 'a' : 'b') : null,
+        loser_next_match_id: null,
+        loser_next_slot: null,
+      });
+    }
+  }
+  return matches;
+}
+
+/**
+ * 상·하위 토너먼트 매치 생성
+ */
+function buildUpperLowerMatches(bracketSize, participants) {
+  const r1Count = bracketSize / 2;
+  const innerRounds = Math.log2(r1Count); // rounds in upper/lower bracket
+
+  // IDs 미리 생성
+  const r1Ids = Array.from({ length: r1Count }, () => randomUUID());
+  const upperRoundIds = Array.from({ length: innerRounds }, (_, r) =>
+    Array.from({ length: r1Count / Math.pow(2, r + 1) }, () => randomUUID())
+  );
+  const lowerRoundIds = Array.from({ length: innerRounds }, (_, r) =>
+    Array.from({ length: r1Count / Math.pow(2, r + 1) }, () => randomUUID())
+  );
+
+  const slots = seededBracket(bracketSize).map((seed) => participants[seed - 1] ?? null);
+  const upperLabels = getSingleElimLabels(r1Count).map((l, i, arr) =>
+    i === arr.length - 1 ? '상위 결승' : `상위 ${l}`
+  );
+  const lowerLabels = getSingleElimLabels(r1Count).map((l, i, arr) =>
+    i === arr.length - 1 ? '하위 결승' : `하위 ${l}`
+  );
+
+  const matches = [];
+
+  // R1
+  for (let m = 0; m < r1Count; m++) {
+    matches.push({
+      id: r1Ids[m],
+      bracket: 'upper',
+      round_number: 1,
+      match_label: roundName(bracketSize),
+      match_order: matches.length + 1,
+      participant_a_id: slots[m * 2]?.id ?? null,
+      participant_b_id: slots[m * 2 + 1]?.id ?? null,
+      next_match_id: upperRoundIds[0][Math.floor(m / 2)],
+      next_slot: m % 2 === 0 ? 'a' : 'b',
+      loser_next_match_id: lowerRoundIds[0][Math.floor(m / 2)],
+      loser_next_slot: m % 2 === 0 ? 'a' : 'b',
+    });
+  }
+
+  // Upper bracket rounds
+  for (let r = 0; r < innerRounds; r++) {
+    const ids = upperRoundIds[r];
+    const nextIds = r + 1 < innerRounds ? upperRoundIds[r + 1] : null;
+    for (let m = 0; m < ids.length; m++) {
+      matches.push({
+        id: ids[m],
+        bracket: 'upper',
+        round_number: r + 2,
+        match_label: upperLabels[r],
+        match_order: matches.length + 1,
+        participant_a_id: null,
+        participant_b_id: null,
+        next_match_id: nextIds ? nextIds[Math.floor(m / 2)] : null,
+        next_slot: nextIds ? (m % 2 === 0 ? 'a' : 'b') : null,
+        loser_next_match_id: null,
+        loser_next_slot: null,
+      });
+    }
+  }
+
+  // Lower bracket rounds
+  for (let r = 0; r < innerRounds; r++) {
+    const ids = lowerRoundIds[r];
+    const nextIds = r + 1 < innerRounds ? lowerRoundIds[r + 1] : null;
+    for (let m = 0; m < ids.length; m++) {
+      matches.push({
+        id: ids[m],
+        bracket: 'lower',
+        round_number: r + 1,
+        match_label: lowerLabels[r],
+        match_order: matches.length + 1,
+        participant_a_id: null,
+        participant_b_id: null,
+        next_match_id: nextIds ? nextIds[Math.floor(m / 2)] : null,
+        next_slot: nextIds ? (m % 2 === 0 ? 'a' : 'b') : null,
+        loser_next_match_id: null,
+        loser_next_slot: null,
+      });
+    }
+  }
+
+  return matches;
+}
+
 // league_code(AAA260316 01 형식)로 요청 시 실제 UUID로 자동 변환
 router.param('id', async (req, _res, next, id) => {
   if (/^[A-Z]{3}\d{6}\d{2}$/.test(id)) {
@@ -162,6 +403,8 @@ const createLeagueSchema = z.object({
   participant_count: z.number().int().min(0).default(0),
   group_id: z.string().uuid('클럽 ID 형식이 올바르지 않습니다.'),
   participants: z.array(participantSchema).default([]),
+  tournament_seeding: z.string().optional(),      // 'manual' | 'seed' | 'random'
+  tournament_advancement: z.string().optional(),  // 'upper-only' | 'upper-lower'
 });
 
 const updateLeagueSchema = z.object({
@@ -177,6 +420,8 @@ const updateLeagueSchema = z.object({
   recruit_count: z.number().int().min(1).optional(),
   status: z.enum(['draft', 'active', 'completed']).optional(),
   join_permission: z.enum(['public', 'club_only']).optional(),
+  tournament_seeding: z.string().optional(),
+  tournament_advancement: z.string().optional(),
 });
 
 /**
@@ -379,6 +624,8 @@ router.post('/league', requireAuth, async (req, res) => {
       participant_count,
       group_id,
       participants,
+      tournament_seeding,
+      tournament_advancement,
     } = createLeagueSchema.parse(req.body);
 
     const userId = req.user.sub;
@@ -397,10 +644,10 @@ router.post('/league', requireAuth, async (req, res) => {
     await client.query('BEGIN');
 
     const result = await client.query(
-      `INSERT INTO leagues (id, name, description, type, format, sport, start_date, rules, sort_order, recruit_count, participant_count, group_id, created_by_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-       RETURNING id, name, description, type, format, sport, start_date, status, rules, notice, sort_order, recruit_count, participant_count, group_id, created_at, updated_at;`,
-      [leagueId, name, description, type, format, sport, start_date, rules, sort_order ?? null, recruit_count, participant_count, group_id, userId],
+      `INSERT INTO leagues (id, name, description, type, format, sport, start_date, rules, sort_order, recruit_count, participant_count, group_id, created_by_id, tournament_seeding, tournament_advancement)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+       RETURNING id, name, description, type, format, sport, start_date, status, rules, notice, sort_order, recruit_count, participant_count, group_id, tournament_seeding, tournament_advancement, created_at, updated_at;`,
+      [leagueId, name, description, type, format, sport, start_date, rules, sort_order ?? null, recruit_count, participant_count, group_id, userId, tournament_seeding ?? null, tournament_advancement ?? null],
     );
 
     // 리그 코드 생성: {클럽코드}{YYMMDD}{순번2자리}
@@ -758,7 +1005,8 @@ router.get('/league/:id', optionalAuth, async (req, res) => {
     // 리그 정보 조회
     const leagueResult = await pool.query(
       `SELECT id, name, description, type, format, sport, start_date, rules, status,
-              recruit_count, participant_count, join_permission, group_id, created_by_id, created_at, updated_at
+              sort_order, notice, league_code, recruit_count, participant_count, join_permission,
+              group_id, created_by_id, tournament_seeding, tournament_advancement, created_at, updated_at
        FROM leagues
        WHERE id = $1`,
       [id],
@@ -1317,6 +1565,8 @@ router.get('/league/:id/matches', optionalAuth, async (req, res) => {
       `SELECT
          m.id, m.match_order, m.score_a, m.score_b, m.court, m.status,
          m.participant_a_id, m.participant_b_id,
+         m.bracket, m.round_number, m.match_label,
+         m.next_match_id, m.next_slot, m.loser_next_match_id, m.loser_next_slot,
          pa.name AS participant_a_name, pa.division AS participant_a_division,
          pb.name AS participant_b_name, pb.division AS participant_b_division
        FROM league_matches m
@@ -1329,6 +1579,28 @@ router.get('/league/:id/matches', optionalAuth, async (req, res) => {
     return res.json({ matches: result.rows });
   } catch (err) {
     console.error('Error fetching matches:', err);
+    return res.status(500).json({ message: '서버 오류' });
+  }
+});
+
+// DELETE /league/:id/matches - 전체 경기 삭제 및 리그 상태 draft로 초기화 (owner/admin)
+router.delete('/league/:id/matches', requireAuth, async (req, res) => {
+  const userId = Number(req.user.sub);
+  const leagueId = req.params.id;
+  try {
+    const access = await pool.query(
+      `SELECT l.id FROM leagues l
+       INNER JOIN group_members gm ON gm.group_id = l.group_id
+       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+      [leagueId, userId],
+    );
+    if (access.rowCount === 0) return res.status(403).json({ message: '권한이 없습니다.' });
+
+    await pool.query(`DELETE FROM league_matches WHERE league_id = $1`, [leagueId]);
+    await pool.query(`UPDATE leagues SET status = 'draft', updated_at = NOW() WHERE id = $1`, [leagueId]);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Error deleting all matches:', err);
     return res.status(500).json({ message: '서버 오류' });
   }
 });
@@ -1655,11 +1927,11 @@ router.patch('/league/:id/matches/reorder', requireAuth, async (req, res) => {
  *       500:
  *         description: 서버 오류
  */
-// PATCH /league/:id/matches/:matchId - 점수/코트/상태 업데이트 (public 리그는 누구나, club_only는 클럽 멤버)
+// PATCH /league/:id/matches/:matchId - 점수/코트/상태/참가자 업데이트 (public 리그는 누구나, club_only는 클럽 멤버; 참가자 변경은 owner/admin만)
 router.patch('/league/:id/matches/:matchId', optionalAuth, async (req, res) => {
   const { id, matchId } = req.params;
   const leagueId = id;
-  const { score_a, score_b, court, status } = req.body;
+  const { score_a, score_b, court, status, participant_a_id, participant_b_id } = req.body;
   try {
     // join_permission 확인
     const leagueRow = await pool.query(`SELECT join_permission FROM leagues WHERE id = $1`, [leagueId]);
@@ -1676,12 +1948,25 @@ router.patch('/league/:id/matches/:matchId', optionalAuth, async (req, res) => {
       if (accessCheck.rowCount === 0) return res.status(403).json({ message: '클럽 회원만 수정할 수 있습니다.' });
     }
 
+    // 참가자 변경은 owner/admin만 가능
+    if (participant_a_id !== undefined || participant_b_id !== undefined) {
+      const userId = req.user ? Number(req.user.sub) : null;
+      if (!userId) return res.status(401).json({ message: '로그인이 필요합니다.' });
+      const ownerCheck = await pool.query(
+        `SELECT 1 FROM leagues l INNER JOIN group_members gm ON gm.group_id = l.group_id WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+        [leagueId, userId],
+      );
+      if (ownerCheck.rowCount === 0) return res.status(403).json({ message: '권한이 없습니다.' });
+    }
+
     const fields = [];
     const vals = [];
     if (score_a !== undefined) { fields.push(`score_a = $${vals.length + 1}`); vals.push(score_a); }
     if (score_b !== undefined) { fields.push(`score_b = $${vals.length + 1}`); vals.push(score_b); }
     if (court !== undefined) { fields.push(`court = $${vals.length + 1}`); vals.push(court); }
     if (status !== undefined) { fields.push(`status = $${vals.length + 1}`); vals.push(status); }
+    if (participant_a_id !== undefined) { fields.push(`participant_a_id = $${vals.length + 1}`); vals.push(participant_a_id); }
+    if (participant_b_id !== undefined) { fields.push(`participant_b_id = $${vals.length + 1}`); vals.push(participant_b_id); }
     if (fields.length === 0) return res.status(400).json({ message: '변경할 필드가 없습니다.' });
 
     vals.push(matchId, leagueId);
@@ -1761,6 +2046,187 @@ router.delete('/league/:id/matches/:matchId', requireAuth, async (req, res) => {
     return res.json({ ok: true });
   } catch (err) {
     console.error('Error deleting match:', err);
+    return res.status(500).json({ message: '서버 오류' });
+  }
+});
+
+/**
+ * @openapi
+ * /league/{id}/matches/init-tournament:
+ *   post:
+ *     summary: 토너먼트 대진표 자동 생성
+ *     description: 참가자 목록을 기반으로 토너먼트 대진표를 자동 생성합니다. owner/admin만 가능합니다.
+ *     tags: [리그]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: 리그 ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [bracket_size]
+ *             properties:
+ *               bracket_size:
+ *                 type: integer
+ *                 enum: [4, 8, 16, 32, 64, 128]
+ *               seeding:
+ *                 type: string
+ *                 enum: [manual, seed, random]
+ *               advancement:
+ *                 type: string
+ *                 enum: [upper-only, upper-lower]
+ *               force:
+ *                 type: boolean
+ *                 description: true이면 기존 경기를 삭제하고 재생성
+ *     responses:
+ *       200:
+ *         description: 대진표 생성 성공
+ *       400:
+ *         description: 잘못된 bracket_size 또는 이미 경기 존재
+ *       403:
+ *         description: 권한 없음
+ *       500:
+ *         description: 서버 오류
+ */
+// POST /league/:id/matches/init-tournament - 토너먼트 대진표 생성 (owner/admin)
+router.post('/league/:id/matches/init-tournament', requireAuth, async (req, res) => {
+  const userId = Number(req.user.sub);
+  const leagueId = req.params.id;
+  try {
+    const access = await pool.query(
+      `SELECT l.tournament_seeding, l.tournament_advancement
+       FROM leagues l
+       INNER JOIN group_members gm ON gm.group_id = l.group_id
+       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+      [leagueId, userId],
+    );
+    if (access.rowCount === 0) return res.status(403).json({ message: '권한이 없습니다.' });
+
+    const { bracket_size, seeding: seedingOverride, advancement: advancementOverride, force } = req.body;
+
+    const validSizes = [4, 8, 16, 32, 64, 128];
+    if (!validSizes.includes(bracket_size)) {
+      return res.status(400).json({ message: '유효하지 않은 참가 인원입니다. (4/8/16/32/64/128)' });
+    }
+
+    const seeding = seedingOverride ?? access.rows[0].tournament_seeding ?? 'seed';
+    const advancement = advancementOverride ?? access.rows[0].tournament_advancement ?? 'upper-only';
+
+    // 기존 경기 확인
+    const existing = await pool.query(`SELECT id FROM league_matches WHERE league_id = $1 LIMIT 1`, [leagueId]);
+    if (existing.rowCount > 0) {
+      if (!force) return res.status(400).json({ message: '이미 경기가 생성되어 있습니다.' });
+      await pool.query(`DELETE FROM league_matches WHERE league_id = $1`, [leagueId]);
+    }
+
+    // 참가자 로드 (편성 방식에 따라 정렬; 수동은 빈 슬롯으로 생성)
+    let participants;
+    let groupedParticipants = null;
+
+    if (seeding === 'manual') {
+      // 수동: 모든 슬롯을 비워서 생성 (관리자가 직접 등록)
+      participants = Array.from({ length: bracket_size }, () => null);
+    } else if (seeding === 'group') {
+      // 조별: division 기준으로 그룹핑 (같은 조 1라운드 대전 방지)
+      const pQuery = await pool.query(
+        `SELECT id, division FROM league_participants WHERE league_id = $1 ORDER BY division ASC, sort_order ASC NULLS LAST, created_at ASC`,
+        [leagueId],
+      );
+      groupedParticipants = {};
+      for (const p of pQuery.rows) {
+        const div = p.division || '';
+        if (!groupedParticipants[div]) groupedParticipants[div] = [];
+        groupedParticipants[div].push({ id: p.id });
+      }
+      participants = null; // group 모드는 buildGroupBracket에서 직접 처리
+    } else if (seeding === 'seed') {
+      const pQuery = await pool.query(
+        `SELECT id FROM league_participants WHERE league_id = $1 ORDER BY division ASC, sort_order ASC NULLS LAST, created_at ASC`,
+        [leagueId],
+      );
+      const pRows = pQuery.rows;
+      participants = Array.from({ length: bracket_size }, (_, i) =>
+        pRows[i] ? { id: pRows[i].id } : null,
+      );
+    } else {
+      // random
+      const pQuery = await pool.query(
+        `SELECT id FROM league_participants WHERE league_id = $1 ORDER BY RANDOM()`,
+        [leagueId],
+      );
+      const pRows = pQuery.rows;
+      participants = Array.from({ length: bracket_size }, (_, i) =>
+        pRows[i] ? { id: pRows[i].id } : null,
+      );
+    }
+
+    // 대진표 생성
+    let matches;
+    if (seeding === 'group') {
+      matches = buildGroupBracket(bracket_size, groupedParticipants);
+    } else if (advancement === 'upper-lower') {
+      matches = buildUpperLowerMatches(bracket_size, participants);
+    } else {
+      matches = buildSingleElimMatches(bracket_size, participants);
+    }
+
+    // 일괄 삽입
+    if (matches.length > 0) {
+      const vals = matches.map((m) => [
+        m.id, leagueId, m.match_order,
+        m.participant_a_id, m.participant_b_id,
+        m.bracket, m.round_number, m.match_label,
+        m.next_match_id, m.next_slot,
+        m.loser_next_match_id, m.loser_next_slot,
+      ]);
+      const placeholders = vals.map((_, i) => {
+        const b = i * 12;
+        return `($${b+1},$${b+2},$${b+3},$${b+4},$${b+5},$${b+6},$${b+7},$${b+8},$${b+9},$${b+10},$${b+11},$${b+12})`;
+      }).join(',');
+      await pool.query(
+        `INSERT INTO league_matches
+           (id, league_id, match_order, participant_a_id, participant_b_id,
+            bracket, round_number, match_label,
+            next_match_id, next_slot, loser_next_match_id, loser_next_slot)
+         VALUES ${placeholders}`,
+        vals.flat(),
+      );
+    }
+
+    // 리그 상태 active로 변경 + 편성 방식 저장
+    await pool.query(
+      `UPDATE leagues SET status = 'active', tournament_seeding = $2, tournament_advancement = $3, updated_at = NOW() WHERE id = $1`,
+      [leagueId, seeding, advancement],
+    );
+
+    // 생성된 경기 반환
+    const result = await pool.query(
+      `SELECT
+         m.id, m.match_order, m.score_a, m.score_b, m.court, m.status,
+         m.participant_a_id, m.participant_b_id,
+         m.bracket, m.round_number, m.match_label,
+         m.next_match_id, m.next_slot, m.loser_next_match_id, m.loser_next_slot,
+         pa.name AS participant_a_name, pa.division AS participant_a_division,
+         pb.name AS participant_b_name, pb.division AS participant_b_division
+       FROM league_matches m
+       LEFT JOIN league_participants pa ON pa.id = m.participant_a_id
+       LEFT JOIN league_participants pb ON pb.id = m.participant_b_id
+       WHERE m.league_id = $1
+       ORDER BY m.match_order ASC`,
+      [leagueId],
+    );
+    return res.json({ matches: result.rows });
+  } catch (err) {
+    console.error('Error initializing tournament matches:', err);
     return res.status(500).json({ message: '서버 오류' });
   }
 });

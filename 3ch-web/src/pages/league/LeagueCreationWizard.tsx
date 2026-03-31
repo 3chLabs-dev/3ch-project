@@ -7,6 +7,7 @@ import LeagueStep2TypeSelection from './LeagueStep2TypeSelection';
 import LeagueStep3FormatSelection from './LeagueStep3FormatSelection';
 import LeagueStep4Rules from './LeagueStep4Rules';
 import LeagueStep5Participants from './LeagueStep5Participants';
+import LeagueStep4TournamentOptions from './LeagueStep4TournamentOptions';
 import LeagueStep6Creating from './LeagueStep6Creating';
 import LeagueStep7Done from './LeagueStep7Done';
 
@@ -24,6 +25,8 @@ const LeagueCreationWizard: React.FC = () => {
       return <LeagueStep3FormatSelection />;
     case 4:
       return <LeagueStep4Rules />;
+    case 8:
+      return <LeagueStep4TournamentOptions />;
     case 5:
       return <LeagueStep5Participants />;
     case 6:

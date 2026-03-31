@@ -47,6 +47,15 @@ export interface LeagueRulesInfo {
   rule: LeagueRuleValue;
 }
 
+/** Step 4-5: 토너먼트 옵션 (상·하위 토너먼트 전용) */
+export type TournamentSeedingValue = "manual" | "seed" | "random" | "group";
+export type TournamentAdvancementValue = "upper-only" | "upper-lower";
+
+export interface LeagueTournamentOptionsInfo {
+  seeding: TournamentSeedingValue;
+  advancement: TournamentAdvancementValue;
+}
+
 /** Step 5: 참가자 */
 export interface Participant {
   division: string;
@@ -87,6 +96,7 @@ export interface LeagueCreationState {
   step2Type: LeagueTypeInfo | null;
   step3Format: LeagueFormatInfo | null;
   step4Rules: LeagueRulesInfo | null;
+  step4TournamentOptions: LeagueTournamentOptionsInfo | null;
   step5Participants: LeagueParticipantsInfo | null;
   step6Creating: LeagueStep6CreatingInfo | null;
 
@@ -104,6 +114,7 @@ const initialState: LeagueCreationState = {
   step2Type: null,
   step3Format: null,
   step4Rules: null,
+  step4TournamentOptions: null,
   step5Participants: null,
   step6Creating: null,
 
@@ -186,6 +197,8 @@ export const createLeague = createAsyncThunk.withTypes<{ state: RootState }>()(
       group_id: s.groupId,
       sort_order: s.step5Participants?.sortOrder ?? undefined,
       participants,
+      tournament_seeding: s.step4TournamentOptions?.seeding ?? undefined,
+      tournament_advancement: s.step4TournamentOptions?.advancement ?? undefined,
     };
 
     const token = thunkApi.getState().auth.token;
@@ -240,6 +253,10 @@ const leagueCreationSlice = createSlice({
       state.step4Rules = action.payload;
     },
 
+    setStep4TournamentOptions: (state, action: PayloadAction<LeagueTournamentOptionsInfo>) => {
+      state.step4TournamentOptions = action.payload;
+    },
+
     setStep5Participants: (
       state,
       action: PayloadAction<LeagueParticipantsInfo>,
@@ -290,6 +307,7 @@ export const {
   setStep2Type,
   setStep3Format,
   setStep4Rules,
+  setStep4TournamentOptions,
   setStep5Participants,
   setStep6Creating,
   resetCreateStatus,

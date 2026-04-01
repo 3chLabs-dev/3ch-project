@@ -307,17 +307,6 @@ export default function DrawList() {
           participant_division: w.participant_division ?? "",})),
         })),
       );
-      // done 용 화면 데이터 셋팅
-      setPrizeResults(
-        draftData.prizes.map((p) => ({
-          id: p.id,
-          prize_name: p.prize_name,
-          quantity: p.quantity,
-          winners: (p.winners ?? []).map(w => ({
-          participant_name: w.participant_name,
-          participant_division: w.participant_division ?? "",})),
-        })),
-      );
     }
   }, [draftData, draftId, phase]);
 
@@ -669,7 +658,7 @@ export default function DrawList() {
                       <Chip label={`${prize.quantity}명`} size="small" sx={{ height: 22, fontWeight: 700 }} />
                     </Stack>
                     <Stack direction="row" alignItems="center" spacing={0.5}>
-                      {canManage && (
+                      {canManage && draftId && (
                         <Button
                           variant={prize.winners.length > 0 ? "outlined" : "contained"}
                           size="small"

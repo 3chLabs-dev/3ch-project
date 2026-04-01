@@ -65,6 +65,13 @@ export default function AppShell() {
         return () => el.removeEventListener("scroll", handleScroll);
     }, [isHome]);
 
+    const scrollToTop = () => {
+        contentRef.current?.scrollTo({
+        top: 0,
+        behavior: "smooth",
+        });
+    };
+
     // 비홈: 항상 보임 / 홈: 스크롤 후에만 보임
     const appBarVisible = !isHome || showHomeBar;
 
@@ -260,7 +267,7 @@ export default function AppShell() {
                     )}
 
                     <Box sx={{ p: 2, pb: `calc(8px + env(safe-area-inset-bottom))` }}>
-                        <Outlet />
+                        <Outlet context={{ scrollToTop }} />
                         <AppFooter />
                     </Box>
                 </Box>

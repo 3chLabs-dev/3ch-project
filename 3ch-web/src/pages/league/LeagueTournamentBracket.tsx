@@ -33,14 +33,18 @@ const PT = 40;
 const PB = 32;
 
 // ─── 상·하위 (center-out) 레이아웃 상수 ─────────────────────────────────────
-const VBW = 78;
-const VBH = 110;
 const VB_LABEL_H = 20;
-const VB_SLOT_H = (VBH - VB_LABEL_H) / 2; // 45
 const CO_ROW_H = 140;
-const CO_H_GAP = 6;
+const CO_H_GAP = 20;
+const CO_GROUP_GAP = 30;  // 2개 슬롯 그룹 간 추가 간격
 const CO_CENTER_GAP = 52;
 const CO_PX = 20;
+
+// ─── 개별 슬롯 박스 (상·하위 전 라운드) 상수 ────────────────────────────────
+const SS_W = 72;          // 단일 슬롯 너비
+const SS_H = 65;          // 단일 슬롯 높이
+const SS_GAP = 6;         // A/B 슬롯 사이 간격
+const CO_MATCH_W = SS_W * 2 + SS_GAP;  // 매치 1개의 전체 너비 (= 150)
 
 // ─── 표준 토너먼트 시드 배치 (백엔드 동일 로직) ─────────────────────────────
 // seededBracket(16) = [1,16, 8,9, 5,12, 4,13, 3,14, 6,11, 7,10, 2,15]
@@ -134,9 +138,11 @@ function calcCenterOutPositions(matches: LeagueMatch[]): MatchPos[] {
   const n = r1.length;
   const half = Math.ceil(n / 2);
   r1.forEach((m, i) => {
+    const j = i < half ? i : i - half;
+    const groupOffset = Math.floor(j / 2) * CO_GROUP_GAP;
     const x = i < half
-      ? CO_PX + i * (VBW + CO_H_GAP)
-      : CO_PX + half * (VBW + CO_H_GAP) + CO_CENTER_GAP + (i - half) * (VBW + CO_H_GAP);
+      ? CO_PX + i * (CO_MATCH_W + CO_H_GAP) + groupOffset
+      : CO_PX + half * (CO_MATCH_W + CO_H_GAP) + Math.floor(half / 2) * CO_GROUP_GAP + CO_CENTER_GAP + j * (CO_MATCH_W + CO_H_GAP) + groupOffset;
     xMap.set(m.id, x);
   });
 
@@ -208,10 +214,11 @@ function calcCenterOutPositions(matches: LeagueMatch[]): MatchPos[] {
   return result;
 }
 
-// ─── 단일 토너먼트 매치 박스 (가로형) ───────────────────────────────────────
+// ─── 매치 박스 (단일 + 좌우 대칭 상·하위 공용) ──────────────────────────────
 function MatchBox({ pos, actions }: { pos: MatchPos; actions?: SlotActions }) {
   const { x, y, match: m } = pos;
-  const isR1 = m.round_number === 1 && m.bracket !== "lower";
+  const isLower = m.bracket === "lower";
+  const isR1 = m.round_number === 1 && !isLower;
   const done = m.status === "done";
   const winA = done && m.score_a != null && m.score_b != null && m.score_a > m.score_b;
   const winB = done && m.score_a != null && m.score_b != null && m.score_b > m.score_a;
@@ -249,8 +256,8 @@ function MatchBox({ pos, actions }: { pos: MatchPos; actions?: SlotActions }) {
     <Box sx={{
       position: "absolute", left: x, top: y,
       width: MW, height: MH,
-      bgcolor: "background.paper",
-      border: "1.5px solid #E2E8F0",
+      bgcolor: isLower ? "#FAF5FF" : "background.paper",
+      border: `1.5px solid ${isLower ? "#DDD6FE" : "#E2E8F0"}`,
       borderRadius: "6px",
       overflow: "hidden",
       boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
@@ -259,7 +266,7 @@ function MatchBox({ pos, actions }: { pos: MatchPos; actions?: SlotActions }) {
         onClick={handleSlotA}
         sx={{
           height: MH / 2, display: "flex", alignItems: "center", px: 1, gap: 0.5,
-          borderBottom: "1px solid #F1F5F9",
+          borderBottom: `1px solid ${isLower ? "#EDE9FE" : "#F1F5F9"}`,
           bgcolor: swapSelA ? "#DBEAFE" : winA ? "#F0FDF4" : "transparent",
           cursor: slotACursor,
           outline: swapSelA ? "2px solid #3B82F6" : "none",
@@ -312,125 +319,81 @@ function MatchBox({ pos, actions }: { pos: MatchPos; actions?: SlotActions }) {
   );
 }
 
-// ─── 상·하위 토너먼트 매치 박스 (세로형) ─────────────────────────────────────
-function VerticalMatchBox({ pos, actions }: { pos: MatchPos; actions?: SlotActions }) {
-  const { x, y, match: m } = pos;
+// ─── 개별 슬롯 박스 (상·하위 전 라운드) ─────────────────────────────────────
+function SingleSlotBox({ pos, slot, actions }: { pos: MatchPos; slot: "a" | "b"; actions?: SlotActions }) {
+  const { x: baseX, y, match: m } = pos;
+  const x = slot === "a" ? baseX : baseX + SS_W + SS_GAP;
   const isR1 = m.round_number === 1 && m.bracket !== "lower";
   const done = m.status === "done";
-  const winA = done && m.score_a != null && m.score_b != null && m.score_a > m.score_b;
-  const winB = done && m.score_a != null && m.score_b != null && m.score_b > m.score_a;
-  const nameA = m.participant_a_name;
-  const nameB = m.participant_b_name;
-  const isByeA = !nameA && isR1;
-  const isByeB = !nameB && isR1;
-  const isLower = m.bracket === "lower";
-
-  const labelColor = isLower ? "#7C3AED" : "#2563EB";
-  const labelBg = isLower ? "#F5F3FF" : "#EFF6FF";
-
-  const swapSelA = actions?.swapFirstKey === `${m.id}:a`;
-  const swapSelB = actions?.swapFirstKey === `${m.id}:b`;
-
-  const handleSlotA = () => {
-    if (!actions || !isR1) return;
-    if (actions.editMode) {
-      actions.onSwapSelect(m.id, "a", m.participant_a_id, nameA ?? null);
-    } else if (actions.canRegister && !nameA) {
-      actions.onRegister(m.id, "a");
-    }
-  };
-
-  const handleSlotB = () => {
-    if (!actions || !isR1) return;
-    if (actions.editMode) {
-      actions.onSwapSelect(m.id, "b", m.participant_b_id, nameB ?? null);
-    } else if (actions.canRegister && !nameB) {
-      actions.onRegister(m.id, "b");
-    }
-  };
-
-  const slotACursor = isR1 && (actions?.canRegister && !nameA) || (actions?.canManage && actions.editMode) ? "pointer" : "default";
-  const slotBCursor = isR1 && (actions?.canRegister && !nameB) || (actions?.canManage && actions.editMode) ? "pointer" : "default";
-
+  const name = slot === "a" ? m.participant_a_name : m.participant_b_name;
+  const participantId = slot === "a" ? m.participant_a_id : m.participant_b_id;
+  const score = slot === "a" ? m.score_a : m.score_b;
+  const otherScore = slot === "a" ? m.score_b : m.score_a;
+  const win = done && score != null && otherScore != null && score > otherScore;
+  const isBye = !name && isR1;
+  const division = slot === "a" ? m.participant_a_division : m.participant_b_division;
   const seed = actions?.seedMap?.get(m.id);
+  const seedNum = slot === "a" ? seed?.a : seed?.b;
+  const swapSel = actions?.swapFirstKey === `${m.id}:${slot}`;
+
+  const handleClick = () => {
+    if (!actions || !isR1) return;
+    if (actions.editMode) {
+      actions.onSwapSelect(m.id, slot, participantId, name ?? null);
+    } else if (actions.canRegister && !name) {
+      actions.onRegister(m.id, slot);
+    }
+  };
+
+  const cursor = isR1 && ((actions?.canRegister && !name) || (actions?.canManage && actions.editMode)) ? "pointer" : "default";
 
   return (
     <Box sx={{
       position: "absolute", left: x, top: y,
-      width: VBW, height: VBH,
+      width: SS_W, height: SS_H,
       bgcolor: "background.paper",
-      border: `1.5px solid ${isLower ? "#DDD6FE" : "#E2E8F0"}`,
+      border: `1.5px solid #E2E8F0`,
       borderRadius: "5px",
       overflow: "hidden",
       boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
       display: "flex", flexDirection: "column",
     }}>
-      {/* 라운드 레이블 */}
+      {/* 라운드/시드 레이블 */}
       <Box sx={{
         height: VB_LABEL_H, display: "flex", alignItems: "center", justifyContent: "center",
-        bgcolor: labelBg, borderBottom: `1px solid ${isLower ? "#DDD6FE" : "#E2E8F0"}`,
+        bgcolor: m.bracket === "lower" ? "#F5F3FF" : "#EFF6FF",
+        borderBottom: `1px solid ${m.bracket === "lower" ? "#DDD6FE" : "#E2E8F0"}`,
         flexShrink: 0,
       }}>
-        <Typography sx={{ fontSize: 9, fontWeight: 700, color: labelColor, lineHeight: 1 }}>
-          {m.match_label ?? (isR1 ? `R1-${m.match_order}` : `R${m.round_number}`)}
+        <Typography sx={{ fontSize: 8, fontWeight: 700, color: m.bracket === "lower" ? "#7C3AED" : "#2563EB", lineHeight: 1 }}>
+          {isR1 && seedNum ? `1-${seedNum}` : (m.match_label ?? `R${m.round_number}`)}
         </Typography>
       </Box>
-      {/* 슬롯 A */}
+      {/* 슬롯 */}
       <Box
-        onClick={handleSlotA}
+        onClick={handleClick}
         sx={{
-          height: VB_SLOT_H, display: "flex", alignItems: "center", px: 0.5, gap: 0.25,
-          borderBottom: "1px solid #F1F5F9",
-          bgcolor: swapSelA ? "#DBEAFE" : winA ? "#F0FDF4" : "transparent",
-          cursor: slotACursor,
-          flexShrink: 0,
-          outline: swapSelA ? "2px solid #3B82F6" : "none",
+          flex: 1, display: "flex", alignItems: "center", px: 0.75, gap: 0.5,
+          bgcolor: swapSel ? "#DBEAFE" : win ? "#F0FDF4" : "transparent",
+          cursor,
+          outline: swapSel ? "2px solid #3B82F6" : "none",
         }}
       >
-        {m.participant_a_division && (
-          <Box sx={{ fontSize: 7, fontWeight: 700, color: "#fff", bgcolor: "#FAAA47", borderRadius: "2px", px: 0.3, lineHeight: "13px", flexShrink: 0 }}>{m.participant_a_division}</Box>
+        {division && (
+          <Box sx={{ fontSize: 7, fontWeight: 700, color: "#fff", bgcolor: "#FAAA47", borderRadius: "2px", px: 0.3, lineHeight: "13px", flexShrink: 0 }}>{division}</Box>
         )}
-        {isR1 && !nameA ? (
-          <Box sx={{ flex: 1, display: "flex", alignItems: "center", gap: 0.5 }}>
-            {seed?.a && <Typography sx={{ fontSize: 10, fontWeight: 800, color: "#94A3B8" }}>1-{seed.a}</Typography>}
+        {isR1 && !name ? (
+          <Box sx={{ flex: 1, display: "flex", alignItems: "center" }}>
             {actions?.canRegister && !actions.editMode && (
-              <Typography sx={{ fontSize: 9, fontWeight: 700, color: "#93C5FD" }}>등록</Typography>
+              <Typography sx={{ fontSize: 8, fontWeight: 700, color: "#93C5FD" }}>등록</Typography>
             )}
           </Box>
         ) : (
-          <Typography sx={{ fontSize: 9, fontWeight: isByeA ? 400 : 600, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: winA ? "#16A34A" : isByeA ? "#9CA3AF" : "text.primary", fontStyle: isByeA ? "italic" : "normal" }}>
-            {nameA ?? (isR1 ? "BYE" : "")}
+          <Typography sx={{ fontSize: 10, fontWeight: isBye ? 400 : 600, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: win ? "#16A34A" : isBye ? "#9CA3AF" : "text.primary", fontStyle: isBye ? "italic" : "normal" }}>
+            {name ?? (isR1 ? "BYE" : "")}
           </Typography>
         )}
-        {m.score_a != null && <Typography sx={{ fontSize: 10, fontWeight: 800, color: winA ? "#16A34A" : "#6B7280", flexShrink: 0 }}>{m.score_a}</Typography>}
-      </Box>
-      {/* 슬롯 B */}
-      <Box
-        onClick={handleSlotB}
-        sx={{
-          height: VB_SLOT_H, display: "flex", alignItems: "center", px: 0.5, gap: 0.25,
-          bgcolor: swapSelB ? "#DBEAFE" : winB ? "#F0FDF4" : "transparent",
-          cursor: slotBCursor,
-          flexShrink: 0,
-          outline: swapSelB ? "2px solid #3B82F6" : "none",
-        }}
-      >
-        {m.participant_b_division && (
-          <Box sx={{ fontSize: 7, fontWeight: 700, color: "#fff", bgcolor: "#FAAA47", borderRadius: "2px", px: 0.3, lineHeight: "13px", flexShrink: 0 }}>{m.participant_b_division}</Box>
-        )}
-        {isR1 && !nameB ? (
-          <Box sx={{ flex: 1, display: "flex", alignItems: "center", gap: 0.5 }}>
-            {seed?.b && <Typography sx={{ fontSize: 10, fontWeight: 800, color: "#94A3B8" }}>1-{seed.b}</Typography>}
-            {actions?.canRegister && !actions.editMode && (
-              <Typography sx={{ fontSize: 9, fontWeight: 700, color: "#93C5FD" }}>등록</Typography>
-            )}
-          </Box>
-        ) : (
-          <Typography sx={{ fontSize: 9, fontWeight: isByeB ? 400 : 600, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: winB ? "#16A34A" : isByeB ? "#9CA3AF" : "text.primary", fontStyle: isByeB ? "italic" : "normal" }}>
-            {nameB ?? (isR1 ? "BYE" : "")}
-          </Typography>
-        )}
-        {m.score_b != null && <Typography sx={{ fontSize: 10, fontWeight: 800, color: winB ? "#16A34A" : "#6B7280", flexShrink: 0 }}>{m.score_b}</Typography>}
+        {score != null && <Typography sx={{ fontSize: 10, fontWeight: 800, color: win ? "#16A34A" : "#6B7280", flexShrink: 0 }}>{score}</Typography>}
       </Box>
     </Box>
   );
@@ -455,47 +418,80 @@ function Connectors({ positions }: { positions: MatchPos[] }) {
   );
 }
 
-// ─── 상·하위 토너먼트 SVG 커넥터 (center-out 수직) ───────────────────────────
+// ─── 상·하위 토너먼트 SVG 커넥터 ────────────────────────────────────────────
 function CenterOutConnectors({ positions }: { positions: MatchPos[] }) {
   const posById = new Map(positions.map((p) => [p.id, p]));
   const paths: React.ReactElement[] = [];
+  const mcx = (pos: MatchPos) => pos.x + CO_MATCH_W / 2;
 
-  for (const { id, x, y, match: m } of positions) {
-    const cx = x + VBW / 2;
+  const drawBracket = (
+    childrenByParent: Map<string, MatchPos[]>,
+    getParentPos: (id: string) => MatchPos | undefined,
+    stroke: string,
+    keyPrefix: string,
+  ) => {
+    for (const [parentId, children] of childrenByParent) {
+      const parentPos = getParentPos(parentId);
+      if (!parentPos) continue;
+      const sorted = [...children].sort((a, b) => a.x - b.x);
+      const pcx = mcx(parentPos);
+      const goingUp = parentPos.y < sorted[0].y;
+      // goingUp=true: 자식이 아래(큰 Y), 부모가 위(작은 Y) → 상위 브래킷
+      // goingUp=false: 자식이 위(작은 Y), 부모가 아래(큰 Y) → 하위 브래킷
+      const srcY = goingUp ? sorted[0].y : sorted[0].y + SS_H;
+      const tgtY = goingUp ? parentPos.y + SS_H : parentPos.y;
+      const midY = (srcY + tgtY) / 2;
 
-    if (m.next_match_id) {
-      const tgt = posById.get(m.next_match_id);
-      if (tgt) {
-        const tcx = tgt.x + VBW / 2;
-        const goingUp = tgt.y < y;
-        const srcY = goingUp ? y : y + VBH;
-        const tgtY = goingUp ? tgt.y + VBH : tgt.y;
-        const midY = (srcY + tgtY) / 2;
+      if (sorted.length === 2) {
+        const cx1 = mcx(sorted[0]);
+        const cx2 = mcx(sorted[1]);
+        // ⊓ 또는 ⊔: 두 자식을 midY에서 수평 연결 + 부모 줄기
         paths.push(
-          <path key={`w-${id}`}
-            d={`M ${cx} ${srcY} V ${midY} H ${tcx} V ${tgtY}`}
-            stroke="#CBD5E1" strokeWidth={1.5} fill="none"
-          />
+          <path key={`${keyPrefix}-br-${parentId}`}
+            d={`M ${cx1} ${srcY} V ${midY} H ${cx2} V ${srcY}`}
+            stroke={stroke} strokeWidth={1.5} fill="none"
+          />,
+          <path key={`${keyPrefix}-st-${parentId}`}
+            d={`M ${pcx} ${tgtY} V ${midY}`}
+            stroke={stroke} strokeWidth={1.5} fill="none"
+          />,
+        );
+      } else {
+        const cx1 = mcx(sorted[0]);
+        paths.push(
+          <path key={`${keyPrefix}-l-${parentId}`}
+            d={`M ${cx1} ${srcY} V ${midY} H ${pcx} V ${tgtY}`}
+            stroke={stroke} strokeWidth={1.5} fill="none"
+          />,
         );
       }
     }
+  };
 
-    if (m.loser_next_match_id) {
-      const tgt = posById.get(m.loser_next_match_id);
-      if (tgt) {
-        const tcx = tgt.x + VBW / 2;
-        const srcY = y + VBH;
-        const tgtY = tgt.y;
-        const midY = (srcY + tgtY) / 2;
-        paths.push(
-          <path key={`l-${id}`}
-            d={`M ${cx} ${srcY} V ${midY} H ${tcx} V ${tgtY}`}
-            stroke="#F87171" strokeWidth={1} fill="none" strokeDasharray="4 3"
-          />
-        );
-      }
-    }
+  // ── 승자 연결: 부모가 상위면 하늘색, 하위면 보라색 ──
+  const byWinnerUpper = new Map<string, MatchPos[]>();
+  const byWinnerLower = new Map<string, MatchPos[]>();
+  for (const pos of positions) {
+    if (!pos.match.next_match_id) continue;
+    const pid = pos.match.next_match_id;
+    const parentPos = posById.get(pid);
+    const isLowerParent = parentPos?.match.bracket === "lower";
+    const map = isLowerParent ? byWinnerLower : byWinnerUpper;
+    if (!map.has(pid)) map.set(pid, []);
+    map.get(pid)!.push(pos);
   }
+  drawBracket(byWinnerUpper, (id) => posById.get(id), "#94A3B8", "wn");
+  drawBracket(byWinnerLower, (id) => posById.get(id), "#94A3B8", "wl");
+
+  // ── 패자 연결: 소스들을 하위 대상별로 묶어서 ⊔ 브래킷 ──
+  const byLoserTarget = new Map<string, MatchPos[]>();
+  for (const pos of positions) {
+    if (!pos.match.loser_next_match_id) continue;
+    const tid = pos.match.loser_next_match_id;
+    if (!byLoserTarget.has(tid)) byLoserTarget.set(tid, []);
+    byLoserTarget.get(tid)!.push(pos);
+  }
+  drawBracket(byLoserTarget, (id) => posById.get(id), "#94A3B8", "lo");
 
   return <>{paths}</>;
 }
@@ -654,8 +650,8 @@ export default function LeagueTournamentBracket() {
   const { canvasW, canvasH } = useMemo(() => {
     if (!positions.length) return { canvasW: 400, canvasH: 300 };
     if (isDoubleElim) {
-      const maxX = positions.reduce((acc, p) => Math.max(acc, p.x + VBW), 0) + CO_PX;
-      const maxY = positions.reduce((acc, p) => Math.max(acc, p.y + VBH), 0) + PB;
+      const maxX = positions.reduce((acc, p) => Math.max(acc, p.x + CO_MATCH_W), 0) + CO_PX;
+      const maxY = positions.reduce((acc, p) => Math.max(acc, p.y + SS_H), 0) + PB;
       return { canvasW: maxX, canvasH: maxY };
     }
     const maxRound = Math.max(...positions.map((p) => p.match.round_number ?? 1));
@@ -773,11 +769,15 @@ export default function LeagueTournamentBracket() {
                 </Typography>
               ))}
 
-              {positions.map((pos) =>
-                isDoubleElim
-                  ? <VerticalMatchBox key={pos.id} pos={pos} actions={canManage && !isCompleted ? slotActions : undefined} />
-                  : <MatchBox key={pos.id} pos={pos} actions={canManage && !isCompleted ? slotActions : undefined} />
-              )}
+              {positions.map((pos) => {
+                if (!isDoubleElim) return <MatchBox key={pos.id} pos={pos} actions={canManage && !isCompleted ? slotActions : undefined} />;
+                return (
+                  <React.Fragment key={pos.id}>
+                    <SingleSlotBox pos={pos} slot="a" actions={canManage && !isCompleted ? slotActions : undefined} />
+                    <SingleSlotBox pos={pos} slot="b" actions={canManage && !isCompleted ? slotActions : undefined} />
+                  </React.Fragment>
+                );
+              })}
             </Box>
             </Box>
           </Box>

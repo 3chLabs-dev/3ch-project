@@ -1119,7 +1119,7 @@ router.get('/leagues', requireAdmin, async (req, res) => {
   const conditions = [];
   const params = [];
 
-  if (code)        { conditions.push(`l.id = $${params.push(code)}`); }
+  if (code)        { conditions.push(`l.league_code ILIKE $${params.push(`%${code}%`)}`); }
   if (sport)       { conditions.push(`l.sport ILIKE $${params.push(`%${sport}%`)}`); }
   if (club)        { conditions.push(`g.name ILIKE $${params.push(`%${club}%`)}`); }
   if (type)        { conditions.push(`l.type = $${params.push(type)}`); }
@@ -1145,7 +1145,7 @@ router.get('/leagues', requireAdmin, async (req, res) => {
 
     const [dataResult, countResult] = await Promise.all([
       pool.query(
-        `SELECT l.id, l.name, l.sport, l.type, l.format,
+        `SELECT l.id, l.league_code, l.name, l.sport, l.type, l.format,
                 l.start_date::text, l.created_at::text,
                 l.participant_count,
                 u.id AS creator_id, u.name AS creator_name,

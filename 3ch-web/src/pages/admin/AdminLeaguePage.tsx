@@ -10,6 +10,7 @@ import { useAppSelector } from "../../app/hooks";
 
 type League = {
   id: string;
+  league_code: string | null;
   name: string;
   sport: string | null;
   type: string | null;
@@ -248,7 +249,7 @@ export default function AdminLeaguePage() {
             ) : (
               leagues.map((l) => (
                 <TableRow key={l.id} hover>
-                  <TableCell sx={{ fontSize: 12 }}>{l.id.slice(0, 8)}…</TableCell>
+                  <TableCell sx={{ fontSize: 12 }}>{l.league_code ?? "-"}</TableCell>
                   <TableCell sx={{ fontSize: 12 }}>
                     {l.sport ? (
                       <Chip label={l.sport} size="small" sx={{ height: 20, fontSize: 11, fontWeight: 700 }} />

@@ -981,7 +981,7 @@ export default function LeagueBracket() {
         {/* 경기 순서 패널: 오버레이 고정 (scale 계산에서 분리)
             landscape: 하단 가로 바 / portrait: 우측 세로 바 */}
         <Box ref={scheduleRef} sx={{
-          position: "absolute", zIndex: 5,
+          position: "absolute", zIndex: 5, cursor: "pointer",
           ...(landscape ? { bottom: 0, left: 0, right: 0 } : { top: 0, bottom: 0, right: 0 }),
         }}>
           <MatchSchedulePanel matches={matches} localOrder={localOrder} landscape={landscape} leagueId={id ?? ""} />

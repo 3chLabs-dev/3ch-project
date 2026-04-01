@@ -1164,9 +1164,9 @@ export default function LeagueDetail() {
           sx={{
             position: "fixed",
             bottom: "calc(56px + env(safe-area-inset-bottom))",
-            left: "50%",
-            transform: "translateX(-50%)",
-            width: "min(calc(100% - 32px), 398px)",
+            left: 0,
+            right: 0,
+            px: 2,
             pb: 1,
             zIndex: 10,
           }}

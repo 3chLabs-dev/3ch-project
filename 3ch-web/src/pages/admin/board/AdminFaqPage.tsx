@@ -7,6 +7,7 @@ import {
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import LiveHelpOutlinedIcon from "@mui/icons-material/LiveHelpOutlined";
+import PolicyEditor from "../../../components/PolicyEditor";
 
 const API = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
@@ -67,7 +68,8 @@ export default function AdminFaqPage() {
   };
 
   const handleSave = async () => {
-    if (!form.question.trim() || !form.answer.trim()) { setAlert("질문과 답변을 입력하세요."); return; }
+    const answerText = form.answer.replace(/<[^>]*>/g, "").trim();
+    if (!form.question.trim() || !answerText) { setAlert("질문과 답변을 입력하세요."); return; }
     setSaving(true);
     const url    = editId ? `${API}/admin/board/faqs/${editId}` : `${API}/admin/board/faqs`;
     const method = editId ? "PUT" : "POST";
@@ -248,12 +250,10 @@ export default function AdminFaqPage() {
               <Typography fontSize={12} fontWeight={700} color="#374151" sx={{ mb: 0.8 }}>
                 답변 <Typography component="span" color="error" fontSize={12}>*</Typography>
               </Typography>
-              <TextField
-                size="small" fullWidth multiline rows={8}
-                placeholder="답변 내용을 입력하세요."
+              <PolicyEditor
                 value={form.answer}
-                onChange={(e) => setForm((p) => ({ ...p, answer: e.target.value }))}
-                slotProps={{ input: { style: { fontSize: 13, fontFamily: "inherit", lineHeight: 1.8 } } }}
+                onChange={(html) => setForm((p) => ({ ...p, answer: html }))}
+                minHeight={220}
               />
             </Box>
 

@@ -231,7 +231,7 @@ router.get("/user/me/home-summary", requireAuth, async (req, res) => {
     // 1. 나의 조편성: 활성 리그에서 내 배정 부수/조
     const groupsQuery = `
       SELECT l.id AS league_id, l.name AS league_name, l.league_code,
-             lp.division, lp.name AS participant_name
+             l.format, lp.division, lp.name AS participant_name
       FROM league_participants lp
       JOIN leagues l ON l.id = lp.league_id
       WHERE lp.member_id = $1

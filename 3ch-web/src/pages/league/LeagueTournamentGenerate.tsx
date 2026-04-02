@@ -93,56 +93,6 @@ export default function LeagueTournamentGenerate() {
         )}
 
         <Stack spacing={3}>
-          {/* 참가 인원 */}
-          <Box>
-            <Typography fontSize={13} fontWeight={700} color="text.secondary" mb={1}>
-              참가 인원
-            </Typography>
-            <FormControl fullWidth size="small">
-              <InputLabel>참가 인원</InputLabel>
-              <Select
-                value={bracketSize}
-                label="참가 인원"
-                onChange={(e) => setBracketSize(Number(e.target.value))}
-              >
-                {BRACKET_SIZES.map((n) => (
-                  <MenuItem key={n} value={n}>{n}명</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <Typography fontSize={12} color="text.secondary" mt={0.8}>
-              실제 참가자가 더 적으면 나머지는 부전승으로 처리됩니다.
-            </Typography>
-          </Box>
-
-          <Divider />
-
-          {/* 편성 방식 */}
-          <Box>
-            <Typography fontSize={13} fontWeight={700} color="text.secondary" mb={1}>
-              편성 방식
-            </Typography>
-            <FormControl fullWidth size="small">
-              <InputLabel>편성 방식</InputLabel>
-              <Select
-                value={seeding}
-                label="편성 방식"
-                onChange={(e) => setSeeding(e.target.value)}
-              >
-                {SEEDING_OPTIONS.map((o) => (
-                  <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            {selectedSeedingDesc && (
-              <Typography fontSize={12} color="text.secondary" mt={0.8}>
-                {selectedSeedingDesc}
-              </Typography>
-            )}
-          </Box>
-
-          <Divider />
-
           {/* 다음 진출 방식 */}
           <Box>
             <Typography fontSize={13} fontWeight={700} color="text.secondary" mb={1}>
@@ -175,9 +125,54 @@ export default function LeagueTournamentGenerate() {
                 );
               })}
             </Stack>
-            {selectedAdvancementDesc && (
+          </Box>
+
+          <Divider />
+
+          {/* 본선 시작 단계 */}
+          <Box>
+            <Typography fontSize={13} fontWeight={700} color="text.secondary" mb={1}>
+              본선 시작 단계
+            </Typography>
+            <FormControl fullWidth size="small">
+              <InputLabel>본선 시작 단계</InputLabel>
+              <Select
+                value={bracketSize}
+                label="본선 시작 단계"
+                onChange={(e) => setBracketSize(Number(e.target.value))}
+              >
+                {BRACKET_SIZES.map((n) => (
+                  <MenuItem key={n} value={n}>{n}강</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Typography fontSize={12} color="text.secondary" mt={0.8}>
+              실제 참가자가 더 적으면 나머지는 부전승으로 처리됩니다.
+            </Typography>
+          </Box>
+
+          <Divider />
+
+          {/* 편성 방식 */}
+          <Box>
+            <Typography fontSize={13} fontWeight={700} color="text.secondary" mb={1}>
+              편성 방식
+            </Typography>
+            <FormControl fullWidth size="small">
+              <InputLabel>편성 방식</InputLabel>
+              <Select
+                value={seeding}
+                label="편성 방식"
+                onChange={(e) => setSeeding(e.target.value)}
+              >
+                {SEEDING_OPTIONS.map((o) => (
+                  <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            {selectedSeedingDesc && (
               <Typography fontSize={12} color="text.secondary" mt={0.8}>
-                {selectedAdvancementDesc}
+                {selectedSeedingDesc}
               </Typography>
             )}
           </Box>

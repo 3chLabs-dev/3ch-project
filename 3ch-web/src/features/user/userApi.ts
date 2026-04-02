@@ -10,6 +10,7 @@ export interface MyGroupItem {
   league_id: string;
   league_name: string;
   league_code: string | null;
+  format: string | null;
   division: string | null;
   participant_name: string;
 }

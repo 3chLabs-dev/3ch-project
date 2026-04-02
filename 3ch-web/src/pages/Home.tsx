@@ -518,7 +518,10 @@ function MyGroupCard({ item, navigate }: { item: MyGroupItem; navigate: (path: s
     return (
         <Card
             elevation={2}
-            onClick={() => navigate(`/league/${item.league_code ?? item.league_id}/bracket`)}
+            onClick={() => {
+                const base = item.league_code ?? item.league_id;
+                navigate(item.format?.includes("토너먼트") ? `/league/${base}/tournament` : `/league/${base}/bracket`);
+            }}
             sx={{ borderRadius: 0.6, boxShadow: "0 4px 12px rgba(0,0,0,0.08)", cursor: "pointer" }}
         >
             <CardContent sx={{ py: 1.6, px: 2.5, "&:last-child": { pb: 1.6 } }}>

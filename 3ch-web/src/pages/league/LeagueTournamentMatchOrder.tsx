@@ -251,23 +251,29 @@ export default function LeagueTournamentMatchOrder() {
   const participants = useMemo(() => participantsData?.participants ?? [], [participantsData]);
 
   // ── 탭 목록 ──────────────────────────────────────────────────────────────
+  // 순서: 상위 R1 → 하위 R1 → 상위 R2 → 하위 R2 → ... (라운드별 상위/하위 교차)
   const tabs = useMemo<RoundTab[]>(() => {
-    const result: RoundTab[] = [];
-    const seen = new Set<string>();
-    const addRounds = (bracket: string) => {
-      const list = matches.filter((m) => (m.bracket ?? "upper") === bracket);
-      const rounds = [...new Set(list.map((m) => m.round_number ?? 0))].sort((a, b) => a - b);
-      for (const r of rounds) {
-        const key = `${bracket}-${r}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        const sample = list.find((m) => m.round_number === r);
-        const rawLabel = sample?.match_label ?? `R${r}`;
-        result.push({ key, label: rawLabel, bracket, roundNumber: r });
-      }
+    const makeTab = (bracket: string, r: number): RoundTab => {
+      const sample = matches.find(
+        (m) => (m.bracket ?? "upper") === bracket && m.round_number === r,
+      );
+      return { key: `${bracket}-${r}`, label: sample?.match_label ?? `R${r}`, bracket, roundNumber: r };
     };
-    addRounds("upper");
-    addRounds("lower");
+
+    const upperRounds = [...new Set(
+      matches.filter((m) => (m.bracket ?? "upper") === "upper").map((m) => m.round_number ?? 0),
+    )].sort((a, b) => a - b);
+
+    const lowerRounds = [...new Set(
+      matches.filter((m) => m.bracket === "lower").map((m) => m.round_number ?? 0),
+    )].sort((a, b) => a - b);
+
+    const result: RoundTab[] = [];
+    const maxLen = Math.max(upperRounds.length, lowerRounds.length);
+    for (let i = 0; i < maxLen; i++) {
+      if (i < upperRounds.length) result.push(makeTab("upper", upperRounds[i]));
+      if (i < lowerRounds.length) result.push(makeTab("lower", lowerRounds[i]));
+    }
     return result;
   }, [matches]);
 

@@ -9,7 +9,7 @@ import {
   FormControl, 
   Stack 
 } from "@mui/material";
-import { setStep, setStep4Rules } from "../../features/league/leagueCreationSlice";
+import { setStep, setStep4Rules, setStep4TournamentOptions } from "../../features/league/leagueCreationSlice";
 import type { LeagueRuleValue } from "../../features/league/leagueCreationSlice";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 
@@ -31,8 +31,11 @@ const LeagueStep4Rules: React.FC = () => {
   const handleNext = () => {
     if (!selectedRule) return;
     dispatch(setStep4Rules({ rule: selectedRule }));
-    // 상·하위 토너먼트는 옵션 설정 단계(step 8)로, 나머지는 참가자(step 5)로
-    dispatch(setStep(format === "upper-lower-tournament" ? 8 : 5));
+    if (format === "upper-lower-tournament") {
+      // 토너먼트 옵션 페이지 생략 — 기본값(시드 배치, 상·하위 진출) 자동 적용
+      dispatch(setStep4TournamentOptions({ seeding: "seed", advancement: "upper-lower" }));
+    }
+    dispatch(setStep(5));
   };
 
   const handlePrev = () => {

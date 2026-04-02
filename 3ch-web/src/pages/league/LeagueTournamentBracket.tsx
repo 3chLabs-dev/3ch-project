@@ -5,6 +5,7 @@ import {
   Box, Button, CircularProgress, IconButton, InputAdornment,
   TextField, Tooltip, Typography,
 } from "@mui/material";
+import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import CloseIcon from "@mui/icons-material/Close";
 import EditIcon from "@mui/icons-material/Edit";
@@ -25,29 +26,48 @@ import { useGetGroupDetailQuery } from "../../features/group/groupApi";
 import { formatLeagueDate } from "../../utils/dateUtils";
 
 // ─── 단일 토너먼트 레이아웃 상수 ────────────────────────────────────────────
-const MW = 152;
-const MH = 60;
-const RGAP = 56;
-const PX = 32;
-const PT = 40;
-const PB = 32;
+// 단일 토너먼트(라운드로빈 등)에서 매치 박스를 좌→우 방향으로 나열할 때 사용
+const MW = 152;  // 매치 박스 너비 (px)
+const MH = 60;   // 매치 박스 높이 - 상단 슬롯(A) + 하단 슬롯(B) 포함
+const RGAP = 56; // 라운드 간 수평 간격 (라운드 사이 SVG 커넥터 공간)
+const PX = 32;   // 캔버스 좌우 패딩
+const PT = 40;   // 캔버스 상단 패딩 (라운드 레이블 공간)
+const PB = 32;   // 캔버스 하단 패딩
 
 // ─── 상·하위 (center-out) 레이아웃 상수 ─────────────────────────────────────
-const VB_LABEL_H = 20;
-const CO_ROW_H = 140;
-const CO_H_GAP = 20;
-const CO_GROUP_GAP = 30;  // 2개 슬롯 그룹 간 추가 간격
-const CO_CENTER_GAP = 52;
-const CO_PX = 20;
+// 상·하위 토너먼트는 16강이 중앙에, 상위 브래킷이 위로, 하위 브래킷이 아래로 펼쳐지는
+// "center-out" 구조를 사용한다. 각 라운드는 CO_ROW_H 간격으로 수직 배치됨.
+const CO_PT = 110;        // 캔버스 상단 패딩 — 상위 우승자 박스(CO_WINNER_H + 여백) 공간 포함
+const CO_WINNER_W = 214;  // 우승자 박스 너비 — CO_MATCH_W와 동일하게 맞춤
+const CO_WINNER_H = 72;   // 우승자 박스 높이
+const VB_LABEL_H = 20;    // 각 슬롯 박스 상단 라운드/시드 레이블 영역 높이
+const CO_ROW_H = 140;     // 라운드 간 수직 간격 (SVG 커넥터 포함)
+const CO_H_GAP = 20;      // 같은 라운드 내 매치 간 수평 간격
+const CO_GROUP_GAP = 30;  // 2경기씩 묶인 그룹 간 추가 수평 간격 (시각적 그루핑)
+const CO_CENTER_GAP = 52; // 좌측 절반과 우측 절반 사이 중앙 빈 공간 (결승선 공간)
+const CO_PX = 20;         // 캔버스 좌우 패딩
 
 // ─── 개별 슬롯 박스 (상·하위 전 라운드) 상수 ────────────────────────────────
-const SS_W = 72;          // 단일 슬롯 너비
-const SS_H = 65;          // 단일 슬롯 높이
-const SS_GAP = 6;         // A/B 슬롯 사이 간격
-const CO_MATCH_W = SS_W * 2 + SS_GAP;  // 매치 1개의 전체 너비 (= 150)
+// 상·하위 토너먼트에서 A 슬롯과 B 슬롯을 독립 박스로 나란히 렌더링
+const SS_W = 96;          // 슬롯 박스 너비 (이름이 잘리지 않도록 충분히 확보)
+const SS_H = 76;          // 슬롯 박스 높이 (라벨 20 + 이름 영역 + 점수 영역 24)
+const SS_GAP = 22;        // A·B 슬롯 사이 간격 — "vs" 텍스트 표시 공간
+const CO_MATCH_W = SS_W * 2 + SS_GAP;  // 매치 1개 전체 너비 = 96*2 + 22 = 214px
 
-// ─── 표준 토너먼트 시드 배치 (백엔드 동일 로직) ─────────────────────────────
-// seededBracket(16) = [1,16, 8,9, 5,12, 4,13, 3,14, 6,11, 7,10, 2,15]
+// ─── 표준 토너먼트 시드 배치 ────────────────────────────────────────────────
+/**
+ * n명 규모 토너먼트의 시드 배치 순서를 반환한다.
+ * 백엔드(league.js)의 seededBracket 함수와 동일한 알고리즘을 사용하므로
+ * 서버에서 배정한 참가자와 프론트 시드 표시가 일치한다.
+ *
+ * 반환값은 매치 슬롯 순서대로 나열된 시드 번호 배열:
+ *   seededBracket(8) = [1,8, 4,5, 3,6, 2,7]
+ *   seededBracket(16) = [1,16, 8,9, 5,12, 4,13, 3,14, 6,11, 7,10, 2,15]
+ *
+ * 알고리즘:
+ *   1. buildPrimary: 재귀적으로 상위 시드를 절반씩 분할하여 좌·우 서브트리에 배치
+ *   2. 최종 배열: primary[i]와 그 상대(n+1-primary[i])를 쌍으로 나열
+ */
 function seededBracket(n: number): number[] {
   function buildPrimary(size: number): number[] {
     if (size === 2) return [1];
@@ -83,6 +103,18 @@ interface SlotActions {
 }
 
 // ─── 단일 토너먼트 위치 계산 (좌→우) ────────────────────────────────────────
+/**
+ * 단일 토너먼트(싱글·라운드로빈)의 각 매치에 캔버스 좌표(x, y)를 계산한다.
+ *
+ * 레이아웃 규칙:
+ *   - X축: 라운드 번호에 따라 왼쪽(1라운드)→오른쪽(결승) 방향으로 배치
+ *          x = PX + (round - 1) * (MW + RGAP)
+ *   - Y축: 1라운드 매치를 균등 간격으로 나열하고,
+ *          상위 라운드는 자식 두 매치의 Y 중간값에 배치 (트리 중앙 정렬)
+ *
+ * upper 브래킷(bracket=null 또는 'upper') 매치만 처리하며,
+ * match_order 기준으로 정렬 후 계산한다.
+ */
 function calcPositions(matches: LeagueMatch[]): MatchPos[] {
   const upper = matches.filter(
     (m) => m.round_number != null && (!m.bracket || m.bracket === "upper"),
@@ -118,6 +150,34 @@ function calcPositions(matches: LeagueMatch[]): MatchPos[] {
 }
 
 // ─── 상·하위 토너먼트 위치 계산 (center-out) ─────────────────────────────────
+/**
+ * 상·하위 토너먼트(더블 엘리미네이션)의 각 매치에 캔버스 좌표를 계산한다.
+ *
+ * center-out 레이아웃 구조:
+ *   ┌─────────────────────────────┐
+ *   │      [상위 결승]             │  ← 최상단 (round=maxUpper, y=CO_PT)
+ *   │    [상위 4강] [상위 4강]     │
+ *   │  [상위 8강] ... [상위 8강]   │
+ *   │        [16강 중앙 배치]      │  ← centerY (상·하위 분기점)
+ *   │  [하위 8강] ... [하위 8강]   │
+ *   │    [하위 4강] [하위 4강]     │
+ *   │      [하위 결승]             │  ← 최하단
+ *   └─────────────────────────────┘
+ *
+ * X축 계산 (1라운드):
+ *   - 전체 매치를 좌 절반 / 우 절반으로 나누고, 절반 내부는 2경기씩 그룹화
+ *   - 좌 절반: CO_PX부터 오른쪽으로, 우 절반: 중앙 간격(CO_CENTER_GAP) 이후 오른쪽으로
+ *   - 2경기 그룹 사이에 CO_GROUP_GAP 추가 (시각적 구분)
+ *   - 상위 라운드는 자식 두 매치의 x 평균으로 중앙 정렬
+ *
+ * Y축 계산:
+ *   - centerY = CO_PT + (maxUpper - 1) * CO_ROW_H (1라운드 위치)
+ *   - 상위 라운드: centerY - (round - 1) * CO_ROW_H  (위로 올라감)
+ *   - 하위 라운드: centerY + round * CO_ROW_H         (아래로 내려감)
+ *
+ * 하위 브래킷 X 좌표는 상위 패자(loser_next_match_id)와 하위 승자(next_match_id)
+ * 의 X 평균으로 결정해 연결선이 자연스럽게 이어지도록 한다.
+ */
 function calcCenterOutPositions(matches: LeagueMatch[]): MatchPos[] {
   const upper = matches.filter(
     (m) => m.round_number != null && (!m.bracket || m.bracket === "upper"),
@@ -159,7 +219,7 @@ function calcCenterOutPositions(matches: LeagueMatch[]): MatchPos[] {
     });
   }
 
-  const centerY = PT + (maxUpper - 1) * CO_ROW_H;
+  const centerY = CO_PT + (maxUpper - 1) * CO_ROW_H;
   const result: MatchPos[] = [];
 
   for (const [r, arr] of upperByRound) {
@@ -214,7 +274,19 @@ function calcCenterOutPositions(matches: LeagueMatch[]): MatchPos[] {
   return result;
 }
 
-// ─── 매치 박스 (단일 + 좌우 대칭 상·하위 공용) ──────────────────────────────
+// ─── 매치 박스 (단일 토너먼트용) ─────────────────────────────────────────────
+/**
+ * 단일 토너먼트에서 사용하는 매치 박스 컴포넌트.
+ * 세로로 A 슬롯(상단)과 B 슬롯(하단)이 배치된다.
+ *
+ * 기능:
+ *   - 라운드 레이블 / 시드 번호 표시 (1라운드만 시드 표시)
+ *   - 부수(division) 주황 원형 배지 표시
+ *   - 승자 슬롯은 초록 배경으로 강조
+ *   - 편성 모드(editMode): 슬롯 클릭 시 스왑 대상 선택 (파란 테두리 강조)
+ *   - 등록 모드(canRegister + !editMode): 비어있는 슬롯 클릭 시 참가자 등록 팝업
+ *   - BYE: 1라운드에 참가자가 없으면 이탤릭 "BYE" 표시
+ */
 function MatchBox({ pos, actions }: { pos: MatchPos; actions?: SlotActions }) {
   const { x, y, match: m } = pos;
   const isLower = m.bracket === "lower";
@@ -273,7 +345,7 @@ function MatchBox({ pos, actions }: { pos: MatchPos; actions?: SlotActions }) {
         }}
       >
         {m.participant_a_division && (
-          <Box sx={{ fontSize: 9, fontWeight: 700, color: "#fff", bgcolor: "#FAAA47", borderRadius: "3px", px: 0.5, lineHeight: "16px", flexShrink: 0 }}>{m.participant_a_division}</Box>
+          <Box sx={{ width: 18, height: 18, borderRadius: "50%", bgcolor: "#FAAA47", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: 900, color: "#111827", flexShrink: 0, lineHeight: 1 }}>{m.participant_a_division}</Box>
         )}
         {isR1 && !nameA ? (
           <Box sx={{ flex: 1, display: "flex", alignItems: "center", gap: 0.75 }}>
@@ -299,7 +371,7 @@ function MatchBox({ pos, actions }: { pos: MatchPos; actions?: SlotActions }) {
         }}
       >
         {m.participant_b_division && (
-          <Box sx={{ fontSize: 9, fontWeight: 700, color: "#fff", bgcolor: "#FAAA47", borderRadius: "3px", px: 0.5, lineHeight: "16px", flexShrink: 0 }}>{m.participant_b_division}</Box>
+          <Box sx={{ width: 18, height: 18, borderRadius: "50%", bgcolor: "#FAAA47", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: 900, color: "#111827", flexShrink: 0, lineHeight: 1 }}>{m.participant_b_division}</Box>
         )}
         {isR1 && !nameB ? (
           <Box sx={{ flex: 1, display: "flex", alignItems: "center", gap: 0.75 }}>
@@ -319,7 +391,24 @@ function MatchBox({ pos, actions }: { pos: MatchPos; actions?: SlotActions }) {
   );
 }
 
-// ─── 개별 슬롯 박스 (상·하위 전 라운드) ─────────────────────────────────────
+// ─── 개별 슬롯 박스 (상·하위 토너먼트용) ────────────────────────────────────
+/**
+ * 상·하위 토너먼트에서 A·B 슬롯을 독립적인 박스로 렌더링하는 컴포넌트.
+ * MatchBox와 달리 슬롯 하나가 곧 하나의 박스이며, 두 박스가 나란히 배치된다:
+ *   [슬롯A 박스] <── SS_GAP(vs 공간) ──> [슬롯B 박스]
+ *
+ * 레이아웃 (세로 3행):
+ *   ┌──────────────────┐
+ *   │  라운드/시드 레이블 │  ← VB_LABEL_H(20px), 상위=파랑, 하위=보라 배경
+ *   │  부수○ 이름       │  ← flex 영역, 승자는 초록 글씨
+ *   │      점수         │  ← 24px 고정, 승자는 초록 배경 + 굵은 숫자
+ *   └──────────────────┘
+ *
+ * 클릭 동작:
+ *   - editMode ON: 스왑 대상으로 선택 (파란 테두리 강조)
+ *   - editMode OFF + canRegister + 빈 슬롯: 참가자 등록 팝업 열기
+ *   - 이외: 클릭 무반응
+ */
 function SingleSlotBox({ pos, slot, actions }: { pos: MatchPos; slot: "a" | "b"; actions?: SlotActions }) {
   const { x: baseX, y, match: m } = pos;
   const x = slot === "a" ? baseX : baseX + SS_W + SS_GAP;
@@ -351,13 +440,16 @@ function SingleSlotBox({ pos, slot, actions }: { pos: MatchPos; slot: "a" | "b";
     <Box sx={{
       position: "absolute", left: x, top: y,
       width: SS_W, height: SS_H,
-      bgcolor: "background.paper",
-      border: `1.5px solid #E2E8F0`,
-      borderRadius: "5px",
+      bgcolor: win ? "#F0FDF4" : swapSel ? "#DBEAFE" : "background.paper",
+      border: `1.5px solid ${win ? "#86EFAC" : swapSel ? "#3B82F6" : "#E2E8F0"}`,
+      borderRadius: "6px",
       overflow: "hidden",
       boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
       display: "flex", flexDirection: "column",
-    }}>
+      cursor,
+      outline: swapSel ? "2px solid #3B82F6" : "none",
+    }} onClick={handleClick}>
+
       {/* 라운드/시드 레이블 */}
       <Box sx={{
         height: VB_LABEL_H, display: "flex", alignItems: "center", justifyContent: "center",
@@ -369,37 +461,53 @@ function SingleSlotBox({ pos, slot, actions }: { pos: MatchPos; slot: "a" | "b";
           {isR1 && seedNum ? `1-${seedNum}` : (m.match_label ?? `R${m.round_number}`)}
         </Typography>
       </Box>
-      {/* 슬롯 */}
-      <Box
-        onClick={handleClick}
-        sx={{
-          flex: 1, display: "flex", alignItems: "center", px: 0.75, gap: 0.5,
-          bgcolor: swapSel ? "#DBEAFE" : win ? "#F0FDF4" : "transparent",
-          cursor,
-          outline: swapSel ? "2px solid #3B82F6" : "none",
-        }}
-      >
+
+      {/* 이름 행 */}
+      <Box sx={{ display: "flex", alignItems: "center", px: 0.75, gap: 0.4, flex: 1, minWidth: 0 }}>
         {division && (
-          <Box sx={{ fontSize: 7, fontWeight: 700, color: "#fff", bgcolor: "#FAAA47", borderRadius: "2px", px: 0.3, lineHeight: "13px", flexShrink: 0 }}>{division}</Box>
+          <Box sx={{ width: 16, height: 16, borderRadius: "50%", bgcolor: "#FAAA47", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 7, fontWeight: 900, color: "#111827", flexShrink: 0, lineHeight: 1 }}>{division}</Box>
         )}
         {isR1 && !name ? (
-          <Box sx={{ flex: 1, display: "flex", alignItems: "center" }}>
-            {actions?.canRegister && !actions.editMode && (
-              <Typography sx={{ fontSize: 8, fontWeight: 700, color: "#93C5FD" }}>등록</Typography>
-            )}
-          </Box>
+          <Typography sx={{ fontSize: 9, fontWeight: 700, color: "#93C5FD" }}>
+            {actions?.canRegister && !actions.editMode ? "등록" : ""}
+          </Typography>
         ) : (
-          <Typography sx={{ fontSize: 10, fontWeight: isBye ? 400 : 600, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: win ? "#16A34A" : isBye ? "#9CA3AF" : "text.primary", fontStyle: isBye ? "italic" : "normal" }}>
+          <Typography sx={{ fontSize: 11, fontWeight: isBye ? 400 : 700, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: win ? "#16A34A" : isBye ? "#9CA3AF" : "#111827", fontStyle: isBye ? "italic" : "normal" }}>
             {name ?? (isR1 ? "BYE" : "")}
           </Typography>
         )}
-        {score != null && <Typography sx={{ fontSize: 10, fontWeight: 800, color: win ? "#16A34A" : "#6B7280", flexShrink: 0 }}>{score}</Typography>}
+      </Box>
+
+      {/* 점수 행 */}
+      <Box sx={{
+        height: 24, display: "flex", alignItems: "center", justifyContent: "center",
+        borderTop: `1px solid ${win ? "#BBF7D0" : "#F1F5F9"}`,
+        bgcolor: win ? "#DCFCE7" : "#F8FAFC",
+        flexShrink: 0,
+      }}>
+        {score != null ? (
+          <Typography sx={{ fontSize: 14, fontWeight: 900, color: win ? "#16A34A" : "#374151", lineHeight: 1 }}>
+            {score}
+          </Typography>
+        ) : (
+          <Typography sx={{ fontSize: 10, color: "#CBD5E1" }}>-</Typography>
+        )}
       </Box>
     </Box>
   );
 }
 
 // ─── 단일 토너먼트 SVG 커넥터 (좌→우) ───────────────────────────────────────
+/**
+ * 단일 토너먼트 매치 간 연결선을 SVG path로 렌더링한다.
+ *
+ * 각 매치에서 next_match_id가 있는 경우 다음 라운드 매치로 수평+수직+수평
+ * 꺾인 선(└─ 형태)을 그린다:
+ *   M (현재 매치 우측 끝, 중앙) → H (라운드 간 중간 x) → V (다음 매치 슬롯 y) → H (다음 매치 좌측)
+ *
+ * next_slot='a' 이면 상단(MH/4), 'b' 이면 하단(3*MH/4) 높이에 연결된다.
+ * 색상: #CBD5E1 (연한 회색)
+ */
 function Connectors({ positions }: { positions: MatchPos[] }) {
   const posById = new Map(positions.map((p) => [p.id, p]));
   return (
@@ -419,6 +527,31 @@ function Connectors({ positions }: { positions: MatchPos[] }) {
 }
 
 // ─── 상·하위 토너먼트 SVG 커넥터 ────────────────────────────────────────────
+/**
+ * 상·하위 토너먼트(더블 엘리미네이션)의 매치 간 연결선을 SVG path로 렌더링한다.
+ *
+ * 연결 종류:
+ *   1. 승자 연결 (winner advancement):
+ *      - byWinnerUpper: 상위 브래킷 내 승자 → 다음 상위 라운드
+ *      - byWinnerLower: 하위 브래킷 내 승자 → 다음 하위 라운드
+ *      모두 #94A3B8(회색) 선으로 표시
+ *
+ *   2. 패자 연결 (loser drop):
+ *      - byLoserTarget: 상위 브래킷 패자 → 하위 브래킷 대상 매치
+ *      동일하게 #94A3B8 선으로 표시
+ *
+ * drawBracket 내부 로직 (⊓/⊔ 브래킷 형태):
+ *   - 자식 2개인 경우: 두 자식을 midY에서 수평으로 연결 후 부모로 수직 줄기
+ *       M cx1 srcY → V midY → H cx2 → V srcY  (수평 팔)
+ *       M pcx tgtY → V midY                    (수직 줄기)
+ *   - 자식 1개인 경우: 단순 꺾인 선으로 직접 연결
+ *       M cx1 srcY → V midY → H pcx → V tgtY
+ *
+ *   goingUp=true  (상위 브래킷): 자식이 아래(큰 Y), 부모가 위(작은 Y) → srcY=매치 상단, tgtY=부모 하단
+ *   goingUp=false (하위 브래킷): 자식이 위(작은 Y), 부모가 아래(큰 Y) → srcY=매치 하단, tgtY=부모 상단
+ *
+ * 각 매치 중심 x(mcx) = pos.x + CO_MATCH_W / 2 로 A·B 슬롯 중앙을 기준으로 한다.
+ */
 function CenterOutConnectors({ positions }: { positions: MatchPos[] }) {
   const posById = new Map(positions.map((p) => [p.id, p]));
   const paths: React.ReactElement[] = [];
@@ -637,6 +770,32 @@ export default function LeagueTournamentBracket() {
     [matches, isDoubleElim],
   );
 
+  // 상위/하위 우승자 계산
+  const { upperWinner, lowerWinner, upperFinalPos, lowerFinalPos } = useMemo(() => {
+    if (!isDoubleElim) return { upperWinner: null, lowerWinner: null, upperFinalPos: null, lowerFinalPos: null };
+    const posMap = new Map(positions.map((p) => [p.id, p]));
+    const upperMatches = matches.filter((m) => !m.bracket || m.bracket === "upper");
+    const lowerMatches = matches.filter((m) => m.bracket === "lower");
+    const maxUpperRound = Math.max(...upperMatches.map((m) => m.round_number ?? 0));
+    const maxLowerRound = Math.max(...lowerMatches.map((m) => m.round_number ?? 0));
+    const upperFinal = upperMatches.find((m) => m.round_number === maxUpperRound);
+    const lowerFinal = lowerMatches.find((m) => m.round_number === maxLowerRound);
+    const getWinner = (m?: LeagueMatch) => {
+      if (!m || m.status !== "done") return null;
+      const sa = m.score_a ?? 0, sb = m.score_b ?? 0;
+      if (sa === sb) return null;
+      return sa > sb
+        ? { name: m.participant_a_name, division: m.participant_a_division }
+        : { name: m.participant_b_name, division: m.participant_b_division };
+    };
+    return {
+      upperWinner: getWinner(upperFinal),
+      lowerWinner: getWinner(lowerFinal),
+      upperFinalPos: upperFinal ? posMap.get(upperFinal.id) ?? null : null,
+      lowerFinalPos: lowerFinal ? posMap.get(lowerFinal.id) ?? null : null,
+    };
+  }, [isDoubleElim, matches, positions]);
+
   const roundLabels = useMemo(() => {
     if (isDoubleElim) return new Map<number, string>();
     const map = new Map<number, string>();
@@ -651,7 +810,7 @@ export default function LeagueTournamentBracket() {
     if (!positions.length) return { canvasW: 400, canvasH: 300 };
     if (isDoubleElim) {
       const maxX = positions.reduce((acc, p) => Math.max(acc, p.x + CO_MATCH_W), 0) + CO_PX;
-      const maxY = positions.reduce((acc, p) => Math.max(acc, p.y + SS_H), 0) + PB;
+      const maxY = positions.reduce((acc, p) => Math.max(acc, p.y + SS_H), 0) + CO_WINNER_H + 30 + PB;
       return { canvasW: maxX, canvasH: maxY };
     }
     const maxRound = Math.max(...positions.map((p) => p.match.round_number ?? 1));
@@ -774,10 +933,87 @@ export default function LeagueTournamentBracket() {
                 return (
                   <React.Fragment key={pos.id}>
                     <SingleSlotBox pos={pos} slot="a" actions={canManage && !isCompleted ? slotActions : undefined} />
+                    <Typography sx={{
+                      position: "absolute",
+                      left: pos.x + SS_W,
+                      top: pos.y + SS_H / 2 - 8,
+                      width: SS_GAP,
+                      textAlign: "center",
+                      fontSize: 11, fontWeight: 900, color: "#94A3B8", lineHeight: 1,
+                      pointerEvents: "none",
+                    }}>vs</Typography>
                     <SingleSlotBox pos={pos} slot="b" actions={canManage && !isCompleted ? slotActions : undefined} />
                   </React.Fragment>
                 );
               })}
+
+              {/* ── 상위 우승자 박스 ── */}
+              {isDoubleElim && upperFinalPos && (() => {
+                const cx = upperFinalPos.x + CO_MATCH_W / 2;
+                const bx = cx - CO_WINNER_W / 2;
+                const by = upperFinalPos.y - CO_WINNER_H - 16;
+                return (
+                  <Box key="upper-winner" sx={{
+                    position: "absolute", left: bx, top: by,
+                    width: CO_WINNER_W, height: CO_WINNER_H,
+                    bgcolor: upperWinner ? "#FFF7ED" : "#F8FAFC",
+                    border: `2px solid ${upperWinner ? "#FB923C" : "#E2E8F0"}`,
+                    borderRadius: "8px",
+                    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                    boxShadow: upperWinner ? "0 2px 8px rgba(251,146,60,0.2)" : "none",
+                    gap: 0.4,
+                  }}>
+                    <EmojiEventsIcon sx={{ fontSize: 16, color: upperWinner ? "#F59E0B" : "#CBD5E1" }} />
+                    <Typography sx={{ fontSize: 9, fontWeight: 700, color: upperWinner ? "#F59E0B" : "#94A3B8" }}>
+                      상위 우승
+                    </Typography>
+                    {upperWinner ? (
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.4 }}>
+                        {upperWinner.division && (
+                          <Box sx={{ width: 16, height: 16, borderRadius: "50%", bgcolor: "#FAAA47", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 7, fontWeight: 900, color: "#111827", flexShrink: 0, lineHeight: 1 }}>{upperWinner.division}</Box>
+                        )}
+                        <Typography sx={{ fontSize: 11, fontWeight: 800, color: "#111827" }}>{upperWinner.name}</Typography>
+                      </Box>
+                    ) : (
+                      <Typography sx={{ fontSize: 9, color: "#CBD5E1" }}>미결정</Typography>
+                    )}
+                  </Box>
+                );
+              })()}
+
+              {/* ── 하위 우승자 박스 ── */}
+              {isDoubleElim && lowerFinalPos && (() => {
+                const cx = lowerFinalPos.x + CO_MATCH_W / 2;
+                const bx = cx - CO_WINNER_W / 2;
+                const by = lowerFinalPos.y + SS_H + 16;
+                return (
+                  <Box key="lower-winner" sx={{
+                    position: "absolute", left: bx, top: by,
+                    width: CO_WINNER_W, height: CO_WINNER_H,
+                    bgcolor: lowerWinner ? "#F5F3FF" : "#F8FAFC",
+                    border: `2px solid ${lowerWinner ? "#A78BFA" : "#E2E8F0"}`,
+                    borderRadius: "8px",
+                    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                    boxShadow: lowerWinner ? "0 2px 8px rgba(167,139,250,0.2)" : "none",
+                    gap: 0.4,
+                  }}>
+                    <EmojiEventsIcon sx={{ fontSize: 16, color: lowerWinner ? "#7C3AED" : "#CBD5E1" }} />
+                    <Typography sx={{ fontSize: 9, fontWeight: 700, color: lowerWinner ? "#7C3AED" : "#94A3B8" }}>
+                      하위 우승
+                    </Typography>
+                    {lowerWinner ? (
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.4 }}>
+                        {lowerWinner.division && (
+                          <Box sx={{ width: 16, height: 16, borderRadius: "50%", bgcolor: "#FAAA47", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 7, fontWeight: 900, color: "#111827", flexShrink: 0, lineHeight: 1 }}>{lowerWinner.division}</Box>
+                        )}
+                        <Typography sx={{ fontSize: 11, fontWeight: 800, color: "#111827" }}>{lowerWinner.name}</Typography>
+                      </Box>
+                    ) : (
+                      <Typography sx={{ fontSize: 9, color: "#CBD5E1" }}>미결정</Typography>
+                    )}
+                  </Box>
+                );
+              })()}
             </Box>
             </Box>
           </Box>

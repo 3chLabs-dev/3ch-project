@@ -309,7 +309,11 @@ export default function LeagueDetail() {
     if (league?.status !== "active") {
       await updateLeague({ id, updates: { status: "active" } });
     }
-    navigate(`/league/${id}/matches`);
+    if (league?.format?.includes("토너먼트")) {
+      navigate(`/league/${id}/tournament/matches`);
+    } else {
+      navigate(`/league/${id}/matches`);
+    }
   };
 
   const handleEnterEdit = () => {
@@ -1261,7 +1265,7 @@ export default function LeagueDetail() {
             <Box sx={floatingBoxSx}>
             <Button fullWidth variant="contained" disableElevation
               sx={{ borderRadius: 1, height: 44, fontWeight: 900, fontSize: 15, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}
-              onClick={() => navigate(`/league/${id}/matches`)}
+              onClick={() => navigate(league.format?.includes("토너먼트") ? `/league/${id}/tournament/matches` : `/league/${id}/matches`)}
             >
               리그 진행 중
             </Button>
@@ -1302,7 +1306,7 @@ export default function LeagueDetail() {
             <Button
               fullWidth variant="contained" disableElevation
               sx={{ borderRadius: 1, height: 44, fontWeight: 900, fontSize: 15, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}
-              onClick={() => navigate(`/league/${id}/matches`)}
+              onClick={() => navigate(league.format?.includes("토너먼트") ? `/league/${id}/tournament/matches` : `/league/${id}/matches`)}
             >
               리그 진행 중
             </Button>

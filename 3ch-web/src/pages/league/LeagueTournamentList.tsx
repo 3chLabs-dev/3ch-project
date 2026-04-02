@@ -195,46 +195,68 @@ export default function LeagueTournamentList() {
               </Stack>
 
               {/* 액션 버튼 */}
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Button
-                  variant="contained"
-                  disableElevation
-                  endIcon={<ChevronRightIcon sx={{ fontSize: 16 }} />}
-                  onClick={() => navigate(`/league/${id}/tournament/bracket`)}
-                  sx={{
-                    flex: 1, height: 40, fontWeight: 700, fontSize: 13,
-                    borderRadius: 1.5, textTransform: "none", boxShadow: "none",
-                    bgcolor: "#2563EB", "&:hover": { bgcolor: "#1D4ED8" },
-                  }}
-                >
-                  대진표 보기
-                </Button>
+              <Stack spacing={1}>
+                <Stack direction="row" spacing={1}>
+                  <Button
+                    variant="outlined"
+                    disableElevation
+                    endIcon={<ChevronRightIcon sx={{ fontSize: 16 }} />}
+                    onClick={() => navigate(`/league/${id}/tournament/matches`)}
+                    sx={{
+                      flex: 1, height: 42, fontWeight: 700, fontSize: 13,
+                      borderRadius: 1.5, textTransform: "none", whiteSpace: "nowrap",
+                      borderColor: "#2563EB", color: "#2563EB",
+                      "&:hover": { bgcolor: "#EFF6FF" },
+                    }}
+                  >
+                    경기 순서
+                  </Button>
+                  <Button
+                    variant="contained"
+                    disableElevation
+                    endIcon={<ChevronRightIcon sx={{ fontSize: 16 }} />}
+                    onClick={() => navigate(`/league/${id}/tournament/bracket`)}
+                    sx={{
+                      flex: 1, height: 42, fontWeight: 700, fontSize: 13,
+                      borderRadius: 1.5, textTransform: "none", boxShadow: "none", whiteSpace: "nowrap",
+                      bgcolor: "#2563EB", "&:hover": { bgcolor: "#1D4ED8" },
+                    }}
+                  >
+                    대진표 보기
+                  </Button>
+                </Stack>
                 {canManage && (
-                  <>
-                    <IconButton
+                  <Stack direction="row" spacing={1}>
+                    <Button
+                      variant="outlined"
                       size="small"
+                      startIcon={<EditOutlinedIcon sx={{ fontSize: 15 }} />}
                       onClick={() => navigate(`/league/${id}/tournament/new?force=true`)}
                       sx={{
-                        width: 40, height: 40, border: "1px solid #E5E7EB",
-                        borderRadius: 1.5, color: "#6B7280",
+                        flex: 1, height: 36, fontWeight: 700, fontSize: 12,
+                        borderRadius: 1.5, textTransform: "none", whiteSpace: "nowrap",
+                        borderColor: "#E5E7EB", color: "#6B7280",
                         "&:hover": { bgcolor: "#F9FAFB" },
                       }}
                     >
-                      <EditOutlinedIcon sx={{ fontSize: 17 }} />
-                    </IconButton>
-                    <IconButton
+                      대진표 수정
+                    </Button>
+                    <Button
+                      variant="outlined"
                       size="small"
+                      startIcon={<DeleteOutlineIcon sx={{ fontSize: 15 }} />}
                       onClick={() => setConfirmOpen(true)}
                       disabled={isDeleting}
                       sx={{
-                        width: 40, height: 40, border: "1px solid #FEE2E2",
-                        borderRadius: 1.5, color: "#EF4444",
+                        flex: 1, height: 36, fontWeight: 700, fontSize: 12,
+                        borderRadius: 1.5, textTransform: "none", whiteSpace: "nowrap",
+                        borderColor: "#FEE2E2", color: "#EF4444",
                         "&:hover": { bgcolor: "#FFF5F5" },
                       }}
                     >
-                      <DeleteOutlineIcon sx={{ fontSize: 17 }} />
-                    </IconButton>
-                  </>
+                      삭제
+                    </Button>
+                  </Stack>
                 )}
               </Stack>
             </Box>

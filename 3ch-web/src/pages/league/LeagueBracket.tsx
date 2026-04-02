@@ -990,7 +990,7 @@ export default function LeagueBracket() {
         {/* 플로팅 버튼들 (position: absolute, wrapperRef 기준 → 스크롤 영역 위에 고정) */}
 
         {/* 이미지 저장 / 인쇄 버튼 */}
-        <Box sx={{ position: "absolute", bottom: 220, right: 14, zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: "#fff", borderRadius: 2, boxShadow: "0 2px 8px rgba(0,0,0,0.15)", display: "flex", flexDirection: "column", alignItems: "center", p: 0.25 }}>
+        <Box sx={{ position: "absolute", bottom: landscape ? 300 : 170, right: landscape ? 14 : 85, zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: "#fff", borderRadius: 2, boxShadow: "0 2px 8px rgba(0,0,0,0.15)", display: "flex", flexDirection: "column", alignItems: "center", p: 0.25 }}>
           <Tooltip title="이미지 저장">
             <IconButton size="small" onClick={handleSaveImage}>
               <DownloadIcon sx={{ fontSize: 18, ...(landscape ? {} : { transform: "rotate(90deg)" }) }} />
@@ -1004,7 +1004,7 @@ export default function LeagueBracket() {
         </Box>
 
         {/* 줌 컨트롤: portrait=세로(writing-mode 회전), landscape=가로 */}
-        <Box sx={{ position: "absolute", bottom: 126, right: 14, zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: "#fff", borderRadius: 2, boxShadow: "0 2px 8px rgba(0,0,0,0.15)", display: "flex", flexDirection: "column", alignItems: "center", p: 0.25 }}>
+        <Box sx={{ position: "absolute", bottom: landscape ? 216 : 126, right: landscape ? 14 : 85, zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: "#fff", borderRadius: 2, boxShadow: "0 2px 8px rgba(0,0,0,0.15)", display: "flex", flexDirection: "column", alignItems: "center", p: 0.25 }}>
           <IconButton size="small" onClick={() => setUserZoom((z) => Math.min(2.5, +(z + 0.25).toFixed(2)))}>
             <ZoomInIcon sx={{ fontSize: 18 }} />
           </IconButton>
@@ -1017,12 +1017,12 @@ export default function LeagueBracket() {
         </Box>
 
         <Tooltip title="새로고침">
-          <IconButton onClick={handleRefresh} sx={{ position: "absolute", bottom: 67, right: 14, zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: "#fff", color: "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: "#F3F4F6" } }}>
+          <IconButton onClick={handleRefresh} sx={{ position: "absolute", bottom: landscape? 157 : 67, right: landscape ? 14 : 85, zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: "#fff", color: "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: "#F3F4F6" } }}>
             <RefreshIcon sx={{ fontSize: 18 }} />
           </IconButton>
         </Tooltip>
         <Tooltip title={landscape ? "세로 보기" : "가로 보기"}>
-          <IconButton onClick={() => { setLandscape((v) => !v); setUserZoom(1); }} sx={{ position: "absolute", bottom: 14, right: 14, zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: landscape ? COLOR.primary : "#fff", color: landscape ? "#fff" : "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: landscape ? "#1D4ED8" : "#F3F4F6" } }}>
+          <IconButton onClick={() => { setLandscape((v) => !v); setUserZoom(1); }} sx={{ position: "absolute", bottom: landscape ? 104 : 14, right: landscape ? 14 : 85, zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: landscape ? COLOR.primary : "#fff", color: landscape ? "#fff" : "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: landscape ? "#1D4ED8" : "#F3F4F6" } }}>
             <ScreenRotationIcon sx={{ fontSize: 18 }} />
           </IconButton>
         </Tooltip>

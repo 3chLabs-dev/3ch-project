@@ -212,9 +212,15 @@ function BracketScoreCell({ match, isA, leagueId, winScore, canManage, landscape
   landscape: boolean;
 }) {
   const [updateMatch] = useUpdateLeagueMatchMutation();
-
   const isActive = match?.status === "playing" || match?.status === "done";
   const score    = isActive ? ((isA ? match!.score_a : match!.score_b) ?? 0) : null;
+  const [isEditing, setIsEditing] = useState(false);
+  const [tempValue, setTempValue] = useState<string>("");
+  const handleSet = (value: number) => {
+    if (!match || !canEdit) return;
+    const next = (Math.max(0, value));
+    updateMatch({ leagueId, matchId: match.id, updates: isA ? { score_a: next } : { score_b: next } });
+  };
   const oppScore = isActive ? ((isA ? match!.score_b : match!.score_a) ?? 0) : null;
   // 선승제에서 정확히 winScore 점을 획득한 경우 → 승자 스타일 적용
   const isWinner = winScore !== null && match?.status === "done" && score !== null && oppScore !== null && score === winScore;
@@ -243,9 +249,26 @@ function BracketScoreCell({ match, isA, leagueId, winScore, canManage, landscape
       px: 0.25, height: "100%", gap: 0.25,
     }}>
       <ScoreButton icon="down" variant="score" disabled={(score ?? 0) <= 0} rotate={!landscape} onClick={() => handleChange(-1)} />
-      <Typography sx={{ fontSize: 14, ...winnerStyle, lineHeight: 1, ...(landscape ? {} : { transform: "rotate(90deg)" }), minWidth: 14, textAlign: "center" }}>
-        {score ?? 0}
-      </Typography>
+      {!isEditing && 
+        <Typography onClick={() => { setTempValue(String(score ?? 0)); setIsEditing(true); }}sx={{ fontSize: 14, ...winnerStyle, lineHeight: 1, ...(landscape ? {} : { transform: "rotate(90deg)" }), minWidth: 14, textAlign: "center" }}>
+          {score ?? 0}
+        </Typography>
+      }
+      {isEditing &&
+        <input type="text" inputMode="numeric" autoFocus value={tempValue} 
+          onChange={(e) => { const val = e.target.value;
+                              if (/^\d*$/.test(val)) {
+                                setTempValue(val);
+                              }}}
+          onBlur={() => { const num = tempValue === "" ? 0 : Number(tempValue); handleSet(num); setIsEditing(false);}}
+          onKeyDown={(e) => { if (e.key === "Enter") {
+                                const num = tempValue === "" ? 0 : Number(tempValue);
+                                handleSet(num);
+                                setIsEditing(false);
+                              }
+                            }}
+          style={{ width: 50, textAlign: "center",}}/>
+      }
       <ScoreButton icon="up" variant="score" rotate={!landscape} onClick={() => handleChange(1)} />
     </Box>
   );

@@ -1583,6 +1583,41 @@ router.get('/league/:id/matches', optionalAuth, async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /league/{id}/matches:
+ *   delete:
+ *     summary: 전체 경기 삭제
+ *     description: 해당 리그의 모든 경기를 삭제하고 리그 상태를 draft로 초기화합니다. owner/admin만 가능합니다.
+ *     tags: [리그]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: 리그 ID
+ *     responses:
+ *       200:
+ *         description: 삭제 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *                   example: true
+ *       401:
+ *         description: 인증 필요
+ *       403:
+ *         description: 권한 없음 (owner/admin 아님)
+ *       500:
+ *         description: 서버 오류
+ */
 // DELETE /league/:id/matches - 전체 경기 삭제 및 리그 상태 draft로 초기화 (owner/admin)
 router.delete('/league/:id/matches', requireAuth, async (req, res) => {
   const userId = Number(req.user.sub);
@@ -1975,6 +2010,26 @@ router.patch('/league/:id/matches/:matchId', optionalAuth, async (req, res) => {
       vals,
     );
     if (result.rowCount === 0) return res.status(404).json({ message: '경기를 찾을 수 없습니다.' });
+
+    // 토너먼트 진출 처리: status가 done이 되면 승자/패자를 다음 경기에 배정
+    if (status === 'done') {
+      const m = result.rows[0];
+      const scoreA = m.score_a ?? 0;
+      const scoreB = m.score_b ?? 0;
+      if (scoreA !== scoreB) {
+        const winnerId = scoreA > scoreB ? m.participant_a_id : m.participant_b_id;
+        const loserId  = scoreA > scoreB ? m.participant_b_id : m.participant_a_id;
+        if (m.next_match_id && winnerId) {
+          const col = m.next_slot === 'a' ? 'participant_a_id' : 'participant_b_id';
+          await pool.query(`UPDATE league_matches SET ${col} = $1 WHERE id = $2`, [winnerId, m.next_match_id]);
+        }
+        if (m.loser_next_match_id && loserId) {
+          const col = m.loser_next_slot === 'a' ? 'participant_a_id' : 'participant_b_id';
+          await pool.query(`UPDATE league_matches SET ${col} = $1 WHERE id = $2`, [loserId, m.loser_next_match_id]);
+        }
+      }
+    }
+
     return res.json({ match: result.rows[0] });
   } catch (err) {
     console.error('Error updating match:', err);

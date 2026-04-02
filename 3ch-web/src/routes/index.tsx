@@ -36,6 +36,7 @@ import LeagueMatchOrder from "../pages/league/LeagueMatchOrder";
 import LeagueTournamentGenerate from "../pages/league/LeagueTournamentGenerate";
 import LeagueTournamentList from "../pages/league/LeagueTournamentList";
 import LeagueTournamentBracket from "../pages/league/LeagueTournamentBracket";
+import LeagueTournamentMatchOrder from "../pages/league/LeagueTournamentMatchOrder";
 import DrawList from "../pages/draw/DrawList";
 import DrawDetail from "../pages/draw/DrawDetail";
 import MemberCheckPage from "../pages/mypage/userinfo/MemberCheckPage.tsx";
@@ -73,6 +74,7 @@ export const router = createBrowserRouter([
       { path: "/league/:id/tournament", element: <LeagueTournamentList /> },
       { path: "/league/:id/tournament/new", element: <LeagueTournamentGenerate /> },
       { path: "/league/:id/tournament/bracket", element: <LeagueTournamentBracket /> },
+      { path: "/league/:id/tournament/matches", element: <LeagueTournamentMatchOrder /> },
       { path: "/league/:id/matches", element: <LeagueMatchOrder /> },
       { path: "/mypage", element: <MyPage />},
       { path: "/auth/success", element: <AuthSuccess />},

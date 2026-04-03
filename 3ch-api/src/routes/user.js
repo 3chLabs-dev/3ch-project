@@ -296,4 +296,107 @@ router.get("/user/me/home-summary", requireAuth, async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /user/me/push-subscription:
+ *   post:
+ *     summary: 푸시 알림 구독 등록
+ *     description: 사용자의 Web Push 구독 정보를 저장합니다.
+ *     tags: [User]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [endpoint, keys]
+ *             properties:
+ *               endpoint:
+ *                 type: string
+ *               keys:
+ *                 type: object
+ *                 properties:
+ *                   p256dh:
+ *                     type: string
+ *                   auth:
+ *                     type: string
+ *     responses:
+ *       200:
+ *         description: 등록 성공
+ *       401:
+ *         description: 인증 토큰이 없거나 유효하지 않음.
+ *       500:
+ *         description: 서버 오류.
+ */
+router.post("/user/me/push-subscription", requireAuth, async (req, res) => {
+  const userId = Number(req.user.sub);
+  if (!Number.isFinite(userId)) {
+    return res.status(401).json({ ok: false, error: "BAD_TOKEN_SUB" });
+  }
+  const { endpoint, keys } = req.body;
+  if (!endpoint || !keys?.p256dh || !keys?.auth) {
+    return res.status(400).json({ ok: false, error: "INVALID_SUBSCRIPTION" });
+  }
+  try {
+    await pool.query(
+      `INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (user_id, endpoint) DO UPDATE SET p256dh = $3, auth = $4`,
+      [userId, endpoint, keys.p256dh, keys.auth]
+    );
+    return res.json({ ok: true });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
+});
+
+/**
+ * @openapi
+ * /user/me/push-subscription:
+ *   delete:
+ *     summary: 푸시 알림 구독 해제
+ *     description: 사용자의 Web Push 구독 정보를 삭제합니다.
+ *     tags: [User]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [endpoint]
+ *             properties:
+ *               endpoint:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: 해제 성공
+ *       401:
+ *         description: 인증 토큰이 없거나 유효하지 않음.
+ *       500:
+ *         description: 서버 오류.
+ */
+router.delete("/user/me/push-subscription", requireAuth, async (req, res) => {
+  const userId = Number(req.user.sub);
+  if (!Number.isFinite(userId)) {
+    return res.status(401).json({ ok: false, error: "BAD_TOKEN_SUB" });
+  }
+  const { endpoint } = req.body;
+  if (!endpoint) {
+    return res.status(400).json({ ok: false, error: "MISSING_ENDPOINT" });
+  }
+  try {
+    await pool.query(
+      "DELETE FROM push_subscriptions WHERE user_id = $1 AND endpoint = $2",
+      [userId, endpoint]
+    );
+    return res.json({ ok: true });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
+});
+
 module.exports = router;

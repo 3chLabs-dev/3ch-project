@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Box, Button, CircularProgress, Dialog, DialogContent, DialogTitle,
-  IconButton, InputAdornment, List, ListItemButton, Stack, Tab, Tabs, TextField, Typography,
+  IconButton, InputAdornment, List, ListItemButton, Stack, Tab, Tabs, TextField, Tooltip, Typography,
 } from "@mui/material";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import EditIcon from "@mui/icons-material/Edit";
@@ -12,6 +12,9 @@ import RemoveIcon from "@mui/icons-material/Remove";
 import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
 import SearchIcon from "@mui/icons-material/Search";
 import AccountTreeIcon from "@mui/icons-material/AccountTree";
+import NotificationsIcon from "@mui/icons-material/Notifications";
+import NotificationsOffIcon from "@mui/icons-material/NotificationsOff";
+import { usePushNotification } from "../../hooks/usePushNotification";
 import {
   useGetLeagueQuery,
   useGetLeagueMatchesQuery,
@@ -230,6 +233,8 @@ export default function LeagueTournamentMatchOrder() {
   const navigate = useNavigate();
   const authUser = useAppSelector((s) => s.auth.user);
 
+  const { state: pushState, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe } = usePushNotification();
+
   const [tabKey, setTabKey] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [registerTarget, setRegisterTarget] = useState<{ matchId: string; slot: "a" | "b" } | null>(null);
@@ -355,6 +360,25 @@ export default function LeagueTournamentMatchOrder() {
         >
           대진표 보기
         </Button>
+        <Tooltip title={
+          pushState === "subscribed" ? "알림 끄기"
+          : pushState === "denied" ? "브라우저에서 알림이 차단됨"
+          : pushState === "unsupported" ? "이 환경에서는 알림을 지원하지 않습니다"
+          : "경기 시작 알림 받기"
+        }>
+          <span>
+            <IconButton
+              size="small"
+              disabled={pushState === "denied" || pushState === "unsupported"}
+              onClick={pushState === "subscribed" ? pushUnsubscribe : pushSubscribe}
+              sx={{ color: pushState === "subscribed" ? "#2563EB" : "#9CA3AF" }}
+            >
+              {pushState === "subscribed"
+                ? <NotificationsIcon sx={{ fontSize: 20 }} />
+                : <NotificationsOffIcon sx={{ fontSize: 20 }} />}
+            </IconButton>
+          </span>
+        </Tooltip>
         {canManage && (
           <IconButton size="small" onClick={() => setEditMode((v) => !v)}
             sx={{ color: editMode ? "#10B981" : "#6B7280" }}>

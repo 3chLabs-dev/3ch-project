@@ -13,6 +13,8 @@ import {
   IconButton, InputAdornment, Stack, TextField, Typography, Tooltip,
 } from "@mui/material";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
+import NotificationsIcon from "@mui/icons-material/Notifications";
+import NotificationsOffIcon from "@mui/icons-material/NotificationsOff";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import DragHandleIcon from "@mui/icons-material/DragHandle";
@@ -32,6 +34,7 @@ import {
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
 import { useAppSelector } from "../../app/hooks";
 import { useOutletContext } from "react-router-dom";
+import { usePushNotification } from "../../hooks/usePushNotification";
 
 // ─── 상태 표시 ────────────────────────────────────────────────────────────────
 const STATUS_LABEL: Record<string, string> = {
@@ -267,6 +270,7 @@ function MatchCard({
 export default function LeagueMatchOrder() {
   const { id: leagueId = "" } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { state: pushState, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe } = usePushNotification();
   const { scrollToTop } = useOutletContext<{ scrollToTop: () => void }>();
 
   const { data: leagueData } = useGetLeagueQuery(leagueId, { skip: !leagueId });
@@ -354,6 +358,25 @@ export default function LeagueMatchOrder() {
         >
           대진표 보기
         </Button>
+        <Tooltip title={
+          pushState === "subscribed" ? "알림 끄기"
+          : pushState === "denied" ? "브라우저에서 알림이 차단됨"
+          : pushState === "unsupported" ? "이 환경에서는 알림을 지원하지 않습니다"
+          : "경기 시작 알림 받기"
+        }>
+          <span>
+            <IconButton
+              size="small"
+              disabled={pushState === "denied" || pushState === "unsupported"}
+              onClick={pushState === "subscribed" ? pushUnsubscribe : pushSubscribe}
+              sx={{ color: pushState === "subscribed" ? "#2563EB" : "#9CA3AF" }}
+            >
+              {pushState === "subscribed"
+                ? <NotificationsIcon sx={{ fontSize: 20 }} />
+                : <NotificationsOffIcon sx={{ fontSize: 20 }} />}
+            </IconButton>
+          </span>
+        </Tooltip>
       </Stack>
 
       {/* 생성 중 / 경기 없을 때 */}

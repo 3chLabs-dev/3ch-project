@@ -4,6 +4,46 @@ const { randomUUID } = require('crypto');
 const pool = require('../db/pool');
 const { requireAuth, optionalAuth } = require('../middlewares/auth');
 const { buildLeagueCode } = require('../utils/clubCodeUtils');
+const webpush = require('web-push');
+
+webpush.setVapidDetails(
+  process.env.VAPID_MAILTO,
+  process.env.VAPID_PUBLIC_KEY,
+  process.env.VAPID_PRIVATE_KEY
+);
+
+/** 참가자(participant_id)의 member_id로 push 발송 */
+async function sendPushToParticipant(participantId, payload) {
+  if (!participantId) return;
+  try {
+    const r = await pool.query(
+      'SELECT member_id FROM league_participants WHERE id = $1',
+      [participantId]
+    );
+    if (!r.rows[0]?.member_id) return;
+    const memberId = r.rows[0].member_id;
+    const subs = await pool.query(
+      'SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = $1',
+      [memberId]
+    );
+    for (const sub of subs.rows) {
+      await webpush.sendNotification(
+        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+        JSON.stringify(payload)
+      ).catch((e) => {
+        if (e.statusCode === 410) {
+          // 만료된 subscription 삭제
+          pool.query(
+            'DELETE FROM push_subscriptions WHERE endpoint = $1',
+            [sub.endpoint]
+          ).catch(() => {});
+        }
+      });
+    }
+  } catch (e) {
+    console.error('push 발송 실패:', e.message);
+  }
+}
 
 const router = express.Router();
 
@@ -2010,6 +2050,15 @@ router.patch('/league/:id/matches/:matchId', optionalAuth, async (req, res) => {
       vals,
     );
     if (result.rowCount === 0) return res.status(404).json({ message: '경기를 찾을 수 없습니다.' });
+
+    // 경기 시작 알림: status가 playing이 되면 두 참가자에게 푸시 발송
+    if (status === 'playing') {
+      const m = result.rows[0];
+      const label = m.match_label ?? `${m.match_order}번 경기`;
+      const payload = { title: '내 경기가 시작됩니다!', body: `${label} 경기가 시작되었습니다.`, url: `/league/${leagueId}/tournament/matches` };
+      sendPushToParticipant(m.participant_a_id, payload);
+      sendPushToParticipant(m.participant_b_id, payload);
+    }
 
     // 토너먼트 진출 처리: status가 done이 되면 승자/패자를 다음 경기에 배정
     if (status === 'done') {

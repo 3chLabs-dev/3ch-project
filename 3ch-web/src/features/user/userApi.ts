@@ -64,6 +64,20 @@ const userApi = baseApi.injectEndpoints({
         res.preferences,
       invalidatesTags: ["UserPreferences"],
     }),
+    savePushSubscription: builder.mutation<void, PushSubscriptionJSON>({
+      query: (sub) => ({
+        url: "/user/me/push-subscription",
+        method: "POST",
+        body: sub,
+      }),
+    }),
+    deletePushSubscription: builder.mutation<void, { endpoint: string }>({
+      query: (body) => ({
+        url: "/user/me/push-subscription",
+        method: "DELETE",
+        body,
+      }),
+    }),
     getHomeSummary: builder.query<HomeSummary, { groupId?: string | null }>({
       query: ({ groupId }) => ({
         url: "/user/me/home-summary",
@@ -81,5 +95,7 @@ const userApi = baseApi.injectEndpoints({
 export const {
   useGetPreferencesQuery,
   useUpdatePreferencesMutation,
+  useSavePushSubscriptionMutation,
+  useDeletePushSubscriptionMutation,
   useGetHomeSummaryQuery,
 } = userApi;

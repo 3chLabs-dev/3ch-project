@@ -67,7 +67,7 @@ export default function LeagueTournamentGenerate() {
   }
 
   const selectedSeedingDesc = SEEDING_OPTIONS.find((o) => o.value === seeding)?.desc ?? "";
-  const selectedAdvancementDesc = ADVANCEMENT_OPTIONS.find((o) => o.value === advancement)?.desc ?? "";
+  // const selectedAdvancementDesc = ADVANCEMENT_OPTIONS.find((o) => o.value === advancement)?.desc ?? "";
 
   return (
     <Box sx={{ maxWidth: 500, mx: "auto", pb: 6 }}>

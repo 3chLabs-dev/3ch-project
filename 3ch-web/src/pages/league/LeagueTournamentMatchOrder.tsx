@@ -274,11 +274,17 @@ export default function LeagueTournamentMatchOrder() {
       matches.filter((m) => m.bracket === "lower").map((m) => m.round_number ?? 0),
     )].sort((a, b) => a - b);
 
+    // 순서: 상위 R1 → 상위 R2 → 하위 R1 → 상위 R3 → 하위 R2 → ...
+    // 첫 상위 라운드 단독, 이후 상위[i] → 하위[i-1] 쌍으로 배치
     const result: RoundTab[] = [];
-    const maxLen = Math.max(upperRounds.length, lowerRounds.length);
-    for (let i = 0; i < maxLen; i++) {
-      if (i < upperRounds.length) result.push(makeTab("upper", upperRounds[i]));
-      if (i < lowerRounds.length) result.push(makeTab("lower", lowerRounds[i]));
+    if (upperRounds.length === 0) return lowerRounds.map((r) => makeTab("lower", r));
+    result.push(makeTab("upper", upperRounds[0]));
+    for (let i = 1; i < upperRounds.length; i++) {
+      result.push(makeTab("upper", upperRounds[i]));
+      if (i - 1 < lowerRounds.length) result.push(makeTab("lower", lowerRounds[i - 1]));
+    }
+    for (let i = upperRounds.length - 1; i < lowerRounds.length; i++) {
+      result.push(makeTab("lower", lowerRounds[i]));
     }
     return result;
   }, [matches]);

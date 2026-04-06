@@ -114,7 +114,9 @@ function formatDate(iso: string) {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   const wd = ["일", "월", "화", "수", "목", "금", "토"][d.getDay()];
-  return `${y}-${m}-${day}(${wd})`;
+  const hh = String(d.getUTCHours()).padStart(2, "0");;
+  const minute = String(d.getUTCMinutes()).padStart(2, "0");;
+  return `${y}-${m}-${day}(${wd}) ${hh}:${minute}`;
 }
 
 function formatDateTime(iso: string) {
@@ -1031,14 +1033,10 @@ export default function DrawList() {
               <CardContent sx={{ py: 1.5, px: 2, "&:last-child": { pb: 1.5 } }}>
                 <Stack direction="row" alignItems="center" justifyContent="space-between">
                   <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography fontWeight={800} noWrap>{draw.name}</Typography>
+                    <Typography fontWeight={800} noWrap>{draw.title} | {draw.type}</Typography>
                     <Stack direction="row" spacing={1} alignItems="center" mt={0.3}>
                       <Typography variant="caption" color="text.secondary" fontWeight={700}>
-                        {formatDate(draw.created_at)}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">·</Typography>
-                      <Typography variant="caption" color="text.secondary" fontWeight={700}>
-                        경품 {draw.prize_count}개 · {draw.winner_count > 0 ? `당첨 ${draw.winner_count}명` : `${draw.total_quantity}명 예정`}
+                        {formatDate(draw.start_date)}
                       </Typography>
                       {draw.prize_count > 0 && draw.winner_count === 0 && (
                         <Chip

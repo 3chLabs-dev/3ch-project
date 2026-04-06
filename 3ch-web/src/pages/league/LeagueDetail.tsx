@@ -414,7 +414,7 @@ export default function LeagueDetail() {
           <ArrowBackIcon />
         </IconButton>
         <Typography fontWeight={900} fontSize={18} sx={{ flex: 1 }}>
-          {isEditing ? "리그 수정" : "리그 상세"}
+          {league.title}
         </Typography>
         {!isEditing && (
           <>

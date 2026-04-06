@@ -433,6 +433,7 @@ const participantSchema = z.object({
 const createLeagueSchema = z.object({
   name: z.string().min(1, '리그 이름은 필수입니다.'),
   description: z.string().optional(),
+  title: z.string().optional(),
   type: z.string().min(1, '리그 유형은 필수입니다.'),
   format: z.string().optional(),
   sport: z.string().min(1, '스포츠 종목은 필수입니다.'),
@@ -450,6 +451,7 @@ const createLeagueSchema = z.object({
 const updateLeagueSchema = z.object({
   name: z.string().min(1, '리그 이름은 필수입니다.').optional(),
   description: z.string().optional(),
+  title: z.string().optional(),
   type: z.string().min(1, '리그 유형은 필수입니다.').optional(),
   format: z.string().optional(),
   sport: z.string().min(1, '스포츠 종목은 필수입니다.').optional(),
@@ -557,8 +559,8 @@ router.get('/league', async (req, res) => {
 
     const listParams = [...params, limit, offset];
     const result = await pool.query(
-      `SELECT l.id, l.name, l.description, l.type, l.sport, l.start_date, l.status,
-              l.recruit_count, l.participant_count, l.group_id, l.created_at, l.league_code,
+      `SELECT l.id, l.name, l.description, l.title, l.type, l.sport, l.start_date, l.status,
+              l.recruit_count, l.participant_count, l.group_id, l.created_at, l.league_code, l.title,
               u.name AS creator_name,
               g.name AS group_name
        FROM leagues l
@@ -654,6 +656,7 @@ router.post('/league', requireAuth, async (req, res) => {
     const {
       name,
       description,
+      title,
       type,
       format,
       sport,
@@ -684,10 +687,10 @@ router.post('/league', requireAuth, async (req, res) => {
     await client.query('BEGIN');
 
     const result = await client.query(
-      `INSERT INTO leagues (id, name, description, type, format, sport, start_date, rules, sort_order, recruit_count, participant_count, group_id, created_by_id, tournament_seeding, tournament_advancement)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-       RETURNING id, name, description, type, format, sport, start_date, status, rules, notice, sort_order, recruit_count, participant_count, group_id, tournament_seeding, tournament_advancement, created_at, updated_at;`,
-      [leagueId, name, description, type, format, sport, start_date, rules, sort_order ?? null, recruit_count, participant_count, group_id, userId, tournament_seeding ?? null, tournament_advancement ?? null],
+      `INSERT INTO leagues (id, name, description, title, type, format, sport, start_date, rules, sort_order, recruit_count, participant_count, group_id, created_by_id, tournament_seeding, tournament_advancement)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+       RETURNING id, name, description, title, type, format, sport, start_date, status, rules, notice, sort_order, recruit_count, participant_count, group_id, tournament_seeding, tournament_advancement, created_at, updated_at;`,
+      [leagueId, name, description, title, type, format, sport, start_date, rules, sort_order ?? null, recruit_count, participant_count, group_id, userId, tournament_seeding ?? null, tournament_advancement ?? null],
     );
 
     // 리그 코드 생성: {클럽코드}{YYMMDD}{순번2자리}
@@ -1044,7 +1047,7 @@ router.get('/league/:id', optionalAuth, async (req, res) => {
 
     // 리그 정보 조회
     const leagueResult = await pool.query(
-      `SELECT id, name, description, type, format, sport, start_date, rules, status,
+      `SELECT id, name, description, title, type, format, sport, start_date, rules, status,
               sort_order, notice, league_code, recruit_count, participant_count, join_permission,
               group_id, created_by_id, tournament_seeding, tournament_advancement, created_at, updated_at
        FROM leagues
@@ -1154,7 +1157,7 @@ router.put('/league/:id', requireAuth, async (req, res) => {
       UPDATE leagues
       SET ${fields.join(', ')}, updated_at = NOW()
       WHERE id = $${queryIndex}
-      RETURNING id, name, description, type, format, sport, start_date, rules, notice, sort_order, status, recruit_count, participant_count, join_permission, created_by_id, created_at, updated_at;
+      RETURNING id, name, description, title, type, format, sport, start_date, rules, notice, sort_order, status, recruit_count, participant_count, join_permission, created_by_id, created_at, updated_at;
     `;
 
     const result = await pool.query(updateQuery, values);

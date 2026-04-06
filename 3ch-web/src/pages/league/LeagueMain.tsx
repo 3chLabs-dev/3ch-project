@@ -9,7 +9,7 @@ import {
   Stack, Typography, Card, CardContent, Button, IconButton, Box
 } from "@mui/material";
 import TuneIcon from "@mui/icons-material/Tune";
-import { formatLeagueDate } from "../../utils/dateUtils";
+import { formatLeagueDateTime } from "../../utils/dateUtils";
 import LeagueFilterDialog from "../../components/LeagueFilterDialog.tsx";
 
 type LeagueStatus = "scheduled" | "active" | "completed";
@@ -239,9 +239,14 @@ function LeagueCard({ league }: { league: LeagueListItem }) {
     >
       <CardContent sx={{ py: 1.8, px: 2.5, "&:last-child": { pb: 1.8 } }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center">
-          <Typography fontWeight={700} fontSize={15}>
-            {formatLeagueDate(league.start_date)}
-          </Typography>
+          <Box>
+            <Typography fontWeight={700} fontSize={15}>
+              {league.title} | {league.type}
+            </Typography>
+            <Typography fontSize={12} color="text.secondary">
+              {formatLeagueDateTime(league.start_date)}
+            </Typography>
+          </Box>
           <Typography variant="body2" color="text.secondary" fontWeight={600}>
             {league.participant_count} / {league.recruit_count}명
           </Typography>

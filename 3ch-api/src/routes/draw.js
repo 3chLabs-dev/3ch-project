@@ -139,13 +139,15 @@ router.get('/draw/:leagueId', requireAuth, async (req, res) => {
       `SELECT d.id, d.name, d.created_at, d.draw_code, u.name AS creator_name,
               COUNT(DISTINCT dp.id) AS prize_count,
               COALESCE((SELECT SUM(quantity) FROM draw_prizes WHERE draw_id = d.id), 0) AS total_quantity,
-              COUNT(DISTINCT dw.id) AS winner_count
+              COUNT(DISTINCT dw.id) AS winner_count,
+              l.title, l.type, l.start_date
        FROM draws d
        LEFT JOIN users u ON u.id = d.created_by_id
        LEFT JOIN draw_prizes dp ON dp.draw_id = d.id
        LEFT JOIN draw_winners dw ON dw.draw_id = d.id
+       LEFT JOIN leagues l ON l.id = d.league_id
        WHERE d.league_id = $1
-       GROUP BY d.id, d.name, d.created_at, d.draw_code, u.name
+       GROUP BY d.id, d.name, d.created_at, d.draw_code, u.name, l.title, l.type, l.start_date
        ORDER BY d.created_at DESC`,
       [leagueId],
     );

@@ -262,7 +262,8 @@ export default function LeagueTournamentMatchOrder() {
       const sample = matches.find(
         (m) => (m.bracket ?? "upper") === bracket && m.round_number === r,
       );
-      return { key: `${bracket}-${r}`, label: sample?.match_label ?? `R${r}`, bracket, roundNumber: r };
+      const prefix = bracket === "upper" ? "상위 " : "하위 ";
+      return { key: `${bracket}-${r}`, label: prefix + (sample?.match_label ?? `R${r}`), bracket, roundNumber: r };
     };
 
     const upperRounds = [...new Set(

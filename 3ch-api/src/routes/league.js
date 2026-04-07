@@ -2154,6 +2154,39 @@ router.delete('/league/:id/matches/:matchId', requireAuth, async (req, res) => {
   }
 });
 
+/** 경기 참가자에게 앱 푸시 알림 전송 */
+router.post('/league/:id/matches/:matchId/notify', requireAuth, async (req, res) => {
+  const leagueId = req.params.id;
+  const matchId = req.params.matchId;
+  try {
+    const r = await pool.query(
+      `SELECT m.match_order, m.participant_a_id, m.participant_b_id,
+              pa.name AS a_name, pa.division AS a_div,
+              pb.name AS b_name, pb.division AS b_div
+       FROM league_matches m
+       LEFT JOIN league_participants pa ON pa.id = m.participant_a_id
+       LEFT JOIN league_participants pb ON pb.id = m.participant_b_id
+       WHERE m.id = $1 AND m.league_id = $2`,
+      [matchId, leagueId]
+    );
+    if (!r.rows[0]) return res.status(404).json({ ok: false });
+    const m = r.rows[0];
+    const aLabel = m.a_div ? `(${m.a_div})${m.a_name ?? '?'}` : (m.a_name ?? '?');
+    const bLabel = m.b_div ? `(${m.b_div})${m.b_name ?? '?'}` : (m.b_name ?? '?');
+    const payload = {
+      title: `${m.match_order}경기`,
+      body: `${aLabel} VS ${bLabel}\n곧 경기 시작! 지금 입장해 주세요`,
+      url: `/league/${leagueId}/matches`,
+    };
+    sendPushToParticipant(m.participant_a_id, payload);
+    sendPushToParticipant(m.participant_b_id, payload);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Error sending match notify:', err);
+    return res.status(500).json({ message: '서버 오류' });
+  }
+});
+
 /**
  * @openapi
  * /league/{id}/matches/init-tournament:

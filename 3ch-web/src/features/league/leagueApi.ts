@@ -391,6 +391,13 @@ export const leagueApi = baseApi.injectEndpoints({
       invalidatesTags: (_result, _error, { leagueId }) => [{ type: "League", id: `matches-${leagueId}` }],
     }),
 
+    notifyLeagueMatch: builder.mutation<{ ok: boolean }, { leagueId: string; matchId: string }>({
+      query: ({ leagueId, matchId }) => ({
+        url: `/league/${leagueId}/matches/${matchId}/notify`,
+        method: "POST",
+      }),
+    }),
+
     reorderLeagueParticipants: builder.mutation<{ ok: boolean }, { leagueId: string; order: string[] }>({
       query: ({ leagueId, order }) => ({
         url: `/league/${leagueId}/participants/reorder`,
@@ -457,6 +464,7 @@ export const {
   useUpdateLeagueMatchMutation,
   useReorderLeagueMatchesMutation,
   useDeleteLeagueMatchMutation,
+  useNotifyLeagueMatchMutation,
   useReorderLeagueParticipantsMutation,
   useDeleteAllLeagueMatchesMutation,
   useInitTournamentMatchesMutation,

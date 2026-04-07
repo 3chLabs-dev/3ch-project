@@ -10,16 +10,20 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   Box, Button, Card, CardContent, CircularProgress,
-  IconButton, InputAdornment, Stack, TextField, Typography, Tooltip,
+  Divider, IconButton, InputAdornment, ListItemIcon, ListItemText,
+  Menu, MenuItem, Stack, TextField, Typography, Tooltip,
 } from "@mui/material";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import NotificationsOffIcon from "@mui/icons-material/NotificationsOff";
+import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import DragHandleIcon from "@mui/icons-material/DragHandle";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
+import SearchIcon from "@mui/icons-material/Search";
 import AddIcon from "@mui/icons-material/Add";
 import RemoveIcon from "@mui/icons-material/Remove";
 import {
@@ -29,6 +33,7 @@ import {
   useUpdateLeagueMatchMutation,
   useReorderLeagueMatchesMutation,
   useDeleteLeagueMatchMutation,
+  useNotifyLeagueMatchMutation,
   type LeagueMatch,
 } from "../../features/league/leagueApi";
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
@@ -39,14 +44,10 @@ import { usePushNotification } from "../../hooks/usePushNotification";
 // ─── 상태 표시 ────────────────────────────────────────────────────────────────
 const STATUS_LABEL: Record<string, string> = {
   pending: "시작",
-  playing: "저장",
-  done: "완료",
+  playing: "진행 중",
+  done: "종료",
 };
-const STATUS_COLOR: Record<string, string> = {
-  pending: "#6B7280",
-  playing: "#2F80ED",
-  done: "#10B981",
-};
+
 const NEXT_STATUS: Record<string, "pending" | "playing" | "done"> = {
   pending: "playing",
   playing: "done",
@@ -62,18 +63,54 @@ function getWinScore(rules?: string | null): number | null {
   return null;
 }
 
-// ─── 참가자 표시 ──────────────────────────────────────────────────────────────
-function ParticipantLabel({ name, division, isMe }: { name: string | null; division: string | null; isMe?: boolean }) {
+// ─── 참가자 행 (번호 + 이름/부 + 점수) ──────────────────────────────────────
+/** 테두리 박스 안 참가자 행: [번호셀] | [배지+이름] [점수] */
+function ParticipantRow({
+  name, division, isMe, score, wins, canEditScore, onMinus, onPlus,
+}: {
+  name: string | null; division: string | null; isMe?: boolean;
+  score: number; wins: boolean; canEditScore: boolean;
+  onMinus: () => void; onPlus: () => void;
+}) {
   return (
-    <Stack direction="row" alignItems="center" spacing={0.5}>
-      {division && (
-        <Box component="span" sx={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 20, height: 20, borderRadius: "50%", bgcolor: "#FAAA47", color: "#000", fontSize: 9, fontWeight: 900, flexShrink: 0 }}>
-          {division}
+    <Stack direction="row" alignItems="stretch" sx={{ minHeight: 54 }}>
+      {/* 왼쪽 번호 셀 */}
+      <Box sx={{ width: 46, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", borderRight: "1.5px solid #E5E7EB" }}>
+        <Typography sx={{ fontSize: 22, fontWeight: 900, color: "#C4C9D4" }}>
+          {division ?? ""}
+        </Typography>
+      </Box>
+
+      {/* 배지 + 이름 */}
+      <Stack direction="row" alignItems="center" spacing={0.5} flex={1} px={1.5} minWidth={0}>
+        {division && (
+          <Box component="span" sx={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 22, height: 22, borderRadius: "50%", bgcolor: "#FAAA47", color: "#000", fontSize: 9, fontWeight: 900, flexShrink: 0, px: 0.3 }}>
+            {division}
+          </Box>
+        )}
+        <Typography noWrap sx={{ fontWeight: 700, fontSize: 14, color: isMe ? "#2F80ED" : "#111827" }}>
+          {name ?? "?"}
+        </Typography>
+      </Stack>
+
+      {/* -[점수]+ */}
+      <Stack direction="row" alignItems="center" sx={{ flexShrink: 0, pr: 1, gap: "4px" }}>
+        <Box
+          onClick={canEditScore ? onMinus : undefined}
+          sx={{ width: 30, height: 30, border: "1.5px solid #E5E7EB", borderRadius: 1, display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "#fff", cursor: canEditScore ? "pointer" : "default", color: "#6B7280", userSelect: "none" }}
+        >
+          <RemoveIcon sx={{ fontSize: 14 }} />
         </Box>
-      )}
-      <Typography sx={{ fontWeight: 700, fontSize: 14, lineHeight: 1.2, color: isMe ? "#2F80ED" : "inherit" }}>
-        {name ?? "?"}
-      </Typography>
+        <Box sx={{ minWidth: 36, height: 30, border: "1.5px solid #E5E7EB", borderRadius: 1, display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "#fff" }}>
+          <Typography sx={{ fontWeight: 900, fontSize: 18, color: wins ? "#16A34A" : "#111827" }}>{score}</Typography>
+        </Box>
+        <Box
+          onClick={canEditScore ? onPlus : undefined}
+          sx={{ width: 30, height: 30, border: "1.5px solid #E5E7EB", borderRadius: 1, display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "#fff", cursor: canEditScore ? "pointer" : "default", color: "#2F80ED", userSelect: "none" }}
+        >
+          <AddIcon sx={{ fontSize: 14 }} />
+        </Box>
+      </Stack>
     </Stack>
   );
 }
@@ -93,7 +130,15 @@ function MatchCard({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: match.id, disabled: !canManage });
   const [updateMatch] = useUpdateLeagueMatchMutation();
   const [deleteMatch] = useDeleteLeagueMatchMutation();
+  const [notifyMatch] = useNotifyLeagueMatchMutation();
   const courtRef = useRef<HTMLInputElement>(null);
+  const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+
+  const matchLabel = useCallback(() => {
+    const aDiv = match.participant_a_division ? `(${match.participant_a_division})` : "";
+    const bDiv = match.participant_b_division ? `(${match.participant_b_division})` : "";
+    return `${index + 1}경기\n${aDiv}${match.participant_a_name ?? "?"} VS ${bDiv}${match.participant_b_name ?? "?"}`;
+  }, [match, index]);
 
   const handleScore = useCallback((side: "a" | "b", delta: number) => {
     const current = side === "a" ? (match.score_a ?? 0) : (match.score_b ?? 0);
@@ -109,33 +154,41 @@ function MatchCard({
   }, [match, leagueId, updateMatch]);
 
   const handleStatus = useCallback(() => {
-    const aDiv = match.participant_a_division ? `(${match.participant_a_division})` : "";
-    const bDiv = match.participant_b_division ? `(${match.participant_b_division})` : "";
-    const aName = match.participant_a_name ?? "?";
-    const bName = match.participant_b_name ?? "?";
     const sa = match.score_a ?? 0;
     const sb = match.score_b ?? 0;
     if (match.status === "pending") {
-      const msg = `${index + 1}경기\n${aDiv}${aName}(${sa}) VS (${sb})${bDiv}${bName}\n시작하겠습니까?`;
-      if (!window.confirm(msg)) return;
+      if (!window.confirm(`${matchLabel()}\n시작하겠습니까?`)) return;
     } else if (match.status === "playing") {
-      const msg = `${index + 1}경기\n${aDiv}${aName}(${sa}) VS (${sb})${bDiv}${bName}\n종료되었습니까?`;
-      if (!window.confirm(msg)) return;
+      if (!window.confirm(`${matchLabel()}\n종료되었습니까?`)) return;
     }
     updateMatch({ leagueId, matchId: match.id, updates: { status: NEXT_STATUS[match.status], score_a: sa, score_b: sb } });
-  }, [match, index, leagueId, updateMatch]);
+  }, [match, matchLabel, leagueId, updateMatch]);
 
   const handleDelete = useCallback(() => {
-    const aDiv = match.participant_a_division ? `(${match.participant_a_division})` : "";
-    const bDiv = match.participant_b_division ? `(${match.participant_b_division})` : "";
-    const aName = match.participant_a_name ?? "?";
-    const bName = match.participant_b_name ?? "?";
-    const sa = match.score_a ?? 0;
-    const sb = match.score_b ?? 0;
-    const msg = `${index + 1}경기\n${aDiv}${aName}(${sa}) VS (${sb})${bDiv}${bName}\n경기를 삭제하겠습니까?`;
-    if (!window.confirm(msg)) return;
+    setMenuAnchor(null);
+    if (!window.confirm(`${matchLabel()}\n경기를 삭제하겠습니까?`)) return;
     deleteMatch({ leagueId, matchId: match.id });
-  }, [match, index, leagueId, deleteMatch]);
+  }, [match, matchLabel, leagueId, deleteMatch]);
+
+  const handleAppNotify = useCallback(async () => {
+    setMenuAnchor(null);
+    await notifyMatch({ leagueId, matchId: match.id });
+  }, [match, leagueId, notifyMatch]);
+
+  const handleKakaoShare = useCallback(() => {
+    setMenuAnchor(null);
+    const text = `${matchLabel()}\n곧 경기 시작! 지금 입장해 주세요`;
+    const kakao = (window as unknown as { Kakao?: { isInitialized?: () => boolean; Share?: { sendDefault: (o: unknown) => void } } }).Kakao;
+    if (kakao?.isInitialized?.() && kakao.Share) {
+      kakao.Share.sendDefault({
+        objectType: "text",
+        text,
+        link: { mobileWebUrl: window.location.href, webUrl: window.location.href },
+      });
+    } else {
+      navigator.clipboard?.writeText(text).then(() => alert("메시지가 복사되었습니다.\n카카오톡에 붙여넣기 해주세요."));
+    }
+  }, [matchLabel]);
 
   const isPlaying = match.status === "playing";
   const isDone = match.status === "done";
@@ -160,83 +213,74 @@ function MatchCard({
     >
       <CardContent sx={{ py: 1.5, px: 1.5, "&:last-child": { pb: 1.5 } }}>
 
-        {/* Row 1: 선수 이름 + VS + 삭제 */}
-        <Stack direction="row" alignItems="center" mb={1}>
-          <Box flex={1} display="flex" justifyContent="center" alignItems="center" gap={1.5} flexWrap="wrap">
-            <ParticipantLabel name={match.participant_a_name} division={match.participant_a_division} isMe={!!myName && match.participant_a_name === myName} />
-            <Typography sx={{ fontWeight: 900, fontSize: 13, color: "#9CA3AF" }}>VS</Typography>
-            <ParticipantLabel name={match.participant_b_name} division={match.participant_b_division} isMe={!!myName && match.participant_b_name === myName} />
-          </Box>
+        {/* Row 1: n경기 + 드래그 + ⋮ */}
+        <Stack direction="row" alignItems="center" mb={1.5}>
+          <Typography sx={{ fontWeight: 700, fontSize: 13, color: "#9CA3AF", flex: 1 }}>
+            {index + 1}경기
+          </Typography>
           {canManage && (
-            <IconButton size="small" onClick={handleDelete} sx={{ color: "#D1D5DB", p: 0.3, flexShrink: 0 }}>
-              <DeleteOutlineIcon sx={{ fontSize: 18 }} />
-            </IconButton>
+            <Box {...attributes} {...listeners} sx={{ cursor: "grab", color: "#D1D5DB", display: "flex", alignItems: "center", mx: 1 }}>
+              <DragHandleIcon sx={{ fontSize: 20 }} />
+            </Box>
+          )}
+          {canManage && (
+            <>
+              <IconButton size="small" onClick={(e) => setMenuAnchor(e.currentTarget)} sx={{ color: "#9CA3AF", p: 0.3 }}>
+                <MoreVertIcon sx={{ fontSize: 20 }} />
+              </IconButton>
+              <Menu
+                anchorEl={menuAnchor}
+                open={Boolean(menuAnchor)}
+                onClose={() => setMenuAnchor(null)}
+                anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+                transformOrigin={{ vertical: "top", horizontal: "right" }}
+              >
+                <MenuItem onClick={handleAppNotify}>
+                  <ListItemIcon><NotificationsActiveIcon fontSize="small" sx={{ color: "#2F80ED" }} /></ListItemIcon>
+                  <ListItemText>앱 알림</ListItemText>
+                </MenuItem>
+                <MenuItem onClick={handleKakaoShare}>
+                  <ListItemIcon>
+                    <Box sx={{ width: 20, height: 20, bgcolor: "#FEE500", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 900 }}>K</Box>
+                  </ListItemIcon>
+                  <ListItemText>카카오톡 알림</ListItemText>
+                </MenuItem>
+                <Divider />
+                <MenuItem onClick={handleDelete} sx={{ color: "#EF4444" }}>
+                  <ListItemIcon><DeleteOutlineIcon fontSize="small" sx={{ color: "#EF4444" }} /></ListItemIcon>
+                  <ListItemText>경기 삭제</ListItemText>
+                </MenuItem>
+              </Menu>
+            </>
           )}
         </Stack>
 
-        {/* Row 2: 경기번호 좌측 / -[A]+ VS -[B]+ 중앙 / 상태버튼+드래그 우측 */}
-        <Stack direction="row" alignItems="center">
-          <Typography sx={{ fontWeight: 700, fontSize: 12, color: "#9CA3AF", minWidth: 34, flexShrink: 0 }}>
-            {index + 1}경기
-          </Typography>
-
-          <Box flex={1} display="flex" justifyContent="center" alignItems="center" gap={0.5}>
-            {canEditScore && (
-              <IconButton size="small" onClick={() => handleScore("a", -1)} sx={{ p: 0.3, color: "#6B7280" }}>
-                <RemoveIcon sx={{ fontSize: 14 }} />
-              </IconButton>
-            )}
-            <Box sx={{ minWidth: 32, height: 30, border: "1.5px solid #E5E7EB", borderRadius: 1, display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "#fff" }}>
-              <Typography sx={{ fontWeight: 900, fontSize: 17, color: aWins ? "#16A34A" : "#111827" }}>{sa}</Typography>
-            </Box>
-            {canEditScore && (
-              <IconButton size="small" onClick={() => handleScore("a", 1)} sx={{ p: 0.3, color: "#2F80ED" }}>
-                <AddIcon sx={{ fontSize: 14 }} />
-              </IconButton>
-            )}
-
-            <Typography sx={{ fontWeight: 900, fontSize: 13, color: "#9CA3AF", px: 0.3 }}>VS</Typography>
-
-            {canEditScore && (
-              <IconButton size="small" onClick={() => handleScore("b", -1)} sx={{ p: 0.3, color: "#6B7280" }}>
-                <RemoveIcon sx={{ fontSize: 14 }} />
-              </IconButton>
-            )}
-            <Box sx={{ minWidth: 32, height: 30, border: "1.5px solid #E5E7EB", borderRadius: 1, display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "#fff" }}>
-              <Typography sx={{ fontWeight: 900, fontSize: 17, color: bWins ? "#16A34A" : "#111827" }}>{sb}</Typography>
-            </Box>
-            {canEditScore && (
-              <IconButton size="small" onClick={() => handleScore("b", 1)} sx={{ p: 0.3, color: "#2F80ED" }}>
-                <AddIcon sx={{ fontSize: 14 }} />
-              </IconButton>
-            )}
+        {/* 참가자 박스 (직선 테두리) */}
+        <Box sx={{ border: "1.5px solid #E5E7EB", borderRadius: 0, overflow: "hidden" }}>
+          <ParticipantRow
+            name={match.participant_a_name}
+            division={match.participant_a_division}
+            isMe={!!myName && match.participant_a_name === myName}
+            score={sa} wins={aWins} canEditScore={canEditScore}
+            onMinus={() => handleScore("a", -1)}
+            onPlus={() => handleScore("a", 1)}
+          />
+          {/* vs 구분 */}
+          <Box sx={{ borderTop: "1.5px solid #E5E7EB", borderBottom: "1.5px solid #E5E7EB", py: 0.4, textAlign: "center", bgcolor: "#FAFAFA" }}>
+            <Typography sx={{ fontSize: 11, fontWeight: 700, color: "#C4C9D4" }}>vs</Typography>
           </Box>
+          <ParticipantRow
+            name={match.participant_b_name}
+            division={match.participant_b_division}
+            isMe={!!myName && match.participant_b_name === myName}
+            score={sb} wins={bWins} canEditScore={canEditScore}
+            onMinus={() => handleScore("b", -1)}
+            onPlus={() => handleScore("b", 1)}
+          />
+        </Box>
 
-          <Stack direction="row" alignItems="center" spacing={1.5} sx={{ flexShrink: 0 }}>
-            <Button
-              size="small"
-              onClick={canMember ? handleStatus : undefined}
-              disabled={!canMember}
-              sx={{
-                minWidth: "auto", px: 1, py: 0.3, fontSize: 11, fontWeight: 700, borderRadius: 1,
-                bgcolor: STATUS_COLOR[match.status] + "22",
-                color: STATUS_COLOR[match.status],
-                "&:hover": { bgcolor: STATUS_COLOR[match.status] + "33" },
-                "&.Mui-disabled": { color: STATUS_COLOR[match.status], bgcolor: STATUS_COLOR[match.status] + "22" },
-              }}
-            >
-              {STATUS_LABEL[match.status]}
-            </Button>
-            {canManage && (
-              <Box {...attributes} {...listeners} sx={{ cursor: "grab", color: "#D1D5DB", display: "flex", alignItems: "center" }}>
-                <DragHandleIcon sx={{ fontSize: 20 }} />
-              </Box>
-            )}
-          </Stack>
-        </Stack>
-
-        {/* Row 3: 코트 입력 (중앙 정렬) */}
-        <Box mt={1} display="flex" justifyContent="center">
+        {/* Row 4: 코트 + 상태 버튼 */}
+        <Stack direction="row" alignItems="center" spacing={1} mt={1.5}>
           <TextField
             inputRef={courtRef}
             defaultValue={match.court ?? ""}
@@ -249,18 +293,33 @@ function MatchCard({
               input: {
                 startAdornment: (
                   <InputAdornment position="start">
-                    <MeetingRoomIcon sx={{ fontSize: 15, color: "#9CA3AF" }} />
+                    <MeetingRoomIcon sx={{ fontSize: 14, color: "#9CA3AF" }} />
                   </InputAdornment>
                 ),
               },
             }}
             sx={{
-              width: 100,
-              "& .MuiOutlinedInput-root": { borderRadius: 1, bgcolor: "#F9FAFB", height: 32 },
+              width: 90,
+              flexShrink: 0,
+              "& .MuiOutlinedInput-root": { borderRadius: 1.5, bgcolor: "#F9FAFB", height: 40 },
               "& .MuiOutlinedInput-input": { py: 0, fontSize: "0.82rem" },
             }}
           />
-        </Box>
+          <Button
+            fullWidth
+            variant="contained"
+            onClick={canMember ? handleStatus : undefined}
+            disabled={!canMember || isDone}
+            sx={{
+              py: 1, fontSize: 15, fontWeight: 900, borderRadius: 1.5, height: 40,
+              ...(isDone && { bgcolor: "#4B5563", "&.Mui-disabled": { bgcolor: "#4B5563", color: "#fff" } }),
+              ...(isPlaying && { bgcolor: "#2F80ED", "&:hover": { bgcolor: "#1E6FD9" } }),
+              ...(!isPlaying && !isDone && { bgcolor: "#fff", color: "#374151", border: "1.5px solid #D1D5DB", boxShadow: "none", "&:hover": { bgcolor: "#F9FAFB", boxShadow: "none" } }),
+            }}
+          >
+            {STATUS_LABEL[match.status]}
+          </Button>
+        </Stack>
       </CardContent>
     </Card>
   );
@@ -289,13 +348,21 @@ export default function LeagueMatchOrder() {
     ?? null;
 
   const { data: matchData, isLoading: matchLoading, refetch: refetchMatches } = useGetLeagueMatchesQuery(leagueId, { skip: !leagueId, refetchOnMountOrArgChange: true });
+  const [search, setSearch] = useState("");
   // 순서만 로컬에 보관. 경기 데이터는 항상 RTK Query 캐시에서 가져와야 optimistic update가 즉시 반영됨
   const [localOrder, setLocalOrder] = useState<string[] | null>(null);
   const matches = useMemo(() => {
     const serverMatches = matchData?.matches ?? [];
-    if (!localOrder) return serverMatches;
-    return localOrder.map((id) => serverMatches.find((m) => m.id === id)).filter((m): m is LeagueMatch => !!m);
-  }, [localOrder, matchData?.matches]);
+    const ordered = localOrder
+      ? localOrder.map((id) => serverMatches.find((m) => m.id === id)).filter((m): m is LeagueMatch => !!m)
+      : serverMatches;
+    if (!search.trim()) return ordered;
+    const q = search.trim().toLowerCase();
+    return ordered.filter((m) =>
+      [m.participant_a_name, m.participant_b_name, m.participant_a_division, m.participant_b_division]
+        .some((v) => v?.toLowerCase().includes(q))
+    );
+  }, [localOrder, matchData?.matches, search]);
 
   const [initMatches, { isLoading: isIniting }] = useInitLeagueMatchesMutation();
   const [reorderMatches] = useReorderLeagueMatchesMutation();
@@ -378,6 +445,27 @@ export default function LeagueMatchOrder() {
           </span>
         </Tooltip>
       </Stack>
+
+      {/* 검색창 */}
+      <TextField
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="이름 또는 부수 검색"
+        size="small"
+        fullWidth
+        slotProps={{
+          input: {
+            endAdornment: (
+              <InputAdornment position="end">
+                <SearchIcon sx={{ fontSize: 18, color: "#9CA3AF" }} />
+              </InputAdornment>
+            ),
+          },
+        }}
+        sx={{
+          "& .MuiOutlinedInput-root": { borderRadius: 2, bgcolor: "#F9FAFB", fontSize: 14 },
+        }}
+      />
 
       {/* 생성 중 / 경기 없을 때 */}
       {matches.length === 0 ? (

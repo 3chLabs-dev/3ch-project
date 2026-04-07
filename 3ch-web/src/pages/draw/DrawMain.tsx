@@ -45,12 +45,15 @@ type DrawResult = {
   type: DrawType;
   name: string;
   createdAt: string;
+  start_date: string;
 };
 type DrawSourceItem = {
   id: string;
   name: string;
   league_code?: string;
-  start_date?: string;
+  start_date: string;
+  title?: string;
+  type: string;
 };
 
 type QuickRange = "1w" | "1m" | "3m" | "6m" | "1y" | null;
@@ -69,6 +72,17 @@ function addMonths(date: Date, months: number) {
 
 function formatDate(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function formatDateTime(iso: string) {
+  const d = new Date(iso);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const wd = ["일", "월", "화", "수", "목", "금", "토"][d.getDay()];
+  const hh = String(d.getUTCHours()).padStart(2, "0");;
+  const minute = String(d.getUTCMinutes()).padStart(2, "0");;
+  return `${y}-${m}-${day}(${wd}) ${hh}:${minute}`;
 }
 
 export default function DrawMain() {
@@ -138,7 +152,7 @@ export default function DrawMain() {
     { skip: !isLoggedIn || !effectiveSelectedGroupId, refetchOnMountOrArgChange: true },
   );
   const leagueSources = useMemo<DrawSourceItem[]>(
-    () => (leagueData?.leagues ?? []).map((l) => ({ id: l.id, name: l.name, league_code: l.league_code, start_date: l.start_date })),
+    () => (leagueData?.leagues ?? []).map((l) => ({ id: l.id, name: l.name, league_code: l.league_code, start_date: l.start_date, title: l.title, type: l.type })),
     [leagueData],
   );
 
@@ -512,7 +526,7 @@ export default function DrawMain() {
       ) : tournamentDraws.length > 0 ? (
         <Stack spacing={1}>
           {tournamentDraws.map((d) => (
-            <ResultCard key={d.id} name={d.name} />
+            <ResultCard key={d.id} name={d.name} start_date={d.start_date} />
           ))}
         </Stack>
       ) : (
@@ -563,7 +577,7 @@ function EmptyCard({ text }: { text: string }) {
 }
 
 function LeagueResultCard({ item, canCreate, navigate }: {
-  item: { id: string; name: string; league_code?: string };
+  item: { id: string; name: string; league_code?: string; title?: string; type: string; start_date: string; };
   canCreate: boolean;
   navigate: (path: string) => void;
 }) {
@@ -571,14 +585,15 @@ function LeagueResultCard({ item, canCreate, navigate }: {
   const hasDraws = (data?.draws?.length ?? 0) > 0;
   return (
     <ResultCard
-      name={item.name}
+      name={`${item.title ?? ""} | ${item.type}`}
+      start_date={item.start_date}
       onClick={canCreate ? () => navigate(`/draw/${item.league_code ?? item.id}?create=1`) : undefined}
       onHistory={hasDraws ? () => navigate(`/draw/${item.league_code ?? item.id}`) : undefined}
     />
   );
 }
 
-function ResultCard({ name, onClick, onHistory }: { name: string; onClick?: () => void; onHistory?: () => void }) {
+function ResultCard({ name, start_date , onClick, onHistory  }: { name: string; start_date: string; onClick?: () => void; onHistory?: () => void }) {
   return (
     <Card
       elevation={2}
@@ -586,7 +601,12 @@ function ResultCard({ name, onClick, onHistory }: { name: string; onClick?: () =
     >
       <CardContent sx={{ py: 1.8, px: 2.5, minHeight: 56, display: "flex", alignItems: "center", "&:last-child": { pb: 1.8 } }}>
         <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ width: "100%" }}>
-          <Typography fontWeight={800} sx={{ flex: 1, minWidth: 0 }} noWrap>{name}</Typography>
+          <Box>
+            <Typography fontWeight={800} sx={{ flex: 1, minWidth: 0 }} noWrap>{name}</Typography>
+            <Typography variant="caption" color="text.secondary" fontWeight={700}>
+              {formatDateTime(start_date)}
+            </Typography>
+          </Box>
           <Stack direction="row" alignItems="center" spacing={0.5}>
             {onHistory && (
               <IconButton size="small" onClick={onHistory} sx={{ color: "#6B7280" }} title="추첨 목록">

@@ -16,6 +16,7 @@ type League = {
   type: string | null;
   format: string | null;
   start_date: string | null;
+  title?: string | null;
   created_at: string;
   participant_count: number;
   creator_name: string | null;
@@ -228,7 +229,7 @@ export default function AdminLeaguePage() {
         <Table size="small">
           <TableHead>
             <TableRow sx={{ bgcolor: "#F9FAFB" }}>
-              {["리그코드", "종목", "클럽", "리그날짜", "유형", "방식", "생성자", "생성일시", "참가자"].map((h) => (
+              {["리그코드", "종목", "클럽", "리그날짜", "리그명", "유형", "방식", "생성자", "생성일시", "참가자"].map((h) => (
                 <TableCell key={h} sx={{ fontWeight: 800, fontSize: 12, color: "#374151", py: 1.2 }}>{h}</TableCell>
               ))}
             </TableRow>
@@ -257,6 +258,7 @@ export default function AdminLeaguePage() {
                   </TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{l.club_name ?? "-"}</TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{l.start_date ? l.start_date.slice(0, 10) : "-"}</TableCell>
+                  <TableCell sx={{ fontSize: 12 }}>{l.title ? l.title : "-"}</TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{l.type ? (TYPE_LABEL[l.type] ?? l.type) : "-"}</TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{l.format ? (FORMAT_LABEL[l.format] ?? l.format) : "-"}</TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{l.creator_name ?? "-"}</TableCell>

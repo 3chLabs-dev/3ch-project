@@ -17,6 +17,7 @@ type Draw = {
   club_name: string | null;
   creator_name: string | null;
   prize_count: number;
+  title?: string | null;
 };
 
 type Filters = {
@@ -225,7 +226,7 @@ export default function AdminDrawPage() {
         <Table size="small">
           <TableHead>
             <TableRow sx={{ bgcolor: "#F9FAFB" }}>
-              {["추첨코드", "종목", "클럽", "리그날짜", "대회날짜", "생성자", "생성일시", "경품"].map((h) => (
+              {["추첨코드", "종목", "클럽", "리그날짜", "대회날짜", "리그명", "생성자", "생성일시", "경품"].map((h) => (
                 <TableCell key={h} sx={{ fontWeight: 800, fontSize: 12, color: "#374151", py: 1.2 }}>{h}</TableCell>
               ))}
             </TableRow>
@@ -255,6 +256,7 @@ export default function AdminDrawPage() {
                   <TableCell sx={{ fontSize: 12 }}>{d.club_name ?? "-"}</TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{d.start_date ? d.start_date.slice(0, 10) : "-"}</TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{d.created_at.slice(0, 10)}</TableCell>
+                  <TableCell sx={{ fontSize: 12 }}>{d.title ? d.title : "-"}</TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{d.creator_name ?? "-"}</TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{d.created_at.slice(0, 16).replace("T", " ")}</TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{d.prize_count}개</TableCell>

@@ -165,9 +165,9 @@ const LeagueStep1BasicInfo: React.FC = () => {
        
         {/* 제목 */}
         <Box sx={rowSx}>
-          <Typography sx={{ fontWeight: 900, letterSpacing: 6 }}>대회명</Typography>
+          <Typography sx={{ fontWeight: 900, letterSpacing: 6 }}>리그명</Typography>
           <TextField
-            placeholder="대회명"
+            placeholder="리그명"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             sx={inputSx}

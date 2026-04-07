@@ -1145,7 +1145,7 @@ router.get('/leagues', requireAdmin, async (req, res) => {
 
     const [dataResult, countResult] = await Promise.all([
       pool.query(
-        `SELECT l.id, l.league_code, l.name, l.sport, l.type, l.format,
+        `SELECT l.id, l.league_code, l.name, l.sport, l.type, l.format, l.title,
                 l.start_date::text, l.created_at::text,
                 l.participant_count,
                 u.id AS creator_id, u.name AS creator_name,
@@ -1261,13 +1261,13 @@ router.get('/draws', requireAdmin, async (req, res) => {
     const [dataResult, countResult] = await Promise.all([
       pool.query(
         `SELECT d.id, d.name, d.created_at::text,
-                l.sport, l.start_date::text,
+                l.sport, l.start_date::text, l.title,
                 g.name AS club_name,
                 u.name AS creator_name,
                 COUNT(DISTINCT dp.id)::int AS prize_count
          ${baseFrom}
          LEFT JOIN draw_prizes dp ON dp.draw_id = d.id
-         GROUP BY d.id, d.name, d.created_at, l.sport, l.start_date, g.name, u.name
+         GROUP BY d.id, d.name, d.created_at, l.sport, l.start_date, g.name, u.name, l.title
          ORDER BY d.created_at DESC
          LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
         params,

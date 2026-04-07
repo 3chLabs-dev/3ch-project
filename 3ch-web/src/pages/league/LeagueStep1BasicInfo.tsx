@@ -42,6 +42,7 @@ const LeagueStep1BasicInfo: React.FC = () => {
   const [date, setDate] = useState(existing?.date ?? "");
   const [time, setTime] = useState(existing?.time ?? "");
   const [location, setLocation] = useState(existing?.location ?? "");
+  const [title, setTitle] = useState(existing?.title ?? "")
 
   // 시간을 hour와 minute로 분리
   const [hour, minute] = time ? time.split(':') : ['', ''];
@@ -66,6 +67,7 @@ const LeagueStep1BasicInfo: React.FC = () => {
         date,
         time,
         location,
+        title,
       })
     );
     dispatch(setStep(2));
@@ -157,6 +159,17 @@ const LeagueStep1BasicInfo: React.FC = () => {
             placeholder="장소"
             value={location}
             onChange={(e) => setLocation(e.target.value)}
+            sx={inputSx}
+          />
+        </Box>
+       
+        {/* 제목 */}
+        <Box sx={rowSx}>
+          <Typography sx={{ fontWeight: 900, letterSpacing: 6 }}>리그명</Typography>
+          <TextField
+            placeholder="리그명"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
             sx={inputSx}
           />
         </Box>

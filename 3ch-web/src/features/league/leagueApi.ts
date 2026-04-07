@@ -6,6 +6,7 @@ import { baseApi } from "../api/baseApi";
 export interface CreateLeagueRequest {
   name: string;
   description?: string;
+  title?: string;
   type: string;
   sport: string;
   start_date: string;
@@ -15,6 +16,7 @@ export interface CreateLeagueRequest {
 export interface UpdateLeagueRequest {
   name?: string;
   description?: string;
+  title?: string;
   type?: string;
   format?: string;
   sport?: string;
@@ -37,6 +39,7 @@ export interface League {
   name: string;
   league_code?: string;
   description?: string;
+  title?: string;
   type: string;
   format?: string;
   sport: string;

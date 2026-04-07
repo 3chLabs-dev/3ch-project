@@ -11,6 +11,9 @@ export interface DrawListItem {
   total_quantity: number;
   winner_count: number;
   creator_name?: string;
+  title?: string;
+  type: string;
+  start_date: string;
 }
 
 export interface GetDrawsResponse {

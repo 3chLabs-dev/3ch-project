@@ -9,6 +9,7 @@ export interface LeagueBasicInfo {
   date: string; // YYYY-MM-DD
   time: string; // HH:mm
   location: string;
+  title: string;
 }
 
 /** Step 2: 리그 유형 */
@@ -187,6 +188,7 @@ export const createLeague = createAsyncThunk.withTypes<{ state: RootState }>()(
     const requestBody = {
       name: autoName,
       description: s.step1BasicInfo.location ? `장소: ${s.step1BasicInfo.location}` : undefined,
+      title: s.step1BasicInfo.title ? `${s.step1BasicInfo.title}` : undefined,
       type: typeMap[s.step2Type.selectedType],
       format: s.step3Format ? formatMap[s.step3Format.format] : undefined,
       sport: "탁구", // 탁구로 고정 (향후 확장 예정)

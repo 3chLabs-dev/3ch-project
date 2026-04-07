@@ -205,6 +205,7 @@ export default function DrawMain() {
           type: drawType,
           name: drawName.trim() || `${drawType === "league" ? "리그" : "대회"} 추첨`,
           createdAt: new Date().toISOString(),
+          start_date: new Date().toISOString(),
         },
       ]);
       setPhase("done");

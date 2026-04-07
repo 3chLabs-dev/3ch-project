@@ -59,7 +59,7 @@ const LeagueStep1BasicInfo: React.FC = () => {
   };
 
   // 다음 버튼 활성
-  const canNext = useMemo(() => Boolean(date && time), [date, time]);
+  const canNext = useMemo(() => Boolean(date && time && title), [date, time, title]);
 
   const handleNext = () => {
     dispatch(
@@ -84,9 +84,21 @@ const LeagueStep1BasicInfo: React.FC = () => {
       </Typography>
 
       <Box sx={{ borderTop: "1px solid #D9DDE6" }}>
+        
+        {/* 리그명 */}
+        <Box sx={rowSx}>
+          <Typography sx={{ fontWeight: 900, letterSpacing: 4 }}>리그명<Box component="span" sx={{ color: "#EF4444", fontSize: 18 }}>*</Box></Typography>
+          <TextField
+            placeholder="리그명"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            sx={inputSx}
+          />
+        </Box>
+
         {/* 날짜 */}
         <Box sx={{...rowSx, cursor: "pointer"}} onClick={() => dateRef.current?.showPicker()}>
-          <Typography sx={{ fontWeight: 900, letterSpacing: 6 }}>날짜</Typography>
+          <Typography sx={{ fontWeight: 900, letterSpacing: 6 }}>날짜<Box component="span" sx={{ color: "#EF4444", fontSize: 18 }}>*</Box></Typography>
 
           <TextField
             inputRef={dateRef}
@@ -99,7 +111,7 @@ const LeagueStep1BasicInfo: React.FC = () => {
 
         {/* 시간 */}
         <Box sx={rowSx}>
-          <Typography sx={{ fontWeight: 900, letterSpacing: 6 }}>시간</Typography>
+          <Typography sx={{ fontWeight: 900, letterSpacing: 6 }}>시간<Box component="span" sx={{ color: "#EF4444", fontSize: 18 }}>*</Box></Typography>
 
           <Box sx={{ display: 'flex', gap: 1 }}>
             {/* 시 */}
@@ -159,17 +171,6 @@ const LeagueStep1BasicInfo: React.FC = () => {
             placeholder="장소"
             value={location}
             onChange={(e) => setLocation(e.target.value)}
-            sx={inputSx}
-          />
-        </Box>
-       
-        {/* 제목 */}
-        <Box sx={rowSx}>
-          <Typography sx={{ fontWeight: 900, letterSpacing: 6 }}>리그명</Typography>
-          <TextField
-            placeholder="리그명"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
             sx={inputSx}
           />
         </Box>

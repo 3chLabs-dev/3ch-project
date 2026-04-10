@@ -735,7 +735,6 @@ export default function LeagueTournamentBracket() {
     }
   };
 
-  const isManualSeeding = league?.tournament_seeding === "manual";
 
   // R1 상위 브래킷 배치 공식 (seededBracket 동일 로직)
   const seedMap = useMemo(() => {

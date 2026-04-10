@@ -203,13 +203,17 @@ function ScoreButton({ icon, disabled, rotate, variant = "order", onClick }: {
  * - landscape(가로): ↑ 점수 ↓ 세로 배치
  * - portrait(세로, writingMode 적용): ← 점수 → 가로 배치 + 아이콘 90° 회전
  */
-function BracketScoreCell({ match, isA, leagueId, winScore, canManage, landscape }: {
+function BracketScoreCell({ match, isA, leagueId, winScore, canManage, landscape, rowIndex, colIndex, totalRows, totalCols }: {
   match: LeagueMatch | undefined;
   isA: boolean;         // 현재 행 참가자가 해당 경기의 A선수인지 여부
   leagueId: string;
   winScore: number | null; // 선승 기준 점수 (null이면 선승제 아님)
   canManage: boolean;
   landscape: boolean;
+  rowIndex: number;
+  colIndex: number;
+  totalRows: number;
+  totalCols: number;
 }) {
   const [updateMatch] = useUpdateLeagueMatchMutation();
   const isActive = match?.status === "playing" || match?.status === "done";
@@ -250,12 +254,12 @@ function BracketScoreCell({ match, isA, leagueId, winScore, canManage, landscape
     }}>
       <ScoreButton icon="down" variant="score" disabled={(score ?? 0) <= 0} rotate={!landscape} onClick={() => handleChange(-1)} />
       {!isEditing && 
-        <Typography onClick={() => { setTempValue(String(score ?? 0)); setIsEditing(true); }}sx={{ fontSize: 14, ...winnerStyle, lineHeight: 1, ...(landscape ? {} : { transform: "rotate(90deg)" }), minWidth: 14, textAlign: "center" }}>
+        <Typography className="score-text" data-row={rowIndex} data-col={colIndex} data-tc ={totalCols} data-tr={totalRows} onClick={() => { setTempValue(String(score ?? 0)); setIsEditing(true); }}sx={{ fontSize: 14, ...winnerStyle, lineHeight: 1, ...(landscape ? {} : { transform: "rotate(90deg)" }), minWidth: 14, textAlign: "center" }}>
           {score ?? 0}
         </Typography>
       }
       {isEditing &&
-        <input type="text" inputMode="numeric" autoFocus value={tempValue} 
+        <input className="score-input" enterKeyHint="next" data-row={rowIndex} data-col={colIndex} type="text" inputMode="numeric" autoFocus value={tempValue} 
           onChange={(e) => { const val = e.target.value;
                               if (/^\d*$/.test(val)) {
                                 setTempValue(val);
@@ -265,6 +269,39 @@ function BracketScoreCell({ match, isA, leagueId, winScore, canManage, landscape
                                 const num = tempValue === "" ? 0 : Number(tempValue);
                                 handleSet(num);
                                 setIsEditing(false);
+                                // 다음 셀 이동 로직
+                                let nextRow = rowIndex;
+                                let nextCol = colIndex + 1;
+                                if (nextCol >= totalCols) {
+                                  nextCol = 0;
+                                  nextRow++;
+                                }
+                                // 대각선셀 스킵
+                                while (nextRow < totalRows && nextRow === nextCol) {
+                                  nextCol++;
+                                  if (nextCol >= totalCols) {
+                                    nextCol = 0;
+                                    nextRow++;
+                                  }
+                                }
+                                if (nextRow >= totalRows) return;
+                                // 다음 Typography 찾아서 클릭
+                                const nextText = document.querySelector<HTMLElement>(
+                                  `.score-text[data-row="${nextRow}"][data-col="${nextCol}"]`
+                                );
+
+                                if (!nextText) return;
+
+                                nextText.click();
+
+                                // input 생성된 후 포커스
+                                setTimeout(() => {
+                                  const nextInput = document.querySelector<HTMLInputElement>(
+                                    `.score-input[data-row="${nextRow}"][data-col="${nextCol}"]`
+                                  );
+                                  nextInput?.focus();
+                                  nextInput?.select();
+                                }, 0);
                               }
                             }}
           style={{ width: 50, textAlign: "center",}}/>
@@ -374,7 +411,7 @@ const SortableBracketRow = memo(function SortableBracketRow({
         const m   = matchLookup.get(`${participant.id}__${colPlayer.id}`);
         const isA = m?.participant_a_id === participant.id;
         return (
-          <BracketScoreCell key={colIdx} match={m} isA={isA} leagueId={leagueId} winScore={winScore} canManage={canScore} landscape={landscape} />
+          <BracketScoreCell key={colIdx} match={m} isA={isA} leagueId={leagueId} winScore={winScore} canManage={canScore} landscape={landscape} rowIndex={rowIdx} colIndex={colIdx} totalRows={n} totalCols={n}/>
         );
       })}
 

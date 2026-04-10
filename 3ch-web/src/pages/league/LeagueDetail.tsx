@@ -96,7 +96,7 @@ const FORMAT_OPTIONS = [
   { label: "단일리그", disabled: false },
   { label: "조별리그", disabled: false },
   { label: "조별리그 + 본선리그", disabled: false },
-  { label: "단일리그 + 토너먼트", disabled: true },
+  { label: "단일리그 + 토너먼트", disabled: false },
   { label: "조별리그 + 토너먼트", disabled: true },
   { label: "상·하위 토너먼트", disabled: false },
 ];
@@ -129,6 +129,12 @@ export default function LeagueDetail() {
   const [editSortOrder, setEditSortOrder] = useState("부수");
   const [editTournamentSeeding, setEditTournamentSeeding] = useState("seed");
   const [editTournamentAdvancement, setEditTournamentAdvancement] = useState("upper-lower");
+  // 단일리그+토너먼트 본선 편성
+  const [editTournamentRules, setEditTournamentRules] = useState("");
+  const [editAdvanceCount, setEditAdvanceCount] = useState<number>(8);
+  const [editAdvanceMethod, setEditAdvanceMethod] = useState("rank");
+  const [editMainSeeding, setEditMainSeeding] = useState("seed");
+  const [editFinalsAdvance, setEditFinalsAdvance] = useState<number>(2);
   const [editRecruitCount, setEditRecruitCount] = useState(20);
   const [searchQuery, setSearchQuery] = useState("");
   const [inputDivision, setInputDivision] = useState("");
@@ -309,7 +315,7 @@ export default function LeagueDetail() {
     if (league?.status !== "active") {
       await updateLeague({ id, updates: { status: "active" } });
     }
-    if (league?.format?.includes("토너먼트")) {
+    if (league?.format?.includes("토너먼트") && league?.format !== "단일리그 + 토너먼트") {
       navigate(`/league/${id}/tournament/matches`);
     } else {
       navigate(`/league/${id}/matches`);
@@ -332,6 +338,11 @@ export default function LeagueDetail() {
     setEditRecruitCount(league.recruit_count ?? 20);
     setEditTournamentSeeding(league.tournament_seeding ?? "seed");
     setEditTournamentAdvancement(league.tournament_advancement ?? "upper-lower");
+    setEditTournamentRules(league.tournament_rules ?? "5전 3선승제");
+    setEditAdvanceCount(league.advance_count ?? 8);
+    setEditAdvanceMethod(league.advance_method ?? "rank");
+    setEditMainSeeding(league.tournament_seeding ?? "seed");
+    setEditFinalsAdvance(league.finals_advance ?? 2);
     const editMap: Record<string, { division: string; name: string }> = {};
     participants.forEach((p) => { editMap[p.id] = { division: p.division ?? "", name: p.name }; });
     setEditingParticipants(editMap);
@@ -375,6 +386,13 @@ export default function LeagueDetail() {
           ...(editFormat === "상·하위 토너먼트" && {
             tournament_seeding: editTournamentSeeding,
             tournament_advancement: editTournamentAdvancement,
+          }),
+          ...(editFormat === "단일리그 + 토너먼트" && {
+            tournament_rules: editTournamentRules || undefined,
+            advance_count: editAdvanceCount,
+            advance_method: editAdvanceMethod || undefined,
+            tournament_seeding: editMainSeeding,
+            finals_advance: editFinalsAdvance,
           }),
         },
       }).unwrap();
@@ -575,6 +593,7 @@ export default function LeagueDetail() {
           </Box>
         </>)}
       </Box>
+
 
       {/* 참가자 */}
       <Box sx={{ mb: 2.5 }}>
@@ -811,21 +830,40 @@ export default function LeagueDetail() {
           </Button>
         )}
         {((!isEditing && league.status === "active") || !isEditing && canManage) && (
-          <Button
-            fullWidth variant="contained" disableElevation
-            sx={{ mt: 1, borderRadius: 1, height: 40, fontWeight: 700, bgcolor: "#87B8FF", "&:hover": { bgcolor: "#79AEFF" } }}
-            onClick={() => {
-              if (league.format?.includes("토너먼트")) {
-                navigate(`/league/${id}/tournament`);
-              } else {
-                navigate(`/league/${id}/bracket`);
-              }
-            }}
-          >
-            {canManage && league.format && league.status === "draft" ? `${league.format} 대진표 생성` : ""}
-            {canManage && league.format && league.status === "active" ? `${league.format} 대진표 보기` : ""}
-            {!canManage && league.format ? `${league.format} 대진표 보기` : ""}
-          </Button>
+          league.format === "단일리그 + 토너먼트" ? (
+            <Stack spacing={1} sx={{ mt: 1 }}>
+              <Button
+                fullWidth variant="outlined" disableElevation
+                sx={{ borderRadius: 1, height: 40, fontWeight: 700, borderColor: "#87B8FF", color: "#2F80ED", "&:hover": { borderColor: "#79AEFF", bgcolor: "#EFF6FF" } }}
+                onClick={() => navigate(`/league/${id}/bracket`)}
+              >
+                {canManage && league.status === "draft" ? "단일리그 대진표 생성" : "단일리그 대진표 보기"}
+              </Button>
+              <Button
+                fullWidth variant="contained" disableElevation
+                sx={{ borderRadius: 1, height: 40, fontWeight: 700, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}
+                onClick={() => navigate(`/league/${id}/tournament`)}
+              >
+                {canManage && league.status === "draft" ? "본선 토너먼트 대진표 생성" : "본선 토너먼트 대진표 보기"}
+              </Button>
+            </Stack>
+          ) : (
+            <Button
+              fullWidth variant="contained" disableElevation
+              sx={{ mt: 1, borderRadius: 1, height: 40, fontWeight: 700, bgcolor: "#87B8FF", "&:hover": { bgcolor: "#79AEFF" } }}
+              onClick={() => {
+                if (league.format?.includes("토너먼트")) {
+                  navigate(`/league/${id}/tournament`);
+                } else {
+                  navigate(`/league/${id}/bracket`);
+                }
+              }}
+            >
+              {canManage && league.format && league.status === "draft" ? `${league.format} 대진표 생성` : ""}
+              {canManage && league.format && league.status === "active" ? `${league.format} 대진표 보기` : ""}
+              {!canManage && league.format ? `${league.format} 대진표 보기` : ""}
+            </Button>
+          )
         )}
       </Box>
 
@@ -1265,7 +1303,7 @@ export default function LeagueDetail() {
             <Box sx={floatingBoxSx}>
             <Button fullWidth variant="contained" disableElevation
               sx={{ borderRadius: 1, height: 44, fontWeight: 900, fontSize: 15, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}
-              onClick={() => navigate(league.format?.includes("토너먼트") ? `/league/${id}/tournament/matches` : `/league/${id}/matches`)}
+              onClick={() => navigate(league.format?.includes("토너먼트") && league.format !== "단일리그 + 토너먼트" ? `/league/${id}/tournament/matches` : `/league/${id}/matches`)}
             >
               리그 진행 중
             </Button>
@@ -1306,7 +1344,7 @@ export default function LeagueDetail() {
             <Button
               fullWidth variant="contained" disableElevation
               sx={{ borderRadius: 1, height: 44, fontWeight: 900, fontSize: 15, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}
-              onClick={() => navigate(league.format?.includes("토너먼트") ? `/league/${id}/tournament/matches` : `/league/${id}/matches`)}
+              onClick={() => navigate(league.format?.includes("토너먼트") && league.format !== "단일리그 + 토너먼트" ? `/league/${id}/tournament/matches` : `/league/${id}/matches`)}
             >
               리그 진행 중
             </Button>

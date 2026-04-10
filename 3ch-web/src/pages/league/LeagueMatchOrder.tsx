@@ -352,7 +352,8 @@ export default function LeagueMatchOrder() {
   // 순서만 로컬에 보관. 경기 데이터는 항상 RTK Query 캐시에서 가져와야 optimistic update가 즉시 반영됨
   const [localOrder, setLocalOrder] = useState<string[] | null>(null);
   const matches = useMemo(() => {
-    const serverMatches = matchData?.matches ?? [];
+    // bracket이 있는 경기(토너먼트 경기)는 리그 경기 순서 뷰에서 제외
+    const serverMatches = (matchData?.matches ?? []).filter((m) => !m.bracket);
     const ordered = localOrder
       ? localOrder.map((id) => serverMatches.find((m) => m.id === id)).filter((m): m is LeagueMatch => !!m)
       : serverMatches;

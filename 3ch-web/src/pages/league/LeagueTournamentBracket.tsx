@@ -348,10 +348,12 @@ function MatchBox({ pos, actions }: { pos: MatchPos; actions?: SlotActions }) {
           <Box sx={{ width: 18, height: 18, borderRadius: "50%", bgcolor: "#FAAA47", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: 900, color: "#111827", flexShrink: 0, lineHeight: 1 }}>{m.participant_a_division}</Box>
         )}
         {isR1 && !nameA ? (
-          <Box sx={{ flex: 1, display: "flex", alignItems: "center", gap: 0.75 }}>
+          <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 0.75 }}>
             {seed?.a && <Typography sx={{ fontSize: 11, fontWeight: 800, color: "#94A3B8" }}>1-{seed.a}</Typography>}
             {actions?.canRegister && !actions.editMode && (
-              <Typography sx={{ fontSize: 10, fontWeight: 700, color: "#93C5FD" }}>등록</Typography>
+              <Box sx={{ px: 0.8, py: 0.2, borderRadius: 0.6, bgcolor: "#2F80ED", display: "flex", alignItems: "center" }}>
+                <Typography sx={{ fontSize: 9, fontWeight: 900, color: "#fff", lineHeight: 1.4 }}>등록</Typography>
+              </Box>
             )}
           </Box>
         ) : (
@@ -374,10 +376,12 @@ function MatchBox({ pos, actions }: { pos: MatchPos; actions?: SlotActions }) {
           <Box sx={{ width: 18, height: 18, borderRadius: "50%", bgcolor: "#FAAA47", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: 900, color: "#111827", flexShrink: 0, lineHeight: 1 }}>{m.participant_b_division}</Box>
         )}
         {isR1 && !nameB ? (
-          <Box sx={{ flex: 1, display: "flex", alignItems: "center", gap: 0.75 }}>
+          <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 0.75 }}>
             {seed?.b && <Typography sx={{ fontSize: 11, fontWeight: 800, color: "#94A3B8" }}>1-{seed.b}</Typography>}
             {actions?.canRegister && !actions.editMode && (
-              <Typography sx={{ fontSize: 10, fontWeight: 700, color: "#93C5FD" }}>등록</Typography>
+              <Box sx={{ px: 0.8, py: 0.2, borderRadius: 0.6, bgcolor: "#2F80ED", display: "flex", alignItems: "center" }}>
+                <Typography sx={{ fontSize: 9, fontWeight: 900, color: "#fff", lineHeight: 1.4 }}>등록</Typography>
+              </Box>
             )}
           </Box>
         ) : (
@@ -468,9 +472,13 @@ function SingleSlotBox({ pos, slot, actions }: { pos: MatchPos; slot: "a" | "b";
           <Box sx={{ width: 16, height: 16, borderRadius: "50%", bgcolor: "#FAAA47", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 7, fontWeight: 900, color: "#111827", flexShrink: 0, lineHeight: 1 }}>{division}</Box>
         )}
         {isR1 && !name ? (
-          <Typography sx={{ fontSize: 9, fontWeight: 700, color: "#93C5FD" }}>
-            {actions?.canRegister && !actions.editMode ? "등록" : ""}
-          </Typography>
+          <Box sx={{ flex: 1, display: "flex", justifyContent: "center" }}>
+            {actions?.canRegister && !actions.editMode && (
+              <Box sx={{ px: 0.8, py: 0.2, borderRadius: 0.6, bgcolor: "#2F80ED", display: "flex", alignItems: "center" }}>
+                <Typography sx={{ fontSize: 9, fontWeight: 900, color: "#fff", lineHeight: 1.4 }}>등록</Typography>
+              </Box>
+            )}
+          </Box>
         ) : (
           <Typography sx={{ fontSize: 11, fontWeight: isBye ? 400 : 700, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: win ? "#16A34A" : isBye ? "#9CA3AF" : "#111827", fontStyle: isBye ? "italic" : "normal" }}>
             {name ?? (isR1 ? "BYE" : "")}
@@ -489,9 +497,7 @@ function SingleSlotBox({ pos, slot, actions }: { pos: MatchPos; slot: "a" | "b";
           <Typography sx={{ fontSize: 14, fontWeight: 900, color: win ? "#16A34A" : "#374151", lineHeight: 1 }}>
             {score}
           </Typography>
-        ) : (
-          <Typography sx={{ fontSize: 10, color: "#CBD5E1" }}>-</Typography>
-        )}
+        ) : null}
       </Box>
     </Box>
   );
@@ -757,7 +763,7 @@ export default function LeagueTournamentBracket() {
 
   const slotActions: SlotActions = {
     canManage,
-    canRegister: canManage && isManualSeeding,
+    canRegister: canManage,
     editMode,
     swapFirstKey: swapFirst ? `${swapFirst.matchId}:${swapFirst.slot}` : null,
     seedMap,

@@ -57,6 +57,16 @@ export interface LeagueTournamentOptionsInfo {
   advancement: TournamentAdvancementValue;
 }
 
+/** Step 4b: 본선 편성 설정 (단일리그+토너먼트 전용) */
+export type AdvanceMethodValue = "rank" | "top1" | "top2" | "upper-lower";
+export interface LeagueMainSetupInfo {
+  tournament_rules: string;
+  advance_count: number;
+  advance_method: AdvanceMethodValue;
+  seeding: "seed" | "random";
+  finals_advance: number;
+}
+
 /** Step 5: 참가자 */
 export interface Participant {
   division: string;
@@ -98,6 +108,7 @@ export interface LeagueCreationState {
   step3Format: LeagueFormatInfo | null;
   step4Rules: LeagueRulesInfo | null;
   step4TournamentOptions: LeagueTournamentOptionsInfo | null;
+  step4MainSetup: LeagueMainSetupInfo | null;
   step5Participants: LeagueParticipantsInfo | null;
   step6Creating: LeagueStep6CreatingInfo | null;
 
@@ -116,6 +127,7 @@ const initialState: LeagueCreationState = {
   step3Format: null,
   step4Rules: null,
   step4TournamentOptions: null,
+  step4MainSetup: null,
   step5Participants: null,
   step6Creating: null,
 
@@ -199,8 +211,14 @@ export const createLeague = createAsyncThunk.withTypes<{ state: RootState }>()(
       group_id: s.groupId,
       sort_order: s.step5Participants?.sortOrder ?? undefined,
       participants,
-      tournament_seeding: s.step4TournamentOptions?.seeding ?? undefined,
+      tournament_seeding: s.step4TournamentOptions?.seeding ?? s.step4MainSetup?.seeding ?? undefined,
       tournament_advancement: s.step4TournamentOptions?.advancement ?? undefined,
+      tournament_rules: s.step4MainSetup?.tournament_rules
+        ? (rulesMap as Record<string, string>)[s.step4MainSetup.tournament_rules] ?? s.step4MainSetup.tournament_rules
+        : undefined,
+      advance_count: s.step4MainSetup?.advance_count ?? undefined,
+      advance_method: s.step4MainSetup?.advance_method ?? undefined,
+      finals_advance: s.step4MainSetup?.finals_advance ?? undefined,
     };
 
     const token = thunkApi.getState().auth.token;
@@ -259,6 +277,10 @@ const leagueCreationSlice = createSlice({
       state.step4TournamentOptions = action.payload;
     },
 
+    setStep4MainSetup: (state, action: PayloadAction<LeagueMainSetupInfo>) => {
+      state.step4MainSetup = action.payload;
+    },
+
     setStep5Participants: (
       state,
       action: PayloadAction<LeagueParticipantsInfo>,
@@ -310,6 +332,7 @@ export const {
   setStep3Format,
   setStep4Rules,
   setStep4TournamentOptions,
+  setStep4MainSetup,
   setStep5Participants,
   setStep6Creating,
   resetCreateStatus,

@@ -47,11 +47,15 @@ async function sendPushToParticipant(participantId, payload) {
 
 const router = express.Router();
 
-// 토너먼트 옵션 컬럼 자동 추가
+// 컬럼 자동 추가
 pool.query(`
   ALTER TABLE leagues
     ADD COLUMN IF NOT EXISTS tournament_seeding TEXT,
-    ADD COLUMN IF NOT EXISTS tournament_advancement TEXT
+    ADD COLUMN IF NOT EXISTS tournament_advancement TEXT,
+    ADD COLUMN IF NOT EXISTS tournament_rules TEXT,
+    ADD COLUMN IF NOT EXISTS advance_count INT,
+    ADD COLUMN IF NOT EXISTS advance_method TEXT,
+    ADD COLUMN IF NOT EXISTS finals_advance INT
 `).catch((e) => console.error('leagues 컬럼 추가 실패:', e.message));
 
 // 토너먼트 경기 컬럼 자동 추가
@@ -446,6 +450,10 @@ const createLeagueSchema = z.object({
   participants: z.array(participantSchema).default([]),
   tournament_seeding: z.string().optional(),      // 'manual' | 'seed' | 'random'
   tournament_advancement: z.string().optional(),  // 'upper-only' | 'upper-lower'
+  tournament_rules: z.string().optional(),        // 본선 규칙
+  advance_count: z.number().int().min(1).optional(), // 진출 수
+  advance_method: z.string().optional(),          // 진출 방식
+  finals_advance: z.number().int().min(2).optional(), // 결승 진출
 });
 
 const updateLeagueSchema = z.object({
@@ -464,6 +472,10 @@ const updateLeagueSchema = z.object({
   join_permission: z.enum(['public', 'club_only']).optional(),
   tournament_seeding: z.string().optional(),
   tournament_advancement: z.string().optional(),
+  tournament_rules: z.string().optional(),
+  advance_count: z.number().int().min(1).optional(),
+  advance_method: z.string().optional(),
+  finals_advance: z.number().int().min(2).optional(),
 });
 
 /**
@@ -669,6 +681,10 @@ router.post('/league', requireAuth, async (req, res) => {
       participants,
       tournament_seeding,
       tournament_advancement,
+      tournament_rules,
+      advance_count,
+      advance_method,
+      finals_advance,
     } = createLeagueSchema.parse(req.body);
 
     const userId = req.user.sub;
@@ -687,10 +703,10 @@ router.post('/league', requireAuth, async (req, res) => {
     await client.query('BEGIN');
 
     const result = await client.query(
-      `INSERT INTO leagues (id, name, description, title, type, format, sport, start_date, rules, sort_order, recruit_count, participant_count, group_id, created_by_id, tournament_seeding, tournament_advancement)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-       RETURNING id, name, description, title, type, format, sport, start_date, status, rules, notice, sort_order, recruit_count, participant_count, group_id, tournament_seeding, tournament_advancement, created_at, updated_at;`,
-      [leagueId, name, description, title, type, format, sport, start_date, rules, sort_order ?? null, recruit_count, participant_count, group_id, userId, tournament_seeding ?? null, tournament_advancement ?? null],
+      `INSERT INTO leagues (id, name, description, title, type, format, sport, start_date, rules, sort_order, recruit_count, participant_count, group_id, created_by_id, tournament_seeding, tournament_advancement, tournament_rules, advance_count, advance_method, finals_advance)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+       RETURNING id, name, description, title, type, format, sport, start_date, status, rules, notice, sort_order, recruit_count, participant_count, group_id, tournament_seeding, tournament_advancement, tournament_rules, advance_count, advance_method, finals_advance, created_at, updated_at;`,
+      [leagueId, name, description, title, type, format, sport, start_date, rules, sort_order ?? null, recruit_count, participant_count, group_id, userId, tournament_seeding ?? null, tournament_advancement ?? null, tournament_rules ?? null, advance_count ?? null, advance_method ?? null, finals_advance ?? null],
     );
 
     // 리그 코드 생성: {클럽코드}{YYMMDD}{순번2자리}
@@ -1049,7 +1065,9 @@ router.get('/league/:id', optionalAuth, async (req, res) => {
     const leagueResult = await pool.query(
       `SELECT id, name, description, title, type, format, sport, start_date, rules, status,
               sort_order, notice, league_code, recruit_count, participant_count, join_permission,
-              group_id, created_by_id, tournament_seeding, tournament_advancement, created_at, updated_at
+              group_id, created_by_id, tournament_seeding, tournament_advancement,
+              tournament_rules, advance_count, advance_method, finals_advance,
+              created_at, updated_at
        FROM leagues
        WHERE id = $1`,
       [id],
@@ -1157,7 +1175,7 @@ router.put('/league/:id', requireAuth, async (req, res) => {
       UPDATE leagues
       SET ${fields.join(', ')}, updated_at = NOW()
       WHERE id = $${queryIndex}
-      RETURNING id, name, description, title, type, format, sport, start_date, rules, notice, sort_order, status, recruit_count, participant_count, join_permission, created_by_id, created_at, updated_at;
+      RETURNING id, name, description, title, type, format, sport, start_date, rules, notice, sort_order, status, recruit_count, participant_count, join_permission, created_by_id, tournament_seeding, tournament_advancement, tournament_rules, advance_count, advance_method, finals_advance, created_at, updated_at;
     `;
 
     const result = await pool.query(updateQuery, values);
@@ -2261,11 +2279,22 @@ router.post('/league/:id/matches/init-tournament', requireAuth, async (req, res)
     const seeding = seedingOverride ?? access.rows[0].tournament_seeding ?? 'seed';
     const advancement = advancementOverride ?? access.rows[0].tournament_advancement ?? 'upper-only';
 
-    // 기존 경기 확인
-    const existing = await pool.query(`SELECT id FROM league_matches WHERE league_id = $1 LIMIT 1`, [leagueId]);
+    // 리그 포맷 확인 (단일리그+토너먼트는 리그 경기 보존)
+    const leagueFormatRow = await pool.query(`SELECT format FROM leagues WHERE id = $1`, [leagueId]);
+    const leagueFormat = leagueFormatRow.rows[0]?.format ?? '';
+    const isLeaguePlusTournament = leagueFormat === '단일리그 + 토너먼트';
+
+    // 기존 경기 확인 (단일리그+토너먼트: 토너먼트 경기만 확인/삭제, 리그 경기 보존)
+    const existingQuery = isLeaguePlusTournament
+      ? `SELECT id FROM league_matches WHERE league_id = $1 AND bracket IS NOT NULL LIMIT 1`
+      : `SELECT id FROM league_matches WHERE league_id = $1 LIMIT 1`;
+    const existing = await pool.query(existingQuery, [leagueId]);
     if (existing.rowCount > 0) {
       if (!force) return res.status(400).json({ message: '이미 경기가 생성되어 있습니다.' });
-      await pool.query(`DELETE FROM league_matches WHERE league_id = $1`, [leagueId]);
+      const deleteQuery = isLeaguePlusTournament
+        ? `DELETE FROM league_matches WHERE league_id = $1 AND bracket IS NOT NULL`
+        : `DELETE FROM league_matches WHERE league_id = $1`;
+      await pool.query(deleteQuery, [leagueId]);
     }
 
     // 참가자 로드 (편성 방식에 따라 정렬; 수동은 빈 슬롯으로 생성)
@@ -2288,6 +2317,30 @@ router.post('/league/:id/matches/init-tournament', requireAuth, async (req, res)
         groupedParticipants[div].push({ id: p.id });
       }
       participants = null; // group 모드는 buildGroupBracket에서 직접 처리
+    } else if (seeding === 'standings') {
+      // 리그 순위: 리그 단계(bracket IS NULL) 경기 결과 기준 승수 내림차순
+      const pQuery = await pool.query(
+        `SELECT
+           p.id,
+           COALESCE(SUM(CASE
+             WHEN m.bracket IS NULL AND m.status = 'done' AND m.participant_a_id = p.id AND m.score_a > m.score_b THEN 1
+             WHEN m.bracket IS NULL AND m.status = 'done' AND m.participant_b_id = p.id AND m.score_b > m.score_a THEN 1
+             ELSE 0 END), 0) AS wins,
+           COALESCE(SUM(CASE
+             WHEN m.bracket IS NULL AND m.status = 'done' AND m.participant_a_id = p.id THEN m.score_a
+             WHEN m.bracket IS NULL AND m.status = 'done' AND m.participant_b_id = p.id THEN m.score_b
+             ELSE 0 END), 0) AS sets_won
+         FROM league_participants p
+         LEFT JOIN league_matches m ON m.bracket IS NULL
+           AND (m.participant_a_id = p.id OR m.participant_b_id = p.id)
+         WHERE p.league_id = $1
+         GROUP BY p.id
+         ORDER BY wins DESC, sets_won DESC`,
+        [leagueId],
+      );
+      participants = Array.from({ length: bracket_size }, (_, i) =>
+        pQuery.rows[i] ? { id: pQuery.rows[i].id } : null,
+      );
     } else if (seeding === 'seed') {
       const pQuery = await pool.query(
         `SELECT id FROM league_participants WHERE league_id = $1 ORDER BY division ASC, sort_order ASC NULLS LAST, created_at ASC`,

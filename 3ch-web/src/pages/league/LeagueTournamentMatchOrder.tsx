@@ -309,7 +309,8 @@ export default function LeagueTournamentMatchOrder() {
   const { data: participantsData } = useGetLeagueParticipantsQuery(id!, { skip: !canManage });
   const [assignParticipant] = useAssignMatchParticipantMutation();
 
-  const matches = useMemo(() => matchesData?.matches ?? [], [matchesData]);
+  // bracket=null인 리그 단계 경기 제외 (단일리그+토너먼트 혼합 포맷 지원)
+  const matches = useMemo(() => (matchesData?.matches ?? []).filter((m) => !!m.bracket), [matchesData]);
   const participants = useMemo(() => participantsData?.participants ?? [], [participantsData]);
 
   // ── 탭 목록 ──────────────────────────────────────────────────────────────

@@ -29,6 +29,10 @@ export interface UpdateLeagueRequest {
   join_permission?: "public" | "club_only";
   tournament_seeding?: string;
   tournament_advancement?: string;
+  tournament_rules?: string;
+  advance_count?: number | null;
+  advance_method?: string;
+  finals_advance?: number | null;
 }
 
 /**
@@ -54,6 +58,10 @@ export interface League {
   status: "draft" | "active" | "completed";
   tournament_seeding?: string;
   tournament_advancement?: string;
+  tournament_rules?: string;
+  advance_count?: number | null;
+  advance_method?: string;
+  finals_advance?: number | null;
   created_by_id: number;
   created_at: string;
   updated_at: string;

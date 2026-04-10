@@ -614,7 +614,8 @@ export default function LeagueBracket() {
 
   const league          = leagueData?.league;
   // useMemo로 감싸서 matchData 객체 참조가 바뀔 때만 재생성 (불필요한 하위 useMemo 재실행 방지)
-  const matches         = useMemo(() => matchData?.matches ?? [], [matchData]);
+  // bracket 필드가 있는 매치는 토너먼트 경기이므로 리그(라운드로빈) 뷰에서 제외
+  const matches         = useMemo(() => (matchData?.matches ?? []).filter((m) => !m.bracket), [matchData]);
   const rawParticipants = useMemo(() => participantData?.participants ?? [], [participantData]);
 
   // ── 권한 ─────────────────────────────────────────────────────────────────

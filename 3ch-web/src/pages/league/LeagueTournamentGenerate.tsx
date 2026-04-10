@@ -2,24 +2,48 @@ import { useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Box, Button, CircularProgress, Stack, Typography,
-  Select, MenuItem, FormControl, InputLabel, Divider,
+  Select, MenuItem, FormControl,
 } from "@mui/material";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
-import { useGetLeagueQuery, useInitTournamentMatchesMutation } from "../../features/league/leagueApi";
+import {
+  useGetLeagueQuery,
+  useInitTournamentMatchesMutation,
+  useUpdateLeagueMutation,
+} from "../../features/league/leagueApi";
 
 const BRACKET_SIZES = [4, 8, 16, 32, 64, 128];
 
-const SEEDING_OPTIONS = [
-  { value: "manual", label: "수동",  desc: "관리자가 직접 배치한 순서로 대진을 구성합니다." },
-  { value: "seed",   label: "시드",  desc: "부수 순으로 시드를 정해 자동 배치합니다." },
-  { value: "group",  label: "조별",  desc: "각 부수(조) 1위는 다른 부수 2위와 대전. 같은 조끼리는 1라운드에서 만나지 않습니다." },
-  { value: "random", label: "랜덤",  desc: "무작위로 배치합니다." },
+const TOURNAMENT_TYPE_OPTIONS = [
+  { value: "upper-only",  label: "단일 토너먼트" },
+  { value: "upper-lower", label: "상위부·하위부" },
 ];
 
 const ADVANCEMENT_OPTIONS = [
-  { value: "upper-only",  label: "상위 진출",    desc: "승자만 진출하는 단일 토너먼트" },
-  { value: "upper-lower", label: "상·하위 진출", desc: "승자는 상위, 패자는 하위 토너먼트로 진출" },
+  {
+    value: "upper-only",
+    label: "상위 진출",
+    desc: "승자만 다음 라운드로 진출",
+  },
+  {
+    value: "upper-lower",
+    label: "상·하위 진출",
+    desc: "1R 승자는 상위, 패자는 하위 토너먼트로 진출",
+  },
 ];
+
+const SEEDING_OPTIONS = [
+  { value: "seed",   label: "시드(순위)" },
+  { value: "random", label: "랜덤" },
+  { value: "manual", label: "수동" },
+];
+
+const RULES_OPTIONS = [
+  { value: "3전 2선승제", label: "3전 2선승제" },
+  { value: "5전 3선승제", label: "5전 3선승제" },
+  { value: "7전 4선승제", label: "7전 4선승제" },
+];
+
+
 
 export default function LeagueTournamentGenerate() {
   const { id } = useParams<{ id: string }>();
@@ -29,21 +53,37 @@ export default function LeagueTournamentGenerate() {
 
   const { data, isLoading } = useGetLeagueQuery(id!);
   const [initTournament, { isLoading: isGenerating }] = useInitTournamentMatchesMutation();
+  const [updateLeague] = useUpdateLeagueMutation();
 
   const league = data?.league;
 
+  const [advancement, setAdvancement] = useState<string>(
+    () => league?.tournament_advancement ?? "upper-only",
+  );
+  const [upperBracketSize, setUpperBracketSize] = useState<number>(
+    () => league?.advance_count ?? 0,
+  );
   const [bracketSize, setBracketSize] = useState<number>(() => {
     const target = league?.recruit_count ?? 0;
     return BRACKET_SIZES.reduce((prev, cur) =>
       cur >= target && cur < prev ? cur : prev, 128);
   });
-  const [seeding, setSeeding] = useState<string>(() => league?.tournament_seeding ?? "seed");
-  const [advancement, setAdvancement] = useState<string>(() => league?.tournament_advancement ?? "upper-only");
+  const [seeding, setSeeding] = useState<string>(() => {
+    if (league?.tournament_seeding) return league.tournament_seeding;
+    return league?.format === "단일리그 + 토너먼트" ? "standings" : "seed";
+  });
+  const [rules, setRules] = useState<string>(
+    () => league?.tournament_rules ?? "5전 3선승제",
+  );
   const [error, setError] = useState<string | null>(null);
 
   const handleGenerate = async () => {
     setError(null);
     try {
+      // 본선 규칙 저장
+      if (id && rules) {
+        await updateLeague({ id, updates: { tournament_rules: rules } }).unwrap();
+      }
       await initTournament({
         leagueId: id!,
         bracket_size: bracketSize,
@@ -66,38 +106,67 @@ export default function LeagueTournamentGenerate() {
     );
   }
 
-  const selectedSeedingDesc = SEEDING_OPTIONS.find((o) => o.value === seeding)?.desc ?? "";
-  // const selectedAdvancementDesc = ADVANCEMENT_OPTIONS.find((o) => o.value === advancement)?.desc ?? "";
-
   return (
     <Box sx={{ maxWidth: 500, mx: "auto", pb: 6 }}>
       {/* 헤더 */}
-      <Box sx={{ display: "flex", alignItems: "center", px: 1, pt: 1, pb: 0.5 }}>
+      <Stack direction="row" alignItems="center" sx={{ px: 1, pt: 1, pb: 0.5 }}>
         <Button
           startIcon={<ChevronLeftIcon />}
           onClick={() => navigate(-1)}
           sx={{ color: "text.primary", fontWeight: 700, minWidth: 0, px: 0.5 }}
         >
-          뒤로
+          토너먼트 대진표 생성
         </Button>
-      </Box>
+      </Stack>
 
       <Box sx={{ px: 3, pt: 1 }}>
-        <Typography sx={{ fontSize: 22, fontWeight: 900, mb: 0.5 }}>
-          토너먼트 대진표 생성
-        </Typography>
-        {league && (
-          <Typography sx={{ fontSize: 13, color: "text.secondary", mb: 3 }}>
-            {league.name}
-          </Typography>
-        )}
+        <Stack spacing={4}>
 
-        <Stack spacing={3}>
-          {/* 다음 진출 방식 */}
+          {/* ① 토너먼트 유형 */}
           <Box>
-            <Typography fontSize={13} fontWeight={700} color="text.secondary" mb={1}>
-              다음 진출 방식
+            <Stack direction="row" spacing={2} alignItems="flex-start">
+              <Box sx={{ flex: 1 }}>
+                <Typography fontSize={13} fontWeight={700} color="text.secondary" mb={1}>토너먼트 유형</Typography>
+                <FormControl fullWidth size="small">
+                  <Select
+                    value={advancement}
+                    onChange={(e) => setAdvancement(e.target.value)}
+                    displayEmpty
+                  >
+                    {TOURNAMENT_TYPE_OPTIONS.map((o) => (
+                      <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Box>
+              {advancement === "upper-lower" && (
+                <Box sx={{ flex: 1 }}>
+                  <Typography fontSize={13} fontWeight={700} color="text.secondary" mb={1}>상위부 편성</Typography>
+                  <FormControl fullWidth size="small">
+                    <Select
+                      value={upperBracketSize}
+                      onChange={(e) => setUpperBracketSize(Number(e.target.value))}
+                      displayEmpty
+                      renderValue={(v) => v ? `${v}명` : "-선택-"}
+                    >
+                      {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                        <MenuItem key={n} value={n}>{n}명</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Box>
+              )}
+            </Stack>
+            <Typography fontSize={12} color="text.secondary" mt={0.8}>
+              {advancement === "upper-only"
+                ? "하나의 토너먼트 대진표에 전부 배정됩니다."
+                : "예선 순위를 기준으로 상위부·하위부 토너먼트 대진표로 나뉘서 편성됩니다. (상위부 편성 외에는 하위부로 편성)"}
             </Typography>
+          </Box>
+
+          {/* ② 다음 진출 방식 */}
+          <Box>
+            <Typography fontSize={13} fontWeight={700} color="text.secondary" mb={1}>다음 진출 방식</Typography>
             <Stack direction="row" spacing={1.5}>
               {ADVANCEMENT_OPTIONS.map((o) => {
                 const selected = advancement === o.value;
@@ -127,18 +196,13 @@ export default function LeagueTournamentGenerate() {
             </Stack>
           </Box>
 
-          <Divider />
-
-          {/* 본선 시작 단계 */}
+          {/* ③ 본선 시작 단계 */}
           <Box>
-            <Typography fontSize={13} fontWeight={700} color="text.secondary" mb={1}>
-              본선 시작 단계
-            </Typography>
+            <Typography fontSize={13} fontWeight={700} color="text.secondary" mb={1}>본선 시작 단계</Typography>
             <FormControl fullWidth size="small">
-              <InputLabel>본선 시작 단계</InputLabel>
               <Select
                 value={bracketSize}
-                label="본선 시작 단계"
+                displayEmpty
                 onChange={(e) => setBracketSize(Number(e.target.value))}
               >
                 {BRACKET_SIZES.map((n) => (
@@ -147,22 +211,17 @@ export default function LeagueTournamentGenerate() {
               </Select>
             </FormControl>
             <Typography fontSize={12} color="text.secondary" mt={0.8}>
-              실제 참가자가 더 적으면 나머지는 부전승으로 처리됩니다.
+              참가인원이 부족할 경우 일부 경기는 부전승으로 처리됩니다.
             </Typography>
           </Box>
 
-          <Divider />
-
-          {/* 편성 방식 */}
+          {/* ④ 배치 방식 */}
           <Box>
-            <Typography fontSize={13} fontWeight={700} color="text.secondary" mb={1}>
-              편성 방식
-            </Typography>
+            <Typography fontSize={13} fontWeight={700} color="text.secondary" mb={1}>배치 방식</Typography>
             <FormControl fullWidth size="small">
-              <InputLabel>편성 방식</InputLabel>
               <Select
                 value={seeding}
-                label="편성 방식"
+                displayEmpty
                 onChange={(e) => setSeeding(e.target.value)}
               >
                 {SEEDING_OPTIONS.map((o) => (
@@ -170,12 +229,27 @@ export default function LeagueTournamentGenerate() {
                 ))}
               </Select>
             </FormControl>
-            {selectedSeedingDesc && (
-              <Typography fontSize={12} color="text.secondary" mt={0.8}>
-                {selectedSeedingDesc}
-              </Typography>
-            )}
+            <Typography fontSize={12} color="text.secondary" mt={0.8}>
+              순위 순으로 시드를 정해 자동 배치합니다.
+            </Typography>
           </Box>
+
+          {/* ⑤ 본선 규칙 */}
+          <Box>
+            <Typography fontSize={13} fontWeight={700} color="text.secondary" mb={1}>본선 규칙</Typography>
+            <FormControl fullWidth size="small">
+              <Select
+                value={rules}
+                displayEmpty
+                onChange={(e) => setRules(e.target.value)}
+              >
+                {RULES_OPTIONS.map((o) => (
+                  <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
+
         </Stack>
 
         {error && (
@@ -191,12 +265,14 @@ export default function LeagueTournamentGenerate() {
           onClick={handleGenerate}
           disabled={isGenerating}
           sx={{
-            mt: 4, borderRadius: 1, height: 48, fontWeight: 900, fontSize: 15,
+            mt: 4, borderRadius: 2, height: 52, fontWeight: 900, fontSize: 16,
             bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" },
           }}
         >
-          {isGenerating ? <CircularProgress size={22} sx={{ color: "#fff" }} /> : "대진표 생성"}
+          {isGenerating ? <CircularProgress size={22} sx={{ color: "#fff" }} /> : "완료"}
         </Button>
+
+
       </Box>
     </Box>
   );

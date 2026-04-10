@@ -87,7 +87,7 @@ const LeagueStep1BasicInfo: React.FC = () => {
         
         {/* 리그명 */}
         <Box sx={rowSx}>
-          <Typography sx={{ fontWeight: 900, letterSpacing: 4 }}>리그명<Box component="span" sx={{ color: "#EF4444", fontSize: 18 }}>*</Box></Typography>
+          <Typography sx={{ fontWeight: 900, letterSpacing: 1 }}>리그명<Box component="span" sx={{ color: "#EF4444", fontSize: 18 }}>*</Box></Typography>
           <TextField
             placeholder="리그명"
             value={title}

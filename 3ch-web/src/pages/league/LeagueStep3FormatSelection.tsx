@@ -15,8 +15,8 @@ import { useAppDispatch, useAppSelector } from "../../app/hooks";
 
 const LeagueFormatOptions = [
   { value: "single-league", label: "단일리그", disabled: false },
-  { value: "group-league", label: "조별리그", disabled: false },
-  { value: "group-and-knockout", label: "조별리그 + 본선리그", disabled: false },
+  { value: "group-league", label: "조별리그", disabled: true },
+  { value: "group-and-knockout", label: "조별리그 + 본선리그", disabled: true },
   { value: "single-league-tournament", label: "단일리그 + 토너먼트", disabled: false },
   { value: "group-league-tournament", label: "조별리그 + 토너먼트", disabled: true },
   { value: "upper-lower-tournament", label: "상·하위 토너먼트", disabled: false },

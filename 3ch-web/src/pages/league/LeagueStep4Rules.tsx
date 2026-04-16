@@ -14,10 +14,10 @@ import type { LeagueRuleValue } from "../../features/league/leagueCreationSlice"
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 
 const ALL_RULES = [
-  { value: "best-of-3", label: "3전 2선승제" },
-  { value: "best-of-5", label: "5전 3선승제" },
-  { value: "best-of-7", label: "7전 4선승제" },
-  { value: "3-sets",    label: "3세트제" },
+  { value: "best-of-3", label: "3전 2선승제", disabled: false },
+  { value: "best-of-5", label: "5전 3선승제", disabled: false },
+  { value: "best-of-7", label: "7전 4선승제", disabled: false },
+  { value: "3-sets",    label: "3세트제",     disabled: true },
 ] as const;
 
 const LeagueStep4Rules: React.FC = () => {
@@ -63,16 +63,27 @@ const LeagueStep4Rules: React.FC = () => {
           {ALL_RULES.map((o) => (
             <FormControlLabel
               key={o.value} value={o.value}
-              control={<Radio />} label={o.label}
+              disabled={o.disabled}
+              control={<Radio />}
+              label={
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <span>{o.label}</span>
+                  {o.disabled && (
+                    <Typography component="span" sx={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", bgcolor: "#F3F4F6", px: 0.8, py: 0.2, borderRadius: 0.5 }}>
+                      준비중
+                    </Typography>
+                  )}
+                </Box>
+              }
               sx={{
                 m: 0, borderRadius: 1, border: "1px solid",
-                borderColor: rule === o.value ? "grey.900" : "grey.300",
-                bgcolor: "background.paper",
-                px: 2, py: 2, boxShadow: rule === o.value ? 2 : 1,
+                borderColor: !o.disabled && rule === o.value ? "grey.900" : "grey.300",
+                bgcolor: o.disabled ? "#F9FAFB" : "background.paper",
+                px: 2, py: 2, boxShadow: !o.disabled && rule === o.value ? 2 : 1,
                 gap: 1.5, alignItems: "center",
                 "& .MuiFormControlLabel-label": { fontSize: 20, fontWeight: 700 },
                 "& .MuiRadio-root": { p: 0.5 },
-                "&:hover": { borderColor: "grey.700" },
+                "&:hover": { borderColor: o.disabled ? "grey.300" : "grey.700" },
               }}
             />
           ))}

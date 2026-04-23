@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Box, Button, CircularProgress, Stack, Typography,
@@ -31,10 +31,16 @@ const ADVANCEMENT_OPTIONS = [
   },
 ];
 
-const SEEDING_OPTIONS = [
-  { value: "seed",   label: "시드(순위)" },
-  { value: "random", label: "랜덤" },
-  { value: "manual", label: "수동" },
+const SEEDING_OPTIONS_DEFAULT = [
+  { value: "seed",       label: "시드(순위)" },
+  { value: "random",     label: "랜덤" },
+  { value: "manual",     label: "수동" },
+];
+
+const SEEDING_OPTIONS_LEAGUE_TOURNAMENT = [
+  { value: "standings", label: "시드(순위)" },
+  { value: "random",    label: "랜덤" },
+  { value: "manual",    label: "수동" },
 ];
 
 const RULES_OPTIONS = [
@@ -56,22 +62,27 @@ export default function LeagueTournamentGenerate() {
   const [updateLeague] = useUpdateLeagueMutation();
 
   const league = data?.league;
+  const isLeagueTournament = league?.format === "단일리그 + 토너먼트";
+  const seedingOptions = isLeagueTournament ? SEEDING_OPTIONS_LEAGUE_TOURNAMENT : SEEDING_OPTIONS_DEFAULT;
 
-  const [advancement, setAdvancement] = useState<string>(
-    () => league?.tournament_advancement ?? "upper-only",
-  );
-  const [upperBracketSize, setUpperBracketSize] = useState<number>(
-    () => league?.advance_count ?? 0,
-  );
-  const [bracketSize, setBracketSize] = useState<number>(() => {
-    const target = league?.recruit_count ?? 0;
-    return BRACKET_SIZES.reduce((prev, cur) =>
-      cur >= target && cur < prev ? cur : prev, 128);
-  });
-  const [seeding, setSeeding] = useState<string>(() => {
-    if (league?.tournament_seeding) return league.tournament_seeding;
-    return league?.format === "단일리그 + 토너먼트" ? "standings" : "seed";
-  });
+  const [advancement, setAdvancement] = useState<string>("upper-only");
+  const [upperBracketSize, setUpperBracketSize] = useState<number>(0);
+  const [bracketSize, setBracketSize] = useState<number>(128);
+  const [seeding, setSeeding] = useState<string>("seed");
+
+  useEffect(() => {
+    if (!league) return;
+    setAdvancement(league.tournament_advancement ?? "upper-only");
+    setUpperBracketSize(league.advance_count ?? 0);
+    const target = league.recruit_count ?? 0;
+    setBracketSize(BRACKET_SIZES.reduce((prev, cur) =>
+      cur >= target && cur < prev ? cur : prev, 128));
+    if (league.tournament_seeding) {
+      setSeeding(league.tournament_seeding);
+    } else {
+      setSeeding(league.format === "단일리그 + 토너먼트" ? "standings" : "seed");
+    }
+  }, [league]);
   const [rules, setRules] = useState<string>(
     () => league?.tournament_rules ?? "5전 3선승제",
   );
@@ -224,13 +235,19 @@ export default function LeagueTournamentGenerate() {
                 displayEmpty
                 onChange={(e) => setSeeding(e.target.value)}
               >
-                {SEEDING_OPTIONS.map((o) => (
+                {seedingOptions.map((o) => (
                   <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
                 ))}
               </Select>
             </FormControl>
             <Typography fontSize={12} color="text.secondary" mt={0.8}>
-              순위 순으로 시드를 정해 자동 배치합니다.
+              {seeding === "standings"
+                ? "예선리그 순위를 기준으로 시드를 정해 자동 배치합니다."
+                : seeding === "seed"
+                ? "등록 순서 기준으로 시드를 정해 자동 배치합니다."
+                : seeding === "random"
+                ? "무작위로 배치합니다."
+                : "관리자가 직접 선수를 배치합니다."}
             </Typography>
           </Box>
 

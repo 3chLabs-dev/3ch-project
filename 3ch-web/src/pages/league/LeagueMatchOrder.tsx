@@ -178,17 +178,18 @@ function MatchCard({
   const handleKakaoShare = useCallback(() => {
     setMenuAnchor(null);
     const text = `${matchLabel()}\n곧 경기 시작! 지금 입장해 주세요`;
+    const matchOrderUrl = `${window.location.origin}/league/${leagueId}/matches`;
     const kakao = (window as unknown as { Kakao?: { isInitialized?: () => boolean; Share?: { sendDefault: (o: unknown) => void } } }).Kakao;
     if (kakao?.isInitialized?.() && kakao.Share) {
       kakao.Share.sendDefault({
         objectType: "text",
         text,
-        link: { mobileWebUrl: window.location.href, webUrl: window.location.href },
+        link: { mobileWebUrl: matchOrderUrl, webUrl: matchOrderUrl },
       });
     } else {
       navigator.clipboard?.writeText(text).then(() => alert("메시지가 복사되었습니다.\n카카오톡에 붙여넣기 해주세요."));
     }
-  }, [matchLabel]);
+  }, [matchLabel, leagueId]);
 
   const isPlaying = match.status === "playing";
   const isDone = match.status === "done";
@@ -241,7 +242,9 @@ function MatchCard({
                 </MenuItem>
                 <MenuItem onClick={handleKakaoShare}>
                   <ListItemIcon>
-                    <Box sx={{ width: 20, height: 20, bgcolor: "#FEE500", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 900 }}>K</Box>
+                    <Box sx={{ width: 20, height: 20, bgcolor: "#FEE500", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                      <Box component="img" src="/kakao-logo.png" alt="카카오톡" sx={{ width: 14, height: 14, objectFit: "contain" }} />
+                    </Box>
                   </ListItemIcon>
                   <ListItemText>카카오톡 알림</ListItemText>
                 </MenuItem>

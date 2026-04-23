@@ -25,6 +25,9 @@ export default defineConfig({
           { src: "pwa-512-maskable.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
         ],
       },
+      injectManifest: {
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024, // 4 MiB
+      },
       // pwa 제외 요청
       workbox: {
         // SPA fallback에서 제외 (서버에서 직접 처리하는 경로)

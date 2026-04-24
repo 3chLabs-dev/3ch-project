@@ -38,7 +38,7 @@ const LeagueStep4Rules: React.FC = () => {
       dispatch(setStep4MainSetup({
         advance_count: 8,
         advance_method: "rank",
-        seeding: "seed",
+        seeding: "standings",
         finals_advance: 2,
         tournament_rules: "best-of-5",
       }));

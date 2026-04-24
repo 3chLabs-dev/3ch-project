@@ -63,7 +63,7 @@ export interface LeagueMainSetupInfo {
   tournament_rules: string;
   advance_count: number;
   advance_method: AdvanceMethodValue;
-  seeding: "seed" | "random";
+  seeding: "seed" | "random" | "standings";
   finals_advance: number;
 }
 

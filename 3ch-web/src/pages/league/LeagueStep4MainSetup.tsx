@@ -32,7 +32,7 @@ const LeagueStep4MainSetup: React.FC = () => {
 
   const [advanceCount,  setAdvanceCount]  = useState(existing?.advance_count  ?? 8);
   const [advanceMethod, setAdvanceMethod] = useState<AdvanceMethodValue>(existing?.advance_method ?? "rank");
-  const [seeding,       setSeeding]       = useState<"seed" | "random">(existing?.seeding ?? "seed");
+  const [seeding,       setSeeding]       = useState<"seed" | "random" | "standings">(existing?.seeding ?? "standings");
   const [finalsAdvance, setFinalsAdvance] = useState(existing?.finals_advance ?? 2);
 
   const handleNext = () => {

@@ -1798,6 +1798,180 @@ router.post('/league/:id/matches/init', requireAuth, async (req, res) => {
   }
 });
 
+router.post('/league/:id/matches/extend', requireAuth, async (req, res) => {
+  const userId = Number(req.user.sub);
+  const leagueId = req.params.id;
+
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    // 참가자 삭제 시 삭제된 참가자의 경기순서 삭제
+    await client.query(
+      `DELETE FROM league_matches
+      WHERE league_id = $1
+        AND (participant_a_id IS NULL OR participant_b_id IS NULL)`,
+      [leagueId],
+    );
+
+    // 권한 체크
+    const access = await client.query(
+      `SELECT l.id
+       FROM leagues l
+       INNER JOIN group_members gm ON gm.group_id = l.group_id
+       WHERE l.id = $1
+         AND gm.user_id = $2
+         AND gm.role IN ('owner', 'admin')`,
+      [leagueId, userId],
+    );
+
+    if (access.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ message: '권한이 없습니다.' });
+    }
+
+    // 현재 참가자 전체 조회
+    const participants = await client.query(
+      `SELECT id
+       FROM league_participants
+       WHERE league_id = $1
+       ORDER BY sort_order ASC NULLS LAST, division ASC, created_at ASC`,
+      [leagueId],
+    );
+
+    const ids = participants.rows.map((r) => r.id);
+
+    if (ids.length < 2) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: '참가자가 2명 이상이어야 합니다.' });
+    }
+
+    // 기존 경기 조회
+    const existingMatches = await client.query(
+      `SELECT participant_a_id, participant_b_id
+       FROM league_matches
+       WHERE league_id = $1`,
+      [leagueId],
+    );
+
+    // 기존 경기 조합 Set으로 저장
+    // A-B, B-A를 같은 경기로 보기 위해 정렬해서 key 생성
+    const existingPairSet = new Set(
+      existingMatches.rows.map((m) => {
+        return [m.participant_a_id, m.participant_b_id].sort().join('__');
+      }),
+    );
+
+    // 현재 참가자 기준으로 필요한 전체 조합 만들기
+    const missingPairs = [];
+
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        const aId = ids[i];
+        const bId = ids[j];
+
+        const pairKey = [aId, bId].sort().join('__');
+
+        // 현재 참가자 안에 있으면 넘어가고 없으면 missingPairs에 추가
+        if (!existingPairSet.has(pairKey)) {
+          missingPairs.push([aId, bId]);
+        }
+      }
+    }
+
+    if (missingPairs.length === 0) {
+      await client.query('COMMIT');
+
+      const result = await client.query(
+        `SELECT
+           m.id, m.match_order, m.score_a, m.score_b, m.court, m.status,
+           m.participant_a_id, m.participant_b_id,
+           pa.name AS participant_a_name, pa.division AS participant_a_division,
+           pb.name AS participant_b_name, pb.division AS participant_b_division
+         FROM league_matches m
+         LEFT JOIN league_participants pa ON pa.id = m.participant_a_id
+         LEFT JOIN league_participants pb ON pb.id = m.participant_b_id
+         WHERE m.league_id = $1
+         ORDER BY m.match_order ASC`,
+        [leagueId],
+      );
+
+      return res.json({
+        message: '추가할 경기가 없습니다.',
+        addedCount: 0,
+        matches: result.rows,
+      });
+    }
+
+    // 기존 마지막 경기 순서 조회
+    const maxOrderResult = await client.query(
+      `SELECT COALESCE(MAX(match_order), 0) AS max_order
+       FROM league_matches
+       WHERE league_id = $1`,
+      [leagueId],
+    );
+
+    let nextOrder = Number(maxOrderResult.rows[0].max_order) + 1;
+
+    // 없는 경기만 뒤에 추가
+    const insertValues = [];
+    const queryValues = [];
+
+    missingPairs.forEach(([aId, bId], index) => {
+      const baseIndex = index * 5;
+
+      insertValues.push(
+        `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5})`,
+      );
+
+      queryValues.push(
+        randomUUID(),
+        leagueId,
+        nextOrder++,
+        aId,
+        bId,
+      );
+    });
+
+    await client.query(
+      `INSERT INTO league_matches
+       (id, league_id, match_order, participant_a_id, participant_b_id)
+       VALUES ${insertValues.join(', ')}`,
+      queryValues,
+    );
+
+    // 최종 경기 목록 반환
+    const result = await client.query(
+      `SELECT
+         m.id, m.match_order, m.score_a, m.score_b, m.court, m.status,
+         m.participant_a_id, m.participant_b_id,
+         pa.name AS participant_a_name, pa.division AS participant_a_division,
+         pb.name AS participant_b_name, pb.division AS participant_b_division
+       FROM league_matches m
+       LEFT JOIN league_participants pa ON pa.id = m.participant_a_id
+       LEFT JOIN league_participants pb ON pb.id = m.participant_b_id
+       WHERE m.league_id = $1
+       ORDER BY m.match_order ASC`,
+      [leagueId],
+    );
+
+    await client.query('COMMIT');
+
+    return res.json({
+      message: '추가 경기가 생성되었습니다.',
+      addedCount: missingPairs.length,
+      matches: result.rows,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Error extending matches:', err);
+    return res.status(500).json({ message: '경기 추가 생성 중 서버 오류' });
+  } finally {
+    client.release();
+  }
+});
+
 /**
  * @openapi
  * /league/{id}/participants/reorder:

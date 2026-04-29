@@ -34,6 +34,7 @@ import {
   useReorderLeagueMatchesMutation,
   useDeleteLeagueMatchMutation,
   useNotifyLeagueMatchMutation,
+  useExtendLeagueMatchesMutation,
   type LeagueMatch,
 } from "../../features/league/leagueApi";
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
@@ -369,6 +370,7 @@ export default function LeagueMatchOrder() {
   }, [localOrder, matchData?.matches, search]);
 
   const [initMatches, { isLoading: isIniting }] = useInitLeagueMatchesMutation();
+  const [extendMatches, {isLoading: isExtending }] = useExtendLeagueMatchesMutation();
   const [reorderMatches] = useReorderLeagueMatchesMutation();
   const initCalledRef = useRef(false);
 
@@ -380,6 +382,11 @@ export default function LeagueMatchOrder() {
     initCalledRef.current = true;
     initMatches({ id: leagueId });
   }, [matchData, canManage, leagueId, initMatches]);
+
+  useEffect(() => {
+    if (!canManage) return;
+    extendMatches({ id: leagueId });
+  },[canManage, leagueId, extendMatches]);
 
   const handleRefresh = useCallback(() => {
     setLocalOrder(null);
@@ -485,6 +492,9 @@ export default function LeagueMatchOrder() {
       ) : (
         /* 경기 목록 */
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        {isExtending ? (
+          <CircularProgress />
+        ) : (
           <SortableContext items={matches.map((m) => m.id)} strategy={verticalListSortingStrategy}>
             <Stack spacing={1}>
               {matches.map((match, i) => (
@@ -501,6 +511,7 @@ export default function LeagueMatchOrder() {
               ))}
             </Stack>
           </SortableContext>
+      )}
         </DndContext>
       )}
 

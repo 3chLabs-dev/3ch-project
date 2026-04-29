@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { renderToStaticMarkup } from "react-dom/server";
 import {
   DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors,
 } from "@dnd-kit/core";
@@ -30,6 +31,7 @@ import ZoomInIcon from "@mui/icons-material/ZoomIn";
 import ZoomOutIcon from "@mui/icons-material/ZoomOut";
 import DownloadIcon from "@mui/icons-material/Download";
 import PrintIcon from "@mui/icons-material/Print";
+import QRCode from "react-qr-code";
 import { formatLeagueDate } from "../../utils/dateUtils";
 import {
   useGetLeagueQuery,
@@ -78,6 +80,15 @@ const NEXT_STATUS: Record<string, "pending" | "playing" | "done"> = {
   playing: "done",
   done: "done",
 };
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
 // ─── Styled 셀 ────────────────────────────────────────────────────────────────
 // 모든 셀의 공통 베이스 스타일 (padding / 정렬 / 테두리)
@@ -822,16 +833,59 @@ export default function LeagueBracket() {
     try {
       const html2canvas = (await import("html2canvas")).default;
       const canvas = await html2canvas(clone, { scale: 2, useCORS: true });
+      const bracketImageUrl = canvas.toDataURL("image/png");
+      const leagueName = league?.name ?? "대진표";
+      const leagueUrl = id ? `${window.location.origin}/league/${id}` : window.location.href;
+      const qrMarkup = renderToStaticMarkup(
+        <QRCode
+          value={leagueUrl}
+          size={112}
+          bgColor="#FFFFFF"
+          fgColor="#111111"
+        />,
+      );
       const win = window.open("", "_blank");
       if (!win) return;
-      win.document.write(`<html><head><title>대진표</title><style>body{margin:0}img{max-width:100%}@media print{body{margin:0}}</style></head><body><img src="${canvas.toDataURL("image/png")}" /></body></html>`);
+      win.document.write(`<!DOCTYPE html>
+<html>
+  <head>
+    <title>${escapeHtml(leagueName)} 대진표</title>
+    <style>
+      body{margin:0;padding:24px;background:#fff;color:#111;font-family:Arial,sans-serif}
+      .print-header{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:24px}
+      .print-title{font-size:24px;font-weight:700;line-height:1.3}
+      .print-subtitle{margin-top:8px;font-size:12px;color:#555;word-break:break-all}
+      .print-qr{display:flex;flex-direction:column;align-items:center;gap:8px;min-width:132px}
+      .print-qr svg{display:block;width:112px;height:112px}
+      .print-qr-label{font-size:12px;color:#555}
+      .print-image{display:block;width:100%;height:auto}
+      @media print{
+        body{margin:0;padding:16px}
+        .print-header{break-inside:avoid}
+      }
+    </style>
+  </head>
+  <body>
+    <div class="print-header">
+      <div>
+        <div class="print-title">${escapeHtml(leagueName)} 대진표</div>
+        <div class="print-subtitle">${escapeHtml(leagueUrl)}</div>
+      </div>
+      <div class="print-qr">
+        ${qrMarkup}
+        <div class="print-qr-label">QR로 리그 바로가기</div>
+      </div>
+    </div>
+    <img class="print-image" src="${bracketImageUrl}" alt="${escapeHtml(leagueName)} 대진표" />
+  </body>
+</html>`);
       win.document.close();
       win.focus();
       win.onload = () => { win.print(); };
     } finally {
       document.body.removeChild(clone);
     }
-  }, []);
+  }, [id, league?.name]);
 
   // ── 경기 데이터 ───────────────────────────────────────────────────────────
   // matchLookup: "aId__bId" 또는 "bId__aId" 양방향 키로 O(1) 조회

@@ -58,13 +58,27 @@ const NEXT_STATUS: Record<string, "pending" | "playing" | "done"> = {
 
 interface RoundTab { key: string; label: string; bracket: string; roundNumber: number }
 
+function isWalkoverWinner(match: LeagueMatch, slot: "a" | "b") {
+  if (match.status !== "done") return false;
+  const scoreA = match.score_a;
+  const scoreB = match.score_b;
+  const hasScoreA = typeof scoreA === "number";
+  const hasScoreB = typeof scoreB === "number";
+  if (hasScoreA && hasScoreB && scoreA !== scoreB) {
+    return slot === "a" ? scoreA > scoreB : scoreB > scoreA;
+  }
+  return slot === "a"
+    ? !!match.participant_a_id && !match.participant_b_id
+    : !!match.participant_b_id && !match.participant_a_id;
+}
+
 // ─── 슬롯 행 ─────────────────────────────────────────────────────────────────
-function SlotRow({ slot, name, seed, division, score, isWin, isR1, canManage, canScore, matchId, onRegister, onScore }: {
+function SlotRow({ slot, name, seed, division, score, isWin, isR1, canManage, canScore, matchId, onRegister, onScore, showBye }: {
   slot: "a" | "b";
   name?: string | null;
   seed?: number;
   division?: string | null;
-  score: number;
+  score?: number | null;
   isWin: boolean;
   isR1: boolean;
   canManage: boolean;
@@ -72,6 +86,7 @@ function SlotRow({ slot, name, seed, division, score, isWin, isR1, canManage, ca
   matchId: string;
   onRegister: (matchId: string, slot: "a" | "b") => void;
   onScore: (slot: "a" | "b", delta: number) => void;
+  showBye: boolean;
 }) {
   return (
     <Stack direction="row" alignItems="stretch" sx={{ minHeight: 54 }}>
@@ -93,6 +108,8 @@ function SlotRow({ slot, name, seed, division, score, isWin, isR1, canManage, ca
           <Typography noWrap sx={{ fontSize: 14, fontWeight: 700, color: isWin ? "#16A34A" : "#111827" }}>
             {name}
           </Typography>
+        ) : showBye ? (
+          <Typography sx={{ fontSize: 13, color: "#9CA3AF", fontStyle: "italic", fontWeight: 700 }}>BYE</Typography>
         ) : isR1 && canManage ? (
           <Button size="small" onClick={() => onRegister(matchId, slot)}
             sx={{ fontSize: 12, fontWeight: 700, px: 1.5, minWidth: 48, height: 28, borderRadius: 1, border: "1.5px solid #93C5FD", color: "#2563EB", whiteSpace: "nowrap", flexShrink: 0 }}>
@@ -112,7 +129,7 @@ function SlotRow({ slot, name, seed, division, score, isWin, isR1, canManage, ca
           <RemoveIcon sx={{ fontSize: 14 }} />
         </Box>
         <Box sx={{ minWidth: 36, height: 30, border: "1.5px solid #E5E7EB", borderRadius: 1, display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "#fff" }}>
-          <Typography sx={{ fontWeight: 900, fontSize: 18, color: isWin ? "#16A34A" : "#111827" }}>{score}</Typography>
+          <Typography sx={{ fontWeight: 900, fontSize: 18, color: isWin ? "#16A34A" : "#111827" }}>{score ?? ""}</Typography>
         </Box>
         <Box
           onClick={canScore ? () => onScore(slot, 1) : undefined}
@@ -127,7 +144,7 @@ function SlotRow({ slot, name, seed, division, score, isWin, isR1, canManage, ca
 
 // ─── 매치 카드 ────────────────────────────────────────────────────────────────
 function MatchCard({
-  match, matchIndex, canManage, leagueId, seedA, seedB, isR1, onRegister,
+  match, matchIndex, canManage, leagueId, seedA, seedB, isR1, onRegister, manualSeeding,
 }: {
   match: LeagueMatch;
   matchIndex: number;
@@ -137,6 +154,7 @@ function MatchCard({
   seedB?: number;
   isR1: boolean;
   onRegister: (matchId: string, slot: "a" | "b") => void;
+  manualSeeding: boolean;
 }) {
   const [updateMatch] = useUpdateLeagueMatchMutation();
   const [notifyMatch] = useNotifyLeagueMatchMutation();
@@ -147,14 +165,16 @@ function MatchCard({
   const nameB = match.participant_b_name;
   const isDone = match.status === "done";
   const isPlaying = match.status === "playing";
-  const sa = match.score_a ?? 0;
-  const sb = match.score_b ?? 0;
-  const winA = isDone && sa > sb;
-  const winB = isDone && sb > sa;
-  const canScore = canManage && (isPlaying || isDone);
+  const sa = match.score_a;
+  const sb = match.score_b;
+  const winA = isWalkoverWinner(match, "a");
+  const winB = isWalkoverWinner(match, "b");
+  const showByeA = isR1 && !manualSeeding && !nameA;
+  const showByeB = isR1 && !manualSeeding && !nameB;
+  const canScore = canManage && (isPlaying || (isDone && !!nameA && !!nameB));
 
   const handleScore = useCallback((slot: "a" | "b", delta: number) => {
-    const cur = slot === "a" ? sa : sb;
+    const cur = slot === "a" ? (sa ?? 0) : (sb ?? 0);
     updateMatch({ leagueId, matchId: match.id, updates: slot === "a" ? { score_a: Math.max(0, cur + delta) } : { score_b: Math.max(0, cur + delta) } });
   }, [sa, sb, leagueId, match.id, updateMatch]);
 
@@ -237,11 +257,11 @@ function MatchCard({
 
       {/* 참가자 박스 (직선 테두리) */}
       <Box sx={{ mx: 1.5, border: "1.5px solid #E5E7EB", borderRadius: 0, overflow: "hidden" }}>
-        <SlotRow slot="a" name={nameA} seed={seedA} division={match.participant_a_division} score={sa} isWin={winA} {...commonSlotProps} />
+        <SlotRow slot="a" name={nameA} seed={seedA} division={match.participant_a_division} score={sa} isWin={winA} showBye={showByeA} {...commonSlotProps} />
         <Box sx={{ borderTop: "1.5px solid #E5E7EB", borderBottom: "1.5px solid #E5E7EB", py: 0.4, textAlign: "center", bgcolor: "#FAFAFA" }}>
           <Typography sx={{ fontSize: 11, fontWeight: 700, color: "#C4C9D4" }}>vs</Typography>
         </Box>
-        <SlotRow slot="b" name={nameB} seed={seedB} division={match.participant_b_division} score={sb} isWin={winB} {...commonSlotProps} />
+        <SlotRow slot="b" name={nameB} seed={seedB} division={match.participant_b_division} score={sb} isWin={winB} showBye={showByeB} {...commonSlotProps} />
       </Box>
 
       {/* 코트 + 상태 버튼 */}
@@ -305,6 +325,7 @@ export default function LeagueTournamentMatchOrder() {
   );
   const isCreator = !!authUser && leagueData?.league?.created_by_id === authUser?.id;
   const canManage = isCreator || groupData?.myRole === "owner" || groupData?.myRole === "admin";
+  const manualSeeding = leagueData?.league?.tournament_seeding === "manual";
 
   const { data: participantsData } = useGetLeagueParticipantsQuery(id!, { skip: !canManage });
   const [assignParticipant] = useAssignMatchParticipantMutation();
@@ -486,6 +507,7 @@ export default function LeagueTournamentMatchOrder() {
               seedA={seed?.a}
               seedB={seed?.b}
               isR1={isCurrentR1}
+              manualSeeding={manualSeeding}
               onRegister={(matchId, slot) => {
                 setRegisterTarget({ matchId, slot });
                 setParticipantSearch("");

@@ -88,6 +88,20 @@ function seededBracket(n: number): number[] {
   return result;
 }
 
+function isWalkoverWinner(match: LeagueMatch, slot: "a" | "b") {
+  if (match.status !== "done") return false;
+  const scoreA = match.score_a;
+  const scoreB = match.score_b;
+  const hasScoreA = typeof scoreA === "number";
+  const hasScoreB = typeof scoreB === "number";
+  if (hasScoreA && hasScoreB && scoreA !== scoreB) {
+    return slot === "a" ? scoreA > scoreB : scoreB > scoreA;
+  }
+  return slot === "a"
+    ? !!match.participant_a_id && !match.participant_b_id
+    : !!match.participant_b_id && !match.participant_a_id;
+}
+
 // ─── 위치 타입 ───────────────────────────────────────────────────────────────
 interface MatchPos { id: string; x: number; y: number; match: LeagueMatch }
 
@@ -287,17 +301,16 @@ function calcCenterOutPositions(matches: LeagueMatch[]): MatchPos[] {
  *   - 등록 모드(canRegister + !editMode): 비어있는 슬롯 클릭 시 참가자 등록 팝업
  *   - BYE: 1라운드에 참가자가 없으면 이탤릭 "BYE" 표시
  */
-function MatchBox({ pos, actions }: { pos: MatchPos; actions?: SlotActions }) {
+function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; actions?: SlotActions; manualSeeding?: boolean }) {
   const { x, y, match: m } = pos;
   const isLower = m.bracket === "lower";
   const isR1 = m.round_number === 1 && !isLower;
-  const done = m.status === "done";
-  const winA = done && m.score_a != null && m.score_b != null && m.score_a > m.score_b;
-  const winB = done && m.score_a != null && m.score_b != null && m.score_b > m.score_a;
+  const winA = isWalkoverWinner(m, "a");
+  const winB = isWalkoverWinner(m, "b");
   const nameA = m.participant_a_name;
   const nameB = m.participant_b_name;
-  const isByeA = !nameA && isR1;
-  const isByeB = !nameB && isR1;
+  const isByeA = !nameA && isR1 && !manualSeeding;
+  const isByeB = !nameB && isR1 && !manualSeeding;
 
   const swapSelA = actions?.swapFirstKey === `${m.id}:a`;
   const swapSelB = actions?.swapFirstKey === `${m.id}:b`;
@@ -347,7 +360,7 @@ function MatchBox({ pos, actions }: { pos: MatchPos; actions?: SlotActions }) {
         {m.participant_a_division && (
           <Box sx={{ width: 18, height: 18, borderRadius: "50%", bgcolor: "#FAAA47", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: 900, color: "#111827", flexShrink: 0, lineHeight: 1 }}>{m.participant_a_division}</Box>
         )}
-        {isR1 && !nameA ? (
+        {isR1 && !nameA && manualSeeding ? (
           <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 0.75 }}>
             {seed?.a && <Typography sx={{ fontSize: 11, fontWeight: 800, color: "#94A3B8" }}>1-{seed.a}</Typography>}
             {actions?.canRegister && !actions.editMode && (
@@ -358,7 +371,7 @@ function MatchBox({ pos, actions }: { pos: MatchPos; actions?: SlotActions }) {
           </Box>
         ) : (
           <Typography sx={{ fontSize: 11, fontWeight: isByeA ? 400 : 600, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: winA ? "#16A34A" : isByeA ? "#9CA3AF" : "text.primary", fontStyle: isByeA ? "italic" : "normal" }}>
-            {nameA ?? (isR1 ? "BYE" : "")}
+            {nameA ?? (isByeA ? "BYE" : "")}
           </Typography>
         )}
         {m.score_a != null && <Typography sx={{ fontSize: 12, fontWeight: 800, color: winA ? "#16A34A" : "#6B7280", flexShrink: 0 }}>{m.score_a}</Typography>}
@@ -375,7 +388,7 @@ function MatchBox({ pos, actions }: { pos: MatchPos; actions?: SlotActions }) {
         {m.participant_b_division && (
           <Box sx={{ width: 18, height: 18, borderRadius: "50%", bgcolor: "#FAAA47", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: 900, color: "#111827", flexShrink: 0, lineHeight: 1 }}>{m.participant_b_division}</Box>
         )}
-        {isR1 && !nameB ? (
+        {isR1 && !nameB && manualSeeding ? (
           <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 0.75 }}>
             {seed?.b && <Typography sx={{ fontSize: 11, fontWeight: 800, color: "#94A3B8" }}>1-{seed.b}</Typography>}
             {actions?.canRegister && !actions.editMode && (
@@ -386,7 +399,7 @@ function MatchBox({ pos, actions }: { pos: MatchPos; actions?: SlotActions }) {
           </Box>
         ) : (
           <Typography sx={{ fontSize: 11, fontWeight: isByeB ? 400 : 600, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: winB ? "#16A34A" : isByeB ? "#9CA3AF" : "text.primary", fontStyle: isByeB ? "italic" : "normal" }}>
-            {nameB ?? (isR1 ? "BYE" : "")}
+            {nameB ?? (isByeB ? "BYE" : "")}
           </Typography>
         )}
         {m.score_b != null && <Typography sx={{ fontSize: 12, fontWeight: 800, color: winB ? "#16A34A" : "#6B7280", flexShrink: 0 }}>{m.score_b}</Typography>}
@@ -413,17 +426,15 @@ function MatchBox({ pos, actions }: { pos: MatchPos; actions?: SlotActions }) {
  *   - editMode OFF + canRegister + 빈 슬롯: 참가자 등록 팝업 열기
  *   - 이외: 클릭 무반응
  */
-function SingleSlotBox({ pos, slot, actions }: { pos: MatchPos; slot: "a" | "b"; actions?: SlotActions }) {
+function SingleSlotBox({ pos, slot, actions, manualSeeding = false }: { pos: MatchPos; slot: "a" | "b"; actions?: SlotActions; manualSeeding?: boolean }) {
   const { x: baseX, y, match: m } = pos;
   const x = slot === "a" ? baseX : baseX + SS_W + SS_GAP;
   const isR1 = m.round_number === 1 && m.bracket !== "lower";
-  const done = m.status === "done";
   const name = slot === "a" ? m.participant_a_name : m.participant_b_name;
   const participantId = slot === "a" ? m.participant_a_id : m.participant_b_id;
   const score = slot === "a" ? m.score_a : m.score_b;
-  const otherScore = slot === "a" ? m.score_b : m.score_a;
-  const win = done && score != null && otherScore != null && score > otherScore;
-  const isBye = !name && isR1;
+  const win = isWalkoverWinner(m, slot);
+  const isBye = !name && isR1 && !manualSeeding;
   const division = slot === "a" ? m.participant_a_division : m.participant_b_division;
   const seed = actions?.seedMap?.get(m.id);
   const seedNum = slot === "a" ? seed?.a : seed?.b;
@@ -471,7 +482,7 @@ function SingleSlotBox({ pos, slot, actions }: { pos: MatchPos; slot: "a" | "b";
         {division && (
           <Box sx={{ width: 16, height: 16, borderRadius: "50%", bgcolor: "#FAAA47", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 7, fontWeight: 900, color: "#111827", flexShrink: 0, lineHeight: 1 }}>{division}</Box>
         )}
-        {isR1 && !name ? (
+        {isR1 && !name && manualSeeding ? (
           <Box sx={{ flex: 1, display: "flex", justifyContent: "center" }}>
             {actions?.canRegister && !actions.editMode && (
               <Box sx={{ px: 0.8, py: 0.2, borderRadius: 0.6, bgcolor: "#2F80ED", display: "flex", alignItems: "center" }}>
@@ -481,7 +492,7 @@ function SingleSlotBox({ pos, slot, actions }: { pos: MatchPos; slot: "a" | "b";
           </Box>
         ) : (
           <Typography sx={{ fontSize: 11, fontWeight: isBye ? 400 : 700, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: win ? "#16A34A" : isBye ? "#9CA3AF" : "#111827", fontStyle: isBye ? "italic" : "normal" }}>
-            {name ?? (isR1 ? "BYE" : "")}
+            {name ?? (isBye ? "BYE" : "")}
           </Typography>
         )}
       </Box>
@@ -662,6 +673,7 @@ export default function LeagueTournamentBracket() {
 
   const league = leagueData?.league;
   const matches = useMemo(() => matchesData?.matches ?? [], [matchesData]);
+  const manualSeeding = league?.tournament_seeding === "manual";
 
   const isDoubleElim = matches.some((m) => m.bracket === "lower");
   const canManage = groupData?.myRole === "owner" || groupData?.myRole === "admin";
@@ -787,11 +799,13 @@ export default function LeagueTournamentBracket() {
     const lowerFinal = lowerMatches.find((m) => m.round_number === maxLowerRound);
     const getWinner = (m?: LeagueMatch) => {
       if (!m || m.status !== "done") return null;
-      const sa = m.score_a ?? 0, sb = m.score_b ?? 0;
-      if (sa === sb) return null;
-      return sa > sb
-        ? { name: m.participant_a_name, division: m.participant_a_division }
-        : { name: m.participant_b_name, division: m.participant_b_division };
+      if (isWalkoverWinner(m, "a")) {
+        return { name: m.participant_a_name, division: m.participant_a_division };
+      }
+      if (isWalkoverWinner(m, "b")) {
+        return { name: m.participant_b_name, division: m.participant_b_division };
+      }
+      return null;
     };
     return {
       upperWinner: getWinner(upperFinal),
@@ -934,10 +948,10 @@ export default function LeagueTournamentBracket() {
               ))}
 
               {positions.map((pos) => {
-                if (!isDoubleElim) return <MatchBox key={pos.id} pos={pos} actions={canManage && !isCompleted ? slotActions : undefined} />;
+                if (!isDoubleElim) return <MatchBox key={pos.id} pos={pos} actions={canManage && !isCompleted ? slotActions : undefined} manualSeeding={manualSeeding} />;
                 return (
                   <React.Fragment key={pos.id}>
-                    <SingleSlotBox pos={pos} slot="a" actions={canManage && !isCompleted ? slotActions : undefined} />
+                    <SingleSlotBox pos={pos} slot="a" actions={canManage && !isCompleted ? slotActions : undefined} manualSeeding={manualSeeding} />
                     <Typography sx={{
                       position: "absolute",
                       left: pos.x + SS_W,
@@ -947,7 +961,7 @@ export default function LeagueTournamentBracket() {
                       fontSize: 11, fontWeight: 900, color: "#94A3B8", lineHeight: 1,
                       pointerEvents: "none",
                     }}>vs</Typography>
-                    <SingleSlotBox pos={pos} slot="b" actions={canManage && !isCompleted ? slotActions : undefined} />
+                    <SingleSlotBox pos={pos} slot="b" actions={canManage && !isCompleted ? slotActions : undefined} manualSeeding={manualSeeding} />
                   </React.Fragment>
                 );
               })}

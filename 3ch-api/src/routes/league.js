@@ -292,6 +292,202 @@ function buildUpperLowerMatches(bracketSize, participants) {
   return matches;
 }
 
+function isUpperRoundOne(match) {
+  return match.round_number === 1 && (!match.bracket || match.bracket === 'upper');
+}
+
+async function reconcileTournamentMatches(db, leagueId, options = {}) {
+  const { manualSeeding = false } = options;
+  const result = await db.query(
+    `SELECT id, league_id, bracket, round_number, participant_a_id, participant_b_id,
+            status, score_a, score_b, next_match_id, next_slot,
+            loser_next_match_id, loser_next_slot
+       FROM league_matches
+      WHERE league_id = $1 AND bracket IS NOT NULL
+      ORDER BY match_order ASC`,
+    [leagueId],
+  );
+  if (result.rowCount === 0) return;
+
+  const matches = result.rows.map((row) => ({ ...row }));
+  const originalById = new Map(result.rows.map((row) => [row.id, { ...row }]));
+  const byId = new Map(matches.map((row) => [row.id, row]));
+  const winnerSources = new Map();
+  const loserSources = new Map();
+
+  for (const match of matches) {
+    if (match.next_match_id && match.next_slot) {
+      winnerSources.set(`${match.next_match_id}:${match.next_slot}`, match.id);
+    }
+    if (match.loser_next_match_id && match.loser_next_slot) {
+      loserSources.set(`${match.loser_next_match_id}:${match.loser_next_slot}`, match.id);
+    }
+  }
+
+  const getSource = (matchId, slot) => {
+    const key = `${matchId}:${slot}`;
+    if (winnerSources.has(key)) return { matchId: winnerSources.get(key), type: 'winner' };
+    if (loserSources.has(key)) return { matchId: loserSources.get(key), type: 'loser' };
+    return null;
+  };
+
+  for (let iter = 0; iter < matches.length * 4; iter++) {
+    let changed = false;
+    const slotMemo = new Map();
+    const outcomeMemo = new Map();
+
+    const getOutcome = (match, trail = new Set()) => {
+      if (!match) return { known: true, winnerId: null, loserId: null, walkover: false };
+      if (outcomeMemo.has(match.id)) return outcomeMemo.get(match.id);
+      if (trail.has(match.id)) return { known: false };
+
+      const nextTrail = new Set(trail);
+      nextTrail.add(match.id);
+      const a = getSlotState(match, 'a', nextTrail);
+      const b = getSlotState(match, 'b', nextTrail);
+      const walkoverA = a.kind === 'participant' && b.kind === 'impossible';
+      const walkoverB = b.kind === 'participant' && a.kind === 'impossible';
+
+      let outcome;
+      if (match.status === 'done') {
+        const hasScoreA = typeof match.score_a === 'number';
+        const hasScoreB = typeof match.score_b === 'number';
+        if (hasScoreA && hasScoreB && match.score_a !== match.score_b) {
+          const winnerId = match.score_a > match.score_b ? match.participant_a_id : match.participant_b_id;
+          const loserId = match.score_a > match.score_b ? match.participant_b_id : match.participant_a_id;
+          outcome = { known: true, winnerId: winnerId ?? null, loserId: loserId ?? null, walkover: false };
+        } else if (walkoverA) {
+          outcome = { known: true, winnerId: a.participantId, loserId: null, walkover: true };
+        } else if (walkoverB) {
+          outcome = { known: true, winnerId: b.participantId, loserId: null, walkover: true };
+        } else if (a.kind === 'impossible' && b.kind === 'impossible') {
+          outcome = { known: true, winnerId: null, loserId: null, walkover: false };
+        } else {
+          outcome = { known: false };
+        }
+      } else if (walkoverA) {
+        outcome = { known: true, winnerId: a.participantId, loserId: null, walkover: true };
+      } else if (walkoverB) {
+        outcome = { known: true, winnerId: b.participantId, loserId: null, walkover: true };
+      } else if (a.kind === 'impossible' && b.kind === 'impossible') {
+        outcome = { known: true, winnerId: null, loserId: null, walkover: false };
+      } else {
+        outcome = { known: false };
+      }
+
+      outcomeMemo.set(match.id, outcome);
+      return outcome;
+    };
+
+    const getSlotState = (match, slot, trail = new Set()) => {
+      const key = `${match.id}:${slot}`;
+      if (slotMemo.has(key)) return slotMemo.get(key);
+
+      const direct = slot === 'a' ? match.participant_a_id : match.participant_b_id;
+      if (direct) {
+        const state = { kind: 'participant', participantId: direct };
+        slotMemo.set(key, state);
+        return state;
+      }
+
+      const source = getSource(match.id, slot);
+      if (!source) {
+        const state = {
+          kind: manualSeeding && isUpperRoundOne(match) ? 'pending' : 'impossible',
+        };
+        slotMemo.set(key, state);
+        return state;
+      }
+
+      const sourceMatch = byId.get(source.matchId);
+      const outcome = getOutcome(sourceMatch, trail);
+      if (!outcome.known) {
+        const state = { kind: 'pending' };
+        slotMemo.set(key, state);
+        return state;
+      }
+
+      const participantId = source.type === 'winner' ? outcome.winnerId : outcome.loserId;
+      const state = participantId
+        ? { kind: 'participant', participantId }
+        : { kind: 'impossible' };
+      slotMemo.set(key, state);
+      return state;
+    };
+
+    for (const match of matches) {
+      const aState = getSlotState(match, 'a');
+      const bState = getSlotState(match, 'b');
+      const aSource = getSource(match.id, 'a');
+      const bSource = getSource(match.id, 'b');
+
+      if (aState.kind === 'participant') {
+        if (match.participant_a_id !== aState.participantId) {
+          match.participant_a_id = aState.participantId;
+          changed = true;
+        }
+      } else if (aSource && match.participant_a_id !== null) {
+        match.participant_a_id = null;
+        changed = true;
+      }
+
+      if (bState.kind === 'participant') {
+        if (match.participant_b_id !== bState.participantId) {
+          match.participant_b_id = bState.participantId;
+          changed = true;
+        }
+      } else if (bSource && match.participant_b_id !== null) {
+        match.participant_b_id = null;
+        changed = true;
+      }
+
+      const outcome = getOutcome(match);
+      const isWalkover =
+        outcome.known &&
+        !!outcome.winnerId &&
+        ((aState.kind === 'participant' && bState.kind === 'impossible') ||
+          (bState.kind === 'participant' && aState.kind === 'impossible'));
+
+      if (isWalkover && match.status !== 'done') {
+        match.status = 'done';
+        if (match.score_a !== null) match.score_a = null;
+        if (match.score_b !== null) match.score_b = null;
+        changed = true;
+      }
+    }
+
+    if (!changed) break;
+  }
+
+  for (const match of matches) {
+    const original = originalById.get(match.id);
+    if (!original) continue;
+
+    const fields = [];
+    const values = [];
+    const pushField = (column, value) => {
+      fields.push(`${column} = $${values.length + 1}`);
+      values.push(value);
+    };
+
+    if (original.participant_a_id !== match.participant_a_id) pushField('participant_a_id', match.participant_a_id);
+    if (original.participant_b_id !== match.participant_b_id) pushField('participant_b_id', match.participant_b_id);
+    if (original.status !== match.status) pushField('status', match.status);
+    if (original.score_a !== match.score_a) pushField('score_a', match.score_a);
+    if (original.score_b !== match.score_b) pushField('score_b', match.score_b);
+
+    if (!fields.length) continue;
+
+    values.push(match.id);
+    await db.query(
+      `UPDATE league_matches
+          SET ${fields.join(', ')}
+        WHERE id = $${values.length}`,
+      values,
+    );
+  }
+}
+
 // league_code(AAA260316 01 형식)로 요청 시 실제 UUID로 자동 변환
 router.param('id', async (req, _res, next, id) => {
   if (/^[A-Z]{3}\d{6}\d{2}$/.test(id)) {
@@ -2030,9 +2226,13 @@ router.patch('/league/:id/matches/:matchId', optionalAuth, async (req, res) => {
   const { score_a, score_b, court, status, participant_a_id, participant_b_id } = req.body;
   try {
     // join_permission 확인
-    const leagueRow = await pool.query(`SELECT join_permission FROM leagues WHERE id = $1`, [leagueId]);
+    const leagueRow = await pool.query(
+      `SELECT join_permission, tournament_seeding FROM leagues WHERE id = $1`,
+      [leagueId],
+    );
     if (leagueRow.rowCount === 0) return res.status(404).json({ message: '리그를 찾을 수 없습니다.' });
     const joinPermission = leagueRow.rows[0].join_permission;
+    const manualSeeding = leagueRow.rows[0].tournament_seeding === 'manual';
 
     if (joinPermission === 'club_only') {
       const userId = req.user ? Number(req.user.sub) : null;
@@ -2081,26 +2281,24 @@ router.patch('/league/:id/matches/:matchId', optionalAuth, async (req, res) => {
       sendPushToParticipant(m.participant_b_id, payload);
     }
 
-    // 토너먼트 진출 처리: status가 done이 되면 승자/패자를 다음 경기에 배정
-    if (status === 'done') {
-      const m = result.rows[0];
-      const scoreA = m.score_a ?? 0;
-      const scoreB = m.score_b ?? 0;
-      if (scoreA !== scoreB) {
-        const winnerId = scoreA > scoreB ? m.participant_a_id : m.participant_b_id;
-        const loserId  = scoreA > scoreB ? m.participant_b_id : m.participant_a_id;
-        if (m.next_match_id && winnerId) {
-          const col = m.next_slot === 'a' ? 'participant_a_id' : 'participant_b_id';
-          await pool.query(`UPDATE league_matches SET ${col} = $1 WHERE id = $2`, [winnerId, m.next_match_id]);
-        }
-        if (m.loser_next_match_id && loserId) {
-          const col = m.loser_next_slot === 'a' ? 'participant_a_id' : 'participant_b_id';
-          await pool.query(`UPDATE league_matches SET ${col} = $1 WHERE id = $2`, [loserId, m.loser_next_match_id]);
-        }
-      }
-    }
+    await reconcileTournamentMatches(pool, leagueId, { manualSeeding });
 
-    return res.json({ match: result.rows[0] });
+    const refreshed = await pool.query(
+      `SELECT
+         m.id, m.match_order, m.score_a, m.score_b, m.court, m.status,
+         m.participant_a_id, m.participant_b_id,
+         m.bracket, m.round_number, m.match_label,
+         m.next_match_id, m.next_slot, m.loser_next_match_id, m.loser_next_slot,
+         pa.name AS participant_a_name, pa.division AS participant_a_division,
+         pb.name AS participant_b_name, pb.division AS participant_b_division
+       FROM league_matches m
+       LEFT JOIN league_participants pa ON pa.id = m.participant_a_id
+       LEFT JOIN league_participants pb ON pb.id = m.participant_b_id
+       WHERE m.id = $1 AND m.league_id = $2`,
+      [matchId, leagueId],
+    );
+
+    return res.json({ match: refreshed.rows[0] ?? result.rows[0] });
   } catch (err) {
     console.error('Error updating match:', err);
     return res.status(500).json({ message: '서버 오류' });
@@ -2400,6 +2598,8 @@ router.post('/league/:id/matches/init-tournament', requireAuth, async (req, res)
       `UPDATE leagues SET status = 'active', tournament_seeding = $2, tournament_advancement = $3, updated_at = NOW() WHERE id = $1`,
       [leagueId, seeding, advancement],
     );
+
+    await reconcileTournamentMatches(pool, leagueId, { manualSeeding: seeding === 'manual' });
 
     // 생성된 경기 반환
     const result = await pool.query(

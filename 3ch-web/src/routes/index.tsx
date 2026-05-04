@@ -34,6 +34,7 @@ import GroupMemberLeagueHistoryPage from "../pages/group/GroupMemberLeagueHistor
 import RankingHubPage from "../pages/group/RankingHubPage";
 import SportRankingPage from "../pages/group/SportRankingPage";
 import GroupRankingPage from "../pages/group/GroupRankingPage";
+import GroupRankingDetailPage from "../pages/group/GroupRankingDetailPage";
 import GroupMemberRankingDetailPage from "../pages/group/GroupMemberRankingDetailPage";
 import DrawMain from "../pages/draw/DrawMain";
 import LeagueDetail from "../pages/league/LeagueDetail";
@@ -92,6 +93,7 @@ export const router = createBrowserRouter([
       { path: "/club/:id/manage", element: <GroupManage /> },
       { path: "/club/:id/manage/league", element: <GroupLeagueManage /> },
       { path: "/club/:id/ranking", element: <GroupRankingPage /> },
+      { path: "/club/:id/ranking/detail", element: <GroupRankingDetailPage /> },
       { path: "/club/:id/ranking/:userId", element: <GroupMemberRankingDetailPage /> },
       { path: "/club/:id/member/:userId", element: <ClubMemberDetail /> },
       { path: "/club/:id/member/:userId/leagues", element: <GroupMemberLeagueHistoryPage /> },

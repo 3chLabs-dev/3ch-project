@@ -144,11 +144,130 @@ export interface GroupMemberDetailResponse {
   stats: {
     year: number;
     attendance: number;
+    league_attendance: number;
+    tournament_attendance: number;
     wins: number;
     losses: number;
     championships: number;
   };
+  ranking_summary: {
+    rank: number | null;
+    rating: number;
+    wins: number;
+    losses: number;
+    matches_played: number;
+    win_rate: number;
+    streak: number;
+    last_match_at?: string | null;
+  } | null;
   clubs: { id: string; name: string; sport?: string | null; role: string }[];
+}
+
+export interface GroupRankingRow {
+  member_id: number;
+  name: string;
+  division?: string | null;
+  rank: number | null;
+  rating: number;
+  wins: number;
+  losses: number;
+  matches_played: number;
+  win_rate: number;
+  streak: number;
+  last_match_at?: string | null;
+}
+
+export interface GroupRankingResponse {
+  group: { id: string; name: string };
+  summary: {
+    member_count: number;
+    ranked_count: number;
+    match_count: number;
+    updated_at?: string | null;
+  };
+  myRole: string;
+  rankings: GroupRankingRow[];
+}
+
+export interface GroupRankingDetailResponse {
+  member: {
+    member_id: number;
+    name: string;
+    division?: string | null;
+  };
+  ranking: GroupRankingRow & {
+    best_win_rating?: number | null;
+  };
+  recent_events: Array<{
+    league_id?: string | null;
+    league_match_id?: string | null;
+    before_rating: number;
+    after_rating: number;
+    delta: number;
+    result: "win" | "loss";
+    match_type: "league" | "tournament";
+    opponent_name?: string | null;
+    created_at: string;
+  }>;
+}
+
+export interface PointRankingRow {
+  member_id: number;
+  name: string;
+  division?: string | null;
+  rank: number | null;
+  attendance_count: number;
+  championships: number;
+  matches_played: number;
+  wins: number;
+  losses: number;
+  win_rate: number;
+  score_points: number;
+  attendance_points: number;
+  bonus_points: number;
+  total_points: number;
+}
+
+export interface GroupPointRankingResponse {
+  group: { id: string; name: string; sport?: string | null };
+  year: number;
+  scope: "club" | "national";
+  available_years: number[];
+  myRole: string;
+  currentUserId: number;
+  league: {
+    rankings: PointRankingRow[];
+  };
+  tournament: {
+    rankings: PointRankingRow[];
+  };
+}
+
+export interface GroupMemberLeagueHistoryResponse {
+  member: {
+    user_id: number;
+    name: string;
+    email: string;
+    role: string;
+    division?: string | null;
+    joined_at: string;
+  };
+  histories: Array<{
+    league_id: string;
+    league_name: string;
+    format?: string | null;
+    type?: string | null;
+    sport?: string | null;
+    start_date?: string | null;
+    status?: string | null;
+    division?: string | null;
+    participant_name: string;
+    wins: number;
+    losses: number;
+    matches_played: number;
+    has_league_stage: boolean;
+    has_tournament_stage: boolean;
+  }>;
 }
 
 export const groupApi = baseApi.injectEndpoints({
@@ -286,6 +405,43 @@ export const groupApi = baseApi.injectEndpoints({
       query: ({ groupId, userId }) => `/group/${groupId}/member/${userId}`,
       providesTags: (_result, _error, { groupId, userId }) => [{ type: "Group", id: `member-${groupId}-${userId}` }],
     }),
+
+    getGroupMemberLeagueHistory: builder.query<GroupMemberLeagueHistoryResponse, { groupId: string; userId: number }>({
+      query: ({ groupId, userId }) => `/group/${groupId}/member/${userId}/leagues`,
+      providesTags: (_result, _error, { groupId, userId }) => [{ type: "Group", id: `member-leagues-${groupId}-${userId}` }],
+    }),
+
+    getGroupRanking: builder.query<GroupRankingResponse, { groupId: string }>({
+      query: ({ groupId }) => `/group/${groupId}/ranking`,
+      providesTags: (_result, _error, { groupId }) => [{ type: "Group", id: `ranking-${groupId}` }],
+    }),
+
+    getGroupPointRanking: builder.query<GroupPointRankingResponse, { groupId: string; year?: number; scope: "club" | "national" }>({
+      query: ({ groupId, year, scope }) => ({
+        url: `/group/${groupId}/ranking/points`,
+        params: {
+          scope,
+          ...(year ? { year } : {}),
+        },
+      }),
+      providesTags: (_result, _error, { groupId, year, scope }) => [{ type: "Group", id: `point-ranking-${groupId}-${scope}-${year ?? "latest"}` }],
+    }),
+
+    getGroupRankingDetail: builder.query<GroupRankingDetailResponse, { groupId: string; memberId: number }>({
+      query: ({ groupId, memberId }) => `/group/${groupId}/ranking/${memberId}`,
+      providesTags: (_result, _error, { groupId, memberId }) => [{ type: "Group", id: `ranking-${groupId}-${memberId}` }],
+    }),
+
+    rebuildGroupRanking: builder.mutation<{ message: string }, { groupId: string }>({
+      query: ({ groupId }) => ({
+        url: `/group/${groupId}/ranking/rebuild`,
+        method: "POST",
+      }),
+      invalidatesTags: (_result, _error, { groupId }) => [
+        { type: "Group", id: `ranking-${groupId}` },
+        "Group",
+      ],
+    }),
   }),
 });
 
@@ -305,4 +461,9 @@ export const {
   useLazyGeocodeAddressQuery,
   useRecommendGroupsMutation,
   useGetGroupMemberDetailQuery,
+  useGetGroupMemberLeagueHistoryQuery,
+  useGetGroupRankingQuery,
+  useGetGroupPointRankingQuery,
+  useGetGroupRankingDetailQuery,
+  useRebuildGroupRankingMutation,
 } = groupApi;

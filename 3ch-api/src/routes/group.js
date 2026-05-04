@@ -5,6 +5,13 @@ const pool = require('../db/pool');
 const { requireAuth } = require('../middlewares/auth');
 const { requireGroupAdmin, requireGroupOwner } = require('../middlewares/permissions');
 const { generateClubCode } = require('../utils/clubCodeUtils');
+const {
+  rebuildGroupRanking,
+  getGroupRanking,
+  getGroupRankingDetail,
+  updateGroupRankingSettings,
+} = require('../services/groupRanking');
+const { getPointRanking } = require('../services/pointRanking');
 
 const router = express.Router();
 
@@ -128,6 +135,14 @@ const createGroupSchema = z.object({
   address_detail: z.string().optional(),
   lat: z.number().optional(),
   lng: z.number().optional(),
+});
+
+const rankingSettingsSchema = z.object({
+  enabled: z.boolean().optional(),
+  base_rating: z.number().int().min(500).max(4000).optional(),
+  k_league: z.number().int().min(1).max(128).optional(),
+  k_tournament: z.number().int().min(1).max(128).optional(),
+  include_tournament: z.boolean().optional(),
 });
 
 /**
@@ -1525,6 +1540,212 @@ router.delete('/group/:id/member/:userId', requireAuth, requireGroupAdmin, async
 
 /**
  * @openapi
+ * /group/{id}/ranking/points:
+ *   get:
+ *     summary: 연도별 포인트 순위 조회
+ *     description: 클럽 내부 또는 같은 종목 전국 기준의 리그/대회 포인트 순위를 조회합니다.
+ *     tags: [클럽]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *       - in: query
+ *         name: year
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: scope
+ *         schema:
+ *           type: string
+ *           enum: [club, national]
+ *     responses:
+ *       200:
+ *         description: 조회 성공
+ *       403:
+ *         description: 권한 없음
+ */
+router.get('/group/:id/ranking/points', requireAuth, async (req, res) => {
+  try {
+    const userId = Number(req.user.sub);
+    const { id: groupId } = req.params;
+    const year = req.query.year ? Number(req.query.year) : undefined;
+    const scope = req.query.scope === 'national' ? 'national' : 'club';
+
+    const accessCheck = await pool.query(
+      `SELECT role FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      [groupId, userId],
+    );
+    if (accessCheck.rowCount === 0) {
+      return res.status(403).json({ message: '권한이 없습니다.' });
+    }
+
+    const data = await getPointRanking(groupId, year, scope);
+    if (!data) return res.status(404).json({ message: '클럽을 찾을 수 없습니다.' });
+
+    return res.json({
+      ...data,
+      myRole: accessCheck.rows[0].role,
+      currentUserId: userId,
+    });
+  } catch (error) {
+    console.error('Error fetching point ranking:', error);
+    return res.status(500).json({ message: '서버 오류' });
+  }
+});
+
+/**
+ * @openapi
+ * /group/{id}/ranking:
+ *   get:
+ *     summary: 클럽 랭킹 조회
+ *     description: 클럽 내부 멤버 랭킹 목록을 조회합니다.
+ *     tags: [클럽]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: 랭킹 조회 성공
+ *       403:
+ *         description: 권한 없음
+ */
+router.get('/group/:id/ranking', requireAuth, async (req, res) => {
+  try {
+    const userId = Number(req.user.sub);
+    const { id: groupId } = req.params;
+
+    const accessCheck = await pool.query(
+      `SELECT role FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      [groupId, userId],
+    );
+    if (accessCheck.rowCount === 0) {
+      return res.status(403).json({ message: '권한이 없습니다.' });
+    }
+
+    const data = await getGroupRanking(groupId);
+    if (!data) return res.status(404).json({ message: '클럽을 찾을 수 없습니다.' });
+
+    return res.json({
+      ...data,
+      myRole: accessCheck.rows[0].role,
+    });
+  } catch (error) {
+    console.error('Error fetching group ranking:', error);
+    return res.status(500).json({ message: '서버 오류' });
+  }
+});
+
+/**
+ * @openapi
+ * /group/{id}/ranking/{memberId}:
+ *   get:
+ *     summary: 클럽 회원 랭킹 상세 조회
+ *     description: 한 회원의 랭킹 상세와 최근 레이팅 변동 내역을 조회합니다.
+ *     tags: [클럽]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *       - in: path
+ *         name: memberId
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: 랭킹 상세 조회 성공
+ */
+router.get('/group/:id/ranking/:memberId', requireAuth, async (req, res) => {
+  try {
+    const userId = Number(req.user.sub);
+    const { id: groupId, memberId } = req.params;
+
+    const accessCheck = await pool.query(
+      `SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      [groupId, userId],
+    );
+    if (accessCheck.rowCount === 0) {
+      return res.status(403).json({ message: '권한이 없습니다.' });
+    }
+
+    const data = await getGroupRankingDetail(groupId, Number(memberId));
+    if (!data) return res.status(404).json({ message: '랭킹 정보를 찾을 수 없습니다.' });
+
+    return res.json(data);
+  } catch (error) {
+    console.error('Error fetching group ranking detail:', error);
+    return res.status(500).json({ message: '서버 오류' });
+  }
+});
+
+/**
+ * @openapi
+ * /group/{id}/ranking/rebuild:
+ *   post:
+ *     summary: 클럽 랭킹 수동 재계산
+ *     description: owner/admin이 클럽 랭킹을 강제로 재계산합니다.
+ *     tags: [클럽]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 재계산 성공
+ */
+router.post('/group/:id/ranking/rebuild', requireAuth, requireGroupAdmin, async (req, res) => {
+  try {
+    const { id: groupId } = req.params;
+    const result = await rebuildGroupRanking(groupId);
+    return res.json({
+      message: '클럽 랭킹을 재계산했습니다.',
+      summary: result,
+    });
+  } catch (error) {
+    console.error('Error rebuilding group ranking:', error);
+    return res.status(500).json({ message: '서버 오류' });
+  }
+});
+
+/**
+ * @openapi
+ * /group/{id}/ranking/settings:
+ *   patch:
+ *     summary: 클럽 랭킹 설정 수정
+ *     description: owner/admin이 클럽 랭킹 설정을 수정합니다.
+ *     tags: [클럽]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 설정 저장 성공
+ */
+router.patch('/group/:id/ranking/settings', requireAuth, requireGroupAdmin, async (req, res) => {
+  try {
+    const { id: groupId } = req.params;
+    const payload = rankingSettingsSchema.parse(req.body);
+    const settings = await updateGroupRankingSettings(groupId, payload);
+    return res.json({
+      message: '클럽 랭킹 설정이 저장되었습니다.',
+      settings,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ errors: error.errors });
+    }
+    console.error('Error updating ranking settings:', error);
+    return res.status(500).json({ message: '서버 오류' });
+  }
+});
+
+/**
+ * @openapi
  * /group/{id}/member/{userId}:
  *   get:
  *     summary: 클럽 회원 상세 조회
@@ -1546,6 +1767,52 @@ router.delete('/group/:id/member/:userId', requireAuth, requireGroupAdmin, async
  *     responses:
  *       200:
  *         description: 회원 상세 정보
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 member:
+ *                   type: object
+ *                   properties:
+ *                     user_id:
+ *                       type: integer
+ *                     name:
+ *                       type: string
+ *                     email:
+ *                       type: string
+ *                     role:
+ *                       type: string
+ *                     division:
+ *                       type: string
+ *                       nullable: true
+ *                     joined_at:
+ *                       type: string
+ *                       format: date-time
+ *                 stats:
+ *                   type: object
+ *                   properties:
+ *                     year:
+ *                       type: integer
+ *                     attendance:
+ *                       type: integer
+ *                     league_attendance:
+ *                       type: integer
+ *                     tournament_attendance:
+ *                       type: integer
+ *                     wins:
+ *                       type: integer
+ *                     losses:
+ *                       type: integer
+ *                     championships:
+ *                       type: integer
+ *                 ranking_summary:
+ *                   type: object
+ *                   nullable: true
+ *                 clubs:
+ *                   type: array
+ *                   items:
+ *                     type: object
  *       403:
  *         description: 권한 없음 (해당 클럽 멤버 아님)
  *       404:
@@ -1578,39 +1845,62 @@ router.get('/group/:id/member/:userId', requireAuth, async (req, res) => {
     const member = memberResult.rows[0];
     const year = new Date().getFullYear();
 
-    // 올해 리그 통계 (이름 매칭, 이 회원이 속한 클럽들의 리그 기준)
+    // 올해 리그/대회 통계
     const statsResult = await pool.query(
       `WITH member_participants AS (
          SELECT DISTINCT lp.id AS participant_id, lp.league_id
          FROM league_participants lp
          JOIN leagues l ON l.id = lp.league_id
          JOIN group_members ug ON ug.group_id = l.group_id AND ug.user_id = $1
-         WHERE lp.name = $2 AND EXTRACT(YEAR FROM l.start_date) = $3
+         WHERE (lp.member_id = $1 OR (lp.member_id IS NULL AND lp.name = $2))
+           AND EXTRACT(YEAR FROM l.start_date) = $3
+       ),
+       league_attendance AS (
+         SELECT COUNT(DISTINCT mp.league_id)::int AS count
+         FROM member_participants mp
+         JOIN league_matches m ON m.league_id = mp.league_id
+         WHERE m.bracket IS NULL
+       ),
+       tournament_attendance AS (
+         SELECT COUNT(DISTINCT mp.league_id)::int AS count
+         FROM member_participants mp
+         JOIN league_matches m
+           ON m.league_id = mp.league_id
+          AND (m.participant_a_id = mp.participant_id OR m.participant_b_id = mp.participant_id)
+         WHERE m.bracket IS NOT NULL
+       ),
+       match_stats AS (
+         SELECT
+           COUNT(CASE
+             WHEN (m.participant_a_id = mp.participant_id AND m.score_a > m.score_b) OR
+                  (m.participant_b_id = mp.participant_id AND m.score_b > m.score_a) THEN 1
+           END)::int AS wins,
+           COUNT(CASE
+             WHEN (m.participant_a_id = mp.participant_id AND m.score_a < m.score_b) OR
+                  (m.participant_b_id = mp.participant_id AND m.score_b < m.score_a) THEN 1
+           END)::int AS losses
+         FROM member_participants mp
+         LEFT JOIN league_matches m
+           ON (m.participant_a_id = mp.participant_id OR m.participant_b_id = mp.participant_id)
+          AND m.status = 'done'
        )
        SELECT
-         (SELECT COUNT(DISTINCT mp2.league_id) FROM member_participants mp2) AS attendance,
-         COUNT(CASE
-           WHEN (m.participant_a_id = mp.participant_id AND m.score_a > m.score_b) OR
-                (m.participant_b_id = mp.participant_id AND m.score_b > m.score_a) THEN 1
-         END) AS wins,
-         COUNT(CASE
-           WHEN (m.participant_a_id = mp.participant_id AND m.score_a < m.score_b) OR
-                (m.participant_b_id = mp.participant_id AND m.score_b < m.score_a) THEN 1
-         END) AS losses
-       FROM member_participants mp
-       LEFT JOIN league_matches m ON (m.participant_a_id = mp.participant_id OR m.participant_b_id = mp.participant_id)
-         AND m.status = 'done'`,
+         COALESCE((SELECT count FROM league_attendance), 0) AS league_attendance,
+         COALESCE((SELECT count FROM tournament_attendance), 0) AS tournament_attendance,
+         COALESCE((SELECT wins FROM match_stats), 0) AS wins,
+         COALESCE((SELECT losses FROM match_stats), 0) AS losses`,
       [targetUserId, member.name, year],
     );
 
-    // 올해 우승 수: 참가한 리그에서 최다 승자인 경우
+    // 올해 우승 수: 참가 리그 내 최다 승리 횟수 기준
     const championResult = await pool.query(
       `WITH member_participants AS (
          SELECT DISTINCT lp.id AS participant_id, lp.league_id
          FROM league_participants lp
          JOIN leagues l ON l.id = lp.league_id
          JOIN group_members ug ON ug.group_id = l.group_id AND ug.user_id = $1
-         WHERE lp.name = $2 AND EXTRACT(YEAR FROM l.start_date) = $3
+         WHERE (lp.member_id = $1 OR (lp.member_id IS NULL AND lp.name = $2))
+           AND EXTRACT(YEAR FROM l.start_date) = $3
        ),
        all_wins AS (
          SELECT lp.id AS participant_id, lp.league_id,
@@ -1638,6 +1928,13 @@ router.get('/group/:id/member/:userId', requireAuth, async (req, res) => {
       [targetUserId, member.name, year],
     );
 
+    const rankingSummaryResult = await pool.query(
+      `SELECT rank, rating, wins, losses, matches_played, win_rate, streak, last_match_at
+         FROM group_rankings
+        WHERE group_id = $1 AND member_id = $2`,
+      [groupId, targetUserId],
+    );
+
     // 가입한 모든 클럽
     const clubsResult = await pool.query(
       `SELECT g.id, g.name, g.sport, gm.role
@@ -1660,15 +1957,228 @@ router.get('/group/:id/member/:userId', requireAuth, async (req, res) => {
       },
       stats: {
         year,
-        attendance: Number(stats.attendance) || 0,
+        attendance: (Number(stats.league_attendance) || 0) + (Number(stats.tournament_attendance) || 0),
+        league_attendance: Number(stats.league_attendance) || 0,
+        tournament_attendance: Number(stats.tournament_attendance) || 0,
         wins: Number(stats.wins) || 0,
         losses: Number(stats.losses) || 0,
         championships: Number(championResult.rows[0].championships) || 0,
       },
+      ranking_summary: rankingSummaryResult.rows[0]
+        ? {
+            rank: rankingSummaryResult.rows[0].rank == null ? null : Number(rankingSummaryResult.rows[0].rank),
+            rating: Number(rankingSummaryResult.rows[0].rating),
+            wins: Number(rankingSummaryResult.rows[0].wins),
+            losses: Number(rankingSummaryResult.rows[0].losses),
+            matches_played: Number(rankingSummaryResult.rows[0].matches_played),
+            win_rate: Number(rankingSummaryResult.rows[0].win_rate),
+            streak: Number(rankingSummaryResult.rows[0].streak),
+            last_match_at: rankingSummaryResult.rows[0].last_match_at,
+          }
+        : null,
       clubs: clubsResult.rows,
     });
   } catch (error) {
     console.error('Error fetching member detail:', error);
+    return res.status(500).json({ message: '서버 오류' });
+  }
+});
+
+/**
+ * @openapi
+ * /group/{id}/member/{userId}/leagues:
+ *   get:
+ *     summary: 클럽 회원 리그·대회 참여내역 조회
+ *     description: 특정 클럽 회원이 해당 클럽에서 참가한 리그·대회 목록과 전적을 조회합니다.
+ *     tags: [클럽]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *         description: 클럽 ID
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema: { type: integer }
+ *         description: 조회할 회원의 user_id
+ *     responses:
+ *       200:
+ *         description: 참여내역 조회 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 member:
+ *                   type: object
+ *                   properties:
+ *                     user_id:
+ *                       type: integer
+ *                     name:
+ *                       type: string
+ *                     email:
+ *                       type: string
+ *                     role:
+ *                       type: string
+ *                     division:
+ *                       type: string
+ *                       nullable: true
+ *                     joined_at:
+ *                       type: string
+ *                       format: date-time
+ *                 histories:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       league_id:
+ *                         type: string
+ *                         format: uuid
+ *                       league_name:
+ *                         type: string
+ *                       format:
+ *                         type: string
+ *                         nullable: true
+ *                       type:
+ *                         type: string
+ *                         nullable: true
+ *                       sport:
+ *                         type: string
+ *                         nullable: true
+ *                       start_date:
+ *                         type: string
+ *                         nullable: true
+ *                       status:
+ *                         type: string
+ *                         nullable: true
+ *                       division:
+ *                         type: string
+ *                         nullable: true
+ *                       participant_name:
+ *                         type: string
+ *                         nullable: true
+ *                       wins:
+ *                         type: integer
+ *                       losses:
+ *                         type: integer
+ *                       matches_played:
+ *                         type: integer
+ *                       has_league_stage:
+ *                         type: boolean
+ *                       has_tournament_stage:
+ *                         type: boolean
+ *       403:
+ *         description: 권한 없음
+ *       404:
+ *         description: 회원을 찾을 수 없음
+ *       500:
+ *         description: 서버 오류
+ */
+router.get('/group/:id/member/:userId/leagues', requireAuth, async (req, res) => {
+  try {
+    const requesterId = Number(req.user.sub);
+    const { id: groupId, userId: targetUserId } = req.params;
+
+    const accessCheck = await pool.query(
+      `SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      [groupId, requesterId],
+    );
+    if (accessCheck.rowCount === 0) return res.status(403).json({ message: '권한이 없습니다.' });
+
+    const memberResult = await pool.query(
+      `SELECT gm.role, gm.division, gm.joined_at, u.id AS user_id, u.name, u.email
+       FROM group_members gm
+       JOIN users u ON u.id = gm.user_id
+       WHERE gm.group_id = $1 AND gm.user_id = $2`,
+      [groupId, targetUserId],
+    );
+    if (memberResult.rowCount === 0) return res.status(404).json({ message: '회원을 찾을 수 없습니다.' });
+
+    const member = memberResult.rows[0];
+
+    const historyResult = await pool.query(
+      `WITH member_participants AS (
+         SELECT DISTINCT
+           l.id AS league_id,
+           l.name AS league_name,
+           l.format,
+           l.type,
+           l.sport,
+           l.start_date,
+           l.status,
+           lp.id AS participant_id,
+           COALESCE(lp.division, gm.division, '') AS division,
+           COALESCE(lp.name, u.name, u.email) AS participant_name
+         FROM league_participants lp
+         JOIN leagues l ON l.id = lp.league_id
+         JOIN users u ON u.id = $2
+         LEFT JOIN group_members gm ON gm.group_id = l.group_id AND gm.user_id = u.id
+         WHERE l.group_id = $1
+           AND (lp.member_id = $2 OR (lp.member_id IS NULL AND u.name IS NOT NULL AND lp.name = u.name))
+       )
+       SELECT
+         mp.league_id,
+         mp.league_name,
+         mp.format,
+         mp.type,
+         mp.sport,
+         mp.start_date::text,
+         mp.status,
+         mp.division,
+         mp.participant_name,
+         COUNT(CASE
+           WHEN m.status = 'done'
+            AND ((m.participant_a_id = mp.participant_id AND m.score_a > m.score_b)
+              OR (m.participant_b_id = mp.participant_id AND m.score_b > m.score_a)) THEN 1
+         END)::int AS wins,
+         COUNT(CASE
+           WHEN m.status = 'done'
+            AND ((m.participant_a_id = mp.participant_id AND m.score_a < m.score_b)
+              OR (m.participant_b_id = mp.participant_id AND m.score_b < m.score_a)) THEN 1
+         END)::int AS losses,
+         COUNT(CASE WHEN m.status = 'done' THEN 1 END)::int AS matches_played,
+         BOOL_OR(m.bracket IS NULL) AS has_league_stage,
+         BOOL_OR(m.bracket IS NOT NULL) AS has_tournament_stage
+       FROM member_participants mp
+       LEFT JOIN league_matches m
+         ON (m.participant_a_id = mp.participant_id OR m.participant_b_id = mp.participant_id)
+       GROUP BY
+         mp.league_id, mp.league_name, mp.format, mp.type, mp.sport, mp.start_date, mp.status, mp.division, mp.participant_name
+       ORDER BY mp.start_date DESC, mp.league_name ASC`,
+      [groupId, targetUserId],
+    );
+
+    return res.json({
+      member: {
+        user_id: member.user_id,
+        name: member.name,
+        email: member.email,
+        role: member.role,
+        division: member.division,
+        joined_at: member.joined_at,
+      },
+      histories: historyResult.rows.map((row) => ({
+        league_id: row.league_id,
+        league_name: row.league_name,
+        format: row.format,
+        type: row.type,
+        sport: row.sport,
+        start_date: row.start_date,
+        status: row.status,
+        division: row.division || null,
+        participant_name: row.participant_name,
+        wins: Number(row.wins) || 0,
+        losses: Number(row.losses) || 0,
+        matches_played: Number(row.matches_played) || 0,
+        has_league_stage: Boolean(row.has_league_stage),
+        has_tournament_stage: Boolean(row.has_tournament_stage),
+      })),
+    });
+  } catch (error) {
+    console.error('Error fetching member league history:', error);
     return res.status(500).json({ message: '서버 오류' });
   }
 });

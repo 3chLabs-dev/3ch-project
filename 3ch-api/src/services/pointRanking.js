@@ -1,0 +1,546 @@
+const pool = require("../db/pool");
+
+const ATTENDANCE_POINTS = {
+  league: 1,
+  tournament: 2,
+};
+
+const BONUS_RULES = {
+  league: {
+    default: { first: 30, second: 20, thirdFourth: 10 },
+    "단일리그": { first: 30, second: 20, thirdFourth: 10 },
+    "조별리그": { first: 30, second: 15, thirdFourth: 10 },
+    "조별리그 + 본선리그": { first: 60, second: 40, thirdFourth: 30 },
+  },
+  tournament: {
+    default: { first: 50, second: 30, thirdFourth: 20 },
+    "상·하위 토너먼트": { first: 20, second: 10, thirdFourth: 7 },
+    "단일리그 + 토너먼트": { first: 50, second: 30, thirdFourth: 20 },
+    "조별리그 + 토너먼트": { first: 50, second: 30, thirdFourth: 20 },
+  },
+};
+
+function toKey(value) {
+  return String(value ?? "");
+}
+
+function getBonusRule(section, format) {
+  const normalized = String(format ?? "").trim();
+  return BONUS_RULES[section][normalized] ?? BONUS_RULES[section].default;
+}
+
+function createSectionRow(base) {
+  return {
+    member_id: Number(base.member_id),
+    name: base.name,
+    division: base.division || null,
+    attendance_count: 0,
+    championships: 0,
+    matches_played: 0,
+    wins: 0,
+    losses: 0,
+    win_rate: 0,
+    score_points: 0,
+    attendance_points: 0,
+    bonus_points: 0,
+    total_points: 0,
+    rank: null,
+    section: "league",
+  };
+}
+
+function ensureRow(sectionMap, memberId, baseInfo, section) {
+  const key = Number(memberId);
+  if (!sectionMap.has(key)) {
+    const row = createSectionRow(baseInfo);
+    row.section = section;
+    sectionMap.set(key, row);
+  }
+  return sectionMap.get(key);
+}
+
+function compareStanding(a, b) {
+  if (b.wins !== a.wins) return b.wins - a.wins;
+  const diffA = a.score_points - a.lost_points;
+  const diffB = b.score_points - b.lost_points;
+  if (diffB !== diffA) return diffB - diffA;
+  if (b.score_points !== a.score_points) return b.score_points - a.score_points;
+  return a.name.localeCompare(b.name, "ko");
+}
+
+function compareRanking(a, b) {
+  if (b.total_points !== a.total_points) return b.total_points - a.total_points;
+  if (b.championships !== a.championships) return b.championships - a.championships;
+  if (b.wins !== a.wins) return b.wins - a.wins;
+  if (a.losses !== b.losses) return a.losses - b.losses;
+  return a.name.localeCompare(b.name, "ko");
+}
+
+function awardBonus(row, rank, rule) {
+  let points = 0;
+  if (rank === 1) points = rule.first;
+  else if (rank === 2) points = rule.second;
+  else if (rank === 3 || rank === 4) points = rule.thirdFourth;
+
+  row.bonus_points += points;
+  if (rank === 1) row.championships += 1;
+}
+
+function finalizeRows(sectionMap) {
+  const rows = Array.from(sectionMap.values());
+  rows.forEach((row) => {
+    row.attendance_points = row.attendance_count * ATTENDANCE_POINTS[row.section];
+    row.total_points = row.attendance_points + row.score_points + row.bonus_points;
+    row.win_rate = row.matches_played > 0
+      ? Number((row.wins / row.matches_played).toFixed(3))
+      : 0;
+  });
+
+  rows.sort(compareRanking);
+  rows.forEach((row, index) => {
+    row.rank = index + 1;
+  });
+  return rows;
+}
+
+function getAvailableYears(rows) {
+  const years = new Set();
+  rows.forEach((row) => {
+    const year = Number(row.year);
+    if (Number.isFinite(year)) years.add(year);
+  });
+  return Array.from(years).sort((a, b) => b - a);
+}
+
+async function getPointRanking(groupId, year, scope) {
+  const groupResult = await pool.query(
+    `SELECT id, name, sport FROM groups WHERE id = $1`,
+    [groupId],
+  );
+  if (groupResult.rowCount === 0) return null;
+
+  const group = groupResult.rows[0];
+  const normalizedScope = scope === "national" ? "national" : "club";
+  const scopeValue = normalizedScope === "club"
+    ? String(groupId)
+    : String(group.sport ?? "");
+
+  const yearSourceResult = await pool.query(
+    `SELECT DISTINCT EXTRACT(YEAR FROM start_date)::int AS year
+       FROM leagues
+      WHERE (group_id = $1::text OR sport = $2::text)
+      ORDER BY year DESC`,
+    [String(groupId), String(group.sport ?? "")],
+  );
+  const availableYears = getAvailableYears(yearSourceResult.rows);
+  const targetYear = Number.isFinite(Number(year))
+    ? Number(year)
+    : (availableYears[0] ?? new Date().getFullYear());
+
+  const leagueFilterSql = normalizedScope === "club"
+    ? `l.group_id = $1::text`
+    : `l.sport = $1::text`;
+  const scopedYearPlaceholder = `$2`;
+
+  const memberResult = normalizedScope === "club"
+    ? await pool.query(
+      `SELECT
+         gm.user_id AS member_id,
+         COALESCE(gm.division, '') AS division,
+         COALESCE(u.name, u.email) AS name
+       FROM group_members gm
+       JOIN users u ON u.id = gm.user_id
+      WHERE gm.group_id = $1
+      ORDER BY gm.joined_at ASC, gm.user_id ASC`,
+      [groupId],
+    )
+    : await pool.query(
+      `SELECT DISTINCT
+         COALESCE(lp.member_id, CASE WHEN matched.matched_count = 1 THEN matched.user_id ELSE NULL END) AS member_id,
+         COALESCE(lp.division, CASE WHEN matched.matched_count = 1 THEN matched.division ELSE '' END, '') AS division,
+         COALESCE(u.name, u.email, CASE WHEN matched.matched_count = 1 THEN matched.name ELSE NULL END, lp.name) AS name
+       FROM league_participants lp
+       JOIN leagues l ON l.id = lp.league_id
+       LEFT JOIN users u ON u.id = lp.member_id
+       LEFT JOIN LATERAL (
+         SELECT
+           MIN(gm.user_id) AS user_id,
+           MIN(COALESCE(gm.division, '')) AS division,
+           MIN(COALESCE(u2.name, u2.email, lp.name)) AS name,
+           COUNT(*)::int AS matched_count
+         FROM group_members gm
+         JOIN users u2 ON u2.id = gm.user_id
+         WHERE gm.group_id = l.group_id
+           AND u2.name IS NOT NULL
+           AND u2.name = lp.name
+        ) matched ON lp.member_id IS NULL
+       WHERE ${leagueFilterSql}
+        AND EXTRACT(YEAR FROM l.start_date) = ${scopedYearPlaceholder}
+        AND COALESCE(lp.member_id, CASE WHEN matched.matched_count = 1 THEN matched.user_id ELSE NULL END) IS NOT NULL
+       ORDER BY name ASC`,
+      [scopeValue, targetYear],
+    );
+
+  const baseMembers = new Map();
+  memberResult.rows.forEach((row) => {
+    baseMembers.set(Number(row.member_id), {
+      member_id: Number(row.member_id),
+      division: row.division || null,
+      name: row.name,
+    });
+  });
+
+  const participantResult = await pool.query(
+    `SELECT
+       l.id AS league_id,
+       l.name AS league_name,
+       l.format,
+       l.group_id,
+       lp.id AS participant_id,
+       COALESCE(lp.member_id, CASE WHEN matched.matched_count = 1 THEN matched.user_id ELSE NULL END) AS member_id,
+       COALESCE(lp.division, CASE WHEN matched.matched_count = 1 THEN matched.division ELSE '' END, '') AS division,
+       COALESCE(u.name, u.email, CASE WHEN matched.matched_count = 1 THEN matched.name ELSE NULL END, lp.name) AS name
+     FROM leagues l
+     JOIN league_participants lp ON lp.league_id = l.id
+     LEFT JOIN users u ON u.id = lp.member_id
+     LEFT JOIN LATERAL (
+       SELECT
+         MIN(gm.user_id) AS user_id,
+         MIN(COALESCE(gm.division, '')) AS division,
+         MIN(COALESCE(u2.name, u2.email, lp.name)) AS name,
+         COUNT(*)::int AS matched_count
+       FROM group_members gm
+       JOIN users u2 ON u2.id = gm.user_id
+       WHERE gm.group_id = l.group_id
+         AND u2.name IS NOT NULL
+         AND u2.name = lp.name
+     ) matched ON lp.member_id IS NULL
+     WHERE ${leagueFilterSql}
+       AND EXTRACT(YEAR FROM l.start_date) = ${scopedYearPlaceholder}
+       AND COALESCE(lp.member_id, CASE WHEN matched.matched_count = 1 THEN matched.user_id ELSE NULL END) IS NOT NULL
+     ORDER BY l.start_date ASC, lp.created_at ASC`,
+    [scopeValue, targetYear],
+  );
+
+  const matchResult = await pool.query(
+    `SELECT
+       l.id AS league_id,
+       l.name AS league_name,
+       l.format,
+       l.group_id,
+       m.id AS match_id,
+       m.bracket,
+       m.round_number,
+       m.match_label,
+       m.status,
+       COALESCE(m.score_a, 0) AS score_a,
+       COALESCE(m.score_b, 0) AS score_b,
+       pa.id AS participant_a_id,
+       COALESCE(pa.member_id, CASE WHEN matched_a.matched_count = 1 THEN matched_a.user_id ELSE NULL END) AS member_a_id,
+       COALESCE(pa.division, '') AS division_a,
+       COALESCE(ua.name, ua.email, CASE WHEN matched_a.matched_count = 1 THEN matched_a.name ELSE NULL END, pa.name) AS name_a,
+       pb.id AS participant_b_id,
+       COALESCE(pb.member_id, CASE WHEN matched_b.matched_count = 1 THEN matched_b.user_id ELSE NULL END) AS member_b_id,
+       COALESCE(pb.division, '') AS division_b,
+       COALESCE(ub.name, ub.email, CASE WHEN matched_b.matched_count = 1 THEN matched_b.name ELSE NULL END, pb.name) AS name_b
+     FROM leagues l
+     JOIN league_matches m ON m.league_id = l.id
+     JOIN league_participants pa ON pa.id = m.participant_a_id
+     JOIN league_participants pb ON pb.id = m.participant_b_id
+     LEFT JOIN users ua ON ua.id = pa.member_id
+     LEFT JOIN users ub ON ub.id = pb.member_id
+     LEFT JOIN LATERAL (
+       SELECT
+         MIN(gm.user_id) AS user_id,
+         MIN(COALESCE(u2.name, u2.email, pa.name)) AS name,
+         COUNT(*)::int AS matched_count
+       FROM group_members gm
+       JOIN users u2 ON u2.id = gm.user_id
+       WHERE gm.group_id = l.group_id
+         AND u2.name IS NOT NULL
+         AND u2.name = pa.name
+     ) matched_a ON pa.member_id IS NULL
+     LEFT JOIN LATERAL (
+       SELECT
+         MIN(gm.user_id) AS user_id,
+         MIN(COALESCE(u2.name, u2.email, pb.name)) AS name,
+         COUNT(*)::int AS matched_count
+       FROM group_members gm
+       JOIN users u2 ON u2.id = gm.user_id
+       WHERE gm.group_id = l.group_id
+         AND u2.name IS NOT NULL
+         AND u2.name = pb.name
+     ) matched_b ON pb.member_id IS NULL
+     WHERE ${leagueFilterSql}
+       AND EXTRACT(YEAR FROM l.start_date) = ${scopedYearPlaceholder}
+       AND COALESCE(pa.member_id, CASE WHEN matched_a.matched_count = 1 THEN matched_a.user_id ELSE NULL END) IS NOT NULL
+       AND COALESCE(pb.member_id, CASE WHEN matched_b.matched_count = 1 THEN matched_b.user_id ELSE NULL END) IS NOT NULL
+       AND COALESCE(pa.member_id, CASE WHEN matched_a.matched_count = 1 THEN matched_a.user_id ELSE NULL END)
+           <> COALESCE(pb.member_id, CASE WHEN matched_b.matched_count = 1 THEN matched_b.user_id ELSE NULL END)
+     ORDER BY l.start_date ASC, m.created_at ASC, m.match_order ASC`,
+    [scopeValue, targetYear],
+  );
+
+  const leagueRows = new Map();
+  const tournamentRows = new Map();
+  baseMembers.forEach((base, memberId) => {
+    const leagueRow = createSectionRow(base);
+    leagueRow.section = "league";
+    leagueRows.set(memberId, leagueRow);
+    const tournamentRow = createSectionRow(base);
+    tournamentRow.section = "tournament";
+    tournamentRows.set(memberId, tournamentRow);
+  });
+
+  const leagueParticipantSets = new Map();
+  const tournamentParticipantSets = new Map();
+  const participantsByLeague = new Map();
+
+  participantResult.rows.forEach((row) => {
+    const memberId = Number(row.member_id);
+    if (!baseMembers.has(memberId)) {
+      baseMembers.set(memberId, {
+        member_id: memberId,
+        division: row.division || null,
+        name: row.name,
+      });
+      const leagueRow = createSectionRow(baseMembers.get(memberId));
+      leagueRow.section = "league";
+      leagueRows.set(memberId, leagueRow);
+      const tournamentRow = createSectionRow(baseMembers.get(memberId));
+      tournamentRow.section = "tournament";
+      tournamentRows.set(memberId, tournamentRow);
+    }
+
+    const leagueParticipants = participantsByLeague.get(row.league_id) ?? [];
+    leagueParticipants.push({
+      participant_id: row.participant_id,
+      member_id: memberId,
+      division: row.division || "",
+      name: row.name,
+      format: row.format || "",
+    });
+    participantsByLeague.set(row.league_id, leagueParticipants);
+  });
+
+  const leagueGroups = new Map();
+  const tournamentGroups = new Map();
+  const leagueHasRegularPhase = new Set();
+
+  matchResult.rows.forEach((match) => {
+    const section = match.bracket ? "tournament" : "league";
+    if (!match.bracket) {
+      leagueHasRegularPhase.add(match.league_id);
+    }
+
+    const memberAId = Number(match.member_a_id);
+    const memberBId = Number(match.member_b_id);
+
+    if (section === "tournament") {
+      if (!tournamentParticipantSets.has(memberAId)) tournamentParticipantSets.set(memberAId, new Set());
+      if (!tournamentParticipantSets.has(memberBId)) tournamentParticipantSets.set(memberBId, new Set());
+      tournamentParticipantSets.get(memberAId).add(match.league_id);
+      tournamentParticipantSets.get(memberBId).add(match.league_id);
+    }
+
+    if (match.status !== "done" || Number(match.score_a) === Number(match.score_b)) {
+      return;
+    }
+
+    if (section === "league") {
+      if (!leagueParticipantSets.has(memberAId)) leagueParticipantSets.set(memberAId, new Set());
+      if (!leagueParticipantSets.has(memberBId)) leagueParticipantSets.set(memberBId, new Set());
+      leagueParticipantSets.get(memberAId).add(match.league_id);
+      leagueParticipantSets.get(memberBId).add(match.league_id);
+    }
+
+    const scoreA = Number(match.score_a);
+    const scoreB = Number(match.score_b);
+    const rowA = ensureRow(section === "league" ? leagueRows : tournamentRows, memberAId, baseMembers.get(memberAId), section);
+    const rowB = ensureRow(section === "league" ? leagueRows : tournamentRows, memberBId, baseMembers.get(memberBId), section);
+
+    rowA.matches_played += 1;
+    rowB.matches_played += 1;
+    rowA.score_points += scoreA;
+    rowB.score_points += scoreB;
+
+    if (scoreA > scoreB) {
+      rowA.wins += 1;
+      rowB.losses += 1;
+    } else {
+      rowB.wins += 1;
+      rowA.losses += 1;
+    }
+
+    const leagueKey = match.league_id;
+    if (section === "league") {
+      const divisionKey = String(match.format ?? "").includes("조별리그")
+        ? `${leagueKey}:${toKey(match.division_a)}`
+        : `${leagueKey}:__all__`;
+      const existing = leagueGroups.get(divisionKey) ?? [];
+      existing.push(match);
+      leagueGroups.set(divisionKey, existing);
+
+      if (String(match.format ?? "").includes("조별리그") && toKey(match.division_b) !== toKey(match.division_a)) {
+        const otherKey = `${leagueKey}:${toKey(match.division_b)}`;
+        const otherExisting = leagueGroups.get(otherKey) ?? [];
+        otherExisting.push(match);
+        leagueGroups.set(otherKey, otherExisting);
+      }
+    } else {
+      const existing = tournamentGroups.get(leagueKey) ?? [];
+      existing.push(match);
+      tournamentGroups.set(leagueKey, existing);
+    }
+  });
+
+  participantResult.rows.forEach((row) => {
+    const memberId = Number(row.member_id);
+    const format = String(row.format ?? "");
+    const hasLeaguePhase = format !== "상·하위 토너먼트"
+      && (leagueHasRegularPhase.has(row.league_id) || !format.includes("토너먼트"));
+    if (hasLeaguePhase) {
+      if (!leagueParticipantSets.has(memberId)) leagueParticipantSets.set(memberId, new Set());
+      leagueParticipantSets.get(memberId).add(row.league_id);
+    }
+  });
+
+  leagueParticipantSets.forEach((set, memberId) => {
+    const row = ensureRow(leagueRows, memberId, baseMembers.get(memberId), "league");
+    row.attendance_count = set.size;
+  });
+  tournamentParticipantSets.forEach((set, memberId) => {
+    const row = ensureRow(tournamentRows, memberId, baseMembers.get(memberId), "tournament");
+    row.attendance_count = set.size;
+  });
+
+  leagueGroups.forEach((matches, groupKey) => {
+    if (matches.length === 0) return;
+    const sample = matches[0];
+    const statMap = new Map();
+
+    matches.forEach((match) => {
+      const divisionKey = groupKey.split(":").slice(1).join(":");
+      const includeA = divisionKey === "__all__" || toKey(match.division_a) === divisionKey;
+      const includeB = divisionKey === "__all__" || toKey(match.division_b) === divisionKey;
+      if (!includeA || !includeB) return;
+
+      const memberAId = Number(match.member_a_id);
+      const memberBId = Number(match.member_b_id);
+      const baseA = baseMembers.get(memberAId);
+      const baseB = baseMembers.get(memberBId);
+      if (!baseA || !baseB) return;
+
+      if (!statMap.has(memberAId)) statMap.set(memberAId, { ...baseA, wins: 0, losses: 0, score_points: 0, lost_points: 0 });
+      if (!statMap.has(memberBId)) statMap.set(memberBId, { ...baseB, wins: 0, losses: 0, score_points: 0, lost_points: 0 });
+
+      const scoreA = Number(match.score_a);
+      const scoreB = Number(match.score_b);
+      const a = statMap.get(memberAId);
+      const b = statMap.get(memberBId);
+      a.score_points += scoreA;
+      a.lost_points += scoreB;
+      b.score_points += scoreB;
+      b.lost_points += scoreA;
+      if (scoreA > scoreB) {
+        a.wins += 1;
+        b.losses += 1;
+      } else {
+        b.wins += 1;
+        a.losses += 1;
+      }
+    });
+
+    const standings = Array.from(statMap.values()).sort(compareStanding);
+    const bonusRule = getBonusRule("league", sample.format);
+    standings.slice(0, 4).forEach((standing, index) => {
+      const row = leagueRows.get(Number(standing.member_id));
+      if (row) awardBonus(row, index + 1, bonusRule);
+    });
+  });
+
+  tournamentGroups.forEach((matches) => {
+    if (matches.length === 0) return;
+    const sample = matches[0];
+    const statMap = new Map();
+
+    matches.forEach((match) => {
+      const memberAId = Number(match.member_a_id);
+      const memberBId = Number(match.member_b_id);
+      const baseA = baseMembers.get(memberAId);
+      const baseB = baseMembers.get(memberBId);
+      if (!baseA || !baseB) return;
+
+      if (!statMap.has(memberAId)) statMap.set(memberAId, {
+        ...baseA,
+        wins: 0,
+        losses: 0,
+        score_points: 0,
+        lost_points: 0,
+        max_round: Number(match.round_number) || 0,
+      });
+      if (!statMap.has(memberBId)) statMap.set(memberBId, {
+        ...baseB,
+        wins: 0,
+        losses: 0,
+        score_points: 0,
+        lost_points: 0,
+        max_round: Number(match.round_number) || 0,
+      });
+
+      if (match.status !== "done" || Number(match.score_a) === Number(match.score_b)) return;
+
+      const scoreA = Number(match.score_a);
+      const scoreB = Number(match.score_b);
+      const a = statMap.get(memberAId);
+      const b = statMap.get(memberBId);
+      a.score_points += scoreA;
+      a.lost_points += scoreB;
+      a.max_round = Math.max(a.max_round, Number(match.round_number) || 0);
+      b.score_points += scoreB;
+      b.lost_points += scoreA;
+      b.max_round = Math.max(b.max_round, Number(match.round_number) || 0);
+      if (scoreA > scoreB) {
+        a.wins += 1;
+        b.losses += 1;
+      } else {
+        b.wins += 1;
+        a.losses += 1;
+      }
+    });
+
+    const standings = Array.from(statMap.values()).sort((a, b) => {
+      if ((b.max_round ?? 0) !== (a.max_round ?? 0)) return (b.max_round ?? 0) - (a.max_round ?? 0);
+      return compareStanding(a, b);
+    });
+    const bonusRule = getBonusRule("tournament", sample.format);
+    standings.slice(0, 4).forEach((standing, index) => {
+      const row = tournamentRows.get(Number(standing.member_id));
+      if (row) awardBonus(row, index + 1, bonusRule);
+    });
+  });
+
+  const leagueRankings = finalizeRows(leagueRows);
+  const tournamentRankings = finalizeRows(tournamentRows);
+
+  return {
+    group: {
+      id: group.id,
+      name: group.name,
+      sport: group.sport,
+    },
+    year: targetYear,
+    scope: normalizedScope,
+    available_years: availableYears,
+    league: {
+      rankings: leagueRankings,
+    },
+    tournament: {
+      rankings: tournamentRankings,
+    },
+  };
+}
+
+module.exports = {
+  getPointRanking,
+};

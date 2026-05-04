@@ -68,6 +68,13 @@ export default function SportRankingPage() {
     );
   }
 
+  const topRankings = data.rankings.slice(0, 10);
+  const myRankingRow = data.my_ranking
+    ? data.rankings.find((row) => row.member_id === data.my_ranking?.member_id) ?? null
+    : null;
+  const shouldPinMyRanking = !!myRankingRow && (myRankingRow.rank ?? 0) > 10;
+  const visibleRankings = shouldPinMyRanking ? [...topRankings, myRankingRow] : topRankings;
+
   return (
     <Stack spacing={2.5} sx={{ pb: 3 }}>
       <Stack direction="row" alignItems="center" spacing={1.5}>
@@ -157,17 +164,18 @@ export default function SportRankingPage() {
             </CardContent>
           </Card>
         ) : (
-          data.rankings.map((row) => {
+          visibleRankings.map((row, index) => {
             const isMine = row.member_id === user?.id;
+            const isPinnedMine = shouldPinMyRanking && index === visibleRankings.length - 1;
             return (
               <Card
-                key={row.member_id}
+                key={`${row.member_id}-${isPinnedMine ? "pinned" : "rank"}`}
                 elevation={2}
                 sx={{
                   borderRadius: 1,
                   boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
                   bgcolor: isMine ? "#EFF6FF" : "#FFF",
-                  border: isMine ? "1px solid #BFDBFE" : "1px solid transparent",
+                  border: isMine || isPinnedMine ? "1px solid #BFDBFE" : "1px solid transparent",
                 }}
               >
                 <CardContent sx={{ py: 1.8, px: 2, "&:last-child": { pb: 1.8 } }}>
@@ -204,6 +212,11 @@ export default function SportRankingPage() {
                       <Typography sx={{ mt: 0.5, fontSize: 12, color: "text.secondary", fontWeight: 600 }}>
                         {row.wins}승 {row.losses}패 · 승률 {row.win_rate}% · 최근 {formatStreak(row.streak)}
                       </Typography>
+                      {isPinnedMine ? (
+                        <Typography sx={{ mt: 0.45, fontSize: 11, color: "#2563EB", fontWeight: 800 }}>
+                          내 순위를 아래에 고정 표시
+                        </Typography>
+                      ) : null}
                     </Box>
 
                     <Box sx={{ textAlign: "right", flexShrink: 0 }}>

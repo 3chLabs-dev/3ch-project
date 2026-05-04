@@ -45,6 +45,7 @@ export default function AdminRankingPage() {
 
   const [clubs, setClubs] = useState<ClubOption[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState("");
+  const [selectedSport, setSelectedSport] = useState("");
   const [scope, setScope] = useState<ScopeValue>("club");
   const [selectedYear, setSelectedYear] = useState<number | undefined>(undefined);
   const [loadingClubs, setLoadingClubs] = useState(false);
@@ -60,21 +61,56 @@ export default function AdminRankingPage() {
       });
       const data = await res.json();
       if (data.ok) {
-        const nextClubs = Array.isArray(data.clubs) ? data.clubs : [];
+        const nextClubs: ClubOption[] = Array.isArray(data.clubs) ? data.clubs : [];
         setClubs(nextClubs);
         setSelectedGroupId((prev) => prev || nextClubs[0]?.id || "");
+        setSelectedSport((prev) => prev || nextClubs.find((club) => club.sport)?.sport || "");
       }
     } finally {
       setLoadingClubs(false);
     }
   }, [token]);
 
+  useEffect(() => {
+    fetchClubs();
+  }, [fetchClubs]);
+
+  const sportOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          clubs
+            .map((club) => String(club.sport ?? "").trim())
+            .filter(Boolean),
+        ),
+      ),
+    [clubs],
+  );
+
+  const selectedClub = useMemo(
+    () => clubs.find((club) => club.id === selectedGroupId) ?? null,
+    [clubs, selectedGroupId],
+  );
+
+  useEffect(() => {
+    if (!selectedSport && selectedClub?.sport) {
+      setSelectedSport(selectedClub.sport);
+    }
+  }, [selectedClub, selectedSport]);
+
+  const effectiveGroupId = useMemo(() => {
+    if (scope === "club") {
+      return selectedGroupId;
+    }
+    return clubs.find((club) => club.sport === selectedSport)?.id ?? "";
+  }, [clubs, scope, selectedGroupId, selectedSport]);
+
   const fetchRanking = useCallback(async () => {
-    if (!token || !selectedGroupId) return;
+    if (!token || !effectiveGroupId) return;
     setLoadingRanking(true);
     try {
       const params = new URLSearchParams({
-        group_id: selectedGroupId,
+        group_id: effectiveGroupId,
         scope,
       });
       if (selectedYear) {
@@ -93,11 +129,7 @@ export default function AdminRankingPage() {
     } finally {
       setLoadingRanking(false);
     }
-  }, [scope, selectedGroupId, selectedYear, token]);
-
-  useEffect(() => {
-    fetchClubs();
-  }, [fetchClubs]);
+  }, [effectiveGroupId, scope, selectedYear, token]);
 
   useEffect(() => {
     fetchRanking();
@@ -111,10 +143,7 @@ export default function AdminRankingPage() {
     return [activeYear];
   }, [activeYear, ranking?.available_years]);
 
-  const selectedClub = useMemo(
-    () => clubs.find((club) => club.id === selectedGroupId) ?? null,
-    [clubs, selectedGroupId],
-  );
+  const currentSport = scope === "national" ? selectedSport : selectedClub?.sport || "";
 
   return (
     <Box sx={{ p: 3 }}>
@@ -140,72 +169,117 @@ export default function AdminRankingPage() {
             alignItems: "end",
           }}
         >
-        <FilterField label="클럽">
-          <Select
-            size="small"
-            fullWidth
-            value={selectedGroupId}
-            onChange={(event: SelectChangeEvent) => {
-              setSelectedGroupId(event.target.value);
-              setSelectedYear(undefined);
-            }}
-            sx={{ fontSize: 12, height: 36 }}
-            disabled={loadingClubs || clubs.length === 0}
-          >
-            {clubs.map((club) => (
-              <MenuItem key={club.id} value={club.id} sx={{ fontSize: 12 }}>
-                {club.name} {club.sport ? `(${club.sport})` : ""}
-              </MenuItem>
-            ))}
-          </Select>
-        </FilterField>
+          {scope === "club" ? (
+            <FilterField label="클럽">
+              <Select
+                size="small"
+                fullWidth
+                value={selectedGroupId}
+                onChange={(event: SelectChangeEvent) => {
+                  const nextGroupId = event.target.value;
+                  const nextClub = clubs.find((club) => club.id === nextGroupId) ?? null;
+                  setSelectedGroupId(nextGroupId);
+                  if (nextClub?.sport) {
+                    setSelectedSport(nextClub.sport);
+                  }
+                  setSelectedYear(undefined);
+                }}
+                sx={{ fontSize: 12, height: 36 }}
+                disabled={loadingClubs || clubs.length === 0}
+              >
+                {clubs.map((club) => (
+                  <MenuItem key={club.id} value={club.id} sx={{ fontSize: 12 }}>
+                    {club.name} {club.sport ? `(${club.sport})` : ""}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FilterField>
+          ) : (
+            <FilterField label="종목">
+              <Select
+                size="small"
+                fullWidth
+                value={selectedSport}
+                onChange={(event: SelectChangeEvent) => {
+                  setSelectedSport(event.target.value);
+                  setSelectedYear(undefined);
+                }}
+                sx={{ fontSize: 12, height: 36 }}
+                disabled={sportOptions.length === 0}
+              >
+                {sportOptions.map((sport) => (
+                  <MenuItem key={sport} value={sport} sx={{ fontSize: 12 }}>
+                    {sport}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FilterField>
+          )}
 
-        <FilterField label="연도">
-          <Select
-            size="small"
-            fullWidth
-            value={String(activeYear)}
-            onChange={(event: SelectChangeEvent) => setSelectedYear(Number(event.target.value))}
-            sx={{ fontSize: 12, height: 36 }}
-            disabled={!ranking}
-          >
-            {yearOptions.map((year) => (
-              <MenuItem key={year} value={String(year)} sx={{ fontSize: 12 }}>
-                {year}년
-              </MenuItem>
-            ))}
-          </Select>
-        </FilterField>
+          <FilterField label="연도">
+            <Select
+              size="small"
+              fullWidth
+              value={String(activeYear)}
+              onChange={(event: SelectChangeEvent) => setSelectedYear(Number(event.target.value))}
+              sx={{ fontSize: 12, height: 36 }}
+              disabled={!ranking}
+            >
+              {yearOptions.map((year) => (
+                <MenuItem key={year} value={String(year)} sx={{ fontSize: 12 }}>
+                  {year}년
+                </MenuItem>
+              ))}
+            </Select>
+          </FilterField>
 
-        <FilterField label="범위">
-          <Select
-            size="small"
-            fullWidth
-            value={scope}
-            onChange={(event: SelectChangeEvent<ScopeValue>) => setScope(event.target.value as ScopeValue)}
-            sx={{ fontSize: 12, height: 36 }}
-          >
-            {SCOPE_OPTIONS.map((option) => (
-              <MenuItem key={option.value} value={option.value} sx={{ fontSize: 12 }}>
-                {option.label}
-              </MenuItem>
-            ))}
-          </Select>
-        </FilterField>
-
+          <FilterField label="범위">
+            <Select
+              size="small"
+              fullWidth
+              value={scope}
+              onChange={(event: SelectChangeEvent<ScopeValue>) => {
+                const nextScope = event.target.value as ScopeValue;
+                setScope(nextScope);
+                setSelectedYear(undefined);
+                if (nextScope === "national" && !selectedSport && selectedClub?.sport) {
+                  setSelectedSport(selectedClub.sport);
+                }
+              }}
+              sx={{ fontSize: 12, height: 36 }}
+            >
+              {SCOPE_OPTIONS.map((option) => (
+                <MenuItem key={option.value} value={option.value} sx={{ fontSize: 12 }}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FilterField>
         </Box>
 
         <Box sx={{ pt: 1.25 }}>
           <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            {scope === "club" ? (
+              <Chip
+                label={selectedClub ? `기준 클럽 ${selectedClub.name}` : "기준 클럽 미선택"}
+                size="small"
+                sx={{ fontWeight: 700 }}
+              />
+            ) : (
+              <Chip
+                label={currentSport ? `기준 종목 ${currentSport}` : "기준 종목 미선택"}
+                size="small"
+                sx={{ fontWeight: 700 }}
+              />
+            )}
+            {currentSport && (
+              <Chip label={`종목 ${currentSport}`} size="small" sx={{ fontWeight: 700 }} />
+            )}
             <Chip
-              label={selectedClub ? `기준 클럽 ${selectedClub.name}` : "기준 클럽 미선택"}
+              label={scope === "club" ? "클럽 내부 순위" : "선택 종목 전국 순위"}
               size="small"
               sx={{ fontWeight: 700 }}
             />
-            {selectedClub?.sport && (
-              <Chip label={`종목 ${selectedClub.sport}`} size="small" sx={{ fontWeight: 700 }} />
-            )}
-            <Chip label={scope === "club" ? "클럽 내부 순위" : "선택 종목 전국 순위"} size="small" sx={{ fontWeight: 700 }} />
           </Stack>
         </Box>
       </Box>
@@ -214,8 +288,8 @@ export default function AdminRankingPage() {
         <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
           <CircularProgress size={30} />
         </Box>
-      ) : !selectedGroupId ? (
-        <EmptyState message="조회할 클럽이 없습니다." />
+      ) : !effectiveGroupId ? (
+        <EmptyState message="조회할 기준 정보가 없습니다." />
       ) : !ranking ? (
         <EmptyState message="랭킹 정보를 불러오지 못했습니다." />
       ) : (

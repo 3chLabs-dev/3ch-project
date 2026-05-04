@@ -31,6 +31,7 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import SmsOutlinedIcon from "@mui/icons-material/SmsOutlined";
 import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
+import EmojiEventsOutlinedIcon from "@mui/icons-material/EmojiEventsOutlined";
 import QRCode from "react-qr-code";
 import { useAppSelector } from "../../app/hooks";
 import {
@@ -384,15 +385,25 @@ export default function GroupManage() {
                             리그·대회 개최내역
                             <span>→</span>
                         </Button>
+
                     </Stack>
                 </CardContent>
             </Card>
 
             {/* 클럽 회원 섹션 */}
             <Box>
-                <Typography variant="subtitle1" fontWeight={900} sx={{ mb: 1.5 }}>
-                    클럽 회원 ({members.length}명)
-                </Typography>
+                <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mb: 1.5 }}>
+                    <Typography variant="subtitle1" fontWeight={900} flex={1}>
+                        클럽 회원 ({members.length}명)
+                    </Typography>
+                    <IconButton
+                        size="small"
+                        onClick={() => navigate(`/club/${id}/ranking`)}
+                        sx={{ color: "#D97706" }}
+                    >
+                        <EmojiEventsOutlinedIcon />
+                    </IconButton>
+                </Stack>
 
                 <Card elevation={2} sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
                     <List disablePadding>

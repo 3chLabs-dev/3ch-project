@@ -29,6 +29,11 @@ import GroupDetail from "../pages/group/GroupDetail";
 import GroupManage from "../pages/group/GroupManage";
 import GroupLeagueManage from "../pages/group/GroupLeagueManage";
 import ClubMemberDetail from "../pages/group/ClubMemberDetail";
+import GroupMemberLeagueHistoryPage from "../pages/group/GroupMemberLeagueHistoryPage";
+import RankingHubPage from "../pages/group/RankingHubPage";
+import SportRankingPage from "../pages/group/SportRankingPage";
+import GroupRankingPage from "../pages/group/GroupRankingPage";
+import GroupMemberRankingDetailPage from "../pages/group/GroupMemberRankingDetailPage";
 import DrawMain from "../pages/draw/DrawMain";
 import LeagueDetail from "../pages/league/LeagueDetail";
 import LeagueBracket from "../pages/league/LeagueBracket.tsx";
@@ -85,7 +90,10 @@ export const router = createBrowserRouter([
       { path: "/club/:id", element: <GroupDetail /> },
       { path: "/club/:id/manage", element: <GroupManage /> },
       { path: "/club/:id/manage/league", element: <GroupLeagueManage /> },
+      { path: "/club/:id/ranking", element: <GroupRankingPage /> },
+      { path: "/club/:id/ranking/:userId", element: <GroupMemberRankingDetailPage /> },
       { path: "/club/:id/member/:userId", element: <ClubMemberDetail /> },
+      { path: "/club/:id/member/:userId/leagues", element: <GroupMemberLeagueHistoryPage /> },
       { path: "/draw", element: <DrawMain /> },
       { path: "/draw/:leagueId", element: <DrawList /> },
       { path: "/draw/:leagueId/:drawId", element: <DrawDetail /> },
@@ -103,6 +111,8 @@ export const router = createBrowserRouter([
       { path: "/mypage/faq", element: <FaqPage />},
       { path: "/mypage/guide", element: <GuidePage />},
       { path: "/mypage/pricing", element: <PricingPage />},
+      { path: "/ranking", element: <RankingHubPage /> },
+      { path: "/ranking/sport/:sport", element: <SportRankingPage /> },
       { path: "/payment/checkout", element: <PaymentCheckout /> },
       { path: "/payment/success", element: <PaymentSuccess /> },
       { path: "/payment/fail",    element: <PaymentFail /> },

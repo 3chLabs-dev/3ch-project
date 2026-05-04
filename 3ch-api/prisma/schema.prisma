@@ -27,6 +27,10 @@ model User {
   created_groups Group[]      @relation("GroupCreator")
   group_memberships GroupMember[]
   draws         Draw[]        @relation("DrawCreator")
+  group_rankings GroupRanking[]
+  group_ranking_events GroupRankingEvent[] @relation("GroupRankingEventMember")
+  sport_rankings SportRanking[]
+  sport_ranking_events SportRankingEvent[] @relation("SportRankingEventMember")
 
   @@map("users")
 }
@@ -53,6 +57,10 @@ model Group {
 
   members     GroupMember[]
   leagues     League[]
+  ranking_setting GroupRankingSetting?
+  rankings    GroupRanking[]
+  ranking_events GroupRankingEvent[]
+  sport_ranking_events SportRankingEvent[]
 
   @@map("groups")
 }
@@ -71,6 +79,117 @@ model GroupMember {
 
   @@unique([group_id, user_id])
   @@map("group_members")
+}
+
+model GroupRankingSetting {
+  group_id            String   @id
+  enabled             Boolean  @default(true)
+  algorithm           String   @default("elo")
+  base_rating         Int      @default(1500)
+  k_league            Int      @default(24)
+  k_tournament        Int      @default(32)
+  include_tournament  Boolean  @default(true)
+  exclude_guests      Boolean  @default(true)
+  created_at          DateTime @default(now())
+  updated_at          DateTime @default(now()) @updatedAt
+
+  group               Group    @relation(fields: [group_id], references: [id], onDelete: Cascade)
+
+  @@map("group_ranking_settings")
+}
+
+model GroupRanking {
+  id               String   @id @default(uuid())
+  group_id         String
+  member_id        Int
+  rating           Int      @default(1500)
+  rank             Int?
+  wins             Int      @default(0)
+  losses           Int      @default(0)
+  matches_played   Int      @default(0)
+  win_rate         Float    @default(0)
+  streak           Int      @default(0)
+  best_win_rating  Int?
+  last_match_at    DateTime?
+  created_at       DateTime @default(now())
+  updated_at       DateTime @default(now()) @updatedAt
+
+  group            Group    @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  member           User     @relation(fields: [member_id], references: [id], onDelete: Cascade)
+
+  @@unique([group_id, member_id])
+  @@index([group_id, rank])
+  @@index([group_id, rating])
+  @@map("group_rankings")
+}
+
+model GroupRankingEvent {
+  id                 String   @id @default(uuid())
+  group_id           String
+  member_id          Int
+  opponent_member_id Int?
+  league_id          String?
+  league_match_id    String?
+  before_rating      Int
+  after_rating       Int
+  delta              Int
+  result             String
+  match_type         String
+  created_at         DateTime @default(now())
+
+  group              Group    @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  member             User     @relation("GroupRankingEventMember", fields: [member_id], references: [id], onDelete: Cascade)
+
+  @@index([group_id, member_id, created_at])
+  @@index([league_match_id])
+  @@map("group_ranking_events")
+}
+
+model SportRanking {
+  id               String   @id @default(uuid())
+  sport            String
+  member_id        Int
+  rating           Int      @default(1500)
+  rank             Int?
+  wins             Int      @default(0)
+  losses           Int      @default(0)
+  matches_played   Int      @default(0)
+  win_rate         Float    @default(0)
+  streak           Int      @default(0)
+  best_win_rating  Int?
+  last_match_at    DateTime?
+  created_at       DateTime @default(now())
+  updated_at       DateTime @default(now()) @updatedAt
+
+  member           User     @relation(fields: [member_id], references: [id], onDelete: Cascade)
+
+  @@unique([sport, member_id])
+  @@index([sport, rank])
+  @@index([member_id])
+  @@map("sport_rankings")
+}
+
+model SportRankingEvent {
+  id                 String   @id @default(uuid())
+  sport              String
+  member_id          Int
+  opponent_member_id Int?
+  group_id           String?
+  league_id          String?
+  league_match_id    String?
+  before_rating      Int
+  after_rating       Int
+  delta              Int
+  result             String
+  match_type         String
+  created_at         DateTime @default(now())
+
+  member             User     @relation("SportRankingEventMember", fields: [member_id], references: [id], onDelete: Cascade)
+  group              Group?   @relation(fields: [group_id], references: [id], onDelete: SetNull)
+
+  @@index([sport, member_id, created_at])
+  @@index([league_match_id])
+  @@map("sport_ranking_events")
 }
 
 model League {

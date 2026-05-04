@@ -1,6 +1,7 @@
 const express = require("express");
 const pool = require("../db/pool");
 const { requireAuth } = require("../middlewares/auth");
+const { getUserSportRankingSummary, getSportRanking } = require("../services/sportRanking");
 
 const router = express.Router();
 
@@ -394,6 +395,163 @@ router.delete("/user/me/push-subscription", requireAuth, async (req, res) => {
       [userId, endpoint]
     );
     return res.json({ ok: true });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
+});
+
+/**
+ * @openapi
+ * /user/me/sport-rankings:
+ *   get:
+ *     summary: 내 종목별 랭킹 요약 조회
+ *     description: 로그인한 사용자가 참여 중인 종목별 개인 통합 랭킹 요약을 조회합니다.
+ *     tags: [User]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 조회 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *                 sports:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       sport:
+ *                         type: string
+ *                         example: 탁구
+ *                       joined_club_count:
+ *                         type: integer
+ *                       summary:
+ *                         type: object
+ *                         nullable: true
+ *                         properties:
+ *                           total_members:
+ *                             type: integer
+ *                           my_rank:
+ *                             type: integer
+ *                             nullable: true
+ *                           my_rating:
+ *                             type: number
+ *                             nullable: true
+ *                           matches_played:
+ *                             type: integer
+ *       401:
+ *         description: 인증 실패
+ *       500:
+ *         description: 서버 오류
+ */
+router.get("/user/me/sport-rankings", requireAuth, async (req, res) => {
+  const userId = Number(req.user.sub);
+  if (!Number.isFinite(userId)) {
+    return res.status(401).json({ ok: false, error: "BAD_TOKEN_SUB" });
+  }
+
+  try {
+    const result = await getUserSportRankingSummary(userId);
+    return res.json({
+      ok: true,
+      sports: result.sports,
+    });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
+});
+
+/**
+ * @openapi
+ * /user/me/sport-rankings/{sport}:
+ *   get:
+ *     summary: 내 종목별 랭킹 상세 조회
+ *     description: 특정 종목의 개인 통합 랭킹 상세와 내 최근 변동 내역을 조회합니다.
+ *     tags: [User]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: sport
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 조회할 종목명
+ *         example: 탁구
+ *     responses:
+ *       200:
+ *         description: 조회 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *                 sport:
+ *                   type: string
+ *                 summary:
+ *                   type: object
+ *                   properties:
+ *                     total_members:
+ *                       type: integer
+ *                     my_rank:
+ *                       type: integer
+ *                       nullable: true
+ *                     my_rating:
+ *                       type: number
+ *                       nullable: true
+ *                     matches_played:
+ *                       type: integer
+ *                 my_ranking:
+ *                   type: object
+ *                   nullable: true
+ *                 rankings:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                 my_recent_events:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *       400:
+ *         description: 종목 값 누락
+ *       401:
+ *         description: 인증 실패
+ *       404:
+ *         description: 종목 랭킹 정보를 찾을 수 없음
+ *       500:
+ *         description: 서버 오류
+ */
+router.get("/user/me/sport-rankings/:sport", requireAuth, async (req, res) => {
+  const userId = Number(req.user.sub);
+  if (!Number.isFinite(userId)) {
+    return res.status(401).json({ ok: false, error: "BAD_TOKEN_SUB" });
+  }
+
+  const sport = String(req.params.sport ?? "").trim();
+  if (!sport) {
+    return res.status(400).json({ ok: false, error: "SPORT_REQUIRED" });
+  }
+
+  try {
+    const result = await getSportRanking(sport, userId);
+    if (!result) {
+      return res.status(404).json({ ok: false, error: "SPORT_RANKING_NOT_FOUND" });
+    }
+
+    return res.json({
+      ok: true,
+      sport: result.sport,
+      summary: result.summary,
+      my_ranking: result.my_ranking,
+      rankings: result.rankings,
+      my_recent_events: result.my_recent_events,
+    });
   } catch (e) {
     return res.status(500).json({ ok: false, error: String(e.message || e) });
   }

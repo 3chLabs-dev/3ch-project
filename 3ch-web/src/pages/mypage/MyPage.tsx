@@ -12,6 +12,7 @@ import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
 import CreditCardOutlinedIcon from "@mui/icons-material/CreditCardOutlined";
 import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
+import LeaderboardOutlinedIcon from "@mui/icons-material/LeaderboardOutlined";
 import { useNavigate } from "react-router-dom";
 import { logout } from "../../features/auth/authSlice";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
@@ -26,6 +27,7 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 const COMMUNITY_ITEMS = [
+    { label: "랭킹", to: "/ranking", icon: <LeaderboardOutlinedIcon fontSize="small" /> },
     { label: "이용방법", to: "/mypage/guide", icon: <MenuBookOutlinedIcon fontSize="small" /> },
     { label: "요금제", to: "/mypage/pricing", icon: <CreditCardOutlinedIcon fontSize="small" /> },
     { label: "후원하기", to: "/mypage/donate", icon: <FavoriteBorderIcon fontSize="small" /> },

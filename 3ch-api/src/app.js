@@ -16,6 +16,8 @@ const noticeRouter = require("./routes/notice")
 const inquiryRouter  = require("./routes/inquiry")
 const paymentRouter  = require("./routes/payment")
 const userRouter = require("./routes/user")
+const { ensureGroupRankingTables } = require("./services/groupRanking");
+const { ensureSportRankingTables } = require("./services/sportRanking");
 
 const pool = require("./db/pool");
 
@@ -70,6 +72,9 @@ const passport = require("passport");
 
     // user preferences 컬럼
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS preferences JSONB NOT NULL DEFAULT '{}'`);
+
+    await ensureGroupRankingTables();
+    await ensureSportRankingTables();
   } catch (e) {
     console.error("DB migration error:", e.message);
   }

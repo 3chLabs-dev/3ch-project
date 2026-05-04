@@ -46,6 +46,59 @@ export interface HomeSummary {
   my_wins: MyWinItem[];
 }
 
+export interface SportRankingRow {
+  member_id: number;
+  name: string;
+  rank: number | null;
+  rating: number;
+  wins: number;
+  losses: number;
+  matches_played: number;
+  win_rate: number;
+  streak: number;
+  last_match_at: string | null;
+}
+
+export interface SportRankingPreviewRow {
+  member_id: number;
+  name: string;
+  rank: number | null;
+  rating: number;
+}
+
+export interface SportRankingSummaryItem {
+  sport: string;
+  club_count: number;
+  my_ranking: Omit<SportRankingRow, "name"> | null;
+  top3: SportRankingPreviewRow[];
+}
+
+export interface SportRankingEvent {
+  group_id: string | null;
+  group_name: string | null;
+  league_id: string | null;
+  league_match_id: string | null;
+  before_rating: number;
+  after_rating: number;
+  delta: number;
+  result: string;
+  match_type: string;
+  opponent_name: string | null;
+  created_at: string;
+}
+
+export interface SportRankingDetail {
+  sport: string;
+  summary: {
+    ranked_count: number;
+    match_count: number;
+    updated_at: string | null;
+  };
+  my_ranking: SportRankingRow | null;
+  rankings: SportRankingRow[];
+  my_recent_events: SportRankingEvent[];
+}
+
 const userApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     getPreferences: builder.query<UserPreferences, void>({
@@ -89,6 +142,24 @@ const userApi = baseApi.injectEndpoints({
         my_wins: res.my_wins,
       }),
     }),
+    getMySportRankings: builder.query<{ sports: SportRankingSummaryItem[] }, void>({
+      query: () => "/user/me/sport-rankings",
+      transformResponse: (res: { ok: boolean; sports: SportRankingSummaryItem[] }) => ({
+        sports: res.sports,
+      }),
+      providesTags: ["UserRanking"],
+    }),
+    getSportRanking: builder.query<SportRankingDetail, { sport: string }>({
+      query: ({ sport }) => `/user/me/sport-rankings/${encodeURIComponent(sport)}`,
+      transformResponse: (res: { ok: boolean } & SportRankingDetail) => ({
+        sport: res.sport,
+        summary: res.summary,
+        my_ranking: res.my_ranking,
+        rankings: res.rankings,
+        my_recent_events: res.my_recent_events,
+      }),
+      providesTags: (_result, _error, { sport }) => [{ type: "UserRanking", id: `sport-${sport}` }],
+    }),
   }),
 });
 
@@ -98,4 +169,6 @@ export const {
   useSavePushSubscriptionMutation,
   useDeletePushSubscriptionMutation,
   useGetHomeSummaryQuery,
+  useGetMySportRankingsQuery,
+  useGetSportRankingQuery,
 } = userApi;

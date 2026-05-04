@@ -5,12 +5,24 @@ const pool = require('../db/pool');
 const { requireAuth, optionalAuth } = require('../middlewares/auth');
 const { buildLeagueCode } = require('../utils/clubCodeUtils');
 const webpush = require('web-push');
+const { rebuildGroupRanking, getGroupIdByLeagueId } = require('../services/groupRanking');
+const { rebuildSportRankingByLeagueId } = require('../services/sportRanking');
 
 webpush.setVapidDetails(
   process.env.VAPID_MAILTO,
   process.env.VAPID_PUBLIC_KEY,
   process.env.VAPID_PRIVATE_KEY
 );
+
+async function triggerRankingRebuildByLeagueId(leagueId) {
+  try {
+    const groupId = await getGroupIdByLeagueId(leagueId);
+    if (groupId) await rebuildGroupRanking(groupId);
+    await rebuildSportRankingByLeagueId(leagueId);
+  } catch (error) {
+    console.error('랭킹 재계산 실패:', error);
+  }
+}
 
 /** 참가자(participant_id)의 member_id로 push 발송 */
 async function sendPushToParticipant(participantId, payload) {
@@ -1676,6 +1688,8 @@ router.delete('/league/:leagueId/participants/:participantId', requireAuth, asyn
       [leagueId],
     );
 
+    await triggerRankingRebuildByLeagueId(leagueId);
+
     return res.status(200).json({
       message: '참가자가 삭제되었습니다.',
     });
@@ -1715,6 +1729,7 @@ router.delete('/league/:leagueId', requireAuth, async (req, res) => {
   try {
     const { leagueId } = req.params;
     const userId = Number(req.user.sub);
+    const groupId = await getGroupIdByLeagueId(leagueId);
 
     const accessCheck = await pool.query(
       `SELECT 1
@@ -1736,6 +1751,8 @@ router.delete('/league/:leagueId', requireAuth, async (req, res) => {
     if (result.rowCount === 0) {
       return res.status(404).json({ message: '리그를 찾을 수 없습니다.' });
     }
+
+    if (groupId) await rebuildGroupRanking(groupId);
 
     return res.status(200).json({ message: '리그가 삭제되었습니다.' });
   } catch (error) {
@@ -1890,6 +1907,7 @@ router.delete('/league/:id/matches', requireAuth, async (req, res) => {
 
     await pool.query(`DELETE FROM league_matches WHERE league_id = $1`, [leagueId]);
     await pool.query(`UPDATE leagues SET status = 'draft', updated_at = NOW() WHERE id = $1`, [leagueId]);
+    await triggerRankingRebuildByLeagueId(leagueId);
     return res.json({ ok: true });
   } catch (err) {
     console.error('Error deleting all matches:', err);
@@ -1959,6 +1977,7 @@ router.post('/league/:id/matches/init', requireAuth, async (req, res) => {
     if (existing.rowCount > 0) {
       if (!force) return res.status(400).json({ message: '이미 경기가 생성되어 있습니다.' });
       await pool.query(`DELETE FROM league_matches WHERE league_id = $1`, [leagueId]);
+      await triggerRankingRebuildByLeagueId(leagueId);
     }
 
     const participants = await pool.query(
@@ -2456,6 +2475,7 @@ router.patch('/league/:id/matches/:matchId', optionalAuth, async (req, res) => {
     }
 
     await reconcileTournamentMatches(pool, leagueId, { manualSeeding });
+    await triggerRankingRebuildByLeagueId(leagueId);
 
     const refreshed = await pool.query(
       `SELECT
@@ -2540,6 +2560,7 @@ router.delete('/league/:id/matches/:matchId', requireAuth, async (req, res) => {
        WHERE league_matches.id = sub.id`,
       [leagueId],
     );
+    await triggerRankingRebuildByLeagueId(leagueId);
     return res.json({ ok: true });
   } catch (err) {
     console.error('Error deleting match:', err);
@@ -2667,6 +2688,7 @@ router.post('/league/:id/matches/init-tournament', requireAuth, async (req, res)
         ? `DELETE FROM league_matches WHERE league_id = $1 AND bracket IS NOT NULL`
         : `DELETE FROM league_matches WHERE league_id = $1`;
       await pool.query(deleteQuery, [leagueId]);
+      await triggerRankingRebuildByLeagueId(leagueId);
     }
 
     // 참가자 로드 (편성 방식에 따라 정렬; 수동은 빈 슬롯으로 생성)
@@ -2774,6 +2796,7 @@ router.post('/league/:id/matches/init-tournament', requireAuth, async (req, res)
     );
 
     await reconcileTournamentMatches(pool, leagueId, { manualSeeding: seeding === 'manual' });
+    await triggerRankingRebuildByLeagueId(leagueId);
 
     // 생성된 경기 반환
     const result = await pool.query(

@@ -364,6 +364,19 @@ export const leagueApi = baseApi.injectEndpoints({
       invalidatesTags: (_result, _error, { id }) => [{ type: "League", id: `matches-${id}` }],
     }),
 
+    extendLeagueMatches: builder.mutation<
+      GetLeagueMatchesResponse,
+      { id: string }
+    >({
+      query: ({ id }) => ({
+        url: `/league/${id}/matches/extend`,
+        method: "POST",
+      }),
+      invalidatesTags: (_result, _error, { id }) => [
+        { type: "League", id: `matches-${id}` },
+      ],
+    }),
+
     updateLeagueMatch: builder.mutation<
       { match: LeagueMatch },
       { leagueId: string; matchId: string; updates: UpdateMatchRequest }
@@ -480,4 +493,5 @@ export const {
   useDeleteAllLeagueMatchesMutation,
   useInitTournamentMatchesMutation,
   useAssignMatchParticipantMutation,
+  useExtendLeagueMatchesMutation,
 } = leagueApi;

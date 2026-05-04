@@ -17,7 +17,7 @@ const TABS = [
 type TabValue = typeof TABS[number]["value"];
 
 const SECTIONS: Record<TabValue, string[]> = {
-  leader: ["클럽 생성", "회원 관리", "리그 생성", "리그 진행", "추첨 생성", "추첨 진행"],
+  leader: ["클럽 생성", "회원 관리", "리그 생성", "리그 진행", "토너먼트 생성", "추첨 생성", "추첨 진행"],
   member: ["클럽 가입", "리그 참가", "결과 입력", "추첨 확인"],
 };
 

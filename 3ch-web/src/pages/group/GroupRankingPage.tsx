@@ -248,36 +248,43 @@ function NationalRankingList({
   const listRows = shouldPinMyRow ? [...topRows, myRow] : topRows;
 
   return (
-    <Stack spacing={1}>
+    <Stack spacing={0.6}>
       {listRows.map((row, index) => {
         const isPinnedMine = shouldPinMyRow && index === listRows.length - 1;
+        const rankBadgeBg =
+          row.rank === 1 ? "#F4C542" :
+          row.rank === 2 ? "#D9DEE7" :
+          row.rank === 3 ? "#D89A5B" :
+          "#F3F4F6";
+        const rankBadgeColor =
+          row.rank && row.rank <= 3 ? "#111827" : "#6B7280";
         return (
           <Card
             key={`${row.member_id}-${isPinnedMine ? "mine" : "row"}`}
             elevation={2}
             onClick={() => onSelect(row.member_id)}
             sx={{
-              borderRadius: 1,
+              borderRadius: 0.85,
               boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
               cursor: "pointer",
               bgcolor: row.member_id === currentUserId ? "#EEF2FF" : "#FFF",
               border: isPinnedMine ? "1px solid #C7D2FE" : "1px solid transparent",
             }}
           >
-            <CardContent sx={{ py: 1.5, px: 1.8, "&:last-child": { pb: 1.5 } }}>
-              <Stack direction="row" alignItems="center" spacing={1.2}>
+            <CardContent sx={{ py: 0.95, px: 1.3, "&:last-child": { pb: 0.95 } }}>
+              <Stack direction="row" alignItems="center" spacing={0.75}>
                 <Box
                   sx={{
-                    minWidth: 30,
-                    height: 30,
+                    minWidth: 24,
+                    height: 24,
                     borderRadius: 999,
-                    bgcolor: row.rank && row.rank <= 3 ? "#FCD34D" : "#F3F4F6",
+                    bgcolor: rankBadgeBg,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     fontWeight: 900,
-                    fontSize: 12,
-                    color: row.rank && row.rank <= 3 ? "#111827" : "#6B7280",
+                    fontSize: 10.5,
+                    color: rankBadgeColor,
                   }}
                 >
                   {row.rank ?? "-"}
@@ -286,16 +293,16 @@ function NationalRankingList({
                 {row.division && (
                   <Box
                     sx={{
-                      minWidth: 30,
-                      height: 30,
-                      px: 0.8,
+                      minWidth: 24,
+                      height: 24,
+                      px: 0.55,
                       borderRadius: 999,
                       bgcolor: "#FDBA4D",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
                       fontWeight: 900,
-                      fontSize: 11,
+                      fontSize: 9.5,
                       color: "#111827",
                     }}
                   >
@@ -307,7 +314,7 @@ function NationalRankingList({
                   sx={{
                     flex: 1,
                     minWidth: 0,
-                    fontSize: 15,
+                    fontSize: 13.5,
                     fontWeight: 900,
                     color: row.member_id === currentUserId ? "#1D4ED8" : "#111827",
                     overflow: "hidden",
@@ -318,11 +325,11 @@ function NationalRankingList({
                   {row.name}
                 </Typography>
 
-                <Box sx={{ textAlign: "right", minWidth: 48 }}>
-                  <Typography sx={{ fontSize: 18, fontWeight: 900, color: "#1D4ED8" }}>
+                <Box sx={{ textAlign: "right", minWidth: 38 }}>
+                  <Typography sx={{ fontSize: 15, fontWeight: 900, color: "#1D4ED8", lineHeight: 1 }}>
                     {row.total_points}
                   </Typography>
-                  <Typography sx={{ fontSize: 11, color: "text.secondary", fontWeight: 700 }}>
+                  <Typography sx={{ fontSize: 9.5, color: "text.secondary", fontWeight: 700, lineHeight: 1 }}>
                     포인트
                   </Typography>
                 </Box>

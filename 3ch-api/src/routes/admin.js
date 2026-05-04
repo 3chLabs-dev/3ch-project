@@ -8,6 +8,8 @@ const { signToken } = require('../utils/authUtils');
 const { generateMemberCode } = require('../utils/memberCodeUtils');
 const { generateClubCode } = require('../utils/clubCodeUtils');
 const { getPointRanking } = require('../services/pointRanking');
+const { getGroupRanking } = require('../services/groupRanking');
+const { getSportRanking } = require('../services/sportRanking');
 
 const router = express.Router();
 
@@ -652,6 +654,52 @@ router.get('/rankings/points', requireAdmin, async (req, res) => {
     return res.json({
       ok: true,
       ...data,
+    });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
+});
+
+router.get('/rankings/ratings', requireAdmin, async (req, res) => {
+  const scope = req.query.scope === 'national' ? 'national' : 'club';
+  const groupId = String(req.query.group_id ?? '').trim();
+  const sport = String(req.query.sport ?? '').trim();
+
+  try {
+    if (scope === 'club') {
+      if (!groupId) {
+        return res.status(400).json({ ok: false, error: 'GROUP_ID_REQUIRED' });
+      }
+
+      const data = await getGroupRanking(groupId);
+      if (!data) {
+        return res.status(404).json({ ok: false, error: 'GROUP_NOT_FOUND' });
+      }
+
+      return res.json({
+        ok: true,
+        scope,
+        group: data.group,
+        summary: data.summary,
+        rankings: data.rankings,
+      });
+    }
+
+    if (!sport) {
+      return res.status(400).json({ ok: false, error: 'SPORT_REQUIRED' });
+    }
+
+    const data = await getSportRanking(sport, null);
+    if (!data) {
+      return res.status(404).json({ ok: false, error: 'SPORT_RANKING_NOT_FOUND' });
+    }
+
+    return res.json({
+      ok: true,
+      scope,
+      sport: data.sport,
+      summary: data.summary,
+      rankings: data.rankings,
     });
   } catch (e) {
     return res.status(500).json({ ok: false, error: String(e.message || e) });

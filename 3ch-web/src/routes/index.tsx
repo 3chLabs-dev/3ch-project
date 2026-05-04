@@ -8,6 +8,7 @@ import AdminMemberPage from "../pages/admin/AdminMemberPage";
 import AdminClubPage from "../pages/admin/AdminClubPage";
 import AdminLeaguePage from "../pages/admin/AdminLeaguePage";
 import AdminDrawPage from "../pages/admin/AdminDrawPage";
+import AdminRankingPage from "../pages/admin/AdminRankingPage";
 import AdminTournamentPage from "../pages/admin/AdminTournamentPage";
 import AdminNoticePage from "../pages/admin/board/AdminNoticePage";
 import AdminFaqPage from "../pages/admin/board/AdminFaqPage";
@@ -135,6 +136,7 @@ export const router = createBrowserRouter([
           { path: "/admin/club", element: <AdminClubPage /> },
           { path: "/admin/league", element: <AdminLeaguePage /> },
           { path: "/admin/draw",       element: <AdminDrawPage /> },
+          { path: "/admin/ranking",    element: <AdminRankingPage /> },
           { path: "/admin/tournament", element: <AdminTournamentPage /> },
           { path: "/admin/board/notice",  element: <AdminNoticePage /> },
           { path: "/admin/board/faq",     element: <AdminFaqPage /> },

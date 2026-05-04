@@ -7,6 +7,7 @@ const { requireAdmin } = require('../middlewares/auth');
 const { signToken } = require('../utils/authUtils');
 const { generateMemberCode } = require('../utils/memberCodeUtils');
 const { generateClubCode } = require('../utils/clubCodeUtils');
+const { getPointRanking } = require('../services/pointRanking');
 
 const router = express.Router();
 
@@ -628,6 +629,30 @@ router.get('/clubs-list', requireAdmin, async (req, res) => {
       params,
     );
     return res.json({ ok: true, clubs: result.rows });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
+});
+
+router.get('/rankings/points', requireAdmin, async (req, res) => {
+  const groupId = String(req.query.group_id ?? '').trim();
+  const scope = req.query.scope === 'national' ? 'national' : 'club';
+  const year = req.query.year ? Number(req.query.year) : undefined;
+
+  if (!groupId) {
+    return res.status(400).json({ ok: false, error: 'GROUP_ID_REQUIRED' });
+  }
+
+  try {
+    const data = await getPointRanking(groupId, year, scope);
+    if (!data) {
+      return res.status(404).json({ ok: false, error: 'GROUP_NOT_FOUND' });
+    }
+
+    return res.json({
+      ok: true,
+      ...data,
+    });
   } catch (e) {
     return res.status(500).json({ ok: false, error: String(e.message || e) });
   }

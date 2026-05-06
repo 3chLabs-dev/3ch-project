@@ -12,7 +12,6 @@ import {
   Typography,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import EmojiEventsOutlinedIcon from "@mui/icons-material/EmojiEventsOutlined";
 import type { PointRankingRow } from "../../features/group/groupApi";
 import { useGetGroupPointRankingQuery } from "../../features/group/groupApi";
 

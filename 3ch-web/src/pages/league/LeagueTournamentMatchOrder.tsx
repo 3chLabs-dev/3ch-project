@@ -246,7 +246,9 @@ function MatchCard({
               </MenuItem>
               <MenuItem onClick={handleKakaoShare}>
                 <ListItemIcon>
-                  <Box sx={{ width: 20, height: 20, bgcolor: "#FEE500", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 900 }}>K</Box>
+                  <Box sx={{ width: 20, height: 20, bgcolor: "#FEE500", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                      <Box component="img" src="/kakao-logo.png" alt="카카오톡" sx={{ width: 14, height: 14, objectFit: "contain" }} />
+                  </Box>
                 </ListItemIcon>
                 <ListItemText>카카오톡 알림</ListItemText>
               </MenuItem>

@@ -47,7 +47,7 @@ export default function GroupMemberRankingDetailPage() {
   if (!data) {
     return (
       <Box sx={{ p: 3, textAlign: "center" }}>
-        <Typography color="text.secondary">랭킹 상세를 불러올 수 없습니다.</Typography>
+        <Typography color="text.secondary"> 상세 순위를 불러올 수 없습니다.</Typography>
       </Box>
     );
   }
@@ -59,7 +59,7 @@ export default function GroupMemberRankingDetailPage() {
           <ArrowBackIcon />
         </IconButton>
         <Typography variant="h6" fontWeight={900} flex={1}>
-          랭킹 상세
+          상세 순위
         </Typography>
       </Stack>
 

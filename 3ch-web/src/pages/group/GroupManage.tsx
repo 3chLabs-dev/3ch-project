@@ -53,6 +53,8 @@ import { getRoleLabel } from "../../utils/permissions";
 import { REGION_DATA } from "./regionData";
 import { formatLeagueDate } from "../../utils/dateUtils";
 
+const kakaoIcon = "/카카오톡_원모양.png";
+
 const SPORT_EMOJI: Record<string, string> = {
     "탁구": "🏓",
     "배드민턴": "🏸",
@@ -1028,9 +1030,9 @@ export default function GroupManage() {
                                             alert("링크가 복사되었습니다.");
                                         }
                                     }}
-                                    sx={{ width: 56, height: 56, bgcolor: "#FEE500", "&:hover": { bgcolor: "#E6CE00" } }}
+                                    sx={{ width: 56, height: 56, bgcolor: "#FFEB3A", transition: "none", "&:hover": { bgcolor: "#E6CE00", img: { filter: "brightness(0.89)",}, }, }}
                                 >
-                                    <Typography fontWeight={900} fontSize={20} lineHeight={1}>K</Typography>
+                                    <img src={kakaoIcon} alt="kakao" style={{ width: 40, height: 40,}} />
                                 </IconButton>
                                 <Typography fontSize={11} fontWeight={700} color="text.secondary">카카오톡</Typography>
                             </Box>

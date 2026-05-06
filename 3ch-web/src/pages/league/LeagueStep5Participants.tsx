@@ -57,6 +57,7 @@ const smallBtnSx = (bg: string, hover: string, color = "#fff") => ({
 export default function LeagueStep5Participants() {
   const dispatch = useAppDispatch();
   const existing = useAppSelector((s) => s.leagueCreation.step5Participants?.participants ?? []);
+  const typeSelection = useAppSelector((s) => s.leagueCreation.step2Type?.selectedType ?? []);
 
   const SORT_OPTIONS = ["부수", "이름", "랜덤"];
 
@@ -181,7 +182,6 @@ export default function LeagueStep5Participants() {
             </Select>
           </FormControl>
         </Box>
-
         <Box>
           <Typography sx={{ fontSize: 22, fontWeight: 900, mb: 1 }}>
             정렬 방식 <Box component="span" sx={{ color: "#EF4444", fontSize: 18 }}>*</Box>
@@ -211,6 +211,13 @@ export default function LeagueStep5Participants() {
           </FormControl>
         </Box>
       </Stack>
+      {typeSelection !== "singles" && (
+      <Box>
+        <Typography sx={{ fontSize: 15, fontWeight: 700, mb: 1 }}>
+          <Box component="span" sx={{ color: "#EF4444", fontSize: 18 }}>※</Box> 현재 버전에서는 팀 대표자만 참가자로 등록해주세요.
+        </Typography>
+      </Box>)
+      }
 
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 0.8 }}>
         <Stack direction="row" spacing={1} alignItems="baseline">

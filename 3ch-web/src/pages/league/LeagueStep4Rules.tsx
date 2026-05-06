@@ -17,7 +17,7 @@ const ALL_RULES = [
   { value: "best-of-3", label: "3전 2선승제", disabled: false },
   { value: "best-of-5", label: "5전 3선승제", disabled: false },
   { value: "best-of-7", label: "7전 4선승제", disabled: false },
-  { value: "3-sets",    label: "3세트제",     disabled: true },
+  { value: "3-sets",    label: "3세트제",     disabled: false },
 ] as const;
 
 const LeagueStep4Rules: React.FC = () => {

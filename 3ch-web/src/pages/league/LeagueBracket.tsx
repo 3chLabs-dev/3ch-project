@@ -342,12 +342,14 @@ interface BracketRowProps {
   matchLookup: Map<string, LeagueMatch>; // "aId__bId" 키로 경기 빠르게 조회
   wins: number;
   losses: number;
+  setTotal: number;
   rank: number;
   tieSetDiff: string;   // 동점자 처리용 직접 대결 득실 (예: "5/3")
   hasPlayed: boolean;   // 한 경기라도 완료되었는지 (false면 집계 셀 빈 칸)
   leagueId: string;
   winScore: number | null;
   isMe: boolean;        // 현재 로그인 유저와 동일 여부 (하이라이트 용)
+  rules?: string;
 }
 
 /**
@@ -362,7 +364,7 @@ interface BracketRowProps {
  */
 const SortableBracketRow = memo(function SortableBracketRow({
   participant, rowIdx, n, localOrder, editMode, canManage, canScore, onMove, landscape,
-  matchLookup, wins, losses, rank, tieSetDiff, hasPlayed, leagueId, winScore, isMe,
+  matchLookup, wins, losses, setTotal, rank, tieSetDiff, hasPlayed, leagueId, winScore, isMe, rules,
 }: BracketRowProps) {
   const canDrag = editMode && canManage;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -427,12 +429,20 @@ const SortableBracketRow = memo(function SortableBracketRow({
       })}
 
       {/* 집계 셀: 한 경기도 완료 전(hasPlayed=false)이면 빈 칸으로 표시 */}
-      <StyledTableCell sx={{ bgcolor: "#F0FDF4", color: wins > 0 ? COLOR.win : "inherit", fontWeight: wins > 0 ? 700 : 400 }}>
-        {hasPlayed ? wins : ""}
-      </StyledTableCell>
-      <StyledTableCell sx={{ bgcolor: "#FFF1F2", color: losses > 0 ? COLOR.loss : "inherit" }}>
-        {hasPlayed ? losses : ""}
-      </StyledTableCell>
+      {rules === "3세트제" ? (
+        <StyledTableCell sx={{ bgcolor: "#F0FDF4" }}>
+          {hasPlayed ? setTotal : ""}
+        </StyledTableCell>
+      ):(
+        <>
+          <StyledTableCell sx={{ bgcolor: "#F0FDF4", color: wins > 0 ? COLOR.win : "inherit", fontWeight: wins > 0 ? 700 : 400 }}>
+            {hasPlayed ? wins : ""}
+          </StyledTableCell>
+          <StyledTableCell sx={{ bgcolor: "#FFF1F2", color: losses > 0 ? COLOR.loss : "inherit" }}>
+            {hasPlayed ? losses : ""}
+          </StyledTableCell>
+        </>
+      )}
       {/* 1위는 빨간 볼드로 강조 */}
       <StyledTableCell sx={{ color: rank === 1 && hasPlayed ? COLOR.loss : "inherit", fontWeight: rank === 1 && hasPlayed ? 700 : 400 }}>
         {hasPlayed ? rank : ""}
@@ -453,10 +463,12 @@ const SortableBracketRow = memo(function SortableBracketRow({
  *
  * tieSetDiffs: 동점 그룹에 속한 참가자만 "득/실" 형식으로 반환, 나머지는 빈 문자열
  */
-function useMatchStats(localOrder: LeagueParticipantItem[], matches: LeagueMatch[]) {
-  // 1단계: 참가자별 승/패 집계
+function useMatchStats(localOrder: LeagueParticipantItem[], matches: LeagueMatch[], rules?: string | null) {
+  // 3세트제인지 확인
+  const isThreeSetRule = rules === "3세트제";
+  // 1단계: 참가자별 승/패 + 세트 합계 집계
   const playerStats = useMemo(() => localOrder.map((player) => {
-    let wins = 0, losses = 0;
+    let wins = 0, losses = 0, setTotal = 0;
     for (const m of matches) {
       if (m.status !== "done") continue;
       const isA = m.participant_a_id === player.id;
@@ -464,14 +476,141 @@ function useMatchStats(localOrder: LeagueParticipantItem[], matches: LeagueMatch
       if (!isA && !isB) continue;
       const my  = isA ? (m.score_a ?? 0) : (m.score_b ?? 0);
       const opp = isA ? (m.score_b ?? 0) : (m.score_a ?? 0);
+      setTotal += Number(my) || 0;
       if (my > opp) wins++; else losses++;
     }
-    return { wins, losses, hasPlayed: wins + losses > 0 };
+    return { wins, losses, setTotal, hasPlayed: wins + losses > 0 };
   }), [localOrder, matches]);
 
   // 2단계: 동점자 처리 후 순위 결정
   const { rankings, tieSetDiffs } = useMemo(() => {
     const count = localOrder.length;
+
+    if( isThreeSetRule ){
+      const indices = localOrder.map((_, i) => i);
+
+      /**
+       * 1. 전체 세트 합계(setTotal)별로 그룹핑
+       * 
+       * 같은 세트 점수를 가지고 있는 이들 끼리의 그룹핑
+       * 
+       * Map< 같은 세트점수, 같은 세트 점수를 갖고 있는 인원의 인덱스 배열[] >
+       * 
+       */
+      const bySetTotal = new Map<number, number[]>();
+
+      localOrder.forEach((_, i) => {
+        const total = playerStats[i]?.setTotal ?? 0;
+
+        if (!bySetTotal.has(total)) {
+          bySetTotal.set(total, []);
+        }
+
+        bySetTotal.get(total)!.push(i);
+      });
+
+      /**
+       * 2. 같은 setTotal 그룹 안에서만 직접 경기 세트 득/실 계산
+       */
+      const tieWon = new Array(count).fill(0);
+      const tieLost = new Array(count).fill(0);
+      const isTied = new Array(count).fill(false);
+
+      for (const group of bySetTotal.values()) {
+        // 같은 세트 합계인 사람이 2명 미만이면 동점자 비교 불필요
+        if (group.length < 2) continue;
+
+        const groupIds = new Set(group.map((i) => localOrder[i].id));
+
+        for (const i of group) {
+          isTied[i] = true;
+
+          const player = localOrder[i];
+
+          for (const m of matches) {
+            if (m.status !== "done") continue;
+
+            const isA = m.participant_a_id === player.id;
+            const isB = m.participant_b_id === player.id;
+
+            // 현재 player와 관련 없는 경기는 제외
+            if (!isA && !isB) continue;
+
+            const oppId = isA ? m.participant_b_id : m.participant_a_id;
+
+            // 같은 setTotal 동점 그룹 안의 상대와 한 경기만 집계
+            if (!oppId || !groupIds.has(oppId)) continue;
+
+            const my = isA ? (m.score_a ?? 0) : (m.score_b ?? 0);
+            const opp = isA ? (m.score_b ?? 0) : (m.score_a ?? 0);
+
+            tieWon[i] += Number(my) || 0;
+            tieLost[i] += Number(opp) || 0;
+          }
+        }
+      }
+
+      /**
+       * 3. 최종 정렬
+       * 
+       * 1순위: 전체 세트 합계 높은 순
+       * 2순위: 동점 그룹 내 직접 경기 세트 득점 높은 순
+       * 3순위: 동점 그룹 내 직접 경기 세트 실점 낮은 순
+       * 4순위: 기존 표시 순서
+       * 
+       * 참가자 인덱스 배열 indices를 순위 순서대로 재배치하는 로직
+       */
+      indices.sort((a, b) => {
+        const totalA = playerStats[a]?.setTotal ?? 0;
+        const totalB = playerStats[b]?.setTotal ?? 0;
+
+        // 1순위: 전체 세트 합계
+        if (totalA !== totalB) {
+          return totalB - totalA;
+        }
+
+        // 2순위: 같은 전체 세트 합계라면 직접 경기 세트 득점
+        if (tieWon[a] !== tieWon[b]) {
+          return tieWon[b] - tieWon[a];
+        }
+
+        // 3순위: 직접 경기 세트 실점이 적은 사람
+        if (tieLost[a] !== tieLost[b]) {
+          return tieLost[a] - tieLost[b];
+        }
+
+        // 4순위: 그래도 같으면 현재 화면 순서 유지
+        return a - b;
+      });
+
+      /**
+       * 4. 정렬된 결과를 실제 row index 기준 rank 배열로 변환
+       * 
+       * 여기서는 같은 점수여도 무조건 1, 2, 3, 4처럼 순위를 나눔
+       */
+      const rankMap = new Array(count).fill(0);
+
+      indices.forEach((playerIdx, rankIdx) => {
+        rankMap[playerIdx] = rankIdx + 1;
+      });
+
+      /**
+       * 5. 동점자 세트 득실 표시
+       * 
+       * setTotal이 같은 그룹에 속한 사람만 "득/실" 표시
+       */
+      const diffs = localOrder.map((_, i) => {
+        if (!isTied[i] || !playerStats[i].hasPlayed) return "";
+        if (tieWon[i] === 0 && tieLost[i] === 0) return "";
+
+        return `${tieWon[i]}/${tieLost[i]}`;
+      });
+
+      return {
+        rankings: rankMap,
+        tieSetDiffs: diffs,
+      };
+    }
 
     // 승수별로 참가자 인덱스 그룹핑 (동점 그룹 파악)
     const byWins = new Map<number, number[]>();
@@ -527,7 +666,7 @@ function useMatchStats(localOrder: LeagueParticipantItem[], matches: LeagueMatch
     });
 
     return { rankings: rankMap, tieSetDiffs: diffs };
-  }, [playerStats, localOrder, matches]);
+  }, [playerStats, localOrder, matches, isThreeSetRule]);
 
   return { playerStats, rankings, tieSetDiffs };
 }
@@ -901,7 +1040,7 @@ export default function LeagueBracket() {
     return map;
   }, [matches]);
 
-  const { playerStats, rankings, tieSetDiffs } = useMatchStats(localOrder, matches);
+  const { playerStats, rankings, tieSetDiffs } = useMatchStats(localOrder, matches, league?.rules);
 
   // ── 로딩 / 빈 상태 ───────────────────────────────────────────────────────
   if (leagueLoading || participantsLoading) {
@@ -1033,8 +1172,15 @@ export default function LeagueBracket() {
                         </Box>
                       </NumberHeaderCell>
                     ))}
-                    <NumberHeaderCell rowSpan={2} sx={{ bgcolor: "#F0FDF4", color: COLOR.win }}>승</NumberHeaderCell>
-                    <NumberHeaderCell rowSpan={2} sx={{ bgcolor: "#FFF1F2", color: COLOR.loss }}>패</NumberHeaderCell>
+                    {league.rules === "3세트제" ? (
+                      <NumberHeaderCell rowSpan={2} sx={{ bgcolor: "#F0FDF4"}}>세트<br/>합계</NumberHeaderCell>
+                    ) :
+                    (
+                    <>
+                      <NumberHeaderCell rowSpan={2} sx={{ bgcolor: "#F0FDF4", color: COLOR.win }}>승</NumberHeaderCell>
+                      <NumberHeaderCell rowSpan={2} sx={{ bgcolor: "#FFF1F2", color: COLOR.loss }}>패</NumberHeaderCell>
+                    </>
+                    )}
                     <NumberHeaderCell rowSpan={2}>순위</NumberHeaderCell>
                     <NumberHeaderCell rowSpan={2} sx={{ fontSize: landscape ? "13px" : "14px" }}>동점자{<br />}세트 득실</NumberHeaderCell>
                   </TableRow>
@@ -1075,12 +1221,14 @@ export default function LeagueBracket() {
                         matchLookup={matchLookup}
                         wins={playerStats[rowIdx]?.wins ?? 0}
                         losses={playerStats[rowIdx]?.losses ?? 0}
+                        setTotal={playerStats[rowIdx]?.setTotal ?? 0}
                         rank={rankings[rowIdx] ?? 0}
                         tieSetDiff={tieSetDiffs[rowIdx] ?? ""}
                         hasPlayed={playerStats[rowIdx]?.hasPlayed ?? false}
                         leagueId={id ?? ""}
                         winScore={winScore}
                         isMe={!!myName && rowPlayer.name === myName}
+                        rules={league.rules}
                       />
                     ))}
                   </TableBody>

@@ -27,7 +27,7 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 const COMMUNITY_ITEMS = [
-    { label: "랭킹", to: "/ranking", icon: <LeaderboardOutlinedIcon fontSize="small" /> },
+    { label: "순위", to: "/ranking", icon: <LeaderboardOutlinedIcon fontSize="small" /> },
     { label: "이용방법", to: "/mypage/guide", icon: <MenuBookOutlinedIcon fontSize="small" /> },
     { label: "요금제", to: "/mypage/pricing", icon: <CreditCardOutlinedIcon fontSize="small" /> },
     { label: "후원하기", to: "/mypage/donate", icon: <FavoriteBorderIcon fontSize="small" /> },

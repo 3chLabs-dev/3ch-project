@@ -189,7 +189,6 @@ function PointRankingList({
 
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Stack direction="row" alignItems="center" spacing={0.5}>
-                    {row.rank === 1 && <EmojiEventsOutlinedIcon sx={{ color: "#EAB308", fontSize: 14 }} />}
                     <Typography
                       sx={{
                         minWidth: 0,

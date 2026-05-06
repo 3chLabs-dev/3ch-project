@@ -160,7 +160,6 @@ function ClubRankingTable({
             >
               <Typography sx={{ fontSize: 12, fontWeight: 900, textAlign: "center" }}>{row.rank ?? "-"}</Typography>
               <Stack direction="row" alignItems="center" spacing={0.6} sx={{ minWidth: 0 }}>
-                {row.rank === 1 && <EmojiEventsOutlinedIcon sx={{ color: "#EAB308", fontSize: 14 }} />}
                 <Typography
                   sx={{
                     fontSize: 13,

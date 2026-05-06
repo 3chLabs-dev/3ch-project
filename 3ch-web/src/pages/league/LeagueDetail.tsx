@@ -951,7 +951,8 @@ export default function LeagueDetail() {
                       alert("링크가 복사되었습니다.");
                     }
                   }}
-                  sx={{ width: 56, height: 56, bgcolor: "#FEE500", "&:hover": { bgcolor: "#E6CE00" }, p: 0, overflow: "hidden" }}
+                  // sx={{ width: 56, height: 56, bgcolor: "#FFEB3A", "&:hover": { bgcolor: "#E6CE00" }, p: 0, overflow: "hidden" }}
+                  sx={{ width: 56, height: 56, bgcolor: "#FFEB3A", transition: "none", "&:hover": { bgcolor: "#E6CE00", img: { filter: "brightness(0.89)",}, }, }}
                 >
                   <Box component="img" src="/kakao-logo.png" alt="카카오톡" sx={{ width: 40, height: 40, objectFit: "contain" }} />
                 </IconButton>

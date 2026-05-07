@@ -392,7 +392,8 @@ export default function LeagueMatchOrder() {
   }, [matchData, canManage, leagueId, initMatches]);
 
   useEffect(() => {
-    if( matchData?.matches.length === 0 ) return;
+    if (!matchData) return;
+    if ( matchData.matches.length < 1 ) return;
     if (!canManage) return;
     if ( expectedMatchCount === matchData?.matches.length ) return;
     extendMatches({ id: leagueId });

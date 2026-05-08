@@ -91,20 +91,20 @@ export default function MemberEditDialog({
           sx: {
             width: "calc(100%)",
             maxWidth: "calc(430px)",
-            m: 0,
+            m: 1,
             borderRadius: 1,
           },
         },
       }}
     >
       <DialogTitle sx={{ fontWeight: 900, fontSize: 17 }}>
-        멤버 수정
+        {/* 멤버 수정 */}
       </DialogTitle>
 
       <DialogContent sx={{ pt: 1 }}>
         <Stack direction="row" alignItems="center" sx={{ mb: 1 }}>
           <Typography fontWeight={900} fontSize={16} sx={{ flex: 1 }}>
-            참가자
+            참가자 수정
           </Typography>
 
           <Button

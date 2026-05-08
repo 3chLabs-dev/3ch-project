@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { Link as RouterLink, useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
-import { setStep, setGroupId, setPreferredGroupId } from "../../features/league/leagueCreationSlice";
+import { resetLeagueCreation, setStep, setGroupId, setPreferredGroupId } from "../../features/league/leagueCreationSlice";
 import { useGetMyGroupsQuery } from "../../features/group/groupApi";
 import { useGetLeaguesQuery } from "../../features/league/leagueApi";
 import type { LeagueListItem } from "../../features/league/leagueApi";
@@ -58,6 +58,7 @@ export default function LeagueMainBody() {
 
   const handleCreateNewLeague = () => {
     if (!canCreate || !selectedGroup) return;
+    dispatch(resetLeagueCreation());
     dispatch(setGroupId(selectedGroup.id));
     dispatch(setPreferredGroupId(selectedGroup.id));
     dispatch(setStep(1));

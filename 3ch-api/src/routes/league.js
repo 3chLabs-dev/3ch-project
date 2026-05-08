@@ -24,6 +24,29 @@ async function triggerRankingRebuildByLeagueId(leagueId) {
   }
 }
 
+async function assignLeagueCode(client, { groupId, startDate, leagueId }) {
+  if (!groupId) return null;
+
+  const groupRow = await client.query(`SELECT club_code FROM groups WHERE id = $1`, [groupId]);
+  const clubCode = groupRow.rows[0]?.club_code;
+  if (!clubCode) return null;
+
+  const codePrefix = buildLeagueCode(clubCode, startDate, 0).slice(0, -2);
+  await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`league_code:${codePrefix}`]);
+
+  const seqRow = await client.query(
+    `SELECT COALESCE(MAX(RIGHT(league_code, 2)::int), 0) AS max_seq
+       FROM leagues
+      WHERE league_code LIKE $1`,
+    [`${codePrefix}%`],
+  );
+  const seq = Number(seqRow.rows[0]?.max_seq ?? 0) + 1;
+  const leagueCode = buildLeagueCode(clubCode, startDate, seq);
+
+  await client.query(`UPDATE leagues SET league_code = $1 WHERE id = $2`, [leagueCode, leagueId]);
+  return leagueCode;
+}
+
 /** 참가자(participant_id)의 member_id로 push 발송 */
 async function sendPushToParticipant(participantId, payload) {
   if (!participantId) return;
@@ -917,20 +940,7 @@ router.post('/league', requireAuth, async (req, res) => {
       [leagueId, name, description, title, type, format, sport, start_date, rules, sort_order ?? null, recruit_count, participant_count, group_id, userId, tournament_seeding ?? null, tournament_advancement ?? null, tournament_rules ?? null, advance_count ?? null, advance_method ?? null, finals_advance ?? null],
     );
 
-    // 리그 코드 생성: {클럽코드}{YYMMDD}{순번2자리}
-    if (group_id) {
-      const groupRow = await client.query(`SELECT club_code FROM groups WHERE id = $1`, [group_id]);
-      const clubCode = groupRow.rows[0]?.club_code;
-      if (clubCode) {
-        const seqRow = await client.query(
-          `SELECT COUNT(*) AS cnt FROM leagues WHERE group_id = $1 AND DATE(start_date) = DATE($2::timestamptz)`,
-          [group_id, start_date],
-        );
-        const seq = parseInt(seqRow.rows[0].cnt, 10); // INSERT 후라서 현재 리그 포함
-        const leagueCode = buildLeagueCode(clubCode, start_date, seq);
-        await client.query(`UPDATE leagues SET league_code = $1 WHERE id = $2`, [leagueCode, leagueId]);
-      }
-    }
+    const leagueCode = await assignLeagueCode(client, { groupId: group_id, startDate: start_date, leagueId });
 
     for (const p of participants) {
       await client.query(
@@ -944,7 +954,7 @@ router.post('/league', requireAuth, async (req, res) => {
 
     return res.status(201).json({
       message: '리그가 성공적으로 생성되었습니다.',
-      league: result.rows[0],
+      league: { ...result.rows[0], league_code: leagueCode },
     });
   } catch (error) {
     try {

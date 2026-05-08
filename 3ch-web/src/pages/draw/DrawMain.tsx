@@ -80,8 +80,8 @@ function formatDateTime(iso: string) {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   const wd = ["일", "월", "화", "수", "목", "금", "토"][d.getDay()];
-  const hh = String(d.getUTCHours()).padStart(2, "0");;
-  const minute = String(d.getUTCMinutes()).padStart(2, "0");;
+  const hh = String(d.getHours()).padStart(2, "0");;
+  const minute = String(d.getMinutes()).padStart(2, "0");;
   return `${y}-${m}-${day}(${wd}) ${hh}:${minute}`;
 }
 

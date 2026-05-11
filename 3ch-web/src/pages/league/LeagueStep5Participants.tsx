@@ -58,11 +58,13 @@ export default function LeagueStep5Participants() {
   const dispatch = useAppDispatch();
   const existing = useAppSelector((s) => s.leagueCreation.step5Participants?.participants ?? []);
   const typeSelection = useAppSelector((s) => s.leagueCreation.step2Type?.selectedType ?? []);
+  const formatSelection = useAppSelector((s) => s.leagueCreation.step3Format?.format);
 
   const SORT_OPTIONS = ["부수", "이름", "랜덤"];
 
+  const isFourPlayerOmr = formatSelection === "four-player-omr";
   const [participants, setParticipants] = useState<Participant[]>(existing);
-  const [recruitCount, setRecruitCount] = useState<number | "">("");
+  const [recruitCount, setRecruitCount] = useState<number | "">(isFourPlayerOmr ? 4 : "");
   const [sortOrder, setSortOrder] = useState<string>("");
   const [division, setDivision] = useState("");
   const [name, setName] = useState("");
@@ -72,9 +74,10 @@ export default function LeagueStep5Participants() {
   const [deleteTarget, setDeleteTarget] = useState<{ idx: number; division: string; name: string } | null>(null);
   const [openCancelDialog, setOpenCancelDialog] = useState<boolean>(false);
 
-  const isFull = recruitCount !== "" && participants.length >= recruitCount;
+  const effectiveRecruitCount = isFourPlayerOmr ? 4 : recruitCount;
+  const isFull = effectiveRecruitCount !== "" && participants.length >= effectiveRecruitCount;
   const canAdd = useMemo(() => Boolean(division.trim() && name.trim()), [division, name]);
-  const canNext = recruitCount !== "" && sortOrder !== "";
+  const canNext = effectiveRecruitCount !== "" && sortOrder !== "" && (!isFourPlayerOmr || participants.length === 4);
 
   const handleCancelDelete = () => {
     setOpenCancelDialog(false);
@@ -90,7 +93,7 @@ export default function LeagueStep5Participants() {
     if (!canAdd) return;
 
     if (isFull) {
-      setAlertMsg(`모집 인원(${recruitCount}명)을 초과할 수 없습니다.`);
+      setAlertMsg(`모집 인원(${effectiveRecruitCount}명)을 초과할 수 없습니다.`);
       return;
     }
 
@@ -123,7 +126,7 @@ export default function LeagueStep5Participants() {
   const handleNext = () => {
     dispatch(setStep5Participants({
       participants,
-      recruitCount: recruitCount === "" ? null : recruitCount,
+      recruitCount: effectiveRecruitCount === "" ? null : effectiveRecruitCount,
       sortOrder: sortOrder === "" ? null : sortOrder,
     }));
     dispatch(resetCreateStatus());
@@ -135,8 +138,8 @@ export default function LeagueStep5Participants() {
 
   const handleConfirmLoad = (selected: MemberRow[]) => {
     const merged = mergeMembers(participants, selected);
-    if (recruitCount !== "" && merged.length > recruitCount) {
-      setAlertMsg(`모집 인원(${recruitCount}명)을 초과하여 추가할 수 없습니다.`);
+    if (effectiveRecruitCount !== "" && merged.length > effectiveRecruitCount) {
+      setAlertMsg(`모집 인원(${effectiveRecruitCount}명)을 초과하여 추가할 수 없습니다.`);
       setOpenLoad(false);
       return;
     }
@@ -158,11 +161,12 @@ export default function LeagueStep5Participants() {
           <FormControl sx={{ width: 140 }}>
             <Select
               displayEmpty
-              value={recruitCount === "" ? "" : String(recruitCount)}
+              value={effectiveRecruitCount === "" ? "" : String(effectiveRecruitCount)}
               onChange={(e: SelectChangeEvent<string>) => {
                 const v = e.target.value;
                 setRecruitCount(v === "" ? "" : Number(v));
               }}
+              disabled={isFourPlayerOmr}
               size="small"
               sx={{
                 borderRadius: 0.6,
@@ -223,9 +227,9 @@ export default function LeagueStep5Participants() {
         <Stack direction="row" spacing={1} alignItems="baseline">
           <Typography sx={{ fontSize: 22, fontWeight: 900, mb: 1 }}>
             참가자 사전 등록
-          </Typography>          {recruitCount !== "" && (
+          </Typography>          {effectiveRecruitCount !== "" && (
             <Typography sx={{ fontSize: 14, fontWeight: 700, color: isFull ? "#E53935" : "#6B7280" }}>
-              {participants.length}/{recruitCount}
+              {participants.length}/{effectiveRecruitCount}
             </Typography>
           )}
         </Stack>

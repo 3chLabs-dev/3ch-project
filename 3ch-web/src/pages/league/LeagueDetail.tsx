@@ -96,6 +96,7 @@
   ];
   const FORMAT_OPTIONS = [
     { label: "단일리그", disabled: false },
+    { label: "4인 리그 (OMR)", disabled: false },
     { label: "조별리그", disabled: false },
     { label: "조별리그 + 본선리그", disabled: false },
     { label: "단일리그 + 토너먼트", disabled: false },
@@ -321,6 +322,8 @@
       }
       if (league?.format?.includes("토너먼트") && league?.format !== "단일리그 + 토너먼트") {
         navigate(`/league/${id}/tournament/matches`);
+      } else if (league?.format === "4인 리그 (OMR)") {
+        navigate(`/league/${id}/omr`);
       } else {
         navigate(`/league/${id}/matches`);
       }

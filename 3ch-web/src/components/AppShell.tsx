@@ -27,6 +27,7 @@ export default function AppShell() {
     const currentStep = useSelector((s: RootState) => s.leagueCreation.currentStep);
     const isHome = location.pathname === "/";
     const isMyPage = location.pathname === "/mypage";
+    const isOmrSheet = /^\/league\/[^/]+\/omr$/.test(location.pathname);
 
     const contentRef = useRef<HTMLDivElement>(null);
     const bannerRef = useRef<HTMLDivElement>(null);
@@ -81,13 +82,13 @@ export default function AppShell() {
                 elevation={0}
                 sx={{
                     position: "relative",          // absolute AppBar의 기준점
-                    maxWidth: 430,
+                    maxWidth: isOmrSheet ? 980 : 430,
                     mx: "auto",
                     height: "100dvh",
                     display: "flex",
                     flexDirection: "column",
-                    borderLeft: "1px solid",
-                    borderRight: "1px solid",
+                    borderLeft: isOmrSheet ? 0 : "1px solid",
+                    borderRight: isOmrSheet ? 0 : "1px solid",
                     borderColor: "divider",
                     bgcolor: "background.paper",
                     overflow: "hidden",
@@ -183,7 +184,7 @@ export default function AppShell() {
                         flex: 1,
                         overflowY: "auto",
                         WebkitOverflowScrolling: "touch",
-                        pt: isHome ? 0 : `${APP_BAR_H}px`,
+                        pt: isHome || isOmrSheet ? 0 : `${APP_BAR_H}px`,
                     }}
                 >
                     {isHome && (
@@ -266,13 +267,13 @@ export default function AppShell() {
                         </Box>
                     )}
 
-                    <Box sx={{ p: 2, pb: `calc(8px + env(safe-area-inset-bottom))` }}>
+                    <Box sx={{ p: isOmrSheet ? 0 : 2, pb: isOmrSheet ? 0 : `calc(8px + env(safe-area-inset-bottom))` }}>
                         <Outlet context={{ scrollToTop }} />
-                        <AppFooter />
+                        {!isOmrSheet && <AppFooter />}
                     </Box>
                 </Box>
 
-                <BottomTab />
+                {!isOmrSheet && <BottomTab />}
             </Paper>
         </Box>
     );

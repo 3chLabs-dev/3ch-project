@@ -908,7 +908,7 @@ const handleSaveEdit = async () => {
             </Stack>
             {canManage && (
               <Button
-                variant="contained"
+                variant="outlined"
                 disableElevation
                 size="small"
                 onClick={() => setOpenMemberEditDialog(true)}
@@ -916,13 +916,11 @@ const handleSaveEdit = async () => {
                   borderRadius: 1,
                   height: 28,
                   px: 1.5,
-                  fontWeight: 900,
+                  fontWeight: 700,
                   fontSize: 12,
-                  bgcolor: "#2F80ED",
-                  "&:hover": { bgcolor: "#79AEFF" },
                 }}
               >
-                수정
+                추가/삭제
               </Button>
             )}
           </Stack>
@@ -1505,47 +1503,6 @@ const handleSaveEdit = async () => {
           </Box>
         )}
 
-        {/* 수정 모드 플로팅 저장 버튼 */}
-        {canManage  && (
-          <Box
-            sx={{
-              position: "fixed",
-              bottom: "calc(56px + env(safe-area-inset-bottom))",
-              left: "50%",
-              transform: "translateX(-50%)",
-              width: "min(calc(100% - 32px), 398px)",
-              pb: 1,
-              zIndex: 10,
-            }}
-          >
-            <Button
-              fullWidth
-              variant="contained"
-              disableElevation
-              onClick={handleSaveEdit}
-              disabled={saving}
-              sx={{
-                borderRadius: 1,
-                height: 44,
-                fontWeight: 700,
-                fontSize: 15,
-                bgcolor: "#2F80ED",
-
-                "&:hover": {
-                  bgcolor: "#256FD1",
-                },
-
-                "&.Mui-disabled": {
-                  bgcolor: "#CFE1FB",
-                  color: "#fff",
-                },
-              }}
-            >
-              수정
-            </Button>
-          </Box>
-        )}
-
         {/* 새로고침 플로팅 버튼 */}
         {!canManage  && (
           <IconButton
@@ -1566,7 +1523,7 @@ const handleSaveEdit = async () => {
         )}
 
         {/* 뷰 모드 리그 시작 버튼 (관리자) */}
-        {canManage  && canManage && (
+        { canManage && (
           <Box
             sx={{
               position: "fixed",

@@ -608,7 +608,7 @@ const handleSaveEdit = async () => {
                 },
               }}
             >
-              정보저장
+              저장
             </Button>
             )}
           {/* {!isEditing && ( */}
@@ -922,7 +922,7 @@ const handleSaveEdit = async () => {
                   "&:hover": { bgcolor: "#79AEFF" },
                 }}
               >
-                멤버 수정
+                수정
               </Button>
             )}
           </Stack>
@@ -1124,7 +1124,7 @@ const handleSaveEdit = async () => {
             onOpenLoadMembers={() => setOpenLoadDialog(true)}
           />
 
-          {!canManage  && canInteract && (
+          {canInteract && (
             <Button
               fullWidth variant="outlined" disableElevation
               sx={{ mt: 1.5, borderRadius: 1, height: 40, fontWeight: 700 }}
@@ -1133,7 +1133,7 @@ const handleSaveEdit = async () => {
               경품 추첨
             </Button>
           )}
-          {((!canManage  && league.status === "active") || !canManage  && canManage) && (
+          {((!canManage  && league.status === "active") || canManage) && (
             league.format === "단일리그 + 토너먼트" ? (
               <Stack spacing={1} sx={{ mt: 1 }}>
                 <Button

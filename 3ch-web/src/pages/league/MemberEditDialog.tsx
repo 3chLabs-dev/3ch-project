@@ -122,7 +122,7 @@ export default function MemberEditDialog({
               "&:hover": { bgcolor: "#79AEFF" },
             }}
           >
-            불러오기
+            클럽회원 불러오기
           </Button>
         </Stack>
 
@@ -401,7 +401,7 @@ export default function MemberEditDialog({
             fontWeight: 700,
           }}
         >
-          닫기
+          완료
         </Button>
       </DialogActions>
     </Dialog>

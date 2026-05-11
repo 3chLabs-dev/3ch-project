@@ -608,7 +608,7 @@ const handleSaveEdit = async () => {
                 },
               }}
             >
-              정보저장
+              저장
             </Button>
             )}
           {/* {!isEditing && ( */}
@@ -922,7 +922,7 @@ const handleSaveEdit = async () => {
                   "&:hover": { bgcolor: "#79AEFF" },
                 }}
               >
-                멤버 수정
+                수정
               </Button>
             )}
           </Stack>

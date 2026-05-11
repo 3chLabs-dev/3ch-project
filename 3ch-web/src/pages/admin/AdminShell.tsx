@@ -12,7 +12,7 @@ const MAIN_MENU = [
   { label: "리그 관리",   path: "/admin/league"     },
   { label: "대회 관리",   path: "/admin/tournament" },
   { label: "추첨 관리",   path: "/admin/draw"       },
-  { label: "랭킹 관리",   path: "/admin/ranking"    },
+  { label: "순위 관리",   path: "/admin/ranking"    },
 ];
 
 const BOARD_MENU = [

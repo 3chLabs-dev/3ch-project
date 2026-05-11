@@ -20,8 +20,8 @@ function formatDate(value?: string | null) {
 }
 
 function formatStreak(streak: number) {
-  if (streak > 0) return `W${streak}`;
-  if (streak < 0) return `L${Math.abs(streak)}`;
+  if (streak > 0) return `${streak}승`;
+  if (streak < 0) return `${Math.abs(streak)}패`;
   return "-";
 }
 
@@ -47,7 +47,7 @@ export default function SportRankingPage() {
   if (!token) {
     return (
       <Box sx={{ p: 3, textAlign: "center" }}>
-        <Typography color="text.secondary">로그인 후 랭킹을 확인할 수 있습니다.</Typography>
+        <Typography color="text.secondary">로그인 후 순위를 확인할 수 있습니다.</Typography>
       </Box>
     );
   }
@@ -63,7 +63,7 @@ export default function SportRankingPage() {
   if (!data) {
     return (
       <Box sx={{ p: 3, textAlign: "center" }}>
-        <Typography color="text.secondary">종목 랭킹 정보를 불러올 수 없습니다.</Typography>
+        <Typography color="text.secondary">종목 순위 정보를 불러올 수 없습니다.</Typography>
       </Box>
     );
   }
@@ -82,7 +82,7 @@ export default function SportRankingPage() {
           <ArrowBackIcon />
         </IconButton>
         <Typography variant="h6" fontWeight={900} flex={1}>
-          {data.sport} 개인 랭킹
+          {data.sport} 개인 순위
         </Typography>
       </Stack>
 
@@ -90,7 +90,7 @@ export default function SportRankingPage() {
         <CardContent sx={{ py: 2.5, px: 2.5, "&:last-child": { pb: 2.5 } }}>
           <Stack direction="row" spacing={1}>
             <SummaryCard label="내 순위" value={data.my_ranking?.rank ? `${data.my_ranking.rank}위` : "-"} />
-            <SummaryCard label="랭킹 참여" value={`${data.summary.ranked_count}명`} />
+            <SummaryCard label="순위 참여" value={`${data.summary.ranked_count}명`} />
             <SummaryCard label="반영 경기" value={`${data.summary.match_count}경기`} />
           </Stack>
           <Typography sx={{ mt: 1.5, fontSize: 12, color: "text.secondary", fontWeight: 600 }}>
@@ -103,12 +103,12 @@ export default function SportRankingPage() {
         <Card elevation={2} sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
           <CardContent sx={{ py: 2.2, px: 2.2, "&:last-child": { pb: 2.2 } }}>
             <Typography fontWeight={900} fontSize={15}>
-              내 랭킹 요약
+              내 순위 요약
             </Typography>
             <Stack direction="row" spacing={1} sx={{ mt: 1.4 }}>
               <SummaryCard label="레이팅" value={`${data.my_ranking.rating}`} />
               <SummaryCard label="전적" value={`${data.my_ranking.wins}승 ${data.my_ranking.losses}패`} />
-              <SummaryCard label="흐름" value={formatStreak(data.my_ranking.streak)} />
+              <SummaryCard label="연속" value={formatStreak(data.my_ranking.streak)} />
             </Stack>
             <Typography sx={{ mt: 1.2, fontSize: 12, color: "text.secondary", fontWeight: 600 }}>
               {user?.name ?? "내 계정"}의 최근 경기일: {formatDate(data.my_ranking.last_match_at)}
@@ -120,7 +120,7 @@ export default function SportRankingPage() {
       {data.my_recent_events.length > 0 && (
         <Stack spacing={1}>
           <Typography fontWeight={900} fontSize={16}>
-            내 최근 랭킹 변동
+            내 최근 순위 변동
           </Typography>
           {data.my_recent_events.map((event) => (
             <Card key={`${event.league_match_id}-${event.created_at}`} elevation={1} sx={{ borderRadius: 1 }}>
@@ -159,7 +159,7 @@ export default function SportRankingPage() {
           <Card elevation={2} sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
             <CardContent sx={{ py: 4, px: 2, "&:last-child": { pb: 4 } }}>
               <Typography textAlign="center" color="text.secondary" fontWeight={700}>
-                아직 반영된 랭킹 경기가 없습니다.
+                아직 반영된 순위 경기가 없습니다.
               </Typography>
             </CardContent>
           </Card>

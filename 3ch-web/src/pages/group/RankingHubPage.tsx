@@ -46,7 +46,7 @@ export default function RankingHubPage() {
   if (!token) {
     return (
       <Box sx={{ p: 3, textAlign: "center" }}>
-        <Typography color="text.secondary">로그인 후 랭킹을 확인할 수 있습니다.</Typography>
+        <Typography color="text.secondary">로그인 후 순위를 확인할 수 있습니다.</Typography>
       </Box>
     );
   }
@@ -66,27 +66,27 @@ export default function RankingHubPage() {
           <ArrowBackIcon />
         </IconButton>
         <Typography variant="h6" fontWeight={900} flex={1}>
-          랭킹
+          순위
         </Typography>
       </Stack>
 
       <Card elevation={0} sx={{ borderRadius: 1.25, bgcolor: "#F5F5F5" }}>
         <CardContent sx={{ py: 1.8, px: 1.8, "&:last-child": { pb: 1.8 } }}>
           <Typography fontWeight={800} fontSize={14}>
-            종목별 개인 랭킹과 클럽 랭킹을 한 번에 확인해보세요
+            종목별 개인 순위와 클럽 순위를 한 번에 확인해보세요
           </Typography>
           <Typography sx={{ mt: 0.4, fontSize: 12, color: "text.secondary", lineHeight: 1.55 }}>
-            먼저 내 종목별 통합 랭킹을 보고, 아래에서 가입한 클럽별 순위도 이어서 확인할 수 있어요.
+            먼저 내 종목별 통합 순위를 보고, 아래에서 가입한 클럽별 순위도 이어서 확인할 수 있어요.
           </Typography>
         </CardContent>
       </Card>
 
       <Stack spacing={0.8}>
         <Typography fontWeight={900} fontSize={15}>
-          종목별 개인 통합 랭킹
+          종목별 개인 통합 순위
         </Typography>
         {sports.length === 0 ? (
-          <EmptyCard message="아직 종목별 개인 랭킹이 없습니다." />
+          <EmptyCard message="아직 종목별 개인 순위가 없습니다." />
         ) : (
           <Stack spacing={1}>
             {sports.map((sport) => (
@@ -102,7 +102,7 @@ export default function RankingHubPage() {
 
       <Stack spacing={0.8}>
         <Typography fontWeight={900} fontSize={15}>
-          가입한 클럽 랭킹
+          가입한 클럽 순위
         </Typography>
         {groups.length === 0 ? (
           <EmptyCard message="가입한 클럽이 없습니다." />
@@ -172,7 +172,7 @@ function SportRankingCard({
             <Typography sx={{ mt: 0.2, fontSize: 11.5, color: "text.secondary", fontWeight: 600, lineHeight: 1.4 }}>
               {item.my_ranking?.rank
                 ? `내 순위 ${item.my_ranking.rank}위 · 레이팅 ${item.my_ranking.rating}`
-                : "아직 반영된 개인 랭킹이 없습니다."}
+                : "아직 반영된 개인 순위가 없습니다."}
             </Typography>
 
             <Stack direction="row" spacing={0.55} sx={{ mt: 0.55, flexWrap: "wrap" }}>
@@ -259,12 +259,12 @@ function RankingClubCard({
             </Typography>
             {isLoading ? (
               <Typography sx={{ mt: 0.2, fontSize: 11.5, color: "text.secondary" }}>
-                랭킹을 불러오는 중...
+                순위를 불러오는 중...
               </Typography>
             ) : (
               <>
                 <Typography sx={{ mt: 0.2, fontSize: 11.5, color: "text.secondary", fontWeight: 600, lineHeight: 1.4 }}>
-                  {myRank?.rank ? `내 순위 ${myRank.rank}위 · 레이팅 ${myRank.rating}` : "아직 클럽 랭킹이 없습니다."}
+                  {myRank?.rank ? `내 순위 ${myRank.rank}위 · 레이팅 ${myRank.rating}` : "아직 클럽 순위가 없습니다."}
                 </Typography>
                 <Stack direction="row" spacing={0.55} sx={{ mt: 0.55, flexWrap: "wrap" }}>
                   {top3.length > 0 ? top3.map((row) => (
@@ -287,7 +287,7 @@ function RankingClubCard({
                     </Box>
                   )) : (
                     <Typography sx={{ fontSize: 10.5, color: "text.secondary", lineHeight: 1.35 }}>
-                      아직 랭킹 반영 경기가 없습니다.
+                      아직 순위 반영 경기가 없습니다.
                     </Typography>
                   )}
                 </Stack>

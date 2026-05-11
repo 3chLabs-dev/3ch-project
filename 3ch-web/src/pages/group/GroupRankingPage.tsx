@@ -13,7 +13,6 @@ import {
   Typography,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import EmojiEventsOutlinedIcon from "@mui/icons-material/EmojiEventsOutlined";
 import type { PointRankingRow } from "../../features/group/groupApi";
 import { useGetGroupPointRankingQuery } from "../../features/group/groupApi";
 
@@ -189,7 +188,6 @@ function PointRankingList({
 
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Stack direction="row" alignItems="center" spacing={0.5}>
-                    {row.rank === 1 && <EmojiEventsOutlinedIcon sx={{ color: "#EAB308", fontSize: 14 }} />}
                     <Typography
                       sx={{
                         minWidth: 0,

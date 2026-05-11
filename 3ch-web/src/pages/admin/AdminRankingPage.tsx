@@ -225,7 +225,7 @@ export default function AdminRankingPage() {
   return (
     <Box sx={{ p: 3 }}>
       <Typography sx={{ fontSize: 18, fontWeight: 900, mb: 2, color: "#1F2937" }}>
-        랭킹 관리
+        순위 관리
       </Typography>
 
       <Stack spacing={2.5}>

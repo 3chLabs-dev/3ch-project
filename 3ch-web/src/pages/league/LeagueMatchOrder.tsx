@@ -35,6 +35,7 @@ import {
   useDeleteLeagueMatchMutation,
   useNotifyLeagueMatchMutation,
   useExtendLeagueMatchesMutation,
+  useGetLeagueParticipantsQuery,
   type LeagueMatch,
 } from "../../features/league/leagueApi";
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
@@ -352,6 +353,7 @@ export default function LeagueMatchOrder() {
     ?? null;
 
   const { data: matchData, isLoading: matchLoading, refetch: refetchMatches } = useGetLeagueMatchesQuery(leagueId, { skip: !leagueId, refetchOnMountOrArgChange: true });
+  const { data: participantData } = useGetLeagueParticipantsQuery(leagueId, { skip: !leagueId, refetchOnMountOrArgChange: true, });
   const [search, setSearch] = useState("");
   // 순서만 로컬에 보관. 경기 데이터는 항상 RTK Query 캐시에서 가져와야 optimistic update가 즉시 반영됨
   const [localOrder, setLocalOrder] = useState<string[] | null>(null);
@@ -373,6 +375,12 @@ export default function LeagueMatchOrder() {
   const [extendMatches, {isLoading: isExtending }] = useExtendLeagueMatchesMutation();
   const [reorderMatches] = useReorderLeagueMatchesMutation();
   const initCalledRef = useRef(false);
+  const participantCount = participantData?.participants?.length ?? 0;
+
+  const expectedMatchCount = useMemo(() => {
+    if (participantCount < 2) return 0;
+    return (participantCount * (participantCount - 1)) / 2;
+  }, [participantCount]);
 
   // 경기 없고 canManage 확정되면 자동 생성 (한 번만) — invalidatesTags로 자동 refetch됨
   useEffect(() => {
@@ -384,9 +392,12 @@ export default function LeagueMatchOrder() {
   }, [matchData, canManage, leagueId, initMatches]);
 
   useEffect(() => {
+    if (!matchData) return;
+    if ( matchData.matches.length < 1 ) return;
     if (!canManage) return;
+    if ( expectedMatchCount === matchData?.matches.length ) return;
     extendMatches({ id: leagueId });
-  },[canManage, leagueId, extendMatches]);
+  },[matchData, canManage, expectedMatchCount, leagueId, extendMatches]);
 
   const handleRefresh = useCallback(() => {
     setLocalOrder(null);

@@ -189,6 +189,15 @@
       [groupData, authUser],
     );
     const myName = myMember?.name ?? authUser?.name ?? (id ? localStorage.getItem(`guestName_${id}`) : null) ?? null;
+    const isMyParticipant = (participant: { member_id?: number | null; name: string }) => {
+      if (myMember?.user_id != null && participant.member_id != null) {
+        return participant.member_id === myMember.user_id;
+      }
+      if (authUser?.id != null && participant.member_id != null) {
+        return participant.member_id === authUser.id;
+      }
+      return !!myName && participant.name === myName;
+    };
 
     const rawParticipants = participantData?.participants ?? [];
 
@@ -950,11 +959,16 @@ const handleSaveEdit = async () => {
 
           <Box sx={{ bgcolor: "#fff", borderRadius: 1, border: "1px solid #E5E7EB", overflow: "hidden" }}>
             {/* 테이블 헤더 */}
-            <Box sx={{ display: "grid", gridTemplateColumns: canManage  ? "64px 1fr 40px 56px" : "56px 1fr 130px", px: 1.5, py: 0.8, bgcolor: "#F9FAFB", borderBottom: "1px solid #E5E7EB" }}>
-              <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#6B7280", textAlign: "center" }}>부수</Typography>
-              <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#6B7280", textAlign: "center" }}>이름</Typography>
-              {canManage  && <Box />}
-              <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#6B7280", textAlign: "center" }}>상태</Typography>
+            <Box sx={{ display: "flex", alignItems: "center", px: 1.5, py: 0.8, bgcolor: "#F9FAFB", borderBottom: "1px solid #E5E7EB" }}>
+              <Box sx={{ width: 40, display: "flex", justifyContent: "center", flexShrink: 0 }}>
+                <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#6B7280", textAlign: "center" }}>부수</Typography>
+              </Box>
+              <Box sx={{ flex: 1, display: "flex", justifyContent: "center", minWidth: 0 }}>
+                <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#6B7280", textAlign: "center" }}>이름</Typography>
+              </Box>
+              <Box sx={{ width: 146, display: "flex", justifyContent: "center", flexShrink: 0 }}>
+                <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#6B7280", textAlign: "center" }}>상태</Typography>
+              </Box>
             </Box>
 
             {/* 수정 모드: 수기입력 행 (헤더 바로 아래) */}
@@ -1008,14 +1022,14 @@ const handleSaveEdit = async () => {
               </Box>
             ) : (
               (canManage  ? participants : filteredParticipants).map((p, idx) => {
-                const isMe = !canManage  && !!myName && p.name === myName;
+                const isMe = isMyParticipant(p);
                 // const isManual = p.member_id == null;
                 // const editDiv = editingParticipants[p.id]?.division ?? p.division ?? "";
                 // const editName = editingParticipants[p.id]?.name ?? p.name;
                 return (
                   <Box
                     key={p.id}
-                    sx={{ display: "grid", gridTemplateColumns: canManage  ? "64px 1fr 40px 56px" : "56px 1fr 130px", alignItems: "center", px: 1.5, py: 0.9, borderTop: idx === 0 ? "none" : "1px solid #F3F4F6", bgcolor: isMe ? "#EFF6FF" : "transparent" }}
+                    sx={{ display: "flex", alignItems: "center", px: 1.5, py: 0.9, borderTop: idx === 0 ? "none" : "1px solid #F3F4F6", bgcolor: isMe ? "#EFF6FF" : "transparent" }}
                   >
                     {/* 부수 */}
                     {/* {canManage  ? (
@@ -1028,8 +1042,8 @@ const handleSaveEdit = async () => {
                         sx={{ "& .MuiOutlinedInput-root": { borderRadius: 0.6, height: 30, bgcolor: "#fff" }, "& input": { fontSize: 12, py: 0.3, px: 0.8, textAlign: "center" } }}
                       />
                     ) : ( */}
-                      <Box sx={{ display: "flex", justifyContent: "center" }}>
-                        <Avatar sx={{ width: 36, height: 36, bgcolor: "#FAAA47", color: "#000000", fontSize: 11, fontWeight: 900 }}>
+                      <Box sx={{ width: 40, display: "flex", justifyContent: "center", flexShrink: 0 }}>
+                        <Avatar sx={{ width: 32, height: 32, bgcolor: "#FAAA47", color: "#000000", fontSize: 10, fontWeight: 900 }}>
                           {p.division || "-"}
                         </Avatar>
                       </Box>
@@ -1046,7 +1060,7 @@ const handleSaveEdit = async () => {
                         sx={{ mx: 0.5, "& .MuiOutlinedInput-root": { borderRadius: 0.6, height: 30, bgcolor: "#fff" }, "& input": { fontSize: 13, py: 0.3 } }}
                       />
                     ) : ( */}
-                      <Typography fontWeight={800} fontSize={14} sx={{ textAlign: "center", color: isMe ? "#2F80ED" : "inherit" }}>{p.name}</Typography>
+                      <Typography fontWeight={800} fontSize={14} sx={{ textAlign: "center", color: isMe ? "#2F80ED" : "inherit", flex: 1, minWidth: 0 }}>{p.name}</Typography>
                     {/* )} */}
 
                     {/* 구분 배지 */}
@@ -1075,7 +1089,13 @@ const handleSaveEdit = async () => {
                         </Button>
                       </Box>
                     ) : ( */}
-                      <Stack direction="row" spacing={0.5} justifyContent="center">
+                      <Box sx={{ width: 146, display: "flex", justifyContent: "center", flexShrink: 0 }}>
+                        <Stack
+                          direction="row"
+                          spacing={0.5}
+                          justifyContent="center"
+                          sx={{ width: "fit-content" }}
+                        >
                         {(
                           [
                             { key: "paid", label: "입금", value: p.paid, on: { border: "#27AE60", bgcolor: "#ECFDF5", color: "#16A34A" } },
@@ -1087,20 +1107,30 @@ const handleSaveEdit = async () => {
                             key={key}
                             onClick={() => canInteract && handleToggle(p.id, key, value)}
                             sx={{
-                              height: 24, px: 0.8, borderRadius: 0.6,
+                              width: 44,
+                              height: 24,
+                              px: 0,
+                              borderRadius: 0.6,
                               border: `1px solid ${value ? on.border : "#D1D5DB"}`,
                               bgcolor: value ? on.bgcolor : "#F9FAFB",
                               color: value ? on.color : "#9CA3AF",
                               fontSize: 11, fontWeight: 700,
                               cursor: canInteract ? "pointer" : "default",
-                              display: "flex", alignItems: "center", userSelect: "none", whiteSpace: "nowrap",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              userSelect: "none",
+                              whiteSpace: "nowrap",
+                              textAlign: "center",
+                              flexShrink: 0,
                               "&:hover": { opacity: canInteract ? 0.8 : 1 },
                             }}
                           >
                             {label}
                           </Box>
                         ))}
-                      </Stack>
+                        </Stack>
+                      </Box>
                     {/* )} */}
                   </Box>
                 )

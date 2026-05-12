@@ -24,6 +24,7 @@ import {
   useGetLeagueParticipantsQuery,
   useGetLeagueQuery,
   useInitLeagueMatchesMutation,
+  useScanLeagueOmrMutation,
   useUpdateLeagueMutation,
   useUpdateLeagueMatchMutation,
   type LeagueMatch,
@@ -177,6 +178,14 @@ async function scanOmrImage(file: File, marks: OmrMark[]): Promise<OmrScanResult
   });
 
   return result;
+}
+
+function countRecognizedScores(result: OmrScanResult) {
+  return Object.values(result).reduce((sum, scores) => sum + Object.keys(scores).length, 0);
+}
+
+function pickBestOmrResult(results: OmrScanResult[]) {
+  return results.sort((a, b) => countRecognizedScores(b) - countRecognizedScores(a))[0] ?? {};
 }
 
 function calculateStats(players: LeagueParticipantItem[], matches: LeagueMatch[]): Record<string, PlayerStat> {
@@ -419,6 +428,7 @@ export default function LeagueOmrSheet() {
   });
   const [initMatches, { isLoading: isIniting }] = useInitLeagueMatchesMutation();
   const [updateMatch] = useUpdateLeagueMatchMutation();
+  const [scanLeagueOmr] = useScanLeagueOmrMutation();
   const [updateLeague, { isLoading: isClosing }] = useUpdateLeagueMutation();
 
   const isCreator = !!authUser && league?.created_by_id === authUser.id;
@@ -514,10 +524,6 @@ export default function LeagueOmrSheet() {
     });
   };
 
-  const countRecognizedScores = (result: OmrScanResult) => {
-    return Object.values(result).reduce((sum, scores) => sum + Object.keys(scores).length, 0);
-  };
-
   const applyOmrResult = async (result: OmrScanResult) => {
     let updated = 0;
     for (const match of matches) {
@@ -553,11 +559,28 @@ export default function LeagueOmrSheet() {
         window.alert("OMR 마킹 위치를 찾지 못했습니다. 화면을 새로고침 후 다시 시도해 주세요.");
         return;
       }
-      const scanResults = await Promise.all([
-        sheetMarks.length ? scanOmrImage(file, sheetMarks) : Promise.resolve({} as OmrScanResult),
-        tableMarks.length ? scanOmrImage(file, tableMarks) : Promise.resolve({} as OmrScanResult),
-      ]);
-      const result = scanResults.sort((a, b) => countRecognizedScores(b) - countRecognizedScores(a))[0];
+      const scenarios = [
+        sheetMarks.length ? { name: "sheet", marks: sheetMarks } : null,
+        tableMarks.length ? { name: "table", marks: tableMarks } : null,
+      ].filter((scenario): scenario is { name: string; marks: OmrMark[] } => Boolean(scenario));
+
+      let result: OmrScanResult;
+      try {
+        const response = await scanLeagueOmr({
+          leagueId: id,
+          file,
+          scenarios,
+          darknessThreshold: 20,
+          marginThreshold: 3.5,
+        }).unwrap();
+        result = response.result;
+      } catch {
+        const scanResults = await Promise.all([
+          sheetMarks.length ? scanOmrImage(file, sheetMarks) : Promise.resolve({} as OmrScanResult),
+          tableMarks.length ? scanOmrImage(file, tableMarks) : Promise.resolve({} as OmrScanResult),
+        ]);
+        result = pickBestOmrResult(scanResults);
+      }
       const updated = await applyOmrResult(result);
       if (updated === 0) {
         window.alert("인식된 마킹이 없습니다. 대진표가 화면에 꽉 차게 촬영되었는지 확인해 주세요.");

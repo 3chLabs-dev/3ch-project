@@ -204,6 +204,32 @@ export interface UpdateMatchRequest {
   status?: "pending" | "playing" | "done";
 }
 
+export interface LeagueOmrMark {
+  matchId: string;
+  playerId: string;
+  score: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface ScanLeagueOmrRequest {
+  leagueId: string;
+  file: File;
+  scenarios: { name?: string; marks: LeagueOmrMark[] }[];
+  darknessThreshold?: number;
+  marginThreshold?: number;
+}
+
+export interface ScanLeagueOmrResponse {
+  engine: string;
+  scenario: string;
+  recognizedCount: number;
+  result: Record<string, Record<string, number>>;
+  scenarios: { name: string; recognizedCount: number }[];
+}
+
 export interface AddParticipantsRequest {
   leagueId: string;
   participants: { division: string; name: string; member_id?: number | null }[];
@@ -398,6 +424,26 @@ export const leagueApi = baseApi.injectEndpoints({
       invalidatesTags: (_result, _error, { leagueId }) => [{ type: "League", id: `matches-${leagueId}` }],
     }),
 
+    scanLeagueOmr: builder.mutation<ScanLeagueOmrResponse, ScanLeagueOmrRequest>({
+      query: ({ leagueId, file, scenarios, darknessThreshold, marginThreshold }) => {
+        const formData = new FormData();
+        formData.append("image", file);
+        formData.append(
+          "payload",
+          JSON.stringify({
+            scenarios,
+            darknessThreshold,
+            marginThreshold,
+          }),
+        );
+        return {
+          url: `/league/${leagueId}/omr/scan`,
+          method: "POST",
+          body: formData,
+        };
+      },
+    }),
+
     reorderLeagueMatches: builder.mutation<{ ok: boolean }, { leagueId: string; order: string[] }>({
       query: ({ leagueId, order }) => ({
         url: `/league/${leagueId}/matches/reorder`,
@@ -486,6 +532,7 @@ export const {
   useGetLeagueMatchesQuery,
   useInitLeagueMatchesMutation,
   useUpdateLeagueMatchMutation,
+  useScanLeagueOmrMutation,
   useReorderLeagueMatchesMutation,
   useDeleteLeagueMatchMutation,
   useNotifyLeagueMatchMutation,

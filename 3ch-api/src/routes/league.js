@@ -1,12 +1,14 @@
 ﻿const express = require('express');
 const { z } = require('zod');
 const { randomUUID } = require('crypto');
+const multer = require('multer');
 const pool = require('../db/pool');
 const { requireAuth, optionalAuth } = require('../middlewares/auth');
 const { buildLeagueCode } = require('../utils/clubCodeUtils');
 const webpush = require('web-push');
 const { rebuildGroupRanking, getGroupIdByLeagueId } = require('../services/groupRanking');
 const { rebuildSportRankingByLeagueId } = require('../services/sportRanking');
+const { scanOmrImageWithPython } = require('../services/omrScanner');
 
 webpush.setVapidDetails(
   process.env.VAPID_MAILTO,
@@ -81,6 +83,44 @@ async function sendPushToParticipant(participantId, payload) {
 }
 
 const router = express.Router();
+const omrUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024 },
+});
+
+const omrMarkSchema = z.object({
+  matchId: z.string().min(1),
+  playerId: z.string().min(1),
+  score: z.number().int().min(0).max(3),
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+  w: z.number().positive().max(1),
+  h: z.number().positive().max(1),
+});
+
+const omrScanSchema = z.object({
+  scenarios: z.array(
+    z.object({
+      name: z.string().optional(),
+      marks: z.array(omrMarkSchema).min(1),
+    }),
+  ).min(1).max(4),
+  darknessThreshold: z.number().min(0).max(100).default(20),
+  marginThreshold: z.number().min(0).max(100).default(3.5),
+});
+
+function parseOmrPayload(rawPayload) {
+  try {
+    return omrScanSchema.parse(JSON.parse(rawPayload ?? '{}'));
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      const payloadError = new Error('OMR 요청 형식이 올바르지 않습니다.');
+      payloadError.code = 'INVALID_OMR_PAYLOAD';
+      throw payloadError;
+    }
+    throw error;
+  }
+}
 
 // 컬럼 자동 추가
 pool.query(`
@@ -2574,6 +2614,91 @@ router.delete('/league/:id/matches/:matchId', requireAuth, async (req, res) => {
     return res.json({ ok: true });
   } catch (err) {
     console.error('Error deleting match:', err);
+    return res.status(500).json({ message: '서버 오류' });
+  }
+});
+
+router.post('/league/:id/omr/scan', optionalAuth, omrUpload.single('image'), async (req, res) => {
+  const leagueId = req.params.id;
+
+  try {
+    const leagueRow = await pool.query(
+      `SELECT join_permission, group_id FROM leagues WHERE id = $1`,
+      [leagueId],
+    );
+    if (leagueRow.rowCount === 0) {
+      return res.status(404).json({ message: '리그를 찾을 수 없습니다.' });
+    }
+
+    const joinPermission = leagueRow.rows[0].join_permission;
+    if (joinPermission === 'club_only') {
+      const userId = req.user ? Number(req.user.sub) : null;
+      if (!userId) return res.status(401).json({ message: '로그인이 필요합니다.' });
+
+      const memberCheck = await pool.query(
+        `SELECT 1
+           FROM group_members
+          WHERE group_id = $1 AND user_id = $2`,
+        [leagueRow.rows[0].group_id, userId],
+      );
+      if (memberCheck.rowCount === 0) {
+        return res.status(403).json({ message: '클럽 회원만 OMR을 읽을 수 있습니다.' });
+      }
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: '이미지 파일이 필요합니다.' });
+    }
+    if (!String(req.file.mimetype || '').startsWith('image/')) {
+      return res.status(400).json({ message: '이미지 파일만 업로드할 수 있습니다.' });
+    }
+
+    const payload = parseOmrPayload(req.body.payload);
+    const result = await scanOmrImageWithPython({
+      imageBuffer: req.file.buffer,
+      originalName: req.file.originalname,
+      payload,
+    });
+
+    return res.json(result);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        message: 'OMR 좌표 데이터가 올바르지 않습니다.',
+        issues: error.issues,
+      });
+    }
+    if (error?.code === 'INVALID_OMR_PAYLOAD') {
+      return res.status(400).json({ message: error.message });
+    }
+    if (error?.code === 'PYTHON_ENGINE_UNAVAILABLE') {
+      return res.status(503).json({
+        message: 'Python OMR 엔진을 사용할 수 없습니다.',
+        code: error.code,
+      });
+    }
+    if (error?.code === 'PYTHON_DEPENDENCY_MISSING') {
+      return res.status(503).json({
+        message: 'Python OMR 필수 패키지가 설치되지 않았습니다.',
+        code: error.code,
+        details: error.details ?? error.message,
+      });
+    }
+    if (error?.code === 'PYTHON_TIMEOUT') {
+      return res.status(504).json({
+        message: 'OMR 이미지 분석 시간이 초과되었습니다.',
+        code: error.code,
+      });
+    }
+    if (error?.code === 'PYTHON_ENGINE_FAILED' || error?.code === 'PYTHON_ENGINE_INVALID_RESPONSE') {
+      return res.status(500).json({
+        message: 'Python OMR 엔진 처리 중 오류가 발생했습니다.',
+        code: error.code,
+        details: error.details ?? error.message,
+      });
+    }
+
+    console.error('Error scanning OMR image:', error);
     return res.status(500).json({ message: '서버 오류' });
   }
 });

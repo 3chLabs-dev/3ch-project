@@ -261,61 +261,68 @@ function ScoreMarks({
 }) {
   return (
     <Stack
-      direction="row"
+      direction="column"
       justifyContent="center"
       sx={{
         width: "100%",
-        gap: "4px",
-        overflow: "visible",
+        alignItems: "center",
+        gap: "1px",
+        overflow: "hidden",
       }}
     >
-      {SCORE_OPTIONS.map((score) => (
-        <Box
-          key={score}
-          component="button"
-          type="button"
-          data-omr-mark={matchId && playerId ? "true" : undefined}
-          data-match-id={matchId}
-          data-player-id={playerId}
-          data-score={score}
-          disabled={disabled}
-          onClick={() => !disabled && onSelect(score)}
-          sx={{
-            appearance: "none",
-            border: 0,
-            bgcolor: "transparent",
-            color: "#111827",
-            fontFamily: "inherit",
-            minWidth: "auto",
-            width: "auto",
-            height: 18,
-            px: 0,
-            py: 0,
-            m: 0,
-            borderRadius: 0,
-            fontWeight: 900,
-            fontSize: 11,
-            lineHeight: "18px",
-            cursor: disabled ? "default" : "pointer",
-            whiteSpace: "nowrap",
-            "&::before": { content: '"["' },
-            "&::after": { content: '"]"' },
-            ...(selected === score && {
-              bgcolor: "#111",
-              color: "#fff",
-              px: "1px",
-            }),
-            "@media print": {
-              color: selected === score ? "#fff !important" : "#111 !important",
-              background: selected === score ? "#111 !important" : "transparent !important",
-              WebkitPrintColorAdjust: "exact",
-              printColorAdjust: "exact",
-            },
-          }}
-        >
-          {score}
-        </Box>
-      ))}
+      <Stack direction="row" sx={{ width: 72, justifyContent: "space-between" }}>
+        {SCORE_OPTIONS.map((score) => (
+          <Box
+            key={`label-${score}`}
+            component="span"
+            sx={{
+              width: 14,
+              color: "#111827",
+              fontWeight: 900,
+              fontSize: 10,
+              lineHeight: "12px",
+              textAlign: "center",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {score}
+          </Box>
+        ))}
+      </Stack>
+      <Stack direction="row" sx={{ width: 72, justifyContent: "space-between" }}>
+        {SCORE_OPTIONS.map((score) => (
+          <Box
+            key={`mark-${score}`}
+            component="button"
+            type="button"
+            data-omr-mark={matchId && playerId ? "true" : undefined}
+            data-match-id={matchId}
+            data-player-id={playerId}
+            data-score={score}
+            disabled={disabled}
+            aria-label={`${score}점`}
+            onClick={() => !disabled && onSelect(score)}
+            sx={{
+              appearance: "none",
+              width: 12,
+              height: 12,
+              p: 0,
+              m: 0,
+              border: "1.4px solid #111",
+              borderRadius: 0,
+              boxSizing: "border-box",
+              bgcolor: selected === score ? "#111" : "#fff",
+              cursor: disabled ? "default" : "pointer",
+              "@media print": {
+                background: selected === score ? "#111 !important" : "#fff !important",
+                borderColor: "#111 !important",
+                WebkitPrintColorAdjust: "exact",
+                printColorAdjust: "exact",
+              },
+            }}
+          />
+        ))}
+      </Stack>
     </Stack>
   );
 }

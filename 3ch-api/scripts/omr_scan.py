@@ -18,13 +18,34 @@ except ImportError:
     np = None
     HAS_OPENCV = False
 
+# 촬영/crop 보정 후에도 좌표가 조금 밀릴 수 있어 소폭 이동 후보를 같이 시도함.
+COORDINATE_OFFSETS = [
+    (-0.018, -0.008),
+    (-0.018, 0),
+    (-0.018, 0.008),
+    (-0.009, -0.008),
+    (-0.009, 0),
+    (-0.009, 0.008),
+    (0, -0.008),
+    (0, 0),
+    (0, 0.008),
+    (0.009, -0.008),
+    (0.009, 0),
+    (0.009, 0.008),
+    (0.018, -0.008),
+    (0.018, 0),
+    (0.018, 0.008),
+]
+
 
 def read_payload(payload_path: str):
+    # Node 브리지에서 임시 파일로 넘긴 좌표/임계값 설정 읽음.
     with open(payload_path, "r", encoding="utf-8") as handle:
         return json.load(handle)
 
 
 def prepare_with_pillow(image: Image.Image) -> Image.Image:
+    # OpenCV가 없을 때도 최소 판독 가능하도록 Pillow만으로 명암 정리함.
     grayscale = ImageOps.grayscale(image)
     grayscale = ImageOps.autocontrast(grayscale)
     grayscale = grayscale.filter(ImageFilter.MedianFilter(size=3))
@@ -32,6 +53,7 @@ def prepare_with_pillow(image: Image.Image) -> Image.Image:
 
 
 def prepare_with_opencv(image: Image.Image) -> Image.Image:
+    # 촬영 환경마다 밝기가 달라서 정규화와 적응형 threshold로 마킹 대비 끌어올림.
     rgb = np.array(image)
     gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
@@ -49,6 +71,7 @@ def prepare_with_opencv(image: Image.Image) -> Image.Image:
 
 
 def prepare_image(image_path: str):
+    # 휴대폰 사진의 EXIF 회전값 반영 후 사용 가능한 엔진으로 전처리함.
     image = Image.open(image_path)
     image = ImageOps.exif_transpose(image).convert("RGB")
     if HAS_OPENCV:
@@ -57,6 +80,7 @@ def prepare_image(image_path: str):
 
 
 def read_darkness_rect(image, center_x, center_y, width_ratio, height_ratio):
+    # 각 점수 박스 주변의 어두운 픽셀 비율 계산해 실제 마킹 여부 판단함.
     width, height = image.size
     box_width = max(10, round(width * width_ratio * 0.9))
     box_height = max(10, round(height * height_ratio * 0.9))
@@ -79,6 +103,7 @@ def read_darkness_rect(image, center_x, center_y, width_ratio, height_ratio):
 
 
 def crop_image(image, rect, padding=4):
+    # 감지한 표 경계가 살짝 타이트할 수 있어 약간의 여백 포함해 자름.
     width, height = image.size
     x, y, w, h = rect
     left = max(0, x - padding)
@@ -89,6 +114,7 @@ def crop_image(image, rect, padding=4):
 
 
 def order_quad_points(points):
+    # perspective 보정용 네 꼭짓점을 좌상, 우상, 우하, 좌하 순서로 정렬함.
     points = np.array(points, dtype="float32")
     ordered = np.zeros((4, 2), dtype="float32")
     sums = points.sum(axis=1)
@@ -101,6 +127,7 @@ def order_quad_points(points):
 
 
 def warp_quad(image, points):
+    # 비스듬히 촬영된 표를 정면 직사각형 이미지로 펴줌.
     ordered = order_quad_points(points)
     top_left, top_right, bottom_right, bottom_left = ordered
     width_top = np.linalg.norm(top_right - top_left)
@@ -124,6 +151,7 @@ def warp_quad(image, points):
 
 
 def detect_table_images(image):
+    # 화면 좌표는 표 영역 기준이므로 사진 안에서 표 후보 찾아 별도 판독 후보로 만듦.
     if not HAS_OPENCV:
         return []
 
@@ -131,12 +159,13 @@ def detect_table_images(image):
     if len(gray.shape) == 3:
         gray = cv2.cvtColor(gray, cv2.COLOR_RGB2GRAY)
 
-    # The prepared image is mostly white with black text/grid. Invert so table
-    # borders become foreground, then keep only long horizontal/vertical lines.
+    # 전처리된 이미지는 흰 배경과 검은 선/글자 구조임.
+    # 반전 후 긴 가로/세로선만 남겨 표 격자 후보 찾음.
     inverted = cv2.bitwise_not(gray)
     _, binary = cv2.threshold(inverted, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
     height, width = binary.shape[:2]
 
+    # 작은 글자나 숫자는 지우고 표 선처럼 긴 구조만 보존함.
     horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (max(30, width // 18), 1))
     vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, max(20, height // 20)))
     horizontal = cv2.morphologyEx(binary, cv2.MORPH_OPEN, horizontal_kernel, iterations=1)
@@ -147,6 +176,7 @@ def detect_table_images(image):
     candidates = []
     image_area = width * height
     for contour in contours:
+        # 너무 작거나 표 비율에서 많이 벗어난 윤곽은 후보에서 제외함.
         x, y, w, h = cv2.boundingRect(contour)
         area = w * h
         if area < image_area * 0.08:
@@ -161,6 +191,7 @@ def detect_table_images(image):
     candidates.sort(reverse=True, key=lambda item: item[0])
     table_images = []
     for _area, contour, rect in candidates[:3]:
+        # 네 꼭짓점이 잡히면 그대로 펴고, 아니면 최소 회전 사각형으로 보정함.
         epsilon = 0.02 * cv2.arcLength(contour, True)
         approx = cv2.approxPolyDP(contour, epsilon, True)
         if len(approx) == 4:
@@ -173,15 +204,18 @@ def detect_table_images(image):
     return table_images
 
 
-def scan_scenario(image, marks, darkness_threshold, margin_threshold):
+def scan_scenario(image, marks, darkness_threshold, margin_threshold, x_offset=0, y_offset=0):
+    # 하나의 이미지 후보에서 모든 OMR 마크 읽고, 선수별 가장 진한 점수 고름.
     grouped = defaultdict(list)
     width, height = image.size
 
     for mark in marks:
+        center_x = min(1, max(0, mark["x"] + x_offset)) * width
+        center_y = min(1, max(0, mark["y"] + y_offset)) * height
         darkness = read_darkness_rect(
             image,
-            mark["x"] * width,
-            mark["y"] * height,
+            center_x,
+            center_y,
             mark["w"],
             mark["h"],
         )
@@ -190,7 +224,9 @@ def scan_scenario(image, marks, darkness_threshold, margin_threshold):
 
     result = {}
     recognized = 0
+    confidence = 0.0
     for (match_id, player_id), items in grouped.items():
+        # 가장 진한 칸이 충분히 진하고 2등 칸과 차이가 있을 때만 확정함.
         ranked = sorted(items, key=lambda item: item["darkness"], reverse=True)
         if len(ranked) < 2:
             continue
@@ -204,11 +240,13 @@ def scan_scenario(image, marks, darkness_threshold, margin_threshold):
 
         result.setdefault(match_id, {})[player_id] = winner["score"]
         recognized += 1
+        confidence += winner["darkness"] - runner_up["darkness"]
 
-    return {"result": result, "recognizedCount": recognized}
+    return {"result": result, "recognizedCount": recognized, "confidence": confidence}
 
 
 def scan_scenario_candidates(base_image, scenario, darkness_threshold, margin_threshold, table_images):
+    # sheet/table 좌표 기준별로 여러 이미지 후보 시도하고 가장 많이 읽힌 결과 선택함.
     scenario_name = scenario.get("name") or "unnamed"
     marks = scenario.get("marks") or []
     candidates = []
@@ -220,28 +258,67 @@ def scan_scenario_candidates(base_image, scenario, darkness_threshold, margin_th
     best = None
     candidate_summaries = []
     for candidate_name, candidate_image in candidates:
-        summary = scan_scenario(candidate_image, marks, darkness_threshold, margin_threshold)
+        offset_summaries = []
+        for x_offset, y_offset in COORDINATE_OFFSETS:
+            summary = scan_scenario(
+                candidate_image,
+                marks,
+                darkness_threshold,
+                margin_threshold,
+                x_offset,
+                y_offset,
+            )
+            offset_summary = {
+                "xOffset": x_offset,
+                "yOffset": y_offset,
+                "recognizedCount": summary["recognizedCount"],
+                "confidence": summary["confidence"],
+            }
+            offset_summaries.append(offset_summary)
+            if (
+                best is None
+                or summary["recognizedCount"] > best["recognizedCount"]
+                or (
+                    summary["recognizedCount"] == best["recognizedCount"]
+                    and summary["confidence"] > best["confidence"]
+                )
+            ):
+                best = {
+                    "candidate": candidate_name,
+                    "xOffset": x_offset,
+                    "yOffset": y_offset,
+                    "recognizedCount": summary["recognizedCount"],
+                    "confidence": summary["confidence"],
+                    "result": summary["result"],
+                }
+
+        best_offset = max(
+            offset_summaries,
+            key=lambda item: (item["recognizedCount"], item["confidence"]),
+            default={"recognizedCount": 0, "confidence": 0, "xOffset": 0, "yOffset": 0},
+        )
         candidate_summaries.append({
             "name": candidate_name,
-            "recognizedCount": summary["recognizedCount"],
+            "recognizedCount": best_offset["recognizedCount"],
+            "confidence": best_offset["confidence"],
+            "xOffset": best_offset["xOffset"],
+            "yOffset": best_offset["yOffset"],
         })
-        if best is None or summary["recognizedCount"] > best["recognizedCount"]:
-            best = {
-                "candidate": candidate_name,
-                "recognizedCount": summary["recognizedCount"],
-                "result": summary["result"],
-            }
 
     return {
         "name": scenario_name,
         "recognizedCount": best["recognizedCount"] if best else 0,
+        "confidence": best["confidence"] if best else 0,
         "candidate": best["candidate"] if best else None,
+        "xOffset": best["xOffset"] if best else 0,
+        "yOffset": best["yOffset"] if best else 0,
         "result": best["result"] if best else {},
         "candidates": candidate_summaries,
     }
 
 
 def main():
+    # 입력 파일 경로와 payload 경로는 Node 서비스가 임시 파일로 넘김.
     parser = argparse.ArgumentParser()
     parser.add_argument("--image", required=True)
     parser.add_argument("--payload", required=True)
@@ -256,11 +333,13 @@ def main():
         raise ValueError("At least one OMR scenario is required.")
 
     image, engine_name = prepare_image(args.image)
+    # 표 후보를 먼저 만들어두고 table 시나리오에서 우선 사용함.
     table_images = detect_table_images(image)
     scenario_summaries = []
     best = None
 
     for scenario in scenarios:
+        # 프론트가 보낸 sheet/table 좌표계 중 실제 사진에 가장 잘 맞는 것 찾음.
         summary = scan_scenario_candidates(
             image,
             scenario,
@@ -271,22 +350,39 @@ def main():
         scenario_summaries.append({
             "name": summary["name"],
             "recognizedCount": summary["recognizedCount"],
+            "confidence": summary["confidence"],
             "candidate": summary["candidate"],
+            "xOffset": summary["xOffset"],
+            "yOffset": summary["yOffset"],
             "candidates": summary["candidates"],
         })
-        if best is None or summary["recognizedCount"] > best["recognizedCount"]:
+        if (
+            best is None
+            or summary["recognizedCount"] > best["recognizedCount"]
+            or (
+                summary["recognizedCount"] == best["recognizedCount"]
+                and summary["confidence"] > best["confidence"]
+            )
+        ):
             best = {
                 "name": summary["name"],
                 "candidate": summary["candidate"],
+                "xOffset": summary["xOffset"],
+                "yOffset": summary["yOffset"],
                 "recognizedCount": summary["recognizedCount"],
+                "confidence": summary["confidence"],
                 "result": summary["result"],
             }
 
+    # 프론트/로그에서 튜닝 가능하도록 선택된 시나리오와 후보별 인식 개수 함께 반환함.
     output = {
         "engine": f"python-{engine_name}",
         "scenario": best["name"],
         "candidate": best["candidate"],
+        "xOffset": best["xOffset"],
+        "yOffset": best["yOffset"],
         "recognizedCount": best["recognizedCount"],
+        "confidence": best["confidence"],
         "result": best["result"],
         "scenarios": scenario_summaries,
     }

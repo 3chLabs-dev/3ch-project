@@ -67,7 +67,8 @@ type OmrMark = {
 type OmrScanResult = Record<string, Record<string, number>>;
 
 function divisionLabel(division?: string | null) {
-  return division ? `${division}부` : "-";
+  if (!division) return "-";
+  return /[부조]$/.test(division) ? division : `${division}부`;
 }
 
 function formatSheetDate(dateString?: string) {

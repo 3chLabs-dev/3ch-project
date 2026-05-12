@@ -88,6 +88,41 @@ def crop_image(image, rect, padding=4):
     return image.crop((left, top, right, bottom))
 
 
+def order_quad_points(points):
+    points = np.array(points, dtype="float32")
+    ordered = np.zeros((4, 2), dtype="float32")
+    sums = points.sum(axis=1)
+    diffs = np.diff(points, axis=1)
+    ordered[0] = points[np.argmin(sums)]
+    ordered[2] = points[np.argmax(sums)]
+    ordered[1] = points[np.argmin(diffs)]
+    ordered[3] = points[np.argmax(diffs)]
+    return ordered
+
+
+def warp_quad(image, points):
+    ordered = order_quad_points(points)
+    top_left, top_right, bottom_right, bottom_left = ordered
+    width_top = np.linalg.norm(top_right - top_left)
+    width_bottom = np.linalg.norm(bottom_right - bottom_left)
+    height_right = np.linalg.norm(bottom_right - top_right)
+    height_left = np.linalg.norm(bottom_left - top_left)
+    target_width = max(1, int(max(width_top, width_bottom)))
+    target_height = max(1, int(max(height_right, height_left)))
+    destination = np.array(
+        [
+            [0, 0],
+            [target_width - 1, 0],
+            [target_width - 1, target_height - 1],
+            [0, target_height - 1],
+        ],
+        dtype="float32",
+    )
+    matrix = cv2.getPerspectiveTransform(ordered, destination)
+    warped = cv2.warpPerspective(np.array(image), matrix, (target_width, target_height))
+    return Image.fromarray(warped)
+
+
 def detect_table_images(image):
     if not HAS_OPENCV:
         return []
@@ -121,10 +156,21 @@ def detect_table_images(image):
         aspect = w / h if h else 0
         if aspect < 1.4 or aspect > 8:
             continue
-        candidates.append((area, (x, y, w, h)))
+        candidates.append((area, contour, (x, y, w, h)))
 
     candidates.sort(reverse=True, key=lambda item: item[0])
-    return [crop_image(image, rect) for _area, rect in candidates[:3]]
+    table_images = []
+    for _area, contour, rect in candidates[:3]:
+        epsilon = 0.02 * cv2.arcLength(contour, True)
+        approx = cv2.approxPolyDP(contour, epsilon, True)
+        if len(approx) == 4:
+            table_images.append(warp_quad(image, approx.reshape(4, 2)))
+        else:
+            rotated_rect = cv2.minAreaRect(contour)
+            box = cv2.boxPoints(rotated_rect)
+            table_images.append(warp_quad(image, box))
+        table_images.append(crop_image(image, rect))
+    return table_images
 
 
 def scan_scenario(image, marks, darkness_threshold, margin_threshold):

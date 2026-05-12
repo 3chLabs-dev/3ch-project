@@ -121,7 +121,16 @@ npm start
 2. `git pull origin main`
 3. `npm ci --omit=dev`
 4. `npx prisma migrate deploy`
-5. `pm2 restart 3ch-api`
+5. `python3 -m pip install --user -r scripts/requirements-omr.txt`
+6. `pm2 restart 3ch-api --update-env`
+
+OMR Python scanner environment variables:
+
+```dotenv
+OMR_PYTHON_BIN=python3
+OMR_PYTHON_SCRIPT=/opt/3ch-api/3ch-project/3ch-api/scripts/omr_scan.py
+OMR_SCANNER_TIMEOUT_MS=30000
+```
 
 > API 소스 코드는 서버에 직접 존재 (git pull 방식)
 

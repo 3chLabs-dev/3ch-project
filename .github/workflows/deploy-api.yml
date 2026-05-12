@@ -61,8 +61,11 @@ jobs:
             echo "==> prisma migrate"
             npx prisma migrate deploy
 
+            echo "==> python omr dependencies"
+            python3 -m pip install --user -r scripts/requirements-omr.txt
+
             echo "==> pm2 restart"
-            pm2 restart 3ch-api || pm2 start src/server.js --name 3ch-api
+            pm2 restart 3ch-api --update-env || pm2 start src/server.js --name 3ch-api
 
             echo "==> done"
 

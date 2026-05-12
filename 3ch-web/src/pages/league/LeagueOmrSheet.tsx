@@ -443,11 +443,6 @@ export default function LeagueOmrSheet() {
   const sheetTitle = `${formatSheetDate(league?.start_date)} / ${league?.type ?? "단식"} ${league?.format ?? "단일리그"} / ${league?.rules ?? ""}`;
   const isCompleted = league?.status === "completed";
   const scoreEditMode = isCompleted || forceScoreEditMode;
-  const isMyParticipant = (participant: LeagueParticipantItem) => {
-    if (!authUser) return false;
-    if (participant.member_id != null) return participant.member_id === authUser.id;
-    return participant.name === authUser.name;
-  };
 
   useEffect(() => {
     if (!canManage || !matchData || matchData.matches.length > 0 || participants.length !== 4) return;
@@ -751,9 +746,7 @@ export default function LeagueOmrSheet() {
                       {index + 1}
                     </Box>
                     <Box sx={{ color: "#F59E0B", fontSize: 10, fontWeight: 900 }}>{divisionLabel(participant.division)}</Box>
-                    <Box sx={{ color: isMyParticipant(participant) ? "#2563EB" : "#111827", fontWeight: isMyParticipant(participant) ? 900 : 700 }}>
-                      {participant.name}
-                    </Box>
+                    <Box>{participant.name}</Box>
                   </Stack>
                 </th>
               ))}
@@ -773,9 +766,7 @@ export default function LeagueOmrSheet() {
                         {rowIndex + 1}
                       </Box>
                       <Box sx={{ color: "#F59E0B", fontSize: 10, fontWeight: 900 }}>{divisionLabel(rowPlayer.division)}</Box>
-                      <Box sx={{ color: isMyParticipant(rowPlayer) ? "#2563EB" : "#111827", fontWeight: isMyParticipant(rowPlayer) ? 900 : 700 }}>
-                        {rowPlayer.name}
-                      </Box>
+                      <Box>{rowPlayer.name}</Box>
                     </Stack>
                   </th>
                   {participants.map((colPlayer) => {

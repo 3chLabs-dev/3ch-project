@@ -971,45 +971,6 @@ const handleSaveEdit = async () => {
               </Box>
             </Box>
 
-            {/* 수정 모드: 수기입력 행 (헤더 바로 아래) */}
-            {/* {canManage  && (
-              <>
-                <Box sx={{ display: "grid", gridTemplateColumns: "64px 1fr 40px 56px", gap: 0.8, px: 1.5, py: 0.8, borderBottom: "1px solid #E5E7EB" }}>
-                  <TextField
-                    placeholder="부수"
-                    value={inputDivision}
-                    onChange={(e) => setInputDivision(e.target.value)}
-                    size="small"
-                    sx={{ "& .MuiOutlinedInput-root": { borderRadius: 0.6, height: 30, bgcolor: "#fff" }, "& input": { fontSize: 12, py: 0.3, textAlign: "center" } }}
-                  />
-                  <TextField
-                    placeholder="이름"
-                    value={inputName}
-                    onChange={(e) => setInputName(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") handleAddParticipant(); }}
-                    size="small"
-                    sx={{ mx: 0.5, "& .MuiOutlinedInput-root": { borderRadius: 0.6, height: 30, bgcolor: "#fff" }, "& input": { fontSize: 13, py: 0.3 } }}
-                  />
-                  <Box />
-                  <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center" }}>
-                    <Button
-                      variant="contained"
-                      disableElevation
-                      onClick={handleAddParticipant}
-                      disabled={!inputName.trim()}
-                      sx={{
-                        borderRadius: 0.6, height: 30, px: 1, fontWeight: 900, fontSize: 12, minWidth: 0, width: "100%",
-                        bgcolor: "#BDBDBD", "&:hover": { bgcolor: "#BDBDBD" },
-                        "&.Mui-disabled": { bgcolor: "#E5E7EB", color: "#fff" },
-                      }}
-                    >
-                      추가
-                    </Button>
-                  </Box>
-                </Box>
-              </>
-            )} */}
-
             {participantsLoading ? (
               <Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
                 <CircularProgress size={24} />
@@ -1023,72 +984,19 @@ const handleSaveEdit = async () => {
             ) : (
               (canManage  ? participants : filteredParticipants).map((p, idx) => {
                 const isMe = isMyParticipant(p);
-                // const isManual = p.member_id == null;
-                // const editDiv = editingParticipants[p.id]?.division ?? p.division ?? "";
-                // const editName = editingParticipants[p.id]?.name ?? p.name;
                 return (
                   <Box
                     key={p.id}
                     sx={{ display: "flex", alignItems: "center", px: 1.5, py: 0.9, borderTop: idx === 0 ? "none" : "1px solid #F3F4F6", bgcolor: isMe ? "#EFF6FF" : "transparent" }}
                   >
-                    {/* 부수 */}
-                    {/* {canManage  ? (
-                      <TextField
-                        value={editDiv}
-                        onChange={(e) => setEditingParticipants((prev) => ({ ...prev, [p.id]: { ...prev[p.id] ?? { division: p.division ?? "", name: p.name }, division: e.target.value } }))}
-                        onBlur={() => handleParticipantFieldBlur(p.id, "division", p.division ?? "")}
-                        size="small" placeholder="부수"
-                        disabled={!isManual}
-                        sx={{ "& .MuiOutlinedInput-root": { borderRadius: 0.6, height: 30, bgcolor: "#fff" }, "& input": { fontSize: 12, py: 0.3, px: 0.8, textAlign: "center" } }}
-                      />
-                    ) : ( */}
                       <Box sx={{ width: 40, display: "flex", justifyContent: "center", flexShrink: 0 }}>
                         <Avatar sx={{ width: 32, height: 32, bgcolor: "#FAAA47", color: "#000000", fontSize: 10, fontWeight: 900 }}>
                           {p.division || "-"}
                         </Avatar>
                       </Box>
-                    {/* )} */}
 
-                    {/* 이름 */}
-                    {/* {canManage  ? (
-                      <TextField
-                        value={editName}
-                        onChange={(e) => setEditingParticipants((prev) => ({ ...prev, [p.id]: { ...prev[p.id] ?? { division: p.division ?? "", name: p.name }, name: e.target.value } }))}
-                        onBlur={() => handleParticipantFieldBlur(p.id, "name", p.name)}
-                        size="small"
-                        disabled={!isManual}
-                        sx={{ mx: 0.5, "& .MuiOutlinedInput-root": { borderRadius: 0.6, height: 30, bgcolor: "#fff" }, "& input": { fontSize: 13, py: 0.3 } }}
-                      />
-                    ) : ( */}
                       <Typography fontWeight={800} fontSize={14} sx={{ textAlign: "center", color: isMe ? "#2F80ED" : "inherit", flex: 1, minWidth: 0 }}>{p.name}</Typography>
-                    {/* )} */}
 
-                    {/* 구분 배지 */}
-                    {/* {canManage  && (
-                      <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center" }}>
-                        <Box sx={{
-                          px: 0.6, py: 0.3, borderRadius: 0.5, fontSize: 10, fontWeight: 700, lineHeight: 1, userSelect: "none",
-                          ...(isManual
-                            ? { bgcolor: "#F3F4F6", color: "#6B7280", border: "1px solid #D1D5DB" }
-                            : { bgcolor: "#EFF6FF", color: "#1D6FBF", border: "1px solid #BFDBFE" }),
-                        }}>
-                          {isManual ? "수동" : "클럽"}
-                        </Box>
-                      </Box>
-                    )} */}
-
-                    {/* 상태 / 삭제 */}
-                    {/* {canManage  ? (
-                      <Box sx={{ display: "flex", justifyContent: "center" }}>
-                        <Button
-                          size="small" variant="outlined" color="error"
-                          onClick={() => setDeleteParticipantTarget({ id: p.id, division: p.division ?? "", name: p.name })}
-                          sx={{ height: 28, minWidth: 0, px: 1, fontSize: 12, fontWeight: 700, borderRadius: 0.6 }}
-                        >
-                          삭제
-                        </Button>
-                      </Box>
-                    ) : ( */}
                       <Box sx={{ width: 146, display: "flex", justifyContent: "center", flexShrink: 0 }}>
                         <Stack
                           direction="row"

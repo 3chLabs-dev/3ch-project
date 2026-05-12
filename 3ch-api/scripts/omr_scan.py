@@ -78,6 +78,55 @@ def read_darkness_rect(image, center_x, center_y, width_ratio, height_ratio):
     return (dark / total) * 100 if total else 0.0
 
 
+def crop_image(image, rect, padding=4):
+    width, height = image.size
+    x, y, w, h = rect
+    left = max(0, x - padding)
+    top = max(0, y - padding)
+    right = min(width, x + w + padding)
+    bottom = min(height, y + h + padding)
+    return image.crop((left, top, right, bottom))
+
+
+def detect_table_images(image):
+    if not HAS_OPENCV:
+        return []
+
+    gray = np.array(image)
+    if len(gray.shape) == 3:
+        gray = cv2.cvtColor(gray, cv2.COLOR_RGB2GRAY)
+
+    # The prepared image is mostly white with black text/grid. Invert so table
+    # borders become foreground, then keep only long horizontal/vertical lines.
+    inverted = cv2.bitwise_not(gray)
+    _, binary = cv2.threshold(inverted, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+    height, width = binary.shape[:2]
+
+    horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (max(30, width // 18), 1))
+    vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, max(20, height // 20)))
+    horizontal = cv2.morphologyEx(binary, cv2.MORPH_OPEN, horizontal_kernel, iterations=1)
+    vertical = cv2.morphologyEx(binary, cv2.MORPH_OPEN, vertical_kernel, iterations=1)
+    grid = cv2.dilate(cv2.add(horizontal, vertical), np.ones((3, 3), dtype=np.uint8), iterations=1)
+
+    contours, _hierarchy = cv2.findContours(grid, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    candidates = []
+    image_area = width * height
+    for contour in contours:
+        x, y, w, h = cv2.boundingRect(contour)
+        area = w * h
+        if area < image_area * 0.08:
+            continue
+        if w < width * 0.45 or h < height * 0.18:
+            continue
+        aspect = w / h if h else 0
+        if aspect < 1.4 or aspect > 8:
+            continue
+        candidates.append((area, (x, y, w, h)))
+
+    candidates.sort(reverse=True, key=lambda item: item[0])
+    return [crop_image(image, rect) for _area, rect in candidates[:3]]
+
+
 def scan_scenario(image, marks, darkness_threshold, margin_threshold):
     grouped = defaultdict(list)
     width, height = image.size
@@ -113,6 +162,39 @@ def scan_scenario(image, marks, darkness_threshold, margin_threshold):
     return {"result": result, "recognizedCount": recognized}
 
 
+def scan_scenario_candidates(base_image, scenario, darkness_threshold, margin_threshold, table_images):
+    scenario_name = scenario.get("name") or "unnamed"
+    marks = scenario.get("marks") or []
+    candidates = []
+
+    if scenario_name == "table":
+        candidates.extend((f"table-crop-{index + 1}", image) for index, image in enumerate(table_images))
+    candidates.append(("full-image", base_image))
+
+    best = None
+    candidate_summaries = []
+    for candidate_name, candidate_image in candidates:
+        summary = scan_scenario(candidate_image, marks, darkness_threshold, margin_threshold)
+        candidate_summaries.append({
+            "name": candidate_name,
+            "recognizedCount": summary["recognizedCount"],
+        })
+        if best is None or summary["recognizedCount"] > best["recognizedCount"]:
+            best = {
+                "candidate": candidate_name,
+                "recognizedCount": summary["recognizedCount"],
+                "result": summary["result"],
+            }
+
+    return {
+        "name": scenario_name,
+        "recognizedCount": best["recognizedCount"] if best else 0,
+        "candidate": best["candidate"] if best else None,
+        "result": best["result"] if best else {},
+        "candidates": candidate_summaries,
+    }
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--image", required=True)
@@ -128,24 +210,28 @@ def main():
         raise ValueError("At least one OMR scenario is required.")
 
     image, engine_name = prepare_image(args.image)
+    table_images = detect_table_images(image)
     scenario_summaries = []
     best = None
 
     for scenario in scenarios:
-        summary = scan_scenario(
+        summary = scan_scenario_candidates(
             image,
-            scenario.get("marks") or [],
+            scenario,
             darkness_threshold,
             margin_threshold,
+            table_images,
         )
-        scenario_name = scenario.get("name") or "unnamed"
         scenario_summaries.append({
-            "name": scenario_name,
+            "name": summary["name"],
             "recognizedCount": summary["recognizedCount"],
+            "candidate": summary["candidate"],
+            "candidates": summary["candidates"],
         })
         if best is None or summary["recognizedCount"] > best["recognizedCount"]:
             best = {
-                "name": scenario_name,
+                "name": summary["name"],
+                "candidate": summary["candidate"],
                 "recognizedCount": summary["recognizedCount"],
                 "result": summary["result"],
             }
@@ -153,6 +239,7 @@ def main():
     output = {
         "engine": f"python-{engine_name}",
         "scenario": best["name"],
+        "candidate": best["candidate"],
         "recognizedCount": best["recognizedCount"],
         "result": best["result"],
         "scenarios": scenario_summaries,

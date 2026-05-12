@@ -121,13 +121,14 @@ npm start
 2. `git pull origin main`
 3. `npm ci --omit=dev`
 4. `npx prisma migrate deploy`
-5. `python3 -m pip install --user -r scripts/requirements-omr.txt`
-6. `pm2 restart 3ch-api --update-env`
+5. `python3 -m venv .venv-omr`
+6. `.venv-omr/bin/python -m pip install -r scripts/requirements-omr.txt`
+7. `OMR_PYTHON_BIN=$PWD/.venv-omr/bin/python pm2 restart 3ch-api --update-env`
 
 OMR Python scanner environment variables:
 
 ```dotenv
-OMR_PYTHON_BIN=python3
+OMR_PYTHON_BIN=/opt/3ch-api/3ch-project/3ch-api/.venv-omr/bin/python
 OMR_PYTHON_SCRIPT=/opt/3ch-api/3ch-project/3ch-api/scripts/omr_scan.py
 OMR_SCANNER_TIMEOUT_MS=30000
 ```

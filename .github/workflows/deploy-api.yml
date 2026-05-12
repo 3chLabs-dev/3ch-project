@@ -62,9 +62,12 @@ jobs:
             npx prisma migrate deploy
 
             echo "==> python omr dependencies"
-            python3 -m pip install --user -r scripts/requirements-omr.txt
+            python3 -m venv .venv-omr
+            .venv-omr/bin/python -m pip install --upgrade pip
+            .venv-omr/bin/python -m pip install -r scripts/requirements-omr.txt
 
             echo "==> pm2 restart"
+            export OMR_PYTHON_BIN="$PWD/.venv-omr/bin/python"
             pm2 restart 3ch-api --update-env || pm2 start src/server.js --name 3ch-api
 
             echo "==> done"

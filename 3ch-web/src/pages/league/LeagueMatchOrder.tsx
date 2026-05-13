@@ -363,9 +363,18 @@ export default function LeagueMatchOrder() {
     const ordered = localOrder
       ? localOrder.map((id) => serverMatches.find((m) => m.id === id)).filter((m): m is LeagueMatch => !!m)
       : serverMatches;
-    if (!search.trim()) return ordered;
+
+    const sorted = [...ordered].sort((a, b) => {
+      if (a.status === "playing" && b.status !== "playing") return -1;
+      if (a.status !== "playing" && b.status === "playing") return 1;
+      return 0;
+    });
+
+    if (!search.trim()) return sorted;
+
     const q = search.trim().toLowerCase();
-    return ordered.filter((m) =>
+
+    return sorted.filter((m) =>
       [m.participant_a_name, m.participant_b_name, m.participant_a_division, m.participant_b_division]
         .some((v) => v?.toLowerCase().includes(q))
     );
@@ -508,18 +517,24 @@ export default function LeagueMatchOrder() {
         ) : (
           <SortableContext items={matches.map((m) => m.id)} strategy={verticalListSortingStrategy}>
             <Stack spacing={1}>
-              {matches.map((match, i) => (
-                <MatchCard
-                  key={match.id}
-                  match={match}
-                  index={i}
-                  canManage={canManage}
-                  canMember={canMember}
-                  leagueId={leagueId}
-                  rules={league?.rules}
-                  myName={myName ?? undefined}
-                />
-              ))}
+              {matches.map((match) => {
+                const originalIndex = (matchData?.matches ?? [])
+                  .filter((m) => !m.bracket)
+                  .findIndex((m) => m.id === match.id);
+
+                return (
+                  <MatchCard
+                    key={match.id}
+                    match={match}
+                    index={originalIndex}
+                    canManage={canManage}
+                    canMember={canMember}
+                    leagueId={leagueId}
+                    rules={league?.rules}
+                    myName={myName ?? undefined}
+                  />
+                );
+              })}
             </Stack>
           </SortableContext>
       )}

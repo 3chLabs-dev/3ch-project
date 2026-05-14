@@ -20,6 +20,12 @@ export interface GetGroupsResponse {
   groups: Group[];
 }
 
+export interface CreateGroupLinkRequest {
+  label?: string;
+  url: string;
+  sort_order?: number;
+}
+
 export interface CreateGroupRequest {
   name: string;
   description?: string;
@@ -32,6 +38,7 @@ export interface CreateGroupRequest {
   address_detail?: string;
   lat?: number;
   lng?: number;
+  links?: CreateGroupLinkRequest[];
 }
 
 export interface CheckNameResponse {
@@ -65,6 +72,13 @@ export interface SearchGroupsResponse {
   groups: Omit<Group, "role">[];
 }
 
+export interface GroupLink {
+  id?: string;
+  label?: string | null;
+  url: string;
+  sort_order?: number;
+}
+
 export interface GetGroupDetailResponse {
   group: {
     id: string;
@@ -85,6 +99,7 @@ export interface GetGroupDetailResponse {
   };
   members: GroupMember[];
   myRole: string;
+  links?: GroupLink[];
 }
 
 export interface UpdateGroupRequest {
@@ -99,6 +114,7 @@ export interface UpdateGroupRequest {
   address_detail?: string;
   lat?: number;
   lng?: number;
+  links?: GroupLink[];
 }
 
 export interface GeocodeResponse {

@@ -135,6 +135,14 @@ const createGroupSchema = z.object({
   address_detail: z.string().optional(),
   lat: z.number().optional(),
   lng: z.number().optional(),
+  links: z
+    .array(
+      z.object({
+        label: z.string().optional(),
+        url: z.string().url(),
+        sort_order: z.number().int().optional(),
+      })
+    ).optional(),
 });
 
 const rankingSettingsSchema = z.object({
@@ -264,7 +272,7 @@ router.get('/group/check-name', requireAuth, async (req, res) => {
 router.post('/group', requireAuth, async (req, res) => {
   const client = await pool.connect();
   try {
-    const { name, description, sport, region_city, region_district, founded_at, address, address_detail, lat, lng } = createGroupSchema.parse(req.body);
+    const { name, description, sport, region_city, region_district, founded_at, address, address_detail, lat, lng, links = [], } = createGroupSchema.parse(req.body);
     const userId = req.user.sub;
     const groupId = randomUUID();
     const memberId = randomUUID();
@@ -276,6 +284,14 @@ router.post('/group', requireAuth, async (req, res) => {
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
       [groupId, name, description || null, sport || null, region_city || null, region_district || null, founded_at || null, address || null, address_detail || null, lat ?? null, lng ?? null, userId]
     );
+
+    for ( const [index, link] of links.entries() ) {
+      await client.query(
+        `INSERT INTO group_links (id, group_id, label, url, sort_order)
+        VALUES ($1, $2, $3, $4, $5)`,
+        [ randomUUID(), groupId, link.label || null, link.url, link.sort_order ?? index + 1, ]
+      );
+    }
 
     await client.query(
       `INSERT INTO group_members (id, group_id, user_id, role)
@@ -853,6 +869,15 @@ router.get('/group/:id', requireAuth, async (req, res) => {
        WHERE g.id = $1`,
       [id]
     );
+
+    const linksResult = await pool.query(
+      `SELECT id, label, url, sort_order
+      FROM group_links
+      WHERE group_id = $1
+      ORDER BY sort_order ASC, created_at ASC`,
+      [id]
+    );
+
     if (groupResult.rows.length === 0) {
       return res.status(404).json({ message: '클럽을 찾을 수 없습니다' });
     }
@@ -874,6 +899,7 @@ router.get('/group/:id', requireAuth, async (req, res) => {
 
     res.status(200).json({
       group: groupResult.rows[0],
+      links: linksResult.rows,
       members,
       myRole,
     });
@@ -1335,10 +1361,13 @@ router.patch('/group/:id/member/:userId', requireAuth, requireGroupAdmin, async 
  *         description: 서버 오류
  */
 router.patch('/group/:id', requireAuth, requireGroupOwner, async (req, res) => {
+  const client = await pool.connect();
+
   try {
     const { id } = req.params;
-    const { name, description, sport, region_city, region_district, founded_at, address, address_detail, lat, lng } = req.body;
+    const { name, description, sport, region_city, region_district, founded_at, address, address_detail, lat, lng, links, } = req.body;
 
+    const hasLinks = Array.isArray(links);
     const updates = [];
     const values = [];
     let paramIdx = 1;
@@ -1384,20 +1413,60 @@ router.patch('/group/:id', requireAuth, requireGroupOwner, async (req, res) => {
       values.push(lng);
     }
 
-    if (updates.length === 0) {
+    if (updates.length === 0 && !hasLinks) {
       return res.status(400).json({ message: '수정할 내용이 없습니다' });
     }
 
-    values.push(id);
-    await pool.query(
-      `UPDATE groups SET ${updates.join(', ')} WHERE id = $${paramIdx}`,
-      values
-    );
+    await client.query('BEGIN');
+
+    // group 기본 정보 수정
+    if ( updates.length > 0 ) {
+      updates.push(`updated_at = CURRENT_TIMESTAMP`);
+
+      values.push(id);
+
+
+      await client.query(
+        `UPDATE groups SET ${updates.join(', ')} WHERE id = $${paramIdx}`,
+        values
+      );
+    }
+
+    // group_links 수정
+    if (hasLinks) {
+      await client.query(
+        `DELETE FROM group_links
+         WHERE group_id = $1`,
+        [id]
+      );
+
+      for (const [index, link] of links.entries()) {
+        if (!link.url || !link.url.trim()) continue;
+
+        await client.query(
+          `INSERT INTO group_links
+           (id, group_id, label, url, sort_order)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [
+            randomUUID(),
+            id,
+            link.label?.trim() || null,
+            link.url.trim(),
+            link.sort_order ?? index + 1,
+          ]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
 
     res.status(200).json({ message: '클럽 정보가 수정되었습니다' });
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('Error updating group:', error);
     res.status(500).json({ message: '내부 서버 오류' });
+  } finally {
+    client.release();
   }
 });
 

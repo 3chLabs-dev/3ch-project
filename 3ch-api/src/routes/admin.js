@@ -838,7 +838,7 @@ router.get('/clubs', requireAdmin, async (req, res) => {
 router.get('/clubs/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
   try {
-    const [clubR, membersR] = await Promise.all([
+    const [clubR, membersR, linksR] = await Promise.all([
       pool.query(
         `SELECT g.id, g.club_code, g.name, g.sport,
                 g.region_city, g.region_district,
@@ -859,9 +859,17 @@ router.get('/clubs/:id', requireAdmin, async (req, res) => {
          ORDER BY CASE gm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, u.name`,
         [id],
       ),
+
+      pool.query(
+        `SELECT id, group_id, label, url, sort_order, created_at::text, updated_at::text
+         FROM group_links
+         WHERE group_id = $1
+         ORDER BY sort_order ASC, created_at ASC`,
+        [id],
+      ),
     ]);
     if (!clubR.rows[0]) return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
-    return res.json({ ok: true, club: clubR.rows[0], members: membersR.rows });
+    return res.json({ ok: true, club: clubR.rows[0], members: membersR.rows, links: linksR.rows, });
   } catch (e) {
     return res.status(500).json({ ok: false, error: String(e.message || e) });
   }
@@ -920,8 +928,10 @@ router.get('/clubs/:id', requireAdmin, async (req, res) => {
 // PUT /admin/clubs/:id - 클럽 수정
 router.put('/clubs/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const { name, sport, region_city, region_district, founded_at, address, address_detail, description, owner_id } = req.body;
+  const { name, sport, region_city, region_district, founded_at, address, address_detail, description, owner_id, links, } = req.body;
   if (!name?.trim()) return res.status(400).json({ ok: false, error: '클럽명은 필수입니다.' });
+
+  const hasLinks = Array.isArray(links);
 
   const client = await pool.connect();
   try {
@@ -950,6 +960,32 @@ router.put('/clubs/:id', requireAdmin, async (req, res) => {
         [randomUUID(), id, newOwnerId],
       );
       await client.query(`UPDATE groups SET created_by_id = $1 WHERE id = $2`, [newOwnerId, id]);
+    }
+
+    // 클럽 URL 수정
+    if (hasLinks) {
+      await client.query(
+        `DELETE FROM group_links
+         WHERE group_id = $1`,
+        [id],
+      );
+
+      for (const [index, link] of links.entries()) {
+        if (!link.url || !link.url.trim()) continue;
+
+        await client.query(
+          `INSERT INTO group_links
+           (id, group_id, label, url, sort_order)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [
+            randomUUID(),
+            id,
+            link.label?.trim() || null,
+            link.url.trim(),
+            link.sort_order ?? index + 1,
+          ],
+        );
+      }
     }
 
     await client.query('COMMIT');

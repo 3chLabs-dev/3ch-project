@@ -73,7 +73,7 @@ export default function GroupDetail() {
     );
   }
 
-  const { group, members, myRole } = data;
+  const { group, members, myRole, links = [] } = data;
   const isAlreadyMember = !!myRole && myRole !== "" && myRole !== "none";
   const emoji = group.sport ? (SPORT_EMOJI[group.sport] ?? "🏓") : "🏓";
 
@@ -112,6 +112,64 @@ export default function GroupDetail() {
             >
               {group.description || "클럽 소개를 작성해보세요."}
             </Typography>
+            {links && links.length > 0 && (
+              <Stack spacing={1}>
+                {links.map((link, index) => (
+                  <Box
+                    key={link.id ?? index}
+                    component="a"
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 1,
+                      px: 1.5,
+                      py: 1.1,
+                      border: "1px solid #D6E6FF",
+                      borderRadius: 1,
+                      textDecoration: "none",
+                      color: "#2F80ED",
+                      bgcolor: "#fff",
+                    }}
+                  >
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography
+                        fontSize={13}
+                        fontWeight={900}
+                        sx={{
+                          color: "#2F80ED",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {link.label?.trim() || "URL"}
+                      </Typography>
+
+                      <Typography
+                        fontSize={12}
+                        sx={{
+                          color: "#6B7280",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          mt: 0.25,
+                        }}
+                      >
+                        {link.url}
+                      </Typography>
+                    </Box>
+
+                    <Typography fontSize={14} fontWeight={900} sx={{ color: "#2F80ED" }}>
+                      →
+                    </Typography>
+                  </Box>
+                ))}
+              </Stack>
+            )}
           </Stack>
         </CardContent>
       </Card>

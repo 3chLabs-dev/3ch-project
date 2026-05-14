@@ -21,6 +21,12 @@ import { useCreateGroupMutation, useLazyCheckGroupNameQuery, useLazyGeocodeAddre
 import { REGION_DATA, CITY_ALIAS_MAP } from "./regionData";
 import confettiImg from "../../assets/128_축포.png";
 
+type GroupLinkInput = {
+    id?: string;
+    label: string;
+    url: string;
+};
+
 export default function GroupCreate() {
     const navigate = useNavigate();
     const [createGroup, { isLoading: creating }] = useCreateGroupMutation();
@@ -38,6 +44,10 @@ export default function GroupCreate() {
     const [addressDetail, setAddressDetail] = useState("");
     const [lat, setLat] = useState<number | undefined>();
     const [lng, setLng] = useState<number | undefined>();
+
+    const [links, setLinks] = useState<GroupLinkInput[]>([
+        { label: "", url: "" },
+    ]);
 
     const [nameChecked, setNameChecked] = useState<boolean | null>(null); // null=미확인, true=사용가능, false=중복
     const [nameCheckMsg, setNameCheckMsg] = useState("");
@@ -77,6 +87,26 @@ export default function GroupCreate() {
         setGroupName(val);
         setNameChecked(null);
         setNameCheckMsg("");
+    };
+
+    const handleAddLink = () => {
+        setLinks((prev) => [...prev, { label: "", url: "" }]);
+    };
+
+    const handleRemoveLink = (index: number) => {
+        setLinks((prev) => prev.filter((_, i) => i !== index));
+    };
+
+    const handleChangeLink = (
+        index: number,
+        field: keyof GroupLinkInput,
+        value: string
+    ) => {
+        setLinks((prev) =>
+            prev.map((link, i) =>
+                i === index ? { ...link, [field]: value } : link
+            )
+        );
     };
 
     const handleCheckName = async () => {
@@ -176,6 +206,12 @@ export default function GroupCreate() {
                 address_detail: addressDetail || undefined,
                 lat,
                 lng,
+                links: links.filter((link) => link.url.trim() !== "").map((link, index) => ({
+                            id: link.id,
+                            label: link.label.trim() || undefined,
+                            url: link.url.trim(),
+                            sort_order: index + 1,
+                        })),
             }).unwrap();
             setDone(true);
         } catch {
@@ -447,6 +483,78 @@ export default function GroupCreate() {
                             "& .MuiOutlinedInput-input": { fontSize: "0.95rem" },
                         }}
                     />
+                </Box>
+
+                {/* 클럽 URL */}
+                <Box>
+                    <Typography sx={{ fontWeight: 900, mb: 1 }}>
+                        URL{" "}
+                        <Typography
+                            component="span"
+                            sx={{ fontSize: 11, fontWeight: 500, color: "#9CA3AF" }}
+                        >
+                            (선택)
+                        </Typography>
+                    </Typography>
+
+                    <Stack spacing={1.5}>
+                        {links.map((link, index) => (
+                            <Box key={index}>
+                                <Stack direction="row" spacing={1} mb={1}>
+                                    <TextField
+                                        placeholder="URL 이름 예: 카카오톡"
+                                        size="small"
+                                        value={link.label}
+                                        onChange={(e) =>
+                                            handleChangeLink(index, "label", e.target.value)
+                                        }
+                                        sx={{ ...inputSx, flex: 1 }}
+                                    />
+
+                                    <Button
+                                        variant="outlined"
+                                        size="small"
+                                        color="error"
+                                        onClick={() => handleRemoveLink(index)}
+                                        disabled={links.length === 1}
+                                        sx={{
+                                            borderRadius: 1,
+                                            height: 40,
+                                            minWidth: 40,
+                                            fontWeight: 900,
+                                        }}
+                                    >
+                                        -
+                                    </Button>
+                                </Stack>
+
+                                <TextField
+                                    placeholder="URL을 입력하세요. 예: https://open.kakao.com/..."
+                                    size="small"
+                                    fullWidth
+                                    value={link.url}
+                                    onChange={(e) =>
+                                        handleChangeLink(index, "url", e.target.value)
+                                    }
+                                    sx={inputSx}
+                                />
+                            </Box>
+                        ))}
+
+                        <Button
+                            fullWidth
+                            variant="outlined"
+                            size="small"
+                            onClick={handleAddLink}
+                            sx={{
+                                borderRadius: 1,
+                                height: 40,
+                                fontWeight: 900,
+                            }}
+                        >
+                            + URL 추가
+                        </Button>
+                    </Stack>
                 </Box>
 
                 {/* 클럽 생성 버튼 */}

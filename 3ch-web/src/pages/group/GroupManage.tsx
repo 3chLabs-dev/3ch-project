@@ -61,6 +61,12 @@ const SPORT_EMOJI: Record<string, string> = {
     "테니스": "🎾",
 };
 
+type GroupLinkInput = {
+    id?: string;
+    label: string;
+    url: string;
+};
+
 export default function GroupManage() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
@@ -106,6 +112,10 @@ export default function GroupManage() {
         lat: undefined as number | undefined,
         lng: undefined as number | undefined,
     });
+
+    const [editLinks, setEditLinks] = useState<GroupLinkInput[]>([
+        { label: "", url: "" },
+    ]);
 
     // 현재 클럽의 리그 목록 조회 (URL 파라미터가 club_code일 수 있으므로 fetch된 UUID 사용)
     const groupUuid = data?.group?.id;
@@ -158,7 +168,7 @@ export default function GroupManage() {
         );
     }
 
-    const { group, members, myRole } = data;
+    const { group, members, myRole, links = []  } = data;
     const canManage = myRole === "owner" || myRole === "admin";
     const canInvite = myRole === "owner" || myRole === "admin" || myRole === "member";
     const isOwner = myRole === "owner";
@@ -192,6 +202,29 @@ export default function GroupManage() {
         }
     };
 
+    const handleAddLink = () => {
+        setEditLinks((prev) => [...prev, { label: "", url: "" }]);
+    };
+
+    const handleRemoveLink = (index: number) => {
+        setEditLinks((prev) => {
+            const next = prev.filter((_, i) => i !== index);
+            return next.length > 0 ? next : [{ label: "", url: "" }];
+        });
+    };
+
+    const handleChangeLink = (
+        index: number,
+        field: keyof GroupLinkInput,
+        value: string
+    ) => {
+        setEditLinks((prev) =>
+            prev.map((link, i) =>
+                i === index ? { ...link, [field]: value } : link
+            )
+        );
+    };
+
     const handleOpenEditDialog = () => {
         if (!group) return; // 데이터가 없으면 다이얼로그를 열지 않음
 
@@ -206,6 +239,17 @@ export default function GroupManage() {
             lat: group.lat,
             lng: group.lng,
         });
+
+        setEditLinks(
+            links.length > 0
+                ? links.map((link) => ({
+                    id: link.id,
+                    label: link.label ?? "",
+                    url: link.url ?? "",
+                }))
+                : [{ label: "", url: "" }]
+        );
+
         setEditDialogOpen(true);
     };
 
@@ -214,7 +258,17 @@ export default function GroupManage() {
         try {
             await updateGroup({
                 groupId: id,
-                data: formData,
+                data: {
+                ...formData,
+                links: editLinks
+                    .filter((link) => link.url.trim() !== "")
+                    .map((link, index) => ({
+                        id: link.id,
+                        label: link.label.trim() || undefined,
+                        url: link.url.trim(),
+                        sort_order: index + 1,
+                    })),
+            },
             }).unwrap();
             setEditDialogOpen(false);
         } catch (error) {
@@ -371,6 +425,65 @@ export default function GroupManage() {
                         <Typography fontSize={14} color={group.description ? "text.secondary" : "#C0C0C0"} sx={{ whiteSpace: "pre-line", lineHeight: 1.7 }}>
                             {group.description || "클럽 소개를 작성해보세요."}
                         </Typography>
+
+                        {links && links.length > 0 && (
+                            <Stack spacing={1}>
+                            {links.map((link, index) => (
+                                <Box
+                                key={link.id ?? index}
+                                component="a"
+                                href={link.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                sx={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    gap: 1,
+                                    px: 1.5,
+                                    py: 1.1,
+                                    border: "1px solid #D6E6FF",
+                                    borderRadius: 1,
+                                    textDecoration: "none",
+                                    color: "#2F80ED",
+                                    bgcolor: "#fff",
+                                }}
+                                >
+                                <Box sx={{ minWidth: 0 }}>
+                                    <Typography
+                                    fontSize={13}
+                                    fontWeight={900}
+                                    sx={{
+                                        color: "#2F80ED",
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                        whiteSpace: "nowrap",
+                                    }}
+                                    >
+                                    {link.label?.trim() || "URL"}
+                                    </Typography>
+            
+                                    <Typography
+                                    fontSize={12}
+                                    sx={{
+                                        color: "#6B7280",
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                        whiteSpace: "nowrap",
+                                        mt: 0.25,
+                                    }}
+                                    >
+                                    {link.url}
+                                    </Typography>
+                                </Box>
+            
+                                <Typography fontSize={14} fontWeight={900} sx={{ color: "#2F80ED" }}>
+                                    →
+                                </Typography>
+                                </Box>
+                            ))}
+                            </Stack>
+                        )}
 
                         {/* 리그·대회 개최내역 */}
                         <Button
@@ -812,6 +925,89 @@ export default function GroupManage() {
                             slotProps={{ inputLabel: { shrink: true } }}
                             sx={{ "& .MuiInputBase-input": { fontSize: 14 } }}
                         />
+
+                        {/* 클럽 URL */}
+                        <Box>
+                            <Typography sx={{ fontSize: 14, fontWeight: 700, mb: 1 }}>
+                                클럽 URL{" "}
+                                <Typography
+                                    component="span"
+                                    sx={{ fontSize: 11, fontWeight: 500, color: "#9CA3AF" }}
+                                >
+                                    (선택)
+                                </Typography>
+                            </Typography>
+
+                            <Stack spacing={1.5}>
+                                {editLinks.map((link, index) => (
+                                    <Box key={link.id ?? index}>
+                                        <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
+                                            <TextField
+                                                label="URL 이름"
+                                                value={link.label}
+                                                onChange={(e) =>
+                                                    handleChangeLink(index, "label", e.target.value)
+                                                }
+                                                fullWidth
+                                                size="small"
+                                                placeholder="예: 카카오톡, 인스타그램, 네이버 카페"
+                                                slotProps={{ inputLabel: { shrink: true } }}
+                                                sx={{
+                                                    "& .MuiInputBase-input": {
+                                                        fontSize: 14,
+                                                    },
+                                                }}
+                                            />
+
+                                            <Button
+                                                variant="outlined"
+                                                color="error"
+                                                size="small"
+                                                onClick={() => handleRemoveLink(index)}
+                                                disabled={editLinks.length === 1 && !link.label && !link.url}
+                                                sx={{
+                                                    minWidth: 40,
+                                                    height: 40,
+                                                    fontWeight: 900,
+                                                }}
+                                            >
+                                                -
+                                            </Button>
+                                        </Stack>
+
+                                        <TextField
+                                            label="URL"
+                                            value={link.url}
+                                            onChange={(e) =>
+                                                handleChangeLink(index, "url", e.target.value)
+                                            }
+                                            fullWidth
+                                            size="small"
+                                            placeholder="https://open.kakao.com/..."
+                                            slotProps={{ inputLabel: { shrink: true } }}
+                                            sx={{
+                                                "& .MuiInputBase-input": {
+                                                    fontSize: 14,
+                                                },
+                                            }}
+                                        />
+                                    </Box>
+                                ))}
+
+                                <Button
+                                    variant="outlined"
+                                    size="small"
+                                    fullWidth
+                                    onClick={handleAddLink}
+                                    sx={{
+                                        height: 40,
+                                        fontWeight: 900,
+                                    }}
+                                >
+                                    + URL 추가
+                                </Button>
+                            </Stack>
+                        </Box>
                     </Stack>
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2.5, justifyContent: "space-between" }}>

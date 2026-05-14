@@ -35,6 +35,12 @@ const EMPTY_FILTERS: Filters = {
   club: "", leader: "", from: "", to: "",
 };
 
+type GroupLinkInput = {
+  id?: string;
+  label: string;
+  url: string;
+};
+
 const SPORT_OPTIONS = [
   { value: "", label: "선택" },
   { value: "배드민턴", label: "배드민턴" },
@@ -105,6 +111,33 @@ export default function AdminClubPage() {
 
   const addDistricts  = addRegionCity ? (REGION_DATA[addRegionCity] ?? []) : [];
   const editDistricts = editCity      ? (REGION_DATA[editCity]      ?? []) : [];
+
+  const [editLinks, setEditLinks] = useState<GroupLinkInput[]>([
+      { label: "", url: "" },
+  ]);
+
+  const handleAddLink = () => {
+      setEditLinks((prev) => [...prev, { label: "", url: "" }]);
+  };
+
+  const handleRemoveLink = (index: number) => {
+      setEditLinks((prev) => {
+          const next = prev.filter((_, i) => i !== index);
+          return next.length > 0 ? next : [{ label: "", url: "" }];
+      });
+  };
+
+  const handleChangeLink = (
+      index: number,
+      field: keyof GroupLinkInput,
+      value: string
+  ) => {
+      setEditLinks((prev) =>
+          prev.map((link, i) =>
+              i === index ? { ...link, [field]: value } : link
+          )
+      );
+  };
 
   type DaumPostcodeData = {
     address: string;
@@ -217,6 +250,17 @@ export default function AdminClubPage() {
       setEditCreatedAt(c.created_at ? c.created_at.slice(0, 19).replace("T", " ") : "");
       setEditNameChecked(null); setEditNameMsg("");
       setEditLeader(c.leader_id ? { id: c.leader_id, name: c.leader_name ?? "", email: c.leader_email ?? "" } : null);
+
+      const fetchedLinks = Array.isArray(data.links)? data.links: Array.isArray(c.links)? c.links: [];
+      setEditLinks(
+        fetchedLinks.length > 0
+          ? fetchedLinks.map((link: GroupLinkInput) => ({
+              id: link.id,
+              label: link.label ?? "",
+              url: link.url ?? "",
+            }))
+          : [{ label: "", url: "" }]
+      );
     } catch { setEditError("서버 오류가 발생했습니다."); }
     finally { setEditFetching(false); }
   };
@@ -253,6 +297,14 @@ export default function AdminClubPage() {
           address_detail: editAddressDet.trim() || undefined,
           description: editDescription.trim() || undefined,
           owner_id: editLeader?.id ?? undefined,
+          links: editLinks
+          .filter((link) => link.url.trim() !== "")
+          .map((link, index) => ({
+            id: link.id,
+            label: link.label.trim() || undefined,
+            url: link.url.trim(),
+            sort_order: index + 1,
+          })),
         }),
       });
       const data = await res.json();
@@ -767,6 +819,88 @@ export default function AdminClubPage() {
                   inputProps={{ maxLength: 1000, style: { fontSize: 13 } }}
                 />
               </AddFormRow>
+              {/* 클럽 URL */}
+              <Box>
+                  <Typography sx={{ fontSize: 14, fontWeight: 700, mb: 1 }}>
+                      클럽 URL{" "}
+                      <Typography
+                          component="span"
+                          sx={{ fontSize: 11, fontWeight: 500, color: "#9CA3AF" }}
+                      >
+                          (선택)
+                      </Typography>
+                  </Typography>
+
+                  <Stack spacing={1.5}>
+                      {editLinks.map((link, index) => (
+                          <Box key={link.id ?? index}>
+                              <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
+                                  <TextField
+                                      label="URL 이름"
+                                      value={link.label}
+                                      onChange={(e) =>
+                                          handleChangeLink(index, "label", e.target.value)
+                                      }
+                                      fullWidth
+                                      size="small"
+                                      placeholder="예: 카카오톡, 인스타그램, 네이버 카페"
+                                      slotProps={{ inputLabel: { shrink: true } }}
+                                      sx={{
+                                          "& .MuiInputBase-input": {
+                                              fontSize: 14,
+                                          },
+                                      }}
+                                  />
+
+                                  <Button
+                                      variant="outlined"
+                                      color="error"
+                                      size="small"
+                                      onClick={() => handleRemoveLink(index)}
+                                      disabled={editLinks.length === 1 && !link.label && !link.url}
+                                      sx={{
+                                          minWidth: 40,
+                                          height: 40,
+                                          fontWeight: 900,
+                                      }}
+                                  >
+                                      -
+                                  </Button>
+                              </Stack>
+
+                              <TextField
+                                  label="URL"
+                                  value={link.url}
+                                  onChange={(e) =>
+                                      handleChangeLink(index, "url", e.target.value)
+                                  }
+                                  fullWidth
+                                  size="small"
+                                  placeholder="https://open.kakao.com/..."
+                                  slotProps={{ inputLabel: { shrink: true } }}
+                                  sx={{
+                                      "& .MuiInputBase-input": {
+                                          fontSize: 14,
+                                      },
+                                  }}
+                              />
+                          </Box>
+                      ))}
+
+                      <Button
+                          variant="outlined"
+                          size="small"
+                          fullWidth
+                          onClick={handleAddLink}
+                          sx={{
+                              height: 40,
+                              fontWeight: 900,
+                          }}
+                      >
+                          + URL 추가
+                      </Button>
+                  </Stack>
+              </Box>
 
               <AddFormRow label="생성일시" plain>
                 <Typography fontSize={13} color="#6B7280">{editCreatedAt || "-"}</Typography>

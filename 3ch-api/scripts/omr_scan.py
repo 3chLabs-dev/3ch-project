@@ -38,6 +38,7 @@ COORDINATE_TRANSFORMS = [
 ]
 
 MARK_READ_SCALES = (0.55, 0.75)
+MAX_PROCESSING_EDGE = 1800
 
 
 def read_payload(payload_path: str):
@@ -69,6 +70,7 @@ def prepare_image(image_path: str):
     # 휴대폰 사진의 EXIF 회전값 반영 후 사용 가능한 엔진으로 전처리함.
     image = Image.open(image_path)
     image = ImageOps.exif_transpose(image).convert("RGB")
+    image.thumbnail((MAX_PROCESSING_EDGE, MAX_PROCESSING_EDGE), Image.Resampling.LANCZOS)
     if HAS_OPENCV:
         return prepare_with_opencv(image), "opencv"
     return prepare_with_pillow(image), "pillow"

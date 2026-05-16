@@ -118,6 +118,18 @@ function loadImageFromFile(file: File): Promise<HTMLImageElement> {
 const MARK_READ_SCALES = [0.55, 0.75];
 const OMR_DARKNESS_THRESHOLD = 18;
 const OMR_MARGIN_THRESHOLD = 5;
+const OMR_SERVER_TIMEOUT_MS = 8_000;
+const OMR_UPDATE_TIMEOUT_MS = 8_000;
+const OMR_FALLBACK_IMAGE_EDGE = 1800;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+    promise
+      .then(resolve, reject)
+      .finally(() => window.clearTimeout(timer));
+  });
+}
 
 function clamp(value: number, low: number, high: number) {
   return Math.max(low, Math.min(high, value));
@@ -185,8 +197,11 @@ async function scanOmrImage(file: File, marks: OmrMark[]): Promise<OmrScanResult
 
   const img = await loadImageFromFile(file);
   const canvas = document.createElement("canvas");
-  canvas.width = img.naturalWidth || img.width;
-  canvas.height = img.naturalHeight || img.height;
+  const naturalWidth = img.naturalWidth || img.width;
+  const naturalHeight = img.naturalHeight || img.height;
+  const scale = Math.min(1, OMR_FALLBACK_IMAGE_EDGE / Math.max(naturalWidth, naturalHeight));
+  canvas.width = Math.max(1, Math.round(naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(naturalHeight * scale));
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx) throw new Error("이미지를 분석할 수 없습니다.");
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
@@ -598,15 +613,19 @@ export default function LeagueOmrSheet() {
       const scoreB = matchResult[match.participant_b_id];
       if (scoreA == null || scoreB == null) continue;
       if ([scoreA, scoreB].filter((score) => score === 3).length !== 1) continue;
-      await updateMatch({
-        leagueId: id,
-        matchId: match.id,
-        updates: {
-          score_a: scoreA,
-          score_b: scoreB,
-          status: "done",
-        },
-      }).unwrap();
+      await withTimeout(
+        updateMatch({
+          leagueId: id,
+          matchId: match.id,
+          updates: {
+            score_a: scoreA,
+            score_b: scoreB,
+            status: "done",
+          },
+        }).unwrap(),
+        OMR_UPDATE_TIMEOUT_MS,
+        "OMR 결과 저장 시간이 초과되었습니다.",
+      );
       updated += 1;
     }
     return updated;
@@ -630,16 +649,26 @@ export default function LeagueOmrSheet() {
       ].filter((scenario): scenario is { name: string; marks: OmrMark[] } => Boolean(scenario));
 
       let result: OmrScanResult;
+      let scanRequest: ReturnType<typeof scanLeagueOmr> | null = null;
       try {
-        const response = await scanLeagueOmr({
+        scanRequest = scanLeagueOmr({
           leagueId: id,
           file,
           scenarios,
           darknessThreshold: OMR_DARKNESS_THRESHOLD,
           marginThreshold: OMR_MARGIN_THRESHOLD,
-        }).unwrap();
+        });
+        const response = await withTimeout(
+          scanRequest.unwrap(),
+          OMR_SERVER_TIMEOUT_MS,
+          "OMR 서버 분석 시간이 오래 걸려 기기 내 분석으로 전환합니다.",
+        );
         result = response.result;
-      } catch {
+      } catch (error) {
+        scanRequest?.abort();
+        if (error instanceof Error && error.message.includes("기기 내 분석")) {
+          // The server scanner can take a long time on high-resolution scans.
+        }
         const scanResults = await Promise.all([
           sheetMarks.length
             ? scanOmrImage(file, sheetMarks).then((scanResult) => ({ result: scanResult, marks: sheetMarks }))

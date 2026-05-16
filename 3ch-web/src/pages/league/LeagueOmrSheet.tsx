@@ -68,7 +68,7 @@ type OmrScanResult = Record<string, Record<string, number>>;
 
 function divisionLabel(division?: string | null) {
   if (!division) return "-";
-  return /[부조]$/.test(division) ? division : `${division}부`;
+  return /(?:부|조)$/.test(division) ? division : `${division}부`;
 }
 
 function formatSheetDate(dateString?: string) {
@@ -115,16 +115,21 @@ function loadImageFromFile(file: File): Promise<HTMLImageElement> {
   });
 }
 
-function readDarknessRect(data: ImageData, centerX: number, centerY: number, widthRatio: number, heightRatio: number) {
+const MARK_READ_SCALES = [0.5, 0.65, 0.8];
+
+function clamp(value: number, low: number, high: number) {
+  return Math.max(low, Math.min(high, value));
+}
+
+function readLuminanceStats(data: ImageData, left: number, top: number, right: number, bottom: number) {
   let count = 0;
   let darkPixels = 0;
+  let luminanceSum = 0;
   const { width, height } = data;
-  const boxWidth = Math.max(10, Math.round(width * widthRatio * 0.9));
-  const boxHeight = Math.max(10, Math.round(height * heightRatio * 0.9));
-  const startX = Math.max(0, Math.floor(centerX - boxWidth / 2));
-  const endX = Math.min(width - 1, Math.ceil(centerX + boxWidth / 2));
-  const startY = Math.max(0, Math.floor(centerY - boxHeight / 2));
-  const endY = Math.min(height - 1, Math.ceil(centerY + boxHeight / 2));
+  const startX = clamp(Math.round(left), 0, width - 1);
+  const endX = clamp(Math.round(right), 0, width - 1);
+  const startY = clamp(Math.round(top), 0, height - 1);
+  const endY = clamp(Math.round(bottom), 0, height - 1);
 
   for (let y = startY; y <= endY; y += 1) {
     for (let x = startX; x <= endX; x += 1) {
@@ -133,12 +138,42 @@ function readDarknessRect(data: ImageData, centerX: number, centerY: number, wid
       const g = data.data[idx + 1];
       const b = data.data[idx + 2];
       const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+      luminanceSum += luminance;
       if (luminance < 150) darkPixels += 1;
       count += 1;
     }
   }
 
-  return count > 0 ? (darkPixels / count) * 100 : 0;
+  return {
+    mean: count > 0 ? luminanceSum / count : 255,
+    dark: count > 0 ? (darkPixels / count) * 100 : 0,
+  };
+}
+
+function readDarknessRect(data: ImageData, centerX: number, centerY: number, widthRatio: number, heightRatio: number, scale: number) {
+  const { width, height } = data;
+  const boxWidth = Math.max(4, Math.round(width * widthRatio * scale));
+  const boxHeight = Math.max(4, Math.round(height * heightRatio * scale));
+  const startX = Math.max(0, Math.floor(centerX - boxWidth / 2));
+  const endX = Math.min(width - 1, Math.ceil(centerX + boxWidth / 2));
+  const startY = Math.max(0, Math.floor(centerY - boxHeight / 2));
+  const endY = Math.min(height - 1, Math.ceil(centerY + boxHeight / 2));
+  const inner = readLuminanceStats(data, startX, startY, endX, endY);
+  const outerWidth = Math.max(boxWidth + 2, Math.round(width * widthRatio * 1.8));
+  const outerHeight = Math.max(boxHeight + 2, Math.round(height * heightRatio * 1.8));
+  const outer = readLuminanceStats(
+    data,
+    centerX - outerWidth / 2,
+    centerY - outerHeight / 2,
+    centerX + outerWidth / 2,
+    centerY + outerHeight / 2,
+  );
+  const contrast = Math.max(0, outer.mean - inner.mean);
+  return inner.dark + contrast * 0.35;
+}
+
+function readBestDarkness(data: ImageData, centerX: number, centerY: number, widthRatio: number, heightRatio: number) {
+  return Math.max(...MARK_READ_SCALES.map((scale) => readDarknessRect(data, centerX, centerY, widthRatio, heightRatio, scale)));
 }
 
 async function scanOmrImage(file: File, marks: OmrMark[]): Promise<OmrScanResult> {
@@ -156,7 +191,7 @@ async function scanOmrImage(file: File, marks: OmrMark[]): Promise<OmrScanResult
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const grouped = new Map<string, Array<{ score: number; darkness: number }>>();
   marks.forEach((mark) => {
-    const darkness = readDarknessRect(
+    const darkness = readBestDarkness(
       imageData,
       mark.x * canvas.width,
       mark.y * canvas.height,
@@ -185,8 +220,32 @@ function countRecognizedScores(result: OmrScanResult) {
   return Object.values(result).reduce((sum, scores) => sum + Object.keys(scores).length, 0);
 }
 
-function pickBestOmrResult(results: OmrScanResult[]) {
-  return results.sort((a, b) => countRecognizedScores(b) - countRecognizedScores(a))[0] ?? {};
+function countCompleteValidMatches(result: OmrScanResult, marks: OmrMark[]) {
+  const expectedPlayers = new Map<string, Set<string>>();
+  marks.forEach((mark) => {
+    expectedPlayers.set(mark.matchId, (expectedPlayers.get(mark.matchId) ?? new Set()).add(mark.playerId));
+  });
+
+  let complete = 0;
+  let valid = 0;
+  expectedPlayers.forEach((players, matchId) => {
+    const matchResult = result[matchId];
+    if (!matchResult || [...players].some((playerId) => matchResult[playerId] == null)) return;
+    complete += 1;
+    const scores = [...players].map((playerId) => matchResult[playerId]);
+    if (scores.length === 2 && scores.filter((score) => score === 3).length === 1) valid += 1;
+  });
+  return { complete, valid };
+}
+
+function pickBestOmrResult(results: Array<{ result: OmrScanResult; marks: OmrMark[] }>) {
+  return results.sort((a, b) => {
+    const aQuality = countCompleteValidMatches(a.result, a.marks);
+    const bQuality = countCompleteValidMatches(b.result, b.marks);
+    if (bQuality.valid !== aQuality.valid) return bQuality.valid - aQuality.valid;
+    if (bQuality.complete !== aQuality.complete) return bQuality.complete - aQuality.complete;
+    return countRecognizedScores(b.result) - countRecognizedScores(a.result);
+  })[0]?.result ?? {};
 }
 
 function calculateStats(players: LeagueParticipantItem[], matches: LeagueMatch[]): Record<string, PlayerStat> {
@@ -270,13 +329,13 @@ function ScoreMarks({
         overflow: "hidden",
       }}
     >
-      <Stack direction="row" sx={{ width: 72, justifyContent: "space-between" }}>
+      <Stack direction="row" sx={{ width: 88, justifyContent: "space-between" }}>
         {SCORE_OPTIONS.map((score) => (
           <Box
             key={`label-${score}`}
             component="span"
             sx={{
-              width: 14,
+              width: 16,
               color: "#111827",
               fontWeight: 900,
               fontSize: 10,
@@ -289,7 +348,7 @@ function ScoreMarks({
           </Box>
         ))}
       </Stack>
-      <Stack direction="row" sx={{ width: 72, justifyContent: "space-between" }}>
+      <Stack direction="row" sx={{ width: 88, justifyContent: "space-between" }}>
         {SCORE_OPTIONS.map((score) => (
           <Box
             key={`mark-${score}`}
@@ -300,15 +359,15 @@ function ScoreMarks({
             data-player-id={playerId}
             data-score={score}
             disabled={disabled}
-            aria-label={`${score}점`}
+            aria-label={String(score)}
             onClick={() => !disabled && onSelect(score)}
             sx={{
               appearance: "none",
-              width: 12,
-              height: 12,
+              width: 15,
+              height: 15,
               p: 0,
               m: 0,
-              border: "1.4px solid #111",
+              border: "1.6px solid #111",
               borderRadius: 0,
               boxSizing: "border-box",
               bgcolor: selected === score ? "#111" : "#fff",
@@ -535,14 +594,15 @@ export default function LeagueOmrSheet() {
       if (!matchResult) continue;
       const scoreA = matchResult[match.participant_a_id];
       const scoreB = matchResult[match.participant_b_id];
-      if (scoreA == null && scoreB == null) continue;
+      if (scoreA == null || scoreB == null) continue;
+      if ([scoreA, scoreB].filter((score) => score === 3).length !== 1) continue;
       await updateMatch({
         leagueId: id,
         matchId: match.id,
         updates: {
-          score_a: scoreA ?? match.score_a,
-          score_b: scoreB ?? match.score_b,
-          status: scoreA != null && scoreB != null ? "done" : "playing",
+          score_a: scoreA,
+          score_b: scoreB,
+          status: "done",
         },
       }).unwrap();
       updated += 1;
@@ -579,8 +639,12 @@ export default function LeagueOmrSheet() {
         result = response.result;
       } catch {
         const scanResults = await Promise.all([
-          sheetMarks.length ? scanOmrImage(file, sheetMarks) : Promise.resolve({} as OmrScanResult),
-          tableMarks.length ? scanOmrImage(file, tableMarks) : Promise.resolve({} as OmrScanResult),
+          sheetMarks.length
+            ? scanOmrImage(file, sheetMarks).then((scanResult) => ({ result: scanResult, marks: sheetMarks }))
+            : Promise.resolve({ result: {} as OmrScanResult, marks: sheetMarks }),
+          tableMarks.length
+            ? scanOmrImage(file, tableMarks).then((scanResult) => ({ result: scanResult, marks: tableMarks }))
+            : Promise.resolve({ result: {} as OmrScanResult, marks: tableMarks }),
         ]);
         result = pickBestOmrResult(scanResults);
       }

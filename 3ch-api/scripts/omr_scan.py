@@ -37,6 +37,18 @@ COORDINATE_OFFSETS = [
     (0.018, 0.008),
 ]
 
+COORDINATE_TRANSFORMS = [
+    {"name": "base", "x_scale": 1.0, "y_scale": 1.0},
+    {"name": "wide", "x_scale": 1.012, "y_scale": 1.0},
+    {"name": "narrow", "x_scale": 0.988, "y_scale": 1.0},
+    {"name": "tall", "x_scale": 1.0, "y_scale": 1.012},
+    {"name": "short", "x_scale": 1.0, "y_scale": 0.988},
+    {"name": "wide-tall", "x_scale": 1.012, "y_scale": 1.012},
+    {"name": "narrow-short", "x_scale": 0.988, "y_scale": 0.988},
+]
+
+MARK_READ_SCALES = (0.5, 0.65, 0.8)
+
 
 def read_payload(payload_path: str):
     # Node 브리지에서 임시 파일로 넘긴 좌표/임계값 설정 읽음.
@@ -57,16 +69,9 @@ def prepare_with_opencv(image: Image.Image) -> Image.Image:
     rgb = np.array(image)
     gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-    normalized = cv2.normalize(blurred, None, 0, 255, cv2.NORM_MINMAX)
-    thresholded = cv2.adaptiveThreshold(
-        normalized,
-        255,
-        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY,
-        31,
-        15,
-    )
-    filtered = cv2.medianBlur(thresholded, 3)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    normalized = clahe.apply(blurred)
+    filtered = cv2.medianBlur(normalized, 3)
     return Image.fromarray(filtered)
 
 
@@ -79,27 +84,69 @@ def prepare_image(image_path: str):
     return prepare_with_pillow(image), "pillow"
 
 
-def read_darkness_rect(image, center_x, center_y, width_ratio, height_ratio):
+def clamp(value, low, high):
+    return max(low, min(high, value))
+
+
+def read_luminance_stats(image, left, top, right, bottom):
+    width, height = image.size
+    left = clamp(round(left), 0, width - 1)
+    right = clamp(round(right), 0, width - 1)
+    top = clamp(round(top), 0, height - 1)
+    bottom = clamp(round(bottom), 0, height - 1)
+    if right < left or bottom < top:
+        return {"count": 0, "mean": 255.0, "dark": 0.0}
+
+    pixels = image.load()
+    total = 0
+    dark = 0
+    luminance_sum = 0.0
+    for y in range(top, bottom + 1):
+        for x in range(left, right + 1):
+            luminance = pixels[x, y]
+            luminance_sum += luminance
+            if luminance < 150:
+                dark += 1
+            total += 1
+
+    return {
+        "count": total,
+        "mean": luminance_sum / total if total else 255.0,
+        "dark": (dark / total) * 100 if total else 0.0,
+    }
+
+
+def read_darkness_rect(image, center_x, center_y, width_ratio, height_ratio, scale=0.65):
     # 각 점수 박스 주변의 어두운 픽셀 비율 계산해 실제 마킹 여부 판단함.
     width, height = image.size
-    box_width = max(10, round(width * width_ratio * 0.9))
-    box_height = max(10, round(height * height_ratio * 0.9))
+    # Read mostly inside the printed square. Larger scale candidates help when
+    # phone photos blur or shrink the filled area.
+    box_width = max(4, round(width * width_ratio * scale))
+    box_height = max(4, round(height * height_ratio * scale))
     start_x = max(0, round(center_x - box_width / 2))
     end_x = min(width - 1, round(center_x + box_width / 2))
     start_y = max(0, round(center_y - box_height / 2))
     end_y = min(height - 1, round(center_y + box_height / 2))
 
-    pixels = image.load()
-    total = 0
-    dark = 0
-    for y in range(start_y, end_y + 1):
-        for x in range(start_x, end_x + 1):
-            luminance = pixels[x, y]
-            if luminance < 150:
-                dark += 1
-            total += 1
+    inner = read_luminance_stats(image, start_x, start_y, end_x, end_y)
+    outer_width = max(box_width + 2, round(width * width_ratio * 1.8))
+    outer_height = max(box_height + 2, round(height * height_ratio * 1.8))
+    outer = read_luminance_stats(
+        image,
+        center_x - outer_width / 2,
+        center_y - outer_height / 2,
+        center_x + outer_width / 2,
+        center_y + outer_height / 2,
+    )
+    contrast = max(0.0, outer["mean"] - inner["mean"])
+    return inner["dark"] + contrast * 0.35
 
-    return (dark / total) * 100 if total else 0.0
+
+def read_best_darkness(image, center_x, center_y, width_ratio, height_ratio):
+    return max(
+        read_darkness_rect(image, center_x, center_y, width_ratio, height_ratio, scale)
+        for scale in MARK_READ_SCALES
+    )
 
 
 def crop_image(image, rect, padding=4):
@@ -204,15 +251,25 @@ def detect_table_images(image):
     return table_images
 
 
-def scan_scenario(image, marks, darkness_threshold, margin_threshold, x_offset=0, y_offset=0):
+def transform_mark_position(mark, transform, x_offset, y_offset):
+    x_scale = transform.get("x_scale", 1.0)
+    y_scale = transform.get("y_scale", 1.0)
+    x = 0.5 + (mark["x"] - 0.5) * x_scale + x_offset
+    y = 0.5 + (mark["y"] - 0.5) * y_scale + y_offset
+    return min(1, max(0, x)), min(1, max(0, y))
+
+
+def scan_scenario(image, marks, darkness_threshold, margin_threshold, x_offset=0, y_offset=0, transform=None):
     # 하나의 이미지 후보에서 모든 OMR 마크 읽고, 선수별 가장 진한 점수 고름.
     grouped = defaultdict(list)
     width, height = image.size
 
     for mark in marks:
-        center_x = min(1, max(0, mark["x"] + x_offset)) * width
-        center_y = min(1, max(0, mark["y"] + y_offset)) * height
-        darkness = read_darkness_rect(
+        transform = transform or COORDINATE_TRANSFORMS[0]
+        mark_x, mark_y = transform_mark_position(mark, transform, x_offset, y_offset)
+        center_x = mark_x * width
+        center_y = mark_y * height
+        darkness = read_best_darkness(
             image,
             center_x,
             center_y,
@@ -242,7 +299,71 @@ def scan_scenario(image, marks, darkness_threshold, margin_threshold, x_offset=0
         recognized += 1
         confidence += winner["darkness"] - runner_up["darkness"]
 
-    return {"result": result, "recognizedCount": recognized, "confidence": confidence}
+    complete_matches, valid_matches = count_complete_valid_matches(result, marks)
+
+    return {
+        "result": result,
+        "recognizedCount": recognized,
+        "completeMatchCount": complete_matches,
+        "validMatchCount": valid_matches,
+        "confidence": confidence,
+    }
+
+
+def count_complete_valid_matches(result, marks):
+    expected_players = defaultdict(set)
+    for mark in marks:
+        expected_players[mark["matchId"]].add(mark["playerId"])
+
+    complete_matches = 0
+    valid_matches = 0
+    for match_id, players in expected_players.items():
+        match_result = result.get(match_id) or {}
+        if not players.issubset(match_result.keys()):
+            continue
+
+        complete_matches += 1
+        scores = [match_result[player_id] for player_id in players]
+        if len(scores) == 2 and scores.count(3) == 1 and all(0 <= score <= 3 for score in scores):
+            valid_matches += 1
+
+    return complete_matches, valid_matches
+
+
+def filter_valid_match_results(result, marks):
+    expected_players = defaultdict(set)
+    for mark in marks:
+        expected_players[mark["matchId"]].add(mark["playerId"])
+
+    filtered = {}
+    for match_id, players in expected_players.items():
+        match_result = result.get(match_id) or {}
+        if not players.issubset(match_result.keys()):
+            continue
+
+        scores = [match_result[player_id] for player_id in players]
+        if len(scores) == 2 and scores.count(3) == 1 and all(0 <= score <= 3 for score in scores):
+            filtered[match_id] = {player_id: match_result[player_id] for player_id in players}
+
+    return filtered
+
+
+def is_better_scan(summary, best):
+    if best is None:
+        return True
+    current_quality = (
+        summary["validMatchCount"],
+        summary["completeMatchCount"],
+        summary["recognizedCount"],
+        summary["confidence"],
+    )
+    best_quality = (
+        best["validMatchCount"],
+        best["completeMatchCount"],
+        best["recognizedCount"],
+        best["confidence"],
+    )
+    return current_quality > best_quality
 
 
 def scan_scenario_candidates(base_image, scenario, darkness_threshold, margin_threshold, table_images):
@@ -259,48 +380,64 @@ def scan_scenario_candidates(base_image, scenario, darkness_threshold, margin_th
     candidate_summaries = []
     for candidate_name, candidate_image in candidates:
         offset_summaries = []
-        for x_offset, y_offset in COORDINATE_OFFSETS:
-            summary = scan_scenario(
-                candidate_image,
-                marks,
-                darkness_threshold,
-                margin_threshold,
-                x_offset,
-                y_offset,
-            )
-            offset_summary = {
-                "xOffset": x_offset,
-                "yOffset": y_offset,
-                "recognizedCount": summary["recognizedCount"],
-                "confidence": summary["confidence"],
-            }
-            offset_summaries.append(offset_summary)
-            if (
-                best is None
-                or summary["recognizedCount"] > best["recognizedCount"]
-                or (
-                    summary["recognizedCount"] == best["recognizedCount"]
-                    and summary["confidence"] > best["confidence"]
+        for transform in COORDINATE_TRANSFORMS:
+            for x_offset, y_offset in COORDINATE_OFFSETS:
+                summary = scan_scenario(
+                    candidate_image,
+                    marks,
+                    darkness_threshold,
+                    margin_threshold,
+                    x_offset,
+                    y_offset,
+                    transform,
                 )
-            ):
-                best = {
-                    "candidate": candidate_name,
+                offset_summary = {
+                    "transform": transform["name"],
                     "xOffset": x_offset,
                     "yOffset": y_offset,
                     "recognizedCount": summary["recognizedCount"],
+                    "completeMatchCount": summary["completeMatchCount"],
+                    "validMatchCount": summary["validMatchCount"],
                     "confidence": summary["confidence"],
-                    "result": summary["result"],
                 }
+                offset_summaries.append(offset_summary)
+                if is_better_scan(summary, best):
+                    best = {
+                        "candidate": candidate_name,
+                        "transform": transform["name"],
+                        "xOffset": x_offset,
+                        "yOffset": y_offset,
+                        "recognizedCount": summary["recognizedCount"],
+                        "completeMatchCount": summary["completeMatchCount"],
+                        "validMatchCount": summary["validMatchCount"],
+                        "confidence": summary["confidence"],
+                        "result": filter_valid_match_results(summary["result"], marks),
+                    }
 
         best_offset = max(
             offset_summaries,
-            key=lambda item: (item["recognizedCount"], item["confidence"]),
-            default={"recognizedCount": 0, "confidence": 0, "xOffset": 0, "yOffset": 0},
+            key=lambda item: (
+                item["validMatchCount"],
+                item["completeMatchCount"],
+                item["recognizedCount"],
+                item["confidence"],
+            ),
+            default={
+                "recognizedCount": 0,
+                "completeMatchCount": 0,
+                "validMatchCount": 0,
+                "confidence": 0,
+                "xOffset": 0,
+                "yOffset": 0,
+            },
         )
         candidate_summaries.append({
             "name": candidate_name,
             "recognizedCount": best_offset["recognizedCount"],
+            "completeMatchCount": best_offset["completeMatchCount"],
+            "validMatchCount": best_offset["validMatchCount"],
             "confidence": best_offset["confidence"],
+            "transform": best_offset.get("transform", "base"),
             "xOffset": best_offset["xOffset"],
             "yOffset": best_offset["yOffset"],
         })
@@ -308,8 +445,11 @@ def scan_scenario_candidates(base_image, scenario, darkness_threshold, margin_th
     return {
         "name": scenario_name,
         "recognizedCount": best["recognizedCount"] if best else 0,
+        "completeMatchCount": best["completeMatchCount"] if best else 0,
+        "validMatchCount": best["validMatchCount"] if best else 0,
         "confidence": best["confidence"] if best else 0,
         "candidate": best["candidate"] if best else None,
+        "transform": best.get("transform", "base") if best else "base",
         "xOffset": best["xOffset"] if best else 0,
         "yOffset": best["yOffset"] if best else 0,
         "result": best["result"] if best else {},
@@ -350,26 +490,39 @@ def main():
         scenario_summaries.append({
             "name": summary["name"],
             "recognizedCount": summary["recognizedCount"],
+            "completeMatchCount": summary["completeMatchCount"],
+            "validMatchCount": summary["validMatchCount"],
             "confidence": summary["confidence"],
             "candidate": summary["candidate"],
+            "transform": summary["transform"],
             "xOffset": summary["xOffset"],
             "yOffset": summary["yOffset"],
             "candidates": summary["candidates"],
         })
         if (
             best is None
-            or summary["recognizedCount"] > best["recognizedCount"]
             or (
-                summary["recognizedCount"] == best["recognizedCount"]
-                and summary["confidence"] > best["confidence"]
+                summary["validMatchCount"],
+                summary["completeMatchCount"],
+                summary["recognizedCount"],
+                summary["confidence"],
+            )
+            > (
+                best["validMatchCount"],
+                best["completeMatchCount"],
+                best["recognizedCount"],
+                best["confidence"],
             )
         ):
             best = {
                 "name": summary["name"],
                 "candidate": summary["candidate"],
+                "transform": summary["transform"],
                 "xOffset": summary["xOffset"],
                 "yOffset": summary["yOffset"],
                 "recognizedCount": summary["recognizedCount"],
+                "completeMatchCount": summary["completeMatchCount"],
+                "validMatchCount": summary["validMatchCount"],
                 "confidence": summary["confidence"],
                 "result": summary["result"],
             }
@@ -379,9 +532,12 @@ def main():
         "engine": f"python-{engine_name}",
         "scenario": best["name"],
         "candidate": best["candidate"],
+        "transform": best["transform"],
         "xOffset": best["xOffset"],
         "yOffset": best["yOffset"],
         "recognizedCount": best["recognizedCount"],
+        "completeMatchCount": best["completeMatchCount"],
+        "validMatchCount": best["validMatchCount"],
         "confidence": best["confidence"],
         "result": best["result"],
         "scenarios": scenario_summaries,

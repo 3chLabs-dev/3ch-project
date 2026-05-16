@@ -226,8 +226,10 @@ export interface ScanLeagueOmrResponse {
   engine: string;
   scenario: string;
   recognizedCount: number;
+  completeMatchCount?: number;
+  validMatchCount?: number;
   result: Record<string, Record<string, number>>;
-  scenarios: { name: string; recognizedCount: number }[];
+  scenarios: { name: string; recognizedCount: number; completeMatchCount?: number; validMatchCount?: number }[];
 }
 
 export interface AddParticipantsRequest {

@@ -115,9 +115,9 @@ function loadImageFromFile(file: File): Promise<HTMLImageElement> {
   });
 }
 
-const MARK_READ_SCALES = [0.5, 0.65, 0.8];
-const OMR_DARKNESS_THRESHOLD = 12;
-const OMR_MARGIN_THRESHOLD = 2.5;
+const MARK_READ_SCALES = [0.55, 0.75];
+const OMR_DARKNESS_THRESHOLD = 18;
+const OMR_MARGIN_THRESHOLD = 5;
 
 function clamp(value: number, low: number, high: number) {
   return Math.max(low, Math.min(high, value));
@@ -596,15 +596,15 @@ export default function LeagueOmrSheet() {
       if (!matchResult) continue;
       const scoreA = matchResult[match.participant_a_id];
       const scoreB = matchResult[match.participant_b_id];
-      if (scoreA == null && scoreB == null) continue;
-      if (scoreA != null && scoreB != null && [scoreA, scoreB].filter((score) => score === 3).length !== 1) continue;
+      if (scoreA == null || scoreB == null) continue;
+      if ([scoreA, scoreB].filter((score) => score === 3).length !== 1) continue;
       await updateMatch({
         leagueId: id,
         matchId: match.id,
         updates: {
-          score_a: scoreA ?? match.score_a,
-          score_b: scoreB ?? match.score_b,
-          status: scoreA != null && scoreB != null ? "done" : "playing",
+          score_a: scoreA,
+          score_b: scoreB,
+          status: "done",
         },
       }).unwrap();
       updated += 1;

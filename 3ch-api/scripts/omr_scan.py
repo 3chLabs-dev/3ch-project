@@ -20,9 +20,6 @@ except ImportError:
 
 # 촬영/crop 보정 후에도 좌표가 조금 밀릴 수 있어 소폭 이동 후보를 같이 시도함.
 COORDINATE_OFFSETS = [
-    (-0.018, -0.008),
-    (-0.018, 0),
-    (-0.018, 0.008),
     (-0.009, -0.008),
     (-0.009, 0),
     (-0.009, 0.008),
@@ -32,22 +29,15 @@ COORDINATE_OFFSETS = [
     (0.009, -0.008),
     (0.009, 0),
     (0.009, 0.008),
-    (0.018, -0.008),
-    (0.018, 0),
-    (0.018, 0.008),
 ]
 
 COORDINATE_TRANSFORMS = [
     {"name": "base", "x_scale": 1.0, "y_scale": 1.0},
     {"name": "wide", "x_scale": 1.012, "y_scale": 1.0},
-    {"name": "narrow", "x_scale": 0.988, "y_scale": 1.0},
     {"name": "tall", "x_scale": 1.0, "y_scale": 1.012},
-    {"name": "short", "x_scale": 1.0, "y_scale": 0.988},
-    {"name": "wide-tall", "x_scale": 1.012, "y_scale": 1.012},
-    {"name": "narrow-short", "x_scale": 0.988, "y_scale": 0.988},
 ]
 
-MARK_READ_SCALES = (0.5, 0.65, 0.8)
+MARK_READ_SCALES = (0.55, 0.75)
 
 
 def read_payload(payload_path: str):
@@ -466,8 +456,8 @@ def main():
 
     payload = read_payload(args.payload)
     scenarios = payload.get("scenarios") or []
-    darkness_threshold = float(payload.get("darknessThreshold", 12))
-    margin_threshold = float(payload.get("marginThreshold", 2.5))
+    darkness_threshold = float(payload.get("darknessThreshold", 18))
+    margin_threshold = float(payload.get("marginThreshold", 5))
 
     if not scenarios:
         raise ValueError("At least one OMR scenario is required.")

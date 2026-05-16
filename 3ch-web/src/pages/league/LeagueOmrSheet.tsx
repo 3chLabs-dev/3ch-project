@@ -116,6 +116,8 @@ function loadImageFromFile(file: File): Promise<HTMLImageElement> {
 }
 
 const MARK_READ_SCALES = [0.5, 0.65, 0.8];
+const OMR_DARKNESS_THRESHOLD = 12;
+const OMR_MARGIN_THRESHOLD = 2.5;
 
 function clamp(value: number, low: number, high: number) {
   return Math.max(low, Math.min(high, value));
@@ -209,7 +211,7 @@ async function scanOmrImage(file: File, marks: OmrMark[]): Promise<OmrScanResult
     const winner = ranked[0];
     const runnerUp = ranked[1];
     if (!winner || !runnerUp) return;
-    if (winner.darkness < 20 || winner.darkness - runnerUp.darkness < 3.5) return;
+    if (winner.darkness < OMR_DARKNESS_THRESHOLD || winner.darkness - runnerUp.darkness < OMR_MARGIN_THRESHOLD) return;
     result[matchId] = { ...(result[matchId] ?? {}), [playerId]: winner.score };
   });
 
@@ -594,15 +596,15 @@ export default function LeagueOmrSheet() {
       if (!matchResult) continue;
       const scoreA = matchResult[match.participant_a_id];
       const scoreB = matchResult[match.participant_b_id];
-      if (scoreA == null || scoreB == null) continue;
-      if ([scoreA, scoreB].filter((score) => score === 3).length !== 1) continue;
+      if (scoreA == null && scoreB == null) continue;
+      if (scoreA != null && scoreB != null && [scoreA, scoreB].filter((score) => score === 3).length !== 1) continue;
       await updateMatch({
         leagueId: id,
         matchId: match.id,
         updates: {
-          score_a: scoreA,
-          score_b: scoreB,
-          status: "done",
+          score_a: scoreA ?? match.score_a,
+          score_b: scoreB ?? match.score_b,
+          status: scoreA != null && scoreB != null ? "done" : "playing",
         },
       }).unwrap();
       updated += 1;
@@ -633,8 +635,8 @@ export default function LeagueOmrSheet() {
           leagueId: id,
           file,
           scenarios,
-          darknessThreshold: 20,
-          marginThreshold: 3.5,
+          darknessThreshold: OMR_DARKNESS_THRESHOLD,
+          marginThreshold: OMR_MARGIN_THRESHOLD,
         }).unwrap();
         result = response.result;
       } catch {

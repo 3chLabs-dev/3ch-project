@@ -411,7 +411,7 @@ def scan_scenario_candidates(base_image, scenario, darkness_threshold, margin_th
                         "completeMatchCount": summary["completeMatchCount"],
                         "validMatchCount": summary["validMatchCount"],
                         "confidence": summary["confidence"],
-                        "result": filter_valid_match_results(summary["result"], marks),
+                        "result": summary["result"],
                     }
 
         best_offset = max(
@@ -466,8 +466,8 @@ def main():
 
     payload = read_payload(args.payload)
     scenarios = payload.get("scenarios") or []
-    darkness_threshold = float(payload.get("darknessThreshold", 20))
-    margin_threshold = float(payload.get("marginThreshold", 3.5))
+    darkness_threshold = float(payload.get("darknessThreshold", 12))
+    margin_threshold = float(payload.get("marginThreshold", 2.5))
 
     if not scenarios:
         raise ValueError("At least one OMR scenario is required.")

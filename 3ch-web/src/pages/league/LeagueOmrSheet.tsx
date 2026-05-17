@@ -286,9 +286,9 @@ function pickBestOmrResult(results: Array<{ result: OmrScanResult; marks: OmrMar
     const aQuality = countCompleteValidMatches(a.result, a.marks);
     const bQuality = countCompleteValidMatches(b.result, b.marks);
     const recognizedDiff = countRecognizedScores(b.result) - countRecognizedScores(a.result);
-    if (recognizedDiff !== 0) return recognizedDiff;
     if (bQuality.valid !== aQuality.valid) return bQuality.valid - aQuality.valid;
     if (bQuality.complete !== aQuality.complete) return bQuality.complete - aQuality.complete;
+    if (recognizedDiff !== 0) return recognizedDiff;
     return 0;
   })[0]?.result ?? {};
 }
@@ -642,18 +642,16 @@ export default function LeagueOmrSheet() {
       const scoreA = matchResult[match.participant_a_id];
       const scoreB = matchResult[match.participant_b_id];
       if (scoreA == null && scoreB == null) continue;
-      const inferredScoreA = scoreA ?? (scoreB != null && scoreB < 3 ? 3 : null);
-      const inferredScoreB = scoreB ?? (scoreA != null && scoreA < 3 ? 3 : null);
-      if (inferredScoreA == null && inferredScoreB == null) continue;
-      if (inferredScoreA != null && inferredScoreB != null && [inferredScoreA, inferredScoreB].filter((score) => score === 3).length !== 1) continue;
+      if (scoreA == null || scoreB == null) continue;
+      if ([scoreA, scoreB].filter((score) => score === 3).length !== 1) continue;
       await withTimeout(
         updateMatch({
           leagueId: id,
           matchId: match.id,
           updates: {
-            score_a: inferredScoreA ?? match.score_a,
-            score_b: inferredScoreB ?? match.score_b,
-            status: inferredScoreA != null && inferredScoreB != null ? "done" : "playing",
+            score_a: scoreA,
+            score_b: scoreB,
+            status: "done",
           },
         }).unwrap(),
         OMR_UPDATE_TIMEOUT_MS,

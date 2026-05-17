@@ -263,6 +263,34 @@ def detect_table_images(image):
     vertical = cv2.morphologyEx(binary, cv2.MORPH_OPEN, vertical_kernel, iterations=1)
     grid = cv2.dilate(cv2.add(horizontal, vertical), np.ones((3, 3), dtype=np.uint8), iterations=1)
 
+    table_images = []
+
+    # 메인 대진표는 사진 폭 대부분을 차지하는 긴 가로선들이 모여 있음.
+    # 경기순서 작은 표와 섞이지 않도록 긴 선 좌표로 메인 표 crop 후보를 별도로 만듦.
+    horizontal_contours, _ = cv2.findContours(horizontal, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    long_lines = []
+    for contour in horizontal_contours:
+        x, y, w, h = cv2.boundingRect(contour)
+        if w >= width * 0.55:
+            long_lines.append((x, y, w, h))
+    if len(long_lines) >= 2:
+        x_min = min(x for x, _y, _w, _h in long_lines)
+        x_max = max(x + w for x, _y, w, _h in long_lines)
+        y_centers = sorted(y + h / 2 for _x, y, _w, h in long_lines)
+        y_min = y_centers[0]
+        y_max = y_centers[-1]
+        if (x_max - x_min) >= width * 0.55 and (y_max - y_min) >= height * 0.15:
+            table_images.append(crop_image(
+                image,
+                (
+                    int(x_min),
+                    int(y_min),
+                    int(x_max - x_min),
+                    int(y_max - y_min),
+                ),
+                padding=max(6, width // 180),
+            ))
+
     contours, _hierarchy = cv2.findContours(grid, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     candidates = []
     image_area = width * height
@@ -280,7 +308,6 @@ def detect_table_images(image):
         candidates.append((area, contour, (x, y, w, h)))
 
     candidates.sort(reverse=True, key=lambda item: item[0])
-    table_images = []
     for _area, contour, rect in candidates[:3]:
         # 네 꼭짓점이 잡히면 그대로 펴고, 아니면 최소 회전 사각형으로 보정함.
         epsilon = 0.02 * cv2.arcLength(contour, True)
@@ -441,15 +468,15 @@ def is_better_scan(summary, best):
     if best is None:
         return True
     current_quality = (
-        summary["recognizedCount"],
         summary["validMatchCount"],
         summary["completeMatchCount"],
+        summary["recognizedCount"],
         summary["confidence"],
     )
     best_quality = (
-        best["recognizedCount"],
         best["validMatchCount"],
         best["completeMatchCount"],
+        best["recognizedCount"],
         best["confidence"],
     )
     return current_quality > best_quality
@@ -467,10 +494,8 @@ def scan_scenario_candidates(base_image, scenario, darkness_threshold, margin_th
 
     best = None
     candidate_summaries = []
-    all_summaries = []
     for candidate_name, candidate_image in candidates:
         offset_summaries = []
-        candidate_scan_summaries = []
         for transform in COORDINATE_TRANSFORMS:
             for x_offset, y_offset in COORDINATE_OFFSETS:
                 summary = scan_scenario(
@@ -482,8 +507,6 @@ def scan_scenario_candidates(base_image, scenario, darkness_threshold, margin_th
                     y_offset,
                     transform,
                 )
-                all_summaries.append(summary)
-                candidate_scan_summaries.append(summary)
                 offset_summary = {
                     "transform": transform["name"],
                     "xOffset": x_offset,
@@ -508,27 +531,12 @@ def scan_scenario_candidates(base_image, scenario, darkness_threshold, margin_th
                         "choices": summary["choices"],
                     }
 
-        merged_candidate = merge_scan_summaries(candidate_scan_summaries, marks)
-        if is_better_scan(merged_candidate, best):
-            best = {
-                "candidate": f"{candidate_name}-merged",
-                "transform": "merged",
-                "xOffset": 0,
-                "yOffset": 0,
-                "recognizedCount": merged_candidate["recognizedCount"],
-                "completeMatchCount": merged_candidate["completeMatchCount"],
-                "validMatchCount": merged_candidate["validMatchCount"],
-                "confidence": merged_candidate["confidence"],
-                "result": merged_candidate["result"],
-                "choices": merged_candidate["choices"],
-            }
-
         best_offset = max(
             offset_summaries,
             key=lambda item: (
-                item["recognizedCount"],
                 item["validMatchCount"],
                 item["completeMatchCount"],
+                item["recognizedCount"],
                 item["confidence"],
             ),
             default={
@@ -551,32 +559,20 @@ def scan_scenario_candidates(base_image, scenario, darkness_threshold, margin_th
             "yOffset": best_offset["yOffset"],
         })
 
-    merged_all = merge_scan_summaries(all_summaries, marks)
-    if is_better_scan(merged_all, best):
-        best = {
-            "candidate": "all-merged",
-            "transform": "merged",
-            "xOffset": 0,
-            "yOffset": 0,
-            "recognizedCount": merged_all["recognizedCount"],
-            "completeMatchCount": merged_all["completeMatchCount"],
-            "validMatchCount": merged_all["validMatchCount"],
-            "confidence": merged_all["confidence"],
-            "result": merged_all["result"],
-            "choices": merged_all["choices"],
-        }
+    safe_result = filter_valid_match_results(best["result"], marks) if best else {}
+    safe_complete, safe_valid = count_complete_valid_matches(safe_result, marks)
 
     return {
         "name": scenario_name,
-        "recognizedCount": best["recognizedCount"] if best else 0,
-        "completeMatchCount": best["completeMatchCount"] if best else 0,
-        "validMatchCount": best["validMatchCount"] if best else 0,
+        "recognizedCount": sum(len(scores) for scores in safe_result.values()),
+        "completeMatchCount": safe_complete,
+        "validMatchCount": safe_valid,
         "confidence": best["confidence"] if best else 0,
         "candidate": best["candidate"] if best else None,
         "transform": best.get("transform", "base") if best else "base",
         "xOffset": best["xOffset"] if best else 0,
         "yOffset": best["yOffset"] if best else 0,
-        "result": best["result"] if best else {},
+        "result": safe_result,
         "candidates": candidate_summaries,
     }
 
@@ -632,15 +628,15 @@ def main():
         if (
             best is None
                 or (
-                    summary["recognizedCount"],
                     summary["validMatchCount"],
                     summary["completeMatchCount"],
+                    summary["recognizedCount"],
                     summary["confidence"],
                 )
                 > (
-                    best["recognizedCount"],
                     best["validMatchCount"],
                     best["completeMatchCount"],
+                    best["recognizedCount"],
                     best["confidence"],
                 )
         ):

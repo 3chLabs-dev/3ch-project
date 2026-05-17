@@ -464,6 +464,42 @@ def merge_scan_summaries(summaries, marks):
     return summarize_result(result, choices, marks)
 
 
+def merge_valid_matches_from_summaries(summaries, marks):
+    # 한 경기의 양쪽 점수는 같은 좌표 후보에서 나온 경우만 인정하고,
+    # 경기별로 가장 신뢰도 높은 후보를 골라 종이 휘어짐에 대응함.
+    best_matches = {}
+    for summary in summaries:
+        valid_result = filter_valid_match_results(summary.get("result") or {}, marks)
+        if not valid_result:
+            continue
+
+        choice_map = {
+            (choice["matchId"], choice["playerId"]): choice
+            for choice in summary.get("choices", [])
+        }
+        for match_id, match_scores in valid_result.items():
+            match_choices = [
+                choice_map.get((match_id, player_id))
+                for player_id in match_scores.keys()
+            ]
+            confidence = sum(choice.get("margin", 0) for choice in match_choices if choice)
+            previous = best_matches.get(match_id)
+            if previous is None or confidence > previous["confidence"]:
+                best_matches[match_id] = {
+                    "scores": match_scores,
+                    "choices": [choice for choice in match_choices if choice],
+                    "confidence": confidence,
+                }
+
+    result = {}
+    choices = []
+    for match_id, item in best_matches.items():
+        result[match_id] = item["scores"]
+        choices.extend(item["choices"])
+
+    return summarize_result(result, choices, marks)
+
+
 def is_better_scan(summary, best):
     if best is None:
         return True
@@ -494,6 +530,7 @@ def scan_scenario_candidates(base_image, scenario, darkness_threshold, margin_th
 
     best = None
     candidate_summaries = []
+    all_summaries = []
     for candidate_name, candidate_image in candidates:
         offset_summaries = []
         for transform in COORDINATE_TRANSFORMS:
@@ -507,27 +544,37 @@ def scan_scenario_candidates(base_image, scenario, darkness_threshold, margin_th
                     y_offset,
                     transform,
                 )
+                safe_result = filter_valid_match_results(summary["result"], marks)
+                safe_complete, safe_valid = count_complete_valid_matches(safe_result, marks)
+                safe_summary = {
+                    **summary,
+                    "result": safe_result,
+                    "recognizedCount": sum(len(scores) for scores in safe_result.values()),
+                    "completeMatchCount": safe_complete,
+                    "validMatchCount": safe_valid,
+                }
+                all_summaries.append(safe_summary)
                 offset_summary = {
                     "transform": transform["name"],
                     "xOffset": x_offset,
                     "yOffset": y_offset,
-                    "recognizedCount": summary["recognizedCount"],
-                    "completeMatchCount": summary["completeMatchCount"],
-                    "validMatchCount": summary["validMatchCount"],
+                    "recognizedCount": safe_summary["recognizedCount"],
+                    "completeMatchCount": safe_summary["completeMatchCount"],
+                    "validMatchCount": safe_summary["validMatchCount"],
                     "confidence": summary["confidence"],
                 }
                 offset_summaries.append(offset_summary)
-                if is_better_scan(summary, best):
+                if is_better_scan(safe_summary, best):
                     best = {
                         "candidate": candidate_name,
                         "transform": transform["name"],
                         "xOffset": x_offset,
                         "yOffset": y_offset,
-                        "recognizedCount": summary["recognizedCount"],
-                        "completeMatchCount": summary["completeMatchCount"],
-                        "validMatchCount": summary["validMatchCount"],
+                        "recognizedCount": safe_summary["recognizedCount"],
+                        "completeMatchCount": safe_summary["completeMatchCount"],
+                        "validMatchCount": safe_summary["validMatchCount"],
                         "confidence": summary["confidence"],
-                        "result": summary["result"],
+                        "result": safe_summary["result"],
                         "choices": summary["choices"],
                     }
 
@@ -559,20 +606,32 @@ def scan_scenario_candidates(base_image, scenario, darkness_threshold, margin_th
             "yOffset": best_offset["yOffset"],
         })
 
-    safe_result = filter_valid_match_results(best["result"], marks) if best else {}
-    safe_complete, safe_valid = count_complete_valid_matches(safe_result, marks)
+    merged_valid = merge_valid_matches_from_summaries(all_summaries, marks)
+    if is_better_scan(merged_valid, best):
+        best = {
+            "candidate": "valid-match-merged",
+            "transform": "per-match",
+            "xOffset": 0,
+            "yOffset": 0,
+            "recognizedCount": merged_valid["recognizedCount"],
+            "completeMatchCount": merged_valid["completeMatchCount"],
+            "validMatchCount": merged_valid["validMatchCount"],
+            "confidence": merged_valid["confidence"],
+            "result": merged_valid["result"],
+            "choices": merged_valid["choices"],
+        }
 
     return {
         "name": scenario_name,
-        "recognizedCount": sum(len(scores) for scores in safe_result.values()),
-        "completeMatchCount": safe_complete,
-        "validMatchCount": safe_valid,
+        "recognizedCount": best["recognizedCount"] if best else 0,
+        "completeMatchCount": best["completeMatchCount"] if best else 0,
+        "validMatchCount": best["validMatchCount"] if best else 0,
         "confidence": best["confidence"] if best else 0,
         "candidate": best["candidate"] if best else None,
         "transform": best.get("transform", "base") if best else "base",
         "xOffset": best["xOffset"] if best else 0,
         "yOffset": best["yOffset"] if best else 0,
-        "result": safe_result,
+        "result": best["result"] if best else {},
         "candidates": candidate_summaries,
     }
 

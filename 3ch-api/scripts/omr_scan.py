@@ -324,6 +324,7 @@ def scan_scenario(image, marks, darkness_threshold, margin_threshold, x_offset=0
         grouped[key].append({"score": mark["score"], "darkness": darkness})
 
     result = {}
+    choices = []
     recognized = 0
     confidence = 0.0
     for (match_id, player_id), items in grouped.items():
@@ -340,6 +341,13 @@ def scan_scenario(image, marks, darkness_threshold, margin_threshold, x_offset=0
             continue
 
         result.setdefault(match_id, {})[player_id] = winner["score"]
+        choices.append({
+            "matchId": match_id,
+            "playerId": player_id,
+            "score": winner["score"],
+            "darkness": winner["darkness"],
+            "margin": winner["darkness"] - runner_up["darkness"],
+        })
         recognized += 1
         confidence += winner["darkness"] - runner_up["darkness"]
 
@@ -347,6 +355,7 @@ def scan_scenario(image, marks, darkness_threshold, margin_threshold, x_offset=0
 
     return {
         "result": result,
+        "choices": choices,
         "recognizedCount": recognized,
         "completeMatchCount": complete_matches,
         "validMatchCount": valid_matches,
@@ -392,6 +401,42 @@ def filter_valid_match_results(result, marks):
     return filtered
 
 
+def summarize_result(result, choices, marks):
+    complete_matches, valid_matches = count_complete_valid_matches(result, marks)
+    return {
+        "result": result,
+        "choices": choices,
+        "recognizedCount": sum(len(scores) for scores in result.values()),
+        "completeMatchCount": complete_matches,
+        "validMatchCount": valid_matches,
+        "confidence": sum(choice.get("margin", 0) for choice in choices),
+    }
+
+
+def merge_scan_summaries(summaries, marks):
+    # 여러 좌표 보정 후보가 서로 다른 칸을 읽은 경우, 선수별 가장 신뢰도 높은 값만 병합함.
+    best_choices = {}
+    for summary in summaries:
+        for choice in summary.get("choices", []):
+            key = (choice["matchId"], choice["playerId"])
+            previous = best_choices.get(key)
+            current_quality = (choice.get("margin", 0), choice.get("darkness", 0))
+            previous_quality = (
+                previous.get("margin", 0),
+                previous.get("darkness", 0),
+            ) if previous else None
+            if previous is None or current_quality > previous_quality:
+                best_choices[key] = choice
+
+    result = {}
+    choices = []
+    for (match_id, player_id), choice in best_choices.items():
+        result.setdefault(match_id, {})[player_id] = choice["score"]
+        choices.append(choice)
+
+    return summarize_result(result, choices, marks)
+
+
 def is_better_scan(summary, best):
     if best is None:
         return True
@@ -422,8 +467,10 @@ def scan_scenario_candidates(base_image, scenario, darkness_threshold, margin_th
 
     best = None
     candidate_summaries = []
+    all_summaries = []
     for candidate_name, candidate_image in candidates:
         offset_summaries = []
+        candidate_scan_summaries = []
         for transform in COORDINATE_TRANSFORMS:
             for x_offset, y_offset in COORDINATE_OFFSETS:
                 summary = scan_scenario(
@@ -435,6 +482,8 @@ def scan_scenario_candidates(base_image, scenario, darkness_threshold, margin_th
                     y_offset,
                     transform,
                 )
+                all_summaries.append(summary)
+                candidate_scan_summaries.append(summary)
                 offset_summary = {
                     "transform": transform["name"],
                     "xOffset": x_offset,
@@ -456,7 +505,23 @@ def scan_scenario_candidates(base_image, scenario, darkness_threshold, margin_th
                         "validMatchCount": summary["validMatchCount"],
                         "confidence": summary["confidence"],
                         "result": summary["result"],
+                        "choices": summary["choices"],
                     }
+
+        merged_candidate = merge_scan_summaries(candidate_scan_summaries, marks)
+        if is_better_scan(merged_candidate, best):
+            best = {
+                "candidate": f"{candidate_name}-merged",
+                "transform": "merged",
+                "xOffset": 0,
+                "yOffset": 0,
+                "recognizedCount": merged_candidate["recognizedCount"],
+                "completeMatchCount": merged_candidate["completeMatchCount"],
+                "validMatchCount": merged_candidate["validMatchCount"],
+                "confidence": merged_candidate["confidence"],
+                "result": merged_candidate["result"],
+                "choices": merged_candidate["choices"],
+            }
 
         best_offset = max(
             offset_summaries,
@@ -485,6 +550,21 @@ def scan_scenario_candidates(base_image, scenario, darkness_threshold, margin_th
             "xOffset": best_offset["xOffset"],
             "yOffset": best_offset["yOffset"],
         })
+
+    merged_all = merge_scan_summaries(all_summaries, marks)
+    if is_better_scan(merged_all, best):
+        best = {
+            "candidate": "all-merged",
+            "transform": "merged",
+            "xOffset": 0,
+            "yOffset": 0,
+            "recognizedCount": merged_all["recognizedCount"],
+            "completeMatchCount": merged_all["completeMatchCount"],
+            "validMatchCount": merged_all["validMatchCount"],
+            "confidence": merged_all["confidence"],
+            "result": merged_all["result"],
+            "choices": merged_all["choices"],
+        }
 
     return {
         "name": scenario_name,

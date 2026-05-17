@@ -642,15 +642,18 @@ export default function LeagueOmrSheet() {
       const scoreA = matchResult[match.participant_a_id];
       const scoreB = matchResult[match.participant_b_id];
       if (scoreA == null && scoreB == null) continue;
-      if (scoreA != null && scoreB != null && [scoreA, scoreB].filter((score) => score === 3).length !== 1) continue;
+      const inferredScoreA = scoreA ?? (scoreB != null && scoreB < 3 ? 3 : null);
+      const inferredScoreB = scoreB ?? (scoreA != null && scoreA < 3 ? 3 : null);
+      if (inferredScoreA == null && inferredScoreB == null) continue;
+      if (inferredScoreA != null && inferredScoreB != null && [inferredScoreA, inferredScoreB].filter((score) => score === 3).length !== 1) continue;
       await withTimeout(
         updateMatch({
           leagueId: id,
           matchId: match.id,
           updates: {
-            score_a: scoreA ?? match.score_a,
-            score_b: scoreB ?? match.score_b,
-            status: scoreA != null && scoreB != null ? "done" : "playing",
+            score_a: inferredScoreA ?? match.score_a,
+            score_b: inferredScoreB ?? match.score_b,
+            status: inferredScoreA != null && inferredScoreB != null ? "done" : "playing",
           },
         }).unwrap(),
         OMR_UPDATE_TIMEOUT_MS,

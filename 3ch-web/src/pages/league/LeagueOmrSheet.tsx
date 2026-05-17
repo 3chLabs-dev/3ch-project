@@ -498,6 +498,7 @@ export default function LeagueOmrSheet() {
   const [sheetHeight, setSheetHeight] = useState(0);
   const [resultDialogOpen, setResultDialogOpen] = useState(false);
   const [forceScoreEditMode, setForceScoreEditMode] = useState(false);
+  const [omrProcessingMessage, setOmrProcessingMessage] = useState("");
 
   const { data: leagueData, isLoading: leagueLoading } = useGetLeagueQuery(id, { skip: !id });
   const league = leagueData?.league;
@@ -520,6 +521,7 @@ export default function LeagueOmrSheet() {
   const isCreator = !!authUser && league?.created_by_id === authUser.id;
   const canManage = (!groupLoading && (groupData?.myRole === "owner" || groupData?.myRole === "admin")) || isCreator;
   const canMark = canManage || league?.join_permission === "public" || (!groupLoading && !!groupData?.myRole);
+  const isOmrProcessing = Boolean(omrProcessingMessage);
 
   const participants = useMemo(() => {
     return [...(participantData?.participants ?? [])]
@@ -638,6 +640,7 @@ export default function LeagueOmrSheet() {
     event.target.value = "";
     setResultDialogOpen(false);
     if (!file) return;
+    setOmrProcessingMessage("OMR 이미지를 분석하는 중입니다.");
     try {
       const sheetMarks = collectOmrMarks(sheetRef.current);
       const tableMarks = collectOmrMarks(scoreTableRef.current);
@@ -653,6 +656,7 @@ export default function LeagueOmrSheet() {
       let result: OmrScanResult;
       let scanRequest: ReturnType<typeof scanLeagueOmr> | null = null;
       try {
+        setOmrProcessingMessage("서버에서 OMR 마킹을 읽는 중입니다.");
         scanRequest = scanLeagueOmr({
           leagueId: id,
           file,
@@ -671,6 +675,7 @@ export default function LeagueOmrSheet() {
         if (error instanceof Error && error.message.includes("기기 내 분석")) {
           // 고해상도 스캔 이미지는 서버 분석이 오래 걸릴 수 있어 기기 내 분석으로 넘김.
         }
+        setOmrProcessingMessage("기기에서 OMR 마킹을 다시 분석하는 중입니다.");
         const scanResults = await Promise.all([
           sheetMarks.length
             ? scanOmrImage(file, sheetMarks).then((scanResult) => ({ result: scanResult, marks: sheetMarks }))
@@ -681,6 +686,7 @@ export default function LeagueOmrSheet() {
         ]);
         result = pickBestOmrResult(scanResults);
       }
+      setOmrProcessingMessage("인식된 점수를 저장하는 중입니다.");
       const updated = await applyOmrResult(result);
       if (updated === 0) {
         window.alert("인식된 마킹이 없습니다. 대진표가 화면에 꽉 차게 촬영되었는지 확인해 주세요.");
@@ -690,6 +696,8 @@ export default function LeagueOmrSheet() {
       window.alert(`${updated}개 경기의 점수를 OMR로 인식해 반영했습니다.`);
     } catch (error) {
       window.alert(error instanceof Error ? error.message : "OMR 인식에 실패했습니다.");
+    } finally {
+      setOmrProcessingMessage("");
     }
   };
 
@@ -834,7 +842,7 @@ export default function LeagueOmrSheet() {
               variant="contained"
               size="small"
               onClick={handleRegisterResults}
-              disabled={isCompleted}
+              disabled={isCompleted || isOmrProcessing}
               sx={{ borderRadius: 999, fontWeight: 900, minWidth: 72, px: 1.3, bgcolor: "#22C55E", "&:hover": { bgcolor: "#16A34A" } }}
             >
               결과 등록
@@ -1016,6 +1024,30 @@ export default function LeagueOmrSheet() {
       />
 
       <Dialog
+        open={isOmrProcessing}
+        maxWidth="xs"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: 3,
+              width: "min(340px, calc(100% - 48px))",
+            },
+          },
+        }}
+      >
+        <DialogContent sx={{ py: 3.5, px: 3, textAlign: "center" }}>
+          <CircularProgress size={34} />
+          <Typography sx={{ mt: 2, fontSize: 15, fontWeight: 900 }}>
+            {omrProcessingMessage}
+          </Typography>
+          <Typography sx={{ mt: 0.8, color: "#6B7280", fontSize: 12, fontWeight: 700 }}>
+            잠시만 기다려 주세요.
+          </Typography>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
         open={resultDialogOpen}
         onClose={() => setResultDialogOpen(false)}
         maxWidth="xs"
@@ -1037,6 +1069,7 @@ export default function LeagueOmrSheet() {
           <Stack direction="row" justifyContent="space-around" sx={{ py: 2.8 }}>
             <Button
               onClick={() => cameraInputRef.current?.click()}
+              disabled={isOmrProcessing}
               sx={{ flexDirection: "column", gap: 1, color: "#374151", minWidth: 86, fontWeight: 800 }}
             >
               <CameraAltIcon sx={{ fontSize: 30, color: "#777" }} />
@@ -1044,6 +1077,7 @@ export default function LeagueOmrSheet() {
             </Button>
             <Button
               onClick={() => fileInputRef.current?.click()}
+              disabled={isOmrProcessing}
               sx={{ flexDirection: "column", gap: 1, color: "#374151", minWidth: 86, fontWeight: 800 }}
             >
               <FolderIcon sx={{ fontSize: 32, color: "#777" }} />
@@ -1051,6 +1085,7 @@ export default function LeagueOmrSheet() {
             </Button>
             <Button
               onClick={() => galleryInputRef.current?.click()}
+              disabled={isOmrProcessing}
               sx={{ flexDirection: "column", gap: 1, color: "#374151", minWidth: 86, fontWeight: 800 }}
             >
               <ImageIcon sx={{ fontSize: 30, color: "#3156A6" }} />

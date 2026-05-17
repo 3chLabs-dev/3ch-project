@@ -132,6 +132,24 @@ const MARK_SEARCH_OFFSETS = [
   [-0.35, 0.35],
   [0.35, 0.35],
 ] as const;
+const OMR_COORDINATE_OFFSETS = [
+  [-0.018, -0.016],
+  [-0.018, 0],
+  [-0.018, 0.016],
+  [0, -0.016],
+  [0, 0],
+  [0, 0.016],
+  [0.018, -0.016],
+  [0.018, 0],
+  [0.018, 0.016],
+] as const;
+const OMR_COORDINATE_TRANSFORMS = [
+  { xScale: 1, yScale: 1 },
+  { xScale: 0.988, yScale: 0.988 },
+  { xScale: 1.012, yScale: 1 },
+  { xScale: 1, yScale: 1.012 },
+  { xScale: 1.024, yScale: 1.018 },
+] as const;
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -216,28 +234,32 @@ function readBestDarkness(data: ImageData, centerX: number, centerY: number, wid
   );
 }
 
-async function scanOmrImage(file: File, marks: OmrMark[]): Promise<OmrScanResult> {
-  if (!file.type.startsWith("image/")) {
-    throw new Error("이미지 파일을 선택해 주세요.");
-  }
+function transformOmrMarkPosition(
+  mark: OmrMark,
+  transform: (typeof OMR_COORDINATE_TRANSFORMS)[number],
+  xOffset: number,
+  yOffset: number,
+) {
+  return {
+    x: clamp(0.5 + (mark.x - 0.5) * transform.xScale + xOffset, 0, 1),
+    y: clamp(0.5 + (mark.y - 0.5) * transform.yScale + yOffset, 0, 1),
+  };
+}
 
-  const img = await loadImageFromFile(file);
-  const canvas = document.createElement("canvas");
-  const naturalWidth = img.naturalWidth || img.width;
-  const naturalHeight = img.naturalHeight || img.height;
-  const scale = Math.min(1, OMR_FALLBACK_IMAGE_EDGE / Math.max(naturalWidth, naturalHeight));
-  canvas.width = Math.max(1, Math.round(naturalWidth * scale));
-  canvas.height = Math.max(1, Math.round(naturalHeight * scale));
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  if (!ctx) throw new Error("이미지를 분석할 수 없습니다.");
-  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+function scanOmrImageData(
+  imageData: ImageData,
+  marks: OmrMark[],
+  transform: (typeof OMR_COORDINATE_TRANSFORMS)[number],
+  xOffset: number,
+  yOffset: number,
+): OmrScanResult {
   const grouped = new Map<string, Array<{ score: number; darkness: number }>>();
   marks.forEach((mark) => {
+    const position = transformOmrMarkPosition(mark, transform, xOffset, yOffset);
     const darkness = readBestDarkness(
       imageData,
-      mark.x * canvas.width,
-      mark.y * canvas.height,
+      position.x * imageData.width,
+      position.y * imageData.height,
       mark.w,
       mark.h,
     );
@@ -257,6 +279,31 @@ async function scanOmrImage(file: File, marks: OmrMark[]): Promise<OmrScanResult
   });
 
   return result;
+}
+
+async function scanOmrImage(file: File, marks: OmrMark[]): Promise<OmrScanResult> {
+  if (!file.type.startsWith("image/")) {
+    throw new Error("이미지 파일을 선택해 주세요.");
+  }
+
+  const img = await loadImageFromFile(file);
+  const canvas = document.createElement("canvas");
+  const naturalWidth = img.naturalWidth || img.width;
+  const naturalHeight = img.naturalHeight || img.height;
+  const scale = Math.min(1, OMR_FALLBACK_IMAGE_EDGE / Math.max(naturalWidth, naturalHeight));
+  canvas.width = Math.max(1, Math.round(naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(naturalHeight * scale));
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) throw new Error("이미지를 분석할 수 없습니다.");
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const results = OMR_COORDINATE_TRANSFORMS.flatMap((transform) => (
+    OMR_COORDINATE_OFFSETS.map(([xOffset, yOffset]) => ({
+      result: scanOmrImageData(imageData, marks, transform, xOffset, yOffset),
+      marks,
+    }))
+  ));
+  return pickBestOmrResult(results);
 }
 
 function countRecognizedScores(result: OmrScanResult) {

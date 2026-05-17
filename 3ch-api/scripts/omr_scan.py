@@ -390,6 +390,112 @@ def scan_scenario(image, marks, darkness_threshold, margin_threshold, x_offset=0
     }
 
 
+def scan_detected_filled_marks(image, marks, x_offset=0, y_offset=0, transform=None):
+    # 실제로 칠해진 검은 사각형을 먼저 찾고, 예상 OMR 칸 안쪽에 들어온 것만 매칭함.
+    if not HAS_OPENCV or not marks:
+        return {
+            "result": {},
+            "choices": [],
+            "recognizedCount": 0,
+            "completeMatchCount": 0,
+            "validMatchCount": 0,
+            "confidence": 0,
+        }
+
+    transform = transform or COORDINATE_TRANSFORMS[0]
+    width, height = image.size
+    mark_positions = []
+    mark_widths = []
+    mark_heights = []
+    for mark in marks:
+        mark_x, mark_y = transform_mark_position(mark, transform, x_offset, y_offset)
+        mark_width = max(4, width * mark["w"])
+        mark_height = max(4, height * mark["h"])
+        mark_positions.append({
+            "mark": mark,
+            "x": mark_x * width,
+            "y": mark_y * height,
+            "w": mark_width,
+            "h": mark_height,
+        })
+        mark_widths.append(mark_width)
+        mark_heights.append(mark_height)
+
+    typical_width = float(np.median(mark_widths))
+    typical_height = float(np.median(mark_heights))
+    gray = np.array(image)
+    if len(gray.shape) == 3:
+        gray = cv2.cvtColor(gray, cv2.COLOR_RGB2GRAY)
+
+    mask = cv2.inRange(gray, 0, 90)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((3, 3), dtype=np.uint8), iterations=1)
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    grouped = defaultdict(list)
+    for contour in contours:
+        x, y, w, h = cv2.boundingRect(contour)
+        if w < typical_width * 0.35 or h < typical_height * 0.35:
+            continue
+        if w > typical_width * 2.2 or h > typical_height * 2.2:
+            continue
+        aspect = w / h if h else 0
+        if aspect < 0.55 or aspect > 1.8:
+            continue
+
+        roi = mask[y:y + h, x:x + w]
+        fill_ratio = cv2.countNonZero(roi) / float(max(1, w * h))
+        if fill_ratio < 0.45:
+            continue
+
+        center_x = x + w / 2
+        center_y = y + h / 2
+        best_mark = None
+        best_distance = None
+        for item in mark_positions:
+            dx = abs(center_x - item["x"])
+            dy = abs(center_y - item["y"])
+            if dx > item["w"] * 1.25 or dy > item["h"] * 1.25:
+                continue
+            normalized_distance = (dx / item["w"]) + (dy / item["h"])
+            if best_distance is None or normalized_distance < best_distance:
+                best_distance = normalized_distance
+                best_mark = item
+
+        if best_mark is None:
+            continue
+
+        mark = best_mark["mark"]
+        confidence = fill_ratio * 100 + max(0, 30 - (best_distance or 0) * 20)
+        grouped[(mark["matchId"], mark["playerId"])].append({
+            "score": mark["score"],
+            "darkness": confidence,
+        })
+
+    result = {}
+    choices = []
+    for (match_id, player_id), items in grouped.items():
+        ranked = sorted(items, key=lambda item: item["darkness"], reverse=True)
+        winner = ranked[0]
+        result.setdefault(match_id, {})[player_id] = winner["score"]
+        choices.append({
+            "matchId": match_id,
+            "playerId": player_id,
+            "score": winner["score"],
+            "darkness": winner["darkness"],
+            "margin": winner["darkness"],
+        })
+
+    complete_matches, valid_matches = count_complete_valid_matches(result, marks)
+    return {
+        "result": result,
+        "choices": choices,
+        "recognizedCount": sum(len(scores) for scores in result.values()),
+        "completeMatchCount": complete_matches,
+        "validMatchCount": valid_matches,
+        "confidence": sum(choice["margin"] for choice in choices),
+    }
+
+
 def count_complete_valid_matches(result, marks):
     expected_players = defaultdict(set)
     for mark in marks:
@@ -535,15 +641,30 @@ def scan_scenario_candidates(base_image, scenario, darkness_threshold, margin_th
         offset_summaries = []
         for transform in COORDINATE_TRANSFORMS:
             for x_offset, y_offset in COORDINATE_OFFSETS:
-                summary = scan_scenario(
-                    candidate_image,
-                    marks,
-                    darkness_threshold,
-                    margin_threshold,
-                    x_offset,
-                    y_offset,
-                    transform,
-                )
+                scan_summaries = [
+                    scan_scenario(
+                        candidate_image,
+                        marks,
+                        darkness_threshold,
+                        margin_threshold,
+                        x_offset,
+                        y_offset,
+                        transform,
+                    ),
+                    scan_detected_filled_marks(
+                        candidate_image,
+                        marks,
+                        x_offset,
+                        y_offset,
+                        transform,
+                    ),
+                ]
+                summary = max(scan_summaries, key=lambda item: (
+                    item["validMatchCount"],
+                    item["completeMatchCount"],
+                    item["recognizedCount"],
+                    item["confidence"],
+                ))
                 safe_result = filter_valid_match_results(summary["result"], marks)
                 safe_complete, safe_valid = count_complete_valid_matches(safe_result, marks)
                 safe_summary = {

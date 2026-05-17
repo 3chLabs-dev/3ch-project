@@ -58,6 +58,10 @@ COORDINATE_TRANSFORMS = [
 MARK_READ_SCALES = (0.55, 0.75)
 MARK_SEARCH_OFFSETS = (
     (0.0, 0.0),
+    (-0.9, 0.0),
+    (0.9, 0.0),
+    (0.0, -0.9),
+    (0.0, 0.9),
     (-0.45, 0.0),
     (0.45, 0.0),
     (0.0, -0.45),
@@ -436,7 +440,7 @@ def scan_detected_filled_marks(image, marks, x_offset=0, y_offset=0, transform=N
         x, y, w, h = cv2.boundingRect(contour)
         if w < typical_width * 0.35 or h < typical_height * 0.35:
             continue
-        if w > typical_width * 2.2 or h > typical_height * 2.2:
+        if w > typical_width * 2.8 or h > typical_height * 2.8:
             continue
         aspect = w / h if h else 0
         if aspect < 0.55 or aspect > 1.8:
@@ -454,7 +458,7 @@ def scan_detected_filled_marks(image, marks, x_offset=0, y_offset=0, transform=N
         for item in mark_positions:
             dx = abs(center_x - item["x"])
             dy = abs(center_y - item["y"])
-            if dx > item["w"] * 1.25 or dy > item["h"] * 1.25:
+            if dx > item["w"] * 3.2 or dy > item["h"] * 2.4:
                 continue
             normalized_distance = (dx / item["w"]) + (dy / item["h"])
             if best_distance is None or normalized_distance < best_distance:
@@ -463,9 +467,11 @@ def scan_detected_filled_marks(image, marks, x_offset=0, y_offset=0, transform=N
 
         if best_mark is None:
             continue
+        if best_distance is None or best_distance > 4.2:
+            continue
 
         mark = best_mark["mark"]
-        confidence = fill_ratio * 100 + max(0, 30 - (best_distance or 0) * 20)
+        confidence = fill_ratio * 100 + max(0, 45 - best_distance * 10)
         grouped[(mark["matchId"], mark["playerId"])].append({
             "score": mark["score"],
             "darkness": confidence,

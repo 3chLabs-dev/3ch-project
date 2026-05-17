@@ -292,7 +292,42 @@ def detect_table_images(image):
                     int(x_max - x_min),
                     int(y_max - y_min),
                 ),
+                padding=0,
+            ))
+            table_images.append(crop_image(
+                image,
+                (
+                    int(x_min),
+                    int(y_min),
+                    int(x_max - x_min),
+                    int(y_max - y_min),
+                ),
                 padding=max(6, width // 180),
+            ))
+
+    vertical_contours, _ = cv2.findContours(vertical, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    tall_lines = []
+    for contour in vertical_contours:
+        x, y, w, h = cv2.boundingRect(contour)
+        if h >= height * 0.18:
+            tall_lines.append((x, y, w, h))
+    if len(long_lines) >= 2 and len(tall_lines) >= 2:
+        x_centers = sorted(x + w / 2 for x, _y, w, _h in tall_lines)
+        y_centers = sorted(y + h / 2 for _x, y, _w, h in long_lines)
+        x_min = x_centers[0]
+        x_max = x_centers[-1]
+        y_min = y_centers[0]
+        y_max = y_centers[-1]
+        if (x_max - x_min) >= width * 0.55 and (y_max - y_min) >= height * 0.15:
+            table_images.append(crop_image(
+                image,
+                (
+                    int(x_min),
+                    int(y_min),
+                    int(x_max - x_min),
+                    int(y_max - y_min),
+                ),
+                padding=max(2, width // 360),
             ))
 
     contours, _hierarchy = cv2.findContours(grid, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -461,7 +496,7 @@ def scan_detected_filled_marks(image, marks, x_offset=0, y_offset=0, transform=N
         for item in mark_positions:
             dx = abs(center_x - item["x"])
             dy = abs(center_y - item["y"])
-            if dx > item["w"] * 3.2 or dy > item["h"] * 2.4:
+            if dx > item["w"] * 6.0 or dy > item["h"] * 4.0:
                 continue
             normalized_distance = (dx / item["w"]) + (dy / item["h"])
             if best_distance is None or normalized_distance < best_distance:
@@ -470,7 +505,7 @@ def scan_detected_filled_marks(image, marks, x_offset=0, y_offset=0, transform=N
 
         if best_mark is None:
             continue
-        if best_distance is None or best_distance > 4.2:
+        if best_distance is None or best_distance > 7.5:
             continue
 
         mark = best_mark["mark"]

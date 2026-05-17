@@ -121,6 +121,17 @@ const OMR_MARGIN_THRESHOLD = 5;
 const OMR_SERVER_TIMEOUT_MS = 28_000;
 const OMR_UPDATE_TIMEOUT_MS = 8_000;
 const OMR_FALLBACK_IMAGE_EDGE = 1800;
+const MARK_SEARCH_OFFSETS = [
+  [0, 0],
+  [-0.45, 0],
+  [0.45, 0],
+  [0, -0.45],
+  [0, 0.45],
+  [-0.35, -0.35],
+  [0.35, -0.35],
+  [-0.35, 0.35],
+  [0.35, 0.35],
+] as const;
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -187,7 +198,22 @@ function readDarknessRect(data: ImageData, centerX: number, centerY: number, wid
 }
 
 function readBestDarkness(data: ImageData, centerX: number, centerY: number, widthRatio: number, heightRatio: number) {
-  return Math.max(...MARK_READ_SCALES.map((scale) => readDarknessRect(data, centerX, centerY, widthRatio, heightRatio, scale)));
+  const markWidth = Math.max(4, data.width * widthRatio);
+  const markHeight = Math.max(4, data.height * heightRatio);
+  return Math.max(
+    ...MARK_SEARCH_OFFSETS.flatMap(([dx, dy]) => (
+      MARK_READ_SCALES.map((scale) => (
+        readDarknessRect(
+          data,
+          centerX + dx * markWidth,
+          centerY + dy * markHeight,
+          widthRatio,
+          heightRatio,
+          scale,
+        )
+      ))
+    )),
+  );
 }
 
 async function scanOmrImage(file: File, marks: OmrMark[]): Promise<OmrScanResult> {

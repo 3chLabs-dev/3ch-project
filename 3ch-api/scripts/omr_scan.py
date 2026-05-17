@@ -20,24 +20,53 @@ except ImportError:
 
 # 촬영/crop 보정 후에도 좌표가 조금 밀릴 수 있어 소폭 이동 후보를 같이 시도함.
 COORDINATE_OFFSETS = [
+    (-0.018, -0.016),
+    (-0.018, -0.008),
+    (-0.018, 0),
+    (-0.018, 0.008),
+    (-0.018, 0.016),
+    (-0.009, -0.016),
     (-0.009, -0.008),
     (-0.009, 0),
     (-0.009, 0.008),
+    (-0.009, 0.016),
+    (0, -0.016),
     (0, -0.008),
     (0, 0),
     (0, 0.008),
+    (0, 0.016),
+    (0.009, -0.016),
     (0.009, -0.008),
     (0.009, 0),
     (0.009, 0.008),
+    (0.009, 0.016),
+    (0.018, -0.016),
+    (0.018, -0.008),
+    (0.018, 0),
+    (0.018, 0.008),
+    (0.018, 0.016),
 ]
 
 COORDINATE_TRANSFORMS = [
     {"name": "base", "x_scale": 1.0, "y_scale": 1.0},
+    {"name": "compact", "x_scale": 0.988, "y_scale": 0.988},
     {"name": "wide", "x_scale": 1.012, "y_scale": 1.0},
     {"name": "tall", "x_scale": 1.0, "y_scale": 1.012},
+    {"name": "large", "x_scale": 1.024, "y_scale": 1.018},
 ]
 
 MARK_READ_SCALES = (0.55, 0.75)
+MARK_SEARCH_OFFSETS = (
+    (0.0, 0.0),
+    (-0.45, 0.0),
+    (0.45, 0.0),
+    (0.0, -0.45),
+    (0.0, 0.45),
+    (-0.35, -0.35),
+    (0.35, -0.35),
+    (-0.35, 0.35),
+    (0.35, 0.35),
+)
 MAX_PROCESSING_EDGE = 1800
 
 
@@ -146,8 +175,20 @@ def read_darkness_rect(image, center_x, center_y, width_ratio, height_ratio, sca
 
 
 def read_best_darkness(image, center_x, center_y, width_ratio, height_ratio):
+    width, height = image.size
+    mark_width = max(4, width * width_ratio)
+    mark_height = max(4, height * height_ratio)
+    # 촬영 각도/종이 휘어짐으로 중심 좌표가 조금 어긋나도 같은 칸 안에서 재탐색함.
     return max(
-        read_darkness_rect(image, center_x, center_y, width_ratio, height_ratio, scale)
+        read_darkness_rect(
+            image,
+            center_x + dx * mark_width,
+            center_y + dy * mark_height,
+            width_ratio,
+            height_ratio,
+            scale,
+        )
+        for dx, dy in MARK_SEARCH_OFFSETS
         for scale in MARK_READ_SCALES
     )
 

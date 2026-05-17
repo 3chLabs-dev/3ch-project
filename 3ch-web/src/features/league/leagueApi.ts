@@ -229,7 +229,28 @@ export interface ScanLeagueOmrResponse {
   completeMatchCount?: number;
   validMatchCount?: number;
   result: Record<string, Record<string, number>>;
-  scenarios: { name: string; recognizedCount: number; completeMatchCount?: number; validMatchCount?: number }[];
+  scenarios: Array<{
+    name: string;
+    imageVariant?: string;
+    candidate?: string | null;
+    transform?: string;
+    xOffset?: number;
+    yOffset?: number;
+    recognizedCount: number;
+    completeMatchCount?: number;
+    validMatchCount?: number;
+    confidence?: number;
+    candidates?: Array<{
+      name: string;
+      recognizedCount: number;
+      completeMatchCount?: number;
+      validMatchCount?: number;
+      confidence?: number;
+      transform?: string;
+      xOffset?: number;
+      yOffset?: number;
+    }>;
+  }>;
 }
 
 export interface AddParticipantsRequest {

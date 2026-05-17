@@ -293,6 +293,18 @@ function pickBestOmrResult(results: Array<{ result: OmrScanResult; marks: OmrMar
   })[0]?.result ?? {};
 }
 
+async function scanOmrImageOnDevice(file: File, sheetMarks: OmrMark[], tableMarks: OmrMark[]) {
+  const scanResults = await Promise.all([
+    sheetMarks.length
+      ? scanOmrImage(file, sheetMarks).then((scanResult) => ({ result: scanResult, marks: sheetMarks }))
+      : Promise.resolve({ result: {} as OmrScanResult, marks: sheetMarks }),
+    tableMarks.length
+      ? scanOmrImage(file, tableMarks).then((scanResult) => ({ result: scanResult, marks: tableMarks }))
+      : Promise.resolve({ result: {} as OmrScanResult, marks: tableMarks }),
+  ]);
+  return pickBestOmrResult(scanResults);
+}
+
 function calculateStats(players: LeagueParticipantItem[], matches: LeagueMatch[]): Record<string, PlayerStat> {
   const totals = new Map<string, { wins: number; losses: number; setTotal: number; setLost: number }>();
   players.forEach((player) => totals.set(player.id, { wins: 0, losses: 0, setTotal: 0, setLost: 0 }));
@@ -681,6 +693,7 @@ export default function LeagueOmrSheet() {
       ].filter((scenario): scenario is { name: string; marks: OmrMark[] } => Boolean(scenario));
 
       let result: OmrScanResult;
+      let serverRecognizedCount = 0;
       let scanRequest: ReturnType<typeof scanLeagueOmr> | null = null;
       try {
         setOmrProcessingMessage("서버에서 OMR 마킹을 읽는 중입니다.");
@@ -696,26 +709,34 @@ export default function LeagueOmrSheet() {
           OMR_SERVER_TIMEOUT_MS,
           "OMR 서버 분석 시간이 오래 걸려 기기 내 분석으로 전환합니다.",
         );
-        result = response.result;
+        serverRecognizedCount = response.recognizedCount;
+        if (response.recognizedCount === 0) {
+          console.info("OMR server scan returned no marks", {
+            engine: response.engine,
+            scenario: response.scenario,
+            scenarios: response.scenarios,
+          });
+          setOmrProcessingMessage("기기에서 OMR 마킹을 다시 분석하는 중입니다.");
+          result = await scanOmrImageOnDevice(file, sheetMarks, tableMarks);
+        } else {
+          result = response.result;
+        }
       } catch (error) {
         scanRequest?.abort();
         if (error instanceof Error && error.message.includes("기기 내 분석")) {
           // 고해상도 스캔 이미지는 서버 분석이 오래 걸릴 수 있어 기기 내 분석으로 넘김.
         }
         setOmrProcessingMessage("기기에서 OMR 마킹을 다시 분석하는 중입니다.");
-        const scanResults = await Promise.all([
-          sheetMarks.length
-            ? scanOmrImage(file, sheetMarks).then((scanResult) => ({ result: scanResult, marks: sheetMarks }))
-            : Promise.resolve({ result: {} as OmrScanResult, marks: sheetMarks }),
-          tableMarks.length
-            ? scanOmrImage(file, tableMarks).then((scanResult) => ({ result: scanResult, marks: tableMarks }))
-            : Promise.resolve({ result: {} as OmrScanResult, marks: tableMarks }),
-        ]);
-        result = pickBestOmrResult(scanResults);
+        result = await scanOmrImageOnDevice(file, sheetMarks, tableMarks);
       }
       setOmrProcessingMessage("인식된 점수를 저장하는 중입니다.");
       const updated = await applyOmrResult(result);
       if (updated === 0) {
+        console.info("OMR scan result had no applicable complete matches", {
+          serverRecognizedCount,
+          recognizedCount: countRecognizedScores(result),
+          result,
+        });
         window.alert("인식된 마킹이 없습니다. 대진표가 화면에 꽉 차게 촬영되었는지 확인해 주세요.");
         return;
       }

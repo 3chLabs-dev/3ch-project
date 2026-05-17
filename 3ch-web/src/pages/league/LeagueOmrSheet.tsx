@@ -118,7 +118,7 @@ function loadImageFromFile(file: File): Promise<HTMLImageElement> {
 const MARK_READ_SCALES = [0.55, 0.75];
 const OMR_DARKNESS_THRESHOLD = 18;
 const OMR_MARGIN_THRESHOLD = 5;
-const OMR_SERVER_TIMEOUT_MS = 8_000;
+const OMR_SERVER_TIMEOUT_MS = 15_000;
 const OMR_UPDATE_TIMEOUT_MS = 8_000;
 const OMR_FALLBACK_IMAGE_EDGE = 1800;
 
@@ -611,16 +611,16 @@ export default function LeagueOmrSheet() {
       if (!matchResult) continue;
       const scoreA = matchResult[match.participant_a_id];
       const scoreB = matchResult[match.participant_b_id];
-      if (scoreA == null || scoreB == null) continue;
-      if ([scoreA, scoreB].filter((score) => score === 3).length !== 1) continue;
+      if (scoreA == null && scoreB == null) continue;
+      if (scoreA != null && scoreB != null && [scoreA, scoreB].filter((score) => score === 3).length !== 1) continue;
       await withTimeout(
         updateMatch({
           leagueId: id,
           matchId: match.id,
           updates: {
-            score_a: scoreA,
-            score_b: scoreB,
-            status: "done",
+            score_a: scoreA ?? match.score_a,
+            score_b: scoreB ?? match.score_b,
+            status: scoreA != null && scoreB != null ? "done" : "playing",
           },
         }).unwrap(),
         OMR_UPDATE_TIMEOUT_MS,
@@ -667,7 +667,7 @@ export default function LeagueOmrSheet() {
       } catch (error) {
         scanRequest?.abort();
         if (error instanceof Error && error.message.includes("기기 내 분석")) {
-          // The server scanner can take a long time on high-resolution scans.
+          // 고해상도 스캔 이미지는 서버 분석이 오래 걸릴 수 있어 기기 내 분석으로 넘김.
         }
         const scanResults = await Promise.all([
           sheetMarks.length

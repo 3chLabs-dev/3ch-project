@@ -76,6 +76,17 @@ def prepare_image(image_path: str):
     return prepare_with_pillow(image), "pillow"
 
 
+def build_image_variants(image):
+    # 일부 모바일 브라우저는 EXIF 없이 픽셀 자체가 회전된 이미지를 올림.
+    # 직각 회전 후보를 모두 시도하고 점수 일관성이 가장 좋은 방향을 선택함.
+    return [
+        ("rot0", image),
+        ("rot90", image.rotate(90, expand=True)),
+        ("rot180", image.rotate(180, expand=True)),
+        ("rot270", image.rotate(270, expand=True)),
+    ]
+
+
 def clamp(value, low, high):
     return max(low, min(high, value))
 
@@ -111,8 +122,8 @@ def read_luminance_stats(image, left, top, right, bottom):
 def read_darkness_rect(image, center_x, center_y, width_ratio, height_ratio, scale=0.65):
     # 각 점수 박스 주변의 어두운 픽셀 비율 계산해 실제 마킹 여부 판단함.
     width, height = image.size
-    # Read mostly inside the printed square. Larger scale candidates help when
-    # phone photos blur or shrink the filled area.
+    # 인쇄된 사각형 안쪽 위주로 읽음. 촬영으로 마킹 영역이 흐려지거나
+    # 작게 잡히는 경우를 대비해 여러 크기 후보를 함께 시도함.
     box_width = max(4, round(width * width_ratio * scale))
     box_height = max(4, round(height * height_ratio * scale))
     start_x = max(0, round(center_x - box_width / 2))
@@ -465,12 +476,17 @@ def main():
         raise ValueError("At least one OMR scenario is required.")
 
     image, engine_name = prepare_image(args.image)
-    # 표 후보를 먼저 만들어두고 table 시나리오에서 우선 사용함.
-    table_images = detect_table_images(image)
+    image_variants = build_image_variants(image)
+    # 회전 방향별로 표 후보를 만들고 sheet/table 좌표계와 함께 비교함.
     scenario_summaries = []
     best = None
+    variant_scenarios = []
+    for image_variant, variant_image in image_variants:
+        table_images = detect_table_images(variant_image)
+        for scenario in scenarios:
+            variant_scenarios.append((image_variant, variant_image, table_images, scenario))
 
-    for scenario in scenarios:
+    for image_variant, image, table_images, scenario in variant_scenarios:
         # 프론트가 보낸 sheet/table 좌표계 중 실제 사진에 가장 잘 맞는 것 찾음.
         summary = scan_scenario_candidates(
             image,
@@ -481,6 +497,7 @@ def main():
         )
         scenario_summaries.append({
             "name": summary["name"],
+            "imageVariant": image_variant,
             "recognizedCount": summary["recognizedCount"],
             "completeMatchCount": summary["completeMatchCount"],
             "validMatchCount": summary["validMatchCount"],
@@ -508,6 +525,7 @@ def main():
         ):
             best = {
                 "name": summary["name"],
+                "imageVariant": image_variant,
                 "candidate": summary["candidate"],
                 "transform": summary["transform"],
                 "xOffset": summary["xOffset"],
@@ -523,6 +541,7 @@ def main():
     output = {
         "engine": f"python-{engine_name}",
         "scenario": best["name"],
+        "imageVariant": best["imageVariant"],
         "candidate": best["candidate"],
         "transform": best["transform"],
         "xOffset": best["xOffset"],

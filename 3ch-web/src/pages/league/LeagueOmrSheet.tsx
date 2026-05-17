@@ -651,9 +651,11 @@ export default function LeagueOmrSheet() {
       if (!match.participant_a_id || !match.participant_b_id) continue;
       const matchResult = result[match.id];
       if (!matchResult) continue;
-      const scoreA = matchResult[match.participant_a_id];
-      const scoreB = matchResult[match.participant_b_id];
+      let scoreA = matchResult[match.participant_a_id];
+      let scoreB = matchResult[match.participant_b_id];
       if (scoreA == null && scoreB == null) continue;
+      if (scoreA == null && scoreB != null && scoreB < 3) scoreA = 3;
+      if (scoreB == null && scoreA != null && scoreA < 3) scoreB = 3;
       if (scoreA == null || scoreB == null) continue;
       if ([scoreA, scoreB].filter((score) => score === 3).length !== 1) continue;
       await withTimeout(

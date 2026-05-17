@@ -355,15 +355,15 @@ def is_better_scan(summary, best):
     if best is None:
         return True
     current_quality = (
+        summary["recognizedCount"],
         summary["validMatchCount"],
         summary["completeMatchCount"],
-        summary["recognizedCount"],
         summary["confidence"],
     )
     best_quality = (
+        best["recognizedCount"],
         best["validMatchCount"],
         best["completeMatchCount"],
-        best["recognizedCount"],
         best["confidence"],
     )
     return current_quality > best_quality
@@ -420,9 +420,9 @@ def scan_scenario_candidates(base_image, scenario, darkness_threshold, margin_th
         best_offset = max(
             offset_summaries,
             key=lambda item: (
+                item["recognizedCount"],
                 item["validMatchCount"],
                 item["completeMatchCount"],
-                item["recognizedCount"],
                 item["confidence"],
             ),
             default={
@@ -510,18 +510,18 @@ def main():
         })
         if (
             best is None
-            or (
-                summary["validMatchCount"],
-                summary["completeMatchCount"],
-                summary["recognizedCount"],
-                summary["confidence"],
-            )
-            > (
-                best["validMatchCount"],
-                best["completeMatchCount"],
-                best["recognizedCount"],
-                best["confidence"],
-            )
+                or (
+                    summary["recognizedCount"],
+                    summary["validMatchCount"],
+                    summary["completeMatchCount"],
+                    summary["confidence"],
+                )
+                > (
+                    best["recognizedCount"],
+                    best["validMatchCount"],
+                    best["completeMatchCount"],
+                    best["confidence"],
+                )
         ):
             best = {
                 "name": summary["name"],

@@ -118,7 +118,7 @@ function loadImageFromFile(file: File): Promise<HTMLImageElement> {
 const MARK_READ_SCALES = [0.55, 0.75];
 const OMR_DARKNESS_THRESHOLD = 18;
 const OMR_MARGIN_THRESHOLD = 5;
-const OMR_SERVER_TIMEOUT_MS = 15_000;
+const OMR_SERVER_TIMEOUT_MS = 28_000;
 const OMR_UPDATE_TIMEOUT_MS = 8_000;
 const OMR_FALLBACK_IMAGE_EDGE = 1800;
 
@@ -259,9 +259,11 @@ function pickBestOmrResult(results: Array<{ result: OmrScanResult; marks: OmrMar
   return results.sort((a, b) => {
     const aQuality = countCompleteValidMatches(a.result, a.marks);
     const bQuality = countCompleteValidMatches(b.result, b.marks);
+    const recognizedDiff = countRecognizedScores(b.result) - countRecognizedScores(a.result);
+    if (recognizedDiff !== 0) return recognizedDiff;
     if (bQuality.valid !== aQuality.valid) return bQuality.valid - aQuality.valid;
     if (bQuality.complete !== aQuality.complete) return bQuality.complete - aQuality.complete;
-    return countRecognizedScores(b.result) - countRecognizedScores(a.result);
+    return 0;
   })[0]?.result ?? {};
 }
 
@@ -811,6 +813,15 @@ export default function LeagueOmrSheet() {
             </Typography>
           </Box>
           <Stack direction="row" spacing={0.7} sx={{ flexShrink: 0, "@media print": { display: "none" } }}>
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<ArrowBackIcon fontSize="small" />}
+              onClick={() => navigate(-1)}
+              sx={{ borderRadius: 999, fontWeight: 900, minWidth: 62, px: 1.3, bgcolor: "#6B7280", "&:hover": { bgcolor: "#4B5563" } }}
+            >
+              뒤로
+            </Button>
             <Button
               variant="contained"
               size="small"

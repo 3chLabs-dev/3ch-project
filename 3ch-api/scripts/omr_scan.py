@@ -431,7 +431,10 @@ def scan_detected_filled_marks(image, marks, x_offset=0, y_offset=0, transform=N
     if len(gray.shape) == 3:
         gray = cv2.cvtColor(gray, cv2.COLOR_RGB2GRAY)
 
-    mask = cv2.inRange(gray, 0, 90)
+    # Filled boxes can become lighter after camera exposure correction/CLAHE.
+    # Keep the contour path a little more permissive; the size/aspect checks below
+    # still reject most text and table lines.
+    mask = cv2.inRange(gray, 0, 125)
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((3, 3), dtype=np.uint8), iterations=1)
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -448,7 +451,7 @@ def scan_detected_filled_marks(image, marks, x_offset=0, y_offset=0, transform=N
 
         roi = mask[y:y + h, x:x + w]
         fill_ratio = cv2.countNonZero(roi) / float(max(1, w * h))
-        if fill_ratio < 0.45:
+        if fill_ratio < 0.35:
             continue
 
         center_x = x + w / 2
@@ -612,6 +615,39 @@ def merge_valid_matches_from_summaries(summaries, marks):
     return summarize_result(result, choices, marks)
 
 
+def merge_complete_matches_from_summaries(summaries, marks):
+    best_matches = {}
+    for summary in summaries:
+        result = summary.get("result") or {}
+        choice_map = {
+            (choice["matchId"], choice["playerId"]): choice
+            for choice in summary.get("choices", [])
+        }
+        for match_id, match_scores in result.items():
+            if len(match_scores) < 2:
+                continue
+            match_choices = [
+                choice_map.get((match_id, player_id))
+                for player_id in match_scores.keys()
+            ]
+            confidence = sum(choice.get("margin", 0) for choice in match_choices if choice)
+            previous = best_matches.get(match_id)
+            if previous is None or confidence > previous["confidence"]:
+                best_matches[match_id] = {
+                    "scores": match_scores,
+                    "choices": [choice for choice in match_choices if choice],
+                    "confidence": confidence,
+                }
+
+    result = {}
+    choices = []
+    for match_id, item in best_matches.items():
+        result[match_id] = item["scores"]
+        choices.extend(item["choices"])
+
+    return summarize_result(result, choices, marks)
+
+
 def is_better_scan(summary, best):
     if best is None:
         return True
@@ -671,37 +707,28 @@ def scan_scenario_candidates(base_image, scenario, darkness_threshold, margin_th
                     item["recognizedCount"],
                     item["confidence"],
                 ))
-                safe_result = filter_valid_match_results(summary["result"], marks)
-                safe_complete, safe_valid = count_complete_valid_matches(safe_result, marks)
-                safe_summary = {
-                    **summary,
-                    "result": safe_result,
-                    "recognizedCount": sum(len(scores) for scores in safe_result.values()),
-                    "completeMatchCount": safe_complete,
-                    "validMatchCount": safe_valid,
-                }
-                all_summaries.append(safe_summary)
+                all_summaries.append(summary)
                 offset_summary = {
                     "transform": transform["name"],
                     "xOffset": x_offset,
                     "yOffset": y_offset,
-                    "recognizedCount": safe_summary["recognizedCount"],
-                    "completeMatchCount": safe_summary["completeMatchCount"],
-                    "validMatchCount": safe_summary["validMatchCount"],
+                    "recognizedCount": summary["recognizedCount"],
+                    "completeMatchCount": summary["completeMatchCount"],
+                    "validMatchCount": summary["validMatchCount"],
                     "confidence": summary["confidence"],
                 }
                 offset_summaries.append(offset_summary)
-                if is_better_scan(safe_summary, best):
+                if is_better_scan(summary, best):
                     best = {
                         "candidate": candidate_name,
                         "transform": transform["name"],
                         "xOffset": x_offset,
                         "yOffset": y_offset,
-                        "recognizedCount": safe_summary["recognizedCount"],
-                        "completeMatchCount": safe_summary["completeMatchCount"],
-                        "validMatchCount": safe_summary["validMatchCount"],
+                        "recognizedCount": summary["recognizedCount"],
+                        "completeMatchCount": summary["completeMatchCount"],
+                        "validMatchCount": summary["validMatchCount"],
                         "confidence": summary["confidence"],
-                        "result": safe_summary["result"],
+                        "result": summary["result"],
                         "choices": summary["choices"],
                     }
 
@@ -746,6 +773,21 @@ def scan_scenario_candidates(base_image, scenario, darkness_threshold, margin_th
             "confidence": merged_valid["confidence"],
             "result": merged_valid["result"],
             "choices": merged_valid["choices"],
+        }
+
+    merged_complete = merge_complete_matches_from_summaries(all_summaries, marks)
+    if is_better_scan(merged_complete, best):
+        best = {
+            "candidate": "complete-match-merged",
+            "transform": "per-match",
+            "xOffset": 0,
+            "yOffset": 0,
+            "recognizedCount": merged_complete["recognizedCount"],
+            "completeMatchCount": merged_complete["completeMatchCount"],
+            "validMatchCount": merged_complete["validMatchCount"],
+            "confidence": merged_complete["confidence"],
+            "result": merged_complete["result"],
+            "choices": merged_complete["choices"],
         }
 
     return {

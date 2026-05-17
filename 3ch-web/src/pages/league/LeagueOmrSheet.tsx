@@ -958,11 +958,32 @@ export default function LeagueOmrSheet() {
                     return (
                       <td key={colPlayer.id}>
                         {scoreEditMode ? (
-                          <ScoreStepper
-                            value={selectedScore}
-                            disabled={!match || !canMark || isCompleted}
-                            onChange={(score) => handleScore(match, rowPlayer.id, score)}
-                          />
+                          <Box sx={{ position: "relative", minHeight: 44 }}>
+                            <ScoreStepper
+                              value={selectedScore}
+                              disabled={!match || !canMark || isCompleted}
+                              onChange={(score) => handleScore(match, rowPlayer.id, score)}
+                            />
+                            <Box
+                              aria-hidden="true"
+                              sx={{
+                                position: "absolute",
+                                left: "50%",
+                                top: "50%",
+                                transform: "translate(-50%, -50%)",
+                                opacity: 0,
+                                pointerEvents: "none",
+                              }}
+                            >
+                              <ScoreMarks
+                                selected={selectedScore}
+                                disabled
+                                matchId={match?.id}
+                                playerId={rowPlayer.id}
+                                onSelect={() => {}}
+                              />
+                            </Box>
+                          </Box>
                         ) : (
                           <ScoreMarks
                             selected={selectedScore}

@@ -7,6 +7,7 @@ import NotificationsActiveOutlinedIcon from "@mui/icons-material/NotificationsAc
 import SportsScoreOutlinedIcon from "@mui/icons-material/SportsScoreOutlined";
 import ViewKanbanOutlinedIcon from "@mui/icons-material/ViewKanbanOutlined";
 import { Link as RouterLink } from "react-router-dom";
+import logo from "../../assets/512_우리리그 로고.svg";
 
 const sections = [
   { label: "리그 운영", href: "#league" },
@@ -135,7 +136,19 @@ export default function DemoLandingPage() {
     <Box sx={{ minHeight: "100dvh", bgcolor: "#F9FAFB" }}>
       <Box sx={{ position: "sticky", top: 0, zIndex: 10, bgcolor: "rgba(255,255,255,0.94)", backdropFilter: "blur(10px)", borderBottom: "1px solid #E5E7EB" }}>
         <Box sx={{ width: "min(1120px, calc(100% - 32px))", mx: "auto", py: 1.5, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
-          <Typography sx={{ fontSize: 20, fontWeight: 900, color: "#111827" }}>우리리그</Typography>
+          <Box
+            component={RouterLink}
+            to="/"
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              textDecoration: "none",
+              color: "inherit",
+              flexShrink: 0,
+            }}
+          >
+            <Box component="img" src={logo} alt="우리리그" sx={{ height: 30, width: "auto", display: "block" }} />
+          </Box>
           <Stack direction="row" spacing={0.25} sx={{ display: { xs: "none", md: "flex" } }}>
             {sections.map((section) => (
               <Button key={section.href} component="a" href={section.href} sx={{ color: "#374151", fontWeight: 700, px: 1.25 }}>

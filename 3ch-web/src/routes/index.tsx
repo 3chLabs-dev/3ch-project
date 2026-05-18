@@ -64,6 +64,7 @@ import PaymentFail from "../pages/payment/PaymentFail.tsx";
 import PaymentCheckout from "../pages/payment/PaymentCheckout.tsx";
 import TermsPage from "../pages/mypage/TermsPage.tsx";
 import PrivacyPolicyPage from "../pages/mypage/PrivacyPolicyPage.tsx";
+import DemoLandingPage from "../pages/demo/DemoLandingPage";
 // import League from "../pages/League";
 // import Match from "../pages/Match";
 // import My from "../pages/My";
@@ -128,6 +129,7 @@ export const router = createBrowserRouter([
     ],
   },
   // 어드민 (AppShell 밖 - 별도 레이아웃)
+  { path: "/demo", element: <DemoLandingPage /> },
   { path: "/admin/login", element: <AdminLogin /> },
   {
     element: <AdminGuard />,

@@ -5,7 +5,6 @@ const icon1 = "/128_첫번째 아이콘.png";
 const icon2 = "/128_두번째 아이콘.png";
 const icon3 = "/128_세번째 아이콘.png";
 
-
 type GuideTab = "create" | "join";
 
 export default function GuestHome() {
@@ -19,14 +18,25 @@ export default function GuestHome() {
                 pt: 1,
                 pb: 4,
                 mx: -2,
-                // backgroundColor: "#F3F4F6",
                 minHeight: "100%",
             }}
         >
-            <Stack sx={{}}>
-                <Typography sx={{ mx: 6.5, fontSize: 24, fontWeight: 800, color: "#111827", mb: 2.5 }}>
-                    리그·대회 운영, 한 번에 해결
-                </Typography>
+            <Stack>
+                <Box sx={{ mx: 6.5, mb: 2.5 }}>
+                    <Typography sx={{ fontSize: 24, fontWeight: 800, color: "#111827", mb: 1 }}>
+                        리그·대회 운영, 한 번에 해결
+                    </Typography>
+                    <Typography sx={{ fontSize: 14, lineHeight: 1.6, color: "#6B7280", fontWeight: 600, mb: 1.25 }}>
+                        우리리그의 주요 기능과 운영 흐름을 한 페이지에서 먼저 확인할 수 있습니다.
+                    </Typography>
+                    <Button
+                        variant="outlined"
+                        onClick={() => navigate("/demo")}
+                        sx={{ height: 40, borderRadius: 9999, fontWeight: 800, px: 2.25 }}
+                    >
+                        데모 버전 보기
+                    </Button>
+                </Box>
 
                 <FeatureCard
                     icon={icon1}
@@ -159,7 +169,6 @@ export default function GuestHome() {
                         mt: 3,
                         px: 2,
                         py: 2,
-                        // borderRadius: 0.6,
                         backgroundColor: "#DBEAFE",
                     }}
                 >
@@ -219,7 +228,6 @@ function FeatureCard({
             sx={{
                 px: 5.5,
                 py: 2,
-                // borderRadius: 0.6,
                 backgroundColor: bgColor,
             }}
         >
@@ -231,7 +239,6 @@ function FeatureCard({
                         width: 32,
                         height: 32,
                         borderRadius: 0,
-                        // backgroundColor: "#213555",
                         flexShrink: 0,
                         mt: 0.2,
                     }}

@@ -16,6 +16,8 @@
 - **Security**: bcrypt, cors
 - **File Upload**: Multer (`/uploads`)
 - **API Documentation**: Swagger UI (`/swagger`)
+- **Push Notification**: web-push
+- **OMR Scanner**: Python 스크립트 연동
 - **Process Manager**: PM2
 
 ---
@@ -41,11 +43,15 @@
 │  │  ├─ board.js
 │  │  ├─ notice.js
 │  │  ├─ inquiry.js
+│  │  ├─ payment.js
+│  │  ├─ user.js
 │  │  ├─ policy.js
 │  │  └─ index.js
+│  ├─ services/          # ranking, OMR
 │  ├─ utils/
 │  └─ server.js          # 엔트리 포인트
 │
+├─ scripts/              # OMR Python 스크립트 및 requirements
 ├─ uploads/              # 업로드된 파일 저장소
 ├─ prisma.config.ts
 └─ package.json
@@ -70,6 +76,13 @@ npm install
 # Server Port
 PORT=3000
 
+# DB
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=postgres
+DB_USER=postgres
+DB_PASSWORD=
+
 # JWT Secret
 JWT_SECRET="your-super-secret-key"
 JWT_EXPIRES_IN=7d
@@ -77,11 +90,29 @@ JWT_EXPIRES_IN=7d
 # OAuth Callback URLs
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
+GOOGLE_CALLBACK_URL=
 KAKAO_CLIENT_ID=
+KAKAO_CLIENT_SECRET=
+KAKAO_CALLBACK_URL=
 NAVER_CLIENT_ID=
 NAVER_CLIENT_SECRET=
+NAVER_CALLBACK_URL=
 
 FRONTEND_URL=http://localhost:5173
+
+# External integrations
+KAKAO_REST_API_KEY=
+TOSS_SECRET_KEY=
+
+# Push notification
+VAPID_MAILTO=
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+
+# OMR scanner
+OMR_PYTHON_BIN=
+OMR_PYTHON_SCRIPT=
+OMR_SCANNER_TIMEOUT_MS=30000
 ```
 
 ### 3. 데이터베이스 마이그레이션
@@ -108,6 +139,8 @@ npm run dev
 # 프로덕션
 npm start
 ```
+
+기본 포트는 `3000`입니다.
 
 ---
 
@@ -150,12 +183,23 @@ Swagger UI로 확인:
 - **개발**: `http://localhost:3000/swagger`
 - **프로덕션**: `https://your-domain/swagger`
 
+주요 라우트 영역:
+
+- `/api/auth/*`: 로그인, 회원가입, 소셜 로그인, 내 정보, 회원 수정/탈퇴
+- `/api/league*`: 리그/참가자/매치/OMR
+- `/api/group*`: 클럽/멤버/랭킹
+- `/api/draw/*`: 추첨
+- `/api/payment/*`: 결제/구독
+- `/api/user/me/*`: 사용자 환경설정, 홈 요약, 푸시 구독, 종목 랭킹
+- `/api/notices`, `/api/faqs`, `/api/guides`, `/api/inquiries*`, `/api/policies/*`
+- `/api/admin/*`, `/api/admin/board/*`: 관리자/게시판 관리
+
 ---
 
 ## 🔧 문제 해결 (Troubleshooting)
 
 ### 데이터베이스 연결 실패
-- `.env` 파일의 `DATABASE_URL` 확인
+- `.env` 파일의 `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` 확인
 - PostgreSQL 서버 실행 상태 확인
 
 ### 마이그레이션 오류
@@ -183,6 +227,11 @@ lsof -i :3000
 - 각 OAuth 제공자 콘솔에서 Callback URL 설정 확인
 - `.env` 파일의 Client ID/Secret 및 `FRONTEND_URL` 값 확인
 
+### OMR 스캔 실패
+- `OMR_PYTHON_BIN`, `OMR_PYTHON_SCRIPT` 경로 확인
+- `scripts/requirements-omr.txt` 설치 여부 확인
+- Python 실행 권한 및 timeout 설정 확인
+
 ---
 
 ## 📌 참고사항
@@ -191,3 +240,5 @@ lsof -i :3000
 - 인증이 필요한 API는 `Authorization: Bearer <token>` 헤더 필요
 - Zod 검증 에러는 한글로 반환
 - 프로덕션 환경에서는 반드시 `.env`의 시크릿 값 변경 필요
+- 앱 시작 시 공지/FAQ/가이드/랭킹 관련 테이블과 컬럼 보정 SQL이 추가 실행됨
+- 런타임 쿼리는 Prisma Client가 아니라 `pg` 기반으로 작성되어 있음

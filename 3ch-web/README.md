@@ -80,6 +80,14 @@
 - 소셜 로그인 (Google, Kakao, Naver)
 - JWT 토큰 기반 인증
 
+### 주요 화면
+- 홈, 로그인/회원가입, 소셜 회원가입
+- 리그 생성 위자드, 리그 상세, 매치 운영, 대진표, OMR 입력지
+- 클럽 목록/생성/상세/관리, 클럽 랭킹
+- 추첨 목록/상세
+- 마이페이지, 공지, FAQ, 가이드, 문의, 설정, 약관/개인정보 처리방침
+- 관리자 대시보드, 회원/클럽/리그/추첨/랭킹/게시판 관리
+
 ---
 
 ## 🚀 배포 (Deployment)
@@ -121,6 +129,42 @@ location / {
 
 ---
 
+## ⚙️ 로컬 실행
+
+### 1. 의존성 설치
+
+```bash
+npm install
+```
+
+### 2. 개발 서버 실행
+
+```bash
+npm run dev
+```
+
+기본 개발 서버는 `5173` 포트에서 실행됩니다.
+
+### 3. 주요 환경 변수
+
+```dotenv
+VITE_API_BASE_URL=http://localhost:3000/api
+VITE_APP_URL=http://localhost:5173
+VITE_KAKAO_JS_KEY=
+VITE_TOSS_CLIENT_KEY=
+VITE_VAPID_PUBLIC_KEY=
+```
+
+### 4. 빌드 명령어
+
+```bash
+npm run build
+npm run build:test
+npm run build:prod
+```
+
+---
+
 ## 🔧 문제 해결 (Troubleshooting)
 
 ### CORS 에러
@@ -146,6 +190,11 @@ npm run build -- --force
 - OAuth 콜백 URL이 각 제공자 콘솔에 등록되었는지 확인
 - 팝업 차단이 활성화되어 있는지 확인
 
+### 푸시 알림 동작 안함
+- `VITE_VAPID_PUBLIC_KEY` 설정 확인
+- 브라우저 알림 권한 허용 여부 확인
+- API 서버의 VAPID 키 설정 및 구독 저장 API 동작 여부 확인
+
 ### 라우팅 404 에러 (프로덕션)
 - Nginx 설정에서 `try_files $uri $uri/ /index.html` 확인
 - SPA는 모든 경로를 `index.html`로 리다이렉트해야 함
@@ -159,6 +208,9 @@ npm run build -- --force
 - 토큰은 `localStorage`에 저장
 - Redux store에서 전역 상태 관리 (user, token)
 - MUI 테마는 `src/theme/` 폴더에서 커스터마이징
+- RTK Query base API는 `src/features/api/baseApi.ts`에서 관리
+- 주요 도메인 API는 `features/league`, `features/group`, `features/draw`, `features/policy`, `features/user`에 구성
+- 라우트 정의는 `src/routes/index.tsx` 기준
 
 ---
 

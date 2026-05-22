@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Box, Button, CircularProgress, IconButton, InputAdornment,
@@ -13,6 +13,8 @@ import CheckIcon from "@mui/icons-material/Check";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import ZoomInIcon from "@mui/icons-material/ZoomIn";
 import ZoomOutIcon from "@mui/icons-material/ZoomOut";
+import DownloadIcon from "@mui/icons-material/Download";
+import PrintIcon from "@mui/icons-material/Print";
 import SearchIcon from "@mui/icons-material/Search";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import {
@@ -652,6 +654,7 @@ export default function LeagueTournamentBracket() {
   const navigate = useNavigate();
   const [zoom, setZoom] = useState(1);
   const [editMode, setEditMode] = useState(false);
+  const exportRef = useRef<HTMLDivElement | null>(null);
 
   // 참가자 등록 팝업
   const [registerTarget, setRegisterTarget] = useState<{ matchId: string; slot: "a" | "b" } | null>(null);
@@ -685,6 +688,63 @@ export default function LeagueTournamentBracket() {
   const [assignParticipant, { isLoading: isAssigning }] = useAssignMatchParticipantMutation();
 
   const handleRefresh = () => { refetchLeague(); refetchMatches(); };
+
+  const handleSaveImage = useCallback(async () => {
+    const el = exportRef.current;
+    if (!el) return;
+    const clone = el.cloneNode(true) as HTMLDivElement;
+    clone.style.transform = "none";
+    clone.style.position = "fixed";
+    clone.style.top = "-99999px";
+    clone.style.left = "0";
+    document.body.appendChild(clone);
+    try {
+      const html2canvas = (await import("html2canvas")).default;
+      const canvas = await html2canvas(clone, { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
+      const link = document.createElement("a");
+      link.href = canvas.toDataURL("image/png");
+      link.download = `tournament-bracket-${league?.name ?? "bracket"}.png`;
+      link.click();
+    } finally {
+      document.body.removeChild(clone);
+    }
+  }, [league?.name]);
+
+  const handlePrint = useCallback(async () => {
+    const el = exportRef.current;
+    if (!el) return;
+    const clone = el.cloneNode(true) as HTMLDivElement;
+    clone.style.transform = "none";
+    clone.style.position = "fixed";
+    clone.style.top = "-99999px";
+    clone.style.left = "0";
+    document.body.appendChild(clone);
+    try {
+      const html2canvas = (await import("html2canvas")).default;
+      const canvas = await html2canvas(clone, { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
+      const imageUrl = canvas.toDataURL("image/png");
+      const printWindow = window.open("", "_blank");
+      if (!printWindow) return;
+      printWindow.document.write(`<!DOCTYPE html>
+<html>
+  <head>
+    <title>Bracket Print</title>
+    <style>
+      body{margin:0;padding:16px;background:#fff}
+      img{display:block;width:100%;height:auto}
+    </style>
+  </head>
+  <body>
+    <img src="${imageUrl}" alt="Tournament bracket" />
+  </body>
+</html>`);
+      printWindow.document.close();
+      printWindow.focus();
+      printWindow.onload = () => { printWindow.print(); };
+    } finally {
+      document.body.removeChild(clone);
+    }
+  }, []);
 
   const handleEditToggle = () => {
     setEditMode((v) => !v);
@@ -923,7 +983,7 @@ export default function LeagueTournamentBracket() {
         <Box sx={{ position: "absolute", top: 0, bottom: 0, left: 0, right: registerTarget ? 260 : 0, overflow: "auto", display: "flex", alignItems: "flex-start", justifyContent: "flex-start", transition: "right 0.2s ease" }}>
           <Box sx={{ minWidth: "100%", minHeight: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <Box sx={{ width: canvasW * zoom, height: canvasH * zoom, position: "relative", flexShrink: 0 }}>
-            <Box sx={{
+            <Box ref={exportRef} sx={{
               position: "absolute", top: 0, left: 0,
               width: canvasW, height: canvasH,
               transformOrigin: "top left",
@@ -1039,6 +1099,23 @@ export default function LeagueTournamentBracket() {
         </Box>
 
         {/* ── 플로팅 버튼 (우하단) ── */}
+        <Box sx={{
+          position: "absolute", bottom: 128, right: 14, zIndex: 10,
+          bgcolor: "#fff", borderRadius: 2, boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+          display: "flex", flexDirection: "column", alignItems: "center", p: 0.25,
+        }}>
+          <Tooltip title="Download">
+            <IconButton size="small" onClick={handleSaveImage}>
+              <DownloadIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Print">
+            <IconButton size="small" onClick={handlePrint}>
+              <PrintIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          </Tooltip>
+        </Box>
+
         <Box sx={{
           position: "absolute", bottom: 70, right: 14, zIndex: 10,
           bgcolor: "#fff", borderRadius: 2, boxShadow: "0 2px 8px rgba(0,0,0,0.15)",

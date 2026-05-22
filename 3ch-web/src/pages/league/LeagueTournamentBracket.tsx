@@ -1100,7 +1100,7 @@ export default function LeagueTournamentBracket() {
 
         {/* ── 플로팅 버튼 (우하단) ── */}
         <Box sx={{
-          position: "absolute", bottom: 128, right: 14, zIndex: 10,
+          position: "absolute", bottom: 160, right: 14, zIndex: 10,
           bgcolor: "#fff", borderRadius: 2, boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
           display: "flex", flexDirection: "column", alignItems: "center", p: 0.25,
         }}>

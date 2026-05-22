@@ -35,6 +35,7 @@ import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { setPreferredGroupId } from "../../features/league/leagueCreationSlice";
 import { generateId } from "../../utils/dateUtils";
 import confettiImg from "../../assets/128_축포.png";
+import AdFitBanner from "../../components/AdFitBanner";
 
 type DrawPhase = "list" | "create" | "animating" | "done";
 type DrawType = "league" | "tournament";
@@ -484,6 +485,12 @@ export default function DrawMain() {
           </Stack>
         </SoftCard>
       )}
+
+      <AdFitBanner
+        unitId="DAN-X3ED2pcrZjwaDmxC"
+        width={320}
+        height={50}
+      />
 
       <SectionHeader
         title="리그 추첨"

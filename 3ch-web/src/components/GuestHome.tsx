@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Box, Button, Stack, Typography } from "@mui/material";
 import { useNavigate } from "react-router-dom";
+import AdFitBanner from "./AdFitBanner";
 const icon1 = "/128_첫번째 아이콘.png";
 const icon2 = "/128_두번째 아이콘.png";
 const icon3 = "/128_세번째 아이콘.png";
@@ -22,6 +23,13 @@ export default function GuestHome() {
             }}
         >
             <Stack>
+                <AdFitBanner
+                    unitId="DAN-39yopQXEuZ0jdlDM"
+                    width={320}
+                    height={50}
+                    sx={{ px: 2, pt: 1, pb: 2 }}
+                />
+
                 <Box sx={{ mx: 6.5, mb: 2.5 }}>
                     <Typography sx={{ fontSize: 24, fontWeight: 800, color: "#111827", mb: 1 }}>
                         리그·대회 운영, 한 번에 해결

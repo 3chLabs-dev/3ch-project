@@ -15,6 +15,7 @@ import MyLocationIcon from "@mui/icons-material/MyLocation";
 import { useAppSelector } from "../../app/hooks";
 import { useGetMyGroupsQuery, useSearchGroupsQuery, useRecommendGroupsMutation } from "../../features/group/groupApi";
 import type { Group, RecommendedClub } from "../../features/group/groupApi";
+import AdFitBanner from "../../components/AdFitBanner";
 
 const SPORT_EMOJI: Record<string, string> = {
     "탁구": "\uD83C\uDFD3",
@@ -93,6 +94,12 @@ export default function GroupMain() {
         <Stack spacing={2.5}>
             {/* 가입한 클럽 */}
             <Box>
+                <AdFitBanner
+                    unitId="DAN-xmjkMt9OIqzg6Fih"
+                    width={320}
+                    height={50}
+                    sx={{ mb: 1.5 }}
+                />
                 <Typography variant="subtitle1" sx={{ fontWeight: 900, mb: 1.5 }}>
                     가입한 클럽
                 </Typography>

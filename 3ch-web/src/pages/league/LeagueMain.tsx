@@ -10,6 +10,7 @@ import {
 } from "@mui/material";
 import TuneIcon from "@mui/icons-material/Tune";
 import { formatLeagueDateTime } from "../../utils/dateUtils";
+import AdFitBanner from "../../components/AdFitBanner";
 import LeagueFilterDialog from "../../components/LeagueFilterDialog.tsx";
 
 type LeagueStatus = "scheduled" | "active" | "completed";
@@ -112,6 +113,13 @@ export default function LeagueMainBody() {
           </Stack>
         </SoftCard>
       )}
+
+      <AdFitBanner
+        unitId="DAN-IYkpUS32ZIhq866m"
+        width={320}
+        height={50}
+        sx={{ pt: 0.5 }}
+      />
 
       {/* 리그 일정 */}
       <LeagueSectionHeader

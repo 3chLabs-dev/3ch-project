@@ -26,6 +26,7 @@ import type { LeagueListItem } from "../features/league/leagueApi";
 import { useGetMyGroupsQuery } from "../features/group/groupApi";
 import { setPreferredGroupId } from "../features/league/leagueCreationSlice";
 // import LeagueFilterDialog from "../components/LeagueFilterDialog.tsx";
+import AdFitBanner from "../components/AdFitBanner";
 import GuestHome from "../components/GuestHome.tsx";
 
 const SPORT_EMOJI: Record<string, string> = {
@@ -123,6 +124,14 @@ export default function Home() {
     return (
         <Box>
         <Stack spacing={2.5} sx={{mb: 2}}>
+            {isLoggedIn && (
+                <AdFitBanner
+                    unitId="DAN-wqLH9vJ3WU5v6jE4"
+                    width={320}
+                    height={50}
+                    sx={{ pt: 1 }}
+                />
+            )}
             {/* 사용자명 + 클럽 선택 */}
             {isLoggedIn && (
                 <Stack direction="row" alignItems="center" justifyContent="space-between">

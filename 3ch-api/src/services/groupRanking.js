@@ -47,6 +47,7 @@ async function ensureGroupRankingTables() {
           updated_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW()
         )
       `);
+      await pool.query(`ALTER TABLE group_rankings ALTER COLUMN id SET DEFAULT gen_random_uuid()::text`);
       await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS group_rankings_group_member_uidx ON group_rankings(group_id, member_id)`);
       await pool.query(`CREATE INDEX IF NOT EXISTS group_rankings_group_rank_idx ON group_rankings(group_id, rank)`);
       await pool.query(`CREATE INDEX IF NOT EXISTS group_rankings_group_rating_idx ON group_rankings(group_id, rating DESC)`);
@@ -67,6 +68,7 @@ async function ensureGroupRankingTables() {
           created_at         TIMESTAMPTZ  NOT NULL DEFAULT NOW()
         )
       `);
+      await pool.query(`ALTER TABLE group_ranking_events ALTER COLUMN id SET DEFAULT gen_random_uuid()::text`);
       await pool.query(`CREATE INDEX IF NOT EXISTS group_ranking_events_member_idx ON group_ranking_events(group_id, member_id, created_at DESC)`);
       await pool.query(`CREATE INDEX IF NOT EXISTS group_ranking_events_match_idx ON group_ranking_events(league_match_id)`);
     })().catch((error) => {

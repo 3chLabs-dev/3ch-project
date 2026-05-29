@@ -122,6 +122,122 @@ function parseOmrPayload(rawPayload) {
   }
 }
 
+const scoreboardResultSchema = z.object({
+  red_set: z.number().int().min(0).max(99),
+  black_set: z.number().int().min(0).max(99),
+}).refine((value) => value.red_set !== value.black_set, {
+  message: '세트 스코어는 동점일 수 없습니다.',
+});
+
+// GET /table/:table_id - scoreboard tablet polling endpoint.
+router.get('/table/:table_id', async (req, res) => {
+  const tableId = String(req.params.table_id ?? '').trim();
+  if (!tableId) return res.status(400).json({ status: 'INVALID_TABLE_ID' });
+  const normalizedTableId = tableId.toLowerCase().replace(/\s+/g, '');
+  const tableAliases = [
+    normalizedTableId,
+    `${normalizedTableId}번`,
+    `${normalizedTableId}번코트`,
+    `${normalizedTableId}번탁구대`,
+    `${normalizedTableId}코트`,
+    `${normalizedTableId}탁구대`,
+    `코트${normalizedTableId}`,
+    `탁구대${normalizedTableId}`,
+  ];
+
+  try {
+    const result = await pool.query(
+      `SELECT
+         m.id AS match_id,
+         m.league_id,
+         m.match_order,
+         m.court,
+         m.status,
+         m.score_a,
+         m.score_b,
+         pa.name AS player_red,
+         pb.name AS player_black,
+         l.name AS league_name
+       FROM league_matches m
+       INNER JOIN leagues l ON l.id = m.league_id
+       LEFT JOIN league_participants pa ON pa.id = m.participant_a_id
+       LEFT JOIN league_participants pb ON pb.id = m.participant_b_id
+       WHERE REGEXP_REPLACE(LOWER(TRIM(m.court)), '\\s+', '', 'g') = ANY($1::text[])
+         AND m.status = 'playing'
+       ORDER BY l.start_date DESC NULLS LAST, m.match_order ASC
+       LIMIT 1`,
+      [tableAliases],
+    );
+
+    const match = result.rows[0];
+    if (!match) return res.json({ status: 'WAITING' });
+
+    return res.json({
+      status: 'MATCH_PUSHED',
+      table_id: tableId,
+      match_id: match.match_id,
+      league_id: match.league_id,
+      match_order: match.match_order,
+      player_red: match.player_red,
+      player_black: match.player_black,
+      red_set: match.score_a,
+      black_set: match.score_b,
+      league_name: match.league_name,
+    });
+  } catch (err) {
+    console.error('Error polling table match:', err);
+    return res.status(500).json({ status: 'SERVER_ERROR' });
+  }
+});
+
+// POST /match/:match_id/result - final result from scoreboard tablet.
+router.post('/match/:match_id/result', async (req, res) => {
+  const matchId = String(req.params.match_id ?? '').trim();
+  const parsed = scoreboardResultSchema.safeParse(req.body);
+  if (!matchId) return res.status(400).json({ ok: false, error: 'INVALID_MATCH_ID' });
+  if (!parsed.success) {
+    return res.status(400).json({ ok: false, error: 'INVALID_RESULT', details: parsed.error.flatten() });
+  }
+
+  const { red_set, black_set } = parsed.data;
+  try {
+    const matchResult = await pool.query(
+      `UPDATE league_matches
+          SET score_a = $1,
+              score_b = $2,
+              status = 'done'
+        WHERE id = $3
+        RETURNING id, league_id, court`,
+      [red_set, black_set, matchId],
+    );
+    const match = matchResult.rows[0];
+    if (!match) return res.status(404).json({ ok: false, error: 'MATCH_NOT_FOUND' });
+
+    const leagueResult = await pool.query(
+      `SELECT tournament_seeding FROM leagues WHERE id = $1`,
+      [match.league_id],
+    );
+    await reconcileTournamentMatches(pool, match.league_id, {
+      manualSeeding: leagueResult.rows[0]?.tournament_seeding === 'manual',
+    });
+    await triggerRankingRebuildByLeagueId(match.league_id);
+
+    return res.json({
+      ok: true,
+      status: 'RESULT_ACCEPTED',
+      match_id: match.id,
+      league_id: match.league_id,
+      table_id: match.court,
+      red_set,
+      black_set,
+      next_status: 'WAITING',
+    });
+  } catch (err) {
+    console.error('Error saving scoreboard result:', err);
+    return res.status(500).json({ ok: false, error: 'SERVER_ERROR' });
+  }
+});
+
 // 컬럼 자동 추가
 pool.query(`
   ALTER TABLE leagues

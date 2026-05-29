@@ -99,7 +99,7 @@ model GroupRankingSetting {
 }
 
 model GroupRanking {
-  id               String   @id @default(uuid())
+  id               String   @id @default(dbgenerated("gen_random_uuid()::text"))
   group_id         String
   member_id        Int
   rating           Int      @default(1500)
@@ -124,7 +124,7 @@ model GroupRanking {
 }
 
 model GroupRankingEvent {
-  id                 String   @id @default(uuid())
+  id                 String   @id @default(dbgenerated("gen_random_uuid()::text"))
   group_id           String
   member_id          Int
   opponent_member_id Int?
@@ -146,7 +146,7 @@ model GroupRankingEvent {
 }
 
 model SportRanking {
-  id               String   @id @default(uuid())
+  id               String   @id @default(dbgenerated("gen_random_uuid()::text"))
   sport            String
   member_id        Int
   rating           Int      @default(1500)
@@ -170,7 +170,7 @@ model SportRanking {
 }
 
 model SportRankingEvent {
-  id                 String   @id @default(uuid())
+  id                 String   @id @default(dbgenerated("gen_random_uuid()::text"))
   sport              String
   member_id          Int
   opponent_member_id Int?

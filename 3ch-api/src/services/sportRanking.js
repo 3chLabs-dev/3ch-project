@@ -52,6 +52,7 @@ async function ensureSportRankingTables() {
           updated_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW()
         )
       `);
+      await pool.query(`ALTER TABLE sport_rankings ALTER COLUMN id SET DEFAULT gen_random_uuid()::text`);
       await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS sport_rankings_sport_member_uidx ON sport_rankings(sport, member_id)`);
       await pool.query(`CREATE INDEX IF NOT EXISTS sport_rankings_sport_rank_idx ON sport_rankings(sport, rank)`);
       await pool.query(`CREATE INDEX IF NOT EXISTS sport_rankings_member_idx ON sport_rankings(member_id)`);
@@ -73,6 +74,7 @@ async function ensureSportRankingTables() {
           created_at         TIMESTAMPTZ  NOT NULL DEFAULT NOW()
         )
       `);
+      await pool.query(`ALTER TABLE sport_ranking_events ALTER COLUMN id SET DEFAULT gen_random_uuid()::text`);
       await pool.query(`CREATE INDEX IF NOT EXISTS sport_ranking_events_member_idx ON sport_ranking_events(sport, member_id, created_at DESC)`);
       await pool.query(`CREATE INDEX IF NOT EXISTS sport_ranking_events_match_idx ON sport_ranking_events(league_match_id)`);
     })().catch((error) => {

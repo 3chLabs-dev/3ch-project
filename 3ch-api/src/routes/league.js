@@ -164,6 +164,8 @@ router.get('/table/:table_id', async (req, res) => {
        LEFT JOIN league_participants pb ON pb.id = m.participant_b_id
        WHERE REGEXP_REPLACE(LOWER(TRIM(m.court)), '\\s+', '', 'g') = ANY($1::text[])
          AND m.status = 'playing'
+         AND (l.start_date AT TIME ZONE 'Asia/Seoul')::date
+             = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul')::date
        ORDER BY l.start_date DESC NULLS LAST, m.match_order ASC
        LIMIT 1`,
       [tableAliases],

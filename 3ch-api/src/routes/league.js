@@ -123,9 +123,15 @@ function parseOmrPayload(rawPayload) {
 }
 
 const scoreboardResultSchema = z.object({
-  red_set: z.number().int().min(0).max(99),
+  white_set: z.number().int().min(0).max(99).optional(),
+  red_set: z.number().int().min(0).max(99).optional(),
   black_set: z.number().int().min(0).max(99),
-}).refine((value) => value.red_set !== value.black_set, {
+}).refine((value) => value.white_set !== undefined || value.red_set !== undefined, {
+  message: 'white_set 또는 red_set이 필요합니다.',
+}).transform((value) => ({
+  white_set: value.white_set ?? value.red_set,
+  black_set: value.black_set,
+})).refine((value) => value.white_set !== value.black_set, {
   message: '세트 스코어는 동점일 수 없습니다.',
 });
 
@@ -163,10 +169,13 @@ router.get('/table/:table_id', async (req, res) => {
        LEFT JOIN league_participants pa ON pa.id = m.participant_a_id
        LEFT JOIN league_participants pb ON pb.id = m.participant_b_id
        WHERE REGEXP_REPLACE(LOWER(TRIM(m.court)), '\\s+', '', 'g') = ANY($1::text[])
-         AND m.status = 'playing'
+         AND m.status IN ('playing', 'pending')
          AND (l.start_date AT TIME ZONE 'Asia/Seoul')::date
              = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul')::date
-       ORDER BY l.start_date DESC NULLS LAST, m.match_order ASC
+       ORDER BY
+         CASE WHEN m.status = 'playing' THEN 0 ELSE 1 END,
+         m.created_at DESC,
+         m.match_order ASC
        LIMIT 1`,
       [tableAliases],
     );
@@ -180,8 +189,11 @@ router.get('/table/:table_id', async (req, res) => {
       match_id: match.match_id,
       league_id: match.league_id,
       match_order: match.match_order,
+      match_status: match.status,
+      player_white: match.player_red,
       player_red: match.player_red,
       player_black: match.player_black,
+      white_set: match.score_a,
       red_set: match.score_a,
       black_set: match.score_b,
       league_name: match.league_name,
@@ -201,7 +213,7 @@ router.post('/match/:match_id/result', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'INVALID_RESULT', details: parsed.error.flatten() });
   }
 
-  const { red_set, black_set } = parsed.data;
+  const { white_set, black_set } = parsed.data;
   try {
     const matchResult = await pool.query(
       `UPDATE league_matches
@@ -210,7 +222,7 @@ router.post('/match/:match_id/result', async (req, res) => {
               status = 'done'
         WHERE id = $3
         RETURNING id, league_id, court`,
-      [red_set, black_set, matchId],
+      [white_set, black_set, matchId],
     );
     const match = matchResult.rows[0];
     if (!match) return res.status(404).json({ ok: false, error: 'MATCH_NOT_FOUND' });
@@ -230,7 +242,8 @@ router.post('/match/:match_id/result', async (req, res) => {
       match_id: match.id,
       league_id: match.league_id,
       table_id: match.court,
-      red_set,
+      white_set,
+      red_set: white_set,
       black_set,
       next_status: 'WAITING',
     });

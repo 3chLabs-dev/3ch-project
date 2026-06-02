@@ -37,6 +37,7 @@ import { toUTCDate } from "../../utils/dateUtils";
 const SCORE_OPTIONS = [0, 1, 2, 3];
 const SHEET_WIDTH = 780;
 const OMR_ALIGNMENT_MARKER_SIZE = 14;
+const OMR_ALIGNMENT_MARKER_INSET = 4;
 const MATCH_ORDER_PAIRS = [
   [1, 4],
   [2, 3],
@@ -82,8 +83,8 @@ function OmrAlignmentMarker({ position }: { position: "top-left" | "top-right" |
         boxSizing: "border-box",
         zIndex: 2,
         pointerEvents: "none",
-        [vertical]: 0,
-        [horizontal]: 0,
+        [vertical]: OMR_ALIGNMENT_MARKER_INSET,
+        [horizontal]: OMR_ALIGNMENT_MARKER_INSET,
       }}
     />
   );

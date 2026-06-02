@@ -6,10 +6,13 @@ import {
   Button,
   CircularProgress,
   Dialog,
+  DialogActions,
   DialogContent,
   DialogTitle,
   GlobalStyles,
   IconButton,
+  MenuItem,
+  Select,
   Stack,
   Typography,
 } from "@mui/material";
@@ -35,9 +38,9 @@ import { useAppSelector } from "../../app/hooks";
 import { toUTCDate } from "../../utils/dateUtils";
 
 const SCORE_OPTIONS = [0, 1, 2, 3];
-const SHEET_WIDTH = 780;
-const OMR_ALIGNMENT_MARKER_SIZE = 14;
-const OMR_ALIGNMENT_MARKER_INSET = 4;
+const SHEET_WIDTH = 900;
+const OMR_ALIGNMENT_MARKER_SIZE = 18;
+const OMR_ALIGNMENT_MARKER_GUTTER = 28;
 const MATCH_ORDER_PAIRS = [
   [1, 4],
   [2, 3],
@@ -68,25 +71,55 @@ type OmrMark = {
 
 type OmrScanResult = Record<string, Record<string, number>>;
 
+type OmrPreviewMatch = {
+  matchId: string;
+  playerAId: string;
+  playerAName: string;
+  playerBId: string;
+  playerBName: string;
+  scoreA: number | null;
+  scoreB: number | null;
+};
+
 function OmrAlignmentMarker({ position }: { position: "top-left" | "top-right" | "bottom-left" | "bottom-right" }) {
   const [vertical, horizontal] = position.split("-");
+  const thickness = 5;
   return (
     <Box
       aria-hidden="true"
       data-omr-alignment-marker="true"
       sx={{
-        position: "absolute",
+        position: "relative",
         width: OMR_ALIGNMENT_MARKER_SIZE,
         height: OMR_ALIGNMENT_MARKER_SIZE,
-        bgcolor: "#000",
-        border: `${OMR_ALIGNMENT_MARKER_SIZE / 2}px solid #000`,
         boxSizing: "border-box",
-        zIndex: 2,
+        flexShrink: 0,
         pointerEvents: "none",
-        [vertical]: OMR_ALIGNMENT_MARKER_INSET,
-        [horizontal]: OMR_ALIGNMENT_MARKER_INSET,
       }}
-    />
+    >
+      <Box
+        sx={{
+          position: "absolute",
+          [vertical]: 0,
+          left: 0,
+          right: 0,
+          height: thickness,
+          border: `${thickness / 2}px solid #000`,
+          boxSizing: "border-box",
+        }}
+      />
+      <Box
+        sx={{
+          position: "absolute",
+          [horizontal]: 0,
+          top: 0,
+          bottom: 0,
+          width: thickness,
+          border: `${thickness / 2}px solid #000`,
+          boxSizing: "border-box",
+        }}
+      />
+    </Box>
   );
 }
 
@@ -188,6 +221,11 @@ function clamp(value: number, low: number, high: number) {
   return Math.max(low, Math.min(high, value));
 }
 
+function parseOmrPreviewScore(value: unknown) {
+  if (value == null || String(value) === "") return null;
+  return Number(value);
+}
+
 function readLuminanceStats(data: ImageData, left: number, top: number, right: number, bottom: number) {
   let count = 0;
   let darkPixels = 0;
@@ -255,6 +293,25 @@ function readBestDarkness(data: ImageData, centerX: number, centerY: number, wid
         )
       ))
     )),
+  );
+}
+
+function OmrAlignmentMarkerCell({ position }: { position: "top-left" | "top-right" | "bottom-left" | "bottom-right" }) {
+  return (
+    <td
+      aria-hidden="true"
+      style={{
+        width: OMR_ALIGNMENT_MARKER_GUTTER,
+        height: OMR_ALIGNMENT_MARKER_GUTTER,
+        padding: 0,
+        border: "none",
+        background: "#fff",
+      }}
+    >
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <OmrAlignmentMarker position={position} />
+      </Box>
+    </td>
   );
 }
 
@@ -457,7 +514,7 @@ function ScoreMarks({
         overflow: "hidden",
       }}
     >
-      <Stack direction="row" sx={{ width: 100, justifyContent: "space-between" }}>
+      <Stack direction="row" sx={{ width: 92, justifyContent: "space-between" }}>
         {SCORE_OPTIONS.map((score) => (
           <Box
             key={`label-${score}`}
@@ -476,7 +533,7 @@ function ScoreMarks({
           </Box>
         ))}
       </Stack>
-      <Stack direction="row" sx={{ width: 100, justifyContent: "space-between" }}>
+      <Stack direction="row" sx={{ width: 92, justifyContent: "space-between" }}>
         {SCORE_OPTIONS.map((score) => (
           <Box
             key={`mark-${score}`}
@@ -606,6 +663,8 @@ export default function LeagueOmrSheet() {
   const [sheetScale, setSheetScale] = useState(1);
   const [sheetHeight, setSheetHeight] = useState(0);
   const [resultDialogOpen, setResultDialogOpen] = useState(false);
+  const [omrPreviewMatches, setOmrPreviewMatches] = useState<OmrPreviewMatch[]>([]);
+  const [omrPreviewOpen, setOmrPreviewOpen] = useState(false);
   const [forceScoreEditMode, setForceScoreEditMode] = useState(false);
   const [omrProcessingMessage, setOmrProcessingMessage] = useState("");
 
@@ -650,6 +709,11 @@ export default function LeagueOmrSheet() {
   const sheetTitle = `${formatSheetDate(league?.start_date)} / ${league?.type ?? "단식"} ${league?.format ?? "단일리그"} / ${league?.rules ?? ""}`;
   const isCompleted = league?.status === "completed";
   const scoreEditMode = isCompleted || forceScoreEditMode;
+  const validOmrPreviewCount = omrPreviewMatches.filter((match) => (
+    match.scoreA != null
+      && match.scoreB != null
+      && [match.scoreA, match.scoreB].filter((score) => score === 3).length === 1
+  )).length;
 
   useEffect(() => {
     if (!canManage || !matchData || matchData.matches.length > 0 || participants.length !== 4) return;
@@ -738,20 +802,40 @@ export default function LeagueOmrSheet() {
     });
   };
 
-  const applyOmrResult = async (result: OmrScanResult) => {
+  const buildOmrPreview = (result: OmrScanResult) => {
+    return matches.flatMap((match) => {
+      if (!match.participant_a_id || !match.participant_b_id) return [];
+      const playerA = participants.find((participant) => participant.id === match.participant_a_id);
+      const playerB = participants.find((participant) => participant.id === match.participant_b_id);
+      if (!playerA || !playerB) return [];
+      const matchResult = result[match.id] ?? {};
+      let scoreA = matchResult[match.participant_a_id] ?? null;
+      let scoreB = matchResult[match.participant_b_id] ?? null;
+      if (scoreA == null && scoreB != null && scoreB < 3) scoreA = 3;
+      if (scoreB == null && scoreA != null && scoreA < 3) scoreB = 3;
+      return [{
+        matchId: match.id,
+        playerAId: match.participant_a_id,
+        playerAName: playerA.name,
+        playerBId: match.participant_b_id,
+        playerBName: playerB.name,
+        scoreA,
+        scoreB,
+      }];
+    });
+  };
+
+  const applyOmrPreview = async () => {
     let updated = 0;
-    for (const match of matches) {
-      if (!match.participant_a_id || !match.participant_b_id) continue;
-      const matchResult = result[match.id];
-      if (!matchResult) continue;
-      const scoreA = matchResult[match.participant_a_id];
-      const scoreB = matchResult[match.participant_b_id];
+    setOmrProcessingMessage("확인한 OMR 점수를 저장하는 중입니다.");
+    for (const match of omrPreviewMatches) {
+      const { scoreA, scoreB } = match;
       if (scoreA == null || scoreB == null) continue;
       if ([scoreA, scoreB].filter((score) => score === 3).length !== 1) continue;
       await withTimeout(
         updateMatch({
           leagueId: id,
-          matchId: match.id,
+          matchId: match.matchId,
           updates: {
             score_a: scoreA,
             score_b: scoreB,
@@ -763,7 +847,29 @@ export default function LeagueOmrSheet() {
       );
       updated += 1;
     }
+    setOmrProcessingMessage("");
+    setOmrPreviewOpen(false);
+    setForceScoreEditMode(true);
+    window.alert(`${updated}개 경기의 점수를 저장했습니다.`);
     return updated;
+  };
+
+  const updateOmrPreviewScore = (matchId: string, side: "a" | "b", score: number | null) => {
+    setOmrPreviewMatches((current) => current.map((match) => (
+      match.matchId === matchId
+        ? { ...match, [side === "a" ? "scoreA" : "scoreB"]: score }
+        : match
+    )));
+  };
+
+  const handleSaveOmrPreview = async () => {
+    try {
+      await applyOmrPreview();
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "OMR 결과 저장에 실패했습니다.");
+    } finally {
+      setOmrProcessingMessage("");
+    }
   };
 
   const handleResultFile = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -821,9 +927,8 @@ export default function LeagueOmrSheet() {
         setOmrProcessingMessage("기기에서 OMR 마킹을 다시 분석하는 중입니다.");
         result = await scanOmrImageOnDevice(file, sheetMarks, tableMarks);
       }
-      setOmrProcessingMessage("인식된 점수를 저장하는 중입니다.");
-      const updated = await applyOmrResult(result);
-      if (updated === 0) {
+      const previewMatches = buildOmrPreview(result);
+      if (previewMatches.length === 0) {
         console.info("OMR scan result had no applicable complete matches", {
           serverRecognizedCount,
           recognizedCount: countRecognizedScores(result),
@@ -832,8 +937,8 @@ export default function LeagueOmrSheet() {
         window.alert("인식된 마킹이 없습니다. 대진표가 화면에 꽉 차게 촬영되었는지 확인해 주세요.");
         return;
       }
-      setForceScoreEditMode(true);
-      window.alert(`${updated}개 경기의 점수를 OMR로 인식해 반영했습니다.`);
+      setOmrPreviewMatches(previewMatches);
+      setOmrPreviewOpen(true);
     } catch (error) {
       window.alert(error instanceof Error ? error.message : "OMR 인식에 실패했습니다.");
     } finally {
@@ -1035,6 +1140,7 @@ export default function LeagueOmrSheet() {
           <thead>
             <tr>
               <th style={{ width: 96 }}>참가자명</th>
+              <th aria-hidden="true" style={{ width: OMR_ALIGNMENT_MARKER_GUTTER, border: "none", background: "#fff" }} />
               {participants.map((participant, index) => (
                 <th key={participant.id}>
                   <Stack alignItems="center" spacing={0.3}>
@@ -1046,12 +1152,20 @@ export default function LeagueOmrSheet() {
                   </Stack>
                 </th>
               ))}
+              <th aria-hidden="true" style={{ width: OMR_ALIGNMENT_MARKER_GUTTER, border: "none", background: "#fff" }} />
               <th style={{ width: 58 }}>승/패</th>
               <th style={{ width: 54 }}>순위</th>
               <th style={{ width: 82 }}>동점자<br />세트 득실</th>
             </tr>
           </thead>
           <tbody>
+            <tr aria-hidden="true">
+              <td style={{ border: "none", background: "#fff" }} />
+              <OmrAlignmentMarkerCell position="top-left" />
+              <td colSpan={participants.length} style={{ border: "none", background: "#fff" }} />
+              <OmrAlignmentMarkerCell position="top-right" />
+              <td colSpan={3} style={{ border: "none", background: "#fff" }} />
+            </tr>
             {participants.map((rowPlayer, rowIndex) => {
               const rowStat = stats[rowPlayer.id] ?? { wins: 0, losses: 0, setTotal: 0, setLost: 0, rank: 0, tieDiff: null };
               return (
@@ -1065,35 +1179,23 @@ export default function LeagueOmrSheet() {
                       <Box>{rowPlayer.name}</Box>
                     </Stack>
                   </th>
-                  {participants.map((colPlayer, colIndex) => {
-                    const markerPosition = rowIndex === 0 && colIndex === 0
-                      ? "top-left"
-                      : rowIndex === 0 && colIndex === participants.length - 1
-                        ? "top-right"
-                        : rowIndex === participants.length - 1 && colIndex === 0
-                          ? "bottom-left"
-                          : rowIndex === participants.length - 1 && colIndex === participants.length - 1
-                            ? "bottom-right"
-                            : null;
+                  <td aria-hidden="true" style={{ border: "none", background: "#fff" }} />
+                  {participants.map((colPlayer) => {
                     if (rowPlayer.id === colPlayer.id) {
                       return (
                         <td
                           key={colPlayer.id}
                           style={{
-                            position: "relative",
                             background:
                               "linear-gradient(28deg, transparent 49%, #D1D5DB 49.5%, #D1D5DB 50.5%, transparent 51%)",
                           }}
-                        >
-                          {markerPosition && <OmrAlignmentMarker position={markerPosition} />}
-                        </td>
+                        />
                       );
                     }
                     const match = matchLookup.get(matchKey(rowPlayer.id, colPlayer.id));
                     const selectedScore = getScoreFor(match, rowPlayer.id);
                     return (
-                      <td key={colPlayer.id} style={{ position: "relative" }}>
-                        {markerPosition && <OmrAlignmentMarker position={markerPosition} />}
+                      <td key={colPlayer.id}>
                         {scoreEditMode ? (
                           <Box sx={{ position: "relative", minHeight: 44 }}>
                             <ScoreStepper
@@ -1133,12 +1235,20 @@ export default function LeagueOmrSheet() {
                       </td>
                     );
                   })}
+                  <td aria-hidden="true" style={{ border: "none", background: "#fff" }} />
                   <td style={{ fontWeight: 900 }}>{rowStat.wins}/{rowStat.losses}</td>
                   <td style={{ fontWeight: 900, color: isCompleted && rowStat.rank === 1 ? "#DC2626" : "#111827" }}>{rowStat.rank || ""}</td>
                   <td style={{ fontWeight: 900 }}>{rowStat.setTotal}/{rowStat.setLost}</td>
                 </tr>
               );
             })}
+            <tr aria-hidden="true">
+              <td style={{ border: "none", background: "#fff" }} />
+              <OmrAlignmentMarkerCell position="bottom-left" />
+              <td colSpan={participants.length} style={{ border: "none", background: "#fff" }} />
+              <OmrAlignmentMarkerCell position="bottom-right" />
+              <td colSpan={3} style={{ border: "none", background: "#fff" }} />
+            </tr>
           </tbody>
           </Box>
         </Box>
@@ -1279,6 +1389,72 @@ export default function LeagueOmrSheet() {
             </Button>
           </Stack>
         </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={omrPreviewOpen}
+        onClose={() => !isOmrProcessing && setOmrPreviewOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontSize: 17, fontWeight: 900 }}>
+          OMR 인식 결과 확인
+        </DialogTitle>
+        <DialogContent dividers>
+          <Typography sx={{ mb: 1.5, color: "#6B7280", fontSize: 13, fontWeight: 700 }}>
+            인식되지 않았거나 잘못된 점수는 저장 전에 수정해 주세요.
+          </Typography>
+          <Stack spacing={1}>
+            {omrPreviewMatches.map((match) => {
+              const isValid = match.scoreA != null
+                && match.scoreB != null
+                && [match.scoreA, match.scoreB].filter((score) => score === 3).length === 1;
+              return (
+                <Stack
+                  key={match.matchId}
+                  direction="row"
+                  alignItems="center"
+                  spacing={1}
+                  sx={{ border: "1px solid", borderColor: isValid ? "#D1FAE5" : "#FDE68A", p: 1, borderRadius: 1 }}
+                >
+                  <Typography sx={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 800 }} noWrap>
+                    {match.playerAName}
+                  </Typography>
+                  <Select
+                    size="small"
+                    value={match.scoreA ?? ""}
+                    onChange={(event) => updateOmrPreviewScore(match.matchId, "a", parseOmrPreviewScore(event.target.value))}
+                    sx={{ width: 62, fontWeight: 900 }}
+                  >
+                    <MenuItem value="">-</MenuItem>
+                    {SCORE_OPTIONS.map((score) => <MenuItem key={score} value={score}>{score}</MenuItem>)}
+                  </Select>
+                  <Typography sx={{ fontSize: 12, fontWeight: 900 }}>:</Typography>
+                  <Select
+                    size="small"
+                    value={match.scoreB ?? ""}
+                    onChange={(event) => updateOmrPreviewScore(match.matchId, "b", parseOmrPreviewScore(event.target.value))}
+                    sx={{ width: 62, fontWeight: 900 }}
+                  >
+                    <MenuItem value="">-</MenuItem>
+                    {SCORE_OPTIONS.map((score) => <MenuItem key={score} value={score}>{score}</MenuItem>)}
+                  </Select>
+                  <Typography sx={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 800 }} noWrap>
+                    {match.playerBName}
+                  </Typography>
+                </Stack>
+              );
+            })}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 2.5, py: 1.5 }}>
+          <Button onClick={() => setOmrPreviewOpen(false)} disabled={isOmrProcessing}>
+            취소
+          </Button>
+          <Button variant="contained" onClick={handleSaveOmrPreview} disabled={isOmrProcessing || validOmrPreviewCount === 0}>
+            {validOmrPreviewCount}개 경기 저장
+          </Button>
+        </DialogActions>
       </Dialog>
       </Box>
     </Box>

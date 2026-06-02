@@ -523,13 +523,24 @@ function SectionHeader({ title, icon }: { title: string; icon?: React.ReactNode 
     );
 }
 
+function getLeagueProgressPath(id: string, format?: string | null) {
+    if (format === "4인 리그 (OMR)") return `/league/${id}/omr`;
+    return `/league/${id}/matches`;
+}
+
 function MyGroupCard({ item, navigate }: { item: MyGroupItem; navigate: (path: string) => void }) {
     return (
         <Card
             elevation={2}
             onClick={() => {
                 const base = item.league_code ?? item.league_id;
-                navigate(item.format?.includes("토너먼트") ? `/league/${base}/tournament` : `/league/${base}/bracket`);
+                navigate(
+                    item.format === "4인 리그 (OMR)"
+                        ? `/league/${base}/omr`
+                        : item.format?.includes("토너먼트")
+                            ? `/league/${base}/tournament`
+                            : `/league/${base}/bracket`,
+                );
             }}
             sx={{ borderRadius: 0.6, boxShadow: "0 4px 12px rgba(0,0,0,0.08)", cursor: "pointer" }}
         >
@@ -624,10 +635,11 @@ function MyWinCard({ item, navigate }: { item: MyWinItem; navigate: (path: strin
 
 function LeagueCard({ league, goToMatches = false,}: { league: LeagueListItem; goToMatches?: boolean; }) {
     const navigate = useNavigate();
+    const base = league.league_code ?? league.id;
 
-        const targetPath = goToMatches
-        ? `/league/${league.league_code ?? league.id}/matches`
-        : `/league/${league.league_code ?? league.id}`;
+    const targetPath = goToMatches
+        ? getLeagueProgressPath(base, league.format)
+        : `/league/${base}`;
     return (
         <Card
             elevation={2}

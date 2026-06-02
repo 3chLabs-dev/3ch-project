@@ -329,13 +329,15 @@
       if (league?.status !== "active") {
         await updateLeague({ id, updates: { status: "active" } });
       }
+      navigate(getProgressPath());
+    };
+
+    const getProgressPath = () => {
       if (league?.format?.includes("토너먼트") && league?.format !== "단일리그 + 토너먼트") {
-        navigate(`/league/${id}/tournament/matches`);
-      } else if (league?.format === "4인 리그 (OMR)") {
-        navigate(`/league/${id}/omr`);
-      } else {
-        navigate(`/league/${id}/matches`);
+        return `/league/${id}/tournament/matches`;
       }
+      if (league?.format === "4인 리그 (OMR)") return `/league/${id}/omr`;
+      return `/league/${id}/matches`;
     };
 
     //상시 수정모드 전용 변환 함수
@@ -1513,7 +1515,7 @@ const handleSaveEdit = async () => {
               <Box sx={floatingBoxSx}>
                 <Button fullWidth variant="contained" disableElevation
                   sx={{ borderRadius: 1, height: 44, fontWeight: 900, fontSize: 15, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}
-                  onClick={() => navigate(league.format?.includes("토너먼트") && league.format !== "단일리그 + 토너먼트" ? `/league/${id}/tournament/matches` : `/league/${id}/matches`)}
+                  onClick={() => navigate(getProgressPath())}
                 >
                   리그 진행 중
                 </Button>
@@ -1554,7 +1556,7 @@ const handleSaveEdit = async () => {
                 <Button
                   fullWidth variant="contained" disableElevation
                   sx={{ borderRadius: 1, height: 44, fontWeight: 900, fontSize: 15, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}
-                  onClick={() => navigate(league.format?.includes("토너먼트") && league.format !== "단일리그 + 토너먼트" ? `/league/${id}/tournament/matches` : `/league/${id}/matches`)}
+                  onClick={() => navigate(getProgressPath())}
                 >
                   리그 진행 중
                 </Button>

@@ -72,6 +72,7 @@ function OmrAlignmentMarker({ position }: { position: "top-left" | "top-right" |
   return (
     <Box
       aria-hidden="true"
+      data-omr-alignment-marker="true"
       sx={{
         position: "absolute",
         width: OMR_ALIGNMENT_MARKER_SIZE,
@@ -83,7 +84,6 @@ function OmrAlignmentMarker({ position }: { position: "top-left" | "top-right" |
         pointerEvents: "none",
         [vertical]: 0,
         [horizontal]: 0,
-        transform: `translate(${horizontal === "left" ? "-50%" : "50%"}, ${vertical === "top" ? "-50%" : "50%"})`,
       }}
     />
   );
@@ -598,7 +598,6 @@ export default function LeagueOmrSheet() {
   const authUser = useAppSelector((state) => state.auth.user);
   const scaleContainerRef = useRef<HTMLDivElement | null>(null);
   const sheetRef = useRef<HTMLDivElement | null>(null);
-  const scoreTableFrameRef = useRef<HTMLDivElement | null>(null);
   const scoreTableRef = useRef<HTMLTableElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -695,9 +694,31 @@ export default function LeagueOmrSheet() {
     setResultDialogOpen(true);
   };
 
-  const collectOmrMarks = (target: HTMLElement | null) => {
+  const collectOmrMarks = (target: HTMLElement | null, useAlignmentMarkers = false) => {
     if (!target) return [];
-    const targetRect = target.getBoundingClientRect();
+    let targetRect = target.getBoundingClientRect();
+    if (useAlignmentMarkers) {
+      const markers = Array.from(target.querySelectorAll<HTMLElement>("[data-omr-alignment-marker='true']"));
+      if (markers.length === 4) {
+        const centers = markers.map((marker) => {
+          const rect = marker.getBoundingClientRect();
+          return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+        });
+        const left = Math.min(...centers.map((center) => center.x));
+        const right = Math.max(...centers.map((center) => center.x));
+        const top = Math.min(...centers.map((center) => center.y));
+        const bottom = Math.max(...centers.map((center) => center.y));
+        targetRect = {
+          ...targetRect,
+          left,
+          right,
+          top,
+          bottom,
+          width: right - left,
+          height: bottom - top,
+        };
+      }
+    }
     return Array.from(target.querySelectorAll<HTMLElement>("[data-omr-mark='true']")).flatMap((el) => {
       const matchId = el.dataset.matchId;
       const playerId = el.dataset.playerId;
@@ -722,11 +743,8 @@ export default function LeagueOmrSheet() {
       if (!match.participant_a_id || !match.participant_b_id) continue;
       const matchResult = result[match.id];
       if (!matchResult) continue;
-      let scoreA = matchResult[match.participant_a_id];
-      let scoreB = matchResult[match.participant_b_id];
-      if (scoreA == null && scoreB == null) continue;
-      if (scoreA == null && scoreB != null && scoreB < 3) scoreA = 3;
-      if (scoreB == null && scoreA != null && scoreA < 3) scoreB = 3;
+      const scoreA = matchResult[match.participant_a_id];
+      const scoreB = matchResult[match.participant_b_id];
       if (scoreA == null || scoreB == null) continue;
       if ([scoreA, scoreB].filter((score) => score === 3).length !== 1) continue;
       await withTimeout(
@@ -755,7 +773,7 @@ export default function LeagueOmrSheet() {
     setOmrProcessingMessage("OMR 이미지를 분석하는 중입니다.");
     try {
       const sheetMarks = collectOmrMarks(sheetRef.current);
-      const tableMarks = collectOmrMarks(scoreTableFrameRef.current);
+      const tableMarks = collectOmrMarks(scoreTableRef.current, true);
       if (sheetMarks.length === 0 && tableMarks.length === 0) {
         window.alert("OMR 마킹 위치를 찾지 못했습니다. 화면을 새로고침 후 다시 시도해 주세요.");
         return;
@@ -983,14 +1001,7 @@ export default function LeagueOmrSheet() {
           </Box>
         </Stack>
 
-        <Box
-          ref={scoreTableFrameRef}
-          sx={{ position: "relative", p: 1.5 }}
-        >
-          <OmrAlignmentMarker position="top-left" />
-          <OmrAlignmentMarker position="top-right" />
-          <OmrAlignmentMarker position="bottom-left" />
-          <OmrAlignmentMarker position="bottom-right" />
+        <Box sx={{ position: "relative", p: 1.5 }}>
           <Box
             component="table"
             ref={scoreTableRef}
@@ -1043,22 +1054,35 @@ export default function LeagueOmrSheet() {
                       <Box>{rowPlayer.name}</Box>
                     </Stack>
                   </th>
-                  {participants.map((colPlayer) => {
+                  {participants.map((colPlayer, colIndex) => {
+                    const markerPosition = rowIndex === 0 && colIndex === 0
+                      ? "top-left"
+                      : rowIndex === 0 && colIndex === participants.length - 1
+                        ? "top-right"
+                        : rowIndex === participants.length - 1 && colIndex === 0
+                          ? "bottom-left"
+                          : rowIndex === participants.length - 1 && colIndex === participants.length - 1
+                            ? "bottom-right"
+                            : null;
                     if (rowPlayer.id === colPlayer.id) {
                       return (
                         <td
                           key={colPlayer.id}
                           style={{
+                            position: "relative",
                             background:
                               "linear-gradient(28deg, transparent 49%, #D1D5DB 49.5%, #D1D5DB 50.5%, transparent 51%)",
                           }}
-                        />
+                        >
+                          {markerPosition && <OmrAlignmentMarker position={markerPosition} />}
+                        </td>
                       );
                     }
                     const match = matchLookup.get(matchKey(rowPlayer.id, colPlayer.id));
                     const selectedScore = getScoreFor(match, rowPlayer.id);
                     return (
-                      <td key={colPlayer.id}>
+                      <td key={colPlayer.id} style={{ position: "relative" }}>
+                        {markerPosition && <OmrAlignmentMarker position={markerPosition} />}
                         {scoreEditMode ? (
                           <Box sx={{ position: "relative", minHeight: 44 }}>
                             <ScoreStepper

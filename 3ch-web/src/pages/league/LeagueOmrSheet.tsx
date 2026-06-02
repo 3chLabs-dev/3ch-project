@@ -456,13 +456,13 @@ function ScoreMarks({
         overflow: "hidden",
       }}
     >
-      <Stack direction="row" sx={{ width: 88, justifyContent: "space-between" }}>
+      <Stack direction="row" sx={{ width: 100, justifyContent: "space-between" }}>
         {SCORE_OPTIONS.map((score) => (
           <Box
             key={`label-${score}`}
             component="span"
             sx={{
-              width: 16,
+              width: 18,
               color: "#111827",
               fontWeight: 900,
               fontSize: 10,
@@ -475,7 +475,7 @@ function ScoreMarks({
           </Box>
         ))}
       </Stack>
-      <Stack direction="row" sx={{ width: 88, justifyContent: "space-between" }}>
+      <Stack direction="row" sx={{ width: 100, justifyContent: "space-between" }}>
         {SCORE_OPTIONS.map((score) => (
           <Box
             key={`mark-${score}`}
@@ -490,8 +490,8 @@ function ScoreMarks({
             onClick={() => !disabled && onSelect(score)}
             sx={{
               appearance: "none",
-              width: 15,
-              height: 15,
+              width: 18,
+              height: 18,
               p: 0,
               m: 0,
               border: "1.6px solid #111",
@@ -899,6 +899,16 @@ export default function LeagueOmrSheet() {
           sx={{ borderRadius: 1, fontWeight: 900 }}
         >
           출력
+        </Button>
+        <Button
+          variant="contained"
+          size="small"
+          startIcon={<CameraAltIcon />}
+          onClick={handleRegisterResults}
+          disabled={isCompleted || isOmrProcessing}
+          sx={{ borderRadius: 1, fontWeight: 900, bgcolor: "#16A34A", "&:hover": { bgcolor: "#15803D" } }}
+        >
+          OMR 업로드
         </Button>
       </Stack>
 

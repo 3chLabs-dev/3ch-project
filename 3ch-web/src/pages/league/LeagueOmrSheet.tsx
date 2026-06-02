@@ -77,6 +77,8 @@ function OmrAlignmentMarker({ position }: { position: "top-left" | "top-right" |
         width: OMR_ALIGNMENT_MARKER_SIZE,
         height: OMR_ALIGNMENT_MARKER_SIZE,
         bgcolor: "#000",
+        border: `${OMR_ALIGNMENT_MARKER_SIZE / 2}px solid #000`,
+        boxSizing: "border-box",
         zIndex: 2,
         pointerEvents: "none",
         [vertical]: 0,

@@ -1,4 +1,5 @@
 import argparse
+import itertools
 import json
 import sys
 from collections import defaultdict
@@ -245,6 +246,74 @@ def warp_quad(image, points):
     return Image.fromarray(warped)
 
 
+def detect_alignment_marker_images(image):
+    # 새 출력물은 점수표 주위에 검은 사각형 기준점 4개가 있음.
+    # 각 기준점의 중심은 브라우저에서 전달한 점수표 프레임의 네 모서리와 대응함.
+    if not HAS_OPENCV:
+        return []
+
+    gray = np.array(image)
+    if len(gray.shape) == 3:
+        gray = cv2.cvtColor(gray, cv2.COLOR_RGB2GRAY)
+
+    inverted = cv2.bitwise_not(gray)
+    _, binary = cv2.threshold(inverted, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+    height, width = binary.shape[:2]
+    min_edge = min(width, height)
+    min_side = max(8, round(min_edge * 0.006))
+    max_side = max(min_side + 1, round(min_edge * 0.06))
+    contours, _hierarchy = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    square_candidates = []
+
+    for contour in contours:
+        x, y, w, h = cv2.boundingRect(contour)
+        if w < min_side or h < min_side or w > max_side or h > max_side:
+            continue
+        aspect = w / h if h else 0
+        if aspect < 0.72 or aspect > 1.38:
+            continue
+        rect_area = w * h
+        if not rect_area or cv2.contourArea(contour) / rect_area < 0.72:
+            continue
+        square_candidates.append((x + w / 2, y + h / 2, rect_area))
+
+    square_candidates.sort(key=lambda item: item[2], reverse=True)
+    square_candidates = square_candidates[:40]
+    best = None
+
+    for combination in itertools.combinations(square_candidates, 4):
+        points = np.array([[x, y] for x, y, _area in combination], dtype="float32")
+        top_left, top_right, bottom_right, bottom_left = order_quad_points(points)
+        span_width = max(
+            np.linalg.norm(top_right - top_left),
+            np.linalg.norm(bottom_right - bottom_left),
+        )
+        span_height = max(
+            np.linalg.norm(bottom_left - top_left),
+            np.linalg.norm(bottom_right - top_right),
+        )
+        if span_width < width * 0.45 or span_height < height * 0.15:
+            continue
+        layout_aspect = span_width / span_height if span_height else 0
+        if layout_aspect < 1.35 or layout_aspect > 8:
+            continue
+
+        alignment_error = (
+            abs(top_left[0] - bottom_left[0])
+            + abs(top_right[0] - bottom_right[0])
+            + abs(top_left[1] - top_right[1])
+            + abs(bottom_left[1] - bottom_right[1])
+        ) / max(1, span_width + span_height)
+        if alignment_error > 0.32:
+            continue
+
+        score = (span_width * span_height) / (1 + alignment_error * 8)
+        if best is None or score > best[0]:
+            best = (score, points)
+
+    return [warp_quad(image, best[1])] if best else []
+
+
 def detect_table_images(image):
     # 화면 좌표는 표 영역 기준이므로 사진 안에서 표 후보 찾아 별도 판독 후보로 만듦.
     if not HAS_OPENCV:
@@ -267,7 +336,7 @@ def detect_table_images(image):
     vertical = cv2.morphologyEx(binary, cv2.MORPH_OPEN, vertical_kernel, iterations=1)
     grid = cv2.dilate(cv2.add(horizontal, vertical), np.ones((3, 3), dtype=np.uint8), iterations=1)
 
-    table_images = []
+    table_images = detect_alignment_marker_images(image)
 
     # 메인 대진표는 사진 폭 대부분을 차지하는 긴 가로선들이 모여 있음.
     # 경기순서 작은 표와 섞이지 않도록 긴 선 좌표로 메인 표 crop 후보를 별도로 만듦.

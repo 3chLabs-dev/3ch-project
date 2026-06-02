@@ -36,6 +36,7 @@ import { toUTCDate } from "../../utils/dateUtils";
 
 const SCORE_OPTIONS = [0, 1, 2, 3];
 const SHEET_WIDTH = 780;
+const OMR_ALIGNMENT_MARKER_SIZE = 14;
 const MATCH_ORDER_PAIRS = [
   [1, 4],
   [2, 3],
@@ -65,6 +66,26 @@ type OmrMark = {
 };
 
 type OmrScanResult = Record<string, Record<string, number>>;
+
+function OmrAlignmentMarker({ position }: { position: "top-left" | "top-right" | "bottom-left" | "bottom-right" }) {
+  const [vertical, horizontal] = position.split("-");
+  return (
+    <Box
+      aria-hidden="true"
+      sx={{
+        position: "absolute",
+        width: OMR_ALIGNMENT_MARKER_SIZE,
+        height: OMR_ALIGNMENT_MARKER_SIZE,
+        bgcolor: "#000",
+        zIndex: 2,
+        pointerEvents: "none",
+        [vertical]: 0,
+        [horizontal]: 0,
+        transform: `translate(${horizontal === "left" ? "-50%" : "50%"}, ${vertical === "top" ? "-50%" : "50%"})`,
+      }}
+    />
+  );
+}
 
 function divisionLabel(division?: string | null) {
   if (!division) return "-";
@@ -575,6 +596,7 @@ export default function LeagueOmrSheet() {
   const authUser = useAppSelector((state) => state.auth.user);
   const scaleContainerRef = useRef<HTMLDivElement | null>(null);
   const sheetRef = useRef<HTMLDivElement | null>(null);
+  const scoreTableFrameRef = useRef<HTMLDivElement | null>(null);
   const scoreTableRef = useRef<HTMLTableElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -731,7 +753,7 @@ export default function LeagueOmrSheet() {
     setOmrProcessingMessage("OMR 이미지를 분석하는 중입니다.");
     try {
       const sheetMarks = collectOmrMarks(sheetRef.current);
-      const tableMarks = collectOmrMarks(scoreTableRef.current);
+      const tableMarks = collectOmrMarks(scoreTableFrameRef.current);
       if (sheetMarks.length === 0 && tableMarks.length === 0) {
         window.alert("OMR 마킹 위치를 찾지 못했습니다. 화면을 새로고침 후 다시 시도해 주세요.");
         return;
@@ -960,8 +982,16 @@ export default function LeagueOmrSheet() {
         </Stack>
 
         <Box
-          component="table"
-          ref={scoreTableRef}
+          ref={scoreTableFrameRef}
+          sx={{ position: "relative", p: 1.5 }}
+        >
+          <OmrAlignmentMarker position="top-left" />
+          <OmrAlignmentMarker position="top-right" />
+          <OmrAlignmentMarker position="bottom-left" />
+          <OmrAlignmentMarker position="bottom-right" />
+          <Box
+            component="table"
+            ref={scoreTableRef}
           sx={{
             width: "100%",
             borderCollapse: "collapse",
@@ -1073,6 +1103,7 @@ export default function LeagueOmrSheet() {
               );
             })}
           </tbody>
+          </Box>
         </Box>
 
         <Box

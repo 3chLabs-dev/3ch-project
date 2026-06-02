@@ -170,7 +170,7 @@ router.get('/table/:table_id', async (req, res) => {
        LEFT JOIN league_participants pb ON pb.id = m.participant_b_id
        WHERE REGEXP_REPLACE(LOWER(TRIM(m.court)), '\\s+', '', 'g') = ANY($1::text[])
          AND m.status IN ('playing', 'pending')
-         AND (l.start_date AT TIME ZONE 'Asia/Seoul')::date
+         AND l.start_date::date
              = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul')::date
        ORDER BY
          CASE WHEN m.status = 'playing' THEN 0 ELSE 1 END,

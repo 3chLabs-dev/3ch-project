@@ -78,7 +78,11 @@ export default function SocialSignUp() {
     const dispatch = useAppDispatch();
 
     const ticket = useMemo(() => {
-        return new URLSearchParams(window.location.search).get("ticket") ?? "";
+        const hashTicket = new URLSearchParams(window.location.hash.slice(1)).get("ticket");
+        const queryTicket = new URLSearchParams(window.location.search).get("ticket");
+        const value = hashTicket ?? queryTicket ?? "";
+        window.history.replaceState(null, "", window.location.pathname);
+        return value;
     }, []);
 
     const [name, setName] = useState<string>("");

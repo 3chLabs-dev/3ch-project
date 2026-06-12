@@ -7,6 +7,7 @@ import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import CampaignOutlinedIcon from "@mui/icons-material/CampaignOutlined";
 import { useNavigate } from "react-router-dom";
+import { sanitizeRichHtml } from "../../utils/sanitizeHtml";
 
 const API = import.meta.env.VITE_API_BASE_URL ?? "/api";
 const LIMIT = 20;
@@ -136,7 +137,7 @@ export default function NoticePage() {
                                         ) : (
                                             <Box
                                                 className="tiptap-content"
-                                                dangerouslySetInnerHTML={{ __html: details[n.id]?.content ?? "" }}
+                                                dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(details[n.id]?.content ?? "") }}
                                                 sx={{
                                                     fontSize: 14, lineHeight: 1.9, color: "text.primary",
                                                     "& a": { color: "primary.main", textDecoration: "underline" },

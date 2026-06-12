@@ -1,5 +1,5 @@
-const jwt = require("jsonwebtoken");
 const pool = require("../db/pool");
+const { verifyToken } = require("../utils/authUtils");
 
 async function requireAuth(req, res, next) {
   const header = req.headers.authorization || "";
@@ -11,7 +11,7 @@ async function requireAuth(req, res, next) {
 
   let payload;
   try {
-    payload = jwt.verify(token, process.env.JWT_SECRET);
+    payload = verifyToken(token);
   } catch (e) {
     return res.status(401).json({ ok: false, error: "INVALID_TOKEN" });
   }
@@ -40,7 +40,7 @@ async function requireAdmin(req, res, next) {
     return res.status(401).json({ ok: false, error: "NO_TOKEN" });
   }
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    const payload = verifyToken(token);
     req.user = payload;
   } catch (e) {
     return res.status(401).json({ ok: false, error: "INVALID_TOKEN" });
@@ -66,7 +66,7 @@ async function optionalAuth(req, _res, next) {
   const [type, token] = header.split(" ");
   if (type === "Bearer" && token) {
     try {
-      const payload = jwt.verify(token, process.env.JWT_SECRET);
+      const payload = verifyToken(token);
       req.user = payload;
     } catch { /* 토큰 만료/오류 시 무시 */ }
   }

@@ -7,12 +7,7 @@ import {
     useGetPolicyVersionsQuery,
     useGetPolicyVersionQuery,
 } from "../../features/policy/policyApi";
-
-function toDisplayHTML(s: string): string {
-    if (!s) return "";
-    if (s.trimStart().startsWith("<")) return s;
-    return `<p>${s.trim().replace(/\n/g, "<br>")}</p>`;
-}
+import { sanitizeRichHtml } from "../../utils/sanitizeHtml";
 
 export default function PrivacyPolicyPage() {
     const navigate    = useNavigate();
@@ -115,7 +110,7 @@ export default function PrivacyPolicyPage() {
                                 "& p": { margin: 0 },
                                 "& p:empty": { minHeight: "1.6em" },
                             }}
-                            dangerouslySetInnerHTML={{ __html: toDisplayHTML(detail?.body ?? "") }}
+                            dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(detail?.body ?? "") }}
                         />
                     </>
                 )}

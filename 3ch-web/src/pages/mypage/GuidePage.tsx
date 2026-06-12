@@ -5,6 +5,7 @@ import ManageAccountsOutlinedIcon from "@mui/icons-material/ManageAccountsOutlin
 import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import { sanitizeRichHtml } from "../../utils/sanitizeHtml";
 
 const API = import.meta.env.VITE_API_BASE_URL;
 
@@ -98,7 +99,7 @@ export default function GuidePage() {
         </Stack>
       ) : current ? (
         <Box
-          dangerouslySetInnerHTML={{ __html: current.content }}
+          dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(current.content) }}
           sx={{ "& img": { maxWidth: "100%", borderRadius: 1.5 }, lineHeight: 1.8 }}
         />
       ) : (

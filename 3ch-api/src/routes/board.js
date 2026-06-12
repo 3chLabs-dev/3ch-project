@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../db/pool");
 const { requireAdmin } = require("../middlewares/auth");
+const { sanitizeRichHtml } = require("../utils/sanitizeHtml");
 
 // 모든 라우트에 어드민 인증 적용
 router.use(requireAdmin);
@@ -142,7 +143,7 @@ router.post("/notices", async (req, res) => {
     const r = await pool.query(
       `INSERT INTO notices (category, title, content, is_published)
        VALUES ($1, $2, $3, $4) RETURNING *`,
-      [category, title.trim(), content.trim(), is_published],
+      [category, title.trim(), sanitizeRichHtml(content), is_published],
     );
     res.status(201).json(r.rows[0]);
   } catch (e) {
@@ -200,7 +201,7 @@ router.put("/notices/:id", async (req, res) => {
     const r = await pool.query(
       `UPDATE notices SET category=$1, title=$2, content=$3, is_published=$4, updated_at=NOW()
        WHERE id=$5 RETURNING *`,
-      [category, title.trim(), content.trim(), is_published ?? true, req.params.id],
+      [category, title.trim(), sanitizeRichHtml(content), is_published ?? true, req.params.id],
     );
     if (r.rowCount === 0) return res.status(404).json({ message: "없음" });
     res.json(r.rows[0]);
@@ -370,7 +371,7 @@ router.post("/faqs", async (req, res) => {
     const r = await pool.query(
       `INSERT INTO faqs (tab, section, question, answer, display_order, is_published)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [tab, section.trim(), question.trim(), answer.trim(), display_order, is_published],
+      [tab, section.trim(), question.trim(), sanitizeRichHtml(answer), display_order, is_published],
     );
     res.status(201).json(r.rows[0]);
   } catch (e) {
@@ -430,7 +431,7 @@ router.put("/faqs/:id", async (req, res) => {
     const r = await pool.query(
       `UPDATE faqs SET tab=$1, section=$2, question=$3, answer=$4, display_order=$5, is_published=$6, updated_at=NOW()
        WHERE id=$7 RETURNING *`,
-      [tab ?? "member", (section ?? "").trim(), question.trim(), answer.trim(), display_order ?? 0, is_published ?? true, req.params.id],
+      [tab ?? "member", (section ?? "").trim(), question.trim(), sanitizeRichHtml(answer), display_order ?? 0, is_published ?? true, req.params.id],
     );
     if (r.rowCount === 0) return res.status(404).json({ message: "없음" });
     res.json(r.rows[0]);
@@ -643,7 +644,7 @@ router.post("/policies/:type", async (req, res) => {
     const r = await client.query(
       `INSERT INTO policy_versions (type, label, effective_date, body, is_current)
        VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [type, label.trim(), effective_date.trim(), body.trim(), set_current],
+      [type, label.trim(), effective_date.trim(), sanitizeRichHtml(body), set_current],
     );
     await client.query("COMMIT");
     res.status(201).json(r.rows[0]);
@@ -712,7 +713,7 @@ router.put("/policies/:type/:id", async (req, res) => {
     const r = await pool.query(
       `UPDATE policy_versions SET label=$1, effective_date=$2, body=$3
        WHERE type=$4 AND id=$5 RETURNING *`,
-      [label.trim(), effective_date.trim(), body.trim(), type, id],
+      [label.trim(), effective_date.trim(), sanitizeRichHtml(body), type, id],
     );
     if (r.rowCount === 0) return res.status(404).json({ message: "없음" });
     res.json(r.rows[0]);
@@ -1144,7 +1145,7 @@ router.post("/guide", async (req, res) => {
   try {
     const r = await pool.query(
       `INSERT INTO guides (tab, section, content, display_order) VALUES ($1, $2, $3, $4) RETURNING *`,
-      [tab.trim(), section.trim(), content.trim(), display_order],
+      [tab.trim(), section.trim(), sanitizeRichHtml(content), display_order],
     );
     res.status(201).json(r.rows[0]);
   } catch (e) {
@@ -1202,7 +1203,7 @@ router.put("/guide/:id", async (req, res) => {
     const r = await pool.query(
       `UPDATE guides SET tab=$1, section=$2, content=$3, display_order=$4, updated_at=NOW()
        WHERE id=$5 RETURNING *`,
-      [tab.trim(), section.trim(), content.trim(), display_order ?? 0, req.params.id],
+      [tab.trim(), section.trim(), sanitizeRichHtml(content), display_order ?? 0, req.params.id],
     );
     if (r.rowCount === 0) return res.status(404).json({ message: "없음" });
     res.json(r.rows[0]);

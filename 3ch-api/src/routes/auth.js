@@ -109,7 +109,7 @@ router.get(
  *           Location:
  *             schema:
  *               type: string
- *               example: http://localhost:3000/auth/success?token=your.jwt.token
+ *               example: http://localhost:3000/auth/success#token=your.jwt.token
  *       401:
  *         description: 인증 실패.
  *       500:
@@ -129,7 +129,7 @@ router.get("/google/callback", (req, res, next) => {
     if (!user.name) {
       const ticket = signSignupTicket({ id: user.id, email: user.email });
       return res.redirect(
-        `${process.env.FRONTEND_URL}/auth/success?signup=1&ticket=${ticket}`,
+        `${process.env.FRONTEND_URL}/auth/success#signup=1&ticket=${ticket}`,
       );
     }
     const token = signToken({
@@ -138,7 +138,7 @@ router.get("/google/callback", (req, res, next) => {
     });
 
     return res.redirect(
-      `${process.env.FRONTEND_URL}/auth/success?token=${token}`,
+      `${process.env.FRONTEND_URL}/auth/success#token=${token}`,
     );
   })(req, res, next);
 });
@@ -180,7 +180,7 @@ router.get("/kakao", passport.authenticate("kakao", { session: false }));
  *           Location:
  *             schema:
  *               type: string
- *               example: http://localhost:3000/auth/success?token=your.jwt.token
+ *               example: http://localhost:3000/auth/success#token=your.jwt.token
  *       401:
  *         description: 인증 실패.
  *       500:
@@ -200,7 +200,7 @@ router.get("/kakao/callback", (req, res, next) => {
     if (!user.name) {
       const ticket = signSignupTicket({ id: user.id, email: user.email });
       return res.redirect(
-        `${process.env.FRONTEND_URL}/auth/success?signup=1&ticket=${ticket}`,
+        `${process.env.FRONTEND_URL}/auth/success#signup=1&ticket=${ticket}`,
       );
     }
     const token = signToken({
@@ -209,7 +209,7 @@ router.get("/kakao/callback", (req, res, next) => {
     });
 
     return res.redirect(
-      `${process.env.FRONTEND_URL}/auth/success?token=${token}`,
+      `${process.env.FRONTEND_URL}/auth/success#token=${token}`,
     );
   })(req, res, next);
 });
@@ -251,7 +251,7 @@ router.get("/naver", passport.authenticate("naver", { session: false }));
  *           Location:
  *             schema:
  *               type: string
- *               example: http://localhost:3000/auth/success?token=your.jwt.token
+ *               example: http://localhost:3000/auth/success#token=your.jwt.token
  *       401:
  *         description: 인증 실패.
  *       500:
@@ -271,7 +271,7 @@ router.get("/naver/callback", (req, res, next) => {
     if (!user.name) {
       const ticket = signSignupTicket({ id: user.id, email: user.email });
       return res.redirect(
-        `${process.env.FRONTEND_URL}/auth/success?signup=1&ticket=${ticket}`,
+        `${process.env.FRONTEND_URL}/auth/success#signup=1&ticket=${ticket}`,
       );
     }
     const token = signToken({
@@ -280,7 +280,7 @@ router.get("/naver/callback", (req, res, next) => {
     });
 
     return res.redirect(
-      `${process.env.FRONTEND_URL}/auth/success?token=${token}`,
+      `${process.env.FRONTEND_URL}/auth/success#token=${token}`,
     );
   })(req, res, next);
 });
@@ -738,7 +738,7 @@ router.post("/social/complete", async (req, res) => {
 
   let decoded;
   try {
-    decoded = verifyToken(ticket);
+    decoded = verifyToken(ticket, "signup");
   } catch (e) {
     return res.status(401).json({ ok: false, error: "BAD_TICKET" });
   }

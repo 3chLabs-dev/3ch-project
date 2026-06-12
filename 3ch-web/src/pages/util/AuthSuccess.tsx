@@ -2,7 +2,10 @@ import { useEffect } from "react";
 
 const AuthSuccess = () => {
     useEffect(() => {
-        const params = new URLSearchParams(window.location.search);
+        const hashParams = new URLSearchParams(window.location.hash.slice(1));
+        const queryParams = new URLSearchParams(window.location.search);
+        const params = hashParams.size > 0 ? hashParams : queryParams;
+        window.history.replaceState(null, "", window.location.pathname);
 
         const signup = params.get("signup"); // "1"
         const ticket = params.get("ticket");
@@ -19,7 +22,7 @@ const AuthSuccess = () => {
                 return;
             }
             // 팝업이 아니면 그냥 이동
-            window.location.replace(`/social-signup?ticket=${encodeURIComponent(ticket)}`);
+            window.location.replace(`/social-signup#ticket=${encodeURIComponent(ticket)}`);
             return;
         }
         if (!token) {

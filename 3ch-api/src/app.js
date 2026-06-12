@@ -3,6 +3,8 @@ const path = require("path");
 const { swaggerUi, swaggerSpec } = require("./config/swagger");
 require("dotenv").config();
 const cors = require("cors");
+const helmet = require("helmet");
+const { rateLimit } = require("express-rate-limit");
 
 const testRoutes = require("./routes/test");
 const authRouter = require("./routes/auth");
@@ -22,6 +24,7 @@ const { ensureSportRankingTables } = require("./services/sportRanking");
 const pool = require("./db/pool");
 
 const app = express();
+app.disable("x-powered-by");
 
 require("./config/passport");
 const passport = require("passport");
@@ -82,6 +85,10 @@ const passport = require("passport");
 
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true, limit: "20mb" }));
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+}));
 app.use(passport.initialize());
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
@@ -94,6 +101,14 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
+const authRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { ok: false, error: "TOO_MANY_AUTH_REQUESTS" },
+});
+
 // health check (nginx / 운영 필수)
 app.get("/health", (req, res) => {
   res.json({ ok: true });
@@ -104,6 +119,13 @@ app.use("/swagger", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Routes - 모든 API를 /api 아래로 통일
 app.use("/", testRoutes);
+app.use([
+  "/api/auth/login",
+  "/api/auth/register",
+  "/api/auth/member/verify-password",
+  "/api/auth/social/complete",
+  "/api/admin/login",
+], authRateLimiter);
 app.use("/api/auth", authRouter);
 app.use("/api", leagueRouter);
 app.use("/api", groupRouter);

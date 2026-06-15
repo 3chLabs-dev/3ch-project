@@ -1,0 +1,24 @@
+{
+  "cases": [
+    {
+      "name": "example-photo",
+      "image": "samples/example.jpg",
+      "payload": {
+        "darknessThreshold": 18,
+        "marginThreshold": 5,
+        "scenarios": [
+          {
+            "name": "table",
+            "marks": []
+          }
+        ]
+      },
+      "expected": {
+        "match-id": {
+          "player-a-id": 3,
+          "player-b-id": 1
+        }
+      }
+    }
+  ]
+}

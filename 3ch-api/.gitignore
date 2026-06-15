@@ -46,3 +46,7 @@ generated/
 
 # User uploaded files
 uploads/
+
+# Python
+__pycache__/
+*.py[cod]

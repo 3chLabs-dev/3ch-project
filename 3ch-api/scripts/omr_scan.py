@@ -2,7 +2,7 @@ import argparse
 import itertools
 import json
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 
 try:
     from PIL import Image, ImageFilter, ImageOps
@@ -73,6 +73,9 @@ MARK_SEARCH_OFFSETS = (
     (0.35, 0.35),
 )
 MAX_PROCESSING_EDGE = 1800
+CONSENSUS_MIN_SUPPORT = 3
+CONSENSUS_MIN_SHARE = 0.6
+LUMINANCE_CACHE = {}
 
 
 def read_payload(payload_path: str):
@@ -133,6 +136,37 @@ def read_luminance_stats(image, left, top, right, bottom):
     bottom = clamp(round(bottom), 0, height - 1)
     if right < left or bottom < top:
         return {"count": 0, "mean": 255.0, "dark": 0.0}
+
+    if HAS_OPENCV:
+        cache_key = id(image)
+        cached = LUMINANCE_CACHE.get(cache_key)
+        if cached is None or cached["image"] is not image:
+            pixels = np.array(image)
+            if len(pixels.shape) == 3:
+                pixels = cv2.cvtColor(pixels, cv2.COLOR_RGB2GRAY)
+            cached = {
+                "image": image,
+                "luminance": cv2.integral(pixels.astype(np.float64)),
+                "dark": cv2.integral((pixels < 150).astype(np.uint8)),
+            }
+            LUMINANCE_CACHE[cache_key] = cached
+
+        def rect_sum(integral):
+            return (
+                integral[bottom + 1, right + 1]
+                - integral[top, right + 1]
+                - integral[bottom + 1, left]
+                + integral[top, left]
+            )
+
+        total = (right - left + 1) * (bottom - top + 1)
+        luminance_sum = float(rect_sum(cached["luminance"]))
+        dark = float(rect_sum(cached["dark"]))
+        return {
+            "count": total,
+            "mean": luminance_sum / total if total else 255.0,
+            "dark": (dark / total) * 100 if total else 0.0,
+        }
 
     pixels = image.load()
     total = 0
@@ -592,7 +626,7 @@ def scan_scenario(image, marks, darkness_threshold, margin_threshold, x_offset=0
     }
 
 
-def scan_detected_filled_marks(image, marks, x_offset=0, y_offset=0, transform=None):
+def scan_detected_filled_marks(image, marks, x_offset=0, y_offset=0, transform=None, contour_cache=None):
     # 실제로 칠해진 검은 사각형을 먼저 찾고, 예상 OMR 칸 안쪽에 들어온 것만 매칭함.
     if not HAS_OPENCV or not marks:
         return {
@@ -625,16 +659,15 @@ def scan_detected_filled_marks(image, marks, x_offset=0, y_offset=0, transform=N
 
     typical_width = float(np.median(mark_widths))
     typical_height = float(np.median(mark_heights))
-    gray = np.array(image)
-    if len(gray.shape) == 3:
-        gray = cv2.cvtColor(gray, cv2.COLOR_RGB2GRAY)
-
-    # Filled boxes can become lighter after camera exposure correction/CLAHE.
-    # Keep the contour path a little more permissive; the size/aspect checks below
-    # still reject most text and table lines.
-    mask = cv2.inRange(gray, 0, 125)
-    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((3, 3), dtype=np.uint8), iterations=1)
-    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if contour_cache is None:
+        gray = np.array(image)
+        if len(gray.shape) == 3:
+            gray = cv2.cvtColor(gray, cv2.COLOR_RGB2GRAY)
+        mask = cv2.inRange(gray, 0, 125)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((3, 3), dtype=np.uint8), iterations=1)
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    else:
+        mask, contours = contour_cache
 
     grouped = defaultdict(list)
     for contour in contours:
@@ -846,6 +879,64 @@ def merge_complete_matches_from_summaries(summaries, marks):
     return summarize_result(result, choices, marks)
 
 
+def merge_consensus_valid_matches_from_summaries(summaries, marks):
+    expected_players = defaultdict(set)
+    for mark in marks:
+        expected_players[mark["matchId"]].add(mark["playerId"])
+
+    observations = defaultdict(list)
+    for summary in summaries:
+        valid_result = filter_valid_match_results(summary.get("result") or {}, marks)
+        choice_map = {
+            (choice["matchId"], choice["playerId"]): choice
+            for choice in summary.get("choices", [])
+        }
+        for match_id, scores in valid_result.items():
+            players = sorted(expected_players[match_id])
+            signature = tuple((player_id, scores[player_id]) for player_id in players)
+            confidence = sum(
+                choice_map.get((match_id, player_id), {}).get("margin", 0)
+                for player_id in players
+            )
+            observations[match_id].append((signature, confidence))
+
+    result = {}
+    choices = []
+    consensus = {}
+    for match_id, match_observations in observations.items():
+        counts = Counter(signature for signature, _confidence in match_observations)
+        signature, support = counts.most_common(1)[0]
+        total = sum(counts.values())
+        share = support / total if total else 0
+        if support < CONSENSUS_MIN_SUPPORT or share < CONSENSUS_MIN_SHARE:
+            continue
+
+        scores = dict(signature)
+        result[match_id] = scores
+        consensus[match_id] = {
+            "support": support,
+            "observations": total,
+            "share": round(share, 4),
+        }
+        for player_id, score in signature:
+            matching_confidences = [
+                confidence
+                for observed_signature, confidence in match_observations
+                if observed_signature == signature
+            ]
+            choices.append({
+                "matchId": match_id,
+                "playerId": player_id,
+                "score": score,
+                "darkness": 0,
+                "margin": sum(matching_confidences) / max(1, len(matching_confidences)),
+            })
+
+    summary = summarize_result(result, choices, marks)
+    summary["consensus"] = consensus
+    return summary
+
+
 def is_better_scan(summary, best):
     if best is None:
         return True
@@ -878,6 +969,15 @@ def scan_scenario_candidates(base_image, scenario, darkness_threshold, margin_th
     candidate_summaries = []
     all_summaries = []
     for candidate_name, candidate_image in candidates:
+        contour_cache = None
+        if HAS_OPENCV:
+            gray = np.array(candidate_image)
+            if len(gray.shape) == 3:
+                gray = cv2.cvtColor(gray, cv2.COLOR_RGB2GRAY)
+            mask = cv2.inRange(gray, 0, 125)
+            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((3, 3), dtype=np.uint8), iterations=1)
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            contour_cache = (mask, contours)
         offset_summaries = []
         for transform in COORDINATE_TRANSFORMS:
             for x_offset, y_offset in COORDINATE_OFFSETS:
@@ -897,6 +997,7 @@ def scan_scenario_candidates(base_image, scenario, darkness_threshold, margin_th
                         x_offset,
                         y_offset,
                         transform,
+                        contour_cache,
                     ),
                 ]
                 summary = max(scan_summaries, key=lambda item: (
@@ -988,6 +1089,22 @@ def scan_scenario_candidates(base_image, scenario, darkness_threshold, margin_th
             "choices": merged_complete["choices"],
         }
 
+    consensus = merge_consensus_valid_matches_from_summaries(all_summaries, marks)
+    if consensus["validMatchCount"] > 0:
+        best = {
+            "candidate": "consensus-valid-matches",
+            "transform": "consensus",
+            "xOffset": 0,
+            "yOffset": 0,
+            "recognizedCount": consensus["recognizedCount"],
+            "completeMatchCount": consensus["completeMatchCount"],
+            "validMatchCount": consensus["validMatchCount"],
+            "confidence": consensus["confidence"],
+            "result": consensus["result"],
+            "choices": consensus["choices"],
+            "consensus": consensus["consensus"],
+        }
+
     return {
         "name": scenario_name,
         "recognizedCount": best["recognizedCount"] if best else 0,
@@ -999,6 +1116,7 @@ def scan_scenario_candidates(base_image, scenario, darkness_threshold, margin_th
         "xOffset": best["xOffset"] if best else 0,
         "yOffset": best["yOffset"] if best else 0,
         "result": best["result"] if best else {},
+        "consensus": best.get("consensus", {}) if best else {},
         "candidates": candidate_summaries,
     }
 
@@ -1078,6 +1196,7 @@ def main():
                 "validMatchCount": summary["validMatchCount"],
                 "confidence": summary["confidence"],
                 "result": summary["result"],
+                "consensus": summary["consensus"],
             }
 
     # 프론트/로그에서 튜닝 가능하도록 선택된 시나리오와 후보별 인식 개수 함께 반환함.
@@ -1094,6 +1213,7 @@ def main():
         "validMatchCount": best["validMatchCount"],
         "confidence": best["confidence"],
         "result": best["result"],
+        "consensus": best["consensus"],
         "scenarios": scenario_summaries,
     }
     print(json.dumps(output, ensure_ascii=False))

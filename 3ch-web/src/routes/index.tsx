@@ -65,6 +65,7 @@ import PaymentCheckout from "../pages/payment/PaymentCheckout.tsx";
 import TermsPage from "../pages/mypage/TermsPage.tsx";
 import PrivacyPolicyPage from "../pages/mypage/PrivacyPolicyPage.tsx";
 import DemoLandingPage from "../pages/demo/DemoLandingPage";
+import AdminSupportChatPage from "../pages/admin/AdminSupportChatPage";
 // import League from "../pages/League";
 // import Match from "../pages/Match";
 // import My from "../pages/My";
@@ -147,6 +148,7 @@ export const router = createBrowserRouter([
           { path: "/admin/board/notice",  element: <AdminNoticePage /> },
           { path: "/admin/board/faq",     element: <AdminFaqPage /> },
           { path: "/admin/board/inquiry", element: <AdminInquiryPage /> },
+          { path: "/admin/support-chat", element: <AdminSupportChatPage /> },
           { path: "/admin/board/guide",   element: <AdminGuidePage /> },
           { path: "/admin/board/terms",   element: <AdminTermsPage /> },
           { path: "/admin/board/privacy", element: <AdminPrivacyPage /> },

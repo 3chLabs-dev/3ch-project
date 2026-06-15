@@ -7,6 +7,7 @@ import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { adminLogout } from "../../features/admin/adminSlice";
 
 const MAIN_MENU = [
+  { label: "채팅 상담",   path: "/admin/support-chat" },
   { label: "회원 관리",   path: "/admin/member"     },
   { label: "클럽 관리",   path: "/admin/club"       },
   { label: "리그 관리",   path: "/admin/league"     },

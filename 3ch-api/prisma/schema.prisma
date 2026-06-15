@@ -8,8 +8,8 @@ datasource db {
 }
 
 model User {
-  id            Int      @id @default(autoincrement())
-  email         String   @unique
+  id            Int       @id @default(autoincrement())
+  email         String    @unique
   password_hash String?
   name          String?
   nickname      String?
@@ -22,17 +22,49 @@ model User {
   updated_at    DateTime  @default(now()) @updatedAt
   deleted_at    DateTime?
 
-  leagues       League[]      @relation("LeagueCreator")
-  teams         Team[]        @relation("TeamCreator")
-  created_groups Group[]      @relation("GroupCreator")
-  group_memberships GroupMember[]
-  draws         Draw[]        @relation("DrawCreator")
-  group_rankings GroupRanking[]
-  group_ranking_events GroupRankingEvent[] @relation("GroupRankingEventMember")
-  sport_rankings SportRanking[]
-  sport_ranking_events SportRankingEvent[] @relation("SportRankingEventMember")
+  leagues               League[]             @relation("LeagueCreator")
+  teams                 Team[]               @relation("TeamCreator")
+  created_groups        Group[]              @relation("GroupCreator")
+  group_memberships     GroupMember[]
+  draws                 Draw[]               @relation("DrawCreator")
+  group_rankings        GroupRanking[]
+  group_ranking_events  GroupRankingEvent[]  @relation("GroupRankingEventMember")
+  sport_rankings        SportRanking[]
+  sport_ranking_events  SportRankingEvent[]  @relation("SportRankingEventMember")
+  support_chat_room     SupportChatRoom?
+  support_chat_messages SupportChatMessage[]
 
   @@map("users")
+}
+
+model SupportChatRoom {
+  id              Int      @id @default(autoincrement())
+  user_id         Int      @unique
+  status          String   @default("open") @db.VarChar(20)
+  last_message_at DateTime @default(now()) @db.Timestamptz(6)
+  created_at      DateTime @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
+  user     User                 @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  messages SupportChatMessage[]
+
+  @@index([last_message_at(sort: Desc)])
+  @@map("support_chat_rooms")
+}
+
+model SupportChatMessage {
+  id          Int      @id @default(autoincrement())
+  room_id     Int
+  sender_type String   @db.VarChar(20)
+  sender_id   Int
+  content     String   @db.Text
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  room   SupportChatRoom @relation(fields: [room_id], references: [id], onDelete: Cascade)
+  sender User            @relation(fields: [sender_id], references: [id], onDelete: Cascade)
+
+  @@index([room_id, id])
+  @@map("support_chat_messages")
 }
 
 model Group {
@@ -46,76 +78,76 @@ model Group {
   created_at      DateTime  @default(now())
   updated_at      DateTime  @default(now()) @updatedAt
 
-  address         String?
-  address_detail  String?
-  lat             Float?
-  lng             Float?
-  club_code       String?   @unique
+  address        String?
+  address_detail String?
+  lat            Float?
+  lng            Float?
+  club_code      String? @unique
 
   created_by_id Int
-  creator       User    @relation("GroupCreator", fields: [created_by_id], references: [id])
+  creator       User @relation("GroupCreator", fields: [created_by_id], references: [id])
 
-  members     GroupMember[]
-  leagues     League[]
-  ranking_setting GroupRankingSetting?
-  rankings    GroupRanking[]
-  ranking_events GroupRankingEvent[]
+  members              GroupMember[]
+  leagues              League[]
+  ranking_setting      GroupRankingSetting?
+  rankings             GroupRanking[]
+  ranking_events       GroupRankingEvent[]
   sport_ranking_events SportRankingEvent[]
 
   @@map("groups")
 }
 
 model GroupMember {
-  id         String   @id @default(uuid())
-  role       String   @default("member") // "owner", "admin", "member"
-  division   String?
-  joined_at  DateTime @default(now())
+  id        String   @id @default(uuid())
+  role      String   @default("member") // "owner", "admin", "member"
+  division  String?
+  joined_at DateTime @default(now())
 
-  group_id   String
-  group      Group    @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  group_id String
+  group    Group  @relation(fields: [group_id], references: [id], onDelete: Cascade)
 
-  user_id    Int
-  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  user_id Int
+  user    User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@unique([group_id, user_id])
   @@map("group_members")
 }
 
 model GroupRankingSetting {
-  group_id            String   @id
-  enabled             Boolean  @default(true)
-  algorithm           String   @default("elo")
-  base_rating         Int      @default(1500)
-  k_league            Int      @default(24)
-  k_tournament        Int      @default(32)
-  include_tournament  Boolean  @default(true)
-  exclude_guests      Boolean  @default(true)
-  created_at          DateTime @default(now())
-  updated_at          DateTime @default(now()) @updatedAt
+  group_id           String   @id
+  enabled            Boolean  @default(true)
+  algorithm          String   @default("elo")
+  base_rating        Int      @default(1500)
+  k_league           Int      @default(24)
+  k_tournament       Int      @default(32)
+  include_tournament Boolean  @default(true)
+  exclude_guests     Boolean  @default(true)
+  created_at         DateTime @default(now())
+  updated_at         DateTime @default(now()) @updatedAt
 
-  group               Group    @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  group Group @relation(fields: [group_id], references: [id], onDelete: Cascade)
 
   @@map("group_ranking_settings")
 }
 
 model GroupRanking {
-  id               String   @id @default(dbgenerated("gen_random_uuid()::text"))
-  group_id         String
-  member_id        Int
-  rating           Int      @default(1500)
-  rank             Int?
-  wins             Int      @default(0)
-  losses           Int      @default(0)
-  matches_played   Int      @default(0)
-  win_rate         Float    @default(0)
-  streak           Int      @default(0)
-  best_win_rating  Int?
-  last_match_at    DateTime?
-  created_at       DateTime @default(now())
-  updated_at       DateTime @default(now()) @updatedAt
+  id              String    @id @default(dbgenerated("gen_random_uuid()::text"))
+  group_id        String
+  member_id       Int
+  rating          Int       @default(1500)
+  rank            Int?
+  wins            Int       @default(0)
+  losses          Int       @default(0)
+  matches_played  Int       @default(0)
+  win_rate        Float     @default(0)
+  streak          Int       @default(0)
+  best_win_rating Int?
+  last_match_at   DateTime?
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @default(now()) @updatedAt
 
-  group            Group    @relation(fields: [group_id], references: [id], onDelete: Cascade)
-  member           User     @relation(fields: [member_id], references: [id], onDelete: Cascade)
+  group  Group @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  member User  @relation(fields: [member_id], references: [id], onDelete: Cascade)
 
   @@unique([group_id, member_id])
   @@index([group_id, rank])
@@ -137,8 +169,8 @@ model GroupRankingEvent {
   match_type         String
   created_at         DateTime @default(now())
 
-  group              Group    @relation(fields: [group_id], references: [id], onDelete: Cascade)
-  member             User     @relation("GroupRankingEventMember", fields: [member_id], references: [id], onDelete: Cascade)
+  group  Group @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  member User  @relation("GroupRankingEventMember", fields: [member_id], references: [id], onDelete: Cascade)
 
   @@index([group_id, member_id, created_at])
   @@index([league_match_id])
@@ -146,22 +178,22 @@ model GroupRankingEvent {
 }
 
 model SportRanking {
-  id               String   @id @default(dbgenerated("gen_random_uuid()::text"))
-  sport            String
-  member_id        Int
-  rating           Int      @default(1500)
-  rank             Int?
-  wins             Int      @default(0)
-  losses           Int      @default(0)
-  matches_played   Int      @default(0)
-  win_rate         Float    @default(0)
-  streak           Int      @default(0)
-  best_win_rating  Int?
-  last_match_at    DateTime?
-  created_at       DateTime @default(now())
-  updated_at       DateTime @default(now()) @updatedAt
+  id              String    @id @default(dbgenerated("gen_random_uuid()::text"))
+  sport           String
+  member_id       Int
+  rating          Int       @default(1500)
+  rank            Int?
+  wins            Int       @default(0)
+  losses          Int       @default(0)
+  matches_played  Int       @default(0)
+  win_rate        Float     @default(0)
+  streak          Int       @default(0)
+  best_win_rating Int?
+  last_match_at   DateTime?
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @default(now()) @updatedAt
 
-  member           User     @relation(fields: [member_id], references: [id], onDelete: Cascade)
+  member User @relation(fields: [member_id], references: [id], onDelete: Cascade)
 
   @@unique([sport, member_id])
   @@index([sport, rank])
@@ -184,8 +216,8 @@ model SportRankingEvent {
   match_type         String
   created_at         DateTime @default(now())
 
-  member             User     @relation("SportRankingEventMember", fields: [member_id], references: [id], onDelete: Cascade)
-  group              Group?   @relation(fields: [group_id], references: [id], onDelete: SetNull)
+  member User   @relation("SportRankingEventMember", fields: [member_id], references: [id], onDelete: Cascade)
+  group  Group? @relation(fields: [group_id], references: [id], onDelete: SetNull)
 
   @@index([sport, member_id, created_at])
   @@index([league_match_id])
@@ -193,35 +225,35 @@ model SportRankingEvent {
 }
 
 model League {
-  id              String    @id @default(uuid())
-  name            String
-  description     String?
-  type            String
-  format          String?
-  sport           String
-  start_date      DateTime
-  status          String    @default("draft") // e.g., "draft", "active", "completed"
-  rules           String?
-  notice          String?
-  sort_order      String?   @default("부수")
-  recruit_count   Int       @default(0)
-  participant_count Int     @default(0)
-  league_code      String?   @unique
-  join_permission  String    @default("public") // "public" | "club_only"
-  created_at       DateTime  @default(now())
-  updated_at      DateTime  @default(now()) @updatedAt
+  id                String   @id @default(uuid())
+  name              String
+  description       String?
+  type              String
+  format            String?
+  sport             String
+  start_date        DateTime
+  status            String   @default("draft") // e.g., "draft", "active", "completed"
+  rules             String?
+  notice            String?
+  sort_order        String?  @default("부수")
+  recruit_count     Int      @default(0)
+  participant_count Int      @default(0)
+  league_code       String?  @unique
+  join_permission   String   @default("public") // "public" | "club_only"
+  created_at        DateTime @default(now())
+  updated_at        DateTime @default(now()) @updatedAt
 
-  created_by_id   Int
-  creator         User      @relation("LeagueCreator", fields: [created_by_id], references: [id])
+  created_by_id Int
+  creator       User @relation("LeagueCreator", fields: [created_by_id], references: [id])
 
-  group_id        String?
-  group           Group?    @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  group_id String?
+  group    Group?  @relation(fields: [group_id], references: [id], onDelete: Cascade)
 
-  teams           Team[]
-  matches         Match[]
-  participants    LeagueParticipant[]
-  league_matches  LeagueMatch[]
-  draws           Draw[]
+  teams          Team[]
+  matches        Match[]
+  participants   LeagueParticipant[]
+  league_matches LeagueMatch[]
+  draws          Draw[]
 
   @@map("leagues")
 }
@@ -237,8 +269,8 @@ model LeagueParticipant {
   sort_order Int?
   created_at DateTime @default(now())
 
-  league_id  String
-  league     League   @relation(fields: [league_id], references: [id], onDelete: Cascade)
+  league_id String
+  league    League @relation(fields: [league_id], references: [id], onDelete: Cascade)
 
   matches_as_a LeagueMatch[] @relation("MatchParticipantA")
   matches_as_b LeagueMatch[] @relation("MatchParticipantB")
@@ -248,16 +280,16 @@ model LeagueParticipant {
 }
 
 model LeagueMatch {
-  id           String   @id @default(uuid())
-  match_order  Int
-  score_a      Int?
-  score_b      Int?
-  court        String?
-  status       String   @default("pending")
-  created_at   DateTime @default(now())
+  id          String   @id @default(uuid())
+  match_order Int
+  score_a     Int?
+  score_b     Int?
+  court       String?
+  status      String   @default("pending")
+  created_at  DateTime @default(now())
 
-  league_id    String
-  league       League   @relation(fields: [league_id], references: [id], onDelete: Cascade)
+  league_id String
+  league    League @relation(fields: [league_id], references: [id], onDelete: Cascade)
 
   participant_a_id String?
   participant_a    LeagueParticipant? @relation("MatchParticipantA", fields: [participant_a_id], references: [id], onDelete: SetNull)
@@ -270,86 +302,86 @@ model LeagueMatch {
 }
 
 model Team {
-  id              String    @id @default(uuid())
-  name            String
-  created_at      DateTime  @default(now())
-  updated_at      DateTime  @default(now()) @updatedAt
+  id         String   @id @default(uuid())
+  name       String
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now()) @updatedAt
 
-  league_id       String
-  league          League    @relation(fields: [league_id], references: [id], onDelete: Cascade)
+  league_id String
+  league    League @relation(fields: [league_id], references: [id], onDelete: Cascade)
 
-  created_by_id   Int
-  creator         User      @relation("TeamCreator", fields: [created_by_id], references: [id])
+  created_by_id Int
+  creator       User @relation("TeamCreator", fields: [created_by_id], references: [id])
 
-  players         Player[]
-  home_matches    Match[]   @relation("HomeMatches")
-  away_matches    Match[]   @relation("AwayMatches")
+  players      Player[]
+  home_matches Match[]  @relation("HomeMatches")
+  away_matches Match[]  @relation("AwayMatches")
 
   @@map("teams")
 }
 
 model Player {
-  id              String    @id @default(uuid())
-  name            String
-  created_at      DateTime  @default(now())
-  updated_at      DateTime  @default(now()) @updatedAt
+  id         String   @id @default(uuid())
+  name       String
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now()) @updatedAt
 
-  team_id         String
-  team            Team      @relation(fields: [team_id], references: [id], onDelete: Cascade)
+  team_id String
+  team    Team   @relation(fields: [team_id], references: [id], onDelete: Cascade)
 
   @@map("players")
 }
 
 model Match {
-  id              String    @id @default(uuid())
-  match_date      DateTime
-  location        String?
-  score_home      Int?
-  score_away      Int?
-  created_at      DateTime  @default(now())
-  updated_at      DateTime  @default(now()) @updatedAt
+  id         String   @id @default(uuid())
+  match_date DateTime
+  location   String?
+  score_home Int?
+  score_away Int?
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now()) @updatedAt
 
-  league_id       String
-  league          League    @relation(fields: [league_id], references: [id], onDelete: Cascade)
+  league_id String
+  league    League @relation(fields: [league_id], references: [id], onDelete: Cascade)
 
-  home_team_id    String
-  home_team       Team      @relation("HomeMatches", fields: [home_team_id], references: [id])
+  home_team_id String
+  home_team    Team   @relation("HomeMatches", fields: [home_team_id], references: [id])
 
-  away_team_id    String
-  away_team       Team      @relation("AwayMatches", fields: [away_team_id], references: [id])
+  away_team_id String
+  away_team    Team   @relation("AwayMatches", fields: [away_team_id], references: [id])
 
   @@map("matches")
 }
 
 model Draw {
-  id             String    @id @default(dbgenerated("gen_random_uuid()::text"))
-  name           String
-  draw_code      String?   @unique
-  created_at     DateTime  @default(now())
+  id         String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  name       String
+  draw_code  String?  @unique
+  created_at DateTime @default(now())
 
-  league_id      String
-  league         League    @relation(fields: [league_id], references: [id], onDelete: Cascade)
+  league_id String
+  league    League @relation(fields: [league_id], references: [id], onDelete: Cascade)
 
-  created_by_id  Int
-  creator        User      @relation("DrawCreator", fields: [created_by_id], references: [id])
+  created_by_id Int
+  creator       User @relation("DrawCreator", fields: [created_by_id], references: [id])
 
-  prizes         DrawPrize[]
-  winners        DrawWinner[]
+  prizes  DrawPrize[]
+  winners DrawWinner[]
 
   @@index([league_id])
   @@map("draws")
 }
 
 model DrawPrize {
-  id            String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  id            String @id @default(dbgenerated("gen_random_uuid()::text"))
   prize_name    String
-  quantity      Int      @default(1)
-  display_order Int      @default(0)
+  quantity      Int    @default(1)
+  display_order Int    @default(0)
 
-  draw_id       String
-  draw          Draw     @relation(fields: [draw_id], references: [id], onDelete: Cascade)
+  draw_id String
+  draw    Draw   @relation(fields: [draw_id], references: [id], onDelete: Cascade)
 
-  winners       DrawWinner[]
+  winners DrawWinner[]
 
   @@index([draw_id])
   @@map("draw_prizes")
@@ -361,14 +393,13 @@ model DrawWinner {
   participant_division String?
   display_order        Int     @default(0)
 
-  draw_id   String
-  draw      Draw      @relation(fields: [draw_id], references: [id], onDelete: Cascade)
+  draw_id String
+  draw    Draw   @relation(fields: [draw_id], references: [id], onDelete: Cascade)
 
-  prize_id  String
-  prize     DrawPrize @relation(fields: [prize_id], references: [id], onDelete: Cascade)
+  prize_id String
+  prize    DrawPrize @relation(fields: [prize_id], references: [id], onDelete: Cascade)
 
   @@index([draw_id])
   @@index([prize_id])
   @@map("draw_winners")
 }
-

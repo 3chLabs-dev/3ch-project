@@ -18,6 +18,7 @@ const noticeRouter = require("./routes/notice")
 const inquiryRouter  = require("./routes/inquiry")
 const paymentRouter  = require("./routes/payment")
 const userRouter = require("./routes/user")
+const supportChatRouter = require("./routes/supportChat")
 const { ensureGroupRankingTables } = require("./services/groupRanking");
 const { ensureSportRankingTables } = require("./services/sportRanking");
 
@@ -137,5 +138,6 @@ app.use("/api", noticeRouter);
 app.use("/api", inquiryRouter);
 app.use("/api", paymentRouter);
 app.use("/api", userRouter);
+app.use("/api", supportChatRouter);
 
 module.exports = app;

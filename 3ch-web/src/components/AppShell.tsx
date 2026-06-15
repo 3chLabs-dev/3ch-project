@@ -4,6 +4,7 @@ import { AppBar, Box, Toolbar, Paper, Select, MenuItem, IconButton, Stack, Butto
 import type { SelectChangeEvent } from "@mui/material";
 import BottomTab from "./BottomTab";
 import AppFooter from "./AppFooter";
+import SupportChat from "./SupportChat";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
@@ -273,6 +274,7 @@ export default function AppShell() {
                     </Box>
                 </Box>
 
+                {!isOmrSheet && <SupportChat />}
                 {!isOmrSheet && <BottomTab />}
             </Paper>
         </Box>

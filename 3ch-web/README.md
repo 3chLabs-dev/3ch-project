@@ -1,227 +1,228 @@
-# 3ch Web (Frontend)
+# 3ch Web
 
-3ch는 탁구, 배드민턴, 테니스 등 다양한 스포츠를 기반으로 한
-스포츠 플랫폼 서비스를 목표로 하는 프로젝트입니다.
-
-현재는 창업 준비 단계로, 서비스 기획과 기술 검증을 함께 진행하고 있습니다.
+우리리그 웹 프론트엔드입니다. 모바일 화면 폭을 기준으로 한 SPA/PWA이며, `3ch-api`의 `/api` 엔드포인트를 사용합니다.
 
 ---
 
-## 📌 프로젝트 목표
-- 모임이나 리그 관리자가 생활체육리그를 효율적으로 운영할 수 있는 환경 마련
-- 스포츠와 디지털 기술의 접목으로 생활체육 저변 확대
-- 여러 종목의 스포츠를 하나의 플랫폼에서 다루는 구조
-- 종목별이 아닌 **공통 기능 + 스포츠 타입 확장** 방식
-- 초기에는 소규모, 이후 확장 가능한 아키텍처 지향
+## 보안 원칙
+
+- README에는 실제 도메인, 서버 IP, 키, 토큰, 원격 경로를 남기지 않습니다.
+- 실제 값은 `.env`, `.env.production`, GitHub Secrets, 서버 환경 변수에서 관리합니다.
+- `.env*` 파일은 Git에 커밋하지 않습니다.
 
 ---
 
-## 🧱 프로젝트 구조
-```
+## 기술 스택
+
+- **Framework**: React 19 + TypeScript
+- **Build Tool**: Vite 7
+- **Routing**: React Router 7
+- **State**: Redux Toolkit + RTK Query
+- **UI**: MUI 7
+- **Editor**: Tiptap 3
+- **Payment**: Payments SDK
+- **PWA**: vite-plugin-pwa
+- **Charts**: Recharts
+- **Drag and Drop**: dnd-kit
+- **QR**: react-qr-code
+- **Capture/Effects**: html2canvas, canvas-confetti
+
+---
+
+## 폴더 구조
+
+```text
 3ch-web/
-├─ public/
-│  ├─ og-image.png
-│  └─ (PWA 아이콘 등)
-│
+├─ public/              # PWA 아이콘, 정적 파일
 ├─ src/
-│  ├─ app/            # Redux store / 공통 hooks
-│  ├─ assets/         # 폰트 등 정적 자산
-│  ├─ components/     # 공통 UI 컴포넌트 (Layout, Tab 등)
-│  ├─ features/       # 도메인별 상태 / API (RTK Query)
-│  │  ├─ admin/
-│  │  ├─ api/
-│  │  ├─ auth/
-│  │  ├─ draw/
-│  │  ├─ group/
-│  │  ├─ league/
-│  │  └─ policy/
-│  ├─ icon/           # 아이콘 리소스
-│  ├─ pages/          # 라우트 단위 페이지
-│  │  ├─ admin/
-│  │  ├─ draw/
-│  │  ├─ group/
-│  │  ├─ league/
-│  │  ├─ mypage/
-│  │  ├─ sign/
-│  │  └─ util/
-│  ├─ routes/         # 라우터 설정
-│  ├─ theme/          # MUI Theme 설정
-│  ├─ utils/          # 공통 유틸 함수
-│  ├─ main.tsx        # 엔트리 포인트
-│  └─ vite-env.d.ts
-│
-├─ deploy-web.ps1     # 수동 배포 스크립트 (로컬 빌드 + SCP)
+│  ├─ app/              # Redux store/hooks
+│  ├─ assets/           # 이미지, 로고
+│  ├─ components/       # AppShell, BottomTab, 공통 UI
+│  ├─ features/         # RTK Query API와 slice
+│  ├─ hooks/            # push, support chat socket 등
+│  ├─ pages/            # 라우트 단위 페이지
+│  ├─ routes/           # React Router 설정
+│  ├─ theme/            # MUI theme
+│  ├─ utils/            # 권한, sanitizing 등
+│  ├─ main.tsx
+│  └─ sw.ts             # PWA service worker
+├─ deploy-web.ps1
 ├─ vite.config.ts
-├─ tsconfig.json
 ├─ package.json
 └─ README.md
 ```
 
 ---
 
-## 🛠 사용 기술 스택
+## 환경 변수
 
-### Frontend
-- **Framework**: React 19 + TypeScript
-- **Build Tool**: Vite 7
-- **Routing**: React Router 7 (SPA)
-- **State Management**: Redux Toolkit (RTK) + RTK Query
-- **UI Library**: MUI (Material UI) 7
-- **HTTP Client**: Axios
-- **Rich Text Editor**: Tiptap 3
-- **Drag & Drop**: @dnd-kit
-- **Chart**: Recharts
-- **QR Code**: react-qr-code
-- **PWA**: vite-plugin-pwa (앱 이름: 우리리그, standalone 모드)
-- **UI Pattern**: 모바일 앱 느낌 레이아웃 (모바일 폭 고정, 하단 탭, 카드 UI)
+`.env` 또는 `.env.production`에 설정합니다. 값은 로컬/배포 환경에서만 채웁니다.
 
-### 인증
-- 이메일/비밀번호 회원가입 및 로그인
-- 소셜 로그인 (Google, Kakao, Naver)
-- JWT 토큰 기반 인증
+```dotenv
+VITE_API_BASE_URL=<API_BASE_URL>
+VITE_APP_URL=<WEB_APP_URL>
 
-### 주요 화면
-- 홈, 로그인/회원가입, 소셜 회원가입
-- 리그 생성 위자드, 리그 상세, 매치 운영, 대진표, OMR 입력지
-- 클럽 목록/생성/상세/관리, 클럽 랭킹
-- 추첨 목록/상세
-- 마이페이지, 공지, FAQ, 가이드, 문의, 설정, 약관/개인정보 처리방침
-- 관리자 대시보드, 회원/클럽/리그/추첨/랭킹/게시판 관리
+VITE_GOOGLE_CLIENT_ID=<GOOGLE_CLIENT_ID>
+VITE_KAKAO_JS_KEY=<KAKAO_JS_KEY>
+VITE_TOSS_CLIENT_KEY=<PAYMENT_CLIENT_KEY>
+VITE_VAPID_PUBLIC_KEY=<VAPID_PUBLIC_KEY>
+```
 
 ---
 
-## 🚀 배포 (Deployment)
+## 설치 및 실행
 
-### 자동 배포 (GitHub Actions)
+```powershell
+npm install
+npm run dev
+```
 
-`main` 브랜치의 `3ch-web/**` 변경 시 자동 실행:
+기본 개발 서버는 Vite이며 `--host` 옵션으로 실행됩니다.
 
-1. GitHub Actions에서 `npm ci` + `npm run build`
-2. `dist/` 를 AWS EC2 서버 `/var/www/3ch` 에 SCP 업로드
-3. Nginx 권한 설정 및 재로드
+---
+
+## 주요 명령어
+
+```powershell
+npm run dev        # 개발 서버
+npm run build      # 기본 빌드
+npm run build:test # test mode 빌드
+npm run build:prod # production mode 빌드
+npm run lint       # ESLint
+npm run preview    # Vite preview
+```
+
+---
+
+## 주요 화면
+
+### 사용자
+
+- 홈: 나의 조편성, 경기, 당첨 내역 요약
+- 로그인/회원가입: 이메일, Google, Kakao, Naver
+- 소셜 추가 가입: OAuth ticket 기반 추가 정보 입력
+- 클럽: 생성, 검색, 추천, 상세, 관리, 회원 관리
+- 클럽 순위: 클럽별 랭킹, 랭킹 상세, 회원별 랭킹/리그 이력
+- 리그·대회: 생성 wizard, 상세, 참가자 관리, 경기 진행
+- 조편성/대진표: bracket, tournament, match order
+- OMR: 리그 점수 입력지/스캔 화면
+- 추첨: 리그별 추첨 생성, 실행, 결과 확인
+- 마이페이지: 정보수정, 설정, 공지, FAQ, 이용방법, 문의, 약관, 개인정보 처리방침
+- 요금제/결제: 결제 checkout, 성공/실패 페이지
+- 채팅 문의: 사용자 플로팅 채팅
+
+### 관리자
+
+- 관리자 로그인
+- 대시보드
+- 회원 관리
+- 클럽 관리
+- 리그 관리
+- 대회 관리
+- 추첨 관리
+- 순위 관리
+- 채팅 상담
+- 공지사항, FAQ, 1:1 문의, 이용방법, 약관, 개인정보 처리방침 관리
+
+---
+
+## 라우트 개요
+
+주요 라우트는 `src/routes/index.tsx`에 정의되어 있습니다.
+
+- `/`
+- `/login`, `/signup`, `/social-signup`
+- `/league`, `/league/:id`, `/league/:id/bracket`, `/league/:id/omr`
+- `/league/:id/tournament/*`
+- `/club`, `/club/create`, `/club/:id`, `/club/:id/manage`
+- `/club/:id/ranking/*`
+- `/draw`, `/draw/:leagueId`, `/draw/:leagueId/:drawId`
+- `/ranking`, `/ranking/sport/:sport`
+- `/mypage/*`
+- `/payment/checkout`, `/payment/success`, `/payment/fail`
+- `/admin/*`
+
+---
+
+## API 연동
+
+RTK Query base API는 `src/features/api/baseApi.ts`에 있습니다.
+
+- 기본 URL: `VITE_API_BASE_URL ?? "/api"`
+- 로그인 토큰은 Redux auth state에서 읽어 `Authorization` 헤더로 자동 주입합니다.
+- admin 화면 일부는 `localStorage.admin_token`을 직접 사용합니다.
+
+---
+
+## PWA
+
+`vite.config.ts`에서 `VitePWA`를 사용합니다.
+
+- `injectManifest` 전략
+- service worker: `src/sw.ts`
+- `/api`, `/swagger`, `robots.txt`, `sitemap.xml`은 PWA cache 대상에서 제외
+- 앱 이름: 우리리그
+- standalone 표시 모드
+
+---
+
+## 배포
+
+### 자동 배포
+
+`.github/workflows/deploy-web.yml`
+
+`main` 브랜치에 `3ch-web/**` 변경이 push되면:
+
+1. GitHub Actions에서 `npm ci`
+2. `npm run build`
+3. `dist/`를 원격 웹 루트로 업로드
+4. 파일 권한 설정
+5. Nginx reload
+6. Discord 웹훅 결과 알림
 
 ### 수동 배포
 
 ```powershell
-# 3ch-web/deploy-web.ps1 실행
-# 로컬에서 빌드 후 SCP로 서버에 직접 업로드
-./deploy-web.ps1
+.\deploy-web.ps1
 ```
 
-빌드 명령어:
-```bash
-npm run build:prod   # 프로덕션 빌드
-npm run build:test   # 테스트 서버 빌드
-```
+스크립트는 로컬에서 빌드한 뒤 원격 웹 루트로 업로드하고 Nginx를 reload합니다. 실제 PEM 경로, 서버 주소, 원격 경로는 스크립트나 환경별 비공개 설정에서만 관리합니다.
 
-### Nginx 설정 (참고)
+---
+
+## 문제 해결
+
+### CORS 오류
+
+- `VITE_API_BASE_URL` 확인
+- API 서버의 CORS origin 목록 확인
+
+### 소셜 로그인 실패
+
+- OAuth provider callback URL 확인
+- `VITE_APP_URL` 확인
+- OAuth client key 환경 변수 확인
+
+### 결제 실패
+
+- 결제 client key 환경 변수 확인
+- API 서버의 결제 secret 환경 변수 확인
+- checkout URL의 plan/amount/name query 확인
+
+### 푸시 알림 실패
+
+- `VITE_VAPID_PUBLIC_KEY` 확인
+- 브라우저 알림 권한 확인
+- API 서버 VAPID 설정 및 `/api/user/me/push-subscription` 동작 확인
+
+### 운영 라우트 404
+
+Nginx SPA fallback 설정이 필요합니다. 실제 웹 루트 경로는 환경별로 관리합니다.
+
 ```nginx
 location / {
-    root /var/www/3ch;
+    root <WEB_ROOT>;
     try_files $uri $uri/ /index.html;
 }
 ```
-
-### 주의사항
-- **소스 코드는 서버에 배포하지 않음**
-- 서버에는 **빌드 산출물(dist)만 존재**
-- 환경 변수는 빌드 시점에 포함되므로 배포 전 올바른 값 설정 필요
-
----
-
-## ⚙️ 로컬 실행
-
-### 1. 의존성 설치
-
-```bash
-npm install
-```
-
-### 2. 개발 서버 실행
-
-```bash
-npm run dev
-```
-
-기본 개발 서버는 `5173` 포트에서 실행됩니다.
-
-### 3. 주요 환경 변수
-
-```dotenv
-VITE_API_BASE_URL=http://localhost:3000/api
-VITE_APP_URL=http://localhost:5173
-VITE_KAKAO_JS_KEY=
-VITE_TOSS_CLIENT_KEY=
-VITE_VAPID_PUBLIC_KEY=
-```
-
-### 4. 빌드 명령어
-
-```bash
-npm run build
-npm run build:test
-npm run build:prod
-```
-
----
-
-## 🔧 문제 해결 (Troubleshooting)
-
-### CORS 에러
-- `.env` 파일의 `VITE_API_BASE_URL` 확인
-- API 서버의 CORS 설정 확인
-- 브라우저 개발자 도구에서 네트워크 요청 확인
-
-### 빌드 실패
-```bash
-# node_modules 삭제 후 재설치
-rm -rf node_modules package-lock.json
-npm install
-
-# 캐시 클리어 후 빌드
-npm run build -- --force
-```
-
-### GitHub Actions 빌드 실패
-- Repository Secrets 확인: `EC2_HOST`, `EC2_USER`, `EC2_PEM_KEY`
-
-### 소셜 로그인 실패
-- Google Client ID가 올바르게 설정되었는지 확인
-- OAuth 콜백 URL이 각 제공자 콘솔에 등록되었는지 확인
-- 팝업 차단이 활성화되어 있는지 확인
-
-### 푸시 알림 동작 안함
-- `VITE_VAPID_PUBLIC_KEY` 설정 확인
-- 브라우저 알림 권한 허용 여부 확인
-- API 서버의 VAPID 키 설정 및 구독 저장 API 동작 여부 확인
-
-### 라우팅 404 에러 (프로덕션)
-- Nginx 설정에서 `try_files $uri $uri/ /index.html` 확인
-- SPA는 모든 경로를 `index.html`로 리다이렉트해야 함
-
----
-
-## 📌 참고사항
-
-- 모든 API 요청은 `VITE_API_BASE_URL` 환경 변수 사용
-- API 엔드포인트는 `/api` prefix 포함 (예: `/api/auth/login`)
-- 토큰은 `localStorage`에 저장
-- Redux store에서 전역 상태 관리 (user, token)
-- MUI 테마는 `src/theme/` 폴더에서 커스터마이징
-- RTK Query base API는 `src/features/api/baseApi.ts`에서 관리
-- 주요 도메인 API는 `features/league`, `features/group`, `features/draw`, `features/policy`, `features/user`에 구성
-- 라우트 정의는 `src/routes/index.tsx` 기준
-
----
-
-## 📂 브랜치 / 협업 규칙
-
-- 기본 작업 브랜치는 `dev`
-- 배포 시에만 `dev → main` 머지 (main push 시 GitHub Actions 자동 배포 트리거)
-- build 결과물은 Git에 포함하지 않음
-
----
-
-## ⚠️ 기타
-- 본 저장소는 현재 Private 상태
-- 외부 공개는 서비스 안정화 이후 검토 예정

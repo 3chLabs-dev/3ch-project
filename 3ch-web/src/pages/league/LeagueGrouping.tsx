@@ -158,7 +158,7 @@ export default function LeagueGrouping() {
   
   }, [rawParticipants, step]);
 
-  const runGroupingAlgorithm = (totalUsers: number, groupCount: number) => {
+  const runGroupingAlgorithm = (groupCount: number) => {
     const sortedUsers = [...rawParticipants].sort((a, b) => parseInt(a.division || "99") - parseInt(b.division || "99"));
     const newGroups: LeagueParticipantItem[][] = Array.from({ length: groupCount }, () => []);
     sortedUsers.forEach((user, index) => {
@@ -259,7 +259,7 @@ export default function LeagueGrouping() {
           <Typography fontWeight="800" fontSize={20} width={50} textAlign="center" color={COLOR.primary}>{selectedGroupCount}</Typography>
           <Button variant="outlined" onClick={() => setSelectedGroupCount(p => p + 1)} disabled={selectedGroupCount >= rawParticipants.length} sx={{ minWidth: 40 }}>+</Button>
         </Stack>
-        <Button fullWidth variant="contained" size="large" onClick={() => runGroupingAlgorithm(rawParticipants.length, selectedGroupCount)} sx={{ bgcolor: COLOR.primary, fontWeight: 700, borderRadius: 2, py: 1.5, boxShadow: 'none' }}>
+        <Button fullWidth variant="contained" size="large" onClick={() => runGroupingAlgorithm(selectedGroupCount)} sx={{ bgcolor: COLOR.primary, fontWeight: 700, borderRadius: 2, py: 1.5, boxShadow: 'none' }}>
           {selectedGroupCount}개 조로 편성하기
         </Button>
       </Box>

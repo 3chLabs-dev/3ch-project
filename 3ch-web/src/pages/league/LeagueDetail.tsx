@@ -128,7 +128,7 @@
     const [editType, setEditType] = useState("");
     const [editFormat, setEditFormat] = useState("");
     const [editRules, setEditRules] = useState("");
-    const [editSortOrder, setEditSortOrder] = useState();
+    const [editSortOrder, setEditSortOrder] = useState("");
     const [editTournamentSeeding, setEditTournamentSeeding] = useState("seed");
     const [editTournamentAdvancement, setEditTournamentAdvancement] = useState("upper-lower");
     // 단일리그+토너먼트 본선 편성

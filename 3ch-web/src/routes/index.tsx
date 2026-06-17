@@ -72,6 +72,8 @@ import AdminSupportChatPage from "../pages/admin/AdminSupportChatPage";
 // import Login from "../pages/Login";
 
 export const router = createBrowserRouter([
+  { path: "/auth/success", element: <AuthSuccess /> },
+  { path: "/auth/fail", element: <AuthFail /> },
   {
     element: <AppShell />,
     children: [
@@ -88,8 +90,6 @@ export const router = createBrowserRouter([
       { path: "/league/:id/tournament/matches", element: <LeagueTournamentMatchOrder /> },
       { path: "/league/:id/matches", element: <LeagueMatchOrder /> },
       { path: "/mypage", element: <MyPage />},
-      { path: "/auth/success", element: <AuthSuccess />},
-      { path: "/auth/fail", element: <AuthFail />},
       { path: "/social-signup", element: <SocialSignUp />},
       { path: "/club", element: <GroupMain /> },
       { path: "/club/create", element: <GroupCreate /> },

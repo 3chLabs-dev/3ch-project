@@ -1,0 +1,51 @@
+{
+  "expo": {
+    "name": "우리리그",
+    "slug": "woori-league",
+    "scheme": "woorileague",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "현재 위치 주변의 스포츠 클럽을 추천하기 위해 위치를 사용합니다."
+      }
+    },
+    "android": {
+      "package": "com.threech.woorileague",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ],
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "현재 위치 주변의 스포츠 클럽을 추천하기 위해 위치를 사용합니다."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "7c989835-84ec-4d57-8ece-a11d1664a1b6"
+      }
+    },
+    "owner": "soochan"
+  }
+}

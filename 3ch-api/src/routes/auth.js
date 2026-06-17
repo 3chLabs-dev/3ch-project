@@ -25,6 +25,54 @@ const verifyPasswordSchema = z.object({
 const { signToken, signSignupTicket, verifyToken } = require("../utils/authUtils");
 const { generateMemberCode } = require("../utils/memberCodeUtils");
 
+function getDefaultFrontendOrigin() {
+  try {
+    return new URL(process.env.FRONTEND_URL).origin;
+  } catch {
+    return "http://localhost:5173";
+  }
+}
+
+function isPrivateLanHost(hostname) {
+  return (
+    hostname.startsWith("192.168.") ||
+    hostname.startsWith("10.") ||
+    /^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname)
+  );
+}
+
+function resolveFrontendOrigin(value) {
+  const fallback = getDefaultFrontendOrigin();
+  if (!value || typeof value !== "string") return fallback;
+
+  try {
+    const url = new URL(value);
+    const fallbackOrigin = new URL(fallback).origin;
+    const isAllowedProtocol = url.protocol === "http:" || url.protocol === "https:";
+    const isConfiguredOrigin = url.origin === fallbackOrigin;
+    const isLocalOrigin =
+      url.hostname === "localhost" ||
+      url.hostname === "127.0.0.1" ||
+      isPrivateLanHost(url.hostname);
+
+    if (isAllowedProtocol && (isConfiguredOrigin || isLocalOrigin)) {
+      return url.origin;
+    }
+  } catch {
+    return fallback;
+  }
+
+  return fallback;
+}
+
+function getOauthState(req) {
+  return resolveFrontendOrigin(req.query.returnTo);
+}
+
+function getOauthFrontendOrigin(req) {
+  return resolveFrontendOrigin(req.query.state);
+}
+
 /**
  * @openapi
  * tags:
@@ -82,10 +130,12 @@ const { generateMemberCode } = require("../utils/memberCodeUtils");
  */
 router.get(
   "/google",
-  passport.authenticate("google", {
-    scope: ["profile", "email"],
-    session: false,
-  }),
+  (req, res, next) =>
+    passport.authenticate("google", {
+      scope: ["profile", "email"],
+      session: false,
+      state: getOauthState(req),
+    })(req, res, next),
 );
 
 /**
@@ -117,19 +167,21 @@ router.get(
  */
 router.get("/google/callback", (req, res, next) => {
   passport.authenticate("google", { session: false }, (err, user, info) => {
+    const frontendOrigin = getOauthFrontendOrigin(req);
+
     if (err) {
       return next(err);
     }
     if (!user) {
       const reason = info?.message || "LOGIN_FAILED";
       return res.redirect(
-        `${process.env.FRONTEND_URL}/auth/fail?reason=${encodeURIComponent(reason)}`,
+        `${frontendOrigin}/auth/fail?reason=${encodeURIComponent(reason)}`,
       );
     }
     if (!user.name) {
       const ticket = signSignupTicket({ id: user.id, email: user.email });
       return res.redirect(
-        `${process.env.FRONTEND_URL}/auth/success#signup=1&ticket=${ticket}`,
+        `${frontendOrigin}/auth/success#signup=1&ticket=${ticket}`,
       );
     }
     const token = signToken({
@@ -138,7 +190,7 @@ router.get("/google/callback", (req, res, next) => {
     });
 
     return res.redirect(
-      `${process.env.FRONTEND_URL}/auth/success#token=${token}`,
+      `${frontendOrigin}/auth/success#token=${token}`,
     );
   })(req, res, next);
 });
@@ -157,7 +209,12 @@ router.get("/google/callback", (req, res, next) => {
  *       500:
  *         description: 서버 오류.
  */
-router.get("/kakao", passport.authenticate("kakao", { session: false }));
+router.get("/kakao", (req, res, next) =>
+  passport.authenticate("kakao", {
+    session: false,
+    state: getOauthState(req),
+  })(req, res, next),
+);
 
 /**
  * @openapi
@@ -188,19 +245,21 @@ router.get("/kakao", passport.authenticate("kakao", { session: false }));
  */
 router.get("/kakao/callback", (req, res, next) => {
   passport.authenticate("kakao", { session: false }, (err, user, info) => {
+    const frontendOrigin = getOauthFrontendOrigin(req);
+
     if (err) {
       return next(err);
     }
     if (!user) {
       const reason = info?.message || "LOGIN_FAILED";
       return res.redirect(
-        `${process.env.FRONTEND_URL}/auth/fail?reason=${encodeURIComponent(reason)}`,
+        `${frontendOrigin}/auth/fail?reason=${encodeURIComponent(reason)}`,
       );
     }
     if (!user.name) {
       const ticket = signSignupTicket({ id: user.id, email: user.email });
       return res.redirect(
-        `${process.env.FRONTEND_URL}/auth/success#signup=1&ticket=${ticket}`,
+        `${frontendOrigin}/auth/success#signup=1&ticket=${ticket}`,
       );
     }
     const token = signToken({
@@ -209,7 +268,7 @@ router.get("/kakao/callback", (req, res, next) => {
     });
 
     return res.redirect(
-      `${process.env.FRONTEND_URL}/auth/success#token=${token}`,
+      `${frontendOrigin}/auth/success#token=${token}`,
     );
   })(req, res, next);
 });
@@ -228,7 +287,12 @@ router.get("/kakao/callback", (req, res, next) => {
  *       500:
  *         description: 서버 오류.
  */
-router.get("/naver", passport.authenticate("naver", { session: false }));
+router.get("/naver", (req, res, next) =>
+  passport.authenticate("naver", {
+    session: false,
+    state: getOauthState(req),
+  })(req, res, next),
+);
 
 /**
  * @openapi
@@ -259,19 +323,21 @@ router.get("/naver", passport.authenticate("naver", { session: false }));
  */
 router.get("/naver/callback", (req, res, next) => {
   passport.authenticate("naver", { session: false }, (err, user, info) => {
+    const frontendOrigin = getOauthFrontendOrigin(req);
+
     if (err) {
       return next(err);
     }
     if (!user) {
       const reason = info?.message || "LOGIN_FAILED";
       return res.redirect(
-        `${process.env.FRONTEND_URL}/auth/fail?reason=${encodeURIComponent(reason)}`,
+        `${frontendOrigin}/auth/fail?reason=${encodeURIComponent(reason)}`,
       );
     }
     if (!user.name) {
       const ticket = signSignupTicket({ id: user.id, email: user.email });
       return res.redirect(
-        `${process.env.FRONTEND_URL}/auth/success#signup=1&ticket=${ticket}`,
+        `${frontendOrigin}/auth/success#signup=1&ticket=${ticket}`,
       );
     }
     const token = signToken({
@@ -280,7 +346,7 @@ router.get("/naver/callback", (req, res, next) => {
     });
 
     return res.redirect(
-      `${process.env.FRONTEND_URL}/auth/success#token=${token}`,
+      `${frontendOrigin}/auth/success#token=${token}`,
     );
   })(req, res, next);
 });

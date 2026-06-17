@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE league_participants
+ADD COLUMN group_name VARCHAR(50) DEFAULT NULL,
+ADD COLUMN is_leader BOOLEAN DEFAULT FALSE;

@@ -128,7 +128,7 @@
     const [editType, setEditType] = useState("");
     const [editFormat, setEditFormat] = useState("");
     const [editRules, setEditRules] = useState("");
-    const [editSortOrder, setEditSortOrder] = useState("부수");
+    const [editSortOrder, setEditSortOrder] = useState();
     const [editTournamentSeeding, setEditTournamentSeeding] = useState("seed");
     const [editTournamentAdvancement, setEditTournamentAdvancement] = useState("upper-lower");
     // 단일리그+토너먼트 본선 편성
@@ -336,7 +336,9 @@
       if (league?.format?.includes("토너먼트") && league?.format !== "단일리그 + 토너먼트") {
         return `/league/${id}/tournament/matches`;
       }
-      if (league?.format === "4인 리그 (OMR)") return `/league/${id}/omr`;
+      if (league?.format === "4인 리그 (OMR)") {
+        return `/league/${id}/omr`;
+      }
       return `/league/${id}/matches`;
     };
 
@@ -1073,6 +1075,19 @@ const handleSaveEdit = async () => {
             >
               경품 추첨
             </Button>
+          )}
+          {((!canManage  && league.status === "active") || canManage) && (
+            league.format === "조별리그" && (
+              <Stack spacing={1} sx={{ mt: 1 }}>
+                <Button
+                  fullWidth variant="outlined" disableElevation
+                  sx={{ mt: 1, borderRadius: 1, height: 40, fontWeight: 700, bgcolor: "#87B8FF", "&:hover": { bgcolor: "#79AEFF" } }}
+                  onClick={() => navigate(`/league/${id}/grouping`)}
+                >
+                  {canManage && league.status === "draft" ? "조별리그 조편성 생성" : "조별리그 조편성 보기"}
+                </Button>
+              </Stack>
+            )
           )}
           {((!canManage  && league.status === "active") || canManage) && (
             league.format === "단일리그 + 토너먼트" ? (

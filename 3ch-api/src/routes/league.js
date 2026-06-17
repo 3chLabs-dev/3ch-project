@@ -1203,7 +1203,7 @@ router.get('/league/:id/participants', optionalAuth, async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT id, league_id, division, name, member_id, paid, arrived, "after", sort_order, created_at
+      `SELECT id, league_id, division, name, member_id, paid, arrived, "after", sort_order, created_at, group_name, is_leader
        FROM league_participants
        WHERE league_id = $1
        ORDER BY sort_order ASC NULLS LAST, division ASC, created_at ASC`,
@@ -2161,10 +2161,18 @@ router.post('/league/:id/matches/init', requireAuth, async (req, res) => {
       await triggerRankingRebuildByLeagueId(leagueId);
     }
 
-    const participants = await pool.query(
-      `SELECT id FROM league_participants WHERE league_id = $1 ORDER BY sort_order ASC NULLS LAST, division ASC, created_at ASC`,
-      [leagueId],
+    const groupCheck = await pool.query(
+      `SELECT 1 FROM league_participants WHERE league_id = $1 AND group_name IS NOT NULL LIMIT 1`,
+      [leagueId]
     );
+    const isGroupMode = groupCheck.rowCount > 0;
+
+    const participantsQuery = isGroupMode
+      ? `SELECT id FROM league_participants WHERE league_id = $1 AND is_leader = true ORDER BY sort_order ASC NULLS LAST, division ASC, created_at ASC`
+      : `SELECT id FROM league_participants WHERE league_id = $1 ORDER BY sort_order ASC NULLS LAST, division ASC, created_at ASC`;
+
+    const participants = await pool.query(participantsQuery, [leagueId]);
+
     const ids = participants.rows.map((r) => r.id);
     if (ids.length < 2) return res.status(400).json({ message: '참가자가 2명 이상이어야 합니다.' });
 
@@ -2227,14 +2235,18 @@ router.post('/league/:id/matches/extend', requireAuth, async (req, res) => {
       return res.status(403).json({ message: '권한이 없습니다.' });
     }
 
-    // 현재 참가자 전체 조회
-    const participants = await client.query(
-      `SELECT id
-       FROM league_participants
-       WHERE league_id = $1
-       ORDER BY sort_order ASC NULLS LAST, division ASC, created_at ASC`,
-      [leagueId],
+    const groupCheck = await client.query(
+      `SELECT 1 FROM league_participants WHERE league_id = $1 AND group_name IS NOT NULL LIMIT 1`,
+      [leagueId]
     );
+    const isGroupMode = groupCheck.rowCount > 0;
+    
+    // 현재 참가자 전체 조회
+    const participantsQuery = isGroupMode
+      ? `SELECT id FROM league_participants WHERE league_id = $1 AND is_leader = true ORDER BY sort_order ASC NULLS LAST, division ASC, created_at ASC`
+      : `SELECT id FROM league_participants WHERE league_id = $1 ORDER BY sort_order ASC NULLS LAST, division ASC, created_at ASC`;
+
+    const participants = await client.query(participantsQuery, [leagueId]);
 
     const ids = participants.rows.map((r) => r.id);
 
@@ -2365,6 +2377,43 @@ router.post('/league/:id/matches/extend', requireAuth, async (req, res) => {
     return res.status(500).json({ message: '경기 추가 생성 중 서버 오류' });
   } finally {
     client.release();
+  }
+});
+
+router.post('/league/:id/grouping', requireAuth, async (req, res) => {
+  const userId = Number(req.user.sub);
+  const leagueId = req.params.id;
+  const { groupings } = req.body;
+
+  try {
+    // 1. 권한 체크 (기존 양식 완벽 적용)
+    const access = await pool.query(
+      `SELECT l.id FROM leagues l
+       INNER JOIN group_members gm ON gm.group_id = l.group_id
+       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+      [leagueId, userId],
+    );
+    if (access.rowCount === 0) return res.status(403).json({ message: '권한이 없습니다.' });
+
+    // 데이터 유효성 검사
+    if (!groupings || !Array.isArray(groupings)) {
+      return res.status(400).json({ message: '잘못된 데이터 형식입니다.' });
+    }
+
+    // 2. 조 편성 데이터 업데이트 (pool.query 사용)
+    for (const p of groupings) {
+      await pool.query(
+        `UPDATE league_participants 
+         SET group_name = $1, is_leader = $2 
+         WHERE id = $3 AND league_id = $4`,
+        [p.group_name, p.is_leader, p.participant_id, leagueId]
+      );
+    }
+
+    return res.json({ message: '조 편성이 성공적으로 저장되었습니다.' });
+  } catch (err) {
+    console.error('Error saving league groupings:', err);
+    return res.status(500).json({ message: '서버 오류' });
   }
 });
 

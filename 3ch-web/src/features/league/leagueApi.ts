@@ -95,6 +95,8 @@ export interface LeagueParticipantItem {
   after: boolean;
   sort_order?: number | null;
   created_at: string;
+  group_name?: string | null; 
+  is_leader?: boolean;
 }
 
 export interface GetLeagueParticipantsResponse {
@@ -261,6 +263,21 @@ export interface AddParticipantsRequest {
 export interface AddParticipantsResponse {
   message: string;
   participants: LeagueParticipantItem[];
+}
+
+export interface SaveLeagueGroupingItem {
+  participant_id: string;
+  group_name: string;
+  is_leader: boolean;
+}
+
+export interface SaveLeagueGroupingRequest {
+  leagueId: string;
+  groupings: SaveLeagueGroupingItem[];
+}
+
+export interface SaveLeagueGroupingResponse {
+  message: string;
 }
 
 /**
@@ -536,6 +553,23 @@ export const leagueApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: (_result, _error, { leagueId }) => [{ type: "League", id: `matches-${leagueId}` }],
     }),
+
+    /**
+     * 조 편성 결과 저장
+     */
+    saveLeagueGrouping: builder.mutation<SaveLeagueGroupingResponse, SaveLeagueGroupingRequest>({
+      query: ({ leagueId, groupings }) => ({
+        url: `/league/${leagueId}/grouping`,
+        method: "POST",
+        body: { groupings },
+      }),
+      
+      invalidatesTags: (_result, _error, { leagueId }) => [
+        { type: "League", id: leagueId },
+        { type: "League", id: "LIST" },
+        { type: "League", id: `matches-${leagueId}` }, 
+      ],
+    }),
   }),
 });
 
@@ -564,4 +598,5 @@ export const {
   useInitTournamentMatchesMutation,
   useAssignMatchParticipantMutation,
   useExtendLeagueMatchesMutation,
+  useSaveLeagueGroupingMutation,
 } = leagueApi;

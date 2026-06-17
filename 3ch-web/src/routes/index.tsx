@@ -39,6 +39,7 @@ import GroupMemberRankingDetailPage from "../pages/group/GroupMemberRankingDetai
 import DrawMain from "../pages/draw/DrawMain";
 import LeagueDetail from "../pages/league/LeagueDetail";
 import LeagueBracket from "../pages/league/LeagueBracket.tsx";
+import LeagueGrouping from "../pages/league/LeagueGrouping";
 import LeagueOmrSheet from "../pages/league/LeagueOmrSheet";
 import LeagueMatchOrder from "../pages/league/LeagueMatchOrder";
 import LeagueTournamentGenerate from "../pages/league/LeagueTournamentGenerate";
@@ -81,6 +82,7 @@ export const router = createBrowserRouter([
       { path: "/league", element: <LeagueCreationWizard /> },
       { path: "/league/:id", element: <LeagueDetail /> },
       { path: "/league/:id/bracket", element: <LeagueBracket /> },
+      { path: "/league/:id/grouping", element: <LeagueGrouping /> },
       { path: "/league/:id/omr", element: <LeagueOmrSheet /> },
       { path: "/league/:id/tournament", element: <LeagueTournamentList /> },
       { path: "/league/:id/tournament/new", element: <LeagueTournamentGenerate /> },

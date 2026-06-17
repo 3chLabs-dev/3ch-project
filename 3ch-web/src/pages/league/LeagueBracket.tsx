@@ -821,12 +821,20 @@ export default function LeagueBracket() {
   // ── 참가자 순서 상태 ──────────────────────────────────────────────────────
   // editOrder=null: 서버 데이터(rawParticipants) 그대로 사용
   // editOrder≠null: 사용자가 순서를 변경한 로컬 상태 (서버에도 즉시 반영)
+  const hasGroup = useMemo(() => rawParticipants.some(p => p.group_name), [rawParticipants]);
+  const targetParticipants = useMemo(() => {
+    if (hasGroup) {
+      return rawParticipants.filter(p => p.is_leader === true); // 대표만 추출
+    }
+    return rawParticipants; // 개인전이면 원본 그대로
+  }, [rawParticipants, hasGroup]);
+
   const [editOrder, setEditOrder] = useState<typeof rawParticipants | null>(null);
-  const localOrder = editOrder ?? rawParticipants;
+  const localOrder = editOrder ?? targetParticipants;
   const setLocalOrder = useCallback(
-    (fn: (prev: typeof rawParticipants) => typeof rawParticipants) =>
-      setEditOrder((prev) => fn(prev ?? rawParticipants)),
-    [rawParticipants],
+    (fn: (prev: typeof targetParticipants) => typeof targetParticipants) =>
+      setEditOrder((prev) => fn(prev ?? targetParticipants)),
+    [targetParticipants],
   );
 
   // ── UI 상태 ───────────────────────────────────────────────────────────────

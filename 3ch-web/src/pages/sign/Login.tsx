@@ -1,5 +1,5 @@
 ﻿import * as React from "react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import CssBaseline from "@mui/material/CssBaseline";
@@ -25,6 +25,12 @@ const kakaoIcon = "/free-icon-kakao-talk-3991999.png";
 const naverIcon = "/naver-icon.png";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
+const SOCIAL_AUTH_RESULT_KEY = "socialAuthResult";
+
+type SocialAuthPayload =
+  | { type: "SOCIAL_NEED_NAME"; ticket?: string }
+  | { type: "SOCIAL_LOGIN_SUCCESS"; token?: string }
+  | { type: "SOCIAL_LOGIN_FAIL"; reason?: string };
 
 const SignInContainer = styled(Stack)(({ theme }) => ({
   height: "auto",
@@ -225,16 +231,11 @@ try {
     }
   };
 
-  // 소셜 로그인 요청처리 
-useEffect(() => {
-  const handler = async (event: MessageEvent) => {
-    if (event.origin !== window.location.origin) return;
+  const handleSocialAuthPayload = useCallback(async (payload: SocialAuthPayload) => {
+    const type = payload?.type;
 
-    const type = event.data?.type;
-
-    //신규 소셜 이름 입력필요 처리
     if (type === "SOCIAL_NEED_NAME") {
-      const ticket = event.data?.ticket;
+      const ticket = payload.ticket;
       if (!ticket) {
         alert("가입 티켓이 없습니다.");
         return;
@@ -242,9 +243,9 @@ useEffect(() => {
       navigate(`/social-signup?ticket=${encodeURIComponent(ticket)}`, { replace: true });
       return;
     }
-    //기존 유저 진행
+
     if (type === "SOCIAL_LOGIN_SUCCESS") {
-      const token = event.data?.token;
+      const token = payload.token;
       if (!token) {
         alert("토큰을 받지 못했습니다.");
         return;
@@ -280,16 +281,43 @@ useEffect(() => {
     }
 
     if (type === "SOCIAL_LOGIN_FAIL") {
-      console.log("SOCIAL_LOGIN_FAIL payload:", event.data);
-      const reason = event.data?.reason || "UNKNOWN";
+      console.log("SOCIAL_LOGIN_FAIL payload:", payload);
+      const reason = payload.reason || "UNKNOWN";
       alert(`소셜 로그인 실패: ${reason}`);
-      return;
     }
-  };
+  }, [navigate, dispatch, redirectTo]);
 
-  window.addEventListener("message", handler);
-  return () => window.removeEventListener("message", handler);
-}, [navigate, dispatch, redirectTo]);
+  // 소셜 로그인 요청처리
+  useEffect(() => {
+    const messageHandler = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      void handleSocialAuthPayload(event.data);
+      localStorage.removeItem(SOCIAL_AUTH_RESULT_KEY);
+    };
+
+    const storageHandler = (event: StorageEvent) => {
+      if (event.key !== SOCIAL_AUTH_RESULT_KEY || !event.newValue) return;
+
+      try {
+        const result = JSON.parse(event.newValue) as { payload?: SocialAuthPayload };
+        if (result.payload) {
+          void handleSocialAuthPayload(result.payload);
+        }
+      } catch (err) {
+        console.log("social storage payload parse fail:", err);
+      } finally {
+        localStorage.removeItem(SOCIAL_AUTH_RESULT_KEY);
+      }
+    };
+
+    window.addEventListener("message", messageHandler);
+    window.addEventListener("storage", storageHandler);
+
+    return () => {
+      window.removeEventListener("message", messageHandler);
+      window.removeEventListener("storage", storageHandler);
+    };
+  }, [handleSocialAuthPayload]);
 
 
   return (

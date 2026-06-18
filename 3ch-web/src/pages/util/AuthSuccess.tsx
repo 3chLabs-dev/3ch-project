@@ -1,48 +1,60 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+
+const SOCIAL_AUTH_RESULT_KEY = "socialAuthResult";
+
+type SocialAuthPayload =
+  | { type: "SOCIAL_NEED_NAME"; ticket: string }
+  | { type: "SOCIAL_LOGIN_SUCCESS"; token: string }
+  | { type: "SOCIAL_LOGIN_FAIL"; reason: string };
 
 const AuthSuccess = () => {
-    useEffect(() => {
-        const hashParams = new URLSearchParams(window.location.hash.slice(1));
-        const queryParams = new URLSearchParams(window.location.search);
-        const params = hashParams.size > 0 ? hashParams : queryParams;
-        window.history.replaceState(null, "", window.location.pathname);
+  const handledRef = useRef(false);
 
-        const signup = params.get("signup"); // "1"
-        const ticket = params.get("ticket");
-        const token = params.get("token");
+  useEffect(() => {
+    if (handledRef.current) return;
+    handledRef.current = true;
 
-        // 신규 소셜가입 이름 입력 필요
-        if (signup === "1" && ticket) {
-            if (window.opener) {
-                window.opener.postMessage(
-                    { type: "SOCIAL_NEED_NAME", ticket },
-                    window.location.origin
-                );
-                window.close();
-                return;
-            }
-            // 팝업이 아니면 그냥 이동
-            window.location.replace(`/social-signup#ticket=${encodeURIComponent(ticket)}`);
-            return;
+    const hashParams = new URLSearchParams(window.location.hash.slice(1));
+    const queryParams = new URLSearchParams(window.location.search);
+    const params = hashParams.size > 0 ? hashParams : queryParams;
+    window.history.replaceState(null, "", window.location.pathname);
+
+    const signup = params.get("signup");
+    const ticket = params.get("ticket");
+    const token = params.get("token");
+
+    const finish = (payload: SocialAuthPayload) => {
+      if (window.opener) {
+        window.opener.postMessage(payload, window.location.origin);
+      } else {
+        try {
+          localStorage.setItem(
+            SOCIAL_AUTH_RESULT_KEY,
+            JSON.stringify({ payload, issuedAt: Date.now() }),
+          );
+        } catch {
+          // Storage can fail in restricted browser modes.
         }
-        if (!token) {
-            if (window.opener) window.opener.postMessage({ type: "SOCIAL_LOGIN_FAIL", reason: "NO_TOKEN" }, window.location.origin);
-            window.close();
-            return;
-        }
+      }
 
-        localStorage.setItem("token", token);
+      window.close();
+    };
 
-        if (window.opener) {
-            window.opener.postMessage({ type: "SOCIAL_LOGIN_SUCCESS", token }, window.location.origin);
-            window.close();
-            return;
-        }
+    if (signup === "1" && ticket) {
+      finish({ type: "SOCIAL_NEED_NAME", ticket });
+      return;
+    }
 
-        window.location.replace("/");
-    }, []);
+    if (!token) {
+      finish({ type: "SOCIAL_LOGIN_FAIL", reason: "NO_TOKEN" });
+      return;
+    }
 
-    return <div>로그인 성공 처리중...</div>;
+    localStorage.setItem("token", token);
+    finish({ type: "SOCIAL_LOGIN_SUCCESS", token });
+  }, []);
+
+  return <div>로그인 처리 중입니다...</div>;
 };
 
 export default AuthSuccess;

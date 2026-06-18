@@ -357,9 +357,52 @@ export default function LeagueMatchOrder() {
   const [search, setSearch] = useState("");
   // 순서만 로컬에 보관. 경기 데이터는 항상 RTK Query 캐시에서 가져와야 optimistic update가 즉시 반영됨
   const [localOrder, setLocalOrder] = useState<string[] | null>(null);
+
+  const rawParticipants = useMemo(() => participantData?.participants ?? [], [participantData]);
+
+  // 1. 조 이름 목록 추출 ("1조", "2조" ...)
+  const groupNames = useMemo(() => {
+    const names = new Set(rawParticipants.map(p => p.group_name).filter(Boolean) as string[]);
+    return Array.from(names).sort((a, b) => parseInt(a) - parseInt(b));
+  }, [rawParticipants]);
+
+  // 2. 현재 선택된 조 상태 관리
+  const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
+
+  // 조 목록이 생기면 첫 번째 조를 기본으로 선택
+  useEffect(() => {
+    if (groupNames.length > 0 && (!selectedGroup || !groupNames.includes(selectedGroup))) {
+      setTimeout(() => setSelectedGroup(groupNames[0]), 0);
+    }
+  }, [groupNames, selectedGroup]);
+
+  useEffect(() => {
+    setTimeout(() => setLocalOrder(null), 0);
+  }, [selectedGroup]);
+
+  // 참가자 ID -> 조 이름 매핑 (빠른 검색용)
+  const participantGroupMap = useMemo(() => {
+    const map = new Map<string, string>();
+    rawParticipants.forEach(p => {
+      if (p.group_name) map.set(p.id, p.group_name);
+    });
+    return map;
+  }, [rawParticipants]);
+
   const matches = useMemo(() => {
     // bracket이 있는 경기(토너먼트 경기)는 리그 경기 순서 뷰에서 제외
-    const serverMatches = (matchData?.matches ?? []).filter((m) => !m.bracket);
+    let serverMatches = (matchData?.matches ?? []).filter((m) => !m.bracket);
+
+    // 조별리그인 경우 선택된 조의 경기만 남기기
+    if (groupNames.length > 0 && selectedGroup) {
+      serverMatches = serverMatches.filter(m => {
+        const groupA = m.participant_a_id ? participantGroupMap.get(m.participant_a_id) : null;
+        const groupB = m.participant_b_id ? participantGroupMap.get(m.participant_b_id) : null;
+        // 둘 중 한 명이라도 현재 선택된 조에 속해있다면 화면에 표시
+        return groupA === selectedGroup || groupB === selectedGroup;
+      });
+    }
+
     const ordered = localOrder
       ? localOrder.map((id) => serverMatches.find((m) => m.id === id)).filter((m): m is LeagueMatch => !!m)
       : serverMatches;
@@ -373,23 +416,46 @@ export default function LeagueMatchOrder() {
     if (!search.trim()) return sorted;
 
     const q = search.trim().toLowerCase();
-
     return sorted.filter((m) =>
       [m.participant_a_name, m.participant_b_name, m.participant_a_division, m.participant_b_division]
         .some((v) => v?.toLowerCase().includes(q))
     );
-  }, [localOrder, matchData?.matches, search]);
+  }, [localOrder, matchData?.matches, search, groupNames.length, selectedGroup, participantGroupMap]);
 
   const [initMatches, { isLoading: isIniting }] = useInitLeagueMatchesMutation();
   const [extendMatches, {isLoading: isExtending }] = useExtendLeagueMatchesMutation();
   const [reorderMatches] = useReorderLeagueMatchesMutation();
   const initCalledRef = useRef(false);
-  const participantCount = participantData?.participants?.length ?? 0;
 
+  // 현재 경기 수 계산
   const expectedMatchCount = useMemo(() => {
-    if (participantCount < 2) return 0;
-    return (participantCount * (participantCount - 1)) / 2;
-  }, [participantCount]);
+    if (rawParticipants.length < 2) return 0;
+
+    const isGroupMode = rawParticipants.some(p => p.group_name);
+
+    if (isGroupMode) {
+      // 조별리그: 각 조별 인원을 파악해서 매치 수를 각각 계산 후 합산
+      const groupCounts: Record<string, number> = {};
+      rawParticipants.forEach(p => {
+        if (p.group_name) {
+          groupCounts[p.group_name] = (groupCounts[p.group_name] || 0) + 1;
+        }
+      });
+
+      let total = 0;
+      for (const gName in groupCounts) {
+        const count = groupCounts[gName];
+        if (count >= 2) {
+          total += (count * (count - 1)) / 2; // 각 조 안에서의 경기 수 누적
+        }
+      }
+      return total;
+    } else {
+      // 💡 단일리그(개인전): 전체 인원으로 매치 수 계산
+      const count = rawParticipants.length;
+      return (count * (count - 1)) / 2;
+    }
+  }, [rawParticipants]);
 
   // 경기 없고 canManage 확정되면 자동 생성 (한 번만) — invalidatesTags로 자동 refetch됨
   useEffect(() => {
@@ -476,6 +542,28 @@ export default function LeagueMatchOrder() {
           </span>
         </Tooltip>
       </Stack>
+
+      {/* 조 선택 탭 (조별리그일 때만 표시됨) */}
+      {groupNames.length > 0 && (
+        <Box sx={{ px: 0, pt: 1, pb: 0.5 }}>
+          <Stack direction="row" spacing={1} sx={{ overflowX: "auto", '&::-webkit-scrollbar': { display: 'none' } }}>
+            {groupNames.map(gName => (
+              <Button
+                key={gName}
+                variant={selectedGroup === gName ? "contained" : "outlined"}
+                onClick={() => setSelectedGroup(gName)}
+                size="small"
+                sx={{
+                  minWidth: 60, borderRadius: 1.5, fontWeight: 800, fontSize: 13, boxShadow: "none",
+                  ...(selectedGroup === gName ? { bgcolor: "#2563EB" } : { color: "#6B7280", borderColor: "#D1D5DB", bgcolor: "#fff" })
+                }}
+              >
+                {gName}
+              </Button>
+            ))}
+          </Stack>
+        </Box>
+      )}
 
       {/* 검색창 */}
       <TextField

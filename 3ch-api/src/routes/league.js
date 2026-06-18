@@ -2161,25 +2161,59 @@ router.post('/league/:id/matches/init', requireAuth, async (req, res) => {
       await triggerRankingRebuildByLeagueId(leagueId);
     }
 
-    const groupCheck = await pool.query(
-      `SELECT 1 FROM league_participants WHERE league_id = $1 AND group_name IS NOT NULL LIMIT 1`,
+    // const groupCheck = await pool.query(
+    //   `SELECT 1 FROM league_participants WHERE league_id = $1 AND group_name IS NOT NULL LIMIT 1`,
+    //   [leagueId]
+    // );
+    // const isGroupMode = groupCheck.rowCount > 0;
+
+    // const participantsQuery = isGroupMode
+    //   ? `SELECT id FROM league_participants WHERE league_id = $1 AND is_leader = true ORDER BY sort_order ASC NULLS LAST, division ASC, created_at ASC`
+    //   : `SELECT id FROM league_participants WHERE league_id = $1 ORDER BY sort_order ASC NULLS LAST, division ASC, created_at ASC`;
+    
+    // const participants = await pool.query(participantsQuery, [leagueId]);
+    
+    const participantsRes = await pool.query(
+      `SELECT id, group_name FROM league_participants WHERE league_id = $1 ORDER BY sort_order ASC NULLS LAST, division ASC, created_at ASC`,
       [leagueId]
     );
-    const isGroupMode = groupCheck.rowCount > 0;
 
-    const participantsQuery = isGroupMode
-      ? `SELECT id FROM league_participants WHERE league_id = $1 AND is_leader = true ORDER BY sort_order ASC NULLS LAST, division ASC, created_at ASC`
-      : `SELECT id FROM league_participants WHERE league_id = $1 ORDER BY sort_order ASC NULLS LAST, division ASC, created_at ASC`;
+    const participants = participantsRes.rows;
+    if(participants.length < 2) return res.status(400).json({ message: '참가자가 2명 이상이어야 합니다.' });
 
-    const participants = await pool.query(participantsQuery, [leagueId]);
+    const isGroupMode = participants.some( p => p.group_name );
+    let valuesArray = [];
+    let matchIndex = 1;
 
-    const ids = participants.rows.map((r) => r.id);
-    if (ids.length < 2) return res.status(400).json({ message: '참가자가 2명 이상이어야 합니다.' });
+    if( isGroupMode ) {
+      const groups = {};
+      participants.forEach( p => {
+        if(!p.group_name) return; //조가 없으면 패스
+        if(!groups[p.group_name]) groups[p.group_name] = [];
+        groups[p.group_name].push(p.id);
+      });
 
-    const pairs = generateRoundRobin(ids.length);
-    const values = pairs.map((pair, i) => `('${randomUUID()}', '${leagueId}', ${i + 1}, '${ids[pair[0]]}', '${ids[pair[1]]}')`).join(', ');
+      for(const gName in groups){
+        const ids = groups[gName];
+        if (ids.length < 2) continue;
+        const pairs = generateRoundRobin(ids.length);
+        pairs.forEach(pair => {
+          valuesArray.push(`('${randomUUID()}', '${leagueId}', ${matchIndex++}, '${ids[pair[0]]}', '${ids[pair[1]]}', '${gName}')`);
+        })
+      }
+    } else {
+      const ids = participants.map((r) => r.id);
+      // if (ids.length < 2) return res.status(400).json({ message: '참가자가 2명 이상이어야 합니다.' });
+      const pairs = generateRoundRobin(ids.length);
+      pairs.forEach(pair => {
+        valuesArray.push(`('${randomUUID()}', '${leagueId}', ${matchIndex++}, '${ids[pair[0]]}', '${ids[pair[1]]}', NULL)`);
+      });
+    }
+
+    // const values = pairs.map((pair, i) => `('${randomUUID()}', '${leagueId}', ${i + 1}, '${ids[pair[0]]}', '${ids[pair[1]]}')`).join(', ');
+    const values = valuesArray.join(', ');
     await pool.query(
-      `INSERT INTO league_matches (id, league_id, match_order, participant_a_id, participant_b_id) VALUES ${values}`,
+      `INSERT INTO league_matches (id, league_id, match_order, participant_a_id, participant_b_id, group_name) VALUES ${values}`,
     );
 
     const result = await pool.query(
@@ -2234,30 +2268,25 @@ router.post('/league/:id/matches/extend', requireAuth, async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(403).json({ message: '권한이 없습니다.' });
     }
-
-    const groupCheck = await client.query(
-      `SELECT 1 FROM league_participants WHERE league_id = $1 AND group_name IS NOT NULL LIMIT 1`,
-      [leagueId]
-    );
-    const isGroupMode = groupCheck.rowCount > 0;
     
     // 현재 참가자 전체 조회
-    const participantsQuery = isGroupMode
-      ? `SELECT id FROM league_participants WHERE league_id = $1 AND is_leader = true ORDER BY sort_order ASC NULLS LAST, division ASC, created_at ASC`
-      : `SELECT id FROM league_participants WHERE league_id = $1 ORDER BY sort_order ASC NULLS LAST, division ASC, created_at ASC`;
+    const participantsQuery = await client.query(
+      `SELECT id, group_name FROM league_participants WHERE league_id = $1 ORDER BY sort_order ASC NULLS LAST, division ASC, created_at ASC`,
+      [leagueId]
+    );
 
-    const participants = await client.query(participantsQuery, [leagueId]);
+    const participants = participantsQuery.rows;
 
-    const ids = participants.rows.map((r) => r.id);
-
-    if (ids.length < 2) {
+    if (participants.length < 2) {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: '참가자가 2명 이상이어야 합니다.' });
     }
 
+    const isGroupMode = participants.some(p => p.group_name);
+
     // 기존 경기 조회
     const existingMatches = await client.query(
-      `SELECT participant_a_id, participant_b_id
+      `SELECT participant_a_id, participant_b_id, group_name
        FROM league_matches
        WHERE league_id = $1`,
       [leagueId],
@@ -2274,19 +2303,44 @@ router.post('/league/:id/matches/extend', requireAuth, async (req, res) => {
     // 현재 참가자 기준으로 필요한 전체 조합 만들기
     const missingPairs = [];
 
-    for (let i = 0; i < ids.length; i++) {
-      for (let j = i + 1; j < ids.length; j++) {
-        const aId = ids[i];
-        const bId = ids[j];
+    if( isGroupMode ){
+      const groups = {};
+      participants.forEach(p => {
+        if(!p.group_name) return;
+        if(!groups[p.group_name]) groups[p.group_name] = [];
+        groups[p.group_name].push(p.id);
+      });
 
-        const pairKey = [aId, bId].sort().join('__');
-
-        // 현재 참가자 안에 있으면 넘어가고 없으면 missingPairs에 추가
-        if (!existingPairSet.has(pairKey)) {
-          missingPairs.push([aId, bId]);
+      for (const gName in groups) {
+        const ids = groups[gName];
+        for (let i = 0; i < ids.length; i++) {
+          for (let j = i + 1; j < ids.length; j++) {
+            const aId = ids[i];
+            const bId = ids[j];
+            const pairKey = [aId, bId].sort().join('__');
+            if (!existingPairSet.has(pairKey)) {
+              missingPairs.push([aId, bId, gName]);
+            }
+          }
+        }
+      }
+    } else {
+      const ids = participants.map((p) => p.id);
+      for (let i = 0; i < ids.length; i++) {
+        for (let j = i + 1; j < ids.length; j++) {
+          const aId = ids[i];
+          const bId = ids[j];
+  
+          const pairKey = [aId, bId].sort().join('__');
+  
+          // 현재 참가자 안에 있으면 넘어가고 없으면 missingPairs에 추가
+          if (!existingPairSet.has(pairKey)) {
+            missingPairs.push([aId, bId, null]);
+          }
         }
       }
     }
+
 
     if (missingPairs.length === 0) {
       await client.query('COMMIT');
@@ -2326,11 +2380,11 @@ router.post('/league/:id/matches/extend', requireAuth, async (req, res) => {
     const insertValues = [];
     const queryValues = [];
 
-    missingPairs.forEach(([aId, bId], index) => {
-      const baseIndex = index * 5;
+    missingPairs.forEach(([aId, bId, gName], index) => {
+      const baseIndex = index * 6;
 
       insertValues.push(
-        `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5})`,
+        `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6})`,
       );
 
       queryValues.push(
@@ -2339,12 +2393,13 @@ router.post('/league/:id/matches/extend', requireAuth, async (req, res) => {
         nextOrder++,
         aId,
         bId,
+        gName
       );
     });
 
     await client.query(
       `INSERT INTO league_matches
-       (id, league_id, match_order, participant_a_id, participant_b_id)
+       (id, league_id, match_order, participant_a_id, participant_b_id, group_name)
        VALUES ${insertValues.join(', ')}`,
       queryValues,
     );

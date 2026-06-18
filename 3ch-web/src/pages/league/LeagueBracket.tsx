@@ -12,7 +12,7 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   Box, Button, CircularProgress, IconButton, Paper, Popover,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Tooltip, Typography,
+  Tooltip, Typography, Stack,
 } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import { useNavigate, useParams } from "react-router-dom";
@@ -802,8 +802,44 @@ export default function LeagueBracket() {
   const league          = leagueData?.league;
   // useMemo로 감싸서 matchData 객체 참조가 바뀔 때만 재생성 (불필요한 하위 useMemo 재실행 방지)
   // bracket 필드가 있는 매치는 토너먼트 경기이므로 리그(라운드로빈) 뷰에서 제외
-  const matches         = useMemo(() => (matchData?.matches ?? []).filter((m) => !m.bracket), [matchData]);
+  // const matches         = useMemo(() => (matchData?.matches ?? []).filter((m) => !m.bracket), [matchData]);
   const rawParticipants = useMemo(() => participantData?.participants ?? [], [participantData]);
+
+  // 1. 조 이름 목록 추출 ("1조", "2조" ...)
+  const groupNames = useMemo(() => {
+    const names = new Set(rawParticipants.map(p => p.group_name).filter(Boolean) as string[]);
+    return Array.from(names).sort((a, b) => parseInt(a) - parseInt(b));
+  }, [rawParticipants]);
+
+  // 2. 현재 선택된 조 상태 관리
+  const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (groupNames.length > 0 && (!selectedGroup || !groupNames.includes(selectedGroup))) {
+      setTimeout(() => setSelectedGroup(groupNames[0]), 0);
+    }
+  }, [groupNames, selectedGroup]);
+
+  // 3. 선택된 조의 팀원만 필터링 (조가 없으면 전체)
+  const targetParticipants = useMemo(() => {
+    if (groupNames.length > 0 && selectedGroup) {
+      return rawParticipants.filter(p => p.group_name === selectedGroup);
+    }
+    return rawParticipants;
+  }, [rawParticipants, groupNames, selectedGroup]);
+
+  // 4. 선택된 조의 경기만 필터링
+  const matches = useMemo(() => {
+    let serverMatches = (matchData?.matches ?? []).filter((m) => !m.bracket);
+    if (groupNames.length > 0 && selectedGroup) {
+      serverMatches = serverMatches.filter(m => {
+        const pA = rawParticipants.find(p => p.id === m.participant_a_id);
+        const pB = rawParticipants.find(p => p.id === m.participant_b_id);
+        return pA?.group_name === selectedGroup || pB?.group_name === selectedGroup;
+      });
+    }
+    return serverMatches;
+  }, [matchData?.matches, groupNames.length, selectedGroup, rawParticipants]);
 
   // ── 권한 ─────────────────────────────────────────────────────────────────
   // canManage: 점수 편집 + 시드 순서 변경 가능 여부
@@ -818,21 +854,18 @@ export default function LeagueBracket() {
     ?? (id ? localStorage.getItem(`guestName_${id}`) : null)
     ?? null;
 
+  // 5. 로컬 정렬 상태 (조를 바꿀 때마다 초기화)
+  useEffect(() => {
+    setTimeout(() => setEditOrder(null), 0);
+  }, [selectedGroup]);
+
   // ── 참가자 순서 상태 ──────────────────────────────────────────────────────
   // editOrder=null: 서버 데이터(rawParticipants) 그대로 사용
   // editOrder≠null: 사용자가 순서를 변경한 로컬 상태 (서버에도 즉시 반영)
-  const hasGroup = useMemo(() => rawParticipants.some(p => p.group_name), [rawParticipants]);
-  const targetParticipants = useMemo(() => {
-    if (hasGroup) {
-      return rawParticipants.filter(p => p.is_leader === true); // 대표만 추출
-    }
-    return rawParticipants; // 개인전이면 원본 그대로
-  }, [rawParticipants, hasGroup]);
-
-  const [editOrder, setEditOrder] = useState<typeof rawParticipants | null>(null);
+  const [editOrder, setEditOrder] = useState<LeagueParticipantItem[] | null>(null);
   const localOrder = editOrder ?? targetParticipants;
   const setLocalOrder = useCallback(
-    (fn: (prev: typeof targetParticipants) => typeof targetParticipants) =>
+    (fn: (prev: LeagueParticipantItem[]) => LeagueParticipantItem[]) =>
       setEditOrder((prev) => fn(prev ?? targetParticipants)),
     [targetParticipants],
   );
@@ -1134,6 +1167,27 @@ export default function LeagueBracket() {
           </Typography>
         </Box>
       </Popover>
+
+      {groupNames.length > 0 && (
+        <Box sx={{ px: 1, pt: 1, pb: 0.5, bgcolor: "#F0F2F5", borderBottom: "1px solid #E5E7EB" }}>
+          <Stack direction="row" spacing={1} sx={{ overflowX: "auto", '&::-webkit-scrollbar': { display: 'none' } }}>
+            {groupNames.map(gName => (
+              <Button
+                key={gName}
+                variant={selectedGroup === gName ? "contained" : "outlined"}
+                onClick={() => setSelectedGroup(gName)}
+                size="small"
+                sx={{
+                  minWidth: 60, borderRadius: 1.5, fontWeight: 800, fontSize: 13, boxShadow: "none",
+                  ...(selectedGroup === gName ? { bgcolor: "#2563EB" } : { color: "#6B7280", borderColor: "#D1D5DB", bgcolor: "#fff" })
+                }}
+              >
+                {gName}
+              </Button>
+            ))}
+          </Stack>
+        </Box>
+      )}
 
       {/* ===== 대진표 영역 ===== */}
       <Box ref={wrapperRef} sx={{ flex: 1, overflow: "hidden", position: "relative", minHeight: 0, bgcolor: "#F0F2F5" }}>

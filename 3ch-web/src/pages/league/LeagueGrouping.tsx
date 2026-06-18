@@ -57,9 +57,8 @@ function SortableParticipant({ user, index }: { user: LeagueParticipantItem; ind
       </Typography>
       <DivBadge division={user.division} />
       
-      {/* 💡 핵심: 0번째(맨 윗줄) 사람에게만 (대표) 글씨를 띄워줍니다. 드래그해서 위치가 바뀌면 (대표) 뱃지도 자동으로 맨 윗사람에게 넘어갑니다! */}
       <Typography variant="body2" fontWeight={index === 0 ? "800" : "600"} color={COLOR.darkCard} noWrap sx={{ flex: 1, minWidth: 0, ml: 0.75, fontSize: { xs: '0.85rem', sm: '0.9rem' } }}>
-        {user.name} {index === 0 && <Typography component="span" sx={{ fontSize: 10, color: COLOR.primary, ml: 0.5 }}>(대표)</Typography>}
+        {user.name}
       </Typography>
     </Box>
   );
@@ -136,8 +135,7 @@ export default function LeagueGrouping() {
       
       const rebuiltGroups = sortedKeys.map(key => {
         const members = groupMap.get(key)!;
-        // DB에서 가져온 is_leader가 true인 사람이 무조건 맨 위(인덱스 0)로 오도록 정렬
-        return members.sort((a, b) => (b.is_leader ? 1 : 0) - (a.is_leader ? 1 : 0));
+        return members
       });
 
       setTimeout(() => {
@@ -146,7 +144,6 @@ export default function LeagueGrouping() {
         setStep('result'); 
       }, 0);
     } else {
-      // ✅ DB에 저장된 정보가 아예 없다면 기존처럼 팝업(모달) 띄우기
       const count = rawParticipants.length;
       const options = calculateGroupOptions(count);
       setTimeout(() => {
@@ -226,10 +223,9 @@ export default function LeagueGrouping() {
   const handleSaveGrouping = async () => {
     if (finalGroups.length === 0) return;
     const payload = finalGroups.flatMap((group, groupIndex) => 
-      group.map((user, userIndex) => ({
+      group.map((user) => ({
         participant_id: user.id,
         group_name: `${groupIndex + 1}조`,
-        is_leader: userIndex === 0, // 드래그로 조정한 최종 결과의 0번째가 대표가 됨!
       }))
     );
     try {

@@ -95,8 +95,7 @@ export interface LeagueParticipantItem {
   after: boolean;
   sort_order?: number | null;
   created_at: string;
-  group_name?: string | null; 
-  is_leader?: boolean;
+  group_name?: string | null;
 }
 
 export interface GetLeagueParticipantsResponse {
@@ -268,7 +267,6 @@ export interface AddParticipantsResponse {
 export interface SaveLeagueGroupingItem {
   participant_id: string;
   group_name: string;
-  is_leader: boolean;
 }
 
 export interface SaveLeagueGroupingRequest {

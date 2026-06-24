@@ -1076,6 +1076,19 @@ const handleSaveEdit = async () => {
               경품 추첨
             </Button>
           )}
+          {((!canManage && league.status === "active") || canManage) && (
+            league.format === "클럽 교류전" && (
+              <Stack spacing={1} sx={{ mt: 1 }}>
+                <Button
+                  fullWidth variant="outlined" disableElevation
+                  sx={{mt: 1, borderRadius: 1, height: 40, fontWeight: 700, bgcolor: "#87B8FF", "&:hover": { bgcolor: "#79AEFF" }, }}
+                  onClick={() => navigate(`/league/${id}/program`)}
+                >
+                  {canManage && league.status === "draft" ? "프로그램 생성" : "프로그램 보기"}
+                </Button>
+              </Stack>
+            )
+          )}
           {((!canManage  && league.status === "active") || canManage) && (
             league.format === "조별리그" && (
               <Stack spacing={1} sx={{ mt: 1 }}>

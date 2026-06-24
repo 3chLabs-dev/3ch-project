@@ -159,7 +159,7 @@ export const createLeague = createAsyncThunk.withTypes<{ state: RootState }>()(
       doubles: "복식",
       team: "단체전",
       club_battle: "클럽 대항전",
-      club_exchange: "클럽 교류전",
+      club_exchange: "클럽 이벤트",
     };
 
     // 리그 규칙 매핑

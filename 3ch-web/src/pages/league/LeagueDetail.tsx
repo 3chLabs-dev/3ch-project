@@ -1077,7 +1077,7 @@ const handleSaveEdit = async () => {
             </Button>
           )}
           {((!canManage && league.status === "active") || canManage) && (
-            league.format === "클럽 교류전" && (
+            league.format === "클럽 이벤트" && (
               <Stack spacing={1} sx={{ mt: 1 }}>
                 <Button
                   fullWidth variant="outlined" disableElevation

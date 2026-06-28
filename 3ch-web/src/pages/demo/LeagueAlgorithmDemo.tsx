@@ -21,8 +21,14 @@ const formatTime = (totalMinutes: number) => {
     .padStart(2, '0')}`;
 };
 
-const LeagueAlgorithmDemo = () => {
-  const [playerCount, setPlayerCount] = useState(24);
+interface LeagueAlgorithmDemoProps {
+  initialPlayerCount?: number;
+}
+
+const LeagueAlgorithmDemo = ({
+  initialPlayerCount = 24,
+}: LeagueAlgorithmDemoProps) => {
+  const [playerCount, setPlayerCount] = useState(initialPlayerCount);
   const [selectedOptionIndex, setSelectedOptionIndex] = useState(0);
   const [courtCount, setCourtCount] = useState(4);
   const [startHour, setStartHour] = useState(9);
@@ -67,6 +73,10 @@ const LeagueAlgorithmDemo = () => {
       teamMatchType: "SSS",
     },
   ]);
+
+  const [programMode, setProgramMode] = useState<
+    "recommend" | "custom"
+  >("recommend");
 
   const mockPlayers = [
   { name: '가가가', level: 3 },
@@ -358,7 +368,26 @@ const LeagueAlgorithmDemo = () => {
           </select>
         </div>
       </div>
-        
+
+      <div style={{ marginTop: "24px" }}>
+        <ToggleButtonGroup
+          exclusive
+          value={programMode}
+          onChange={(_, value) => {
+            if (value) setProgramMode(value);
+          }}
+          fullWidth
+        >
+          <ToggleButton value="recommend">
+            추천 프로그램
+          </ToggleButton>
+
+          <ToggleButton value="custom">
+            직접 구성하기
+          </ToggleButton>
+        </ToggleButtonGroup>
+      </div>
+
       <div style={{ marginTop: "24px" }}>
         <div
           style={{

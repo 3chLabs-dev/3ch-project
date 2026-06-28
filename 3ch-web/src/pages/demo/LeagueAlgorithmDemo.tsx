@@ -1,4 +1,4 @@
-import { generateProgramOptions } from '../../features/league/algorithms/generateProgramOptions';
+﻿import { generateProgramOptions } from '../../features/league/algorithms/generateProgramOptions';
 import { distributeSnake } from '../../features/league/algorithms/distributeSnake';
 import { useMemo, useState, useCallback } from 'react';
 import { generateGroupOptions } from '../../features/league/algorithms/generateGroupOptions';
@@ -77,6 +77,8 @@ const LeagueAlgorithmDemo = ({
   const [programMode, setProgramMode] = useState<
     "recommend" | "custom"
   >("recommend");
+  const [isProgramGenerated, setIsProgramGenerated] = useState(false);
+  const [isCustomProgramCompleted, setIsCustomProgramCompleted] = useState(false);
 
   const mockPlayers = [
   { name: '가가가', level: 3 },
@@ -369,6 +371,17 @@ const LeagueAlgorithmDemo = ({
         </div>
       </div>
 
+      <Button
+        variant="contained"
+        fullWidth
+        size="large"
+        onClick={() => setIsProgramGenerated(true)}
+        style={{ marginTop: "24px" }}
+      >
+        AI 프로그램 생성하기
+      </Button>
+
+      {isProgramGenerated && (
       <div style={{ marginTop: "24px" }}>
         <ToggleButtonGroup
           exclusive
@@ -387,7 +400,9 @@ const LeagueAlgorithmDemo = ({
           </ToggleButton>
         </ToggleButtonGroup>
       </div>
+      )}
 
+      {isProgramGenerated && programMode === "custom" && (
       <div style={{ marginTop: "24px" }}>
         <div
           style={{
@@ -768,95 +783,23 @@ const LeagueAlgorithmDemo = ({
         >
           + 라운드 추가
         </Button>
-      </div>
 
-      <div style={{ marginTop: '32px' }}>
-        {options.map((option, index) => (
-          <div
-            key={`${option.tierSize}-${option.groupCount}`}
-            onClick={() => setSelectedOptionIndex(index)}
-            style={{
-              border:
-                selectedOptionIndex === index
-                  ? '2px solid #3b82f6'
-                  : '1px solid #d1d5db',
-              borderRadius: '12px',
-              padding: '20px',
-              marginBottom: '16px',
-              backgroundColor:
-                selectedOptionIndex === index
-                  ? '#eff6ff'
-                  : '#ffffff',
-              cursor: 'pointer',
-            }}
-          >
-            {option.recommended && (
-              <div
-                style={{
-                  color: '#2563eb',
-                  fontWeight: 700,
-                  marginBottom: '12px',
-                }}
-              >
-                추천
-              </div>
-            )}
-
-            <div
-              style={{
-                fontSize: '20px',
-                fontWeight: 700,
-              }}
-            >
-              {option.groupCount}개 조
-            </div>
-
-            <div
-              style={{
-                marginTop: '8px',
-                color: '#6b7280',
-              }}
-            >
-              {option.groups.map((g) => `${g}인`).join(' / ')}
-            </div>
-
-            <div
-              style={{
-                marginTop: '12px',
-                fontSize: '14px',
-                color: '#9ca3af',
-              }}
-            >
-              score: {option.score}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <h2 style={{ marginTop: '40px' }}>
-        조 편성 결과
-      </h2>
-
-      {groupResult.map((group) => (
-        <div
-          key={group.name}
-          style={{
-            border: '1px solid #ddd',
-            borderRadius: '12px',
-            padding: '16px',
-            marginTop: '12px',
-          }}
+        <Button
+          variant="contained"
+          fullWidth
+          onClick={() => setIsCustomProgramCompleted(true)}
+          style={{ marginTop: "12px" }}
         >
-          <h3>{group.name}</h3>
+          완료
+        </Button>
+      </div>
+      )}
 
-          {group.players.map((player) => (
-            <div key={player.name}>
-              {player.level}부 - {player.name}
-            </div>
-          ))}
-        </div>
-      ))}
-
+      {isProgramGenerated && (
+        programMode === "recommend" ||
+        (programMode === "custom" && isCustomProgramCompleted)
+      ) && (
+      <>
 <h2 style={{ marginTop: '40px' }}>
   프로그램 추천안
 </h2>
@@ -880,7 +823,7 @@ const LeagueAlgorithmDemo = ({
   </div>
 )}
 
-{programOptions.map((option, index) => (
+{programOptions.slice(0, 3).map((option, index) => (
   <div
     key={index}
     style={{
@@ -1024,6 +967,101 @@ const LeagueAlgorithmDemo = ({
   </div>
     </div>
 ))}
+
+      <h2 style={{ marginTop: '40px' }}>
+        조 편성 선택
+      </h2>
+
+      <div style={{ marginTop: '16px' }}>
+        {options.map((option, index) => (
+          <div
+            key={`${option.tierSize}-${option.groupCount}`}
+            onClick={() => setSelectedOptionIndex(index)}
+            style={{
+              border:
+                selectedOptionIndex === index
+                  ? '2px solid #3b82f6'
+                  : '1px solid #d1d5db',
+              borderRadius: '12px',
+              padding: '20px',
+              marginBottom: '16px',
+              backgroundColor:
+                selectedOptionIndex === index
+                  ? '#eff6ff'
+                  : '#ffffff',
+              cursor: 'pointer',
+            }}
+          >
+            {option.recommended && (
+              <div
+                style={{
+                  color: '#2563eb',
+                  fontWeight: 700,
+                  marginBottom: '12px',
+                }}
+              >
+                추천
+              </div>
+            )}
+
+            <div
+              style={{
+                fontSize: '20px',
+                fontWeight: 700,
+              }}
+            >
+              {option.groupCount}개 조
+            </div>
+
+            <div
+              style={{
+                marginTop: '8px',
+                color: '#6b7280',
+              }}
+            >
+              {option.groups.map((g) => `${g}인`).join(' / ')}
+            </div>
+
+            <div
+              style={{
+                marginTop: '12px',
+                fontSize: '14px',
+                color: '#9ca3af',
+              }}
+            >
+              score: {option.score}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <h2 style={{ marginTop: '40px' }}>
+        조 편성 결과
+      </h2>
+
+      {groupResult.map((group) => (
+        <div
+          key={group.name}
+          style={{
+            border: '1px solid #ddd',
+            borderRadius: '12px',
+            padding: '16px',
+            marginTop: '12px',
+          }}
+        >
+          <h3>{group.name}</h3>
+
+          {group.players.map((player) => (
+            <div key={player.name}>
+              {player.level}부 - {player.name}
+            </div>
+          ))}
+        </div>
+      ))}
+
+      </>
+      )}
+
     </div>
   );
 };

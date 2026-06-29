@@ -1,13 +1,15 @@
 ﻿import { generateProgramOptions } from '../../features/league/algorithms/generateProgramOptions';
+import { generateProgramBlocks } from '../../features/league/algorithms/generateProgramBlocks';
 import { distributeSnake } from '../../features/league/algorithms/distributeSnake';
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import { generateGroupOptions } from '../../features/league/algorithms/generateGroupOptions';
-import type { ProgramBlock, ProgramType, TeamMatchType, RoundConfig } from '../../features/league/types/tournament.types';
-import { ToggleButton, ToggleButtonGroup, Button } from "@mui/material";
+import type { ProgramBlock, ProgramOption, ProgramType, TeamMatchType, RoundConfig } from '../../features/league/types/tournament.types';
+import { ToggleButton, ToggleButtonGroup, Button, Dialog, DialogTitle, DialogContent, DialogActions, IconButton } from "@mui/material";
 import { DndContext, PointerSensor, TouchSensor, useSensor, useSensors, closestCenter,
   type DragEndEvent, } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove, } from "@dnd-kit/sortable";
 import DragHandleIcon from "@mui/icons-material/DragHandle";
+import EditIcon from "@mui/icons-material/Edit";
 
 const formatTime = (totalMinutes: number) => {
   const minutesInDay = 24 * 60;
@@ -21,6 +23,426 @@ const formatTime = (totalMinutes: number) => {
     .padStart(2, '0')}`;
 };
 
+
+interface RoundConfigEditorProps {
+  rounds: RoundConfig[];
+  setRounds: (rounds: RoundConfig[]) => void;
+}
+
+function RoundConfigEditor({
+  rounds,
+  setRounds,
+}: RoundConfigEditorProps) {
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 150,
+        tolerance: 5,
+      },
+    })
+  );
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+
+      if (!over || active.id === over.id) {
+        return;
+      }
+
+      const oldIndex = rounds.findIndex(
+        (r) => r.id === active.id
+      );
+      const newIndex = rounds.findIndex(
+        (r) => r.id === over.id
+      );
+
+      if (oldIndex === -1 || newIndex === -1) {
+        return;
+      }
+
+      setRounds(
+        arrayMove(rounds, oldIndex, newIndex).map(
+          (round, index) => ({
+            ...round,
+            id: index + 1,
+          })
+        )
+      );
+    },
+    [rounds, setRounds]
+  );
+
+  return (
+    <>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext
+          items={rounds.map((r) => r.id)}
+          strategy={verticalListSortingStrategy}
+        >
+          {rounds.map((round) => (
+            <div
+              key={round.id}
+              style={{
+                border: "1px solid #d1d5db",
+                borderRadius: "12px",
+                padding: "16px",
+                marginBottom: "12px",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  marginBottom: "12px",
+                }}
+              >
+                <div
+                  style={{
+                    fontWeight: 700,
+                    minWidth: "70px",
+                  }}
+                >
+                  {round.id}라운드
+                </div>
+
+                <div
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    justifyContent: "center",
+                  }}
+                >
+                  <DragHandleIcon
+                    sx={{
+                      color: "rgb(209, 213, 219)",
+                    }}
+                  />
+                </div>
+
+                <Button
+                  size="small"
+                  color="error"
+                  variant="outlined"
+                  onClick={() => {
+                    setRounds(
+                      rounds
+                        .filter((x) => x.id !== round.id)
+                        .map((x, index) => ({
+                          ...x,
+                          id: index + 1,
+                        }))
+                    );
+                  }}
+                >
+                  삭제
+                </Button>
+              </div>
+
+              <ToggleButtonGroup
+                exclusive
+                value={round.program}
+                onChange={(_, value) => {
+                  if (!value) return;
+
+                  setRounds(
+                    rounds.map((x) =>
+                      x.id === round.id
+                        ? {
+                            ...x,
+                            program: value,
+                          }
+                        : x
+                    )
+                  );
+                }}
+                fullWidth
+              >
+                <ToggleButton value="SINGLES">
+                  단식
+                </ToggleButton>
+
+                <ToggleButton value="DOUBLES">
+                  복식
+                </ToggleButton>
+
+                <ToggleButton value="TEAM">
+                  단체전
+                </ToggleButton>
+              </ToggleButtonGroup>
+
+              {round.program !== "TEAM" && (
+                <div style={{ marginTop: "16px" }}>
+                  <div
+                    style={{
+                      fontWeight: 700,
+                      marginBottom: "8px",
+                    }}
+                  >
+                    진행방식
+                  </div>
+
+                  <ToggleButtonGroup
+                    exclusive
+                    value={round.format}
+                    fullWidth
+                    onChange={(_, value) => {
+                      if (!value) return;
+
+                      setRounds(
+                        rounds.map((x) =>
+                          x.id === round.id
+                            ? {
+                                ...x,
+                                format: value,
+                              }
+                            : x
+                        )
+                      );
+                    }}
+                  >
+                    <ToggleButton value="LEAGUE">
+                      단일리그
+                    </ToggleButton>
+
+                    <ToggleButton value="GROUP">
+                      조별리그
+                    </ToggleButton>
+
+                    <ToggleButton value="TOURNAMENT">
+                      토너먼트
+                    </ToggleButton>
+                  </ToggleButtonGroup>
+
+                  <div style={{ marginTop: "16px" }}>
+                    <div
+                      style={{
+                        fontWeight: 700,
+                        marginBottom: "8px",
+                      }}
+                    >
+                      옵션
+                    </div>
+
+                    <ToggleButtonGroup
+                      exclusive
+                      value={round.option}
+                      fullWidth
+                      onChange={(_, value) => {
+                        if (!value) return;
+
+                        setRounds(
+                          rounds.map((x) =>
+                            x.id === round.id
+                              ? {
+                                  ...x,
+                                  option: value,
+                                }
+                              : x
+                          )
+                        );
+                      }}
+                    >
+                      <ToggleButton value="NONE">
+                        없음
+                      </ToggleButton>
+
+                      <ToggleButton value="PRELIM">
+                        예선
+                      </ToggleButton>
+
+                      <ToggleButton value="FINAL">
+                        본선
+                      </ToggleButton>
+
+                      <ToggleButton value="UPPER">
+                        상위
+                      </ToggleButton>
+
+                      <ToggleButton value="LOWER">
+                        하위
+                      </ToggleButton>
+                    </ToggleButtonGroup>
+                  </div>
+                </div>
+              )}
+
+              {round.program === "TEAM" && (
+                <div style={{ marginTop: "16px" }}>
+                  <div
+                    style={{
+                      fontWeight: 700,
+                      marginBottom: "8px",
+                    }}
+                  >
+                    팀 인원
+                  </div>
+
+                  <ToggleButtonGroup
+                    exclusive
+                    value={round.teamPlayerCount}
+                    fullWidth
+                    onChange={(_, value) => {
+                      if (!value) return;
+
+                      setRounds(
+                        rounds.map((x) =>
+                          x.id === round.id
+                            ? {
+                                ...x,
+                                teamPlayerCount: value,
+                              }
+                            : x
+                        )
+                      );
+                    }}
+                  >
+                    <ToggleButton value={2}>
+                      2명
+                    </ToggleButton>
+
+                    <ToggleButton value={3}>
+                      3명
+                    </ToggleButton>
+
+                    <ToggleButton value={4}>
+                      4명
+                    </ToggleButton>
+
+                    <ToggleButton value={5}>
+                      5명
+                    </ToggleButton>
+                  </ToggleButtonGroup>
+
+                  <div style={{ marginTop: "16px" }}>
+                    <div
+                      style={{
+                        fontWeight: 700,
+                        marginBottom: "8px",
+                      }}
+                    >
+                      단체전 구성
+                    </div>
+
+                    <ToggleButtonGroup
+                      exclusive
+                      value={round.teamMatchType}
+                      fullWidth
+                      onChange={(_, value) => {
+                        if (!value) return;
+
+                        setRounds(
+                          rounds.map((x) =>
+                            x.id === round.id
+                              ? {
+                                  ...x,
+                                  teamMatchType: value,
+                                }
+                              : x
+                          )
+                        );
+                      }}
+                    >
+                      <ToggleButton value="SSS">
+                        단단단
+                      </ToggleButton>
+
+                      <ToggleButton value="SDS">
+                        단복단
+                      </ToggleButton>
+
+                      <ToggleButton value="DSD">
+                        복단복
+                      </ToggleButton>
+
+                      <ToggleButton value="DDD">
+                        복복복
+                      </ToggleButton>
+                    </ToggleButtonGroup>
+                  </div>
+                </div>
+              )}
+
+              <div style={{ marginTop: "16px" }}>
+                <div
+                  style={{
+                    fontWeight: 700,
+                    marginBottom: "8px",
+                  }}
+                >
+                  경기방식
+                </div>
+
+                <ToggleButtonGroup
+                  exclusive
+                  value={round.matchRule}
+                  fullWidth
+                  onChange={(_, value) => {
+                    if (!value) return;
+
+                    setRounds(
+                      rounds.map((x) =>
+                        x.id === round.id
+                          ? {
+                              ...x,
+                              matchRule: value,
+                            }
+                          : x
+                      )
+                    );
+                  }}
+                >
+                  <ToggleButton value="BEST_OF_3">
+                    3전 2선승제
+                  </ToggleButton>
+
+                  <ToggleButton value="BEST_OF_5">
+                    5전 3선승제
+                  </ToggleButton>
+
+                  <ToggleButton value="THREE_SET">
+                    3세트제
+                  </ToggleButton>
+                </ToggleButtonGroup>
+              </div>
+            </div>
+          ))}
+        </SortableContext>
+      </DndContext>
+
+      <Button
+        variant="contained"
+        fullWidth
+        onClick={() => {
+          setRounds([
+            ...rounds,
+            {
+              id: rounds.length + 1,
+              expanded: true,
+              program: "SINGLES",
+              format: "GROUP",
+              option: "NONE",
+              matchRule: "BEST_OF_3",
+              teamPlayerCount: 4,
+              teamMatchType: "SSS",
+            },
+          ]);
+        }}
+      >
+        + 라운드 추가
+      </Button>
+    </>
+  );
+}
 interface LeagueAlgorithmDemoProps {
   initialPlayerCount?: number;
 }
@@ -79,6 +501,9 @@ const LeagueAlgorithmDemo = ({
   >("recommend");
   const [isProgramGenerated, setIsProgramGenerated] = useState(false);
   const [isCustomProgramCompleted, setIsCustomProgramCompleted] = useState(false);
+  const [customProgramOptions, setCustomProgramOptions] = useState<Record<number, ProgramOption>>({});
+  const [editingOptionIndex, setEditingOptionIndex] = useState<number | null>(null);
+  const [editingRounds, setEditingRounds] = useState<RoundConfig[]>([]);
 
   const mockPlayers = [
   { name: '가가가', level: 3 },
@@ -187,6 +612,105 @@ const LeagueAlgorithmDemo = ({
       rounds,
   },
 });
+  useEffect(() => {
+    setCustomProgramOptions({});
+  }, [
+    playerCount,
+    courtCount,
+    rentalMinutes,
+    rentalStartMinutes,
+  ]);
+
+  const displayedProgramOptions = programOptions.map(
+    (option, index) => customProgramOptions[index] ?? option
+  );
+
+  const buildProgramOptionFromRounds = (
+    baseOption: ProgramOption,
+    nextRounds: RoundConfig[]
+  ): ProgramOption => {
+    let elapsedMinutes = 0;
+    const blocks = generateProgramBlocks(
+      {
+        singlesEnabled,
+        doublesEnabled,
+        teamEnabled,
+        teamMatchRounds,
+        programOrder,
+        teamPlayerCount,
+        rounds: nextRounds,
+      },
+      playerCount,
+      courtCount,
+      baseOption.groupSizes
+    ).map((block) => {
+      const startMinutes = rentalStartMinutes + elapsedMinutes;
+      const endMinutes = startMinutes + block.expectedMinutes;
+
+      elapsedMinutes += block.expectedMinutes;
+
+      return {
+        ...block,
+        startMinutes,
+        endMinutes,
+      };
+    });
+    const totalBlockMatchCount = blocks.reduce(
+      (sum, block) => sum + block.matchCount,
+      0
+    );
+    const totalProgramMinutes = blocks.reduce(
+      (sum, block) => sum + block.expectedMinutes,
+      0
+    );
+
+    return {
+      ...baseOption,
+      matchRule: blocks[0]?.matchRule ?? baseOption.matchRule,
+      matchCount: totalBlockMatchCount,
+      expectedMinutes: totalProgramMinutes,
+      blocks,
+      totalBlockMatchCount,
+      totalProgramMinutes,
+      isOverTime: totalProgramMinutes > rentalMinutes,
+      rounds: nextRounds,
+    };
+  };
+
+  const openProgramEditDialog = (index: number) => {
+    const option = displayedProgramOptions[index];
+
+    setEditingOptionIndex(index);
+    setEditingRounds(
+      (option.rounds ?? rounds).map((round, roundIndex) => ({
+        ...round,
+        id: roundIndex + 1,
+      }))
+    );
+  };
+
+  const closeProgramEditDialog = () => {
+    setEditingOptionIndex(null);
+    setEditingRounds([]);
+  };
+
+  const completeProgramEdit = () => {
+    if (editingOptionIndex === null) {
+      return;
+    }
+
+    const baseOption = displayedProgramOptions[editingOptionIndex];
+    const updatedOption = buildProgramOptionFromRounds(
+      baseOption,
+      editingRounds
+    );
+
+    setCustomProgramOptions({
+      ...customProgramOptions,
+      [editingOptionIndex]: updatedOption,
+    });
+    closeProgramEditDialog();
+  };
 
   const getStars = (score: number) => {
     if (score >= 90) return "★★★★★";
@@ -375,7 +899,10 @@ const LeagueAlgorithmDemo = ({
         variant="contained"
         fullWidth
         size="large"
-        onClick={() => setIsProgramGenerated(true)}
+        onClick={() => {
+          setIsProgramGenerated(true);
+          setCustomProgramOptions({});
+        }}
         style={{ marginTop: "24px" }}
       >
         AI 프로그램 생성하기
@@ -804,7 +1331,7 @@ const LeagueAlgorithmDemo = ({
   프로그램 추천안
 </h2>
 
-{programOptions.length === 0 && (
+{displayedProgramOptions.length === 0 && (
   <div
     style={{
       marginTop: '16px',
@@ -823,7 +1350,7 @@ const LeagueAlgorithmDemo = ({
   </div>
 )}
 
-{programOptions.slice(0, 3).map((option, index) => (
+{displayedProgramOptions.slice(0, 3).map((option, index) => (
   <div
     key={index}
     style={{
@@ -847,12 +1374,28 @@ const LeagueAlgorithmDemo = ({
 
       <div
         style={{
-          fontSize: '20px',
-          fontWeight: 700,
-          color: '#f59e0b',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
         }}
       >
-        {getStars(option.recommendationScore)}
+        <div
+          style={{
+            fontSize: '20px',
+            fontWeight: 700,
+            color: '#f59e0b',
+          }}
+        >
+          {getStars(option.recommendationScore)}
+        </div>
+
+        <IconButton
+          size="small"
+          aria-label="추천 프로그램 수정"
+          onClick={() => openProgramEditDialog(index)}
+        >
+          <EditIcon fontSize="small" />
+        </IconButton>
       </div>
     </div>
   <div style={{ paddingLeft: '16px'}}>
@@ -1061,7 +1604,36 @@ const LeagueAlgorithmDemo = ({
 
       </>
       )}
+      <Dialog
+        open={editingOptionIndex !== null}
+        onClose={closeProgramEditDialog}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>
+          프로그램 추천안 수정
+        </DialogTitle>
 
+        <DialogContent dividers>
+          <RoundConfigEditor
+            rounds={editingRounds}
+            setRounds={setEditingRounds}
+          />
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={closeProgramEditDialog}>
+            취소
+          </Button>
+
+          <Button
+            variant="contained"
+            onClick={completeProgramEdit}
+          >
+            완료
+          </Button>
+        </DialogActions>
+      </Dialog>
     </div>
   );
 };

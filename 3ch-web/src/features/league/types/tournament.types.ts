@@ -81,6 +81,7 @@ export interface ProgramOption {
   totalBlockMatchCount: number;
   totalProgramMinutes: number;
   isOverTime: boolean;
+  rounds?: RoundConfig[];
 }
 
 export interface ProgramBlock {

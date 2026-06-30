@@ -540,11 +540,15 @@ function buildCandidate(
   rounds: RoundConfig[],
   profile: RecommendationProfile
 ): ProgramCandidate | null {
+  const roundsWithGroupSizes = rounds.map((round) => ({
+    ...round,
+    groupSizes: round.groupSizes ?? groupSizes,
+  }));
   const blocks = addSchedule(
     generateProgramBlocks(
       {
         ...input.preferences,
-        rounds,
+        rounds: roundsWithGroupSizes,
       },
       input.playerCount,
       input.courtCount,
@@ -580,11 +584,11 @@ function buildCandidate(
     totalBlockMatchCount,
     totalProgramMinutes,
     isOverTime: false,
-    rounds,
+    rounds: roundsWithGroupSizes,
   };
   const metrics = getCandidateMetrics(
     option,
-    rounds,
+    roundsWithGroupSizes,
     input,
     profile
   );
@@ -597,7 +601,7 @@ function buildCandidate(
         profile
       ),
     },
-    rounds,
+    rounds: roundsWithGroupSizes,
     metrics,
   };
 }
@@ -618,11 +622,15 @@ function getFallbackCandidate(
     input.preferences.teamPlayerCount,
     "SSS"
   );
+  const roundWithGroupSizes = {
+    ...round,
+    groupSizes,
+  };
   const blocks = addSchedule(
     generateProgramBlocks(
       {
         ...input.preferences,
-        rounds: [round],
+        rounds: [roundWithGroupSizes],
       },
       input.playerCount,
       input.courtCount,
@@ -652,7 +660,7 @@ function getFallbackCandidate(
     totalProgramMinutes,
     isOverTime:
       totalProgramMinutes > input.rentalMinutes,
-    rounds: [round],
+    rounds: [roundWithGroupSizes],
   };
 }
 

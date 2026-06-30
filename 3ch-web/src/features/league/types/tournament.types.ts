@@ -98,6 +98,7 @@ export interface ProgramBlock {
   expectedMinutes: number;
   matchCount: number;
   description?: string;
+  groupSizes?: number[];
 }
 
 export type TeamMatchType =
@@ -141,6 +142,7 @@ export interface RoundConfig {
   matchRule: MatchRuleType;
   teamPlayerCount: number;
   teamMatchType: TeamLineupType;
+  groupSizes?: number[];
 }
 
 export interface ProgramPreferences {

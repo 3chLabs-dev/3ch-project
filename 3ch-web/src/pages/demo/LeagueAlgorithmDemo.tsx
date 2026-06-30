@@ -1,4 +1,4 @@
-﻿import { generateProgramOptions } from '../../features/league/algorithms/generateProgramOptions';
+import { generateProgramOptions } from '../../features/league/algorithms/generateProgramOptions';
 import { generateProgramBlocks } from '../../features/league/algorithms/generateProgramBlocks';
 import { distributeSnake } from '../../features/league/algorithms/distributeSnake';
 import { useMemo, useState, useCallback, useEffect } from 'react';
@@ -451,7 +451,6 @@ const LeagueAlgorithmDemo = ({
   initialPlayerCount = 24,
 }: LeagueAlgorithmDemoProps) => {
   const [playerCount, setPlayerCount] = useState(initialPlayerCount);
-  const [selectedOptionIndex, setSelectedOptionIndex] = useState(0);
   const [courtCount, setCourtCount] = useState(4);
   const [startHour, setStartHour] = useState(9);
   const [startMinute, setStartMinute] = useState(0);
@@ -504,6 +503,15 @@ const LeagueAlgorithmDemo = ({
   const [customProgramOptions, setCustomProgramOptions] = useState<Record<number, ProgramOption>>({});
   const [editingOptionIndex, setEditingOptionIndex] = useState<number | null>(null);
   const [editingRounds, setEditingRounds] = useState<RoundConfig[]>([]);
+  const [groupStructureDialog, setGroupStructureDialog] = useState<{
+    optionIndex: number;
+    blockIndex: number;
+  } | null>(null);
+  const [pendingGroupSizes, setPendingGroupSizes] = useState<number[]>([]);
+  const [groupResultDialog, setGroupResultDialog] = useState<{
+    optionIndex: number;
+    blockIndex: number;
+  } | null>(null);
 
   const mockPlayers = [
   { name: '가가가', level: 3 },
@@ -539,14 +547,6 @@ const LeagueAlgorithmDemo = ({
   const options = useMemo(() => {
   return generateGroupOptions(playerCount);
 }, [playerCount]);
-
-  const groupResult =
-    options.length > 0
-      ? distributeSnake(
-          mockPlayers.slice(0, playerCount),
-          options[selectedOptionIndex]?.groups ?? []
-        )
-      : [];
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -597,12 +597,28 @@ const LeagueAlgorithmDemo = ({
   );
 
 
-  const programOptions = generateProgramOptions({
-    playerCount,
-    courtCount,
-    rentalMinutes: rentalHours * 60,
-    rentalStartMinutes,
-    preferences: {
+  const programOptions = useMemo(
+    () =>
+      generateProgramOptions({
+        playerCount,
+        courtCount,
+        rentalMinutes: rentalHours * 60,
+        rentalStartMinutes,
+        preferences: {
+          singlesEnabled,
+          doublesEnabled,
+          teamEnabled,
+          teamMatchRounds,
+          programOrder,
+          teamPlayerCount,
+          rounds,
+        },
+      }),
+    [
+      playerCount,
+      courtCount,
+      rentalHours,
+      rentalStartMinutes,
       singlesEnabled,
       doublesEnabled,
       teamEnabled,
@@ -610,8 +626,8 @@ const LeagueAlgorithmDemo = ({
       programOrder,
       teamPlayerCount,
       rounds,
-  },
-});
+    ]
+  );
   useEffect(() => {
     setCustomProgramOptions({});
   }, [
@@ -712,6 +728,81 @@ const LeagueAlgorithmDemo = ({
     closeProgramEditDialog();
   };
 
+  const sameGroupSizes = (
+    left: number[] = [],
+    right: number[] = []
+  ) =>
+    left.length === right.length &&
+    left.every((value, index) => value === right[index]);
+
+  const getRoundGroupSizes = (
+    option: ProgramOption,
+    blockIndex: number
+  ) =>
+    option.rounds?.[blockIndex]?.groupSizes ??
+    option.blocks[blockIndex]?.groupSizes ??
+    option.groupSizes;
+
+  const updateProgramRoundGroupSizes = (
+    optionIndex: number,
+    blockIndex: number,
+    groupSizes: number[]
+  ) => {
+    const baseOption = displayedProgramOptions[optionIndex];
+    const nextRounds = (baseOption.rounds ?? rounds).map(
+      (round, roundIndex) => ({
+        ...round,
+        id: roundIndex + 1,
+        groupSizes:
+          roundIndex === blockIndex
+            ? groupSizes
+            : round.groupSizes ?? baseOption.groupSizes,
+      })
+    );
+    const updatedOption = buildProgramOptionFromRounds(
+      baseOption,
+      nextRounds
+    );
+
+    setCustomProgramOptions({
+      ...customProgramOptions,
+      [optionIndex]: updatedOption,
+    });
+  };
+
+  const openGroupStructureDialog = (
+    optionIndex: number,
+    blockIndex: number
+  ) => {
+    const option = displayedProgramOptions[optionIndex];
+
+    setPendingGroupSizes(
+      getRoundGroupSizes(option, blockIndex)
+    );
+    setGroupStructureDialog({
+      optionIndex,
+      blockIndex,
+    });
+  };
+
+  const closeGroupStructureDialog = () => {
+    setGroupStructureDialog(null);
+    setPendingGroupSizes([]);
+  };
+
+  const completeGroupStructureDialog = () => {
+    if (!groupStructureDialog) {
+      return;
+    }
+
+    updateProgramRoundGroupSizes(
+      groupStructureDialog.optionIndex,
+      groupStructureDialog.blockIndex,
+      pendingGroupSizes
+    );
+    closeGroupStructureDialog();
+  };
+
   const getStars = (score: number) => {
     if (score >= 90) return "★★★★★";
     if (score >= 80) return "★★★★☆";
@@ -720,6 +811,38 @@ const LeagueAlgorithmDemo = ({
 
   return "★☆☆☆☆";
 };
+
+  const groupStructureOption =
+    groupStructureDialog !== null
+      ? displayedProgramOptions[groupStructureDialog.optionIndex]
+      : undefined;
+  const groupStructureSizes =
+    pendingGroupSizes.length > 0
+      ? pendingGroupSizes
+      : groupStructureDialog !== null && groupStructureOption
+        ? getRoundGroupSizes(
+          groupStructureOption,
+          groupStructureDialog.blockIndex
+        )
+        : [];
+  const groupResultOption =
+    groupResultDialog !== null
+      ? displayedProgramOptions[groupResultDialog.optionIndex]
+      : undefined;
+  const groupResultSizes =
+    groupResultDialog !== null && groupResultOption
+      ? getRoundGroupSizes(
+          groupResultOption,
+          groupResultDialog.blockIndex
+        )
+      : [];
+  const dialogGroupResult =
+    groupResultSizes.length > 0
+      ? distributeSnake(
+          mockPlayers.slice(0, playerCount),
+          groupResultSizes
+        )
+      : [];
 
   return (
     <div
@@ -1400,10 +1523,6 @@ const LeagueAlgorithmDemo = ({
     </div>
   <div style={{ paddingLeft: '16px'}}>
     <div>
-      - 조 구성: {option.groupSizes?.join('/') ?? "-"}
-    </div>
-
-    <div>
       - 경기방식: {option.matchRule}
     </div>
 
@@ -1461,10 +1580,10 @@ const LeagueAlgorithmDemo = ({
       {option.blocks?.map(
         (
           block: ProgramBlock,
-          index: number
+          blockIndex: number
         ) => {
           const elapsedMinutes = option.blocks
-            .slice(0, index)
+            .slice(0, blockIndex)
             .reduce(
               (sum, previousBlock) =>
                 sum + previousBlock.expectedMinutes,
@@ -1478,7 +1597,7 @@ const LeagueAlgorithmDemo = ({
             blockStartMinutes + block.expectedMinutes;
 
           return (
-          <div key={index}>
+          <div key={blockIndex}>
             {block.title}
             
           {block.description && (
@@ -1502,6 +1621,47 @@ const LeagueAlgorithmDemo = ({
               진행시간: {formatTime(blockStartMinutes)} ~{" "}
               {formatTime(blockEndMinutes)}
             </div>
+
+            <div
+              style={{
+                display: "flex",
+                gap: "8px",
+                marginTop: "8px",
+                paddingLeft: "12px",
+              }}
+            >
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() =>
+                  openGroupStructureDialog(index, blockIndex)
+                }
+              >
+                조 편성 구조
+              </Button>
+
+              <Button
+                size="small"
+                variant="outlined"
+                sx={{
+                  color: "#FFFFFF",
+                  backgroundColor: "#1976D2",
+                  borderColor: "#1976D2",
+                  "&:hover": {
+                    backgroundColor: "#1565C0",
+                    borderColor: "#1976D2",
+                  },
+                }}
+                onClick={() =>
+                  setGroupResultDialog({
+                    optionIndex: index,
+                    blockIndex,
+                  })
+                }
+              >
+                조 편성 결과
+              </Button>
+            </div>
           </div>
           );
         }
@@ -1510,97 +1670,6 @@ const LeagueAlgorithmDemo = ({
   </div>
     </div>
 ))}
-
-      <h2 style={{ marginTop: '40px' }}>
-        조 편성 선택
-      </h2>
-
-      <div style={{ marginTop: '16px' }}>
-        {options.map((option, index) => (
-          <div
-            key={`${option.tierSize}-${option.groupCount}`}
-            onClick={() => setSelectedOptionIndex(index)}
-            style={{
-              border:
-                selectedOptionIndex === index
-                  ? '2px solid #3b82f6'
-                  : '1px solid #d1d5db',
-              borderRadius: '12px',
-              padding: '20px',
-              marginBottom: '16px',
-              backgroundColor:
-                selectedOptionIndex === index
-                  ? '#eff6ff'
-                  : '#ffffff',
-              cursor: 'pointer',
-            }}
-          >
-            {option.recommended && (
-              <div
-                style={{
-                  color: '#2563eb',
-                  fontWeight: 700,
-                  marginBottom: '12px',
-                }}
-              >
-                추천
-              </div>
-            )}
-
-            <div
-              style={{
-                fontSize: '20px',
-                fontWeight: 700,
-              }}
-            >
-              {option.groupCount}개 조
-            </div>
-
-            <div
-              style={{
-                marginTop: '8px',
-                color: '#6b7280',
-              }}
-            >
-              {option.groups.map((g) => `${g}인`).join(' / ')}
-            </div>
-
-            <div
-              style={{
-                marginTop: '12px',
-                fontSize: '14px',
-                color: '#9ca3af',
-              }}
-            >
-              score: {option.score}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <h2 style={{ marginTop: '40px' }}>
-        조 편성 결과
-      </h2>
-
-      {groupResult.map((group) => (
-        <div
-          key={group.name}
-          style={{
-            border: '1px solid #ddd',
-            borderRadius: '12px',
-            padding: '16px',
-            marginTop: '12px',
-          }}
-        >
-          <h3>{group.name}</h3>
-
-          {group.players.map((player) => (
-            <div key={player.name}>
-              {player.level}부 - {player.name}
-            </div>
-          ))}
-        </div>
-      ))}
 
       </>
       )}
@@ -1631,6 +1700,139 @@ const LeagueAlgorithmDemo = ({
             onClick={completeProgramEdit}
           >
             완료
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={groupStructureDialog !== null}
+        onClose={closeGroupStructureDialog}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>
+          조 편성 구조
+        </DialogTitle>
+
+        <DialogContent dividers>
+          {options.map((option) => {
+            const selected = sameGroupSizes(
+              groupStructureSizes,
+              option.groups
+            );
+
+            return (
+              <div
+                key={`${option.tierSize}-${option.groupCount}`}
+                onClick={() => {
+                  setPendingGroupSizes(option.groups);
+                }}
+                style={{
+                  border: selected
+                    ? '2px solid #3b82f6'
+                    : '1px solid #d1d5db',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  marginBottom: '16px',
+                  backgroundColor: selected
+                    ? '#eff6ff'
+                    : '#ffffff',
+                  cursor: 'pointer',
+                }}
+              >
+                {option.recommended && (
+                  <div
+                    style={{
+                      color: '#2563eb',
+                      fontWeight: 700,
+                      marginBottom: '12px',
+                    }}
+                  >
+                    추천
+                  </div>
+                )}
+
+                <div
+                  style={{
+                    fontSize: '20px',
+                    fontWeight: 700,
+                  }}
+                >
+                  {option.groupCount}개 조
+                </div>
+
+                <div
+                  style={{
+                    marginTop: '8px',
+                    color: '#6b7280',
+                  }}
+                >
+                  {option.groups.map((g) => `${g}인`).join(' / ')}
+                </div>
+
+                <div
+                  style={{
+                    marginTop: '12px',
+                    fontSize: '14px',
+                    color: '#9ca3af',
+                  }}
+                >
+                  score: {option.score}
+                </div>
+              </div>
+            );
+          })}
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={closeGroupStructureDialog}>
+            취소
+          </Button>
+
+          <Button
+            variant="contained"
+            onClick={completeGroupStructureDialog}
+          >
+            확인
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={groupResultDialog !== null}
+        onClose={() => setGroupResultDialog(null)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>
+          조 편성 결과
+        </DialogTitle>
+
+        <DialogContent dividers>
+          {dialogGroupResult.map((group) => (
+            <div
+              key={group.name}
+              style={{
+                border: '1px solid #ddd',
+                borderRadius: '12px',
+                padding: '16px',
+                marginTop: '12px',
+              }}
+            >
+              <h3>{group.name}</h3>
+
+              {group.players.map((player) => (
+                <div key={player.name}>
+                  {player.level}부 - {player.name}
+                </div>
+              ))}
+            </div>
+          ))}
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={() => setGroupResultDialog(null)}>
+            닫기
           </Button>
         </DialogActions>
       </Dialog>

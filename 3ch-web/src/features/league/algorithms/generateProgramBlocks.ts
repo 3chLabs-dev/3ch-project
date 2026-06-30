@@ -107,6 +107,8 @@ export function generateProgramBlocks(
   const blocks: UnscheduledProgramBlock[] = [];
   const rounds = preferences.rounds ?? [];
   for (const round of rounds) {
+  const roundGroupSizes =
+    round.groupSizes ?? groupSizes;
 
   if (round.program === "SINGLES") {
     let matchCount = 0;
@@ -121,7 +123,7 @@ export function generateProgramBlocks(
     if (round.format === "GROUP") {
       matchCount =
         calculateGroupMatchCount(
-          groupSizes
+          roundGroupSizes
         );
     }
 
@@ -147,6 +149,7 @@ export function generateProgramBlocks(
     expectedMinutes: duration,
 
     matchCount,
+    groupSizes: roundGroupSizes,
   });
 }
 
@@ -185,6 +188,7 @@ export function generateProgramBlocks(
       expectedMinutes: duration,
 
       matchCount,
+      groupSizes: roundGroupSizes,
     });
   }
 
@@ -243,6 +247,7 @@ export function generateProgramBlocks(
 
       description:
         teamInfo.description,
+      groupSizes: roundGroupSizes,
     });
   }
 }

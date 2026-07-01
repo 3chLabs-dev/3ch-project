@@ -145,6 +145,7 @@ export function generateProgramBlocks(
     title: `${blocks.length + 1}라운드 ${getOptionLabel(round.option)} 단식`,
     type: "SINGLES",
     matchRule: getMatchRuleLabel(round.matchRule),
+    format: round.format,
 
     expectedMinutes: duration,
 
@@ -184,6 +185,7 @@ export function generateProgramBlocks(
       title: `${blocks.length + 1}라운드 ${getOptionLabel(round.option)} 복식`,
       type: "DOUBLES",
       matchRule: getMatchRuleLabel(round.matchRule),
+      format: round.format,
 
       expectedMinutes: duration,
 
@@ -240,6 +242,7 @@ export function generateProgramBlocks(
       title: `${blocks.length + 1}라운드 ${getOptionLabel(round.option)} 단체전`,
       type: "TEAM",
       matchRule: getMatchRuleLabel(round.matchRule),
+      format: round.format,
 
       expectedMinutes: duration,
 

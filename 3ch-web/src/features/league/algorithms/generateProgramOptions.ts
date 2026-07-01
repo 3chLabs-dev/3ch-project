@@ -1,5 +1,6 @@
 import { generateGroupOptions } from "./generateGroupOptions";
 import { generateProgramBlocks } from "./generateProgramBlocks";
+import { calculateDuration } from "./calculateDuration";
 
 import type {
   MatchRule,
@@ -198,6 +199,110 @@ function createRound(
     teamMatchType,
   };
 }
+
+function getLeagueUnitCount(
+  program: ProgramType,
+  playerCount: number,
+  teamPlayerCount: number
+) {
+  if (program === "DOUBLES") {
+    return Math.floor(playerCount / 2);
+  }
+
+  if (program === "TEAM") {
+    return Math.ceil(playerCount / teamPlayerCount);
+  }
+
+  return playerCount;
+}
+
+function canIncludeLeagueFormat(
+  program: ProgramType,
+  input: GenerateProgramOptionsInput,
+  teamPlayerCount: number
+) {
+  const unitCount = getLeagueUnitCount(
+    program,
+    input.playerCount,
+    teamPlayerCount
+  );
+  const matchCount =
+    (unitCount * (unitCount - 1)) / 2;
+  const minimumMinutes = calculateDuration(
+    matchCount,
+    input.courtCount,
+    "3전 2선승제"
+  );
+
+  return minimumMinutes <= input.rentalMinutes * 0.75;
+}
+
+function getFormatCandidates(
+  program: ProgramType,
+  input: GenerateProgramOptionsInput,
+  teamPlayerCount: number
+): RoundFormat[] {
+  const formats: RoundFormat[] = [];
+
+  if (input.playerCount < 8) {
+    formats.push("LEAGUE");
+
+    if (
+      input.courtCount <= 2 ||
+      input.rentalMinutes < 120
+    ) {
+      formats.push("GROUP");
+    }
+
+    formats.push("TOURNAMENT");
+    return formats;
+  }
+
+  if (input.playerCount <= 12) {
+    formats.push(
+      "LEAGUE",
+      "GROUP",
+      "TOURNAMENT"
+    );
+    return formats;
+  }
+
+  formats.push("GROUP");
+
+  if (
+    canIncludeLeagueFormat(
+      program,
+      input,
+      teamPlayerCount
+    )
+  ) {
+    formats.push("LEAGUE");
+  }
+
+  formats.push("TOURNAMENT");
+  return formats;
+}
+
+function getMatchRuleCandidates(
+  format: RoundFormat
+): MatchRuleType[] {
+  if (format === "LEAGUE") {
+    return [
+      "THREE_SET",
+      "BEST_OF_3",
+    ];
+  }
+
+  if (format === "TOURNAMENT") {
+    return [
+      "BEST_OF_3",
+      "THREE_SET",
+    ];
+  }
+
+  return MATCH_RULES;
+}
+
 function buildRoundChoices(
   id: number,
   program: ProgramType,
@@ -205,43 +310,56 @@ function buildRoundChoices(
   teamPlayerCounts: number[]
 ): RoundConfig[] {
   if (program === "SINGLES") {
-    const choices = [
-      createRound(id, program, "GROUP", "BEST_OF_5", input.preferences.teamPlayerCount, "SSS"),
-      createRound(id, program, "GROUP", "THREE_SET", input.preferences.teamPlayerCount, "SSS"),
-      createRound(id, program, "GROUP", "BEST_OF_3", input.preferences.teamPlayerCount, "SSS"),
-      createRound(id, program, "TOURNAMENT", "BEST_OF_3", input.preferences.teamPlayerCount, "SSS"),
-    ];
-
-    if (input.playerCount <= 8) {
-      choices.push(
-        createRound(id, program, "LEAGUE", "BEST_OF_3", input.preferences.teamPlayerCount, "SSS")
-      );
-    }
-
-    return choices;
+    return getFormatCandidates(
+      program,
+      input,
+      input.preferences.teamPlayerCount
+    ).flatMap((format) =>
+      getMatchRuleCandidates(format).map(
+        (matchRule) =>
+          createRound(
+            id,
+            program,
+            format,
+            matchRule,
+            input.preferences.teamPlayerCount,
+            "SSS"
+          )
+      )
+    );
   }
 
   if (program === "DOUBLES") {
-    return [
-      createRound(id, program, "GROUP", "THREE_SET", input.preferences.teamPlayerCount, "SSS"),
-      createRound(id, program, "GROUP", "BEST_OF_3", input.preferences.teamPlayerCount, "SSS"),
-      createRound(id, program, "TOURNAMENT", "BEST_OF_3", input.preferences.teamPlayerCount, "SSS"),
-    ];
+    return getFormatCandidates(
+      program,
+      input,
+      input.preferences.teamPlayerCount
+    ).flatMap((format) =>
+      getMatchRuleCandidates(format).map(
+        (matchRule) =>
+          createRound(
+            id,
+            program,
+            format,
+            matchRule,
+            input.preferences.teamPlayerCount,
+            "SSS"
+          )
+      )
+    );
   }
 
   const choices: RoundConfig[] = [];
 
   for (const teamPlayerCount of teamPlayerCounts) {
-    const teamCount = Math.ceil(
-      input.playerCount / teamPlayerCount
+    const formats = getFormatCandidates(
+      program,
+      input,
+      teamPlayerCount
     );
-    const formats: RoundFormat[] =
-      teamCount <= 6
-        ? ["GROUP", "TOURNAMENT", "LEAGUE"]
-        : ["GROUP", "TOURNAMENT"];
 
     for (const format of formats) {
-      for (const matchRule of ["THREE_SET", "BEST_OF_3"] as MatchRuleType[]) {
+      for (const matchRule of getMatchRuleCandidates(format)) {
         for (const teamMatchType of TEAM_LINEUPS) {
           choices.push(
             createRound(
@@ -286,19 +404,39 @@ function buildProgramSequences(
   return sequences;
 }
 
-function cartesian<T>(items: T[][]): T[][] {
-  return items.reduce<T[][]>(
-    (result, values) =>
-      result.flatMap((prefix) =>
-        values.map((value) => [...prefix, value])
-      ),
-    [[]]
-  );
+function cartesianLimited<T>(
+  items: T[][],
+  limit: number
+): T[][] {
+  let result: T[][] = [[]];
+
+  for (const values of items) {
+    const next: T[][] = [];
+
+    for (const prefix of result) {
+      for (const value of values) {
+        next.push([...prefix, value]);
+
+        if (next.length >= limit) {
+          break;
+        }
+      }
+
+      if (next.length >= limit) {
+        break;
+      }
+    }
+
+    result = next;
+  }
+
+  return result;
 }
 
 function buildRoundCandidates(
   input: GenerateProgramOptionsInput
 ): RoundConfig[][] {
+  const maxCandidateCount = 2500;
   const programs = getAvailablePrograms(
     input.preferences
   );
@@ -315,6 +453,10 @@ function buildRoundCandidates(
   const candidates: RoundConfig[][] = [];
 
   for (const sequence of sequences) {
+    if (candidates.length >= maxCandidateCount) {
+      break;
+    }
+
     const perRoundChoices = sequence.map(
       (program, index) =>
         buildRoundChoices(
@@ -324,8 +466,14 @@ function buildRoundCandidates(
           teamPlayerCounts
         )
     );
+    const sequenceCandidates = cartesianLimited(
+      perRoundChoices,
+      maxCandidateCount - candidates.length
+    );
 
-    candidates.push(...cartesian(perRoundChoices));
+    for (const candidate of sequenceCandidates) {
+      candidates.push(candidate);
+    }
   }
 
   return candidates;

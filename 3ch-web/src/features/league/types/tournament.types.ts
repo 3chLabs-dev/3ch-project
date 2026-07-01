@@ -95,6 +95,7 @@ export interface ProgramBlock {
     | "TEAM";
 
   matchRule: MatchRule;
+  format?: RoundFormat;
   expectedMinutes: number;
   matchCount: number;
   description?: string;

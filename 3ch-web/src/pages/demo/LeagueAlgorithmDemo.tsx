@@ -1,10 +1,11 @@
-import { generateProgramOptions } from '../../features/league/algorithms/generateProgramOptions';
+﻿import { generateProgramOptions } from '../../features/league/algorithms/generateProgramOptions';
 import { generateProgramBlocks } from '../../features/league/algorithms/generateProgramBlocks';
 import { distributeSnake } from '../../features/league/algorithms/distributeSnake';
 import { useMemo, useState, useCallback, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { generateGroupOptions } from '../../features/league/algorithms/generateGroupOptions';
 import type { ProgramBlock, ProgramOption, ProgramType, TeamMatchType, RoundConfig } from '../../features/league/types/tournament.types';
-import { ToggleButton, ToggleButtonGroup, Button, Dialog, DialogTitle, DialogContent, DialogActions, IconButton } from "@mui/material";
+import { ToggleButton, ToggleButtonGroup, Button, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Chip } from "@mui/material";
 import { DndContext, PointerSensor, TouchSensor, useSensor, useSensors, closestCenter,
   type DragEndEvent, } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove, } from "@dnd-kit/sortable";
@@ -21,6 +22,21 @@ const formatTime = (totalMinutes: number) => {
   return `${hours.toString().padStart(2, '0')}:${minutes
     .toString()
     .padStart(2, '0')}`;
+};
+
+const getRoundFormatLabel = (
+  format?: RoundConfig["format"]
+) => {
+  switch (format) {
+    case "LEAGUE":
+      return "단일리그";
+    case "GROUP":
+      return "조별리그";
+    case "TOURNAMENT":
+      return "토너먼트";
+    default:
+      return "-";
+  }
 };
 
 
@@ -450,6 +466,8 @@ interface LeagueAlgorithmDemoProps {
 const LeagueAlgorithmDemo = ({
   initialPlayerCount = 24,
 }: LeagueAlgorithmDemoProps) => {
+  const navigate = useNavigate();
+  const { id: leagueId } = useParams<{ id: string }>();
   const [playerCount, setPlayerCount] = useState(initialPlayerCount);
   const [courtCount, setCourtCount] = useState(4);
   const [startHour, setStartHour] = useState(9);
@@ -500,6 +518,7 @@ const LeagueAlgorithmDemo = ({
   >("recommend");
   const [isProgramGenerated, setIsProgramGenerated] = useState(false);
   const [isCustomProgramCompleted, setIsCustomProgramCompleted] = useState(false);
+  const [selectedProgramOptionIndex, setSelectedProgramOptionIndex] = useState<number | null>(null);
   const [customProgramOptions, setCustomProgramOptions] = useState<Record<number, ProgramOption>>({});
   const [editingOptionIndex, setEditingOptionIndex] = useState<number | null>(null);
   const [editingRounds, setEditingRounds] = useState<RoundConfig[]>([]);
@@ -630,16 +649,14 @@ const LeagueAlgorithmDemo = ({
   );
   useEffect(() => {
     setCustomProgramOptions({});
+    setSelectedProgramOptionIndex(null);
   }, [
     playerCount,
     courtCount,
     rentalMinutes,
     rentalStartMinutes,
+    rounds,
   ]);
-
-  const displayedProgramOptions = programOptions.map(
-    (option, index) => customProgramOptions[index] ?? option
-  );
 
   const buildProgramOptionFromRounds = (
     baseOption: ProgramOption,
@@ -693,6 +710,40 @@ const LeagueAlgorithmDemo = ({
     };
   };
 
+  const getCustomModeRounds = (
+    baseOption: ProgramOption
+  ) =>
+    rounds.map((round, roundIndex) => ({
+      ...round,
+      id: roundIndex + 1,
+      groupSizes:
+        round.groupSizes ??
+        baseOption.groupSizes,
+    }));
+
+  const displayedProgramOptions = programOptions.map(
+    (option, index) => {
+      const customOption =
+        customProgramOptions[index];
+
+      if (customOption) {
+        return customOption;
+      }
+
+      if (
+        programMode === "custom" &&
+        isCustomProgramCompleted
+      ) {
+        return buildProgramOptionFromRounds(
+          option,
+          getCustomModeRounds(option)
+        );
+      }
+
+      return option;
+    }
+  );
+
   const openProgramEditDialog = (index: number) => {
     const option = displayedProgramOptions[index];
 
@@ -726,6 +777,25 @@ const LeagueAlgorithmDemo = ({
       [editingOptionIndex]: updatedOption,
     });
     closeProgramEditDialog();
+  };
+
+  const completeProgramCreation = () => {
+    if (selectedProgramOptionIndex === null) {
+      return;
+    }
+
+    const selectedOption = displayedProgramOptions[selectedProgramOptionIndex];
+
+    if (leagueId) {
+      localStorage.setItem(
+        `league-program-${leagueId}`,
+        JSON.stringify(selectedOption)
+      );
+      navigate(`/league/${leagueId}/program`);
+      return;
+    }
+
+    console.log("selected program option", selectedOption);
   };
 
   const sameGroupSizes = (
@@ -1026,13 +1096,13 @@ const LeagueAlgorithmDemo = ({
           setIsProgramGenerated(true);
           setCustomProgramOptions({});
         }}
-        style={{ marginTop: "24px" }}
+        style={{ marginTop: "30px" }}
       >
         AI 프로그램 생성하기
       </Button>
 
       {isProgramGenerated && (
-      <div style={{ marginTop: "24px" }}>
+      <div style={{ marginTop: "60px" }}>
         <ToggleButtonGroup
           exclusive
           value={programMode}
@@ -1476,11 +1546,20 @@ const LeagueAlgorithmDemo = ({
 {displayedProgramOptions.slice(0, 3).map((option, index) => (
   <div
     key={index}
+    onClick={() => setSelectedProgramOptionIndex(index)}
     style={{
-      border: '1px solid #ddd',
+      border:
+        selectedProgramOptionIndex === index
+          ? '2px solid rgb(47, 128, 237)'
+          : '1px solid #ddd',
       borderRadius: '12px',
       padding: '16px',
       marginTop: '12px',
+      backgroundColor:
+        selectedProgramOptionIndex === index
+          ? 'rgb(239, 246, 255)'
+          : '#ffffff',
+      cursor: 'pointer',
     }}
   >
     <div
@@ -1515,17 +1594,16 @@ const LeagueAlgorithmDemo = ({
         <IconButton
           size="small"
           aria-label="추천 프로그램 수정"
-          onClick={() => openProgramEditDialog(index)}
+          onClick={(event) => {
+            event.stopPropagation();
+            openProgramEditDialog(index);
+          }}
         >
           <EditIcon fontSize="small" />
         </IconButton>
       </div>
     </div>
   <div style={{ paddingLeft: '16px'}}>
-    <div>
-      - 경기방식: {option.matchRule}
-    </div>
-
     <div>
       - 총 경기수: {option.totalBlockMatchCount}경기
     </div>
@@ -1597,8 +1675,68 @@ const LeagueAlgorithmDemo = ({
             blockStartMinutes + block.expectedMinutes;
 
           return (
-          <div key={blockIndex}>
-            {block.title}
+          <div
+            key={blockIndex}
+            style={{
+              marginBottom:
+                blockIndex === option.blocks.length - 1
+                  ? 0
+                  : "32px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "6px",
+                marginBottom: "8px",
+              }}
+            >
+              <span
+                style={{
+                  fontWeight: 700,
+                  lineHeight: "24px",
+                }}
+              >
+                {blockIndex + 1}라운드
+              </span>
+
+              {option.rounds?.[blockIndex]?.option &&
+                option.rounds[blockIndex].option !== "NONE" && (
+                  <Chip
+                    label={
+                      option.rounds[blockIndex].option === "PRELIM"
+                        ? "예선"
+                        : option.rounds[blockIndex].option === "FINAL"
+                          ? "본선"
+                          : option.rounds[blockIndex].option === "UPPER"
+                            ? "상위"
+                            : "하위"
+                    }
+                    size="small"
+                  />
+                )}
+
+              <Chip
+                label={
+                  block.type === "SINGLES"
+                    ? "단식"
+                    : block.type === "DOUBLES"
+                      ? "복식"
+                      : "단체전"
+                }
+                size="small"
+              />
+
+              <Chip
+                label={getRoundFormatLabel(block.format)}
+                size="small"
+              />
+            </div>
+
+            <div style={{ paddingLeft: '12px' }}>
+              경기방식: {block.matchRule}
+            </div>
             
           {block.description && (
             <div style={{ paddingLeft: '12px' }}>
@@ -1633,9 +1771,10 @@ const LeagueAlgorithmDemo = ({
               <Button
                 size="small"
                 variant="outlined"
-                onClick={() =>
+                onClick={(event) => {
+                  event.stopPropagation();
                   openGroupStructureDialog(index, blockIndex)
-                }
+                }}
               >
                 조 편성 구조
               </Button>
@@ -1652,12 +1791,13 @@ const LeagueAlgorithmDemo = ({
                     borderColor: "#1976D2",
                   },
                 }}
-                onClick={() =>
+                onClick={(event) => {
+                  event.stopPropagation();
                   setGroupResultDialog({
                     optionIndex: index,
                     blockIndex,
                   })
-                }
+                }}
               >
                 조 편성 결과
               </Button>
@@ -1836,6 +1976,36 @@ const LeagueAlgorithmDemo = ({
           </Button>
         </DialogActions>
       </Dialog>
+
+      {isProgramGenerated && (
+        programMode === "recommend" ||
+        (programMode === "custom" && isCustomProgramCompleted)
+      ) && (
+        <div
+          style={{
+            position: "fixed",
+            left: "50%",
+            bottom: "calc(56px + env(safe-area-inset-bottom) + 16px)",
+            transform: "translateX(-50%)",
+            width: "min(430px, calc(100% - 32px))",
+            zIndex: 1200,
+          }}
+        >
+          <Button
+            variant="contained"
+            fullWidth
+            disabled={selectedProgramOptionIndex === null}
+            onClick={completeProgramCreation}
+            style={{
+              height: "48px",
+              borderRadius: "12px",
+              fontWeight: 800,
+            }}
+          >
+            완료
+          </Button>
+        </div>
+      )}
     </div>
   );
 };

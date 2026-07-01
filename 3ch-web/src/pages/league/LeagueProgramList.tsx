@@ -33,6 +33,74 @@ function getBracketSizeLabel(matchLabel: string | null | undefined): string {
   return matchLabel ?? "";
 }
 
+const PROGRAM_ROUNDS = [
+  {
+    round: 1,
+    title: "1라운드 예선 단식",
+    format: "GROUP",
+    formatLabel: "조별리그",
+    bracketLabel: "리그 대진표 보기",
+    bracketPath: "bracket",
+  },
+  {
+    round: 2,
+    title: "2라운드 본선 단식",
+    format: "TOURNAMENT",
+    formatLabel: "토너먼트",
+    bracketLabel: "토너먼트 대진표 보기",
+    bracketPath: "tournament-bracket",
+  },
+];
+
+type StoredProgramBlock = {
+  title?: string;
+  type?: "SINGLES" | "DOUBLES" | "TEAM";
+  format?: "LEAGUE" | "GROUP" | "TOURNAMENT";
+};
+
+type StoredProgramOption = {
+  title?: string;
+  blocks?: StoredProgramBlock[];
+};
+
+function getProgramTypeLabel(type?: StoredProgramBlock["type"]) {
+  switch (type) {
+    case "SINGLES":
+      return "단식";
+    case "DOUBLES":
+      return "복식";
+    case "TEAM":
+      return "단체전";
+    default:
+      return "";
+  }
+}
+
+function getProgramFormatLabel(format?: StoredProgramBlock["format"]) {
+  switch (format) {
+    case "LEAGUE":
+      return "단일리그";
+    case "GROUP":
+      return "조별리그";
+    case "TOURNAMENT":
+      return "토너먼트";
+    default:
+      return "";
+  }
+}
+
+function getProgramBracketPath(format?: StoredProgramBlock["format"]) {
+  return format === "TOURNAMENT"
+    ? "tournament-bracket"
+    : "bracket";
+}
+
+function getProgramBracketLabel(format?: StoredProgramBlock["format"]) {
+  return format === "TOURNAMENT"
+    ? "토너먼트 대진표 보기"
+    : "리그 대진표 보기";
+}
+
 export default function LeagueTournamentList() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -45,9 +113,21 @@ export default function LeagueTournamentList() {
   const [deleteAllMatches, { isLoading: isDeleting }] = useDeleteAllLeagueMatchesMutation();
 
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [storedProgram, setStoredProgram] = useState<StoredProgramOption | null>(null);
 
   const league = leagueData?.league;
   const matches = matchesData?.matches ?? [];
+  const hasProgram = Boolean(league || storedProgram);
+  const programRounds = storedProgram?.blocks?.length
+    ? storedProgram.blocks.map((block, index) => ({
+        round: index + 1,
+        title: block.title ?? `${index + 1}라운드 ${getProgramTypeLabel(block.type)}`,
+        format: block.format ?? "GROUP",
+        formatLabel: getProgramFormatLabel(block.format),
+        bracketLabel: getProgramBracketLabel(block.format),
+        bracketPath: getProgramBracketPath(block.format),
+      }))
+    : PROGRAM_ROUNDS;
 
   const hasTournament = false;
   const r1Match = matches.find((m) => m.round_number === 1 && m.bracket === "upper");
@@ -59,10 +139,33 @@ export default function LeagueTournamentList() {
 
   const handleDelete = async () => {
     setConfirmOpen(false);
+    if (id) {
+      localStorage.removeItem(`league-program-${id}`);
+      setStoredProgram(null);
+    }
     await deleteAllMatches({ leagueId: id! });
   };
 
   const isLoading = leagueLoading || matchesLoading || groupLoading;
+
+  useEffect(() => {
+    if (!id) {
+      return;
+    }
+
+    const rawProgram = localStorage.getItem(`league-program-${id}`);
+
+    if (!rawProgram) {
+      setStoredProgram(null);
+      return;
+    }
+
+    try {
+      setStoredProgram(JSON.parse(rawProgram));
+    } catch {
+      setStoredProgram(null);
+    }
+  }, [id]);
 
   // 비관리자 + 대진표 있음 → 바로 브래킷으로 이동
   useEffect(() => {
@@ -135,7 +238,7 @@ export default function LeagueTournamentList() {
 
       <Box sx={{ px: 2 }}>
         {/* ── 대진표 카드 ── */}
-        {league ? (
+        {hasProgram ? (
           <Box
             sx={{
               bgcolor: "#fff",
@@ -161,11 +264,13 @@ export default function LeagueTournamentList() {
                 </Box>
                 <Box>
                   <Typography sx={{ fontSize: 15, fontWeight: 800, lineHeight: 1.3 }}>
-                    {league.type} 프로그램
+                    {storedProgram?.title ?? `${league?.type ?? "클럽 이벤트"} 프로그램`}
                   </Typography>
-                  <Typography sx={{ fontSize: 12, color: "#94A3B8", mt: 0.2 }}>
-                    {formatLeagueDate(league.start_date)}
-                  </Typography>
+                  {league?.start_date && (
+                    <Typography sx={{ fontSize: 12, color: "#94A3B8", mt: 0.2 }}>
+                      {formatLeagueDate(league.start_date)}
+                    </Typography>
+                  )}
                 </Box>
               </Stack>
 
@@ -196,35 +301,64 @@ export default function LeagueTournamentList() {
 
               {/* 액션 버튼 */}
               <Stack spacing={1}>
-                <Stack direction="row" spacing={1}>
-                  <Button
-                    variant="outlined"
-                    disableElevation
-                    endIcon={<ChevronRightIcon sx={{ fontSize: 16 }} />}
-                    onClick={() => navigate(`/league/${id}/program/matches`)}
+                {programRounds.map((round) => (
+                  <Box
+                    key={round.round}
                     sx={{
-                      flex: 1, height: 42, fontWeight: 700, fontSize: 13,
-                      borderRadius: 1.5, textTransform: "none", whiteSpace: "nowrap",
-                      borderColor: "#2563EB", color: "#2563EB",
-                      "&:hover": { bgcolor: "#EFF6FF" },
+                      border: "1px solid #E5E7EB",
+                      borderRadius: 1.5,
+                      p: 1.25,
+                      bgcolor: "#F9FAFB",
                     }}
                   >
-                    경기 순서
-                  </Button>
-                  <Button
-                    variant="contained"
-                    disableElevation
-                    endIcon={<ChevronRightIcon sx={{ fontSize: 16 }} />}
-                    onClick={() => navigate(`/league/${id}/program/bracket`)}
-                    sx={{
-                      flex: 1, height: 42, fontWeight: 700, fontSize: 13,
-                      borderRadius: 1.5, textTransform: "none", boxShadow: "none", whiteSpace: "nowrap",
-                      bgcolor: "#2563EB", "&:hover": { bgcolor: "#1D4ED8" },
-                    }}
-                  >
-                    대진표 보기
-                  </Button>
-                </Stack>
+                    <Stack direction="row" alignItems="center" spacing={0.75} mb={1}>
+                      <Typography sx={{ fontSize: 13, fontWeight: 800, flex: 1 }}>
+                        {round.title}
+                      </Typography>
+                      <Chip
+                        label={round.formatLabel}
+                        size="small"
+                        sx={{
+                          height: 22,
+                          fontSize: 11,
+                          fontWeight: 700,
+                          bgcolor: "#EFF6FF",
+                          color: "#2563EB",
+                        }}
+                      />
+                    </Stack>
+
+                    <Stack direction="row" spacing={1}>
+                      <Button
+                        variant="outlined"
+                        disableElevation
+                        endIcon={<ChevronRightIcon sx={{ fontSize: 16 }} />}
+                        onClick={() => navigate(`/league/${id}/program/matches?program=1&round=${round.round}`)}
+                        sx={{
+                          flex: 1, height: 38, fontWeight: 700, fontSize: 12,
+                          borderRadius: 1.5, textTransform: "none", whiteSpace: "nowrap",
+                          borderColor: "#2563EB", color: "#2563EB",
+                          "&:hover": { bgcolor: "#EFF6FF" },
+                        }}
+                      >
+                        경기 순서
+                      </Button>
+                      <Button
+                        variant="contained"
+                        disableElevation
+                        endIcon={<ChevronRightIcon sx={{ fontSize: 16 }} />}
+                        onClick={() => navigate(`/league/${id}/program/${round.bracketPath}?program=1&round=${round.round}&format=${round.format}`)}
+                        sx={{
+                          flex: 1, height: 38, fontWeight: 700, fontSize: 12,
+                          borderRadius: 1.5, textTransform: "none", boxShadow: "none", whiteSpace: "nowrap",
+                          bgcolor: "#2563EB", "&:hover": { bgcolor: "#1D4ED8" },
+                        }}
+                      >
+                        {round.bracketLabel}
+                      </Button>
+                    </Stack>
+                  </Box>
+                ))}
                 {canManage && (
                   <Stack direction="row" spacing={1}>
                     <Button

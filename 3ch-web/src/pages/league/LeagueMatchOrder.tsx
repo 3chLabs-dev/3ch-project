@@ -376,9 +376,18 @@ export default function LeagueMatchOrder() {
 
   // 1. 조 이름 목록 추출 ("1조", "2조" ...)
   const groupNames = useMemo(() => {
+    if (isProgramMode) {
+      const names = new Set(
+        programMatches
+          .map((match) => match.match_label)
+          .filter(Boolean) as string[]
+      );
+      return Array.from(names).sort((a, b) => parseInt(a) - parseInt(b));
+    }
+
     const names = new Set(rawParticipants.map(p => p.group_name).filter(Boolean) as string[]);
     return Array.from(names).sort((a, b) => parseInt(a) - parseInt(b));
-  }, [rawParticipants]);
+  }, [isProgramMode, programMatches, rawParticipants]);
 
   // 2. 현재 선택된 조 상태 관리
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
@@ -405,9 +414,13 @@ export default function LeagueMatchOrder() {
 
   const matches = useMemo(() => {
     if (isProgramMode) {
-      const ordered = localOrder
+      let ordered = localOrder
         ? localOrder.map((id) => programMatches.find((m) => m.id === id)).filter((m): m is LeagueMatch => !!m)
         : programMatches;
+
+      if (groupNames.length > 0 && selectedGroup) {
+        ordered = ordered.filter((m) => m.match_label === selectedGroup);
+      }
 
       if (!search.trim()) return ordered;
 

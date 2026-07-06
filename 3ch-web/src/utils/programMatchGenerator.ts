@@ -1,12 +1,22 @@
 import type { LeagueMatch, LeagueParticipantItem } from "../features/league/leagueApi";
 import { distributeSnake } from "../features/league/algorithms/distributeSnake";
-import type { ProgramOption, ProgramBlock } from "../features/league/types/tournament.types";
+import type { ProgramBlock, ProgramOption } from "../features/league/types/tournament.types";
+import { generateRoundRobin } from "./leagueUtils";
 
 type ProgramPlayer = {
   id: string;
   name: string;
   division: string | null;
   level: number;
+};
+
+type MatchUnit = {
+  id: string | null;
+  name: string | null;
+  division?: string | null;
+  level?: number;
+  roster?: string[];
+  rosterDetails?: Array<{ name: string; division: string | null }>;
 };
 
 function toProgramPlayers(participants: LeagueParticipantItem[]): ProgramPlayer[] {
@@ -23,6 +33,54 @@ function toProgramPlayers(participants: LeagueParticipantItem[]): ProgramPlayer[
     .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
 }
 
+function seededBracket(n: number): number[] {
+  function buildPrimary(size: number): number[] {
+    if (size === 2) return [1];
+    const prev = buildPrimary(size / 2);
+    const half = size / 2;
+    const result: number[] = [];
+    for (let i = 0; i < prev.length; i += 1) {
+      const seed = prev[i];
+      const complement = half + 1 - seed;
+      if (i % 2 === 0) result.push(seed, complement);
+      else result.push(complement, seed);
+    }
+    return result;
+  }
+
+  const primary = buildPrimary(n);
+  const result: number[] = [];
+  for (const seed of primary) result.push(seed, n + 1 - seed);
+  return result;
+}
+
+function hashString(value: string) {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function seededRandom(seed: string) {
+  let state = hashString(seed) || 1;
+  return () => {
+    state = Math.imul(1664525, state) + 1013904223;
+    return (state >>> 0) / 4294967296;
+  };
+}
+
+function shuffleStable<T>(items: T[], seed: string) {
+  const random = seededRandom(seed);
+  const next = [...items];
+  for (let i = next.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(random() * (i + 1));
+    [next[i], next[j]] = [next[j], next[i]];
+  }
+  return next;
+}
+
 function makeMatch(
   id: string,
   order: number,
@@ -32,7 +90,7 @@ function makeMatch(
   bracket?: string | null,
   label?: string,
 ): LeagueMatch {
-  return {
+  const match = {
     id,
     match_order: order,
     participant_a_id: a.id,
@@ -53,6 +111,15 @@ function makeMatch(
     loser_next_match_id: null,
     loser_next_slot: null,
   };
+  const unitA = a as MatchUnit;
+  const unitB = b as MatchUnit;
+  return {
+    ...match,
+    ...(unitA.roster ? { participant_a_roster: unitA.roster } : {}),
+    ...(unitB.roster ? { participant_b_roster: unitB.roster } : {}),
+    ...(unitA.rosterDetails ? { participant_a_roster_details: unitA.rosterDetails } : {}),
+    ...(unitB.rosterDetails ? { participant_b_roster_details: unitB.rosterDetails } : {}),
+  } as LeagueMatch;
 }
 
 function buildRoundRobinMatches(
@@ -62,86 +129,162 @@ function buildRoundRobinMatches(
   players: ProgramPlayer[],
   groupName?: string,
 ): LeagueMatch[] {
-  const matches: LeagueMatch[] = [];
-  let order = 1;
-
-  for (let i = 0; i < players.length; i += 1) {
-    for (let j = i + 1; j < players.length; j += 1) {
-      matches.push(makeMatch(
-        `program-${leagueId}-r${roundIndex + 1}-${groupName ?? "all"}-${order}`,
-        order,
-        players[i],
-        players[j],
-        roundIndex + 1,
-        null,
-        block.format === "GROUP" && groupName ? groupName : undefined,
-      ));
-      order += 1;
-    }
-  }
-
-  return matches;
+  return generateRoundRobin(players.length).map(([leftIndex, rightIndex], index) =>
+    makeMatch(
+      `program-${leagueId}-r${roundIndex + 1}-${groupName ?? "all"}-${index + 1}`,
+      index + 1,
+      players[leftIndex],
+      players[rightIndex],
+      roundIndex + 1,
+      null,
+      block.format === "GROUP" && groupName ? groupName : undefined,
+    )
+  );
 }
 
 function pairLabel(players: ProgramPlayer[]) {
   return players.map((player) => player.name).join(" / ");
 }
 
-function buildTeamLikeMatches(
+function toDoublesUnits(players: ProgramPlayer[]): MatchUnit[] {
+  const units = [];
+  for (let i = 0; i < players.length; i += 2) {
+    const unit = players.slice(i, i + 2);
+    if (unit.length === 2) units.push(unit);
+  }
+
+  return units.map((unit, index) => ({
+    id: unit.map((player) => player.id).join("+"),
+    name: `페어 ${pairLabel(unit)}`,
+    division: null,
+    level: index + 1,
+    roster: unit.map((player) => player.name),
+    rosterDetails: unit.map((player) => ({
+      name: player.name,
+      division: player.division,
+    })),
+  }));
+}
+
+function toTeamUnitsFromGroupSizes(
+  players: ProgramPlayer[],
+  groupSizes: number[],
+): MatchUnit[] {
+  return distributeSnake(players, groupSizes)
+    .filter((group) => group.players.length > 0)
+    .map((group, index) => {
+      const roster = group.players as ProgramPlayer[];
+      const leader = roster[0];
+      return {
+        id: roster.map((player) => player.id).join("+"),
+        name: `팀 ${leader.name}`,
+        division: leader.division,
+        level: index + 1,
+        roster: roster.map((player) => player.name),
+        rosterDetails: roster.map((player) => ({
+          name: player.name,
+          division: player.division,
+        })),
+      };
+    });
+}
+
+function buildUnitRoundRobinMatches(
   leagueId: string,
   roundIndex: number,
   block: ProgramBlock,
-  players: ProgramPlayer[],
+  units: MatchUnit[],
+  groupName?: string,
 ): LeagueMatch[] {
-  const unitSize = block.type === "DOUBLES" ? 2 : 4;
-  const units = [];
-  for (let i = 0; i < players.length; i += unitSize) {
-    const unit = players.slice(i, i + unitSize);
-    if (unit.length === unitSize) units.push(unit);
+  return generateRoundRobin(units.length).map(([leftIndex, rightIndex], index) =>
+    makeMatch(
+      `program-${leagueId}-r${roundIndex + 1}-${groupName ?? "units"}-${index + 1}`,
+      index + 1,
+      units[leftIndex],
+      units[rightIndex],
+      roundIndex + 1,
+      null,
+      block.format === "GROUP" && groupName ? groupName : undefined,
+    )
+  );
+}
+
+function buildTournamentSlots(
+  leagueId: string,
+  roundIndex: number,
+  block: ProgramBlock,
+  players: MatchUnit[],
+) {
+  const bracketSize = 2 ** Math.ceil(Math.log2(Math.max(2, players.length)));
+  const emptySlots = Array.from<MatchUnit | null>({ length: bracketSize }).fill(null);
+  const seeding = block.tournamentSeeding ?? "seed";
+
+  if (seeding === "manual") {
+    return emptySlots;
   }
 
-  const unitPlayers = units.map((unit, index) => ({
-    id: `${unit.map((player) => player.id).join("+")}`,
-    name: `${block.type === "DOUBLES" ? "페어" : "팀"} ${index + 1}: ${pairLabel(unit)}`,
-    division: null,
-  }));
+  const orderedPlayers = seeding === "random"
+    ? shuffleStable(players, `${leagueId}-r${roundIndex + 1}-${players.map((player) => player.id).join("|")}`)
+    : players;
+  const seedPositions = seededBracket(bracketSize);
+  const slots = [...emptySlots];
 
-  const matches: LeagueMatch[] = [];
-  let order = 1;
-  for (let i = 0; i < unitPlayers.length; i += 1) {
-    for (let j = i + 1; j < unitPlayers.length; j += 1) {
-      matches.push(makeMatch(
-        `program-${leagueId}-r${roundIndex + 1}-team-${order}`,
-        order,
-        unitPlayers[i],
-        unitPlayers[j],
-        roundIndex + 1,
-      ));
-      order += 1;
-    }
-  }
-  return matches;
+  orderedPlayers.forEach((player, index) => {
+    const seedNumber = index + 1;
+    const slotIndex = seedPositions.indexOf(seedNumber);
+    if (slotIndex >= 0) slots[slotIndex] = player;
+  });
+
+  return slots;
 }
 
 function buildTournamentMatches(
   leagueId: string,
   roundIndex: number,
-  players: ProgramPlayer[],
+  block: ProgramBlock,
+  players: MatchUnit[],
 ): LeagueMatch[] {
   const matches: LeagueMatch[] = [];
-  for (let i = 0; i < players.length; i += 2) {
-    const a = players[i];
-    const b = players[i + 1] ?? { id: null, name: "BYE", division: null };
-    matches.push(makeMatch(
-      `program-${leagueId}-r${roundIndex + 1}-t-${Math.floor(i / 2) + 1}`,
-      Math.floor(i / 2) + 1,
-      a,
-      b,
-      1,
-      "upper",
-      `1-${Math.floor(i / 2) + 1}`,
-    ));
+  const slots = buildTournamentSlots(leagueId, roundIndex, block, players);
+  const bracketSize = slots.length;
+  let previousRoundIds: string[] = [];
+
+  for (let bracketRound = 1, matchCount = bracketSize / 2; matchCount >= 1; bracketRound += 1, matchCount /= 2) {
+    const currentRoundIds: string[] = [];
+    for (let matchIndex = 0; matchIndex < matchCount; matchIndex += 1) {
+      const matchId = `program-${leagueId}-r${roundIndex + 1}-t-r${bracketRound}-m${matchIndex + 1}`;
+      currentRoundIds.push(matchId);
+
+      const isFirstRound = bracketRound === 1;
+      const a = isFirstRound
+        ? slots[matchIndex * 2] ?? { id: null, name: null, division: null }
+        : { id: null, name: null, division: null };
+      const b = isFirstRound
+        ? slots[matchIndex * 2 + 1] ?? { id: null, name: null, division: null }
+        : { id: null, name: null, division: null };
+      const match = makeMatch(
+        matchId,
+        matchIndex + 1,
+        a,
+        b,
+        bracketRound,
+        "upper",
+        bracketRound === 1 ? `1-${matchIndex + 1}` : `R${bracketRound}`,
+      );
+      matches.push(match);
+    }
+
+    previousRoundIds.forEach((previousId, previousIndex) => {
+      const parentId = currentRoundIds[Math.floor(previousIndex / 2)];
+      const previousMatch = matches.find((match) => match.id === previousId);
+      if (previousMatch) {
+        previousMatch.next_match_id = parentId;
+        previousMatch.next_slot = previousIndex % 2 === 0 ? "a" : "b";
+      }
+    });
+    previousRoundIds = currentRoundIds;
   }
+
   return matches;
 }
 
@@ -164,24 +307,33 @@ export function generateProgramRoundMatches(
   if (!block || participants.length < 2) return [];
 
   const players = toProgramPlayers(participants);
+  const groupSizes = block.groupSizes?.length ? block.groupSizes : option?.groupSizes ?? [players.length];
+  const matchUnits: MatchUnit[] = block.type === "TEAM"
+    ? toTeamUnitsFromGroupSizes(players, groupSizes)
+    : block.type === "DOUBLES"
+      ? toDoublesUnits(players)
+      : players;
 
-  if (block.type === "DOUBLES" || block.type === "TEAM") {
-    return buildTeamLikeMatches(leagueId, round - 1, block, players);
+  if (matchUnits.length < 2) {
+    return [];
   }
 
   if (block.format === "TOURNAMENT") {
-    return buildTournamentMatches(leagueId, round - 1, players);
+    return buildTournamentMatches(leagueId, round - 1, block, matchUnits);
+  }
+
+  if (block.type === "TEAM") {
+    return buildUnitRoundRobinMatches(leagueId, round - 1, block, matchUnits);
   }
 
   if (block.format === "GROUP") {
-    const groupSizes = block.groupSizes?.length ? block.groupSizes : option?.groupSizes ?? [players.length];
-    const groups = distributeSnake(players, groupSizes);
+    const groups = distributeSnake(matchUnits as ProgramPlayer[], groupSizes);
     return groups.flatMap((group, groupIndex) =>
-      buildRoundRobinMatches(
+      buildUnitRoundRobinMatches(
         leagueId,
         round - 1,
         block,
-        group.players as ProgramPlayer[],
+        group.players as MatchUnit[],
         `${groupIndex + 1}조`,
       ).map((match, index) => ({
         ...match,
@@ -191,5 +343,7 @@ export function generateProgramRoundMatches(
     ).map((match, index) => ({ ...match, match_order: index + 1 }));
   }
 
-  return buildRoundRobinMatches(leagueId, round - 1, block, players);
+  return block.type === "SINGLES"
+    ? buildRoundRobinMatches(leagueId, round - 1, block, players)
+    : buildUnitRoundRobinMatches(leagueId, round - 1, block, matchUnits);
 }

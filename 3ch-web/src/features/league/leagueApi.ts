@@ -1,4 +1,14 @@
 import { baseApi } from "../api/baseApi";
+import type { RootState } from "../../app/store";
+import { isLocalDevToken } from "../../utils/localDevAuth";
+import {
+  addLocalDevParticipants,
+  deleteLocalDevParticipant,
+  getLocalDevLeague,
+  getLocalDevLeagues,
+  getLocalDevParticipants,
+  updateLocalDevParticipant,
+} from "../../utils/localDevLeagueStore";
 
 /**
  * API 요청 타입 정의
@@ -287,7 +297,14 @@ export const leagueApi = baseApi.injectEndpoints({
      * 리그 목록 조회
      */
     getLeagues: builder.query<GetLeaguesResponse, GetLeaguesParams | void>({
-      query: (params) => {
+      async queryFn(params, api, _extraOptions, fetchWithBQ) {
+        const token = (api.getState() as RootState).auth?.token;
+        if (isLocalDevToken(token)) {
+          let leagues = getLocalDevLeagues();
+          if (params?.group_id) leagues = leagues.filter((league) => league.group_id === params.group_id);
+          return { data: normalizeLeaguesResponse({ leagues, total: leagues.length, page: 1, limit: leagues.length || 10 }) };
+        }
+
         const searchParams = new URLSearchParams();
         if (params?.page) searchParams.set("page", String(params.page));
         if (params?.limit) searchParams.set("limit", String(params.limit));
@@ -297,9 +314,10 @@ export const leagueApi = baseApi.injectEndpoints({
         if (params?.my_groups) searchParams.set("my_groups", "true");
         if (params?.user_id) searchParams.set("user_id", String(params.user_id));
         const qs = searchParams.toString();
-        return `/league${qs ? `?${qs}` : ""}`;
+        const result = await fetchWithBQ(`/league${qs ? `?${qs}` : ""}`);
+        if (result.error) return { error: result.error };
+        return { data: normalizeLeaguesResponse(result.data) };
       },
-      transformResponse: (response: unknown) => normalizeLeaguesResponse(response),
       providesTags: (result) =>
         result
           ? [
@@ -325,12 +343,27 @@ export const leagueApi = baseApi.injectEndpoints({
      * 리그 조회
      */
     getLeague: builder.query<GetLeagueResponse, string>({
-      query: (id) => `/league/${id}`,
+      async queryFn(id, api, _extraOptions, fetchWithBQ) {
+        const token = (api.getState() as RootState).auth?.token;
+        if (isLocalDevToken(token)) {
+          const league = getLocalDevLeague(id);
+          return league ? { data: { league } } : { error: { status: 404, data: "Not Found" } };
+        }
+        const result = await fetchWithBQ(`/league/${id}`);
+        return result.error ? { error: result.error } : { data: result.data as GetLeagueResponse };
+      },
       providesTags: (_result, _error, id) => [{ type: "League", id }],
     }),
 
     getLeagueParticipants: builder.query<GetLeagueParticipantsResponse, string>({
-      query: (id) => `/league/${id}/participants`,
+      async queryFn(id, api, _extraOptions, fetchWithBQ) {
+        const token = (api.getState() as RootState).auth?.token;
+        if (isLocalDevToken(token)) {
+          return { data: { participants: getLocalDevParticipants(id) } };
+        }
+        const result = await fetchWithBQ(`/league/${id}/participants`);
+        return result.error ? { error: result.error } : { data: result.data as GetLeagueParticipantsResponse };
+      },
       providesTags: (_result, _error, id) => [{ type: "League", id }],
     }),
 
@@ -359,11 +392,21 @@ export const leagueApi = baseApi.injectEndpoints({
       UpdateParticipantResponse,
       { leagueId: string; participantId: string; updates: UpdateParticipantRequest }
     >({
-      query: ({ leagueId, participantId, updates }) => ({
-        url: `/league/${leagueId}/participants/${participantId}`,
-        method: "PUT",
-        body: updates,
-      }),
+      async queryFn({ leagueId, participantId, updates }, api, _extraOptions, fetchWithBQ) {
+        const token = (api.getState() as RootState).auth?.token;
+        if (isLocalDevToken(token)) {
+          const participant = updateLocalDevParticipant(leagueId, participantId, updates);
+          return participant
+            ? { data: { message: "updated", participant } }
+            : { error: { status: 404, data: "Not Found" } };
+        }
+        const result = await fetchWithBQ({
+          url: `/league/${leagueId}/participants/${participantId}`,
+          method: "PUT",
+          body: updates,
+        });
+        return result.error ? { error: result.error } : { data: result.data as UpdateParticipantResponse };
+      },
       async onQueryStarted({ leagueId, participantId, updates }, { dispatch, queryFulfilled }) {
         // 낙관적 업데이트: 서버 응답 전 UI 즉시 반영
         const patchResult = dispatch(
@@ -388,10 +431,18 @@ export const leagueApi = baseApi.injectEndpoints({
     DeleteParticipantResponse,
     { leagueId: string; participantId: string }
   >({
-    query: ({ leagueId, participantId }) => ({
-      url: `/league/${leagueId}/participants/${participantId}`,
-      method: "DELETE",
-    }),
+    async queryFn({ leagueId, participantId }, api, _extraOptions, fetchWithBQ) {
+      const token = (api.getState() as RootState).auth?.token;
+      if (isLocalDevToken(token)) {
+        deleteLocalDevParticipant(leagueId, participantId);
+        return { data: { message: "deleted" } };
+      }
+      const result = await fetchWithBQ({
+        url: `/league/${leagueId}/participants/${participantId}`,
+        method: "DELETE",
+      });
+      return result.error ? { error: result.error } : { data: result.data as DeleteParticipantResponse };
+    },
     invalidatesTags: (_result, _error, { leagueId }) => [
       { type: "League", id: leagueId },
       { type: "League", id: "LIST" },
@@ -399,11 +450,18 @@ export const leagueApi = baseApi.injectEndpoints({
     }),
 
     addParticipants: builder.mutation<AddParticipantsResponse, AddParticipantsRequest>({
-      query: ({ leagueId, participants }) => ({
-        url: `/league/${leagueId}/participants`,
-        method: "POST",
-        body: { participants },
-      }),
+      async queryFn({ leagueId, participants }, api, _extraOptions, fetchWithBQ) {
+        const token = (api.getState() as RootState).auth?.token;
+        if (isLocalDevToken(token)) {
+          return { data: { message: "created", participants: addLocalDevParticipants({ leagueId, participants }) } };
+        }
+        const result = await fetchWithBQ({
+          url: `/league/${leagueId}/participants`,
+          method: "POST",
+          body: { participants },
+        });
+        return result.error ? { error: result.error } : { data: result.data as AddParticipantsResponse };
+      },
       invalidatesTags: (_result, _error, { leagueId }) => [
         { type: "League", id: leagueId },
         { type: "League", id: "LIST" },

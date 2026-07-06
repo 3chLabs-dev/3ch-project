@@ -100,6 +100,7 @@ export interface ProgramBlock {
   matchCount: number;
   description?: string;
   groupSizes?: number[];
+  tournamentSeeding?: TournamentSeedingType;
 }
 
 export type TeamMatchType =
@@ -111,10 +112,15 @@ export type ProgramType =
   | "DOUBLES"
   | "TEAM";
 
-  export type RoundFormat =
+export type RoundFormat =
   | "LEAGUE"
   | "GROUP"
   | "TOURNAMENT";
+
+export type TournamentSeedingType =
+  | "seed"
+  | "random"
+  | "manual";
 
 export type RoundOption =
   | "NONE"
@@ -144,6 +150,7 @@ export interface RoundConfig {
   teamPlayerCount: number;
   teamMatchType: TeamLineupType;
   groupSizes?: number[];
+  tournamentSeeding?: TournamentSeedingType;
 }
 
 export interface ProgramPreferences {

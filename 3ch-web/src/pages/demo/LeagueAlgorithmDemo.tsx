@@ -1,12 +1,12 @@
 ﻿import { generateProgramOptions } from '../../features/league/algorithms/generateProgramOptions';
 import { generateProgramBlocks } from '../../features/league/algorithms/generateProgramBlocks';
 import { distributeSnake } from '../../features/league/algorithms/distributeSnake';
-import { useMemo, useState, useCallback, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { generateGroupOptions } from '../../features/league/algorithms/generateGroupOptions';
 import { useGetLeagueParticipantsQuery } from '../../features/league/leagueApi';
 import type { ProgramBlock, ProgramOption, ProgramType, TeamMatchType, RoundConfig } from '../../features/league/types/tournament.types';
-import { ToggleButton, ToggleButtonGroup, Button, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Chip } from "@mui/material";
+import { ToggleButton, ToggleButtonGroup, Button, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Chip, Checkbox } from "@mui/material";
 import { DndContext, PointerSensor, TouchSensor, useSensor, useSensors, closestCenter,
   type DragEndEvent, } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove, } from "@dnd-kit/sortable";
@@ -197,8 +197,7 @@ function RoundConfigEditor({
                 </ToggleButton>
               </ToggleButtonGroup>
 
-              {round.program !== "TEAM" && (
-                <div style={{ marginTop: "16px" }}>
+              <div style={{ marginTop: "16px" }}>
                   <div
                     style={{
                       fontWeight: 700,
@@ -218,10 +217,14 @@ function RoundConfigEditor({
                       setRounds(
                         rounds.map((x) =>
                           x.id === round.id
-                            ? {
-                                ...x,
-                                format: value,
-                              }
+                              ? {
+                                  ...x,
+                                  format: value,
+                                  tournamentSeeding:
+                                    value === "TOURNAMENT"
+                                      ? x.tournamentSeeding ?? "seed"
+                                      : x.tournamentSeeding,
+                                }
                             : x
                         )
                       );
@@ -238,9 +241,54 @@ function RoundConfigEditor({
                     <ToggleButton value="TOURNAMENT">
                       토너먼트
                     </ToggleButton>
-                  </ToggleButtonGroup>
+	                  </ToggleButtonGroup>
 
-                  <div style={{ marginTop: "16px" }}>
+                    {round.format === "TOURNAMENT" && (
+                      <div style={{ marginTop: "16px" }}>
+                        <div
+                          style={{
+                            fontWeight: 700,
+                            marginBottom: "8px",
+                          }}
+                        >
+                          배치 방식
+                        </div>
+
+                        <ToggleButtonGroup
+                          exclusive
+                          value={round.tournamentSeeding ?? "seed"}
+                          fullWidth
+                          onChange={(_, value) => {
+                            if (!value) return;
+
+                            setRounds(
+                              rounds.map((x) =>
+                                x.id === round.id
+                                  ? {
+                                      ...x,
+                                      tournamentSeeding: value,
+                                    }
+                                  : x
+                              )
+                            );
+                          }}
+                        >
+                          <ToggleButton value="seed">
+                            시드(순위)
+                          </ToggleButton>
+
+                          <ToggleButton value="random">
+                            랜덤
+                          </ToggleButton>
+
+                          <ToggleButton value="manual">
+                            수동
+                          </ToggleButton>
+                        </ToggleButtonGroup>
+                      </div>
+                    )}
+
+	                  <div style={{ marginTop: "16px" }}>
                     <div
                       style={{
                         fontWeight: 700,
@@ -290,8 +338,7 @@ function RoundConfigEditor({
                       </ToggleButton>
                     </ToggleButtonGroup>
                   </div>
-                </div>
-              )}
+              </div>
 
               {round.program === "TEAM" && (
                 <div style={{ marginTop: "16px" }}>
@@ -469,6 +516,10 @@ const LeagueAlgorithmDemo = ({
 }: LeagueAlgorithmDemoProps) => {
   const navigate = useNavigate();
   const { id: leagueId } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const isEditMode = searchParams.get("edit") === "true";
+  const restoredRef = useRef(false);
+  const skipNextResetRef = useRef(false);
   const { data: participantData } = useGetLeagueParticipantsQuery(leagueId ?? "", {
     skip: !leagueId,
   });
@@ -504,6 +555,7 @@ const LeagueAlgorithmDemo = ({
       matchRule: "BEST_OF_5",
       teamPlayerCount: 4,
       teamMatchType: "SSS",
+      tournamentSeeding: "seed",
     },
     {
       id: 2,
@@ -514,6 +566,7 @@ const LeagueAlgorithmDemo = ({
       matchRule: "BEST_OF_5",
       teamPlayerCount: 4,
       teamMatchType: "SSS",
+      tournamentSeeding: "seed",
     },
   ]);
 
@@ -535,6 +588,26 @@ const LeagueAlgorithmDemo = ({
     optionIndex: number;
     blockIndex: number;
   } | null>(null);
+
+  type StoredProgramEditState = {
+    playerCount: number;
+    courtCount: number;
+    startHour: number;
+    startMinute: number;
+    endHour: number;
+    endMinute: number;
+    programMode: "recommend" | "custom";
+    isProgramGenerated: boolean;
+    isCustomProgramCompleted: boolean;
+    selectedProgramOptionIndex: number | null;
+    rounds: RoundConfig[];
+    recommendationOptions: ProgramOption[];
+    customProgramOptions: Record<number, ProgramOption>;
+  };
+
+  type StoredProgramWithEditState = ProgramOption & {
+    editState?: StoredProgramEditState;
+  };
 
   const mockPlayers = [
   { name: '가가가', level: 3 },
@@ -581,10 +654,13 @@ const LeagueAlgorithmDemo = ({
   );
 
   useEffect(() => {
+    if (isEditMode && restoredRef.current) {
+      return;
+    }
     if (leaguePlayers.length > 0) {
       setPlayerCount(leaguePlayers.length);
     }
-  }, [leaguePlayers.length]);
+  }, [isEditMode, leaguePlayers.length]);
 
   const rentalMinutes = (endHour * 60 + endMinute) - (startHour * 60 + startMinute);
   const rentalStartMinutes = startHour * 60 + startMinute;
@@ -675,9 +751,17 @@ const LeagueAlgorithmDemo = ({
     ]
   );
   useEffect(() => {
+    if (isEditMode && restoredRef.current) {
+      return;
+    }
+    if (skipNextResetRef.current) {
+      skipNextResetRef.current = false;
+      return;
+    }
     setCustomProgramOptions({});
     setSelectedProgramOptionIndex(null);
   }, [
+    isEditMode,
     playerCount,
     courtCount,
     rentalMinutes,
@@ -771,6 +855,79 @@ const LeagueAlgorithmDemo = ({
     }
   );
 
+  const getProgramOptionIndexByTitle = useCallback(
+    (title?: string) => {
+      const fixedTitleIndex = ["정규 경기", "밸런스형", "빠른 진행"].findIndex(
+        (fixedTitle) => fixedTitle === title
+      );
+
+      if (fixedTitleIndex >= 0) {
+        return fixedTitleIndex;
+      }
+
+      const generatedIndex = programOptions.findIndex(
+        (option) => option.title === title
+      );
+
+      return generatedIndex >= 0 ? generatedIndex : 0;
+    },
+    [programOptions]
+  );
+
+  useEffect(() => {
+    if (!isEditMode || !leagueId || restoredRef.current) {
+      return;
+    }
+
+    const rawProgram = localStorage.getItem(`league-program-${leagueId}`);
+    if (!rawProgram) {
+      return;
+    }
+
+    try {
+      const storedProgram = JSON.parse(rawProgram) as StoredProgramWithEditState;
+      const editState = storedProgram.editState;
+
+      if (editState) {
+        skipNextResetRef.current = true;
+        const restoredSelectedIndex =
+          editState.selectedProgramOptionIndex ??
+          getProgramOptionIndexByTitle(storedProgram.title);
+        setPlayerCount(editState.playerCount);
+        setCourtCount(editState.courtCount);
+        setStartHour(editState.startHour);
+        setStartMinute(editState.startMinute);
+        setEndHour(editState.endHour);
+        setEndMinute(editState.endMinute);
+        setProgramMode(editState.programMode);
+        setIsProgramGenerated(editState.isProgramGenerated);
+        setIsCustomProgramCompleted(editState.isCustomProgramCompleted);
+        setRounds(editState.rounds);
+        setCustomProgramOptions({
+          ...Object.fromEntries(
+            editState.recommendationOptions.map((option, index) => [index, option])
+          ),
+          ...editState.customProgramOptions,
+          [restoredSelectedIndex]: storedProgram,
+        });
+        setSelectedProgramOptionIndex(restoredSelectedIndex);
+      } else {
+        const restoredRounds = storedProgram.rounds ?? rounds;
+        const restoredSelectedIndex = getProgramOptionIndexByTitle(storedProgram.title);
+        skipNextResetRef.current = true;
+        setIsProgramGenerated(true);
+        setProgramMode("recommend");
+        setRounds(restoredRounds);
+        setCustomProgramOptions({ [restoredSelectedIndex]: storedProgram });
+        setSelectedProgramOptionIndex(restoredSelectedIndex);
+      }
+
+      restoredRef.current = true;
+    } catch {
+      restoredRef.current = true;
+    }
+  }, [getProgramOptionIndexByTitle, isEditMode, leagueId, rounds]);
+
   const openProgramEditDialog = (index: number) => {
     const option = displayedProgramOptions[index];
 
@@ -811,7 +968,24 @@ const LeagueAlgorithmDemo = ({
       return;
     }
 
-    const selectedOption = displayedProgramOptions[selectedProgramOptionIndex];
+    const selectedOption: StoredProgramWithEditState = {
+      ...displayedProgramOptions[selectedProgramOptionIndex],
+      editState: {
+        playerCount,
+        courtCount,
+        startHour,
+        startMinute,
+        endHour,
+        endMinute,
+        programMode,
+        isProgramGenerated,
+        isCustomProgramCompleted,
+        selectedProgramOptionIndex,
+        rounds,
+        recommendationOptions: displayedProgramOptions.slice(0, 3),
+        customProgramOptions,
+      },
+    };
 
     if (leagueId) {
       localStorage.setItem(
@@ -922,6 +1096,11 @@ const LeagueAlgorithmDemo = ({
           groupStructureDialog.blockIndex
         )
         : [];
+  const groupStructureBlock =
+    groupStructureDialog !== null && groupStructureOption
+      ? groupStructureOption.blocks[groupStructureDialog.blockIndex]
+      : undefined;
+  const isGroupStructureTeam = groupStructureBlock?.type === "TEAM";
   const groupResultOption =
     groupResultDialog !== null
       ? displayedProgramOptions[groupResultDialog.optionIndex]
@@ -933,6 +1112,11 @@ const LeagueAlgorithmDemo = ({
           groupResultDialog.blockIndex
         )
       : [];
+  const groupResultBlock =
+    groupResultDialog !== null && groupResultOption
+      ? groupResultOption.blocks[groupResultDialog.blockIndex]
+      : undefined;
+  const isGroupResultTeam = groupResultBlock?.type === "TEAM";
   const dialogGroupResult =
     groupResultSizes.length > 0
       ? distributeSnake(
@@ -1271,8 +1455,7 @@ const LeagueAlgorithmDemo = ({
               </ToggleButton>
             </ToggleButtonGroup>
 
-            {round.program !== "TEAM" && (
-              <div style={{ marginTop: "16px" }}>
+            <div style={{ marginTop: "16px" }}>
                 <div
                   style={{
                     fontWeight: 700,
@@ -1292,10 +1475,14 @@ const LeagueAlgorithmDemo = ({
                     setRounds(
                       rounds.map((x) =>
                         x.id === round.id
-                          ? {
-                              ...x,
-                              format: value,
-                            }
+	                          ? {
+	                              ...x,
+	                              format: value,
+                                tournamentSeeding:
+                                  value === "TOURNAMENT"
+                                    ? x.tournamentSeeding ?? "seed"
+                                    : x.tournamentSeeding,
+	                            }
                           : x
                       )
                     );
@@ -1312,9 +1499,54 @@ const LeagueAlgorithmDemo = ({
                   <ToggleButton value="TOURNAMENT">
                     토너먼트
                   </ToggleButton>
-                </ToggleButtonGroup>
+	                </ToggleButtonGroup>
 
-                <div style={{ marginTop: "16px" }}>
+                  {round.format === "TOURNAMENT" && (
+                    <div style={{ marginTop: "16px" }}>
+                      <div
+                        style={{
+                          fontWeight: 700,
+                          marginBottom: "8px",
+                        }}
+                      >
+                        배치 방식
+                      </div>
+
+                      <ToggleButtonGroup
+                        exclusive
+                        value={round.tournamentSeeding ?? "seed"}
+                        fullWidth
+                        onChange={(_, value) => {
+                          if (!value) return;
+
+                          setRounds(
+                            rounds.map((x) =>
+                              x.id === round.id
+                                ? {
+                                    ...x,
+                                    tournamentSeeding: value,
+                                  }
+                                : x
+                            )
+                          );
+                        }}
+                      >
+                        <ToggleButton value="seed">
+                          시드(순위)
+                        </ToggleButton>
+
+                        <ToggleButton value="random">
+                          랜덤
+                        </ToggleButton>
+
+                        <ToggleButton value="manual">
+                          수동
+                        </ToggleButton>
+                      </ToggleButtonGroup>
+                    </div>
+                  )}
+
+	                <div style={{ marginTop: "16px" }}>
                   <div
                     style={{
                       fontWeight: 700,
@@ -1406,8 +1638,7 @@ const LeagueAlgorithmDemo = ({
                     </ToggleButtonGroup>
                   </div>
                 </div>
-              </div>
-            )}
+            </div>
 
             {round.program === "TEAM" && (
               <div style={{ marginTop: "16px" }}>
@@ -1524,6 +1755,7 @@ const LeagueAlgorithmDemo = ({
                 matchRule: "BEST_OF_3",
                 teamPlayerCount: 4,
                 teamMatchType: "SSS",
+                tournamentSeeding: "seed",
               },
             ]);
           }}
@@ -1597,9 +1829,34 @@ const LeagueAlgorithmDemo = ({
         marginBottom: '12px',
       }}
     >
-      <h3 style={{ margin: 0 }}>
-        {option.title}
-      </h3>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          minWidth: 0,
+        }}
+      >
+        <Checkbox
+          checked={selectedProgramOptionIndex === index}
+          onChange={() => setSelectedProgramOptionIndex(index)}
+          onClick={(event) => event.stopPropagation()}
+          inputProps={{
+            "aria-label": `${option.title} 선택`,
+          }}
+          sx={{
+            p: 0,
+            color: '#9ca3af',
+            '&.Mui-checked': {
+              color: 'rgb(47, 128, 237)',
+            },
+          }}
+        />
+
+        <h3 style={{ margin: 0 }}>
+          {option.title}
+        </h3>
+      </div>
 
       <div
         style={{
@@ -1803,7 +2060,7 @@ const LeagueAlgorithmDemo = ({
                   openGroupStructureDialog(index, blockIndex)
                 }}
               >
-                조 편성 구조
+                {block.type === "TEAM" ? "팀 편성 구조" : "조 편성 구조"}
               </Button>
 
               <Button
@@ -1826,7 +2083,7 @@ const LeagueAlgorithmDemo = ({
                   })
                 }}
               >
-                조 편성 결과
+                {block.type === "TEAM" ? "팀 편성 결과" : "조 편성 결과"}
               </Button>
             </div>
           </div>
@@ -1878,7 +2135,7 @@ const LeagueAlgorithmDemo = ({
         maxWidth="sm"
       >
         <DialogTitle>
-          조 편성 구조
+          {isGroupStructureTeam ? "팀 편성 구조" : "조 편성 구조"}
         </DialogTitle>
 
         <DialogContent dividers>
@@ -1925,7 +2182,7 @@ const LeagueAlgorithmDemo = ({
                     fontWeight: 700,
                   }}
                 >
-                  {option.groupCount}개 조
+                  {option.groupCount}개 {isGroupStructureTeam ? "팀" : "조"}
                 </div>
 
                 <div
@@ -1972,7 +2229,7 @@ const LeagueAlgorithmDemo = ({
         maxWidth="sm"
       >
         <DialogTitle>
-          조 편성 결과
+          {isGroupResultTeam ? "팀 편성 결과" : "조 편성 결과"}
         </DialogTitle>
 
         <DialogContent dividers>
@@ -1986,7 +2243,7 @@ const LeagueAlgorithmDemo = ({
                 marginTop: '12px',
               }}
             >
-              <h3>{group.name}</h3>
+              <h3>{isGroupResultTeam ? group.name.replace(/조$/, "팀") : group.name}</h3>
 
               {group.players.map((player) => (
                 <div key={player.name}>

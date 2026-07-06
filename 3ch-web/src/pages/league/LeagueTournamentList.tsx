@@ -84,7 +84,7 @@ export default function LeagueTournamentList() {
 
       {/* ── 헤더 ── */}
       <Stack direction="row" alignItems="center" sx={{ px: 1, pt: 1.5, pb: 1 }}>
-        <IconButton size="small" onClick={() => navigate(-1)} sx={{ mr: 0.5 }}>
+        <IconButton size="small" onClick={() => navigate(`/league/${id}`)} sx={{ mr: 0.5 }}>
           <ArrowBackIcon fontSize="small" />
         </IconButton>
         <Typography sx={{ fontSize: 17, fontWeight: 900, flex: 1 }}>

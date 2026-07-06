@@ -3,6 +3,8 @@ import type { PayloadAction } from "@reduxjs/toolkit";
 import type { RootState } from "../../app/store";
 import axios from "axios";
 import { baseApi } from "../api/baseApi";
+import { isLocalDevToken } from "../../utils/localDevAuth";
+import { createLocalDevLeague } from "../../utils/localDevLeagueStore";
 
 /** Step 1: 기본 정보 */
 export interface LeagueBasicInfo {
@@ -32,7 +34,8 @@ export type LeagueFormatValue =
   | "group-and-knockout"
   | "single-league-tournament"
   | "group-league-tournament"
-  | "upper-lower-tournament";
+  | "upper-lower-tournament"
+  | "event-program";
 
 export interface LeagueFormatInfo {
   format: LeagueFormatValue;
@@ -171,7 +174,7 @@ export const createLeague = createAsyncThunk.withTypes<{ state: RootState }>()(
     };
 
     // 리그 방식 매핑
-    const formatMap: Record<LeagueFormatValue, string> = {
+    const formatMap: Record<string, string> = {
       "single-league": "단일리그",
       "four-player-omr": "4인 리그 (OMR)",
       "group-league": "조별리그",
@@ -204,10 +207,18 @@ export const createLeague = createAsyncThunk.withTypes<{ state: RootState }>()(
       description: s.step1BasicInfo.location ? `장소: ${s.step1BasicInfo.location}` : undefined,
       title: s.step1BasicInfo.title ? `${s.step1BasicInfo.title}` : undefined,
       type: typeMap[s.step2Type.selectedType],
-      format: s.step3Format ? formatMap[s.step3Format.format] : undefined,
+      format: s.step2Type.selectedType === "club_exchange"
+        ? "이벤트 프로그램"
+        : s.step3Format
+          ? formatMap[s.step3Format.format]
+          : undefined,
       sport: "탁구", // 탁구로 고정 (향후 확장 예정)
       start_date,
-      rules: s.step4Rules ? rulesMap[s.step4Rules.rule] : undefined,
+      rules: s.step2Type.selectedType === "club_exchange"
+        ? "프로그램별 설정"
+        : s.step4Rules
+          ? rulesMap[s.step4Rules.rule]
+          : undefined,
       recruit_count: recruitCount,
       participant_count: participantCount,
       group_id: s.groupId,
@@ -224,6 +235,14 @@ export const createLeague = createAsyncThunk.withTypes<{ state: RootState }>()(
     };
 
     const token = thunkApi.getState().auth.token;
+    if (isLocalDevToken(token)) {
+      const league = createLocalDevLeague(requestBody);
+      thunkApi.dispatch(
+        baseApi.util.invalidateTags([{ type: "League", id: "LIST" }])
+      );
+      return { leagueId: league.id };
+    }
+
     const response = await axios.post(
       `${import.meta.env.VITE_API_BASE_URL}/league`,
       requestBody,

@@ -1,4 +1,6 @@
 import { baseApi } from "../api/baseApi";
+import type { RootState } from "../../app/store";
+import { LOCAL_DEV_GROUP, LOCAL_DEV_USER, isLocalDevToken } from "../../utils/localDevAuth";
 
 export interface Group {
   id: string;
@@ -303,7 +305,38 @@ export const groupApi = baseApi.injectEndpoints({
     }),
 
     getGroupDetail: builder.query<GetGroupDetailResponse, string>({
-      query: (id) => `/group/${id}`,
+      async queryFn(id, api, _extraOptions, fetchWithBQ) {
+        const token = (api.getState() as RootState).auth?.token;
+        if (isLocalDevToken(token) && id === LOCAL_DEV_GROUP.id) {
+          return {
+            data: {
+              group: {
+                id: LOCAL_DEV_GROUP.id,
+                name: LOCAL_DEV_GROUP.name,
+                club_code: LOCAL_DEV_GROUP.club_code,
+                sport: LOCAL_DEV_GROUP.sport,
+                region_city: LOCAL_DEV_GROUP.region_city,
+                region_district: LOCAL_DEV_GROUP.region_district,
+                created_at: LOCAL_DEV_GROUP.created_at,
+                creator_name: LOCAL_DEV_GROUP.creator_name,
+              },
+              members: [{
+                id: "local-dev-member",
+                role: "owner",
+                division: null,
+                joined_at: LOCAL_DEV_GROUP.created_at,
+                user_id: LOCAL_DEV_USER.id,
+                name: LOCAL_DEV_USER.name ?? "",
+                email: LOCAL_DEV_USER.email,
+              }],
+              myRole: "owner",
+              links: [],
+            },
+          };
+        }
+        const result = await fetchWithBQ(`/group/${id}`);
+        return result.error ? { error: result.error } : { data: result.data as GetGroupDetailResponse };
+      },
       providesTags: (_result, _error, id) => [{ type: "Group", id }],
     }),
 

@@ -12,6 +12,7 @@ import type { RootState } from "../app/store";
 import { setToken, setUser } from "../features/auth/authSlice";
 import { setPreferredGroupId } from "../features/league/leagueCreationSlice";
 import { useGetMyGroupsQuery } from "../features/group/groupApi";
+import { LOCAL_DEV_GROUP, isLocalDevToken } from "../utils/localDevAuth";
 import logo from "../assets/512_우리리그 로고.svg";
 import SettingsIcon from "@mui/icons-material/Settings";
 import homeHeaderBg from "../assets/메인 배너_900x700_버튼X.png"
@@ -45,7 +46,11 @@ export default function AppShell() {
         skip: !token,
         refetchOnMountOrArgChange: true,
     });
-    const groups = useMemo(() => groupData?.groups ?? [], [groupData]);
+    const groups = useMemo(() => {
+        const serverGroups = groupData?.groups ?? [];
+        if (serverGroups.length > 0) return serverGroups;
+        return isLocalDevToken(token) ? [LOCAL_DEV_GROUP] : [];
+    }, [groupData, token]);
     const effectiveGroupId = (preferredGroupId && groups.some((g) => g.id === preferredGroupId))
         ? preferredGroupId
         : groups[0]?.id ?? "";

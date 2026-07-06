@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom";
 import React, { useCallback, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Box, Button, CircularProgress, IconButton, InputAdornment,
   TextField, Tooltip, Typography,
@@ -26,6 +26,7 @@ import {
 } from "../../features/league/leagueApi";
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
 import { formatLeagueDate } from "../../utils/dateUtils";
+import { generateProgramRoundMatches, getStoredProgramOption } from "../../utils/programMatchGenerator";
 
 // ─── 단일 토너먼트 레이아웃 상수 ────────────────────────────────────────────
 // 단일 토너먼트(라운드로빈 등)에서 매치 박스를 좌→우 방향으로 나열할 때 사용
@@ -652,6 +653,9 @@ function CenterOutConnectors({ positions }: { positions: MatchPos[] }) {
 export default function LeagueTournamentBracket() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const isProgramMode = searchParams.get("program") === "1";
+  const programRound = Number.parseInt(searchParams.get("round") ?? "1", 10) || 1;
   const [zoom, setZoom] = useState(1);
   const [editMode, setEditMode] = useState(false);
   const exportRef = useRef<HTMLDivElement | null>(null);
@@ -675,19 +679,37 @@ export default function LeagueTournamentBracket() {
   );
 
   const league = leagueData?.league;
-  const matches = useMemo(() => matchesData?.matches ?? [], [matchesData]);
-  const manualSeeding = league?.tournament_seeding === "manual";
-
-  const isDoubleElim = matches.some((m) => m.bracket === "lower");
-  const canManage = groupData?.myRole === "owner" || groupData?.myRole === "admin";
-  const isCompleted = league?.status === "completed";
-
-  const { data: participantsData } = useGetLeagueParticipantsQuery(id!, { skip: !canManage });
+  const { data: participantsData } = useGetLeagueParticipantsQuery(id!, { skip: !id || (!isProgramMode && false) });
   const participants = useMemo(() => participantsData?.participants ?? [], [participantsData]);
+  const programOption = useMemo(
+    () => (isProgramMode && id ? getStoredProgramOption(id) : null),
+    [isProgramMode, id],
+  );
+  const programMatches = useMemo(
+    () => isProgramMode
+      ? generateProgramRoundMatches(id ?? "", programOption, participants, programRound).filter((match) => match.bracket)
+      : [],
+    [isProgramMode, id, programOption, participants, programRound],
+  );
+  const matches = useMemo(
+    () => isProgramMode ? programMatches : matchesData?.matches ?? [],
+    [isProgramMode, programMatches, matchesData],
+  );
+  const programBlock = isProgramMode ? programOption?.blocks?.[programRound - 1] : undefined;
+  const manualSeeding = isProgramMode
+    ? programBlock?.tournamentSeeding === "manual"
+    : league?.tournament_seeding === "manual";
+
+  const isDoubleElim = !isProgramMode && matches.some((m) => m.bracket === "lower");
+  const canManage = !isProgramMode && (groupData?.myRole === "owner" || groupData?.myRole === "admin");
+  const isCompleted = league?.status === "completed";
 
   const [assignParticipant, { isLoading: isAssigning }] = useAssignMatchParticipantMutation();
 
-  const handleRefresh = () => { refetchLeague(); refetchMatches(); };
+  const handleRefresh = () => {
+    refetchLeague();
+    if (!isProgramMode) refetchMatches();
+  };
 
   const handleSaveImage = useCallback(async () => {
     const el = exportRef.current;

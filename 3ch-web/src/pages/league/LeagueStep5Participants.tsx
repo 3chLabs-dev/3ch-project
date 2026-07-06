@@ -63,6 +63,7 @@ export default function LeagueStep5Participants() {
   const SORT_OPTIONS = ["부수", "이름", "랜덤"];
 
   const isFourPlayerOmr = formatSelection === "four-player-omr";
+  const isClubEvent = typeSelection === "club_exchange";
   const [participants, setParticipants] = useState<Participant[]>(existing);
   const [recruitCount, setRecruitCount] = useState<number | "">(isFourPlayerOmr ? 4 : "");
   const [sortOrder, setSortOrder] = useState<string>("");
@@ -215,7 +216,7 @@ export default function LeagueStep5Participants() {
           </FormControl>
         </Box>
       </Stack>
-      {typeSelection !== "singles" && (
+      {typeSelection !== "singles" && !isClubEvent && (
       <Box>
         <Typography sx={{ fontSize: 15, fontWeight: 700, mb: 1 }}>
           <Box component="span" sx={{ color: "#EF4444", fontSize: 18 }}>※</Box> 현재 버전에서는 팀 대표자만 참가자로 등록해주세요.

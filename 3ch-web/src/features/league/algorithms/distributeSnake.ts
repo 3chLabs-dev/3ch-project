@@ -19,7 +19,6 @@ export function distributeSnake(
     players: [],
   }));
 
-  // 조 개수 기준으로 티어 생성
   const tiers: Player[][] = [];
 
   for (let i = 0; i < players.length; i += groupCount) {
@@ -34,7 +33,6 @@ export function distributeSnake(
     currentTier.forEach((player, index) => {
       const groupIndex = index;
 
-      // 정원 체크
       if (
         groups[groupIndex] &&
         groups[groupIndex].players.length < groupSizes[groupIndex]

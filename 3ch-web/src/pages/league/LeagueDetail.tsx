@@ -102,6 +102,7 @@
     { label: "단일리그 + 토너먼트", disabled: false },
     { label: "조별리그 + 토너먼트", disabled: true },
     { label: "상·하위 토너먼트", disabled: false },
+    { label: "이벤트 프로그램", disabled: false },
   ];
   const TOURNAMENT_SEEDING_OPTIONS = [
     { value: "manual", label: "수동" },
@@ -335,6 +336,12 @@
     };
 
     const getProgressPath = () => {
+      if (league?.format === "이벤트 프로그램") {
+        const hasProgram = Boolean(id && localStorage.getItem(`league-program-${id}`));
+        return hasProgram
+          ? `/league/${id}/program/matches?program=1&round=1`
+          : `/league/${id}/program`;
+      }
       if (league?.format?.includes("토너먼트") && league?.format !== "단일리그 + 토너먼트") {
         return `/league/${id}/tournament/matches`;
       }
@@ -1089,7 +1096,7 @@ const handleSaveEdit = async () => {
               </Button>
             </Stack>
           )}
-          {((!canManage  && league.status === "active") || canManage) && (
+          {league.format !== "이벤트 프로그램" && ((!canManage  && league.status === "active") || canManage) && (
             league.format === "조별리그" && (
               <Stack spacing={1} sx={{ mt: 1 }}>
                 <Button
@@ -1102,7 +1109,7 @@ const handleSaveEdit = async () => {
               </Stack>
             )
           )}
-          {((!canManage  && league.status === "active") || canManage) && (
+          {league.format !== "이벤트 프로그램" && ((!canManage  && league.status === "active") || canManage) && (
             league.format === "단일리그 + 토너먼트" ? (
               <Stack spacing={1} sx={{ mt: 1 }}>
                 <Button

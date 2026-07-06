@@ -12,6 +12,7 @@ import TuneIcon from "@mui/icons-material/Tune";
 import { formatLeagueDateTime } from "../../utils/dateUtils";
 import AdFitBanner from "../../components/AdFitBanner";
 import LeagueFilterDialog from "../../components/LeagueFilterDialog.tsx";
+import { LOCAL_DEV_GROUP, isLocalDevToken } from "../../utils/localDevAuth";
 
 type LeagueStatus = "scheduled" | "active" | "completed";
 
@@ -34,7 +35,11 @@ export default function LeagueMainBody() {
     skip: !isLoggedIn,
     refetchOnMountOrArgChange: true,
   });
-  const myGroups = useMemo(() => data?.groups ?? [], [data]);
+  const myGroups = useMemo(() => {
+    const serverGroups = data?.groups ?? [];
+    if (serverGroups.length > 0) return serverGroups;
+    return isLocalDevToken(token) ? [LOCAL_DEV_GROUP] : [];
+  }, [data, token]);
 
   const effectiveGroupId = useMemo(() => {
     if (!myGroups.length) return null;

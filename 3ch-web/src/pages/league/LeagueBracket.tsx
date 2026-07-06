@@ -15,7 +15,7 @@ import {
   Tooltip, Typography, Stack,
 } from "@mui/material";
 import { styled } from "@mui/material/styles";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import CloseIcon from "@mui/icons-material/Close";
 import EditIcon from "@mui/icons-material/Edit";
@@ -33,6 +33,7 @@ import DownloadIcon from "@mui/icons-material/Download";
 import PrintIcon from "@mui/icons-material/Print";
 import QRCode from "react-qr-code";
 import { formatLeagueDate } from "../../utils/dateUtils";
+import { generateProgramRoundMatches, getStoredProgramOption } from "../../utils/programMatchGenerator";
 import {
   useGetLeagueQuery,
   useGetLeagueParticipantsQuery,
@@ -331,6 +332,7 @@ function BracketScoreCell({ match, isA, leagueId, winScore, canManage, landscape
 // ─── Sortable 행 ──────────────────────────────────────────────────────────────
 interface BracketRowProps {
   participant: LeagueParticipantItem;
+  teamRoster?: Array<{ name: string; division: string | null }>;
   rowIdx: number;       // 현재 행의 인덱스 (0-based)
   n: number;            // 전체 참가자 수 (첫/마지막 행 이동 비활성화에 사용)
   localOrder: LeagueParticipantItem[]; // 현재 표시 순서 (열 헤더와 동기화용)
@@ -363,7 +365,7 @@ interface BracketRowProps {
  * - 시드 번호 셀 자체가 드래그 핸들 역할을 겸함
  */
 const SortableBracketRow = memo(function SortableBracketRow({
-  participant, rowIdx, n, localOrder, editMode, canManage, canScore, onMove, landscape,
+  participant, teamRoster, rowIdx, n, localOrder, editMode, canManage, canScore, onMove, landscape,
   matchLookup, wins, losses, setTotal, rank, tieSetDiff, hasPlayed, leagueId, winScore, isMe, rules,
 }: BracketRowProps) {
   const canDrag = editMode && canManage;
@@ -412,10 +414,39 @@ const SortableBracketRow = memo(function SortableBracketRow({
 
       {/* 행 방향 이름: 본인이면 파란 텍스트 + 연파랑 배경 */}
       <BodyHeaderCell sx={isMe ? { bgcolor: COLOR.myHighlight } : undefined}>
-        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0.4, flexWrap: "wrap" }}>
-          <DivBadge division={participant.division} />
-          <span style={isMe ? { color: COLOR.myText, fontWeight: 700 } : undefined}>{participant.name}</span>
-        </Box>
+        {teamRoster?.length ? (
+          <Stack spacing={0.35} alignItems="center">
+            <Stack direction="row" spacing={0.4} alignItems="center" justifyContent="center" flexWrap="wrap">
+              <DivBadge division={teamRoster[0]?.division} />
+              <Box component="span" sx={{ color: isMe ? COLOR.myText : "inherit", fontWeight: 800 }}>
+                {participant.name.split("\n")[0]}
+              </Box>
+            </Stack>
+            {teamRoster.slice(1).map((member, memberIndex) => (
+              <Stack key={`${member.name}-${memberIndex}`} direction="row" spacing={0.4} alignItems="center" justifyContent="center" flexWrap="wrap">
+                <DivBadge division={member.division} />
+                <Box component="span" sx={{ fontSize: 10, lineHeight: 1.2 }}>
+                  {member.name}
+                </Box>
+              </Stack>
+            ))}
+          </Stack>
+        ) : (
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0.4, flexWrap: "wrap" }}>
+            <DivBadge division={participant.division} />
+            <Box
+              component="span"
+              sx={{
+                color: isMe ? COLOR.myText : "inherit",
+                fontWeight: isMe ? 700 : "inherit",
+                whiteSpace: "pre-line",
+                lineHeight: 1.35,
+              }}
+            >
+              {participant.name}
+            </Box>
+          </Box>
+        )}
       </BodyHeaderCell>
 
       {/* 점수 셀: 같은 인덱스(자기 자신)는 대각선 셀, 나머지는 점수 편집 셀 */}
@@ -789,6 +820,9 @@ function MatchSchedulePanel({ matches, localOrder, landscape, leagueId }: {
 export default function LeagueBracket() {
   const { id }   = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const isProgramMode = searchParams.get("program") === "1";
+  const programRound = Number.parseInt(searchParams.get("round") ?? "1", 10) || 1;
 
   // ── 데이터 페칭 ──────────────────────────────────────────────────────────
   // 참가자·경기는 15초마다 자동 갱신 (실시간 점수 반영)
@@ -804,12 +838,74 @@ export default function LeagueBracket() {
   // bracket 필드가 있는 매치는 토너먼트 경기이므로 리그(라운드로빈) 뷰에서 제외
   // const matches         = useMemo(() => (matchData?.matches ?? []).filter((m) => !m.bracket), [matchData]);
   const rawParticipants = useMemo(() => participantData?.participants ?? [], [participantData]);
+  const programOption = useMemo(
+    () => (isProgramMode && id ? getStoredProgramOption(id) : null),
+    [isProgramMode, id],
+  );
+  const programMatchesAll = useMemo(
+    () => isProgramMode
+      ? generateProgramRoundMatches(id ?? "", programOption, rawParticipants, programRound)
+      : [],
+    [isProgramMode, id, programOption, rawParticipants, programRound],
+  );
+  const isProgramTeamRound = isProgramMode && programOption?.blocks?.[programRound - 1]?.type === "TEAM";
+  const programTeamParticipants = useMemo(() => {
+    if (!isProgramTeamRound) return [];
+
+    const map = new Map<string, LeagueParticipantItem>();
+    const rosterMap = new Map<string, Array<{ name: string; division: string | null }>>();
+    const addTeam = (
+      teamId: string | null,
+      teamName: string | null,
+      roster?: string[],
+      rosterDetails?: Array<{ name: string; division: string | null }>,
+      division?: string | null,
+    ) => {
+      if (!teamId || !teamName || map.has(teamId)) return;
+      map.set(teamId, {
+        id: teamId,
+        league_id: id ?? "",
+        division: division ?? null,
+        name: roster?.length ? [teamName, ...roster.slice(1)].join("\n") : teamName,
+        member_id: null,
+        paid: false,
+        arrived: false,
+        after: false,
+        sort_order: map.size + 1,
+        created_at: "",
+        group_name: null,
+      });
+      if (rosterDetails?.length) {
+        rosterMap.set(teamId, rosterDetails);
+      }
+    };
+
+    programMatchesAll.forEach((match) => {
+      const withRoster = match as LeagueMatch & {
+        participant_a_roster?: string[];
+        participant_b_roster?: string[];
+        participant_a_roster_details?: Array<{ name: string; division: string | null }>;
+        participant_b_roster_details?: Array<{ name: string; division: string | null }>;
+      };
+      addTeam(match.participant_a_id, match.participant_a_name, withRoster.participant_a_roster, withRoster.participant_a_roster_details, match.participant_a_division);
+      addTeam(match.participant_b_id, match.participant_b_name, withRoster.participant_b_roster, withRoster.participant_b_roster_details, match.participant_b_division);
+    });
+
+    return Array.from(map.values()).map((participant) => ({
+      ...participant,
+      teamRoster: rosterMap.get(participant.id),
+    }));
+  }, [id, isProgramTeamRound, programMatchesAll]);
 
   // 1. 조 이름 목록 추출 ("1조", "2조" ...)
   const groupNames = useMemo(() => {
+    if (isProgramMode) {
+      const names = new Set(programMatchesAll.map((match) => match.match_label).filter(Boolean) as string[]);
+      return Array.from(names).sort((a, b) => parseInt(a) - parseInt(b));
+    }
     const names = new Set(rawParticipants.map(p => p.group_name).filter(Boolean) as string[]);
     return Array.from(names).sort((a, b) => parseInt(a) - parseInt(b));
-  }, [rawParticipants]);
+  }, [isProgramMode, programMatchesAll, rawParticipants]);
 
   // 2. 현재 선택된 조 상태 관리
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
@@ -822,14 +918,36 @@ export default function LeagueBracket() {
 
   // 3. 선택된 조의 팀원만 필터링 (조가 없으면 전체)
   const targetParticipants = useMemo(() => {
+    if (isProgramTeamRound) {
+      if (groupNames.length > 0 && selectedGroup) {
+        const selectedMatches = programMatchesAll.filter((match) => match.match_label === selectedGroup);
+        const ids = new Set(
+          selectedMatches.flatMap((match) => [match.participant_a_id, match.participant_b_id]).filter(Boolean) as string[],
+        );
+        return programTeamParticipants.filter((participant) => ids.has(participant.id));
+      }
+      return programTeamParticipants;
+    }
+    if (isProgramMode && groupNames.length > 0 && selectedGroup) {
+      const selectedMatches = programMatchesAll.filter((match) => match.match_label === selectedGroup);
+      const ids = new Set(
+        selectedMatches.flatMap((match) => [match.participant_a_id, match.participant_b_id]).filter(Boolean) as string[],
+      );
+      return rawParticipants.filter((participant) => ids.has(participant.id));
+    }
     if (groupNames.length > 0 && selectedGroup) {
       return rawParticipants.filter(p => p.group_name === selectedGroup);
     }
     return rawParticipants;
-  }, [rawParticipants, groupNames, selectedGroup]);
+  }, [isProgramTeamRound, programTeamParticipants, isProgramMode, programMatchesAll, rawParticipants, groupNames, selectedGroup]);
 
   // 4. 선택된 조의 경기만 필터링
   const matches = useMemo(() => {
+    if (isProgramMode) {
+      return groupNames.length > 0 && selectedGroup
+        ? programMatchesAll.filter((match) => match.match_label === selectedGroup)
+        : programMatchesAll.filter((match) => !match.bracket);
+    }
     let serverMatches = (matchData?.matches ?? []).filter((m) => !m.bracket);
     if (groupNames.length > 0 && selectedGroup) {
       serverMatches = serverMatches.filter(m => {
@@ -839,7 +957,7 @@ export default function LeagueBracket() {
       });
     }
     return serverMatches;
-  }, [matchData?.matches, groupNames.length, selectedGroup, rawParticipants]);
+  }, [isProgramMode, programMatchesAll, matchData?.matches, groupNames.length, selectedGroup, rawParticipants]);
 
   // ── 권한 ─────────────────────────────────────────────────────────────────
   // canManage: 점수 편집 + 시드 순서 변경 가능 여부
@@ -847,7 +965,7 @@ export default function LeagueBracket() {
   const authUser  = useAppSelector((s) => s.auth.user);
   const isCreator = !!authUser && league?.created_by_id === authUser.id;
   const canManage = groupData?.myRole === "owner" || groupData?.myRole === "admin" || isCreator;
-  const canScore = canManage || league?.join_permission === "public";
+  const canScore = !isProgramMode && (canManage || league?.join_permission === "public");
   // 그룹 멤버 이름 우선, 없으면 계정 이름, 비로그인 게스트는 localStorage 저장 이름 사용
   const myName    = groupData?.members?.find((m) => m.user_id === authUser?.id)?.name
     ?? authUser?.name
@@ -1256,7 +1374,7 @@ export default function LeagueBracket() {
                             <DivBadge division={p.division} />
                             {/* portrait: minHeight로 세로 공간 확보 */}
                             <Box component="span" sx={{ minHeight: landscape ? "" : "70px", color: isMe ? COLOR.myText : "inherit", fontWeight: isMe ? 700 : "inherit" }}>
-                              {p.name}
+                              {isProgramTeamRound ? p.name.split("\n")[0] : p.name}
                             </Box>
                           </Box>
                         </NameHeaderCell>
@@ -1272,6 +1390,7 @@ export default function LeagueBracket() {
                       <SortableBracketRow
                         key={rowPlayer.id}
                         participant={rowPlayer}
+                        teamRoster={(rowPlayer as LeagueParticipantItem & { teamRoster?: Array<{ name: string; division: string | null }> }).teamRoster}
                         rowIdx={rowIdx}
                         n={n}
                         localOrder={localOrder}

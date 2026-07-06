@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Typography,
@@ -17,15 +17,33 @@ const ALL_RULES = [
   { value: "best-of-3", label: "3전 2선승제", disabled: false },
   { value: "best-of-5", label: "5전 3선승제", disabled: false },
   { value: "best-of-7", label: "7전 4선승제", disabled: false },
-  { value: "3-sets",    label: "3세트제",     disabled: false },
+  { value: "3-sets", label: "3세트제", disabled: false },
 ] as const;
+
+const PROGRAM_RULE = {
+  value: "best-of-5",
+  label: "프로그램별 설정",
+  disabled: false,
+} as const;
 
 const LeagueStep4Rules: React.FC = () => {
   const dispatch = useAppDispatch();
-  const format   = useAppSelector((s) => s.leagueCreation.step3Format?.format);
+  const format = useAppSelector((s) => s.leagueCreation.step3Format?.format);
+  const selectedType = useAppSelector((s) => s.leagueCreation.step2Type?.selectedType);
   const existing = useAppSelector((s) => s.leagueCreation.step4Rules?.rule ?? "");
+  const isClubEvent = selectedType === "club_exchange" || format === "event-program";
 
   const [rule, setRule] = useState<LeagueRuleValue | "">(existing);
+  const visibleRules = useMemo(
+    () => isClubEvent ? [PROGRAM_RULE] : ALL_RULES,
+    [isClubEvent],
+  );
+
+  useEffect(() => {
+    if (isClubEvent && rule !== "best-of-5") {
+      setRule("best-of-5");
+    }
+  }, [isClubEvent, rule]);
 
   const handleNext = () => {
     if (!rule) return;
@@ -60,9 +78,10 @@ const LeagueStep4Rules: React.FC = () => {
           onChange={(e) => setRule(e.target.value as LeagueRuleValue)}
           sx={{ display: "flex", gap: 2 }}
         >
-          {ALL_RULES.map((o) => (
+          {visibleRules.map((o) => (
             <FormControlLabel
-              key={o.value} value={o.value}
+              key={o.value}
+              value={o.value}
               disabled={o.disabled}
               control={<Radio />}
               label={
@@ -76,11 +95,16 @@ const LeagueStep4Rules: React.FC = () => {
                 </Box>
               }
               sx={{
-                m: 0, borderRadius: 1, border: "1px solid",
+                m: 0,
+                borderRadius: 1,
+                border: "1px solid",
                 borderColor: !o.disabled && rule === o.value ? "grey.900" : "grey.300",
                 bgcolor: o.disabled ? "#F9FAFB" : "background.paper",
-                px: 2, py: 2, boxShadow: !o.disabled && rule === o.value ? 2 : 1,
-                gap: 1.5, alignItems: "center",
+                px: 2,
+                py: 2,
+                boxShadow: !o.disabled && rule === o.value ? 2 : 1,
+                gap: 1.5,
+                alignItems: "center",
                 "& .MuiFormControlLabel-label": { fontSize: 20, fontWeight: 700 },
                 "& .MuiRadio-root": { p: 0.5 },
                 "&:hover": { borderColor: o.disabled ? "grey.300" : "grey.700" },
@@ -92,17 +116,26 @@ const LeagueStep4Rules: React.FC = () => {
 
       <Stack direction="row" spacing={2} sx={{ mt: 4 }}>
         <Button
-          fullWidth variant="contained" disableElevation onClick={handlePrev}
+          fullWidth
+          variant="contained"
+          disableElevation
+          onClick={handlePrev}
           sx={{ borderRadius: 1, height: 44, fontWeight: 900, bgcolor: "#777777", "&:hover": { bgcolor: "#777777" } }}
         >
           이전
         </Button>
         <Button
-          fullWidth variant="contained" disableElevation
-          onClick={handleNext} disabled={!rule}
+          fullWidth
+          variant="contained"
+          disableElevation
+          onClick={handleNext}
+          disabled={!rule}
           sx={{
-            borderRadius: 1, height: 44, fontWeight: 900,
-            bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" },
+            borderRadius: 1,
+            height: 44,
+            fontWeight: 900,
+            bgcolor: "#2F80ED",
+            "&:hover": { bgcolor: "#256FD1" },
             "&.Mui-disabled": { bgcolor: "#CFE1FB", color: "#fff" },
           }}
         >

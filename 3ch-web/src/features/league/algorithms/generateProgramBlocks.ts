@@ -149,9 +149,10 @@ export function generateProgramBlocks(
 
     expectedMinutes: duration,
 
-    matchCount,
-    groupSizes: roundGroupSizes,
-  });
+	    matchCount,
+	    groupSizes: roundGroupSizes,
+      tournamentSeeding: round.tournamentSeeding,
+	  });
 }
 
   if (round.program === "DOUBLES") {
@@ -189,9 +190,10 @@ export function generateProgramBlocks(
 
       expectedMinutes: duration,
 
-      matchCount,
-      groupSizes: roundGroupSizes,
-    });
+	      matchCount,
+	      groupSizes: roundGroupSizes,
+        tournamentSeeding: round.tournamentSeeding,
+	    });
   }
 
   if (round.program === "TEAM") {
@@ -248,10 +250,11 @@ export function generateProgramBlocks(
 
       matchCount: matchCount * (teamInfo.singles + teamInfo.doubles),
 
-      description:
-        teamInfo.description,
-      groupSizes: roundGroupSizes,
-    });
+	      description:
+	        teamInfo.description,
+	      groupSizes: roundGroupSizes,
+        tournamentSeeding: round.tournamentSeeding,
+	    });
   }
 }
     return blocks;

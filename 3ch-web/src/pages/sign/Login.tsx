@@ -19,6 +19,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import axios from "axios";
 import { useDispatch } from "react-redux";
 import { setToken, setUser } from "../../features/auth/authSlice";
+import { LOCAL_DEV_TOKEN, LOCAL_DEV_USER, isLocalDevLogin } from "../../utils/localDevAuth";
 
 const emailIcon = "/free-icon-email-5812886.png";
 const kakaoIcon = "/free-icon-kakao-talk-3991999.png";
@@ -204,6 +205,16 @@ export default function Login(props: Record<string, unknown>) {
     setPwError(pMsg);
 
     if (eMsg || pMsg) return; 
+
+    if (isLocalDevLogin(email, password)) {
+      const token = LOCAL_DEV_TOKEN;
+      localStorage.setItem("token", token);
+      localStorage.setItem("user", JSON.stringify(LOCAL_DEV_USER));
+      dispatch(setToken(token));
+      dispatch(setUser(LOCAL_DEV_USER));
+      navigate(redirectTo, { replace: true });
+      return;
+    }
 
 try {
       const res = await axios.post(`${apiBaseUrl}/auth/login`, { email, password });

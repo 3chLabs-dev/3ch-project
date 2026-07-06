@@ -1,13 +1,13 @@
-import React, { useState } from "react";
-import { 
-  Box, 
-  Typography, 
-  Button, 
-  RadioGroup, 
-  FormControlLabel, 
-  Radio, 
-  FormControl, 
-  Stack 
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  Box,
+  Typography,
+  Button,
+  RadioGroup,
+  FormControlLabel,
+  Radio,
+  FormControl,
+  Stack,
 } from "@mui/material";
 import { setStep, setStep3Format } from "../../features/league/leagueCreationSlice";
 import type { LeagueFormatValue } from "../../features/league/leagueCreationSlice";
@@ -21,13 +21,28 @@ const LeagueFormatOptions = [
   { value: "single-league-tournament", label: "단일리그 + 토너먼트", disabled: false },
   { value: "group-league-tournament", label: "조별리그 + 토너먼트", disabled: true },
   { value: "upper-lower-tournament", label: "상·하위 토너먼트", disabled: false },
+  { value: "event-program", label: "이벤트 프로그램", disabled: false },
 ] as const;
 
 const LeagueStep3FormatSelection: React.FC = () => {
   const dispatch = useAppDispatch();
   const existingFormat = useAppSelector((s) => s.leagueCreation.step3Format?.format ?? "");
+  const selectedType = useAppSelector((s) => s.leagueCreation.step2Type?.selectedType);
+  const isClubEvent = selectedType === "club_exchange";
 
   const [selectedFormat, setSelectedFormat] = useState<LeagueFormatValue | "">(existingFormat);
+  const visibleOptions = useMemo(
+    () => isClubEvent
+      ? LeagueFormatOptions.filter((option) => option.value === "event-program")
+      : LeagueFormatOptions.filter((option) => option.value !== "event-program"),
+    [isClubEvent],
+  );
+
+  useEffect(() => {
+    if (isClubEvent && selectedFormat !== "event-program") {
+      setSelectedFormat("event-program");
+    }
+  }, [isClubEvent, selectedFormat]);
 
   const handleNext = () => {
     if (!selectedFormat) return;
@@ -51,9 +66,9 @@ const LeagueStep3FormatSelection: React.FC = () => {
           name="league-format-group"
           value={selectedFormat}
           onChange={(e) => setSelectedFormat(e.target.value as LeagueFormatValue)}
-          sx={{ display: "flex", gap: 2}}
+          sx={{ display: "flex", gap: 2 }}
         >
-          {LeagueFormatOptions.map((option) => (
+          {visibleOptions.map((option) => (
             <FormControlLabel
               key={option.value}
               value={option.value}

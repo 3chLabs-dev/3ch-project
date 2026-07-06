@@ -1092,7 +1092,7 @@ const handleSaveEdit = async () => {
                 sx={{mt: 1, borderRadius: 1, height: 40, fontWeight: 700, bgcolor: "#87B8FF", borderColor: "#87B8FF", color: "#FFF", "&:hover": { bgcolor: "#79AEFF" }, }}
                 onClick={() => navigate(`/league/${id}/program`)}
               >
-                {canManage ? "프로그램 생성" : "프로그램 보기"}
+                {canManage ? "이벤트 프로그램 생성" : "이벤트 프로그램 보기"}
               </Button>
             </Stack>
           )}

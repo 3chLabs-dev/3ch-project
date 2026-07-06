@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors,
 } from "@dnd-kit/core";
@@ -42,6 +42,7 @@ import { useGetGroupDetailQuery } from "../../features/group/groupApi";
 import { useAppSelector } from "../../app/hooks";
 import { useOutletContext } from "react-router-dom";
 import { usePushNotification } from "../../hooks/usePushNotification";
+import { generateProgramRoundMatches, getStoredProgramOption } from "../../utils/programMatchGenerator";
 
 // ─── 상태 표시 ────────────────────────────────────────────────────────────────
 const STATUS_LABEL: Record<string, string> = {
@@ -334,6 +335,9 @@ function MatchCard({
 export default function LeagueMatchOrder() {
   const { id: leagueId = "" } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const isProgramMode = searchParams.get("program") === "1";
+  const programRound = Number.parseInt(searchParams.get("round") ?? "1", 10) || 1;
   const { state: pushState, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe } = usePushNotification();
   const { scrollToTop } = useOutletContext<{ scrollToTop: () => void }>();
 
@@ -359,6 +363,16 @@ export default function LeagueMatchOrder() {
   const [localOrder, setLocalOrder] = useState<string[] | null>(null);
 
   const rawParticipants = useMemo(() => participantData?.participants ?? [], [participantData]);
+  const programOption = useMemo(
+    () => (isProgramMode && leagueId ? getStoredProgramOption(leagueId) : null),
+    [isProgramMode, leagueId],
+  );
+  const programMatches = useMemo(
+    () => isProgramMode
+      ? generateProgramRoundMatches(leagueId, programOption, rawParticipants, programRound)
+      : [],
+    [isProgramMode, leagueId, programOption, rawParticipants, programRound],
+  );
 
   // 1. 조 이름 목록 추출 ("1조", "2조" ...)
   const groupNames = useMemo(() => {
@@ -390,6 +404,20 @@ export default function LeagueMatchOrder() {
   }, [rawParticipants]);
 
   const matches = useMemo(() => {
+    if (isProgramMode) {
+      const ordered = localOrder
+        ? localOrder.map((id) => programMatches.find((m) => m.id === id)).filter((m): m is LeagueMatch => !!m)
+        : programMatches;
+
+      if (!search.trim()) return ordered;
+
+      const q = search.trim().toLowerCase();
+      return ordered.filter((m) =>
+        [m.participant_a_name, m.participant_b_name, m.participant_a_division, m.participant_b_division]
+          .some((v) => v?.toLowerCase().includes(q))
+      );
+    }
+
     // bracket이 있는 경기(토너먼트 경기)는 리그 경기 순서 뷰에서 제외
     let serverMatches = (matchData?.matches ?? []).filter((m) => !m.bracket);
 
@@ -420,7 +448,7 @@ export default function LeagueMatchOrder() {
       [m.participant_a_name, m.participant_b_name, m.participant_a_division, m.participant_b_division]
         .some((v) => v?.toLowerCase().includes(q))
     );
-  }, [localOrder, matchData?.matches, search, groupNames.length, selectedGroup, participantGroupMap]);
+  }, [isProgramMode, localOrder, programMatches, matchData?.matches, search, groupNames.length, selectedGroup, participantGroupMap]);
 
   const [initMatches, { isLoading: isIniting }] = useInitLeagueMatchesMutation();
   const [extendMatches, {isLoading: isExtending }] = useExtendLeagueMatchesMutation();
@@ -459,25 +487,28 @@ export default function LeagueMatchOrder() {
 
   // 경기 없고 canManage 확정되면 자동 생성 (한 번만) — invalidatesTags로 자동 refetch됨
   useEffect(() => {
+    if (isProgramMode) return;
     if (!matchData || matchData.matches.length > 0) return;
     if (!canManage) return;
     if (initCalledRef.current) return;
     initCalledRef.current = true;
     initMatches({ id: leagueId });
-  }, [matchData, canManage, leagueId, initMatches]);
+  }, [isProgramMode, matchData, canManage, leagueId, initMatches]);
 
   useEffect(() => {
+    if (isProgramMode) return;
     if (!matchData) return;
     if ( matchData.matches.length < 1 ) return;
     if (!canManage) return;
     if ( expectedMatchCount === matchData?.matches.length ) return;
     extendMatches({ id: leagueId });
-  },[matchData, canManage, expectedMatchCount, leagueId, extendMatches]);
+  },[isProgramMode, matchData, canManage, expectedMatchCount, leagueId, extendMatches]);
 
   const handleRefresh = useCallback(() => {
     setLocalOrder(null);
+    if (isProgramMode) return;
     refetchMatches();
-  }, [refetchMatches]);
+  }, [isProgramMode, refetchMatches]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -492,11 +523,12 @@ export default function LeagueMatchOrder() {
     if (oldIdx === -1 || newIdx === -1) return;
     const reordered = arrayMove(matches, oldIdx, newIdx);
     setLocalOrder(reordered.map((m) => m.id));
+    if (isProgramMode) return;
     reorderMatches({ leagueId, order: reordered.map((m) => m.id) });
-  }, [matches, leagueId, reorderMatches]);
+  }, [isProgramMode, matches, leagueId, reorderMatches]);
 
 
-  if (matchLoading) {
+  if (!isProgramMode && matchLoading) {
     return (
       <Box display="flex" justifyContent="center" pt={6}>
         <CircularProgress />
@@ -517,7 +549,13 @@ export default function LeagueMatchOrder() {
         <Button
           size="small"
           variant="outlined"
-          onClick={() => navigate(`/league/${leagueId}/bracket`)}
+          onClick={() =>
+            navigate(
+              isProgramMode
+                ? `/league/${leagueId}/program/bracket?program=1&round=${programRound}`
+                : `/league/${leagueId}/bracket`
+            )
+          }
           sx={{ borderRadius: 1, fontWeight: 700, fontSize: 12, px: 1.5 }}
         >
           대진표 보기
@@ -589,7 +627,7 @@ export default function LeagueMatchOrder() {
       {/* 생성 중 / 경기 없을 때 */}
       {matches.length === 0 ? (
         <Box display="flex" justifyContent="center" pt={4}>
-          {isIniting ? (
+          {!isProgramMode && isIniting ? (
             <CircularProgress />
           ) : (
             <Typography color="text.secondary" fontWeight={700} fontSize={14}>
@@ -605,8 +643,10 @@ export default function LeagueMatchOrder() {
         ) : (
           <SortableContext items={matches.map((m) => m.id)} strategy={verticalListSortingStrategy}>
             <Stack spacing={1}>
-              {matches.map((match) => {
-                const originalIndex = (matchData?.matches ?? [])
+              {matches.map((match, displayIndex) => {
+                const originalIndex = isProgramMode
+                  ? displayIndex
+                  : (matchData?.matches ?? [])
                   .filter((m) => !m.bracket)
                   .findIndex((m) => m.id === match.id);
 
@@ -615,7 +655,7 @@ export default function LeagueMatchOrder() {
                     key={match.id}
                     match={match}
                     index={originalIndex}
-                    canManage={canManage}
+                    canManage={canManage && !isProgramMode}
                     canMember={canMember}
                     leagueId={leagueId}
                     rules={league?.rules}

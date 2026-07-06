@@ -4,6 +4,7 @@ import { distributeSnake } from '../../features/league/algorithms/distributeSnak
 import { useMemo, useState, useCallback, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { generateGroupOptions } from '../../features/league/algorithms/generateGroupOptions';
+import { useGetLeagueParticipantsQuery } from '../../features/league/leagueApi';
 import type { ProgramBlock, ProgramOption, ProgramType, TeamMatchType, RoundConfig } from '../../features/league/types/tournament.types';
 import { ToggleButton, ToggleButtonGroup, Button, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Chip } from "@mui/material";
 import { DndContext, PointerSensor, TouchSensor, useSensor, useSensors, closestCenter,
@@ -468,6 +469,9 @@ const LeagueAlgorithmDemo = ({
 }: LeagueAlgorithmDemoProps) => {
   const navigate = useNavigate();
   const { id: leagueId } = useParams<{ id: string }>();
+  const { data: participantData } = useGetLeagueParticipantsQuery(leagueId ?? "", {
+    skip: !leagueId,
+  });
   const [playerCount, setPlayerCount] = useState(initialPlayerCount);
   const [courtCount, setCourtCount] = useState(4);
   const [startHour, setStartHour] = useState(9);
@@ -558,6 +562,29 @@ const LeagueAlgorithmDemo = ({
   { name: '조조조', level: 9 },
   { name: '초초초', level: 9 },
 ];
+
+  const leaguePlayers = useMemo(() => {
+    return (participantData?.participants ?? []).map((participant) => {
+      const parsedLevel = Number.parseInt(participant.division ?? "", 10);
+      return {
+        name: participant.division
+          ? `${participant.name} (${participant.division})`
+          : participant.name,
+        level: Number.isNaN(parsedLevel) ? 999 : parsedLevel,
+      };
+    });
+  }, [participantData]);
+
+  const groupPlayers = useMemo(
+    () => (leaguePlayers.length > 0 ? leaguePlayers : mockPlayers),
+    [leaguePlayers]
+  );
+
+  useEffect(() => {
+    if (leaguePlayers.length > 0) {
+      setPlayerCount(leaguePlayers.length);
+    }
+  }, [leaguePlayers.length]);
 
   const rentalMinutes = (endHour * 60 + endMinute) - (startHour * 60 + startMinute);
   const rentalStartMinutes = startHour * 60 + startMinute;
@@ -909,7 +936,7 @@ const LeagueAlgorithmDemo = ({
   const dialogGroupResult =
     groupResultSizes.length > 0
       ? distributeSnake(
-          mockPlayers.slice(0, playerCount),
+          groupPlayers.slice(0, playerCount),
           groupResultSizes
         )
       : [];

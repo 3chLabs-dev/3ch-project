@@ -181,6 +181,8 @@
 
     const isPublicLeague = league?.join_permission === "public";
     const canInteract = isMember || isPublicLeague;
+    const isClubEventLeague = league?.type === "클럽 이벤트" || league?.type === "클럽 교류전";
+    const canViewProgram = isClubEventLeague && (canManage || (!canManage && league?.status === "active"));
 
     // const isEditing = canManage;
 
@@ -1076,25 +1078,23 @@ const handleSaveEdit = async () => {
               경품 추첨
             </Button>
           )}
-          {((!canManage && league.status === "active") || canManage) && (
-            league.format === "클럽 이벤트" && (
-              <Stack spacing={1} sx={{ mt: 1 }}>
-                <Button
-                  fullWidth variant="outlined" disableElevation
-                  sx={{mt: 1, borderRadius: 1, height: 40, fontWeight: 700, bgcolor: "#87B8FF", "&:hover": { bgcolor: "#79AEFF" }, }}
-                  onClick={() => navigate(`/league/${id}/program`)}
-                >
-                  {canManage && league.status === "draft" ? "프로그램 생성" : "프로그램 보기"}
-                </Button>
-              </Stack>
-            )
+          {canViewProgram && (
+            <Stack spacing={1} sx={{ mt: 1 }}>
+              <Button
+                fullWidth variant="outlined" disableElevation
+                sx={{mt: 1, borderRadius: 1, height: 40, fontWeight: 700, bgcolor: "#87B8FF", borderColor: "#87B8FF", color: "#FFF", "&:hover": { bgcolor: "#79AEFF" }, }}
+                onClick={() => navigate(`/league/${id}/program`)}
+              >
+                {canManage ? "프로그램 생성" : "프로그램 보기"}
+              </Button>
+            </Stack>
           )}
           {((!canManage  && league.status === "active") || canManage) && (
             league.format === "조별리그" && (
               <Stack spacing={1} sx={{ mt: 1 }}>
                 <Button
                   fullWidth variant="outlined" disableElevation
-                  sx={{ mt: 1, borderRadius: 1, height: 40, fontWeight: 700, bgcolor: "#87B8FF", "&:hover": { bgcolor: "#79AEFF" } }}
+                  sx={{ mt: 1, borderRadius: 1, height: 40, fontWeight: 700, bgcolor: "#87B8FF", borderColor: "#87B8FF", color: "#FFF", "&:hover": { bgcolor: "#79AEFF" } }}
                   onClick={() => navigate(`/league/${id}/grouping`)}
                 >
                   {canManage && league.status === "draft" ? "조별리그 조편성 생성" : "조별리그 조편성 보기"}
@@ -1107,7 +1107,7 @@ const handleSaveEdit = async () => {
               <Stack spacing={1} sx={{ mt: 1 }}>
                 <Button
                   fullWidth variant="outlined" disableElevation
-                  sx={{ borderRadius: 1, height: 40, fontWeight: 700, borderColor: "#87B8FF", color: "#2F80ED", "&:hover": { borderColor: "#79AEFF", bgcolor: "#EFF6FF" } }}
+                  sx={{ borderRadius: 1, height: 40, fontWeight: 700, bgcolor: "#87B8FF", color: "#FFF", "&:hover": { borderColor: "#79AEFF", bgcolor: "#EFF6FF" } }}
                   onClick={() => navigate(`/league/${id}/bracket`)}
                 >
                   {canManage && league.status === "draft" ? "단일리그 대진표 생성" : "단일리그 대진표 보기"}

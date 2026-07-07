@@ -4,7 +4,7 @@ import { distributeSnake } from '../../features/league/algorithms/distributeSnak
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { generateGroupOptions } from '../../features/league/algorithms/generateGroupOptions';
-import { useGetLeagueParticipantsQuery, useGetLeagueProgramQuery, useSaveLeagueProgramMutation } from '../../features/league/leagueApi';
+import { useGetLeagueParticipantsQuery, useGetLeagueProgramQuery, useSaveLeagueProgramMutation, useSyncLeagueProgramMatchesMutation } from '../../features/league/leagueApi';
 import type { ProgramBlock, ProgramOption, ProgramType, TeamMatchType, RoundConfig } from '../../features/league/types/tournament.types';
 import { ToggleButton, ToggleButtonGroup, Button, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Chip, Checkbox } from "@mui/material";
 import { DndContext, PointerSensor, TouchSensor, useSensor, useSensors, closestCenter,
@@ -13,6 +13,7 @@ import { SortableContext, verticalListSortingStrategy, arrayMove, } from "@dnd-k
 import DragHandleIcon from "@mui/icons-material/DragHandle";
 import EditIcon from "@mui/icons-material/Edit";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import { generateProgramRoundMatches } from '../../utils/programMatchGenerator';
 
 const formatTime = (totalMinutes: number) => {
   const minutesInDay = 24 * 60;
@@ -528,6 +529,7 @@ const LeagueAlgorithmDemo = ({
     skip: !leagueId || !isEditMode,
   });
   const [saveLeagueProgram] = useSaveLeagueProgramMutation();
+  const [syncLeagueProgramMatches] = useSyncLeagueProgramMatchesMutation();
   const [playerCount, setPlayerCount] = useState(initialPlayerCount);
   const [courtCount, setCourtCount] = useState(4);
   const [startHour, setStartHour] = useState(9);
@@ -587,11 +589,13 @@ const LeagueAlgorithmDemo = ({
   const [groupStructureDialog, setGroupStructureDialog] = useState<{
     optionIndex: number;
     blockIndex: number;
+    mode: "team" | "group";
   } | null>(null);
   const [pendingGroupSizes, setPendingGroupSizes] = useState<number[]>([]);
   const [groupResultDialog, setGroupResultDialog] = useState<{
     optionIndex: number;
     blockIndex: number;
+    mode: "team" | "group";
   } | null>(null);
 
   type StoredProgramEditState = {
@@ -670,10 +674,6 @@ const LeagueAlgorithmDemo = ({
   const rentalMinutes = (endHour * 60 + endMinute) - (startHour * 60 + startMinute);
   const rentalStartMinutes = startHour * 60 + startMinute;
   const rentalHours = rentalMinutes / 60;
-
-  const options = useMemo(() => {
-  return generateGroupOptions(playerCount);
-}, [playerCount]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -998,6 +998,20 @@ const LeagueAlgorithmDemo = ({
         JSON.stringify(selectedOption)
       );
       await saveLeagueProgram({ leagueId, program: selectedOption }).unwrap();
+      const programMatches = selectedOption.blocks.flatMap((block, blockIndex) =>
+        block.type === "SINGLES"
+          ? generateProgramRoundMatches(leagueId, selectedOption, participantData?.participants ?? [], blockIndex + 1).map((match) => ({
+              ...match,
+              program_round: blockIndex + 1,
+              program_block_type: block.type,
+            }))
+          : []
+      );
+      try {
+        await syncLeagueProgramMatches({ leagueId, matches: programMatches }).unwrap();
+      } catch (error) {
+        console.error("Failed to sync program matches", error);
+      }
       navigate(`/league/${leagueId}/program`);
       return;
     }
@@ -1020,20 +1034,51 @@ const LeagueAlgorithmDemo = ({
     option.blocks[blockIndex]?.groupSizes ??
     option.groupSizes;
 
+  const splitIntoTwoGroups = (count: number) => {
+    if (count <= 0) return [];
+    if (count <= 2) return [count];
+    return [Math.ceil(count / 2), Math.floor(count / 2)];
+  };
+
+  const getTeamCount = (option: ProgramOption, blockIndex: number) => {
+    const round = option.rounds?.[blockIndex];
+    const teamSize = Math.max(1, round?.teamPlayerCount ?? teamPlayerCount);
+    return Math.ceil(playerCount / teamSize);
+  };
+
+  const getRoundTeamGroupSizes = (
+    option: ProgramOption,
+    blockIndex: number
+  ) =>
+    option.rounds?.[blockIndex]?.teamGroupSizes ??
+    option.blocks[blockIndex]?.teamGroupSizes ??
+    splitIntoTwoGroups(getTeamCount(option, blockIndex));
+
+  const getStructureSizes = (
+    option: ProgramOption,
+    blockIndex: number,
+    mode: "team" | "group"
+  ) => mode === "team"
+    ? getRoundGroupSizes(option, blockIndex)
+    : getRoundTeamGroupSizes(option, blockIndex);
+
   const updateProgramRoundGroupSizes = (
     optionIndex: number,
     blockIndex: number,
-    groupSizes: number[]
+    groupSizes: number[],
+    mode: "team" | "group"
   ) => {
     const baseOption = displayedProgramOptions[optionIndex];
     const nextRounds = (baseOption.rounds ?? rounds).map(
       (round, roundIndex) => ({
         ...round,
         id: roundIndex + 1,
-        groupSizes:
-          roundIndex === blockIndex
-            ? groupSizes
-            : round.groupSizes ?? baseOption.groupSizes,
+        groupSizes: mode === "team" && roundIndex === blockIndex
+          ? groupSizes
+          : round.groupSizes ?? baseOption.groupSizes,
+        teamGroupSizes: mode === "group" && roundIndex === blockIndex
+          ? groupSizes
+          : round.teamGroupSizes,
       })
     );
     const updatedOption = buildProgramOptionFromRounds(
@@ -1049,16 +1094,18 @@ const LeagueAlgorithmDemo = ({
 
   const openGroupStructureDialog = (
     optionIndex: number,
-    blockIndex: number
+    blockIndex: number,
+    mode: "team" | "group"
   ) => {
     const option = displayedProgramOptions[optionIndex];
 
     setPendingGroupSizes(
-      getRoundGroupSizes(option, blockIndex)
+      getStructureSizes(option, blockIndex, mode)
     );
     setGroupStructureDialog({
       optionIndex,
       blockIndex,
+      mode,
     });
   };
 
@@ -1075,7 +1122,8 @@ const LeagueAlgorithmDemo = ({
     updateProgramRoundGroupSizes(
       groupStructureDialog.optionIndex,
       groupStructureDialog.blockIndex,
-      pendingGroupSizes
+      pendingGroupSizes,
+      groupStructureDialog.mode
     );
     closeGroupStructureDialog();
   };
@@ -1097,38 +1145,60 @@ const LeagueAlgorithmDemo = ({
     pendingGroupSizes.length > 0
       ? pendingGroupSizes
       : groupStructureDialog !== null && groupStructureOption
-        ? getRoundGroupSizes(
+        ? getStructureSizes(
           groupStructureOption,
-          groupStructureDialog.blockIndex
+          groupStructureDialog.blockIndex,
+          groupStructureDialog.mode
         )
         : [];
-  const groupStructureBlock =
-    groupStructureDialog !== null && groupStructureOption
-      ? groupStructureOption.blocks[groupStructureDialog.blockIndex]
-      : undefined;
-  const isGroupStructureTeam = groupStructureBlock?.type === "TEAM";
+  const groupStructureOptionCount =
+    groupStructureDialog?.mode === "group" && groupStructureOption
+      ? getTeamCount(groupStructureOption, groupStructureDialog.blockIndex)
+      : playerCount;
+  const groupStructureOptions = useMemo(
+    () => generateGroupOptions(groupStructureOptionCount),
+    [groupStructureOptionCount],
+  );
+  const isGroupStructureTeam = groupStructureDialog?.mode === "team";
   const groupResultOption =
     groupResultDialog !== null
       ? displayedProgramOptions[groupResultDialog.optionIndex]
       : undefined;
   const groupResultSizes =
     groupResultDialog !== null && groupResultOption
-      ? getRoundGroupSizes(
+      ? getStructureSizes(
           groupResultOption,
-          groupResultDialog.blockIndex
+          groupResultDialog.blockIndex,
+          groupResultDialog.mode
         )
       : [];
-  const groupResultBlock =
-    groupResultDialog !== null && groupResultOption
-      ? groupResultOption.blocks[groupResultDialog.blockIndex]
-      : undefined;
-  const isGroupResultTeam = groupResultBlock?.type === "TEAM";
-  const dialogGroupResult =
-    groupResultSizes.length > 0
+  const isGroupResultTeam = groupResultDialog?.mode === "team";
+  const teamResultGroups =
+    groupResultOption && groupResultDialog
       ? distributeSnake(
           groupPlayers.slice(0, playerCount),
-          groupResultSizes
+          getRoundGroupSizes(groupResultOption, groupResultDialog.blockIndex)
         )
+      : [];
+  const teamUnits = teamResultGroups.map((team, teamIndex) => {
+    const leader = team.players[0];
+    return {
+      name: `팀 ${leader?.name ?? teamIndex + 1}`,
+      level: leader?.level ?? teamIndex + 1,
+      roster: team.players,
+    };
+  });
+  const dialogGroupResult =
+    groupResultSizes.length > 0
+      ? groupResultDialog?.mode === "group" && groupResultOption?.blocks[groupResultDialog.blockIndex]?.type === "TEAM"
+        ? distributeSnake(
+            teamUnits,
+            groupResultSizes
+          )
+        : distributeSnake(
+            groupPlayers.slice(0, playerCount),
+            groupResultSizes
+          )
       : [];
 
   return (
@@ -2083,48 +2153,97 @@ const LeagueAlgorithmDemo = ({
               {formatTime(blockEndMinutes)}
             </div>
 
-            <div
-              style={{
-                display: "flex",
-                gap: "8px",
-                marginTop: "8px",
-                paddingLeft: "12px",
-              }}
-            >
-              <Button
-                size="small"
-                variant="outlined"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  openGroupStructureDialog(index, blockIndex)
+            {block.type === "TEAM" && (
+              <div
+                style={{
+                  display: "flex",
+                  gap: "8px",
+                  marginTop: "8px",
+                  paddingLeft: "12px",
                 }}
               >
-                {block.type === "TEAM" ? "팀 편성 구조" : "조 편성 구조"}
-              </Button>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openGroupStructureDialog(index, blockIndex, "team")
+                  }}
+                >
+                  팀 편성 구조
+                </Button>
 
-              <Button
-                size="small"
-                variant="outlined"
-                sx={{
-                  color: "#FFFFFF",
-                  backgroundColor: "#1976D2",
-                  borderColor: "#1976D2",
-                  "&:hover": {
-                    backgroundColor: "#1565C0",
+                <Button
+                  size="small"
+                  variant="outlined"
+                  sx={{
+                    color: "#FFFFFF",
+                    backgroundColor: "#1976D2",
                     borderColor: "#1976D2",
-                  },
-                }}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setGroupResultDialog({
-                    optionIndex: index,
-                    blockIndex,
-                  })
+                    "&:hover": {
+                      backgroundColor: "#1565C0",
+                      borderColor: "#1976D2",
+                    },
+                  }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setGroupResultDialog({
+                      optionIndex: index,
+                      blockIndex,
+                      mode: "team",
+                    })
+                  }}
+                >
+                  팀 편성 결과
+                </Button>
+              </div>
+            )}
+
+            {block.format === "GROUP" && (
+              <div
+                style={{
+                  display: "flex",
+                  gap: "8px",
+                  marginTop: "8px",
+                  paddingLeft: "12px",
                 }}
               >
-                {block.type === "TEAM" ? "팀 편성 결과" : "조 편성 결과"}
-              </Button>
-            </div>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openGroupStructureDialog(index, blockIndex, "group")
+                  }}
+                >
+                  조 편성 구조
+                </Button>
+
+                <Button
+                  size="small"
+                  variant="outlined"
+                  sx={{
+                    color: "#FFFFFF",
+                    backgroundColor: "#1976D2",
+                    borderColor: "#1976D2",
+                    "&:hover": {
+                      backgroundColor: "#1565C0",
+                      borderColor: "#1976D2",
+                    },
+                  }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setGroupResultDialog({
+                      optionIndex: index,
+                      blockIndex,
+                      mode: "group",
+                    })
+                  }}
+                >
+                  조 편성 결과
+                </Button>
+              </div>
+            )}
           </div>
           );
         }
@@ -2178,7 +2297,7 @@ const LeagueAlgorithmDemo = ({
         </DialogTitle>
 
         <DialogContent dividers>
-          {options.map((option) => {
+          {groupStructureOptions.map((option) => {
             const selected = sameGroupSizes(
               groupStructureSizes,
               option.groups
@@ -2284,11 +2403,24 @@ const LeagueAlgorithmDemo = ({
             >
               <h3>{isGroupResultTeam ? group.name.replace(/조$/, "팀") : group.name}</h3>
 
-              {group.players.map((player) => (
-                <div key={player.name}>
-                  {player.level}부 - {player.name}
-                </div>
-              ))}
+              {group.players.map((player) => {
+                const roster = (player as typeof player & { roster?: Array<{ name: string; level: number }> }).roster;
+
+                return (
+                  <div key={player.name} style={{ marginTop: roster ? "8px" : 0 }}>
+                    {player.level}부 - {player.name}
+                    {roster && (
+                      <div style={{ paddingLeft: "12px", marginTop: "4px", color: "#6b7280" }}>
+                        {roster.map((member) => (
+                          <div key={member.name}>
+                            {member.level}부 - {member.name}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ))}
         </DialogContent>

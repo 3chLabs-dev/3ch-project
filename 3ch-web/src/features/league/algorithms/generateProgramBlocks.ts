@@ -48,6 +48,12 @@ function getMatchRuleLabel(
   }
 }
 
+function splitIntoTwoGroups(count: number) {
+  if (count <= 0) return [];
+  if (count <= 2) return [count];
+  return [Math.ceil(count / 2), Math.floor(count / 2)];
+}
+
 export function generateProgramBlocks(
   preferences: ProgramPreferences,
   playerCount: number,
@@ -208,6 +214,9 @@ export function generateProgramBlocks(
       getTeamMatchInfo(
         round.teamMatchType
       );
+    const teamGroupSizes =
+      round.teamGroupSizes ??
+      splitIntoTwoGroups(teamCount);
 
     let matchCount = 0;
 
@@ -220,10 +229,7 @@ export function generateProgramBlocks(
 
       if (round.format === "GROUP") {
         matchCount =
-          calculateTeamGroupMatchCount([
-            Math.ceil(teamCount / 2),
-            Math.floor(teamCount / 2),
-          ]);
+          calculateTeamGroupMatchCount(teamGroupSizes);
       }
 
       if (round.format === "TOURNAMENT") {
@@ -253,6 +259,7 @@ export function generateProgramBlocks(
 	      description:
 	        teamInfo.description,
 	      groupSizes: roundGroupSizes,
+        teamGroupSizes,
         tournamentSeeding: round.tournamentSeeding,
 	    });
   }

@@ -100,6 +100,7 @@ export interface ProgramBlock {
   matchCount: number;
   description?: string;
   groupSizes?: number[];
+  teamGroupSizes?: number[];
   tournamentSeeding?: TournamentSeedingType;
 }
 
@@ -150,6 +151,7 @@ export interface RoundConfig {
   teamPlayerCount: number;
   teamMatchType: TeamLineupType;
   groupSizes?: number[];
+  teamGroupSizes?: number[];
   tournamentSeeding?: TournamentSeedingType;
 }
 

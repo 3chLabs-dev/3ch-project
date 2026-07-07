@@ -331,7 +331,10 @@ pool.query(`
     ADD COLUMN IF NOT EXISTS next_match_id TEXT,
     ADD COLUMN IF NOT EXISTS next_slot TEXT,
     ADD COLUMN IF NOT EXISTS loser_next_match_id TEXT,
-    ADD COLUMN IF NOT EXISTS loser_next_slot TEXT
+    ADD COLUMN IF NOT EXISTS loser_next_slot TEXT,
+    ADD COLUMN IF NOT EXISTS is_program BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS program_round INT,
+    ADD COLUMN IF NOT EXISTS program_block_type TEXT
 `).catch((e) => console.error('league_matches 컬럼 추가 실패:', e.message));
 
 // ─── 토너먼트 브래킷 생성 유틸 ───────────────────────────────────────────────
@@ -2118,11 +2121,111 @@ router.delete('/league/:id/program', requireAuth, async (req, res) => {
       return res.status(403).json({ message: '권한이 없습니다.' });
     }
 
+    await pool.query(`DELETE FROM league_matches WHERE league_id = $1 AND is_program = TRUE`, [leagueId]);
     await pool.query(`DELETE FROM league_programs WHERE league_id = $1`, [leagueId]);
+    await triggerRankingRebuildByLeagueId(leagueId);
     return res.json({ ok: true });
   } catch (err) {
     console.error('Error deleting league program:', err);
     return res.status(500).json({ message: '프로그램 삭제 중 서버 오류' });
+  }
+});
+
+// 이벤트 프로그램 경기 동기화 (owner/admin)
+// 단식 프로그램 경기만 league_matches에 저장해 개인 랭킹에 반영한다.
+router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) => {
+  const userId = Number(req.user.sub);
+  const leagueId = req.params.id;
+  const matches = Array.isArray(req.body?.matches) ? req.body.matches : [];
+
+  try {
+    const access = await pool.query(
+      `SELECT l.id
+       FROM leagues l
+       INNER JOIN group_members gm ON gm.group_id = l.group_id
+       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+      [leagueId, userId],
+    );
+
+    if (access.rowCount === 0) {
+      return res.status(403).json({ message: '권한이 없습니다.' });
+    }
+
+    const participantRows = await pool.query(
+      `SELECT id FROM league_participants WHERE league_id = $1`,
+      [leagueId],
+    );
+    const participantIds = new Set(participantRows.rows.map((row) => row.id));
+
+    const validMatches = matches
+      .filter((match) =>
+        match &&
+        match.id &&
+        match.program_block_type === 'SINGLES' &&
+        (
+          (participantIds.has(match.participant_a_id) && participantIds.has(match.participant_b_id)) ||
+          (match.bracket && Number(match.round_number) > 1)
+        )
+      )
+      .map((match, index) => ({
+        id: String(match.id),
+        match_order: Number.isFinite(Number(match.match_order)) ? Number(match.match_order) : index + 1,
+        participant_a_id: match.participant_a_id,
+        participant_b_id: match.participant_b_id,
+        bracket: match.bracket ?? null,
+        round_number: match.round_number == null ? null : Number(match.round_number),
+        match_label: match.match_label ?? null,
+        next_match_id: match.next_match_id ?? null,
+        next_slot: match.next_slot ?? null,
+        loser_next_match_id: match.loser_next_match_id ?? null,
+        loser_next_slot: match.loser_next_slot ?? null,
+        program_round: match.program_round == null ? null : Number(match.program_round),
+        program_block_type: 'SINGLES',
+      }));
+
+    await pool.query('BEGIN');
+    await pool.query(`DELETE FROM league_matches WHERE league_id = $1 AND is_program = TRUE`, [leagueId]);
+
+    if (validMatches.length > 0) {
+      const values = [];
+      const placeholders = validMatches.map((match, index) => {
+        const base = index * 14;
+        values.push(
+          match.id,
+          leagueId,
+          match.match_order,
+          match.participant_a_id,
+          match.participant_b_id,
+          match.bracket,
+          match.round_number,
+          match.match_label,
+          match.next_match_id,
+          match.next_slot,
+          match.loser_next_match_id,
+          match.loser_next_slot,
+          match.program_round,
+          match.program_block_type,
+        );
+        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9}, $${base + 10}, $${base + 11}, $${base + 12}, TRUE, $${base + 13}, $${base + 14})`;
+      });
+
+      await pool.query(
+        `INSERT INTO league_matches
+         (id, league_id, match_order, participant_a_id, participant_b_id, bracket, round_number, match_label,
+          next_match_id, next_slot, loser_next_match_id, loser_next_slot, is_program, program_round, program_block_type)
+         VALUES ${placeholders.join(', ')}`,
+        values,
+      );
+    }
+
+    await pool.query('COMMIT');
+    await triggerRankingRebuildByLeagueId(leagueId);
+
+    return res.json({ ok: true, inserted: validMatches.length });
+  } catch (err) {
+    await pool.query('ROLLBACK').catch(() => {});
+    console.error('Error syncing league program matches:', err);
+    return res.status(500).json({ message: '프로그램 경기 동기화 중 서버 오류' });
   }
 });
 
@@ -2204,6 +2307,7 @@ router.get('/league/:id/matches', optionalAuth, async (req, res) => {
       `SELECT
          m.id, m.match_order, m.score_a, m.score_b, m.court, m.status,
          m.participant_a_id, m.participant_b_id,
+         m.is_program, m.program_round, m.program_block_type,
          m.bracket, m.round_number, m.match_label,
          m.next_match_id, m.next_slot, m.loser_next_match_id, m.loser_next_slot,
          pa.name AS participant_a_name, pa.division AS participant_a_division,
@@ -2971,6 +3075,7 @@ router.patch('/league/:id/matches/:matchId', optionalAuth, async (req, res) => {
       `SELECT
          m.id, m.match_order, m.score_a, m.score_b, m.court, m.status,
          m.participant_a_id, m.participant_b_id,
+         m.is_program, m.program_round, m.program_block_type,
          m.bracket, m.round_number, m.match_label,
          m.next_match_id, m.next_slot, m.loser_next_match_id, m.loser_next_slot,
          pa.name AS participant_a_name, pa.division AS participant_a_division,

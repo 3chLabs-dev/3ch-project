@@ -33,7 +33,13 @@ import DownloadIcon from "@mui/icons-material/Download";
 import PrintIcon from "@mui/icons-material/Print";
 import QRCode from "react-qr-code";
 import { formatLeagueDate } from "../../utils/dateUtils";
-import { generateProgramRoundMatches, getStoredProgramOption } from "../../utils/programMatchGenerator";
+import {
+  applyProgramMatchState,
+  generateProgramRoundMatches,
+  getStoredProgramOption,
+  saveProgramMatchPatch,
+  type ProgramMatchPatch,
+} from "../../utils/programMatchGenerator";
 import {
   useGetLeagueQuery,
   useGetLeagueParticipantsQuery,
@@ -82,6 +88,8 @@ const NEXT_STATUS: Record<string, "pending" | "playing" | "done"> = {
   playing: "done",
   done: "done",
 };
+
+const AUTO_COMPLETE_DELAY_MS = 4000;
 
 function escapeHtml(value: string): string {
   return value
@@ -216,7 +224,7 @@ function ScoreButton({ icon, disabled, rotate, variant = "order", onClick }: {
  * - landscape(가로): ↑ 점수 ↓ 세로 배치
  * - portrait(세로, writingMode 적용): ← 점수 → 가로 배치 + 아이콘 90° 회전
  */
-function BracketScoreCell({ match, isA, leagueId, winScore, canManage, landscape, rowIndex, colIndex, totalRows, totalCols }: {
+function BracketScoreCell({ match, isA, leagueId, winScore, canManage, landscape, rowIndex, colIndex, totalRows, totalCols, onProgramMatchUpdate }: {
   match: LeagueMatch | undefined;
   isA: boolean;         // 현재 행 참가자가 해당 경기의 A선수인지 여부
   leagueId: string;
@@ -227,27 +235,59 @@ function BracketScoreCell({ match, isA, leagueId, winScore, canManage, landscape
   colIndex: number;
   totalRows: number;
   totalCols: number;
+  onProgramMatchUpdate?: (matchId: string, updates: ProgramMatchPatch) => void;
 }) {
   const [updateMatch] = useUpdateLeagueMatchMutation();
+  const autoCompleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isActive = match?.status === "playing" || match?.status === "done";
   const score    = isActive ? ((isA ? match!.score_a : match!.score_b) ?? 0) : null;
   const [isEditing, setIsEditing] = useState(false);
   const [tempValue, setTempValue] = useState<string>("");
+  const canEdit  = canManage && isActive;
+  const updateCurrentMatch = useCallback((updates: ProgramMatchPatch) => {
+    if (!match) return;
+    if (onProgramMatchUpdate) {
+      onProgramMatchUpdate(match.id, updates);
+      return;
+    }
+    updateMatch({ leagueId, matchId: match.id, updates });
+  }, [leagueId, match, onProgramMatchUpdate, updateMatch]);
+
+  const scheduleAutoComplete = useCallback(() => {
+    if (!match || !canEdit) return;
+
+    if (autoCompleteTimerRef.current) {
+      clearTimeout(autoCompleteTimerRef.current);
+    }
+
+    autoCompleteTimerRef.current = setTimeout(() => {
+      updateCurrentMatch({ status: "done" });
+      autoCompleteTimerRef.current = null;
+    }, AUTO_COMPLETE_DELAY_MS);
+  }, [canEdit, match, updateCurrentMatch]);
+
+  useEffect(() => () => {
+    if (autoCompleteTimerRef.current) {
+      clearTimeout(autoCompleteTimerRef.current);
+    }
+  }, []);
+
   const handleSet = (value: number) => {
     if (!match || !canEdit) return;
     const next = (Math.max(0, value));
-    updateMatch({ leagueId, matchId: match.id, updates: isA ? { score_a: next } : { score_b: next } });
+    updateCurrentMatch(isA ? { score_a: next } : { score_b: next });
+    scheduleAutoComplete();
   };
   const oppScore = isActive ? ((isA ? match!.score_b : match!.score_a) ?? 0) : null;
   // 선승제에서 정확히 winScore 점을 획득한 경우 → 승자 스타일 적용
   const isWinner = winScore !== null && match?.status === "done" && score !== null && oppScore !== null && score === winScore;
-  const canEdit  = canManage && isActive;
 
   const handleChange = (delta: number) => {
     if (!match || !canEdit) return;
     const cur  = (isA ? match.score_a : match.score_b) ?? 0;
     const next = Math.max(0, cur + delta); // 0 미만 방지
-    updateMatch({ leagueId, matchId: match.id, updates: isA ? { score_a: next } : { score_b: next } });
+    updateCurrentMatch(isA ? { score_a: next } : { score_b: next });
+    scheduleAutoComplete();
   };
 
   const winnerStyle = { color: isWinner ? COLOR.win : "inherit", fontWeight: isWinner ? 700 : 400 };
@@ -353,6 +393,7 @@ interface BracketRowProps {
   winScore: number | null;
   isMe: boolean;        // 현재 로그인 유저와 동일 여부 (하이라이트 용)
   rules?: string;
+  onProgramMatchUpdate?: (matchId: string, updates: ProgramMatchPatch) => void;
 }
 
 /**
@@ -367,7 +408,7 @@ interface BracketRowProps {
  */
 const SortableBracketRow = memo(function SortableBracketRow({
   participant, teamRoster, rowIdx, n, localOrder, editMode, canManage, canScore, onMove, landscape,
-  matchLookup, wins, losses, setTotal, rank, tieSetDiff, hasPlayed, leagueId, winScore, isMe, rules,
+  matchLookup, wins, losses, setTotal, rank, tieSetDiff, hasPlayed, leagueId, winScore, isMe, rules, onProgramMatchUpdate,
 }: BracketRowProps) {
   const canDrag = editMode && canManage;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -456,7 +497,7 @@ const SortableBracketRow = memo(function SortableBracketRow({
         const m   = matchLookup.get(`${participant.id}__${colPlayer.id}`);
         const isA = m?.participant_a_id === participant.id;
         return (
-          <BracketScoreCell key={colIdx} match={m} isA={isA} leagueId={leagueId} winScore={winScore} canManage={canScore} landscape={landscape} rowIndex={rowIdx} colIndex={colIdx} totalRows={n} totalCols={n}/>
+          <BracketScoreCell key={colIdx} match={m} isA={isA} leagueId={leagueId} winScore={winScore} canManage={canScore} landscape={landscape} rowIndex={rowIdx} colIndex={colIdx} totalRows={n} totalCols={n} onProgramMatchUpdate={onProgramMatchUpdate}/>
         );
       })}
 
@@ -717,11 +758,12 @@ function useMatchStats(localOrder: LeagueParticipantItem[], matches: LeagueMatch
  * - landscape: 테이블 아래에 세로로 붙음 (mt: 1.5)
  * - portrait:  테이블 오른쪽에 가로로 붙음 (mr: 1.5)
  */
-function MatchSchedulePanel({ matches, localOrder, landscape, leagueId }: {
+function MatchSchedulePanel({ matches, localOrder, landscape, leagueId, onProgramMatchUpdate }: {
   matches: LeagueMatch[];
   localOrder: LeagueParticipantItem[];
   landscape: boolean;
   leagueId: string;
+  onProgramMatchUpdate?: (matchId: string, updates: ProgramMatchPatch) => void;
 }) {
   const [updateMatch] = useUpdateLeagueMatchMutation();
 
@@ -741,9 +783,14 @@ function MatchSchedulePanel({ matches, localOrder, landscape, leagueId }: {
     if (!window.confirm(msg)) return;
   }
 
-  updateMatch({ leagueId, matchId: match.id, updates: { status: NEXT_STATUS[match.status], score_a: sa, score_b: sb } });
+  const updates = { status: NEXT_STATUS[match.status], score_a: sa, score_b: sb };
+  if (onProgramMatchUpdate) {
+    onProgramMatchUpdate(match.id, updates);
+  } else {
+    updateMatch({ leagueId, matchId: match.id, updates });
+  }
 
-}, [leagueId, updateMatch]);
+}, [leagueId, onProgramMatchUpdate, updateMatch]);
   return (
     <Box sx={{ height: landscape ? "auto" : "100%" }}>
       <Box sx={{
@@ -844,12 +891,32 @@ export default function LeagueBracket() {
     () => (isProgramMode && id ? (programData?.program?.program_data as ReturnType<typeof getStoredProgramOption> | undefined) ?? getStoredProgramOption(id) : null),
     [isProgramMode, id, programData],
   );
-  const programMatchesAll = useMemo(
+  const [programMatchStateVersion, setProgramMatchStateVersion] = useState(0);
+  const generatedProgramMatchesAll = useMemo(
     () => isProgramMode
-      ? generateProgramRoundMatches(id ?? "", programOption, rawParticipants, programRound)
+      ? applyProgramMatchState(
+        generateProgramRoundMatches(id ?? "", programOption, rawParticipants, programRound),
+        id ?? "",
+        programRound,
+      )
       : [],
-    [isProgramMode, id, programOption, rawParticipants, programRound],
+    [isProgramMode, id, programOption, rawParticipants, programRound, programMatchStateVersion],
   );
+  const serverProgramMatchesAll = useMemo(
+    () => (matchData?.matches ?? []).filter((match) => match.is_program && match.program_round === programRound),
+    [matchData?.matches, programRound],
+  );
+  const programMatchesAll = serverProgramMatchesAll.length > 0 ? serverProgramMatchesAll : generatedProgramMatchesAll;
+  const [updateMatch] = useUpdateLeagueMatchMutation();
+  const updateProgramMatch = useCallback((matchId: string, updates: ProgramMatchPatch) => {
+    if (!id) return;
+    if (serverProgramMatchesAll.some((match) => match.id === matchId)) {
+      updateMatch({ leagueId: id, matchId, updates });
+      return;
+    }
+    saveProgramMatchPatch(id, programRound, matchId, updates);
+    setProgramMatchStateVersion((version) => version + 1);
+  }, [id, programRound, serverProgramMatchesAll, updateMatch]);
   const isProgramTeamRound = isProgramMode && programOption?.blocks?.[programRound - 1]?.type === "TEAM";
   const programTeamParticipants = useMemo(() => {
     if (!isProgramTeamRound) return [];
@@ -967,7 +1034,7 @@ export default function LeagueBracket() {
   const authUser  = useAppSelector((s) => s.auth.user);
   const isCreator = !!authUser && league?.created_by_id === authUser.id;
   const canManage = groupData?.myRole === "owner" || groupData?.myRole === "admin" || isCreator;
-  const canScore = !isProgramMode && (canManage || league?.join_permission === "public");
+  const canScore = canManage || league?.join_permission === "public";
   // 그룹 멤버 이름 우선, 없으면 계정 이름, 비로그인 게스트는 localStorage 저장 이름 사용
   const myName    = groupData?.members?.find((m) => m.user_id === authUser?.id)?.name
     ?? authUser?.name
@@ -1412,6 +1479,7 @@ export default function LeagueBracket() {
                         winScore={winScore}
                         isMe={!!myName && rowPlayer.name === myName}
                         rules={league.rules}
+                        onProgramMatchUpdate={isProgramMode ? updateProgramMatch : undefined}
                       />
                     ))}
                   </TableBody>
@@ -1430,7 +1498,7 @@ export default function LeagueBracket() {
           position: "absolute", zIndex: 5, cursor: "pointer",
           ...(landscape ? { bottom: 0, left: 0, right: 0 } : { top: 0, bottom: 0, right: 0 }),
         }}>
-          <MatchSchedulePanel matches={matches} localOrder={localOrder} landscape={landscape} leagueId={id ?? ""} />
+          <MatchSchedulePanel matches={matches} localOrder={localOrder} landscape={landscape} leagueId={id ?? ""} onProgramMatchUpdate={isProgramMode ? updateProgramMatch : undefined} />
         </Box>
 
         {/* 플로팅 버튼들 (position: absolute, wrapperRef 기준 → 스크롤 영역 위에 고정) */}

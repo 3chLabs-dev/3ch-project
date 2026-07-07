@@ -292,6 +292,16 @@ export interface ScanOcrResponse {
       h: number;
     };
   }>;
+  words?: Array<{
+    text: string;
+    confidence: number | null;
+    bbox: {
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+    };
+  }>;
 }
 
 export interface AddParticipantsRequest {

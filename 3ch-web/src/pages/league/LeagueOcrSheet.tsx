@@ -46,14 +46,30 @@ type OcrPreviewMatch = {
   sourceLine?: string;
 };
 
+type OcrWord = {
+  text: string;
+  confidence: number | null;
+  bbox: {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  };
+};
+
+type ScanOcrResult = {
+  text: string;
+  image: {
+    width: number;
+    height: number;
+  };
+  words?: OcrWord[];
+};
+
 function getErrorMessage(error: unknown, fallback = "처리 중 오류가 발생했습니다.") {
   if (!error || typeof error !== "object") return fallback;
   const maybeError = error as { data?: { message?: string; details?: string }; error?: string };
   return maybeError.data?.message ?? maybeError.data?.details ?? maybeError.error ?? fallback;
-}
-
-function normalize(value: string) {
-  return value.replace(/\s+/g, "").toLowerCase();
 }
 
 function matchPlayerName(match: LeagueMatch, side: "A" | "B") {
@@ -63,38 +79,90 @@ function matchPlayerName(match: LeagueMatch, side: "A" | "B") {
   return division ? `(${division}) ${name}` : name;
 }
 
-function parseScoreLine(line: string, match: LeagueMatch) {
-  const normalizedLine = normalize(line);
-  const aName = normalize(match.participant_a_name ?? "");
-  const bName = normalize(match.participant_b_name ?? "");
-  const hasOrder = new RegExp(`(^|\\D)${match.match_order}(\\D|$)`).test(line);
-  const hasNames = Boolean(aName && bName && normalizedLine.includes(aName) && normalizedLine.includes(bName));
-  if (!hasOrder && !hasNames) return null;
-
-  const numbers = line.match(/\d+/g)?.map(Number).filter((num) => Number.isInteger(num) && num >= 0 && num <= 99) ?? [];
-  const scoreNumbers = hasOrder && numbers[0] === match.match_order ? numbers.slice(1) : numbers;
-  if (scoreNumbers.length < 2) return null;
+function wordCenter(word: OcrWord) {
   return {
-    scoreA: scoreNumbers[0],
-    scoreB: scoreNumbers[1],
-    sourceLine: line,
+    x: word.bbox.x + word.bbox.w / 2,
+    y: word.bbox.y + word.bbox.h / 2,
   };
 }
 
-function buildPreview(matches: LeagueMatch[], text: string): OcrPreviewMatch[] {
-  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+function parseIntegerWord(text: string) {
+  const cleaned = text.replace(/[^\d]/g, "");
+  if (!cleaned) return null;
+  const number = Number(cleaned);
+  return Number.isInteger(number) ? number : null;
+}
+
+function parseScoreDigit(text: string) {
+  const trimmed = text.trim();
+  if (/^\d$/.test(trimmed)) return Number(trimmed);
+  if (/^[oO]$/.test(trimmed)) return 0;
+  if (/^[iIl|]$/.test(trimmed)) return 1;
+  return null;
+}
+
+function median(values: number[]) {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)];
+}
+
+function buildRowCenters(matches: LeagueMatch[], words: OcrWord[], imageWidth: number) {
+  const matchColumnMin = imageWidth * 0.32;
+  const matchColumnMax = imageWidth * 0.44;
+  const rowCenters = new Map<number, number>();
+
+  matches.forEach((match) => {
+    const candidates = words
+      .map((word) => ({ word, value: parseIntegerWord(word.text), center: wordCenter(word) }))
+      .filter(({ value, center }) => value === match.match_order && center.x >= matchColumnMin && center.x <= matchColumnMax)
+      .sort((a, b) => a.center.x - b.center.x);
+
+    if (candidates[0]) rowCenters.set(match.match_order, candidates[0].center.y);
+  });
+
+  return rowCenters;
+}
+
+function findScoreNear(words: OcrWord[], imageWidth: number, rowY: number, rowBand: number, targetXRatio: number) {
+  const targetX = imageWidth * targetXRatio;
+  const xBand = imageWidth * 0.055;
+  const candidates = words
+    .map((word) => ({ word, value: parseScoreDigit(word.text), center: wordCenter(word) }))
+    .filter(({ value, center }) => (
+      value !== null
+      && Math.abs(center.y - rowY) <= rowBand
+      && Math.abs(center.x - targetX) <= xBand
+    ))
+    .sort((a, b) => (
+      Math.abs(a.center.x - targetX) + Math.abs(a.center.y - rowY)
+      - (Math.abs(b.center.x - targetX) + Math.abs(b.center.y - rowY))
+    ));
+
+  return candidates[0]?.value ?? null;
+}
+
+function buildPreview(matches: LeagueMatch[], result: ScanOcrResult): OcrPreviewMatch[] {
+  const words = result.words ?? [];
+  const rowCenters = buildRowCenters(matches, words, result.image.width);
+  const sortedRows = [...rowCenters.values()].sort((a, b) => a - b);
+  const rowGaps = sortedRows.slice(1).map((value, index) => value - sortedRows[index]).filter((gap) => gap > 0);
+  const rowBand = Math.max(18, median(rowGaps) * 0.42);
+
   return matches
     .filter((match) => match.participant_a_id && match.participant_b_id)
     .map((match) => {
-      const parsed = lines.map((line) => parseScoreLine(line, match)).find(Boolean);
+      const rowY = rowCenters.get(match.match_order);
+      const scoreA = rowY === undefined ? null : findScoreNear(words, result.image.width, rowY, rowBand, 0.595);
+      const scoreB = rowY === undefined ? null : findScoreNear(words, result.image.width, rowY, rowBand, 0.845);
       return {
         matchId: match.id,
         label: match.match_label ?? `${match.match_order}경기`,
         nameA: matchPlayerName(match, "A") || "미정",
         nameB: matchPlayerName(match, "B") || "미정",
-        scoreA: parsed?.scoreA ?? match.score_a ?? null,
-        scoreB: parsed?.scoreB ?? match.score_b ?? null,
-        sourceLine: parsed?.sourceLine,
+        scoreA,
+        scoreB,
+        sourceLine: rowY === undefined ? "경기 행 위치를 찾지 못했습니다." : "점수 칸 위치에서 인식했습니다.",
       };
     });
 }
@@ -195,7 +263,7 @@ export default function LeagueOcrSheet() {
     setNotice({ type: "info", message: "OCR 이미지를 분석하는 중입니다." });
     try {
       const result = await scanOcr({ file, language: "kor+eng", psm: 6 }).unwrap();
-      setPreview(buildPreview(matches, result.text));
+      setPreview(buildPreview(matches, result));
       setPreviewOpen(true);
       setNotice(null);
     } catch (error) {

@@ -95,6 +95,29 @@ def extract_lines(data):
     return lines
 
 
+def extract_words(data):
+    words = []
+    count = len(data.get("text", []))
+
+    for index in range(count):
+        text = str(data["text"][index] or "").strip()
+        if not text:
+            continue
+
+        words.append({
+            "text": text,
+            "confidence": confidence_value(data["conf"][index]),
+            "bbox": {
+                "x": int(data["left"][index]),
+                "y": int(data["top"][index]),
+                "w": int(data["width"][index]),
+                "h": int(data["height"][index]),
+            },
+        })
+
+    return words
+
+
 def main():
     args = parse_args()
     if args.tesseract_cmd:
@@ -123,6 +146,7 @@ def main():
         "language": args.language,
         "text": text,
         "lines": extract_lines(data),
+        "words": extract_words(data),
         "image": {
             "width": image.width,
             "height": image.height,

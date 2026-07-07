@@ -61,6 +61,12 @@ jobs:
             echo "==> prisma migrate"
             npx prisma migrate deploy
 
+            echo "==> tesseract OCR engine"
+            if ! command -v tesseract >/dev/null 2>&1; then
+              sudo apt-get update
+              sudo apt-get install -y tesseract-ocr tesseract-ocr-kor tesseract-ocr-eng
+            fi
+
             echo "==> python image scanning dependencies"
             python3 -m venv .venv-omr
             .venv-omr/bin/python -m pip install --upgrade pip
@@ -70,6 +76,7 @@ jobs:
             echo "==> pm2 restart"
             export OMR_PYTHON_BIN="$PWD/.venv-omr/bin/python"
             export OCR_PYTHON_BIN="$PWD/.venv-omr/bin/python"
+            export OCR_TESSERACT_CMD="$(command -v tesseract)"
             pm2 restart 3ch-api --update-env || pm2 start src/server.js --name 3ch-api
 
             echo "==> done"

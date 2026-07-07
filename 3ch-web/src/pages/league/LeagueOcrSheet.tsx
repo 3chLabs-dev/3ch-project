@@ -124,7 +124,7 @@ export default function LeagueOcrSheet() {
     refetchOnMountOrArgChange: true,
   });
   const [initMatches, { isLoading: isIniting }] = useInitLeagueMatchesMutation();
-  const [scanOcr, { data: ocrData, error: ocrError, isLoading: isScanning, reset }] = useScanOcrMutation();
+  const [scanOcr, { data: ocrData, isLoading: isScanning, reset }] = useScanOcrMutation();
   const [updateMatch, { isLoading: isSaving }] = useUpdateLeagueMatchMutation();
 
   const league = leagueData?.league;
@@ -295,7 +295,6 @@ export default function LeagueOcrSheet() {
       </Stack>
 
       {notice ? <Alert severity={notice.type} sx={{ mb: 1.5, "@media print": { display: "none" } }}>{notice.message}</Alert> : null}
-      {ocrError ? <Alert severity="error" sx={{ mb: 1.5, "@media print": { display: "none" } }}>{getErrorMessage(ocrError, "OCR 처리에 실패했습니다.")}</Alert> : null}
       {loading || isScanning || isIniting ? <LinearProgress sx={{ mb: 1.5, "@media print": { display: "none" } }} /> : null}
 
       <Box

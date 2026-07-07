@@ -70,6 +70,7 @@ import PrivacyPolicyPage from "../pages/mypage/PrivacyPolicyPage.tsx";
 import DemoLandingPage from "../pages/demo/DemoLandingPage";
 import AdminSupportChatPage from "../pages/admin/AdminSupportChatPage";
 import LeagueAlgorithmDemo from "../pages/demo/LeagueAlgorithmDemo";
+import OcrScanPage from "../pages/ocr/OcrScanPage";
 // import League from "../pages/League";
 // import Match from "../pages/Match";
 // import My from "../pages/My";
@@ -133,6 +134,7 @@ export const router = createBrowserRouter([
       { path: "/payment/checkout", element: <PaymentCheckout /> },
       { path: "/payment/success", element: <PaymentSuccess /> },
       { path: "/payment/fail",    element: <PaymentFail /> },
+      { path: "/ocr", element: <OcrScanPage /> },
       { path: "/demo/league-algorithm", element: <LeagueAlgorithmDemo />,}
 
 

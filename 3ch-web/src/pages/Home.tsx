@@ -525,6 +525,7 @@ function SectionHeader({ title, icon }: { title: string; icon?: React.ReactNode 
 
 function getLeagueProgressPath(id: string, format?: string | null) {
     if (format === "4인 리그 (OMR)") return `/league/${id}/omr`;
+    if (format === "OCR 텍스트 인식") return `/ocr?leagueId=${id}`;
     return `/league/${id}/matches`;
 }
 
@@ -537,6 +538,8 @@ function MyGroupCard({ item, navigate }: { item: MyGroupItem; navigate: (path: s
                 navigate(
                     item.format === "4인 리그 (OMR)"
                         ? `/league/${base}/omr`
+                        : item.format === "OCR 텍스트 인식"
+                            ? `/ocr?leagueId=${base}`
                         : item.format?.includes("토너먼트")
                             ? `/league/${base}/tournament`
                             : `/league/${base}/bracket`,

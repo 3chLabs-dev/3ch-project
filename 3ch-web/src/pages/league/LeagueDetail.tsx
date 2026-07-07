@@ -99,6 +99,7 @@
   const FORMAT_OPTIONS = [
     { label: "단일리그", disabled: false },
     { label: "4인 리그 (OMR)", disabled: false },
+    { label: "OCR 텍스트 인식", disabled: false },
     { label: "조별리그", disabled: false },
     { label: "조별리그 + 본선리그", disabled: false },
     { label: "단일리그 + 토너먼트", disabled: false },
@@ -379,6 +380,9 @@
       }
       if (league?.format === "4인 리그 (OMR)") {
         return `/league/${id}/omr`;
+      }
+      if (league?.format === "OCR 텍스트 인식") {
+        return `/ocr?leagueId=${id}`;
       }
       return `/league/${id}/matches`;
     };
@@ -1148,7 +1152,18 @@ const handleSaveEdit = async () => {
               </Stack>
             )
           )}
-          {league.format !== "이벤트 프로그램" && ((!canManage  && league.status === "active") || canManage) && (
+          {league.format === "OCR 텍스트 인식" && ((!canManage  && league.status === "active") || canManage) && (
+            <Stack spacing={1} sx={{ mt: 1 }}>
+              <Button
+                fullWidth variant="outlined" disableElevation
+                sx={{ mt: 1, borderRadius: 1, height: 40, fontWeight: 700, bgcolor: "#87B8FF", borderColor: "#87B8FF", color: "#FFF", "&:hover": { bgcolor: "#79AEFF" } }}
+                onClick={() => navigate(`/ocr?leagueId=${id}`)}
+              >
+                OCR 텍스트 인식 열기
+              </Button>
+            </Stack>
+          )}
+          {league.format !== "이벤트 프로그램" && league.format !== "OCR 텍스트 인식" && ((!canManage  && league.status === "active") || canManage) && (
             league.format === "단일리그 + 토너먼트" ? (
               <Stack spacing={1} sx={{ mt: 1 }}>
                 <Button

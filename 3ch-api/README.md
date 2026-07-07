@@ -28,6 +28,7 @@
 - **Push**: web-push
 - **Realtime**: `ws` WebSocket support chat
 - **OMR**: Python scanner script
+- **OCR**: Tesseract + Python text recognition script
 - **Process**: PM2
 
 ---
@@ -115,6 +116,12 @@ VAPID_PRIVATE_KEY=<VAPID_PRIVATE_KEY>
 OMR_PYTHON_BIN=<OMR_PYTHON_BIN>
 OMR_PYTHON_SCRIPT=<OMR_PYTHON_SCRIPT>
 OMR_SCANNER_TIMEOUT_MS=30000
+
+OCR_PYTHON_BIN=<OCR_PYTHON_BIN>
+OCR_PYTHON_SCRIPT=<OCR_PYTHON_SCRIPT>
+OCR_TESSERACT_CMD=<TESSERACT_BIN>
+OCR_LANGS=kor+eng
+OCR_TIMEOUT_MS=30000
 ```
 
 ---
@@ -219,6 +226,7 @@ npm run db:studio
 - `PATCH /api/league/:id/matches/:matchId`
 - `PATCH /api/league/:id/matches/reorder`
 - `POST /api/league/:id/omr/scan`
+- `POST /api/ocr/scan`
 - `POST /api/league/:id/matches/:matchId/notify`
 
 ### 추첨
@@ -293,6 +301,26 @@ python -m venv .venv-omr
 ```
 
 운영 서버에서는 배포 환경에서 venv를 만들고 `OMR_PYTHON_BIN`을 프로세스 환경 변수로 주입합니다.
+
+---
+
+## OCR
+
+OCR 스캔은 Tesseract 실행 파일과 Python `pytesseract` 패키지를 사용합니다.
+
+```powershell
+<PYTHON_BIN> -m pip install -r scripts/requirements-ocr.txt
+```
+
+서버에는 Tesseract 본체와 한국어/영어 언어팩이 별도로 설치되어 있어야 합니다. 실행 파일 경로가 PATH에 없으면 `OCR_TESSERACT_CMD`로 지정합니다.
+
+```dotenv
+OCR_PYTHON_BIN=<PYTHON_BIN>
+OCR_TESSERACT_CMD=<TESSERACT_BIN>
+OCR_LANGS=kor+eng
+```
+
+인증된 사용자는 `POST /api/ocr/scan`에 `multipart/form-data`로 `image`를 업로드하면 전체 텍스트와 줄 단위 인식 결과를 받을 수 있습니다.
 
 ---
 

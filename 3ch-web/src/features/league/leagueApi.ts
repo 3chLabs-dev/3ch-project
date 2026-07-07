@@ -267,6 +267,33 @@ export interface ScanLeagueOmrResponse {
   }>;
 }
 
+export interface ScanOcrRequest {
+  file: File;
+  language?: string;
+  psm?: number;
+  maxSide?: number;
+}
+
+export interface ScanOcrResponse {
+  engine: string;
+  language: string;
+  text: string;
+  image: {
+    width: number;
+    height: number;
+  };
+  lines: Array<{
+    text: string;
+    confidence: number | null;
+    bbox: {
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+    };
+  }>;
+}
+
 export interface AddParticipantsRequest {
   leagueId: string;
   participants: { division: string; name: string; member_id?: number | null }[];
@@ -635,6 +662,21 @@ export const leagueApi = baseApi.injectEndpoints({
       },
     }),
 
+    scanOcr: builder.mutation<ScanOcrResponse, ScanOcrRequest>({
+      query: ({ file, language, psm, maxSide }) => {
+        const formData = new FormData();
+        formData.append("image", file);
+        if (language) formData.append("language", language);
+        if (psm !== undefined) formData.append("psm", String(psm));
+        if (maxSide !== undefined) formData.append("maxSide", String(maxSide));
+        return {
+          url: "/ocr/scan",
+          method: "POST",
+          body: formData,
+        };
+      },
+    }),
+
     reorderLeagueMatches: builder.mutation<{ ok: boolean }, { leagueId: string; order: string[] }>({
       query: ({ leagueId, order }) => ({
         url: `/league/${leagueId}/matches/reorder`,
@@ -744,6 +786,7 @@ export const {
   useInitLeagueMatchesMutation,
   useUpdateLeagueMatchMutation,
   useScanLeagueOmrMutation,
+  useScanOcrMutation,
   useReorderLeagueMatchesMutation,
   useDeleteLeagueMatchMutation,
   useNotifyLeagueMatchMutation,

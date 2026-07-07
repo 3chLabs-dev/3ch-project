@@ -30,6 +30,7 @@ export interface LeagueTypeInfo {
 export type LeagueFormatValue =
   | "single-league"
   | "four-player-omr"
+  | "ocr-assisted"
   | "group-league"
   | "group-and-knockout"
   | "single-league-tournament"
@@ -177,6 +178,7 @@ export const createLeague = createAsyncThunk.withTypes<{ state: RootState }>()(
     const formatMap: Record<string, string> = {
       "single-league": "단일리그",
       "four-player-omr": "4인 리그 (OMR)",
+      "ocr-assisted": "OCR 텍스트 인식",
       "group-league": "조별리그",
       "group-and-knockout": "조별리그 + 본선리그",
       "single-league-tournament": "단일리그 + 토너먼트",

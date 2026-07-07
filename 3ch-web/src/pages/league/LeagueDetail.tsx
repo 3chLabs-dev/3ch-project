@@ -382,7 +382,7 @@
         return `/league/${id}/omr`;
       }
       if (league?.format === "OCR 텍스트 인식") {
-        return `/ocr?leagueId=${id}`;
+        return `/league/${id}/ocr`;
       }
       return `/league/${id}/matches`;
     };
@@ -1157,7 +1157,7 @@ const handleSaveEdit = async () => {
               <Button
                 fullWidth variant="outlined" disableElevation
                 sx={{ mt: 1, borderRadius: 1, height: 40, fontWeight: 700, bgcolor: "#87B8FF", borderColor: "#87B8FF", color: "#FFF", "&:hover": { bgcolor: "#79AEFF" } }}
-                onClick={() => navigate(`/ocr?leagueId=${id}`)}
+                onClick={() => navigate(`/league/${id}/ocr`)}
               >
                 OCR 텍스트 인식 열기
               </Button>

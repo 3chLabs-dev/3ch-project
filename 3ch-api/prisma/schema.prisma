@@ -283,6 +283,8 @@ model LeagueParticipant {
   arrived    Boolean  @default(false)
   after      Boolean  @default(false)
   sort_order Int?
+  group_name String?
+  is_leader  Boolean  @default(false)
   created_at DateTime @default(now())
 
   league_id String
@@ -312,6 +314,7 @@ model LeagueMatch {
 
   participant_b_id String?
   participant_b    LeagueParticipant? @relation("MatchParticipantB", fields: [participant_b_id], references: [id], onDelete: SetNull)
+  group_name       String?
 
   @@index([league_id])
   @@map("league_matches")

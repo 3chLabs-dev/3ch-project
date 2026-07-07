@@ -41,6 +41,7 @@ import LeagueDetail from "../pages/league/LeagueDetail";
 import LeagueBracket from "../pages/league/LeagueBracket.tsx";
 import LeagueGrouping from "../pages/league/LeagueGrouping";
 import LeagueOmrSheet from "../pages/league/LeagueOmrSheet";
+import LeagueOcrSheet from "../pages/league/LeagueOcrSheet";
 import LeagueMatchOrder from "../pages/league/LeagueMatchOrder";
 import LeagueTournamentGenerate from "../pages/league/LeagueTournamentGenerate";
 import LeagueTournamentList from "../pages/league/LeagueTournamentList";
@@ -70,7 +71,6 @@ import PrivacyPolicyPage from "../pages/mypage/PrivacyPolicyPage.tsx";
 import DemoLandingPage from "../pages/demo/DemoLandingPage";
 import AdminSupportChatPage from "../pages/admin/AdminSupportChatPage";
 import LeagueAlgorithmDemo from "../pages/demo/LeagueAlgorithmDemo";
-import OcrScanPage from "../pages/ocr/OcrScanPage";
 // import League from "../pages/League";
 // import Match from "../pages/Match";
 // import My from "../pages/My";
@@ -90,6 +90,7 @@ export const router = createBrowserRouter([
       { path: "/league/:id/bracket", element: <LeagueBracket /> },
       { path: "/league/:id/grouping", element: <LeagueGrouping /> },
       { path: "/league/:id/omr", element: <LeagueOmrSheet /> },
+      { path: "/league/:id/ocr", element: <LeagueOcrSheet /> },
       { path: "/league/:id/tournament", element: <LeagueTournamentList /> },
       { path: "/league/:id/tournament/new", element: <LeagueTournamentGenerate /> },
       { path: "/league/:id/tournament/bracket", element: <LeagueTournamentBracket /> },
@@ -134,7 +135,6 @@ export const router = createBrowserRouter([
       { path: "/payment/checkout", element: <PaymentCheckout /> },
       { path: "/payment/success", element: <PaymentSuccess /> },
       { path: "/payment/fail",    element: <PaymentFail /> },
-      { path: "/ocr", element: <OcrScanPage /> },
       { path: "/demo/league-algorithm", element: <LeagueAlgorithmDemo />,}
 
 

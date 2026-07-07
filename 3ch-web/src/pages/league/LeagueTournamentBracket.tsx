@@ -27,7 +27,7 @@ import {
 } from "../../features/league/leagueApi";
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
 import { formatLeagueDate } from "../../utils/dateUtils";
-import { generateProgramRoundMatches, getStoredProgramOption } from "../../utils/programMatchGenerator";
+import { applyProgramMatchState, applyProgramTournamentAdvancement, generateProgramRoundMatches, getStoredProgramOption } from "../../utils/programMatchGenerator";
 
 // ─── 단일 토너먼트 레이아웃 상수 ────────────────────────────────────────────
 // 단일 토너먼트(라운드로빈 등)에서 매치 박스를 좌→우 방향으로 나열할 때 사용
@@ -687,19 +687,47 @@ export default function LeagueTournamentBracket() {
     () => (isProgramMode && id ? (programData?.program?.program_data as ReturnType<typeof getStoredProgramOption> | undefined) ?? getStoredProgramOption(id) : null),
     [isProgramMode, id, programData],
   );
+  const programSourceMatches = useMemo(() => {
+    if (!isProgramMode || !id || !programOption) return matchesData?.matches ?? [];
+
+    const sourceMatches = [...(matchesData?.matches ?? [])];
+    for (let round = 1; round < programRound; round += 1) {
+      const generatedRoundMatches = applyProgramMatchState(
+        generateProgramRoundMatches(id, programOption, participants, round, sourceMatches),
+        id,
+        round,
+      );
+      const existingIds = new Set(sourceMatches.map((match) => match.id));
+      generatedRoundMatches.forEach((match) => {
+        if (!existingIds.has(match.id)) sourceMatches.push(match);
+      });
+    }
+    return sourceMatches;
+  }, [id, isProgramMode, matchesData?.matches, participants, programOption, programRound]);
   const programMatches = useMemo(
     () => isProgramMode
-      ? generateProgramRoundMatches(id ?? "", programOption, participants, programRound).filter((match) => match.bracket)
+      ? applyProgramTournamentAdvancement(
+          applyProgramMatchState(
+            generateProgramRoundMatches(id ?? "", programOption, participants, programRound, programSourceMatches),
+            id ?? "",
+            programRound,
+          ),
+        ).filter((match) => match.bracket)
       : [],
-    [isProgramMode, id, programOption, participants, programRound],
+    [isProgramMode, id, programOption, participants, programRound, programSourceMatches],
   );
   const matches = useMemo(
     () => isProgramMode ? programMatches : matchesData?.matches ?? [],
     [isProgramMode, programMatches, matchesData],
   );
   const programBlock = isProgramMode ? programOption?.blocks?.[programRound - 1] : undefined;
+  const isProgramFinalFromPrelim =
+    isProgramMode &&
+    programOption?.rounds?.[programRound - 1]?.option === "FINAL" &&
+    programOption?.rounds?.[programRound - 2]?.option === "PRELIM";
   const manualSeeding = isProgramMode
-    ? programBlock?.tournamentSeeding === "manual"
+    ? programBlock?.tournamentSeeding === "manual" ||
+      (isProgramFinalFromPrelim && programMatches.some((match) => match.round_number === 1 && !match.participant_a_name && !match.participant_b_name))
     : league?.tournament_seeding === "manual";
 
   const isDoubleElim = !isProgramMode && matches.some((m) => m.bracket === "lower");
@@ -1032,10 +1060,13 @@ export default function LeagueTournamentBracket() {
               ))}
 
               {positions.map((pos) => {
-                if (!isDoubleElim) return <MatchBox key={pos.id} pos={pos} actions={canManage && !isCompleted ? slotActions : undefined} manualSeeding={manualSeeding} />;
+                const visibleSlotActions = (canManage && !isCompleted) || (isProgramMode && manualSeeding)
+                  ? slotActions
+                  : undefined;
+                if (!isDoubleElim) return <MatchBox key={pos.id} pos={pos} actions={visibleSlotActions} manualSeeding={manualSeeding} />;
                 return (
                   <React.Fragment key={pos.id}>
-                    <SingleSlotBox pos={pos} slot="a" actions={canManage && !isCompleted ? slotActions : undefined} manualSeeding={manualSeeding} />
+                    <SingleSlotBox pos={pos} slot="a" actions={visibleSlotActions} manualSeeding={manualSeeding} />
                     <Typography sx={{
                       position: "absolute",
                       left: pos.x + SS_W,
@@ -1045,7 +1076,7 @@ export default function LeagueTournamentBracket() {
                       fontSize: 11, fontWeight: 900, color: "#94A3B8", lineHeight: 1,
                       pointerEvents: "none",
                     }}>vs</Typography>
-                    <SingleSlotBox pos={pos} slot="b" actions={canManage && !isCompleted ? slotActions : undefined} manualSeeding={manualSeeding} />
+                    <SingleSlotBox pos={pos} slot="b" actions={visibleSlotActions} manualSeeding={manualSeeding} />
                   </React.Fragment>
                 );
               })}

@@ -197,6 +197,9 @@ export interface LeagueMatch {
   next_slot?: string | null;
   loser_next_match_id?: string | null;
   loser_next_slot?: string | null;
+  is_program?: boolean;
+  program_round?: number | null;
+  program_block_type?: string | null;
 }
 
 export interface InitTournamentRequest {
@@ -216,6 +219,8 @@ export interface UpdateMatchRequest {
   score_b?: number | null;
   court?: string | null;
   status?: "pending" | "playing" | "done";
+  participant_a_id?: string | null;
+  participant_b_id?: string | null;
 }
 
 export interface LeagueOmrMark {
@@ -344,6 +349,14 @@ export interface GetLeagueProgramResponse {
 export interface SaveLeagueProgramRequest {
   leagueId: string;
   program: unknown;
+}
+
+export interface SyncLeagueProgramMatchesRequest {
+  leagueId: string;
+  matches: Array<Partial<LeagueMatch> & {
+    program_round?: number | null;
+    program_block_type?: string | null;
+  }>;
 }
 
 /**
@@ -608,6 +621,25 @@ export const leagueApi = baseApi.injectEndpoints({
       ],
     }),
 
+    syncLeagueProgramMatches: builder.mutation<{ ok: boolean; inserted: number }, SyncLeagueProgramMatchesRequest>({
+      async queryFn({ leagueId, matches }, api, _extraOptions, fetchWithBQ) {
+        const token = (api.getState() as RootState).auth?.token;
+        if (isLocalDevToken(token)) {
+          return { data: { ok: true, inserted: matches.length } };
+        }
+        const result = await fetchWithBQ({
+          url: `/league/${leagueId}/program/matches/sync`,
+          method: "POST",
+          body: { matches },
+        });
+        return result.error ? { error: result.error } : { data: result.data as { ok: boolean; inserted: number } };
+      },
+      invalidatesTags: (_result, _error, { leagueId }) => [
+        { type: "League", id: `matches-${leagueId}` },
+        { type: "League", id: leagueId },
+      ],
+    }),
+
     getLeagueMatches: builder.query<GetLeagueMatchesResponse, string>({
       query: (id) => `/league/${id}/matches`,
       providesTags: (_result, _error, id) => [{ type: "League", id: `matches-${id}` }],
@@ -792,6 +824,7 @@ export const {
   useGetLeagueProgramQuery,
   useSaveLeagueProgramMutation,
   useDeleteLeagueProgramMutation,
+  useSyncLeagueProgramMatchesMutation,
   useGetLeagueMatchesQuery,
   useInitLeagueMatchesMutation,
   useUpdateLeagueMatchMutation,

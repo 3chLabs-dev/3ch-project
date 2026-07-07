@@ -11,7 +11,7 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   Box, Button, Card, CardContent, CircularProgress,
   Divider, IconButton, InputAdornment, ListItemIcon, ListItemText,
-  Menu, MenuItem, Stack, TextField, Typography, Tooltip,
+  Menu, MenuItem, Stack, Tab, Tabs, TextField, Typography, Tooltip,
 } from "@mui/material";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import NotificationsIcon from "@mui/icons-material/Notifications";
@@ -19,6 +19,7 @@ import NotificationsOffIcon from "@mui/icons-material/NotificationsOff";
 import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import DragHandleIcon from "@mui/icons-material/DragHandle";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
@@ -37,13 +38,21 @@ import {
   useExtendLeagueMatchesMutation,
   useGetLeagueParticipantsQuery,
   useGetLeagueProgramQuery,
+  useSyncLeagueProgramMatchesMutation,
   type LeagueMatch,
 } from "../../features/league/leagueApi";
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
 import { useAppSelector } from "../../app/hooks";
 import { useOutletContext } from "react-router-dom";
 import { usePushNotification } from "../../hooks/usePushNotification";
-import { generateProgramRoundMatches, getStoredProgramOption } from "../../utils/programMatchGenerator";
+import {
+  applyProgramMatchState,
+  applyProgramTournamentAdvancement,
+  generateProgramRoundMatches,
+  getStoredProgramOption,
+  saveProgramMatchPatch,
+  type ProgramMatchPatch,
+} from "../../utils/programMatchGenerator";
 
 // ─── 상태 표시 ────────────────────────────────────────────────────────────────
 const STATUS_LABEL: Record<string, string> = {
@@ -58,30 +67,44 @@ const NEXT_STATUS: Record<string, "pending" | "playing" | "done"> = {
   done: "done",
 };
 
+interface RoundTab { key: string; label: string; roundNumber: number }
+
+function seededBracket(n: number): number[] {
+  let arr = [1, 2];
+  while (arr.length < n) {
+    const size = arr.length * 2 + 1;
+    arr = arr.flatMap((x) => [x, size - x]);
+  }
+  return arr;
+}
+
+const AUTO_COMPLETE_DELAY_MS = 4000;
+
 function getWinScore(rules?: string | null): number | null {
   if (!rules) return null;
   if (rules.includes("3세트제")) return null;
-  if (rules.includes("3전 2선승")) return 2;
-  if (rules.includes("5전 3선승")) return 3;
-  if (rules.includes("7전 4선승")) return 4;
+  if (rules.includes("3전 2선승") || rules.includes("BEST_OF_3")) return 2;
+  if (rules.includes("5전 3선승") || rules.includes("BEST_OF_5")) return 3;
+  if (rules.includes("7전 4선승") || rules.includes("BEST_OF_7")) return 4;
   return null;
 }
 
 // ─── 참가자 행 (번호 + 이름/부 + 점수) ──────────────────────────────────────
 /** 테두리 박스 안 참가자 행: [번호셀] | [배지+이름] [점수] */
 function ParticipantRow({
-  name, division, isMe, score, wins, canEditScore, onMinus, onPlus,
+  name, division, seedLabel, isMe, score, wins, canEditScore, onMinus, onPlus,
 }: {
-  name: string | null; division: string | null; isMe?: boolean;
+  name: string | null; division: string | null; seedLabel?: string; isMe?: boolean;
   score: number; wins: boolean; canEditScore: boolean;
   onMinus: () => void; onPlus: () => void;
 }) {
+  const leftLabel = seedLabel ?? division ?? "";
   return (
     <Stack direction="row" alignItems="stretch" sx={{ minHeight: 54 }}>
       {/* 왼쪽 번호 셀 */}
       <Box sx={{ width: 46, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", borderRight: "1.5px solid #E5E7EB" }}>
-        <Typography sx={{ fontSize: 22, fontWeight: 900, color: "#C4C9D4" }}>
-          {division ?? ""}
+        <Typography sx={{ fontSize: seedLabel ? 12 : 22, fontWeight: 900, color: seedLabel ? "#94A3B8" : "#C4C9D4" }}>
+          {leftLabel}
         </Typography>
       </Box>
 
@@ -92,7 +115,7 @@ function ParticipantRow({
             {division}
           </Box>
         )}
-        <Typography noWrap sx={{ fontWeight: 700, fontSize: 14, color: isMe ? "#2F80ED" : "#111827" }}>
+        <Typography noWrap sx={{ fontWeight: 700, fontSize: 14, color: wins ? "#16A34A" : isMe ? "#2F80ED" : "#111827" }}>
           {name ?? "?"}
         </Typography>
       </Stack>
@@ -121,7 +144,7 @@ function ParticipantRow({
 
 // ─── 경기 카드 ────────────────────────────────────────────────────────────────
 function MatchCard({
-  match, index, canManage, canMember, leagueId, rules, myName,
+  match, index, canManage, canMember, leagueId, rules, myName, seedA, seedB, onProgramMatchUpdate,
 }: {
   match: LeagueMatch;
   index: number;
@@ -130,13 +153,90 @@ function MatchCard({
   leagueId: string;
   rules?: string | null;
   myName?: string;
+  seedA?: number;
+  seedB?: number;
+  onProgramMatchUpdate?: (matchId: string, updates: ProgramMatchPatch) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: match.id, disabled: !canManage });
   const [updateMatch] = useUpdateLeagueMatchMutation();
   const [deleteMatch] = useDeleteLeagueMatchMutation();
   const [notifyMatch] = useNotifyLeagueMatchMutation();
   const courtRef = useRef<HTMLInputElement>(null);
+  const autoCompleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestMatchRef = useRef(match);
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+
+  useEffect(() => {
+    latestMatchRef.current = match;
+  }, [match]);
+
+  const getWinnerPatch = useCallback((nextMatch: LeagueMatch): ProgramMatchPatch | null => {
+    if (nextMatch.status !== "done") return null;
+    const scoreA = nextMatch.score_a;
+    const scoreB = nextMatch.score_b;
+    const hasScoreA = typeof scoreA === "number";
+    const hasScoreB = typeof scoreB === "number";
+    const winnerSlot = hasScoreA && hasScoreB && scoreA !== scoreB
+      ? scoreA > scoreB ? "a" : "b"
+      : nextMatch.participant_a_id && !nextMatch.participant_b_id ? "a"
+      : nextMatch.participant_b_id && !nextMatch.participant_a_id ? "b"
+      : null;
+
+    if (!winnerSlot) return null;
+    return winnerSlot === "a"
+      ? {
+          participant_a_id: nextMatch.participant_a_id,
+          participant_a_name: nextMatch.participant_a_name,
+          participant_a_division: nextMatch.participant_a_division,
+        }
+      : {
+          participant_a_id: nextMatch.participant_b_id,
+          participant_a_name: nextMatch.participant_b_name,
+          participant_a_division: nextMatch.participant_b_division,
+        };
+  }, []);
+
+  const updateCurrentMatch = useCallback((updates: ProgramMatchPatch) => {
+    const nextMatch = { ...latestMatchRef.current, ...updates };
+    latestMatchRef.current = nextMatch;
+    if (onProgramMatchUpdate) {
+      onProgramMatchUpdate(match.id, updates);
+      if (nextMatch.next_match_id && nextMatch.next_slot) {
+        const winnerPatch = getWinnerPatch(nextMatch);
+        if (winnerPatch) {
+          onProgramMatchUpdate(
+            nextMatch.next_match_id,
+            nextMatch.next_slot === "a"
+              ? winnerPatch
+              : {
+                  participant_b_id: winnerPatch.participant_a_id,
+                  participant_b_name: winnerPatch.participant_a_name,
+                  participant_b_division: winnerPatch.participant_a_division,
+                },
+          );
+        }
+      }
+      return;
+    }
+    updateMatch({ leagueId, matchId: match.id, updates });
+  }, [getWinnerPatch, leagueId, match.id, onProgramMatchUpdate, updateMatch]);
+
+  const scheduleAutoComplete = useCallback(() => {
+    if (match.status !== "playing" && match.status !== "done") return;
+    if (autoCompleteTimerRef.current) {
+      clearTimeout(autoCompleteTimerRef.current);
+    }
+    autoCompleteTimerRef.current = setTimeout(() => {
+      updateCurrentMatch({ status: "done" });
+      autoCompleteTimerRef.current = null;
+    }, AUTO_COMPLETE_DELAY_MS);
+  }, [match.status, updateCurrentMatch]);
+
+  useEffect(() => () => {
+    if (autoCompleteTimerRef.current) {
+      clearTimeout(autoCompleteTimerRef.current);
+    }
+  }, []);
 
   const matchLabel = useCallback(() => {
     const aDiv = match.participant_a_division ? `(${match.participant_a_division})` : "";
@@ -147,15 +247,16 @@ function MatchCard({
   const handleScore = useCallback((side: "a" | "b", delta: number) => {
     const current = side === "a" ? (match.score_a ?? 0) : (match.score_b ?? 0);
     const next = Math.max(0, current + delta);
-    updateMatch({ leagueId, matchId: match.id, updates: side === "a" ? { score_a: next } : { score_b: next } });
-  }, [match, leagueId, updateMatch]);
+    updateCurrentMatch(side === "a" ? { score_a: next } : { score_b: next });
+    scheduleAutoComplete();
+  }, [match, scheduleAutoComplete, updateCurrentMatch]);
 
   const handleCourtBlur = useCallback(() => {
     const val = courtRef.current?.value ?? "";
     if (val !== (match.court ?? "")) {
-      updateMatch({ leagueId, matchId: match.id, updates: { court: val || null } });
+      updateCurrentMatch({ court: val || null });
     }
-  }, [match, leagueId, updateMatch]);
+  }, [match, updateCurrentMatch]);
 
   const handleStatus = useCallback(() => {
     const sa = match.score_a ?? 0;
@@ -165,8 +266,8 @@ function MatchCard({
     } else if (match.status === "playing") {
       if (!window.confirm(`${matchLabel()}\n종료되었습니까?`)) return;
     }
-    updateMatch({ leagueId, matchId: match.id, updates: { status: NEXT_STATUS[match.status], score_a: sa, score_b: sb } });
-  }, [match, matchLabel, leagueId, updateMatch]);
+    updateCurrentMatch({ status: NEXT_STATUS[match.status], score_a: sa, score_b: sb });
+  }, [match, matchLabel, updateCurrentMatch]);
 
   const handleDelete = useCallback(() => {
     setMenuAnchor(null);
@@ -267,6 +368,7 @@ function MatchCard({
           <ParticipantRow
             name={match.participant_a_name}
             division={match.participant_a_division}
+            seedLabel={seedA ? `1-${seedA}` : undefined}
             isMe={!!myName && match.participant_a_name === myName}
             score={sa} wins={aWins} canEditScore={canEditScore}
             onMinus={() => handleScore("a", -1)}
@@ -279,6 +381,7 @@ function MatchCard({
           <ParticipantRow
             name={match.participant_b_name}
             division={match.participant_b_division}
+            seedLabel={seedB ? `1-${seedB}` : undefined}
             isMe={!!myName && match.participant_b_name === myName}
             score={sb} wins={bWins} canEditScore={canEditScore}
             onMinus={() => handleScore("b", -1)}
@@ -360,25 +463,69 @@ export default function LeagueMatchOrder() {
   const { data: matchData, isLoading: matchLoading, refetch: refetchMatches } = useGetLeagueMatchesQuery(leagueId, { skip: !leagueId, refetchOnMountOrArgChange: true });
   const { data: participantData } = useGetLeagueParticipantsQuery(leagueId, { skip: !leagueId, refetchOnMountOrArgChange: true, });
   const { data: programData } = useGetLeagueProgramQuery(leagueId, { skip: !isProgramMode || !leagueId });
+  const [updateMatch] = useUpdateLeagueMatchMutation();
   const [search, setSearch] = useState("");
   // 순서만 로컬에 보관. 경기 데이터는 항상 RTK Query 캐시에서 가져와야 optimistic update가 즉시 반영됨
   const [localOrder, setLocalOrder] = useState<string[] | null>(null);
+  const [programMatchStateVersion, setProgramMatchStateVersion] = useState(0);
 
   const rawParticipants = useMemo(() => participantData?.participants ?? [], [participantData]);
   const programOption = useMemo(
     () => (isProgramMode && leagueId ? (programData?.program?.program_data as ReturnType<typeof getStoredProgramOption> | undefined) ?? getStoredProgramOption(leagueId) : null),
     [isProgramMode, leagueId, programData],
   );
-  const programMatches = useMemo(
+  const currentProgramBlock = isProgramMode ? programOption?.blocks?.[programRound - 1] : undefined;
+  const bracketPath = currentProgramBlock?.format === "TOURNAMENT" ? "tournament-bracket" : "bracket";
+  const isTournamentProgramRound = isProgramMode && currentProgramBlock?.format === "TOURNAMENT";
+  const programSourceMatches = useMemo(() => {
+    if (!isProgramMode || !leagueId || !programOption) return matchData?.matches ?? [];
+
+    const sourceMatches = [...(matchData?.matches ?? [])];
+    for (let round = 1; round < programRound; round += 1) {
+      const generatedRoundMatches = applyProgramMatchState(
+        generateProgramRoundMatches(leagueId, programOption, rawParticipants, round, sourceMatches),
+        leagueId,
+        round,
+      );
+      const existingIds = new Set(sourceMatches.map((match) => match.id));
+      generatedRoundMatches.forEach((match) => {
+        if (!existingIds.has(match.id)) sourceMatches.push(match);
+      });
+    }
+    return sourceMatches;
+  }, [isProgramMode, leagueId, matchData?.matches, programOption, programRound, rawParticipants]);
+  const generatedProgramMatches = useMemo(
     () => isProgramMode
-      ? generateProgramRoundMatches(leagueId, programOption, rawParticipants, programRound)
+      ? applyProgramTournamentAdvancement(
+          applyProgramMatchState(
+            generateProgramRoundMatches(leagueId, programOption, rawParticipants, programRound, programSourceMatches),
+            leagueId,
+            programRound,
+          ),
+        )
       : [],
-    [isProgramMode, leagueId, programOption, rawParticipants, programRound],
+    [isProgramMode, leagueId, programOption, rawParticipants, programRound, programMatchStateVersion, programSourceMatches],
   );
+  const serverProgramMatches = useMemo(
+    () => (matchData?.matches ?? []).filter((match) => match.is_program && match.program_round === programRound),
+    [matchData?.matches, programRound],
+  );
+  const programMatches = serverProgramMatches.length > 0 ? serverProgramMatches : generatedProgramMatches;
+
+  const updateProgramMatch = useCallback((matchId: string, updates: ProgramMatchPatch) => {
+    if (!leagueId) return;
+    if (serverProgramMatches.some((match) => match.id === matchId)) {
+      updateMatch({ leagueId, matchId, updates });
+      return;
+    }
+    saveProgramMatchPatch(leagueId, programRound, matchId, updates);
+    setProgramMatchStateVersion((version) => version + 1);
+  }, [leagueId, programRound, serverProgramMatches, updateMatch]);
 
   // 1. 조 이름 목록 추출 ("1조", "2조" ...)
   const groupNames = useMemo(() => {
     if (isProgramMode) {
+      if (currentProgramBlock?.format !== "GROUP") return [];
       const names = new Set(
         programMatches
           .map((match) => match.match_label)
@@ -389,10 +536,11 @@ export default function LeagueMatchOrder() {
 
     const names = new Set(rawParticipants.map(p => p.group_name).filter(Boolean) as string[]);
     return Array.from(names).sort((a, b) => parseInt(a) - parseInt(b));
-  }, [isProgramMode, programMatches, rawParticipants]);
+  }, [currentProgramBlock?.format, isProgramMode, programMatches, rawParticipants]);
 
   // 2. 현재 선택된 조 상태 관리
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
+  const [tournamentTabKey, setTournamentTabKey] = useState<string | null>(null);
 
   // 조 목록이 생기면 첫 번째 조를 기본으로 선택
   useEffect(() => {
@@ -424,10 +572,16 @@ export default function LeagueMatchOrder() {
         ordered = ordered.filter((m) => m.match_label === selectedGroup);
       }
 
-      if (!search.trim()) return ordered;
+      const sorted = [...ordered].sort((a, b) => {
+        if (a.status === "playing" && b.status !== "playing") return -1;
+        if (a.status !== "playing" && b.status === "playing") return 1;
+        return 0;
+      });
+
+      if (isTournamentProgramRound || !search.trim()) return sorted;
 
       const q = search.trim().toLowerCase();
-      return ordered.filter((m) =>
+      return sorted.filter((m) =>
         [m.participant_a_name, m.participant_b_name, m.participant_a_division, m.participant_b_division]
           .some((v) => v?.toLowerCase().includes(q))
       );
@@ -463,12 +617,54 @@ export default function LeagueMatchOrder() {
       [m.participant_a_name, m.participant_b_name, m.participant_a_division, m.participant_b_division]
         .some((v) => v?.toLowerCase().includes(q))
     );
-  }, [isProgramMode, localOrder, programMatches, matchData?.matches, search, groupNames.length, selectedGroup, participantGroupMap]);
+  }, [isProgramMode, isTournamentProgramRound, localOrder, programMatches, matchData?.matches, search, groupNames.length, selectedGroup, participantGroupMap]);
+
+  const tournamentTabs = useMemo<RoundTab[]>(() => {
+    if (!isTournamentProgramRound) return [];
+    const rounds = [...new Set(programMatches
+      .filter((match) => match.bracket === "upper")
+      .map((match) => match.round_number ?? 0)
+      .filter((round) => round > 0))]
+      .sort((a, b) => a - b);
+
+    return rounds.map((roundNumber) => {
+      const sample = programMatches.find((match) => match.bracket === "upper" && match.round_number === roundNumber);
+      return { key: `upper-${roundNumber}`, label: sample?.match_label ?? `R${roundNumber}`, roundNumber };
+    });
+  }, [isTournamentProgramRound, programMatches]);
+
+  const activeTournamentTab = tournamentTabKey ?? tournamentTabs[0]?.key ?? "";
+  const visibleMatches = useMemo(() => {
+    if (!isTournamentProgramRound) return matches;
+    const currentTab = tournamentTabs.find((tab) => tab.key === activeTournamentTab);
+    if (!currentTab) return [];
+    return matches
+      .filter((match) => match.bracket === "upper" && match.round_number === currentTab.roundNumber)
+      .sort((a, b) => a.match_order - b.match_order);
+  }, [activeTournamentTab, isTournamentProgramRound, matches, tournamentTabs]);
+
+  const tournamentSeedMap = useMemo(() => {
+    if (!isTournamentProgramRound) return new Map<string, { a: number; b: number }>();
+    const firstRoundMatches = programMatches
+      .filter((match) => match.bracket === "upper" && match.round_number === 1)
+      .sort((a, b) => a.match_order - b.match_order);
+    const bracketSize = firstRoundMatches.length * 2;
+    if (bracketSize < 2) return new Map<string, { a: number; b: number }>();
+
+    const seeds = seededBracket(bracketSize);
+    const map = new Map<string, { a: number; b: number }>();
+    firstRoundMatches.forEach((match, index) => {
+      map.set(match.id, { a: seeds[index * 2], b: seeds[index * 2 + 1] });
+    });
+    return map;
+  }, [isTournamentProgramRound, programMatches]);
 
   const [initMatches, { isLoading: isIniting }] = useInitLeagueMatchesMutation();
   const [extendMatches, {isLoading: isExtending }] = useExtendLeagueMatchesMutation();
   const [reorderMatches] = useReorderLeagueMatchesMutation();
+  const [syncLeagueProgramMatches] = useSyncLeagueProgramMatchesMutation();
   const initCalledRef = useRef(false);
+  const programSyncCalledRef = useRef<string | null>(null);
 
   // 현재 경기 수 계산
   const expectedMatchCount = useMemo(() => {
@@ -542,6 +738,26 @@ export default function LeagueMatchOrder() {
     reorderMatches({ leagueId, order: reordered.map((m) => m.id) });
   }, [isProgramMode, matches, leagueId, reorderMatches]);
 
+  useEffect(() => {
+    if (!isProgramMode || !programOption || serverProgramMatches.length > 0) return;
+    const currentBlock = programOption.blocks?.[programRound - 1];
+    if (currentBlock?.type !== "SINGLES" || currentBlock.format !== "TOURNAMENT") return;
+    if (!generatedProgramMatches.some((match) => match.bracket && match.round_number === 1 && match.participant_a_id && match.participant_b_id)) return;
+
+    const syncKey = `${leagueId}-${programRound}`;
+    if (programSyncCalledRef.current === syncKey) return;
+    programSyncCalledRef.current = syncKey;
+
+    syncLeagueProgramMatches({
+      leagueId,
+      matches: generatedProgramMatches.map((match) => ({
+        ...match,
+        program_round: programRound,
+        program_block_type: currentBlock.type,
+      })),
+    });
+  }, [generatedProgramMatches, isProgramMode, leagueId, programOption, programRound, serverProgramMatches.length, syncLeagueProgramMatches]);
+
 
   if (!isProgramMode && matchLoading) {
     return (
@@ -563,15 +779,31 @@ export default function LeagueMatchOrder() {
         </Typography>
         <Button
           size="small"
-          variant="outlined"
+          variant={isTournamentProgramRound ? "text" : "outlined"}
+          startIcon={isTournamentProgramRound ? <AccountTreeIcon sx={{ fontSize: 14 }} /> : undefined}
           onClick={() =>
             navigate(
               isProgramMode
-                ? `/league/${leagueId}/program/bracket?program=1&round=${programRound}`
+                ? `/league/${leagueId}/program/${bracketPath}?program=1&round=${programRound}&format=${currentProgramBlock?.format ?? ""}`
                 : `/league/${leagueId}/bracket`
             )
           }
-          sx={{ borderRadius: 1, fontWeight: 700, fontSize: 12, px: 1.5 }}
+          sx={{
+            fontSize: 11,
+            fontWeight: 700,
+            textTransform: "none",
+            color: "#2563EB",
+            flexShrink: 0,
+            ...(isTournamentProgramRound
+              ? { minWidth: "auto", px: 1 }
+              : {
+                  borderColor: "#93C5FD",
+                  borderRadius: "16px",
+                  px: 1.5,
+                  py: 0.35,
+                  "&:hover": { borderColor: "#2563EB", bgcolor: "#EFF6FF" },
+                }),
+          }}
         >
           대진표 보기
         </Button>
@@ -597,7 +829,22 @@ export default function LeagueMatchOrder() {
       </Stack>
 
       {/* 조 선택 탭 (조별리그일 때만 표시됨) */}
-      {groupNames.length > 0 && (
+      {isTournamentProgramRound && tournamentTabs.length > 0 && (
+        <Box sx={{ bgcolor: "#fff", borderBottom: "1px solid #E5E7EB", mx: -2 }}>
+          <Tabs
+            value={activeTournamentTab}
+            onChange={(_, value) => setTournamentTabKey(value)}
+            variant="scrollable"
+            scrollButtons
+            allowScrollButtonsMobile
+            sx={{ minHeight: 40, "& .MuiTab-root": { minHeight: 40, fontSize: 12, fontWeight: 700, px: 1.5, py: 0 }, "& .MuiTabScrollButton-root": { width: 28 } }}
+          >
+            {tournamentTabs.map((tab) => <Tab key={tab.key} value={tab.key} label={tab.label} />)}
+          </Tabs>
+        </Box>
+      )}
+
+      {!isTournamentProgramRound && groupNames.length > 0 && (
         <Box sx={{ px: 0, pt: 1, pb: 0.5 }}>
           <Stack direction="row" spacing={1} sx={{ overflowX: "auto", '&::-webkit-scrollbar': { display: 'none' } }}>
             {groupNames.map(gName => (
@@ -619,7 +866,7 @@ export default function LeagueMatchOrder() {
       )}
 
       {/* 검색창 */}
-      <TextField
+      {!isTournamentProgramRound && <TextField
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder="이름 또는 부수 검색"
@@ -637,10 +884,10 @@ export default function LeagueMatchOrder() {
         sx={{
           "& .MuiOutlinedInput-root": { borderRadius: 2, bgcolor: "#F9FAFB", fontSize: 14 },
         }}
-      />
+      />}
 
       {/* 생성 중 / 경기 없을 때 */}
-      {matches.length === 0 ? (
+      {visibleMatches.length === 0 ? (
         <Box display="flex" justifyContent="center" pt={4}>
           {!isProgramMode && isIniting ? (
             <CircularProgress />
@@ -656,25 +903,29 @@ export default function LeagueMatchOrder() {
         {isExtending ? (
           <CircularProgress />
         ) : (
-          <SortableContext items={matches.map((m) => m.id)} strategy={verticalListSortingStrategy}>
+          <SortableContext items={visibleMatches.map((m) => m.id)} strategy={verticalListSortingStrategy}>
             <Stack spacing={1}>
-              {matches.map((match, displayIndex) => {
+              {visibleMatches.map((match, displayIndex) => {
                 const originalIndex = isProgramMode
-                  ? displayIndex
+                  ? programMatches.findIndex((m) => m.id === match.id)
                   : (matchData?.matches ?? [])
                   .filter((m) => !m.bracket)
                   .findIndex((m) => m.id === match.id);
+                const seed = tournamentSeedMap.get(match.id);
 
                 return (
                   <MatchCard
                     key={match.id}
                     match={match}
-                    index={originalIndex}
+                    index={originalIndex >= 0 ? originalIndex : displayIndex}
                     canManage={canManage && !isProgramMode}
                     canMember={canMember}
                     leagueId={leagueId}
-                    rules={league?.rules}
+                    rules={isProgramMode ? currentProgramBlock?.matchRule : league?.rules}
                     myName={myName ?? undefined}
+                    seedA={isTournamentProgramRound ? seed?.a : undefined}
+                    seedB={isTournamentProgramRound ? seed?.b : undefined}
+                    onProgramMatchUpdate={isProgramMode ? updateProgramMatch : undefined}
                   />
                 );
               })}

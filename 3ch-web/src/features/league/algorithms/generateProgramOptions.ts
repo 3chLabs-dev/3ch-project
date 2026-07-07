@@ -123,9 +123,10 @@ const TEAM_LINEUPS: TeamLineupType[] = [
 ];
 
 function getAvailablePrograms(
-  preferences: ProgramPreferences
+  input: GenerateProgramOptionsInput
 ): ProgramType[] {
   const programs: ProgramType[] = [];
+  const { playerCount, preferences } = input;
   const preferredOrder =
     preferences.programOrder.length > 0
       ? preferences.programOrder
@@ -142,6 +143,7 @@ function getAvailablePrograms(
 
     if (
       program === "DOUBLES" &&
+      playerCount >= 4 &&
       preferences.doublesEnabled &&
       !programs.includes(program)
     ) {
@@ -150,6 +152,7 @@ function getAvailablePrograms(
 
     if (
       program === "TEAM" &&
+      canUseTeamProgram(input) &&
       preferences.teamEnabled &&
       !programs.includes(program)
     ) {
@@ -160,6 +163,28 @@ function getAvailablePrograms(
   return programs.length > 0
     ? programs
     : ["SINGLES"];
+}
+
+function canUseTeamProgram(
+  input: GenerateProgramOptionsInput
+): boolean {
+  if (input.playerCount < 12) {
+    return false;
+  }
+
+  const preferredTeamSize = Math.max(
+    3,
+    input.preferences.teamPlayerCount
+  );
+  const possibleTeamCounts = [
+    preferredTeamSize,
+    4,
+    3,
+  ].map((teamSize) =>
+    Math.floor(input.playerCount / teamSize)
+  );
+
+  return Math.max(...possibleTeamCounts) >= 4;
 }
 
 function getTeamPlayerCounts(
@@ -174,9 +199,9 @@ function getTeamPlayerCounts(
 
   return [...new Set(counts)].filter(
     (count) =>
-      count >= 2 &&
+      count >= 3 &&
       count <= 5 &&
-      Math.ceil(playerCount / count) >= 2
+      Math.floor(playerCount / count) >= 4
   );
 }
 
@@ -438,7 +463,7 @@ function buildRoundCandidates(
 ): RoundConfig[][] {
   const maxCandidateCount = 2500;
   const programs = getAvailablePrograms(
-    input.preferences
+    input
   );
   const maxRoundCount =
     input.rentalMinutes >= 240 ? 3 : 2;
@@ -659,7 +684,9 @@ function getCandidateMetrics(
 
 function scoreCandidate(
   metrics: CandidateMetrics,
-  profile: RecommendationProfile
+  profile: RecommendationProfile,
+  rounds: RoundConfig[],
+  playerCount: number
 ): number {
   const weightedScore =
     metrics.totalMatchesScore * profile.weights.totalMatches +
@@ -673,7 +700,18 @@ function scoreCandidate(
     profile.weights
   ).reduce((sum, value) => sum + value, 0);
 
-  return Math.round(weightedScore / totalWeight);
+  let score = weightedScore / totalWeight;
+  const hasTeamRound = rounds.some((round) => round.program === "TEAM");
+
+  if (hasTeamRound && playerCount < 16) {
+    score -= profile.type === "balanced" ? 3 : 8;
+  }
+
+  if (hasTeamRound && profile.type === "fast") {
+    score -= 12;
+  }
+
+  return Math.round(Math.max(0, score));
 }
 
 function getRepresentativeRule(
@@ -746,7 +784,9 @@ function buildCandidate(
       ...option,
       recommendationScore: scoreCandidate(
         metrics,
-        profile
+        profile,
+        roundsWithGroupSizes,
+        input.playerCount
       ),
     },
     rounds: roundsWithGroupSizes,

@@ -22,6 +22,8 @@ import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import {
   useDeleteAllLeagueMatchesMutation,
+  useDeleteLeagueProgramMutation,
+  useGetLeagueProgramQuery,
   useGetLeagueMatchesQuery,
   useGetLeagueQuery,
 } from "../../features/league/leagueApi";
@@ -89,11 +91,13 @@ export default function LeagueProgramList() {
   const navigate = useNavigate();
   const { data: leagueData, isLoading: leagueLoading } = useGetLeagueQuery(id!);
   const { data: matchesData, isLoading: matchesLoading } = useGetLeagueMatchesQuery(id!);
+  const { data: programData, isLoading: programLoading } = useGetLeagueProgramQuery(id!, { skip: !id });
   const { data: groupData, isLoading: groupLoading } = useGetGroupDetailQuery(
     leagueData?.league?.group_id ?? "",
     { skip: !leagueData?.league?.group_id },
   );
   const [deleteAllMatches, { isLoading: isDeleting }] = useDeleteAllLeagueMatchesMutation();
+  const [deleteLeagueProgram] = useDeleteLeagueProgramMutation();
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [storedProgram, setStoredProgram] = useState<StoredProgramOption | null>(null);
@@ -118,35 +122,23 @@ export default function LeagueProgramList() {
   const bracketSizeLabel = r1Match?.match_label ?? "";
   const advancementLabel = ADVANCEMENT_LABEL[league?.tournament_advancement ?? ""] ?? "";
   const seedingLabel = SEEDING_LABEL[league?.tournament_seeding ?? ""] ?? "";
-  const isLoading = leagueLoading || matchesLoading || groupLoading;
+  const isLoading = leagueLoading || matchesLoading || groupLoading || programLoading;
 
   useEffect(() => {
-    if (!id) return;
-
-    const rawProgram = localStorage.getItem(`league-program-${id}`);
-    if (!rawProgram) {
-      setStoredProgram(null);
-      return;
-    }
-
-    try {
-      setStoredProgram(JSON.parse(rawProgram));
-    } catch {
-      setStoredProgram(null);
-    }
-  }, [id]);
+    setStoredProgram((programData?.program?.program_data as StoredProgramOption | null | undefined) ?? null);
+  }, [programData]);
 
   const handleDelete = async () => {
     setConfirmOpen(false);
     if (!id || !canManage) return;
 
-    localStorage.removeItem(`league-program-${id}`);
-    setStoredProgram(null);
-
     try {
+      await deleteLeagueProgram({ leagueId: id }).unwrap();
+      localStorage.removeItem(`league-program-${id}`);
+      setStoredProgram(null);
       await deleteAllMatches({ leagueId: id }).unwrap();
     } catch {
-      // 프로그램은 localStorage 기반이라 서버 경기 삭제 실패와 무관하게 즉시 목록에서 제거합니다.
+      // 서버 삭제 실패 시 현재 프로그램 캐시를 유지합니다.
     }
   };
 
@@ -165,7 +157,7 @@ export default function LeagueProgramList() {
           <ArrowBackIcon fontSize="small" />
         </IconButton>
         <Typography sx={{ fontSize: 17, fontWeight: 900, flex: 1 }}>
-          프로그램
+          이벤트 프로그램
         </Typography>
         {canManage && (
           <Button

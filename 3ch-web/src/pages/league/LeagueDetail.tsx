@@ -35,11 +35,13 @@
   import LanguageIcon from "@mui/icons-material/Language";
   import {
     useGetLeagueQuery,
+    useGetLeagueProgramQuery,
     useGetLeagueParticipantsQuery,
     useUpdateParticipantMutation,
     useUpdateLeagueMutation,
     useAddParticipantsMutation,
     useDeleteLeagueMutation,
+    useDeleteLeagueProgramMutation,
     useDeleteParticipantMutation,
   } from "../../features/league/leagueApi";
   import { toUTCDate, formatLeagueDate, formatLeagueTime } from "../../utils/dateUtils";
@@ -162,6 +164,9 @@
       id ?? "",
       { skip: !id, pollingInterval: 15000 },
     );
+    const { data: programData } = useGetLeagueProgramQuery(id ?? "", {
+      skip: !id,
+    });
 
     const authUser = useAppSelector((state) => state.auth.user);
 
@@ -169,6 +174,7 @@
     const [updateLeague, { isLoading: saving }] = useUpdateLeagueMutation();
     const [addParticipants] = useAddParticipantsMutation();
     const [deleteLeague] = useDeleteLeagueMutation();
+    const [deleteLeagueProgram] = useDeleteLeagueProgramMutation();
     const [deleteParticipant] = useDeleteParticipantMutation();
 
     const { data: groupData, isLoading: groupLoading } = useGetGroupDetailQuery(leagueData?.league?.group_id ?? "", {
@@ -203,6 +209,28 @@
     };
 
     const rawParticipants = participantData?.participants ?? [];
+    const hasEventProgram = league?.format === "이벤트 프로그램" && Boolean(programData?.program);
+
+    const resetEventProgramBeforeParticipantChange = async () => {
+      if (!id || !hasEventProgram) return true;
+
+      const confirmed = window.confirm(
+        "참가자 정보가 변경되면 기존 이벤트 프로그램의 조 편성, 경기 순서, 대진표가 맞지 않을 수 있습니다.\n\n기존 이벤트 프로그램을 삭제하고 참가자 정보를 변경하시겠습니까?",
+      );
+      if (!confirmed) return false;
+
+      try {
+        await deleteLeagueProgram({ leagueId: id }).unwrap();
+        localStorage.removeItem(`league-program-${id}`);
+        setAlertSeverity("warning");
+        setAlertMsg("참가자 변경으로 기존 이벤트 프로그램이 삭제되었습니다. 프로그램을 다시 생성해주세요.");
+        return true;
+      } catch {
+        setAlertSeverity("error");
+        setAlertMsg("기존 이벤트 프로그램 삭제에 실패했습니다. 참가자 변경을 중단했습니다.");
+        return false;
+      }
+    };
 
     const handleJoin = async (name?: string, division?: string) => {
       if (!id) return;
@@ -219,6 +247,7 @@
         setAlertMsg("이름을 입력해주세요.");
         return;
       }
+      if (!(await resetEventProgramBeforeParticipantChange())) return;
       try {
         await addParticipants({
           leagueId: id,
@@ -242,6 +271,7 @@
       if (!id) return;
       const myParticipant = rawParticipants.find((p) => p.name === myMember?.name);
       if (!myParticipant) return;
+      if (!(await resetEventProgramBeforeParticipantChange())) return;
       try {
         await deleteParticipant({ leagueId: id, participantId: myParticipant.id }).unwrap();
         setCancelJoinConfirm(false);
@@ -278,6 +308,7 @@
 
     const handleAddParticipant = async () => {
       if (!id || !inputName.trim()) return;
+      if (!(await resetEventProgramBeforeParticipantChange())) return;
       try {
         await addParticipants({
           leagueId: id,
@@ -302,6 +333,7 @@
         setAlertMsg(`모집 인원(${league!.recruit_count}명)을 초과합니다. 최대 ${remaining}명 추가 가능합니다.`);
         return;
       }
+      if (!(await resetEventProgramBeforeParticipantChange())) return;
       try {
         await addParticipants({
           leagueId: id,
@@ -337,7 +369,7 @@
 
     const getProgressPath = () => {
       if (league?.format === "이벤트 프로그램") {
-        const hasProgram = Boolean(id && localStorage.getItem(`league-program-${id}`));
+        const hasProgram = Boolean(programData?.program);
         return hasProgram
           ? `/league/${id}/program/matches?program=1&round=1`
           : `/league/${id}/program`;
@@ -444,15 +476,22 @@
 
     const hasChanges = hasLeagueChanges;
 
-    const handleParticipantFieldBlur = (participantId: string, field: "division" | "name", originalValue: string) => {
+    const handleParticipantFieldBlur = async (participantId: string, field: "division" | "name", originalValue: string) => {
       if (!id) return;
       const current = (editingParticipants[participantId]?.[field] ?? "").trim();
       if (current === originalValue.trim()) return;
-      updateParticipant({ leagueId: id, participantId, updates: { [field]: current } });
+      if (!(await resetEventProgramBeforeParticipantChange())) return;
+      try {
+        await updateParticipant({ leagueId: id, participantId, updates: { [field]: current } }).unwrap();
+      } catch {
+        setAlertSeverity("error");
+        setAlertMsg("참가자 정보 수정에 실패했습니다.");
+      }
     };
 
     const handleDeleteParticipant = async () => {
       if (!id || !deleteParticipantTarget) return;
+      if (!(await resetEventProgramBeforeParticipantChange())) return;
       try {
         await deleteParticipant({ leagueId: id, participantId: deleteParticipantTarget.id }).unwrap();
         setDeleteParticipantTarget(null);

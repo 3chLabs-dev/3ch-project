@@ -4,7 +4,7 @@ import { distributeSnake } from '../../features/league/algorithms/distributeSnak
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { generateGroupOptions } from '../../features/league/algorithms/generateGroupOptions';
-import { useGetLeagueParticipantsQuery } from '../../features/league/leagueApi';
+import { useGetLeagueParticipantsQuery, useGetLeagueProgramQuery, useSaveLeagueProgramMutation } from '../../features/league/leagueApi';
 import type { ProgramBlock, ProgramOption, ProgramType, TeamMatchType, RoundConfig } from '../../features/league/types/tournament.types';
 import { ToggleButton, ToggleButtonGroup, Button, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Chip, Checkbox } from "@mui/material";
 import { DndContext, PointerSensor, TouchSensor, useSensor, useSensors, closestCenter,
@@ -12,6 +12,7 @@ import { DndContext, PointerSensor, TouchSensor, useSensor, useSensors, closestC
 import { SortableContext, verticalListSortingStrategy, arrayMove, } from "@dnd-kit/sortable";
 import DragHandleIcon from "@mui/icons-material/DragHandle";
 import EditIcon from "@mui/icons-material/Edit";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 
 const formatTime = (totalMinutes: number) => {
   const minutesInDay = 24 * 60;
@@ -523,6 +524,10 @@ const LeagueAlgorithmDemo = ({
   const { data: participantData } = useGetLeagueParticipantsQuery(leagueId ?? "", {
     skip: !leagueId,
   });
+  const { data: savedProgramData } = useGetLeagueProgramQuery(leagueId ?? "", {
+    skip: !leagueId || !isEditMode,
+  });
+  const [saveLeagueProgram] = useSaveLeagueProgramMutation();
   const [playerCount, setPlayerCount] = useState(initialPlayerCount);
   const [courtCount, setCourtCount] = useState(4);
   const [startHour, setStartHour] = useState(9);
@@ -879,13 +884,13 @@ const LeagueAlgorithmDemo = ({
       return;
     }
 
-    const rawProgram = localStorage.getItem(`league-program-${leagueId}`);
-    if (!rawProgram) {
+    const savedProgram = savedProgramData?.program?.program_data as StoredProgramWithEditState | undefined;
+    if (!savedProgram) {
       return;
     }
 
     try {
-      const storedProgram = JSON.parse(rawProgram) as StoredProgramWithEditState;
+      const storedProgram = savedProgram;
       const editState = storedProgram.editState;
 
       if (editState) {
@@ -926,7 +931,7 @@ const LeagueAlgorithmDemo = ({
     } catch {
       restoredRef.current = true;
     }
-  }, [getProgramOptionIndexByTitle, isEditMode, leagueId, rounds]);
+  }, [getProgramOptionIndexByTitle, isEditMode, leagueId, rounds, savedProgramData]);
 
   const openProgramEditDialog = (index: number) => {
     const option = displayedProgramOptions[index];
@@ -963,7 +968,7 @@ const LeagueAlgorithmDemo = ({
     closeProgramEditDialog();
   };
 
-  const completeProgramCreation = () => {
+  const completeProgramCreation = async () => {
     if (selectedProgramOptionIndex === null) {
       return;
     }
@@ -992,6 +997,7 @@ const LeagueAlgorithmDemo = ({
         `league-program-${leagueId}`,
         JSON.stringify(selectedOption)
       );
+      await saveLeagueProgram({ leagueId, program: selectedOption }).unwrap();
       navigate(`/league/${leagueId}/program`);
       return;
     }
@@ -1136,7 +1142,40 @@ const LeagueAlgorithmDemo = ({
         boxSizing: "border-box",
       }}
     >
-      <h1>조 편성 알고리즘 테스트</h1>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          marginBottom: "20px",
+        }}
+      >
+        <IconButton
+          size="small"
+          onClick={() => {
+            if (leagueId) {
+              navigate(`/league/${leagueId}/program`);
+            } else {
+              navigate(-1);
+            }
+          }}
+          sx={{
+            mr: 0.5,
+            color: "#111827",
+          }}
+          aria-label="프로그램 목록으로 돌아가기"
+        >
+          <ArrowBackIcon fontSize="small" />
+        </IconButton>
+        <div
+          style={{
+            fontSize: "17px",
+            fontWeight: 900,
+            lineHeight: 1.35,
+          }}
+        >
+          이벤트 프로그램 생성
+        </div>
+      </div>
 
       <div style={{ marginTop: '24px' }}>
         <div style={{
@@ -1309,7 +1348,7 @@ const LeagueAlgorithmDemo = ({
         }}
         style={{ marginTop: "30px" }}
       >
-        AI 프로그램 생성하기
+        프로그램 생성하기
       </Button>
 
       {isProgramGenerated && (

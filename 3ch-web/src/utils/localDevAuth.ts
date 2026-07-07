@@ -26,7 +26,7 @@ export const LOCAL_DEV_GROUP: Group = {
 };
 
 export function isLocalDevHost() {
-  return ["localhost", "127.0.0.1"].includes(window.location.hostname);
+  return import.meta.env.DEV && ["localhost", "127.0.0.1"].includes(window.location.hostname);
 }
 
 export function isLocalDevToken(token: string | null | undefined) {

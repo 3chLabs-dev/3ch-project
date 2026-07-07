@@ -36,6 +36,7 @@ import {
   useNotifyLeagueMatchMutation,
   useExtendLeagueMatchesMutation,
   useGetLeagueParticipantsQuery,
+  useGetLeagueProgramQuery,
   type LeagueMatch,
 } from "../../features/league/leagueApi";
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
@@ -358,14 +359,15 @@ export default function LeagueMatchOrder() {
 
   const { data: matchData, isLoading: matchLoading, refetch: refetchMatches } = useGetLeagueMatchesQuery(leagueId, { skip: !leagueId, refetchOnMountOrArgChange: true });
   const { data: participantData } = useGetLeagueParticipantsQuery(leagueId, { skip: !leagueId, refetchOnMountOrArgChange: true, });
+  const { data: programData } = useGetLeagueProgramQuery(leagueId, { skip: !isProgramMode || !leagueId });
   const [search, setSearch] = useState("");
   // 순서만 로컬에 보관. 경기 데이터는 항상 RTK Query 캐시에서 가져와야 optimistic update가 즉시 반영됨
   const [localOrder, setLocalOrder] = useState<string[] | null>(null);
 
   const rawParticipants = useMemo(() => participantData?.participants ?? [], [participantData]);
   const programOption = useMemo(
-    () => (isProgramMode && leagueId ? getStoredProgramOption(leagueId) : null),
-    [isProgramMode, leagueId],
+    () => (isProgramMode && leagueId ? (programData?.program?.program_data as ReturnType<typeof getStoredProgramOption> | undefined) ?? getStoredProgramOption(leagueId) : null),
+    [isProgramMode, leagueId, programData],
   );
   const programMatches = useMemo(
     () => isProgramMode

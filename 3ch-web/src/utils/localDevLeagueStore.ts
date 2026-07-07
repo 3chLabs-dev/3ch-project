@@ -10,6 +10,7 @@ import { LOCAL_DEV_GROUP, LOCAL_DEV_USER } from "./localDevAuth";
 
 const LOCAL_DEV_LEAGUES_KEY = "local-dev-leagues";
 const LOCAL_DEV_PARTICIPANTS_KEY = "local-dev-participants";
+const LOCAL_DEV_PROGRAMS_KEY = "local-dev-programs";
 
 function readJson<T>(key: string, fallback: T): T {
   try {
@@ -153,4 +154,22 @@ export function deleteLocalDevParticipant(leagueId: string, participantId: strin
   const participants = getLocalDevParticipants(leagueId).filter((participant) => participant.id !== participantId);
   saveLocalDevParticipants(leagueId, participants);
   updateLeagueParticipantCount(leagueId, participants.length);
+}
+
+export function getLocalDevProgram(leagueId: string) {
+  const programs = readJson<Record<string, unknown>>(LOCAL_DEV_PROGRAMS_KEY, {});
+  return programs[leagueId] ?? null;
+}
+
+export function saveLocalDevProgram(leagueId: string, programData: unknown) {
+  const programs = readJson<Record<string, unknown>>(LOCAL_DEV_PROGRAMS_KEY, {});
+  programs[leagueId] = programData;
+  writeJson(LOCAL_DEV_PROGRAMS_KEY, programs);
+  return programData;
+}
+
+export function deleteLocalDevProgram(leagueId: string) {
+  const programs = readJson<Record<string, unknown>>(LOCAL_DEV_PROGRAMS_KEY, {});
+  delete programs[leagueId];
+  writeJson(LOCAL_DEV_PROGRAMS_KEY, programs);
 }

@@ -21,6 +21,8 @@ type League = {
   participant_count: number;
   creator_name: string | null;
   club_name: string | null;
+  has_program?: boolean;
+  program_updated_at?: string | null;
 };
 
 type Filters = {
@@ -52,12 +54,14 @@ const TYPE_OPTIONS = [
   { value: "league", label: "리그" },
   { value: "tournament", label: "토너먼트" },
   { value: "mixed", label: "혼합" },
+  { value: "클럽 이벤트", label: "클럽 이벤트" },
 ];
 
 const LIMIT = 20;
 
 const TYPE_LABEL: Record<string, string> = {
   league: "리그", tournament: "토너먼트", mixed: "혼합",
+  "클럽 이벤트": "클럽 이벤트",
 };
 
 const FORMAT_LABEL: Record<string, string> = {
@@ -229,7 +233,7 @@ export default function AdminLeaguePage() {
         <Table size="small">
           <TableHead>
             <TableRow sx={{ bgcolor: "#F9FAFB" }}>
-              {["리그코드", "종목", "클럽", "리그날짜", "리그명", "유형", "방식", "생성자", "생성일시", "참가자"].map((h) => (
+              {["리그코드", "종목", "클럽", "리그날짜", "리그명", "유형", "방식", "프로그램", "생성자", "생성일시", "참가자"].map((h) => (
                 <TableCell key={h} sx={{ fontWeight: 800, fontSize: 12, color: "#374151", py: 1.2 }}>{h}</TableCell>
               ))}
             </TableRow>
@@ -237,13 +241,13 @@ export default function AdminLeaguePage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={9} align="center" sx={{ py: 6 }}>
+                <TableCell colSpan={11} align="center" sx={{ py: 6 }}>
                   <CircularProgress size={28} />
                 </TableCell>
               </TableRow>
             ) : leagues.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} align="center" sx={{ py: 6, color: "#9CA3AF", fontWeight: 700, fontSize: 13 }}>
+                <TableCell colSpan={11} align="center" sx={{ py: 6, color: "#9CA3AF", fontWeight: 700, fontSize: 13 }}>
                   생성된 리그가 없습니다.
                 </TableCell>
               </TableRow>
@@ -261,6 +265,21 @@ export default function AdminLeaguePage() {
                   <TableCell sx={{ fontSize: 12 }}>{l.title ? l.title : "-"}</TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{l.type ? (TYPE_LABEL[l.type] ?? l.type) : "-"}</TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{l.format ? (FORMAT_LABEL[l.format] ?? l.format) : "-"}</TableCell>
+                  <TableCell sx={{ fontSize: 12 }}>
+                    {l.format === "이벤트 프로그램" ? (
+                      <Chip
+                        label={l.has_program ? "생성됨" : "미생성"}
+                        size="small"
+                        sx={{
+                          height: 20,
+                          fontSize: 11,
+                          fontWeight: 800,
+                          bgcolor: l.has_program ? "#EFF6FF" : "#F3F4F6",
+                          color: l.has_program ? "#2563EB" : "#6B7280",
+                        }}
+                      />
+                    ) : "-"}
+                  </TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{l.creator_name ?? "-"}</TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{l.created_at.slice(0, 10)}</TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{l.participant_count ?? 0}명</TableCell>

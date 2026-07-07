@@ -38,6 +38,7 @@ import {
   useGetLeagueQuery,
   useGetLeagueParticipantsQuery,
   useGetLeagueMatchesQuery,
+  useGetLeagueProgramQuery,
   useUpdateLeagueMatchMutation,
   useReorderLeagueParticipantsMutation,
   type LeagueParticipantItem,
@@ -832,6 +833,7 @@ export default function LeagueBracket() {
     useGetLeagueParticipantsQuery(id ?? "", { skip: !id, pollingInterval: 15000 });
   const { data: matchData, refetch: refetchMatches } =
     useGetLeagueMatchesQuery(id ?? "", { skip: !id, pollingInterval: 15000 });
+  const { data: programData } = useGetLeagueProgramQuery(id ?? "", { skip: !isProgramMode || !id });
 
   const league          = leagueData?.league;
   // useMemo로 감싸서 matchData 객체 참조가 바뀔 때만 재생성 (불필요한 하위 useMemo 재실행 방지)
@@ -839,8 +841,8 @@ export default function LeagueBracket() {
   // const matches         = useMemo(() => (matchData?.matches ?? []).filter((m) => !m.bracket), [matchData]);
   const rawParticipants = useMemo(() => participantData?.participants ?? [], [participantData]);
   const programOption = useMemo(
-    () => (isProgramMode && id ? getStoredProgramOption(id) : null),
-    [isProgramMode, id],
+    () => (isProgramMode && id ? (programData?.program?.program_data as ReturnType<typeof getStoredProgramOption> | undefined) ?? getStoredProgramOption(id) : null),
+    [isProgramMode, id, programData],
   );
   const programMatchesAll = useMemo(
     () => isProgramMode

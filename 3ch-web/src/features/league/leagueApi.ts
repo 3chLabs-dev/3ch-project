@@ -3,10 +3,13 @@ import type { RootState } from "../../app/store";
 import { isLocalDevToken } from "../../utils/localDevAuth";
 import {
   addLocalDevParticipants,
+  deleteLocalDevProgram,
   deleteLocalDevParticipant,
   getLocalDevLeague,
   getLocalDevLeagues,
   getLocalDevParticipants,
+  getLocalDevProgram,
+  saveLocalDevProgram,
   updateLocalDevParticipant,
 } from "../../utils/localDevLeagueStore";
 
@@ -288,6 +291,24 @@ export interface SaveLeagueGroupingResponse {
   message: string;
 }
 
+export interface LeagueProgramRecord {
+  id: string;
+  league_id: string;
+  program_data: unknown;
+  created_by_id?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GetLeagueProgramResponse {
+  program: LeagueProgramRecord | null;
+}
+
+export interface SaveLeagueProgramRequest {
+  leagueId: string;
+  program: unknown;
+}
+
 /**
  * RTK Query API endpoints
  */
@@ -476,6 +497,80 @@ export const leagueApi = baseApi.injectEndpoints({
       invalidatesTags: [{ type: "League", id: "LIST" }],
     }),
 
+    getLeagueProgram: builder.query<GetLeagueProgramResponse, string>({
+      async queryFn(id, api, _extraOptions, fetchWithBQ) {
+        const token = (api.getState() as RootState).auth?.token;
+        if (isLocalDevToken(token)) {
+          const programData = getLocalDevProgram(id);
+          return {
+            data: {
+              program: programData
+                ? {
+                    id: `${id}-program`,
+                    league_id: id,
+                    program_data: programData,
+                    created_at: new Date(0).toISOString(),
+                    updated_at: new Date().toISOString(),
+                  }
+                : null,
+            },
+          };
+        }
+        const result = await fetchWithBQ(`/league/${id}/program`);
+        return result.error ? { error: result.error } : { data: result.data as GetLeagueProgramResponse };
+      },
+      providesTags: (_result, _error, id) => [{ type: "League", id: `program-${id}` }],
+    }),
+
+    saveLeagueProgram: builder.mutation<GetLeagueProgramResponse, SaveLeagueProgramRequest>({
+      async queryFn({ leagueId, program }, api, _extraOptions, fetchWithBQ) {
+        const token = (api.getState() as RootState).auth?.token;
+        if (isLocalDevToken(token)) {
+          const programData = saveLocalDevProgram(leagueId, program);
+          return {
+            data: {
+              program: {
+                id: `${leagueId}-program`,
+                league_id: leagueId,
+                program_data: programData,
+                created_at: new Date(0).toISOString(),
+                updated_at: new Date().toISOString(),
+              },
+            },
+          };
+        }
+        const result = await fetchWithBQ({
+          url: `/league/${leagueId}/program`,
+          method: "PUT",
+          body: { program_data: program },
+        });
+        return result.error ? { error: result.error } : { data: result.data as GetLeagueProgramResponse };
+      },
+      invalidatesTags: (_result, _error, { leagueId }) => [
+        { type: "League", id: `program-${leagueId}` },
+        { type: "League", id: leagueId },
+      ],
+    }),
+
+    deleteLeagueProgram: builder.mutation<{ ok: boolean }, { leagueId: string }>({
+      async queryFn({ leagueId }, api, _extraOptions, fetchWithBQ) {
+        const token = (api.getState() as RootState).auth?.token;
+        if (isLocalDevToken(token)) {
+          deleteLocalDevProgram(leagueId);
+          return { data: { ok: true } };
+        }
+        const result = await fetchWithBQ({
+          url: `/league/${leagueId}/program`,
+          method: "DELETE",
+        });
+        return result.error ? { error: result.error } : { data: result.data as { ok: boolean } };
+      },
+      invalidatesTags: (_result, _error, { leagueId }) => [
+        { type: "League", id: `program-${leagueId}` },
+        { type: "League", id: leagueId },
+      ],
+    }),
+
     getLeagueMatches: builder.query<GetLeagueMatchesResponse, string>({
       query: (id) => `/league/${id}/matches`,
       providesTags: (_result, _error, id) => [{ type: "League", id: `matches-${id}` }],
@@ -642,6 +737,9 @@ export const {
   useDeleteParticipantMutation,
   useAddParticipantsMutation,
   useDeleteLeagueMutation,
+  useGetLeagueProgramQuery,
+  useSaveLeagueProgramMutation,
+  useDeleteLeagueProgramMutation,
   useGetLeagueMatchesQuery,
   useInitLeagueMatchesMutation,
   useUpdateLeagueMatchMutation,

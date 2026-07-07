@@ -1942,6 +1942,117 @@ router.delete('/league/:leagueId', requireAuth, async (req, res) => {
   }
 });
 
+// 이벤트 프로그램 조회 (public 리그는 누구나, club_only는 클럽 멤버)
+router.get('/league/:id/program', optionalAuth, async (req, res) => {
+  const leagueId = req.params.id;
+
+  try {
+    const leagueRow = await pool.query(
+      `SELECT id, join_permission
+       FROM leagues
+       WHERE id = $1`,
+      [leagueId],
+    );
+
+    if (leagueRow.rowCount === 0) {
+      return res.status(404).json({ message: '리그를 찾을 수 없습니다.' });
+    }
+
+    if (leagueRow.rows[0].join_permission === 'club_only') {
+      const userId = req.user ? Number(req.user.sub) : null;
+      if (!userId) return res.status(401).json({ message: '로그인이 필요합니다.' });
+
+      const accessCheck = await pool.query(
+        `SELECT 1
+         FROM leagues l
+         INNER JOIN group_members gm ON gm.group_id = l.group_id
+         WHERE l.id = $1 AND gm.user_id = $2`,
+        [leagueId, userId],
+      );
+      if (accessCheck.rowCount === 0) {
+        return res.status(403).json({ message: '클럽 회원만 조회할 수 있습니다.' });
+      }
+    }
+
+    const result = await pool.query(
+      `SELECT id, league_id, program_data, created_by_id, created_at, updated_at
+       FROM league_programs
+       WHERE league_id = $1`,
+      [leagueId],
+    );
+
+    return res.json({ program: result.rows[0] ?? null });
+  } catch (err) {
+    console.error('Error fetching league program:', err);
+    return res.status(500).json({ message: '프로그램 조회 중 서버 오류' });
+  }
+});
+
+// 이벤트 프로그램 저장/수정 (owner/admin)
+router.put('/league/:id/program', requireAuth, async (req, res) => {
+  const userId = Number(req.user.sub);
+  const leagueId = req.params.id;
+  const programData = req.body?.program_data ?? req.body?.program;
+
+  if (!programData || typeof programData !== 'object') {
+    return res.status(400).json({ message: '프로그램 데이터가 올바르지 않습니다.' });
+  }
+
+  try {
+    const access = await pool.query(
+      `SELECT l.id
+       FROM leagues l
+       INNER JOIN group_members gm ON gm.group_id = l.group_id
+       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+      [leagueId, userId],
+    );
+
+    if (access.rowCount === 0) {
+      return res.status(403).json({ message: '권한이 없습니다.' });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO league_programs (league_id, program_data, created_by_id)
+       VALUES ($1, $2::jsonb, $3)
+       ON CONFLICT (league_id)
+       DO UPDATE SET program_data = EXCLUDED.program_data, updated_at = NOW()
+       RETURNING id, league_id, program_data, created_by_id, created_at, updated_at`,
+      [leagueId, JSON.stringify(programData), userId],
+    );
+
+    return res.json({ program: result.rows[0] });
+  } catch (err) {
+    console.error('Error saving league program:', err);
+    return res.status(500).json({ message: '프로그램 저장 중 서버 오류' });
+  }
+});
+
+// 이벤트 프로그램 삭제 (owner/admin)
+router.delete('/league/:id/program', requireAuth, async (req, res) => {
+  const userId = Number(req.user.sub);
+  const leagueId = req.params.id;
+
+  try {
+    const access = await pool.query(
+      `SELECT l.id
+       FROM leagues l
+       INNER JOIN group_members gm ON gm.group_id = l.group_id
+       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+      [leagueId, userId],
+    );
+
+    if (access.rowCount === 0) {
+      return res.status(403).json({ message: '권한이 없습니다.' });
+    }
+
+    await pool.query(`DELETE FROM league_programs WHERE league_id = $1`, [leagueId]);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Error deleting league program:', err);
+    return res.status(500).json({ message: '프로그램 삭제 중 서버 오류' });
+  }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 경기 순서 (league_matches)
 // ─────────────────────────────────────────────────────────────────────────────

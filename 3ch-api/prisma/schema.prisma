@@ -27,6 +27,7 @@ model User {
   created_groups        Group[]              @relation("GroupCreator")
   group_memberships     GroupMember[]
   draws                 Draw[]               @relation("DrawCreator")
+  league_programs       LeagueProgram[]      @relation("LeagueProgramCreator")
   group_rankings        GroupRanking[]
   group_ranking_events  GroupRankingEvent[]  @relation("GroupRankingEventMember")
   sport_rankings        SportRanking[]
@@ -253,9 +254,24 @@ model League {
   matches        Match[]
   participants   LeagueParticipant[]
   league_matches LeagueMatch[]
+  program        LeagueProgram?
   draws          Draw[]
 
   @@map("leagues")
+}
+
+model LeagueProgram {
+  id            String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  league_id     String   @unique
+  program_data  Json
+  created_by_id Int?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @default(now()) @updatedAt
+
+  league  League @relation(fields: [league_id], references: [id], onDelete: Cascade)
+  creator User?  @relation("LeagueProgramCreator", fields: [created_by_id], references: [id], onDelete: SetNull)
+
+  @@map("league_programs")
 }
 
 model LeagueParticipant {

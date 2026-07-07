@@ -21,6 +21,7 @@ import {
   useGetLeagueQuery,
   useGetLeagueMatchesQuery,
   useGetLeagueParticipantsQuery,
+  useGetLeagueProgramQuery,
   useAssignMatchParticipantMutation,
   type LeagueMatch,
 } from "../../features/league/leagueApi";
@@ -680,10 +681,11 @@ export default function LeagueTournamentBracket() {
 
   const league = leagueData?.league;
   const { data: participantsData } = useGetLeagueParticipantsQuery(id!, { skip: !id || (!isProgramMode && false) });
+  const { data: programData } = useGetLeagueProgramQuery(id!, { skip: !isProgramMode || !id });
   const participants = useMemo(() => participantsData?.participants ?? [], [participantsData]);
   const programOption = useMemo(
-    () => (isProgramMode && id ? getStoredProgramOption(id) : null),
-    [isProgramMode, id],
+    () => (isProgramMode && id ? (programData?.program?.program_data as ReturnType<typeof getStoredProgramOption> | undefined) ?? getStoredProgramOption(id) : null),
+    [isProgramMode, id, programData],
   );
   const programMatches = useMemo(
     () => isProgramMode

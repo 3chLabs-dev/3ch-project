@@ -20,7 +20,7 @@ export type LeagueTypeValue =
   | "doubles"
   | "team"
   | "club_battle"
-  | "club_exchange";
+  | "club_event";
 
 export interface LeagueTypeInfo {
   selectedType: LeagueTypeValue;
@@ -162,7 +162,7 @@ export const createLeague = createAsyncThunk.withTypes<{ state: RootState }>()(
       doubles: "복식",
       team: "단체전",
       club_battle: "클럽 대항전",
-      club_exchange: "클럽 이벤트",
+      club_event: "클럽 이벤트",
     };
 
     // 리그 규칙 매핑
@@ -207,14 +207,14 @@ export const createLeague = createAsyncThunk.withTypes<{ state: RootState }>()(
       description: s.step1BasicInfo.location ? `장소: ${s.step1BasicInfo.location}` : undefined,
       title: s.step1BasicInfo.title ? `${s.step1BasicInfo.title}` : undefined,
       type: typeMap[s.step2Type.selectedType],
-      format: s.step2Type.selectedType === "club_exchange"
+      format: s.step2Type.selectedType === "club_event"
         ? "이벤트 프로그램"
         : s.step3Format
           ? formatMap[s.step3Format.format]
           : undefined,
       sport: "탁구", // 탁구로 고정 (향후 확장 예정)
       start_date,
-      rules: s.step2Type.selectedType === "club_exchange"
+      rules: s.step2Type.selectedType === "club_event"
         ? "프로그램별 설정"
         : s.step4Rules
           ? rulesMap[s.step4Rules.rule]

@@ -18,7 +18,7 @@ const LeagueTypeOptions = [
   { value: "doubles", label: "복식", disabled: false },
   { value: "team", label: "단체전", disabled: false },
   { value: "club_battle", label: "클럽 대항전", disabled: true },
-  { value: "club_exchange", label: "클럽 이벤트", disabled: false },
+  { value: "club_event", label: "클럽 이벤트", disabled: false },
 ] as const;
 
 const LeagueStep2TypeSelection: React.FC = () => {

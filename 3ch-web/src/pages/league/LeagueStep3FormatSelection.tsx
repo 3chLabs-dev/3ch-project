@@ -28,7 +28,7 @@ const LeagueStep3FormatSelection: React.FC = () => {
   const dispatch = useAppDispatch();
   const existingFormat = useAppSelector((s) => s.leagueCreation.step3Format?.format ?? "");
   const selectedType = useAppSelector((s) => s.leagueCreation.step2Type?.selectedType);
-  const isClubEvent = selectedType === "club_exchange";
+  const isClubEvent = selectedType === "club_event";
 
   const [selectedFormat, setSelectedFormat] = useState<LeagueFormatValue | "">(existingFormat);
   const visibleOptions = useMemo(

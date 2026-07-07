@@ -63,7 +63,7 @@ export default function LeagueStep5Participants() {
   const SORT_OPTIONS = ["부수", "이름", "랜덤"];
 
   const isFourPlayerOmr = formatSelection === "four-player-omr";
-  const isClubEvent = typeSelection === "club_exchange";
+  const isClubEvent = typeSelection === "club_event";
   const [participants, setParticipants] = useState<Participant[]>(existing);
   const [recruitCount, setRecruitCount] = useState<number | "">(isFourPlayerOmr ? 4 : "");
   const [sortOrder, setSortOrder] = useState<string>("");

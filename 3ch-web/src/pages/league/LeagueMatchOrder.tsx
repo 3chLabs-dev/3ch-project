@@ -487,6 +487,10 @@ export default function LeagueMatchOrder() {
   const currentProgramBlock = isProgramMode ? programOption?.blocks?.[programRound - 1] : undefined;
   const bracketPath = currentProgramBlock?.format === "TOURNAMENT" ? "tournament-bracket" : "bracket";
   const isTournamentProgramRound = isProgramMode && currentProgramBlock?.format === "TOURNAMENT";
+  const isProgramFinalFromPrelim =
+    isProgramMode &&
+    programOption?.rounds?.[programRound - 1]?.option === "FINAL" &&
+    programOption?.rounds?.[programRound - 2]?.option === "PRELIM";
   const programSourceMatches = useMemo(() => {
     if (!isProgramMode || !leagueId || !programOption) return matchData?.matches ?? [];
 
@@ -520,7 +524,25 @@ export default function LeagueMatchOrder() {
     () => (matchData?.matches ?? []).filter((match) => match.is_program && match.program_round === programRound),
     [matchData?.matches, programRound],
   );
-  const programMatches = serverProgramMatches.length > 0 ? serverProgramMatches : generatedProgramMatches;
+  const programMatches = useMemo(() => {
+    if (!isProgramFinalFromPrelim) {
+      return serverProgramMatches.length > 0 ? serverProgramMatches : generatedProgramMatches;
+    }
+
+    const serverById = new Map(serverProgramMatches.map((match) => [match.id, match]));
+    const hydratedMatches = generatedProgramMatches.map((match) => {
+      const serverMatch = serverById.get(match.id);
+      if (!serverMatch) return match;
+      return {
+        ...match,
+        score_a: serverMatch.score_a,
+        score_b: serverMatch.score_b,
+        court: serverMatch.court,
+        status: serverMatch.status,
+      };
+    });
+    return applyProgramTournamentAdvancement(hydratedMatches);
+  }, [generatedProgramMatches, isProgramFinalFromPrelim, serverProgramMatches]);
 
   const updateProgramMatch = useCallback((matchId: string, updates: ProgramMatchPatch) => {
     if (!leagueId) return;
@@ -772,24 +794,26 @@ export default function LeagueMatchOrder() {
   }, [isProgramMode, matches, leagueId, reorderMatches]);
 
   useEffect(() => {
-    if (!isProgramMode || !programOption || serverProgramMatches.length > 0) return;
+    if (!isProgramMode || !programOption) return;
+    if (serverProgramMatches.length > 0 && !isProgramFinalFromPrelim) return;
     const currentBlock = programOption.blocks?.[programRound - 1];
     if (currentBlock?.type !== "SINGLES" || currentBlock.format !== "TOURNAMENT") return;
-    if (!generatedProgramMatches.some((match) => match.bracket && match.round_number === 1 && match.participant_a_id && match.participant_b_id)) return;
+    const matchesToSync = isProgramFinalFromPrelim ? programMatches : generatedProgramMatches;
+    if (!matchesToSync.some((match) => match.bracket && match.round_number === 1 && match.participant_a_id && match.participant_b_id)) return;
 
-    const syncKey = `${leagueId}-${programRound}`;
+    const syncKey = `${leagueId}-${programRound}-${matchesToSync.map((match) => `${match.id}:${match.participant_a_id ?? ""}:${match.participant_b_id ?? ""}:${match.status}:${match.score_a ?? ""}:${match.score_b ?? ""}`).join("|")}`;
     if (programSyncCalledRef.current === syncKey) return;
     programSyncCalledRef.current = syncKey;
 
     syncLeagueProgramMatches({
       leagueId,
-      matches: generatedProgramMatches.map((match) => ({
+      matches: matchesToSync.map((match) => ({
         ...match,
         program_round: programRound,
         program_block_type: currentBlock.type,
       })),
     });
-  }, [generatedProgramMatches, isProgramMode, leagueId, programOption, programRound, serverProgramMatches.length, syncLeagueProgramMatches]);
+  }, [generatedProgramMatches, isProgramFinalFromPrelim, isProgramMode, leagueId, programMatches, programOption, programRound, serverProgramMatches.length, syncLeagueProgramMatches]);
 
 
   if (!isProgramMode && matchLoading) {
@@ -920,18 +944,18 @@ export default function LeagueMatchOrder() {
                     borderRadius: 1,
                     px: 1,
                     fontSize: 11,
-                    fontWeight: 800,
-                    color: mineOnly ? "#1976d2" : "#9CA3AF",
-                    borderColor: mineOnly ? "#1976d2" : "#0000001f",
+                    fontWeight: 700,
+                    color: mineOnly ? "#9CA3AF" : "#1976d2",
+                    borderColor: mineOnly ? "#0000001f" : "#1976d2",
                     bgcolor: "#fff",
                     whiteSpace: "nowrap",
                     "&:hover": {
-                      borderColor: mineOnly ? "#1976d2" : "#0000003d",
-                      bgcolor: mineOnly ? "#EFF6FF" : "#F9FAFB",
+                      borderColor: mineOnly ? "#0000003d" : "#1976d2",
+                      bgcolor: mineOnly ? "#F9FAFB" : "#EFF6FF",
                     },
                   }}
                 >
-                  {mineOnly ? "내 경기" : "전체 경기"}
+                  {mineOnly ? "전체 경기" : "내 경기"}
                 </Button>
                 <SearchIcon sx={{ fontSize: 18, color: "#9CA3AF" }} />
               </InputAdornment>

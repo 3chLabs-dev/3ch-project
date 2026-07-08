@@ -343,8 +343,9 @@ function getRankedPlayersFromPreviousRound(
   }
 
   const playerById = new Map(players.map((player) => [player.id, player]));
-  const stats = new Map<string, { wins: number; losses: number; setDiff: number; played: number }>();
-  players.forEach((player) => stats.set(player.id, { wins: 0, losses: 0, setDiff: 0, played: 0 }));
+  const playerIndex = new Map(players.map((player, index) => [player.id, index]));
+  const stats = new Map<string, { wins: number; losses: number; setTotal: number; played: number }>();
+  players.forEach((player) => stats.set(player.id, { wins: 0, losses: 0, setTotal: 0, played: 0 }));
 
   previousMatches.forEach((match) => {
     const aId = match.participant_a_id;
@@ -357,8 +358,8 @@ function getRankedPlayersFromPreviousRound(
     const bStats = stats.get(bId)!;
     aStats.played += 1;
     bStats.played += 1;
-    aStats.setDiff += scoreA - scoreB;
-    bStats.setDiff += scoreB - scoreA;
+    aStats.setTotal += scoreA;
+    bStats.setTotal += scoreB;
 
     if (scoreA > scoreB) {
       aStats.wins += 1;
@@ -369,16 +370,47 @@ function getRankedPlayersFromPreviousRound(
     }
   });
 
+  const byWins = new Map<number, ProgramPlayer[]>();
+  players.forEach((player) => {
+    const wins = stats.get(player.id)?.wins ?? 0;
+    byWins.set(wins, [...(byWins.get(wins) ?? []), player]);
+  });
+
+  const tieWon = new Map<string, number>();
+  const tieLost = new Map<string, number>();
+  players.forEach((player) => {
+    tieWon.set(player.id, 0);
+    tieLost.set(player.id, 0);
+  });
+
+  for (const group of byWins.values()) {
+    if (group.length < 2) continue;
+    const groupIds = new Set(group.map((player) => player.id));
+    previousMatches.forEach((match) => {
+      const aId = match.participant_a_id;
+      const bId = match.participant_b_id;
+      if (!aId || !bId || !groupIds.has(aId) || !groupIds.has(bId)) return;
+      const scoreA = match.score_a ?? 0;
+      const scoreB = match.score_b ?? 0;
+      tieWon.set(aId, (tieWon.get(aId) ?? 0) + scoreA);
+      tieLost.set(aId, (tieLost.get(aId) ?? 0) + scoreB);
+      tieWon.set(bId, (tieWon.get(bId) ?? 0) + scoreB);
+      tieLost.set(bId, (tieLost.get(bId) ?? 0) + scoreA);
+    });
+  }
+
   return [...players].sort((left, right) => {
     const leftStats = stats.get(left.id)!;
     const rightStats = stats.get(right.id)!;
-    return (
-      rightStats.wins - leftStats.wins ||
-      leftStats.losses - rightStats.losses ||
-      rightStats.setDiff - leftStats.setDiff ||
-      left.level - right.level ||
-      left.name.localeCompare(right.name)
-    );
+    if (leftStats.wins !== rightStats.wins) return rightStats.wins - leftStats.wins;
+
+    const leftTieLost = tieLost.get(left.id) ?? 0;
+    const rightTieLost = tieLost.get(right.id) ?? 0;
+    const leftRatio = leftTieLost === 0 ? Infinity : (tieWon.get(left.id) ?? 0) / leftTieLost;
+    const rightRatio = rightTieLost === 0 ? Infinity : (tieWon.get(right.id) ?? 0) / rightTieLost;
+    if (leftRatio !== rightRatio) return rightRatio - leftRatio;
+
+    return (playerIndex.get(left.id) ?? 0) - (playerIndex.get(right.id) ?? 0);
   });
 }
 

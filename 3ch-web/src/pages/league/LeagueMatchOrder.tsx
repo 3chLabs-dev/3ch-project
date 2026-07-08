@@ -801,7 +801,9 @@ export default function LeagueMatchOrder() {
     const matchesToSync = isProgramFinalFromPrelim ? programMatches : generatedProgramMatches;
     if (!matchesToSync.some((match) => match.bracket && match.round_number === 1 && match.participant_a_id && match.participant_b_id)) return;
 
-    const syncKey = `${leagueId}-${programRound}-${matchesToSync.map((match) => `${match.id}:${match.participant_a_id ?? ""}:${match.participant_b_id ?? ""}:${match.status}:${match.score_a ?? ""}:${match.score_b ?? ""}`).join("|")}`;
+    const syncKey = `${leagueId}-${programRound}-${matchesToSync.map((match) => `${match.id}:${match.participant_a_id ?? ""}:${match.participant_b_id ?? ""}`).join("|")}`;
+    const serverKey = `${leagueId}-${programRound}-${serverProgramMatches.map((match) => `${match.id}:${match.participant_a_id ?? ""}:${match.participant_b_id ?? ""}`).join("|")}`;
+    if (serverProgramMatches.length > 0 && serverKey === syncKey) return;
     if (programSyncCalledRef.current === syncKey) return;
     programSyncCalledRef.current = syncKey;
 
@@ -813,7 +815,7 @@ export default function LeagueMatchOrder() {
         program_block_type: currentBlock.type,
       })),
     });
-  }, [generatedProgramMatches, isProgramFinalFromPrelim, isProgramMode, leagueId, programMatches, programOption, programRound, serverProgramMatches.length, syncLeagueProgramMatches]);
+  }, [generatedProgramMatches, isProgramFinalFromPrelim, isProgramMode, leagueId, programMatches, programOption, programRound, serverProgramMatches, syncLeagueProgramMatches]);
 
 
   if (!isProgramMode && matchLoading) {

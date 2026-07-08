@@ -535,10 +535,10 @@ export default function LeagueMatchOrder() {
       if (!serverMatch) return match;
       return {
         ...match,
-        score_a: serverMatch.score_a,
-        score_b: serverMatch.score_b,
-        court: serverMatch.court,
-        status: serverMatch.status,
+        score_a: match.score_a ?? serverMatch.score_a,
+        score_b: match.score_b ?? serverMatch.score_b,
+        court: match.court ?? serverMatch.court,
+        status: match.status !== "pending" ? match.status : serverMatch.status,
       };
     });
     return applyProgramTournamentAdvancement(hydratedMatches);

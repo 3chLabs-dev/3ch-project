@@ -2185,6 +2185,17 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
 
     await pool.query('BEGIN');
     const targetProgramRounds = [...new Set(validMatches.map((match) => match.program_round).filter((round) => Number.isFinite(round)))];
+    const existingState = new Map();
+    if (targetProgramRounds.length > 0) {
+      const existingRows = await pool.query(
+        `SELECT id, score_a, score_b, court, status
+         FROM league_matches
+         WHERE league_id = $1 AND is_program = TRUE AND program_round = ANY($2::int[])`,
+        [leagueId, targetProgramRounds],
+      );
+      existingRows.rows.forEach((row) => existingState.set(row.id, row));
+    }
+
     if (targetProgramRounds.length > 0) {
       await pool.query(
         `DELETE FROM league_matches WHERE league_id = $1 AND is_program = TRUE AND program_round = ANY($2::int[])`,
@@ -2195,7 +2206,8 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
     if (validMatches.length > 0) {
       const values = [];
       const placeholders = validMatches.map((match, index) => {
-        const base = index * 14;
+        const base = index * 18;
+        const previous = existingState.get(match.id);
         values.push(
           match.id,
           leagueId,
@@ -2209,16 +2221,21 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
           match.next_slot,
           match.loser_next_match_id,
           match.loser_next_slot,
+          previous?.score_a ?? null,
+          previous?.score_b ?? null,
+          previous?.court ?? null,
+          previous?.status ?? 'pending',
           match.program_round,
           match.program_block_type,
         );
-        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9}, $${base + 10}, $${base + 11}, $${base + 12}, TRUE, $${base + 13}, $${base + 14})`;
+        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9}, $${base + 10}, $${base + 11}, $${base + 12}, $${base + 13}, $${base + 14}, $${base + 15}, $${base + 16}, TRUE, $${base + 17}, $${base + 18})`;
       });
 
       await pool.query(
         `INSERT INTO league_matches
          (id, league_id, match_order, participant_a_id, participant_b_id, bracket, round_number, match_label,
-          next_match_id, next_slot, loser_next_match_id, loser_next_slot, is_program, program_round, program_block_type)
+          next_match_id, next_slot, loser_next_match_id, loser_next_slot, score_a, score_b, court, status,
+          is_program, program_round, program_block_type)
          VALUES ${placeholders.join(', ')}`,
         values,
       );

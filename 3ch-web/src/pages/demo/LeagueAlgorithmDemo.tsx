@@ -997,6 +997,7 @@ const LeagueAlgorithmDemo = ({
         `league-program-${leagueId}`,
         JSON.stringify(selectedOption)
       );
+      localStorage.setItem(`league-program-active-round-${leagueId}`, "1");
       await saveLeagueProgram({ leagueId, program: selectedOption }).unwrap();
       const programMatches = selectedOption.blocks.flatMap((block, blockIndex) =>
         block.type === "SINGLES"

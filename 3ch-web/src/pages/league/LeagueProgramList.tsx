@@ -82,8 +82,8 @@ function getProgramBracketPath(format?: StoredProgramBlock["format"]) {
   return format === "TOURNAMENT" ? "tournament-bracket" : "bracket";
 }
 
-function getProgramBracketLabel(format?: StoredProgramBlock["format"]) {
-  return format === "TOURNAMENT" ? "토너먼트 대진표 보기" : "리그 대진표 보기";
+function getProgramBracketLabel() {
+  return "대진표 보기";
 }
 
 export default function LeagueProgramList() {
@@ -113,7 +113,7 @@ export default function LeagueProgramList() {
         title: block.title ?? `${index + 1}라운드 ${getProgramTypeLabel(block.type)}`.trim(),
         format: block.format ?? "GROUP",
         formatLabel: getProgramFormatLabel(block.format),
-        bracketLabel: getProgramBracketLabel(block.format),
+        bracketLabel: getProgramBracketLabel(),
         bracketPath: getProgramBracketPath(block.format),
       }))
     : [];
@@ -226,7 +226,7 @@ export default function LeagueProgramList() {
                       <Typography sx={{ fontSize: 13, fontWeight: 800, flex: 1 }}>
                         {round.title}
                       </Typography>
-                      <Chip label={round.formatLabel} size="small" sx={{ height: 22, fontSize: 11, fontWeight: 700, bgcolor: "#EFF6FF", color: "#2563EB" }} />
+                      <Chip label={round.formatLabel} size="small" sx={{ height: 22, fontSize: 11, fontWeight: 700, bgcolor: "#F5F3FF", color: "#7C3AED", border: "1px solid #DDD6FE" }} />
                     </Stack>
 
                     <Stack direction="row" spacing={1}>

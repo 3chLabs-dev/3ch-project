@@ -2184,7 +2184,13 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
       }));
 
     await pool.query('BEGIN');
-    await pool.query(`DELETE FROM league_matches WHERE league_id = $1 AND is_program = TRUE`, [leagueId]);
+    const targetProgramRounds = [...new Set(validMatches.map((match) => match.program_round).filter((round) => Number.isFinite(round)))];
+    if (targetProgramRounds.length > 0) {
+      await pool.query(
+        `DELETE FROM league_matches WHERE league_id = $1 AND is_program = TRUE AND program_round = ANY($2::int[])`,
+        [leagueId, targetProgramRounds],
+      );
+    }
 
     if (validMatches.length > 0) {
       const values = [];

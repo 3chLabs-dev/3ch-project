@@ -6,7 +6,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { generateGroupOptions } from '../../features/league/algorithms/generateGroupOptions';
 import { useGetLeagueParticipantsQuery, useGetLeagueProgramQuery, useSaveLeagueProgramMutation, useSyncLeagueProgramMatchesMutation } from '../../features/league/leagueApi';
 import type { ProgramBlock, ProgramOption, ProgramType, TeamMatchType, RoundConfig } from '../../features/league/types/tournament.types';
-import { ToggleButton, ToggleButtonGroup, Button, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Chip, Checkbox } from "@mui/material";
+import { ToggleButton, ToggleButtonGroup, Button, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Chip, Checkbox, CircularProgress } from "@mui/material";
 import { DndContext, PointerSensor, TouchSensor, useSensor, useSensors, closestCenter,
   type DragEndEvent, } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove, } from "@dnd-kit/sortable";
@@ -582,6 +582,8 @@ const LeagueAlgorithmDemo = ({
   >("recommend");
   const [isProgramGenerated, setIsProgramGenerated] = useState(false);
   const [isCustomProgramCompleted, setIsCustomProgramCompleted] = useState(false);
+  const [isGeneratingProgram, setIsGeneratingProgram] = useState(false);
+  const [isCompletingCustomProgram, setIsCompletingCustomProgram] = useState(false);
   const [selectedProgramOptionIndex, setSelectedProgramOptionIndex] = useState<number | null>(null);
   const [customProgramOptions, setCustomProgramOptions] = useState<Record<number, ProgramOption>>({});
   const [editingOptionIndex, setEditingOptionIndex] = useState<number | null>(null);
@@ -1413,16 +1415,36 @@ const LeagueAlgorithmDemo = ({
         variant="contained"
         fullWidth
         size="large"
+        disabled={isGeneratingProgram}
         onClick={() => {
-          setIsProgramGenerated(true);
+          setIsGeneratingProgram(true);
+          setIsProgramGenerated(false);
+          setIsCustomProgramCompleted(false);
           setCustomProgramOptions({});
+          window.setTimeout(() => {
+            setIsProgramGenerated(true);
+            setIsGeneratingProgram(false);
+          }, 600);
         }}
         style={{ marginTop: "30px" }}
       >
         프로그램 생성하기
       </Button>
 
-      {isProgramGenerated && (
+      {isGeneratingProgram && (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            marginTop: "40px",
+            marginBottom: "20px",
+          }}
+        >
+          <CircularProgress size={42} thickness={4} />
+        </div>
+      )}
+
+      {isProgramGenerated && !isGeneratingProgram && (
       <div style={{ marginTop: "60px" }}>
         <ToggleButtonGroup
           exclusive
@@ -1851,7 +1873,7 @@ const LeagueAlgorithmDemo = ({
       </DndContext>
 
         <Button
-          variant="contained"
+          variant="outlined"
           fullWidth
           onClick={() => {
             setRounds([
@@ -1876,15 +1898,35 @@ const LeagueAlgorithmDemo = ({
         <Button
           variant="contained"
           fullWidth
-          onClick={() => setIsCustomProgramCompleted(true)}
+          disabled={isCompletingCustomProgram}
+          onClick={() => {
+            setIsCompletingCustomProgram(true);
+            setIsCustomProgramCompleted(false);
+            window.setTimeout(() => {
+              setIsCustomProgramCompleted(true);
+              setIsCompletingCustomProgram(false);
+            }, 600);
+          }}
           style={{ marginTop: "12px" }}
         >
           완료
         </Button>
+        {isCompletingCustomProgram && (
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              marginTop: "32px",
+              marginBottom: "12px",
+            }}
+          >
+            <CircularProgress size={42} thickness={4} />
+          </div>
+        )}
       </div>
       )}
 
-      {isProgramGenerated && (
+      {isProgramGenerated && !isGeneratingProgram && !isCompletingCustomProgram && (
         programMode === "recommend" ||
         (programMode === "custom" && isCustomProgramCompleted)
       ) && (

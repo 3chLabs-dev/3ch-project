@@ -672,9 +672,7 @@ export default function LeagueMatchOrder() {
     if (!isTournamentProgramRound) return matches;
     const currentTab = tournamentTabs.find((tab) => tab.key === activeTournamentTab);
     if (!currentTab) return [];
-    return matches
-      .filter((match) => match.bracket === "upper" && match.round_number === currentTab.roundNumber)
-      .sort((a, b) => a.match_order - b.match_order);
+    return matches.filter((match) => match.bracket === "upper" && match.round_number === currentTab.roundNumber);
   }, [activeTournamentTab, isTournamentProgramRound, matches, tournamentTabs]);
   const displayedMatches = useMemo(() => {
     let filtered = visibleMatches;
@@ -1013,29 +1011,42 @@ export default function LeagueMatchOrder() {
                   />
                 );
               })}
-              {hasNextProgramRound && (
-                <Button
-                  fullWidth
-                  variant="contained"
-                  disableElevation
-                  onClick={() => setFinishRoundConfirmOpen(true)}
-                  sx={{
-                    mt: 1,
-                    height: 44,
-                    borderRadius: 2,
-                    fontSize: 14,
-                    fontWeight: 900,
-                    bgcolor: "#2563EB",
-                    "&:hover": { bgcolor: "#1D4ED8" },
-                  }}
-                >
-                  {programRound}라운드 종료
-                </Button>
-              )}
             </Stack>
           </SortableContext>
       )}
         </DndContext>
+      )}
+
+      {hasNextProgramRound && (
+        <Box
+          sx={{
+            position: "fixed",
+            left: 16,
+            right: 16,
+            bottom: "calc(72px + env(safe-area-inset-bottom))",
+            zIndex: 1200,
+            maxWidth: 393,
+            mx: "auto",
+          }}
+        >
+          <Button
+            fullWidth
+            variant="contained"
+            disableElevation
+            onClick={() => setFinishRoundConfirmOpen(true)}
+            sx={{
+              height: 44,
+              borderRadius: 2,
+              fontSize: 14,
+              fontWeight: 900,
+              bgcolor: "#2563EB",
+              boxShadow: "0 8px 18px rgba(37,99,235,0.24)",
+              "&:hover": { bgcolor: "#1D4ED8" },
+            }}
+          >
+            {programRound}라운드 종료
+          </Button>
+        </Box>
       )}
 
       <Tooltip title="상단으로">

@@ -704,18 +704,31 @@ export default function LeagueTournamentBracket() {
     }
     return sourceMatches;
   }, [id, isProgramMode, matchesData?.matches, participants, programOption, programRound]);
-  const programMatches = useMemo(
-    () => isProgramMode
-      ? applyProgramTournamentAdvancement(
-          applyProgramMatchState(
-            generateProgramRoundMatches(id ?? "", programOption, participants, programRound, programSourceMatches),
-            id ?? "",
-            programRound,
-          ),
-        ).filter((match) => match.bracket)
-      : [],
-    [isProgramMode, id, programOption, participants, programRound, programSourceMatches],
+  const serverProgramMatches = useMemo(
+    () => (matchesData?.matches ?? []).filter((match) => match.is_program && match.program_round === programRound),
+    [matchesData?.matches, programRound],
   );
+  const programMatches = useMemo(() => {
+    if (!isProgramMode) return [];
+    const generatedMatches = applyProgramMatchState(
+      generateProgramRoundMatches(id ?? "", programOption, participants, programRound, programSourceMatches),
+      id ?? "",
+      programRound,
+    );
+    const serverById = new Map(serverProgramMatches.map((match) => [match.id, match]));
+    const hydratedMatches = generatedMatches.map((match) => {
+      const serverMatch = serverById.get(match.id);
+      if (!serverMatch) return match;
+      return {
+        ...match,
+        score_a: match.score_a ?? serverMatch.score_a,
+        score_b: match.score_b ?? serverMatch.score_b,
+        court: match.court ?? serverMatch.court,
+        status: match.status !== "pending" ? match.status : serverMatch.status,
+      };
+    });
+    return applyProgramTournamentAdvancement(hydratedMatches).filter((match) => match.bracket);
+  }, [isProgramMode, id, programOption, participants, programRound, programSourceMatches, serverProgramMatches]);
   const matches = useMemo(
     () => isProgramMode ? programMatches : matchesData?.matches ?? [],
     [isProgramMode, programMatches, matchesData],

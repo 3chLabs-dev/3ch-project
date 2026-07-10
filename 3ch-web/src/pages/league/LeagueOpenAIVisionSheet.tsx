@@ -506,13 +506,7 @@ export default function LeagueOpenAIVisionSheet() {
                       />
                     ) : selectedScore != null ? (
                       <Typography sx={{ fontSize: 18, fontWeight: 900 }}>{selectedScore}</Typography>
-                    ) : (
-                      <Stack direction="row" alignItems="center" justifyContent="center" spacing={0.75} sx={{ minHeight: 42 }}>
-                        <Box aria-hidden="true" sx={{ color: "#111827", fontSize: 10, lineHeight: 1 }}>■</Box>
-                        <Box aria-label="세트스코어 기입 영역" sx={{ width: 38, height: 30, border: "1px solid #4B5563", bgcolor: "#fff" }} />
-                        <Box aria-hidden="true" sx={{ color: "#111827", fontSize: 10, lineHeight: 1 }}>■</Box>
-                      </Stack>
-                    )}
+                    ) : null}
                     {mode === "preview" && previewCell?.confidence != null ? (
                       <Typography sx={{ mt: 0.25, color: previewCell.needsReview || previewCell.issue ? "#B45309" : "#64748B", fontSize: 10, fontWeight: 800 }}>
                         {Math.round(previewCell.confidence * 100)}%
@@ -574,7 +568,21 @@ export default function LeagueOpenAIVisionSheet() {
             <Box sx={{ width: 48, height: 48, p: 0.2, bgcolor: "#fff", flexShrink: 0 }}><QRCode value={pageUrl} size={44} /></Box>
           </Stack>
 
-          <Box sx={{ p: 1.5 }}>{renderMatrixTable("sheet")}</Box>
+          <Box sx={{ position: "relative", p: 1.5 }}>
+            {renderMatrixTable("sheet")}
+            {[
+              { top: 68, left: 108 },
+              { top: 68, right: 206 },
+              { bottom: 12, left: 108 },
+              { bottom: 12, right: 206 },
+            ].map((position, index) => (
+              <Box
+                key={`matrix-marker-${index}`}
+                aria-hidden="true"
+                sx={{ position: "absolute", width: 16, height: 16, bgcolor: "#111", zIndex: 1, ...position }}
+              />
+            ))}
+          </Box>
 
           <Box component="table" sx={{ mt: 1.1, width: 310, borderCollapse: "collapse", tableLayout: "fixed", "& th, & td": { border: "1px solid #D1D5DB", textAlign: "center", verticalAlign: "middle", height: 24, fontSize: 12 }, "& th": { fontWeight: 900, bgcolor: "#fff" } }}>
             <tbody>

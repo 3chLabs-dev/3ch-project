@@ -506,7 +506,13 @@ export default function LeagueOpenAIVisionSheet() {
                       />
                     ) : selectedScore != null ? (
                       <Typography sx={{ fontSize: 18, fontWeight: 900 }}>{selectedScore}</Typography>
-                    ) : null}
+                    ) : (
+                      <Stack direction="row" alignItems="center" justifyContent="center" spacing={0.75} sx={{ minHeight: 42 }}>
+                        <Box aria-hidden="true" sx={{ color: "#111827", fontSize: 10, lineHeight: 1 }}>■</Box>
+                        <Box aria-label="세트스코어 기입 영역" sx={{ width: 38, height: 30, border: "1px solid #4B5563", bgcolor: "#fff" }} />
+                        <Box aria-hidden="true" sx={{ color: "#111827", fontSize: 10, lineHeight: 1 }}>■</Box>
+                      </Stack>
+                    )}
                     {mode === "preview" && previewCell?.confidence != null ? (
                       <Typography sx={{ mt: 0.25, color: previewCell.needsReview || previewCell.issue ? "#B45309" : "#64748B", fontSize: 10, fontWeight: 800 }}>
                         {Math.round(previewCell.confidence * 100)}%

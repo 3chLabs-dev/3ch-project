@@ -3417,6 +3417,30 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
       };
     });
 
+    // A completed match needs two opposing player cells and exactly one winning score of 3.
+    const cellsByMatch = new Map();
+    for (const cell of cells) {
+      if (!cell.matchId || !cell.playerId) continue;
+      const current = cellsByMatch.get(cell.matchId) ?? [];
+      current.push(cell);
+      cellsByMatch.set(cell.matchId, current);
+    }
+    for (const matchCells of cellsByMatch.values()) {
+      const distinctPlayers = new Set(matchCells.map((cell) => cell.playerId));
+      const hasValidPair = matchCells.length === 2
+        && distinctPlayers.size === 2
+        && matchCells.filter((cell) => cell.score === 3).length === 1;
+      if (hasValidPair) continue;
+
+      for (const cell of matchCells) {
+        cell.needsReview = true;
+        cell.confidence = Math.min(cell.confidence, 0.5);
+        cell.issue = [cell.issue, '경기 방식에 맞는 두 셀의 세트 점수를 확인해 주세요.']
+          .filter(Boolean)
+          .join(' ');
+      }
+    }
+
     return res.json({
       engine: vision.engine,
       cells,

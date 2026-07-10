@@ -144,7 +144,7 @@ export default function LeagueProgramList() {
       .map((participant) => {
         const level = Number.parseInt(participant.division ?? "", 10);
         return {
-          name: participant.division ? `${participant.name} (${participant.division})` : participant.name,
+          name: participant.name,
           level: Number.isNaN(level) ? 999 : level,
         };
       })

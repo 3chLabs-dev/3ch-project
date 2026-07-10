@@ -651,9 +651,7 @@ const LeagueAlgorithmDemo = ({
     return (participantData?.participants ?? []).map((participant) => {
       const parsedLevel = Number.parseInt(participant.division ?? "", 10);
       return {
-        name: participant.division
-          ? `${participant.name} (${participant.division})`
-          : participant.name,
+        name: participant.name,
         level: Number.isNaN(parsedLevel) ? 999 : parsedLevel,
       };
     });

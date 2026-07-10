@@ -64,6 +64,7 @@ type ScanOcrResult = {
     height: number;
   };
   words?: OcrWord[];
+  digitWords?: OcrWord[];
 };
 
 function getErrorMessage(error: unknown, fallback = "처리 중 오류가 발생했습니다.") {
@@ -144,6 +145,7 @@ function findScoreNear(words: OcrWord[], imageWidth: number, rowY: number, rowBa
 
 function buildPreview(matches: LeagueMatch[], result: ScanOcrResult): OcrPreviewMatch[] {
   const words = result.words ?? [];
+  const scoreWords = result.digitWords?.length ? result.digitWords : words;
   const rowCenters = buildRowCenters(matches, words, result.image.width);
   const sortedRows = [...rowCenters.values()].sort((a, b) => a - b);
   const rowGaps = sortedRows.slice(1).map((value, index) => value - sortedRows[index]).filter((gap) => gap > 0);
@@ -153,8 +155,13 @@ function buildPreview(matches: LeagueMatch[], result: ScanOcrResult): OcrPreview
     .filter((match) => match.participant_a_id && match.participant_b_id)
     .map((match) => {
       const rowY = rowCenters.get(match.match_order);
-      const scoreA = rowY === undefined ? null : findScoreNear(words, result.image.width, rowY, rowBand, 0.595);
-      const scoreB = rowY === undefined ? null : findScoreNear(words, result.image.width, rowY, rowBand, 0.845);
+      const scoreA = rowY === undefined ? null : findScoreNear(scoreWords, result.image.width, rowY, rowBand, 0.595);
+      const scoreB = rowY === undefined ? null : findScoreNear(scoreWords, result.image.width, rowY, rowBand, 0.845);
+      const sourceLine = rowY === undefined
+        ? "경기 행 위치를 찾지 못했습니다."
+        : scoreA === null && scoreB === null
+          ? "점수 칸의 숫자를 찾지 못했습니다."
+          : "점수 칸 위치에서 인식했습니다.";
       return {
         matchId: match.id,
         label: match.match_label ?? `${match.match_order}경기`,
@@ -162,7 +169,7 @@ function buildPreview(matches: LeagueMatch[], result: ScanOcrResult): OcrPreview
         nameB: matchPlayerName(match, "B") || "미정",
         scoreA,
         scoreB,
-        sourceLine: rowY === undefined ? "경기 행 위치를 찾지 못했습니다." : "점수 칸 위치에서 인식했습니다.",
+        sourceLine,
       };
     });
 }

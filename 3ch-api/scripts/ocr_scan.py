@@ -118,6 +118,17 @@ def extract_words(data):
     return words
 
 
+def extract_digit_words(image):
+    digit_config = "--psm 11 -c tessedit_char_whitelist=0123456789OoIl|"
+    data = pytesseract.image_to_data(
+        image,
+        lang="eng",
+        config=digit_config,
+        output_type=pytesseract.Output.DICT,
+    )
+    return extract_words(data)
+
+
 def main():
     args = parse_args()
     if args.tesseract_cmd:
@@ -134,6 +145,7 @@ def main():
             config=config,
             output_type=pytesseract.Output.DICT,
         )
+        digit_words = extract_digit_words(image)
     except pytesseract.TesseractNotFoundError:
         print("Tesseract executable was not found.", file=sys.stderr)
         sys.exit(3)
@@ -147,6 +159,7 @@ def main():
         "text": text,
         "lines": extract_lines(data),
         "words": extract_words(data),
+        "digitWords": digit_words,
         "image": {
             "width": image.width,
             "height": image.height,

@@ -1056,6 +1056,9 @@ const LeagueAlgorithmDemo = ({
       .flatMap((level) => rotateBySeed(buckets.get(level) ?? [], seed + level * 997));
   };
 
+  const formatFormationName = (name: string, level?: number) =>
+    level == null ? name : name.replace(new RegExp(`\\s*\\(${level}\\)$`), "");
+
   const getRoundGroupSizes = (
     option: ProgramOption,
     blockIndex: number
@@ -2561,12 +2564,12 @@ const LeagueAlgorithmDemo = ({
 
                 return (
                   <div key={player.name} style={{ marginTop: roster ? "8px" : 0 }}>
-                    {player.level}부 - {player.name}
+                    {player.level}부 - {formatFormationName(player.name, player.level)}
                     {roster && (
                       <div style={{ paddingLeft: "12px", marginTop: "4px", color: "#6b7280" }}>
                         {roster.map((member) => (
                           <div key={member.name}>
-                            {member.level}부 - {member.name}
+                            {member.level}부 - {formatFormationName(member.name, member.level)}
                           </div>
                         ))}
                       </div>

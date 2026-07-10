@@ -172,6 +172,9 @@ export default function LeagueProgramList() {
       .flatMap((level) => rotateBySeed(buckets.get(level) ?? [], seed + level * 997));
   };
 
+  const formatFormationName = (name: string, level?: number) =>
+    level == null ? name : name.replace(new RegExp(`\\s*\\(${level}\\)$`), "");
+
   const splitIntoTwoGroups = (count: number) => {
     if (count <= 0) return [];
     if (count <= 2) return [count];
@@ -452,13 +455,13 @@ export default function LeagueProgramList() {
                   return (
                     <Box key={player.name}>
                       <Typography sx={{ fontSize: 13, fontWeight: 700 }}>
-                        {player.level}부 - {player.name}
+                        {player.level}부 - {formatFormationName(player.name, player.level)}
                       </Typography>
                       {roster && (
                         <Box sx={{ pl: 1.5, mt: 0.5, color: "#6B7280" }}>
                           {roster.map((member) => (
                             <Typography key={member.name} sx={{ fontSize: 12 }}>
-                              {member.level}부 - {member.name}
+                              {member.level}부 - {formatFormationName(member.name, member.level)}
                             </Typography>
                           ))}
                         </Box>

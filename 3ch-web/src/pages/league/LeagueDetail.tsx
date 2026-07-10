@@ -371,8 +371,9 @@
     const getProgressPath = () => {
       if (league?.format === "이벤트 프로그램") {
         const hasProgram = Boolean(programData?.program);
+        const activeRound = Number.parseInt(localStorage.getItem(`league-program-active-round-${id}`) ?? "1", 10) || 1;
         return hasProgram
-          ? `/league/${id}/program/matches?program=1&round=1`
+          ? `/league/${id}/program/matches?program=1&round=${activeRound}`
           : `/league/${id}/program`;
       }
       if (league?.format?.includes("토너먼트") && league?.format !== "단일리그 + 토너먼트") {

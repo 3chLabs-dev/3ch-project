@@ -4,15 +4,16 @@ import { distributeSnake } from '../../features/league/algorithms/distributeSnak
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { generateGroupOptions } from '../../features/league/algorithms/generateGroupOptions';
-import { useGetLeagueParticipantsQuery, useGetLeagueProgramQuery, useSaveLeagueProgramMutation } from '../../features/league/leagueApi';
+import { useGetLeagueParticipantsQuery, useGetLeagueProgramQuery, useSaveLeagueProgramMutation, useSyncLeagueProgramMatchesMutation } from '../../features/league/leagueApi';
 import type { ProgramBlock, ProgramOption, ProgramType, TeamMatchType, RoundConfig } from '../../features/league/types/tournament.types';
-import { ToggleButton, ToggleButtonGroup, Button, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Chip, Checkbox } from "@mui/material";
+import { ToggleButton, ToggleButtonGroup, Button, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Chip, Checkbox, CircularProgress } from "@mui/material";
 import { DndContext, PointerSensor, TouchSensor, useSensor, useSensors, closestCenter,
   type DragEndEvent, } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove, } from "@dnd-kit/sortable";
 import DragHandleIcon from "@mui/icons-material/DragHandle";
 import EditIcon from "@mui/icons-material/Edit";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import { generateProgramRoundMatches } from '../../utils/programMatchGenerator';
 
 const formatTime = (totalMinutes: number) => {
   const minutesInDay = 24 * 60;
@@ -528,6 +529,7 @@ const LeagueAlgorithmDemo = ({
     skip: !leagueId || !isEditMode,
   });
   const [saveLeagueProgram] = useSaveLeagueProgramMutation();
+  const [syncLeagueProgramMatches] = useSyncLeagueProgramMatchesMutation();
   const [playerCount, setPlayerCount] = useState(initialPlayerCount);
   const [courtCount, setCourtCount] = useState(4);
   const [startHour, setStartHour] = useState(9);
@@ -580,6 +582,8 @@ const LeagueAlgorithmDemo = ({
   >("recommend");
   const [isProgramGenerated, setIsProgramGenerated] = useState(false);
   const [isCustomProgramCompleted, setIsCustomProgramCompleted] = useState(false);
+  const [isGeneratingProgram, setIsGeneratingProgram] = useState(false);
+  const [isCompletingCustomProgram, setIsCompletingCustomProgram] = useState(false);
   const [selectedProgramOptionIndex, setSelectedProgramOptionIndex] = useState<number | null>(null);
   const [customProgramOptions, setCustomProgramOptions] = useState<Record<number, ProgramOption>>({});
   const [editingOptionIndex, setEditingOptionIndex] = useState<number | null>(null);
@@ -587,11 +591,13 @@ const LeagueAlgorithmDemo = ({
   const [groupStructureDialog, setGroupStructureDialog] = useState<{
     optionIndex: number;
     blockIndex: number;
+    mode: "team" | "group";
   } | null>(null);
   const [pendingGroupSizes, setPendingGroupSizes] = useState<number[]>([]);
   const [groupResultDialog, setGroupResultDialog] = useState<{
     optionIndex: number;
     blockIndex: number;
+    mode: "team" | "group";
   } | null>(null);
 
   type StoredProgramEditState = {
@@ -657,6 +663,9 @@ const LeagueAlgorithmDemo = ({
     () => (leaguePlayers.length > 0 ? leaguePlayers : mockPlayers),
     [leaguePlayers]
   );
+  const effectiveFormationPlayerCount = leaguePlayers.length > 0
+    ? leaguePlayers.length
+    : playerCount;
 
   useEffect(() => {
     if (isEditMode && restoredRef.current) {
@@ -670,10 +679,6 @@ const LeagueAlgorithmDemo = ({
   const rentalMinutes = (endHour * 60 + endMinute) - (startHour * 60 + startMinute);
   const rentalStartMinutes = startHour * 60 + startMinute;
   const rentalHours = rentalMinutes / 60;
-
-  const options = useMemo(() => {
-  return generateGroupOptions(playerCount);
-}, [playerCount]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -789,7 +794,7 @@ const LeagueAlgorithmDemo = ({
         teamPlayerCount,
         rounds: nextRounds,
       },
-      playerCount,
+      effectiveFormationPlayerCount,
       courtCount,
       baseOption.groupSizes
     ).map((block) => {
@@ -997,7 +1002,22 @@ const LeagueAlgorithmDemo = ({
         `league-program-${leagueId}`,
         JSON.stringify(selectedOption)
       );
+      localStorage.setItem(`league-program-active-round-${leagueId}`, "1");
       await saveLeagueProgram({ leagueId, program: selectedOption }).unwrap();
+      const programMatches = selectedOption.blocks.flatMap((block, blockIndex) =>
+        block.type === "SINGLES"
+          ? generateProgramRoundMatches(leagueId, selectedOption, participantData?.participants ?? [], blockIndex + 1).map((match) => ({
+              ...match,
+              program_round: blockIndex + 1,
+              program_block_type: block.type,
+            }))
+          : []
+      );
+      try {
+        await syncLeagueProgramMatches({ leagueId, matches: programMatches }).unwrap();
+      } catch (error) {
+        console.error("Failed to sync program matches", error);
+      }
       navigate(`/league/${leagueId}/program`);
       return;
     }
@@ -1012,28 +1032,94 @@ const LeagueAlgorithmDemo = ({
     left.length === right.length &&
     left.every((value, index) => value === right[index]);
 
+  const rotateBySeed = <T,>(items: T[], seed: number) => {
+    if (items.length < 2) return items;
+    const offset = seed % items.length || 1;
+    const rotated = [...items.slice(offset), ...items.slice(0, offset)];
+    return Math.floor(seed / items.length) % 2 === 1
+      ? rotated.reverse()
+      : rotated;
+  };
+
+  const reshuffleWithinLevel = <T extends { level?: number }>(
+    items: T[],
+    seed?: number,
+  ) => {
+    if (seed == null) return items;
+    const buckets = new Map<number, T[]>();
+    items.forEach((item) => {
+      const level = item.level ?? 999;
+      buckets.set(level, [...(buckets.get(level) ?? []), item]);
+    });
+    return [...buckets.keys()]
+      .sort((a, b) => a - b)
+      .flatMap((level) => rotateBySeed(buckets.get(level) ?? [], seed + level * 997));
+  };
+
+  const formatFormationName = (name: string, level?: number) =>
+    level == null ? name : name.replace(new RegExp(`\\s*\\(${level}\\)$`), "");
+
   const getRoundGroupSizes = (
     option: ProgramOption,
     blockIndex: number
   ) =>
-    option.rounds?.[blockIndex]?.groupSizes ??
     option.blocks[blockIndex]?.groupSizes ??
+    option.rounds?.[blockIndex]?.groupSizes ??
     option.groupSizes;
+
+  const splitIntoTwoGroups = (count: number) => {
+    if (count <= 0) return [];
+    if (count <= 2) return [count];
+    return [Math.ceil(count / 2), Math.floor(count / 2)];
+  };
+
+  const getTeamCount = (option: ProgramOption, blockIndex: number) => {
+    const round = option.rounds?.[blockIndex];
+    const teamSize = Math.max(1, round?.teamPlayerCount ?? teamPlayerCount);
+    return Math.ceil(effectiveFormationPlayerCount / teamSize);
+  };
+
+  const getRoundTeamGroupSizes = (
+    option: ProgramOption,
+    blockIndex: number
+  ) =>
+    option.blocks[blockIndex]?.teamGroupSizes ??
+    option.rounds?.[blockIndex]?.teamGroupSizes ??
+    splitIntoTwoGroups(getTeamCount(option, blockIndex));
+
+  const getStructureSizes = (
+    option: ProgramOption,
+    blockIndex: number,
+    mode: "team" | "group"
+  ) => {
+    const block = option.blocks[blockIndex];
+
+    if (mode === "team") {
+      return getRoundGroupSizes(option, blockIndex);
+    }
+
+    return block?.type === "TEAM"
+      ? getRoundTeamGroupSizes(option, blockIndex)
+      : getRoundGroupSizes(option, blockIndex);
+  };
 
   const updateProgramRoundGroupSizes = (
     optionIndex: number,
     blockIndex: number,
-    groupSizes: number[]
+    groupSizes: number[],
+    mode: "team" | "group"
   ) => {
     const baseOption = displayedProgramOptions[optionIndex];
     const nextRounds = (baseOption.rounds ?? rounds).map(
       (round, roundIndex) => ({
         ...round,
         id: roundIndex + 1,
-        groupSizes:
-          roundIndex === blockIndex
-            ? groupSizes
-            : round.groupSizes ?? baseOption.groupSizes,
+        groupSizes: mode === "team" && roundIndex === blockIndex
+          ? groupSizes
+          : round.groupSizes ?? baseOption.groupSizes,
+        teamGroupSizes: mode === "group" && roundIndex === blockIndex
+          ? groupSizes
+          : round.teamGroupSizes,
       })
     );
     const updatedOption = buildProgramOptionFromRounds(
@@ -1047,18 +1133,72 @@ const LeagueAlgorithmDemo = ({
     });
   };
 
+  const updateProgramRoundShuffleSeed = (
+    optionIndex: number,
+    blockIndex: number,
+    mode: "team" | "group"
+  ) => {
+    const baseOption = customProgramOptions[optionIndex] ?? displayedProgramOptions[optionIndex];
+    const defaultSeed = (blockIndex + 1) * 1000;
+    const nextTeamShuffleSeed =
+      ((baseOption.rounds?.[blockIndex]?.teamShuffleSeed ??
+        baseOption.blocks[blockIndex]?.teamShuffleSeed ??
+        defaultSeed + 101) + 1);
+    const nextGroupShuffleSeed =
+      ((baseOption.rounds?.[blockIndex]?.groupShuffleSeed ??
+        baseOption.blocks[blockIndex]?.groupShuffleSeed ??
+        defaultSeed + 503) + 1);
+    const nextRounds = (baseOption.rounds ?? rounds).map((round, roundIndex) => ({
+      ...round,
+      id: roundIndex + 1,
+      groupSizes: round.groupSizes ?? baseOption.groupSizes,
+      groupShuffleSeed: mode === "group" && roundIndex === blockIndex
+        ? nextGroupShuffleSeed
+        : round.groupShuffleSeed,
+      teamShuffleSeed: mode === "team" && roundIndex === blockIndex
+        ? nextTeamShuffleSeed
+        : round.teamShuffleSeed,
+    }));
+    const updatedOption = buildProgramOptionFromRounds(baseOption, nextRounds);
+    const nextBlocks = updatedOption.blocks.map((block, roundIndex) => {
+      if (roundIndex !== blockIndex) {
+        return block;
+      }
+
+      return {
+        ...block,
+        groupShuffleSeed: mode === "group"
+          ? nextGroupShuffleSeed
+          : block.groupShuffleSeed,
+        teamShuffleSeed: mode === "team"
+          ? nextTeamShuffleSeed
+          : block.teamShuffleSeed,
+      };
+    });
+
+    setCustomProgramOptions((previous) => ({
+      ...previous,
+      [optionIndex]: {
+        ...updatedOption,
+        blocks: nextBlocks,
+      },
+    }));
+  };
+
   const openGroupStructureDialog = (
     optionIndex: number,
-    blockIndex: number
+    blockIndex: number,
+    mode: "team" | "group"
   ) => {
     const option = displayedProgramOptions[optionIndex];
 
     setPendingGroupSizes(
-      getRoundGroupSizes(option, blockIndex)
+      getStructureSizes(option, blockIndex, mode)
     );
     setGroupStructureDialog({
       optionIndex,
       blockIndex,
+      mode,
     });
   };
 
@@ -1075,7 +1215,8 @@ const LeagueAlgorithmDemo = ({
     updateProgramRoundGroupSizes(
       groupStructureDialog.optionIndex,
       groupStructureDialog.blockIndex,
-      pendingGroupSizes
+      pendingGroupSizes,
+      groupStructureDialog.mode
     );
     closeGroupStructureDialog();
   };
@@ -1097,38 +1238,76 @@ const LeagueAlgorithmDemo = ({
     pendingGroupSizes.length > 0
       ? pendingGroupSizes
       : groupStructureDialog !== null && groupStructureOption
-        ? getRoundGroupSizes(
+        ? getStructureSizes(
           groupStructureOption,
-          groupStructureDialog.blockIndex
+          groupStructureDialog.blockIndex,
+          groupStructureDialog.mode
         )
         : [];
-  const groupStructureBlock =
-    groupStructureDialog !== null && groupStructureOption
-      ? groupStructureOption.blocks[groupStructureDialog.blockIndex]
-      : undefined;
-  const isGroupStructureTeam = groupStructureBlock?.type === "TEAM";
+  const groupStructureOptionCount =
+    groupStructureDialog?.mode === "group" &&
+    groupStructureOption?.blocks[groupStructureDialog.blockIndex]?.type === "TEAM"
+      ? getTeamCount(groupStructureOption, groupStructureDialog.blockIndex)
+      : effectiveFormationPlayerCount;
+  const groupStructureOptions = useMemo(
+    () => generateGroupOptions(groupStructureOptionCount),
+    [groupStructureOptionCount],
+  );
+  const isGroupStructureTeam = groupStructureDialog?.mode === "team";
   const groupResultOption =
     groupResultDialog !== null
       ? displayedProgramOptions[groupResultDialog.optionIndex]
       : undefined;
   const groupResultSizes =
     groupResultDialog !== null && groupResultOption
-      ? getRoundGroupSizes(
+      ? getStructureSizes(
           groupResultOption,
-          groupResultDialog.blockIndex
+          groupResultDialog.blockIndex,
+          groupResultDialog.mode
         )
       : [];
-  const groupResultBlock =
-    groupResultDialog !== null && groupResultOption
-      ? groupResultOption.blocks[groupResultDialog.blockIndex]
-      : undefined;
-  const isGroupResultTeam = groupResultBlock?.type === "TEAM";
+  const isGroupResultTeam = groupResultDialog?.mode === "team";
+  const groupResultRound = groupResultOption && groupResultDialog
+    ? groupResultOption.rounds?.[groupResultDialog.blockIndex]
+    : undefined;
+  const groupResultBlock = groupResultOption && groupResultDialog
+    ? groupResultOption.blocks[groupResultDialog.blockIndex]
+    : undefined;
+  const defaultFormationSeed = groupResultDialog ? (groupResultDialog.blockIndex + 1) * 1000 : 0;
+  const teamShuffleSeed = groupResultRound?.teamShuffleSeed ?? groupResultBlock?.teamShuffleSeed ?? defaultFormationSeed + 101;
+  const groupShuffleSeed = groupResultRound?.groupShuffleSeed ?? groupResultBlock?.groupShuffleSeed ?? defaultFormationSeed + 503;
+  const teamFormationPlayers = reshuffleWithinLevel(
+    groupPlayers.slice(0, effectiveFormationPlayerCount),
+    teamShuffleSeed,
+  );
+  const teamResultGroups =
+    groupResultOption && groupResultDialog
+      ? distributeSnake(
+          teamFormationPlayers,
+          getRoundGroupSizes(groupResultOption, groupResultDialog.blockIndex)
+        )
+      : [];
+  const teamUnits = teamResultGroups.map((team, teamIndex) => {
+    const leader = team.players[0];
+    return {
+      name: `팀 ${leader?.name ?? teamIndex + 1}`,
+      level: leader?.level ?? teamIndex + 1,
+      roster: team.players,
+    };
+  });
   const dialogGroupResult =
     groupResultSizes.length > 0
-      ? distributeSnake(
-          groupPlayers.slice(0, playerCount),
-          groupResultSizes
-        )
+      ? groupResultDialog?.mode === "team"
+        ? teamResultGroups
+        : groupResultDialog?.mode === "group" && groupResultOption?.blocks[groupResultDialog.blockIndex]?.type === "TEAM"
+          ? distributeSnake(
+              reshuffleWithinLevel(teamUnits, groupShuffleSeed),
+              groupResultSizes
+            )
+          : distributeSnake(
+              reshuffleWithinLevel(groupPlayers.slice(0, effectiveFormationPlayerCount), groupShuffleSeed),
+              groupResultSizes
+            )
       : [];
 
   return (
@@ -1342,16 +1521,36 @@ const LeagueAlgorithmDemo = ({
         variant="contained"
         fullWidth
         size="large"
+        disabled={isGeneratingProgram}
         onClick={() => {
-          setIsProgramGenerated(true);
+          setIsGeneratingProgram(true);
+          setIsProgramGenerated(false);
+          setIsCustomProgramCompleted(false);
           setCustomProgramOptions({});
+          window.setTimeout(() => {
+            setIsProgramGenerated(true);
+            setIsGeneratingProgram(false);
+          }, 600);
         }}
         style={{ marginTop: "30px" }}
       >
         프로그램 생성하기
       </Button>
 
-      {isProgramGenerated && (
+      {isGeneratingProgram && (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            marginTop: "40px",
+            marginBottom: "20px",
+          }}
+        >
+          <CircularProgress size={42} thickness={4} />
+        </div>
+      )}
+
+      {isProgramGenerated && !isGeneratingProgram && (
       <div style={{ marginTop: "60px" }}>
         <ToggleButtonGroup
           exclusive
@@ -1780,7 +1979,7 @@ const LeagueAlgorithmDemo = ({
       </DndContext>
 
         <Button
-          variant="contained"
+          variant="outlined"
           fullWidth
           onClick={() => {
             setRounds([
@@ -1805,15 +2004,35 @@ const LeagueAlgorithmDemo = ({
         <Button
           variant="contained"
           fullWidth
-          onClick={() => setIsCustomProgramCompleted(true)}
+          disabled={isCompletingCustomProgram}
+          onClick={() => {
+            setIsCompletingCustomProgram(true);
+            setIsCustomProgramCompleted(false);
+            window.setTimeout(() => {
+              setIsCustomProgramCompleted(true);
+              setIsCompletingCustomProgram(false);
+            }, 600);
+          }}
           style={{ marginTop: "12px" }}
         >
           완료
         </Button>
+        {isCompletingCustomProgram && (
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              marginTop: "32px",
+              marginBottom: "12px",
+            }}
+          >
+            <CircularProgress size={42} thickness={4} />
+          </div>
+        )}
       </div>
       )}
 
-      {isProgramGenerated && (
+      {isProgramGenerated && !isGeneratingProgram && !isCompletingCustomProgram && (
         programMode === "recommend" ||
         (programMode === "custom" && isCustomProgramCompleted)
       ) && (
@@ -2083,48 +2302,97 @@ const LeagueAlgorithmDemo = ({
               {formatTime(blockEndMinutes)}
             </div>
 
-            <div
-              style={{
-                display: "flex",
-                gap: "8px",
-                marginTop: "8px",
-                paddingLeft: "12px",
-              }}
-            >
-              <Button
-                size="small"
-                variant="outlined"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  openGroupStructureDialog(index, blockIndex)
+            {block.type === "TEAM" && (
+              <div
+                style={{
+                  display: "flex",
+                  gap: "8px",
+                  marginTop: "8px",
+                  paddingLeft: "12px",
                 }}
               >
-                {block.type === "TEAM" ? "팀 편성 구조" : "조 편성 구조"}
-              </Button>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openGroupStructureDialog(index, blockIndex, "team")
+                  }}
+                >
+                  팀 편성 구조
+                </Button>
 
-              <Button
-                size="small"
-                variant="outlined"
-                sx={{
-                  color: "#FFFFFF",
-                  backgroundColor: "#1976D2",
-                  borderColor: "#1976D2",
-                  "&:hover": {
-                    backgroundColor: "#1565C0",
+                <Button
+                  size="small"
+                  variant="outlined"
+                  sx={{
+                    color: "#FFFFFF",
+                    backgroundColor: "#1976D2",
                     borderColor: "#1976D2",
-                  },
-                }}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setGroupResultDialog({
-                    optionIndex: index,
-                    blockIndex,
-                  })
+                    "&:hover": {
+                      backgroundColor: "#1565C0",
+                      borderColor: "#1976D2",
+                    },
+                  }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setGroupResultDialog({
+                      optionIndex: index,
+                      blockIndex,
+                      mode: "team",
+                    })
+                  }}
+                >
+                  팀 편성 결과
+                </Button>
+              </div>
+            )}
+
+            {block.format === "GROUP" && (
+              <div
+                style={{
+                  display: "flex",
+                  gap: "8px",
+                  marginTop: "8px",
+                  paddingLeft: "12px",
                 }}
               >
-                {block.type === "TEAM" ? "팀 편성 결과" : "조 편성 결과"}
-              </Button>
-            </div>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openGroupStructureDialog(index, blockIndex, "group")
+                  }}
+                >
+                  조 편성 구조
+                </Button>
+
+                <Button
+                  size="small"
+                  variant="outlined"
+                  sx={{
+                    color: "#FFFFFF",
+                    backgroundColor: "#1976D2",
+                    borderColor: "#1976D2",
+                    "&:hover": {
+                      backgroundColor: "#1565C0",
+                      borderColor: "#1976D2",
+                    },
+                  }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setGroupResultDialog({
+                      optionIndex: index,
+                      blockIndex,
+                      mode: "group",
+                    })
+                  }}
+                >
+                  조 편성 결과
+                </Button>
+              </div>
+            )}
           </div>
           );
         }
@@ -2178,7 +2446,7 @@ const LeagueAlgorithmDemo = ({
         </DialogTitle>
 
         <DialogContent dividers>
-          {options.map((option) => {
+          {groupStructureOptions.map((option) => {
             const selected = sameGroupSizes(
               groupStructureSizes,
               option.groups
@@ -2272,6 +2540,14 @@ const LeagueAlgorithmDemo = ({
         </DialogTitle>
 
         <DialogContent dividers>
+          <div
+            key={`${groupResultDialog?.optionIndex ?? "x"}-${groupResultDialog?.blockIndex ?? "x"}-${groupResultDialog?.mode ?? "x"}-${teamShuffleSeed}-${groupShuffleSeed}`}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+              gap: "12px",
+            }}
+          >
           {dialogGroupResult.map((group) => (
             <div
               key={group.name}
@@ -2279,21 +2555,48 @@ const LeagueAlgorithmDemo = ({
                 border: '1px solid #ddd',
                 borderRadius: '12px',
                 padding: '16px',
-                marginTop: '12px',
               }}
             >
               <h3>{isGroupResultTeam ? group.name.replace(/조$/, "팀") : group.name}</h3>
 
-              {group.players.map((player) => (
-                <div key={player.name}>
-                  {player.level}부 - {player.name}
-                </div>
-              ))}
+              {group.players.map((player) => {
+                const roster = (player as typeof player & { roster?: Array<{ name: string; level: number }> }).roster;
+
+                return (
+                  <div key={player.name} style={{ marginTop: roster ? "8px" : 0 }}>
+                    {player.level}부 - {formatFormationName(player.name, player.level)}
+                    {roster && (
+                      <div style={{ paddingLeft: "12px", marginTop: "4px", color: "#6b7280" }}>
+                        {roster.map((member) => (
+                          <div key={member.name}>
+                            {member.level}부 - {formatFormationName(member.name, member.level)}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ))}
+          </div>
         </DialogContent>
 
         <DialogActions>
+          {groupResultDialog && (
+            <Button
+              variant="outlined"
+              onClick={() => {
+                updateProgramRoundShuffleSeed(
+                  groupResultDialog.optionIndex,
+                  groupResultDialog.blockIndex,
+                  groupResultDialog.mode
+                );
+              }}
+            >
+              재편성
+            </Button>
+          )}
           <Button onClick={() => setGroupResultDialog(null)}>
             닫기
           </Button>

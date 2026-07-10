@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useMemo, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Box,
@@ -25,10 +25,12 @@ import {
   useDeleteLeagueProgramMutation,
   useGetLeagueProgramQuery,
   useGetLeagueMatchesQuery,
+  useGetLeagueParticipantsQuery,
   useGetLeagueQuery,
 } from "../../features/league/leagueApi";
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
 import { formatLeagueDate } from "../../utils/dateUtils";
+import { distributeSnake } from "../../features/league/algorithms/distributeSnake";
 
 const ADVANCEMENT_LABEL: Record<string, string> = {
   "upper-only": "상위 진출",
@@ -45,10 +47,15 @@ type StoredProgramBlock = {
   title?: string;
   type?: "SINGLES" | "DOUBLES" | "TEAM";
   format?: "LEAGUE" | "GROUP" | "TOURNAMENT";
+  groupSizes?: number[];
+  teamGroupSizes?: number[];
+  groupShuffleSeed?: number;
+  teamShuffleSeed?: number;
 };
 
 type StoredProgramOption = {
   title?: string;
+  groupSizes?: number[];
   blocks?: StoredProgramBlock[];
 };
 
@@ -82,8 +89,8 @@ function getProgramBracketPath(format?: StoredProgramBlock["format"]) {
   return format === "TOURNAMENT" ? "tournament-bracket" : "bracket";
 }
 
-function getProgramBracketLabel(format?: StoredProgramBlock["format"]) {
-  return format === "TOURNAMENT" ? "토너먼트 대진표 보기" : "리그 대진표 보기";
+function getProgramBracketLabel() {
+  return "대진표 보기";
 }
 
 export default function LeagueProgramList() {
@@ -91,6 +98,7 @@ export default function LeagueProgramList() {
   const navigate = useNavigate();
   const { data: leagueData, isLoading: leagueLoading } = useGetLeagueQuery(id!);
   const { data: matchesData, isLoading: matchesLoading } = useGetLeagueMatchesQuery(id!);
+  const { data: participantsData, isLoading: participantsLoading } = useGetLeagueParticipantsQuery(id!, { skip: !id });
   const { data: programData, isLoading: programLoading } = useGetLeagueProgramQuery(id!, { skip: !id });
   const { data: groupData, isLoading: groupLoading } = useGetGroupDetailQuery(
     leagueData?.league?.group_id ?? "",
@@ -101,9 +109,11 @@ export default function LeagueProgramList() {
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [storedProgram, setStoredProgram] = useState<StoredProgramOption | null>(null);
+  const [formationDialog, setFormationDialog] = useState<{ roundIndex: number; mode: "team" | "group" } | null>(null);
 
   const league = leagueData?.league;
   const matches = matchesData?.matches ?? [];
+  const participants = participantsData?.participants ?? [];
   const hasProgram = Boolean(storedProgram?.blocks?.length);
   const canManage = !groupLoading && (groupData?.myRole === "owner" || groupData?.myRole === "admin");
 
@@ -113,8 +123,9 @@ export default function LeagueProgramList() {
         title: block.title ?? `${index + 1}라운드 ${getProgramTypeLabel(block.type)}`.trim(),
         format: block.format ?? "GROUP",
         formatLabel: getProgramFormatLabel(block.format),
-        bracketLabel: getProgramBracketLabel(block.format),
+        bracketLabel: getProgramBracketLabel(),
         bracketPath: getProgramBracketPath(block.format),
+        type: block.type,
       }))
     : [];
 
@@ -122,11 +133,82 @@ export default function LeagueProgramList() {
   const bracketSizeLabel = r1Match?.match_label ?? "";
   const advancementLabel = ADVANCEMENT_LABEL[league?.tournament_advancement ?? ""] ?? "";
   const seedingLabel = SEEDING_LABEL[league?.tournament_seeding ?? ""] ?? "";
-  const isLoading = leagueLoading || matchesLoading || groupLoading || programLoading;
+  const isLoading = leagueLoading || matchesLoading || groupLoading || programLoading || participantsLoading;
 
   useEffect(() => {
     setStoredProgram((programData?.program?.program_data as StoredProgramOption | null | undefined) ?? null);
   }, [programData]);
+
+  const programPlayers = useMemo(() => {
+    return [...participants]
+      .map((participant) => {
+        const level = Number.parseInt(participant.division ?? "", 10);
+        return {
+          name: participant.division ? `${participant.name} (${participant.division})` : participant.name,
+          level: Number.isNaN(level) ? 999 : level,
+        };
+      })
+      .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
+  }, [participants]);
+
+  const rotateBySeed = <T,>(items: T[], seed: number) => {
+    if (items.length < 2) return items;
+    const offset = seed % items.length || 1;
+    const rotated = [...items.slice(offset), ...items.slice(0, offset)];
+    return Math.floor(seed / items.length) % 2 === 1
+      ? rotated.reverse()
+      : rotated;
+  };
+
+  const reshuffleWithinLevel = <T extends { level?: number }>(items: T[], seed?: number) => {
+    if (seed == null) return items;
+    const buckets = new Map<number, T[]>();
+    items.forEach((item) => {
+      const level = item.level ?? 999;
+      buckets.set(level, [...(buckets.get(level) ?? []), item]);
+    });
+    return [...buckets.keys()]
+      .sort((a, b) => a - b)
+      .flatMap((level) => rotateBySeed(buckets.get(level) ?? [], seed + level * 997));
+  };
+
+  const formatFormationName = (name: string, level?: number) =>
+    level == null ? name : name.replace(new RegExp(`\\s*\\(${level}\\)$`), "");
+
+  const splitIntoTwoGroups = (count: number) => {
+    if (count <= 0) return [];
+    if (count <= 2) return [count];
+    return [Math.ceil(count / 2), Math.floor(count / 2)];
+  };
+
+  const activeFormationBlock = formationDialog && storedProgram?.blocks
+    ? storedProgram.blocks[formationDialog.roundIndex]
+    : undefined;
+  const teamGroupSizes = activeFormationBlock?.groupSizes ?? storedProgram?.groupSizes ?? [programPlayers.length];
+  const defaultFormationSeed = formationDialog ? (formationDialog.roundIndex + 1) * 1000 : 0;
+  const teamFormationPlayers = reshuffleWithinLevel(
+    programPlayers,
+    activeFormationBlock?.teamShuffleSeed ?? defaultFormationSeed + 101,
+  );
+  const teamResultGroups = activeFormationBlock
+    ? distributeSnake(teamFormationPlayers, teamGroupSizes)
+    : [];
+  const teamUnits = teamResultGroups.map((team, teamIndex) => {
+    const leader = team.players[0];
+    return {
+      name: `팀 ${leader?.name ?? teamIndex + 1}`,
+      level: leader?.level ?? teamIndex + 1,
+      roster: team.players,
+    };
+  });
+  const groupResultSizes = activeFormationBlock?.type === "TEAM"
+    ? activeFormationBlock?.teamGroupSizes ?? splitIntoTwoGroups(teamUnits.length)
+    : activeFormationBlock?.groupSizes ?? storedProgram?.groupSizes ?? [programPlayers.length];
+  const formationGroups = formationDialog?.mode === "team"
+    ? teamResultGroups
+    : activeFormationBlock?.type === "TEAM"
+      ? distributeSnake(reshuffleWithinLevel(teamUnits, activeFormationBlock?.groupShuffleSeed ?? defaultFormationSeed + 503), groupResultSizes)
+      : distributeSnake(reshuffleWithinLevel(programPlayers, activeFormationBlock?.groupShuffleSeed ?? defaultFormationSeed + 503), groupResultSizes);
 
   const handleDelete = async () => {
     setConfirmOpen(false);
@@ -226,7 +308,7 @@ export default function LeagueProgramList() {
                       <Typography sx={{ fontSize: 13, fontWeight: 800, flex: 1 }}>
                         {round.title}
                       </Typography>
-                      <Chip label={round.formatLabel} size="small" sx={{ height: 22, fontSize: 11, fontWeight: 700, bgcolor: "#EFF6FF", color: "#2563EB" }} />
+                      <Chip label={round.formatLabel} size="small" sx={{ height: 22, fontSize: 11, fontWeight: 700, bgcolor: "#F5F3FF", color: "#7C3AED", border: "1px solid #DDD6FE" }} />
                     </Stack>
 
                     <Stack direction="row" spacing={1}>
@@ -249,6 +331,31 @@ export default function LeagueProgramList() {
                         {round.bracketLabel}
                       </Button>
                     </Stack>
+
+                    {(round.type === "TEAM" || round.format === "GROUP") && (
+                      <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                        {round.type === "TEAM" && (
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={() => setFormationDialog({ roundIndex: round.round - 1, mode: "team" })}
+                            sx={{ flex: 1, height: 34, fontWeight: 700, fontSize: 12, borderRadius: 1.5, textTransform: "none", whiteSpace: "nowrap" }}
+                          >
+                            팀 편성 결과
+                          </Button>
+                        )}
+                        {round.format === "GROUP" && (
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={() => setFormationDialog({ roundIndex: round.round - 1, mode: "group" })}
+                            sx={{ flex: 1, height: 34, fontWeight: 700, fontSize: 12, borderRadius: 1.5, textTransform: "none", whiteSpace: "nowrap" }}
+                          >
+                            조 편성 결과
+                          </Button>
+                        )}
+                      </Stack>
+                    )}
                   </Box>
                 ))}
 
@@ -305,6 +412,75 @@ export default function LeagueProgramList() {
           </Box>
         )}
       </Box>
+
+      <Dialog
+        open={formationDialog !== null}
+        onClose={() => setFormationDialog(null)}
+        fullWidth
+        maxWidth="sm"
+        slotProps={{ paper: { sx: { borderRadius: 2, mx: 2 } } }}
+      >
+        <DialogTitle sx={{ fontWeight: 900, fontSize: 16 }}>
+          {formationDialog?.mode === "team" ? "팀 편성 결과" : "조 편성 결과"}
+        </DialogTitle>
+        <DialogContent dividers>
+          {formationGroups.length === 0 ? (
+            <Typography sx={{ fontSize: 13, color: "text.secondary", py: 2, textAlign: "center" }}>
+              편성 결과가 없습니다.
+            </Typography>
+          ) : (
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+                gap: 1.25,
+              }}
+            >
+            {formationGroups.map((group) => (
+            <Box
+              key={group.name}
+              sx={{
+                border: "1px solid #E5E7EB",
+                borderRadius: 1.5,
+                p: 1.5,
+                bgcolor: "#fff",
+              }}
+            >
+              <Typography sx={{ fontSize: 15, fontWeight: 900, mb: 1.25 }}>
+                {formationDialog?.mode === "team" ? group.name.replace(/조$/, "팀") : group.name}
+              </Typography>
+              <Stack spacing={0.75}>
+                {group.players.map((player) => {
+                  const roster = (player as typeof player & { roster?: Array<{ name: string; level: number }> }).roster;
+                  return (
+                    <Box key={player.name}>
+                      <Typography sx={{ fontSize: 13, fontWeight: 700 }}>
+                        {player.level}부 - {formatFormationName(player.name, player.level)}
+                      </Typography>
+                      {roster && (
+                        <Box sx={{ pl: 1.5, mt: 0.5, color: "#6B7280" }}>
+                          {roster.map((member) => (
+                            <Typography key={member.name} sx={{ fontSize: 12 }}>
+                              {member.level}부 - {formatFormationName(member.name, member.level)}
+                            </Typography>
+                          ))}
+                        </Box>
+                      )}
+                    </Box>
+                  );
+                })}
+              </Stack>
+            </Box>
+            ))}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 2, pb: 2 }}>
+          <Button onClick={() => setFormationDialog(null)} sx={{ fontWeight: 700 }}>
+            닫기
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)} slotProps={{ paper: { sx: { borderRadius: 2, mx: 2 } } }}>
         <DialogTitle sx={{ fontWeight: 900, fontSize: 16 }}>프로그램 삭제</DialogTitle>

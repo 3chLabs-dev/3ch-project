@@ -10,6 +10,7 @@ const { rebuildGroupRanking, getGroupIdByLeagueId } = require('../services/group
 const { rebuildSportRankingByLeagueId } = require('../services/sportRanking');
 const { scanOmrImageWithPython } = require('../services/omrScanner');
 const { scanLeagueSheetWithOpenAIVision } = require('../services/openaiVisionScanner');
+const { prepareLeagueVisionImage } = require('../services/visionImagePreprocessor');
 
 const isWebPushConfigured = Boolean(
   process.env.VAPID_MAILTO && process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY,
@@ -3369,9 +3370,13 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
       matchLookup.set(`${match.participant_b_id}__${match.participant_a_id}`, match);
     }
 
-    const vision = await scanLeagueSheetWithOpenAIVision({
+    const preparedImage = await prepareLeagueVisionImage({
       imageBuffer: req.file.buffer,
       mimeType: req.file.mimetype,
+    });
+    const vision = await scanLeagueSheetWithOpenAIVision({
+      imageBuffer: preparedImage.imageBuffer,
+      mimeType: preparedImage.mimeType,
       participants,
     });
     const parsed = openAIVisionResultSchema.parse(vision.result);

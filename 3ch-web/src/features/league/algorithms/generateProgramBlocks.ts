@@ -157,6 +157,8 @@ export function generateProgramBlocks(
 
 	    matchCount,
 	    groupSizes: roundGroupSizes,
+      groupShuffleSeed: round.groupShuffleSeed,
+      teamShuffleSeed: round.teamShuffleSeed,
       tournamentSeeding: round.tournamentSeeding,
 	  });
 }
@@ -198,6 +200,8 @@ export function generateProgramBlocks(
 
 	      matchCount,
 	      groupSizes: roundGroupSizes,
+        groupShuffleSeed: round.groupShuffleSeed,
+        teamShuffleSeed: round.teamShuffleSeed,
         tournamentSeeding: round.tournamentSeeding,
 	    });
   }
@@ -260,6 +264,8 @@ export function generateProgramBlocks(
 	        teamInfo.description,
 	      groupSizes: roundGroupSizes,
         teamGroupSizes,
+        groupShuffleSeed: round.groupShuffleSeed,
+        teamShuffleSeed: round.teamShuffleSeed,
         tournamentSeeding: round.tournamentSeeding,
 	    });
   }

@@ -663,6 +663,9 @@ const LeagueAlgorithmDemo = ({
     () => (leaguePlayers.length > 0 ? leaguePlayers : mockPlayers),
     [leaguePlayers]
   );
+  const effectiveFormationPlayerCount = leaguePlayers.length > 0
+    ? leaguePlayers.length
+    : playerCount;
 
   useEffect(() => {
     if (isEditMode && restoredRef.current) {
@@ -791,7 +794,7 @@ const LeagueAlgorithmDemo = ({
         teamPlayerCount,
         rounds: nextRounds,
       },
-      playerCount,
+      effectiveFormationPlayerCount,
       courtCount,
       baseOption.groupSizes
     ).map((block) => {
@@ -1029,12 +1032,36 @@ const LeagueAlgorithmDemo = ({
     left.length === right.length &&
     left.every((value, index) => value === right[index]);
 
+  const rotateBySeed = <T,>(items: T[], seed: number) => {
+    if (items.length < 2) return items;
+    const offset = seed % items.length || 1;
+    const rotated = [...items.slice(offset), ...items.slice(0, offset)];
+    return Math.floor(seed / items.length) % 2 === 1
+      ? rotated.reverse()
+      : rotated;
+  };
+
+  const reshuffleWithinLevel = <T extends { level?: number }>(
+    items: T[],
+    seed?: number,
+  ) => {
+    if (seed == null) return items;
+    const buckets = new Map<number, T[]>();
+    items.forEach((item) => {
+      const level = item.level ?? 999;
+      buckets.set(level, [...(buckets.get(level) ?? []), item]);
+    });
+    return [...buckets.keys()]
+      .sort((a, b) => a - b)
+      .flatMap((level) => rotateBySeed(buckets.get(level) ?? [], seed + level * 997));
+  };
+
   const getRoundGroupSizes = (
     option: ProgramOption,
     blockIndex: number
   ) =>
-    option.rounds?.[blockIndex]?.groupSizes ??
     option.blocks[blockIndex]?.groupSizes ??
+    option.rounds?.[blockIndex]?.groupSizes ??
     option.groupSizes;
 
   const splitIntoTwoGroups = (count: number) => {
@@ -1046,24 +1073,32 @@ const LeagueAlgorithmDemo = ({
   const getTeamCount = (option: ProgramOption, blockIndex: number) => {
     const round = option.rounds?.[blockIndex];
     const teamSize = Math.max(1, round?.teamPlayerCount ?? teamPlayerCount);
-    return Math.ceil(playerCount / teamSize);
+    return Math.ceil(effectiveFormationPlayerCount / teamSize);
   };
 
   const getRoundTeamGroupSizes = (
     option: ProgramOption,
     blockIndex: number
   ) =>
-    option.rounds?.[blockIndex]?.teamGroupSizes ??
     option.blocks[blockIndex]?.teamGroupSizes ??
+    option.rounds?.[blockIndex]?.teamGroupSizes ??
     splitIntoTwoGroups(getTeamCount(option, blockIndex));
 
   const getStructureSizes = (
     option: ProgramOption,
     blockIndex: number,
     mode: "team" | "group"
-  ) => mode === "team"
-    ? getRoundGroupSizes(option, blockIndex)
-    : getRoundTeamGroupSizes(option, blockIndex);
+  ) => {
+    const block = option.blocks[blockIndex];
+
+    if (mode === "team") {
+      return getRoundGroupSizes(option, blockIndex);
+    }
+
+    return block?.type === "TEAM"
+      ? getRoundTeamGroupSizes(option, blockIndex)
+      : getRoundGroupSizes(option, blockIndex);
+  };
 
   const updateProgramRoundGroupSizes = (
     optionIndex: number,
@@ -1093,6 +1128,58 @@ const LeagueAlgorithmDemo = ({
       ...customProgramOptions,
       [optionIndex]: updatedOption,
     });
+  };
+
+  const updateProgramRoundShuffleSeed = (
+    optionIndex: number,
+    blockIndex: number,
+    mode: "team" | "group"
+  ) => {
+    const baseOption = customProgramOptions[optionIndex] ?? displayedProgramOptions[optionIndex];
+    const defaultSeed = (blockIndex + 1) * 1000;
+    const nextTeamShuffleSeed =
+      ((baseOption.rounds?.[blockIndex]?.teamShuffleSeed ??
+        baseOption.blocks[blockIndex]?.teamShuffleSeed ??
+        defaultSeed + 101) + 1);
+    const nextGroupShuffleSeed =
+      ((baseOption.rounds?.[blockIndex]?.groupShuffleSeed ??
+        baseOption.blocks[blockIndex]?.groupShuffleSeed ??
+        defaultSeed + 503) + 1);
+    const nextRounds = (baseOption.rounds ?? rounds).map((round, roundIndex) => ({
+      ...round,
+      id: roundIndex + 1,
+      groupSizes: round.groupSizes ?? baseOption.groupSizes,
+      groupShuffleSeed: mode === "group" && roundIndex === blockIndex
+        ? nextGroupShuffleSeed
+        : round.groupShuffleSeed,
+      teamShuffleSeed: mode === "team" && roundIndex === blockIndex
+        ? nextTeamShuffleSeed
+        : round.teamShuffleSeed,
+    }));
+    const updatedOption = buildProgramOptionFromRounds(baseOption, nextRounds);
+    const nextBlocks = updatedOption.blocks.map((block, roundIndex) => {
+      if (roundIndex !== blockIndex) {
+        return block;
+      }
+
+      return {
+        ...block,
+        groupShuffleSeed: mode === "group"
+          ? nextGroupShuffleSeed
+          : block.groupShuffleSeed,
+        teamShuffleSeed: mode === "team"
+          ? nextTeamShuffleSeed
+          : block.teamShuffleSeed,
+      };
+    });
+
+    setCustomProgramOptions((previous) => ({
+      ...previous,
+      [optionIndex]: {
+        ...updatedOption,
+        blocks: nextBlocks,
+      },
+    }));
   };
 
   const openGroupStructureDialog = (
@@ -1155,9 +1242,10 @@ const LeagueAlgorithmDemo = ({
         )
         : [];
   const groupStructureOptionCount =
-    groupStructureDialog?.mode === "group" && groupStructureOption
+    groupStructureDialog?.mode === "group" &&
+    groupStructureOption?.blocks[groupStructureDialog.blockIndex]?.type === "TEAM"
       ? getTeamCount(groupStructureOption, groupStructureDialog.blockIndex)
-      : playerCount;
+      : effectiveFormationPlayerCount;
   const groupStructureOptions = useMemo(
     () => generateGroupOptions(groupStructureOptionCount),
     [groupStructureOptionCount],
@@ -1176,10 +1264,23 @@ const LeagueAlgorithmDemo = ({
         )
       : [];
   const isGroupResultTeam = groupResultDialog?.mode === "team";
+  const groupResultRound = groupResultOption && groupResultDialog
+    ? groupResultOption.rounds?.[groupResultDialog.blockIndex]
+    : undefined;
+  const groupResultBlock = groupResultOption && groupResultDialog
+    ? groupResultOption.blocks[groupResultDialog.blockIndex]
+    : undefined;
+  const defaultFormationSeed = groupResultDialog ? (groupResultDialog.blockIndex + 1) * 1000 : 0;
+  const teamShuffleSeed = groupResultRound?.teamShuffleSeed ?? groupResultBlock?.teamShuffleSeed ?? defaultFormationSeed + 101;
+  const groupShuffleSeed = groupResultRound?.groupShuffleSeed ?? groupResultBlock?.groupShuffleSeed ?? defaultFormationSeed + 503;
+  const teamFormationPlayers = reshuffleWithinLevel(
+    groupPlayers.slice(0, effectiveFormationPlayerCount),
+    teamShuffleSeed,
+  );
   const teamResultGroups =
     groupResultOption && groupResultDialog
       ? distributeSnake(
-          groupPlayers.slice(0, playerCount),
+          teamFormationPlayers,
           getRoundGroupSizes(groupResultOption, groupResultDialog.blockIndex)
         )
       : [];
@@ -1193,15 +1294,17 @@ const LeagueAlgorithmDemo = ({
   });
   const dialogGroupResult =
     groupResultSizes.length > 0
-      ? groupResultDialog?.mode === "group" && groupResultOption?.blocks[groupResultDialog.blockIndex]?.type === "TEAM"
-        ? distributeSnake(
-            teamUnits,
-            groupResultSizes
-          )
-        : distributeSnake(
-            groupPlayers.slice(0, playerCount),
-            groupResultSizes
-          )
+      ? groupResultDialog?.mode === "team"
+        ? teamResultGroups
+        : groupResultDialog?.mode === "group" && groupResultOption?.blocks[groupResultDialog.blockIndex]?.type === "TEAM"
+          ? distributeSnake(
+              reshuffleWithinLevel(teamUnits, groupShuffleSeed),
+              groupResultSizes
+            )
+          : distributeSnake(
+              reshuffleWithinLevel(groupPlayers.slice(0, effectiveFormationPlayerCount), groupShuffleSeed),
+              groupResultSizes
+            )
       : [];
 
   return (
@@ -2434,6 +2537,14 @@ const LeagueAlgorithmDemo = ({
         </DialogTitle>
 
         <DialogContent dividers>
+          <div
+            key={`${groupResultDialog?.optionIndex ?? "x"}-${groupResultDialog?.blockIndex ?? "x"}-${groupResultDialog?.mode ?? "x"}-${teamShuffleSeed}-${groupShuffleSeed}`}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+              gap: "12px",
+            }}
+          >
           {dialogGroupResult.map((group) => (
             <div
               key={group.name}
@@ -2441,7 +2552,6 @@ const LeagueAlgorithmDemo = ({
                 border: '1px solid #ddd',
                 borderRadius: '12px',
                 padding: '16px',
-                marginTop: '12px',
               }}
             >
               <h3>{isGroupResultTeam ? group.name.replace(/조$/, "팀") : group.name}</h3>
@@ -2466,9 +2576,24 @@ const LeagueAlgorithmDemo = ({
               })}
             </div>
           ))}
+          </div>
         </DialogContent>
 
         <DialogActions>
+          {groupResultDialog && (
+            <Button
+              variant="outlined"
+              onClick={() => {
+                updateProgramRoundShuffleSeed(
+                  groupResultDialog.optionIndex,
+                  groupResultDialog.blockIndex,
+                  groupResultDialog.mode
+                );
+              }}
+            >
+              재편성
+            </Button>
+          )}
           <Button onClick={() => setGroupResultDialog(null)}>
             닫기
           </Button>

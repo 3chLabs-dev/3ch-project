@@ -101,6 +101,8 @@ export interface ProgramBlock {
   description?: string;
   groupSizes?: number[];
   teamGroupSizes?: number[];
+  groupShuffleSeed?: number;
+  teamShuffleSeed?: number;
   tournamentSeeding?: TournamentSeedingType;
 }
 
@@ -152,6 +154,8 @@ export interface RoundConfig {
   teamMatchType: TeamLineupType;
   groupSizes?: number[];
   teamGroupSizes?: number[];
+  groupShuffleSeed?: number;
+  teamShuffleSeed?: number;
   tournamentSeeding?: TournamentSeedingType;
 }
 

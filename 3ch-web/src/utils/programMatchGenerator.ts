@@ -95,6 +95,30 @@ function shuffleStable<T>(items: T[], seed: string) {
   return next;
 }
 
+function rotateBySeed<T>(items: T[], seed: number) {
+  if (items.length < 2) return items;
+  const offset = seed % items.length || 1;
+  const rotated = [...items.slice(offset), ...items.slice(0, offset)];
+  return Math.floor(seed / items.length) % 2 === 1
+    ? rotated.reverse()
+    : rotated;
+}
+
+function shuffleWithinLevel<T extends { level?: number; name?: string | null; id?: string | null }>(
+  items: T[],
+  seed?: number,
+) {
+  if (seed == null) return items;
+  const buckets = new Map<number, T[]>();
+  items.forEach((item) => {
+    const level = item.level ?? 999;
+    buckets.set(level, [...(buckets.get(level) ?? []), item]);
+  });
+  return [...buckets.keys()]
+    .sort((a, b) => a - b)
+    .flatMap((level) => rotateBySeed(buckets.get(level) ?? [], seed + level * 997));
+}
+
 function makeMatch(
   id: string,
   order: number,
@@ -516,9 +540,11 @@ export function generateProgramRoundMatches(
   if (!block || participants.length < 2) return [];
 
   const players = toProgramPlayers(participants);
+  const defaultFormationSeed = round * 1000;
+  const teamFormationPlayers = shuffleWithinLevel(players, block.teamShuffleSeed ?? defaultFormationSeed + 101);
   const groupSizes = block.groupSizes?.length ? block.groupSizes : option?.groupSizes ?? [players.length];
   const matchUnits: MatchUnit[] = block.type === "TEAM"
-    ? toTeamUnitsFromGroupSizes(players, groupSizes)
+    ? toTeamUnitsFromGroupSizes(teamFormationPlayers, groupSizes)
     : block.type === "DOUBLES"
       ? toDoublesUnits(players)
       : players;
@@ -547,7 +573,8 @@ export function generateProgramRoundMatches(
       const teamGroupSizes = block.teamGroupSizes?.length
         ? block.teamGroupSizes
         : [Math.ceil(matchUnits.length / 2), Math.floor(matchUnits.length / 2)].filter((size) => size > 0);
-      const teamGroups = distributeSnake(matchUnits as ProgramPlayer[], teamGroupSizes);
+      const shuffledTeams = shuffleWithinLevel(matchUnits, block.groupShuffleSeed ?? defaultFormationSeed + 503);
+      const teamGroups = distributeSnake(shuffledTeams as ProgramPlayer[], teamGroupSizes);
       return teamGroups.flatMap((group, groupIndex) =>
         buildUnitRoundRobinMatches(
           leagueId,
@@ -567,7 +594,8 @@ export function generateProgramRoundMatches(
   }
 
   if (block.format === "GROUP") {
-    const groups = distributeSnake(matchUnits as ProgramPlayer[], groupSizes);
+    const shuffledUnits = shuffleWithinLevel(matchUnits, block.groupShuffleSeed ?? defaultFormationSeed + 503);
+    const groups = distributeSnake(shuffledUnits as ProgramPlayer[], groupSizes);
     return groups.flatMap((group, groupIndex) =>
       buildUnitRoundRobinMatches(
         leagueId,

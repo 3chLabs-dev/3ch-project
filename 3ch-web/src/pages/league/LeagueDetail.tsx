@@ -100,6 +100,7 @@
     { label: "단일리그", disabled: false },
     { label: "4인 리그 (OMR)", disabled: false },
     { label: "OCR 텍스트 인식", disabled: false },
+    { label: "GPT 인식", disabled: false },
     { label: "조별리그", disabled: false },
     { label: "조별리그 + 본선리그", disabled: false },
     { label: "단일리그 + 토너먼트", disabled: false },
@@ -384,6 +385,9 @@
       }
       if (league?.format === "OCR 텍스트 인식") {
         return `/league/${id}/ocr`;
+      }
+      if (league?.format === "GPT 인식") {
+        return `/league/${id}/openai-vision`;
       }
       return `/league/${id}/matches`;
     };
@@ -1189,6 +1193,8 @@ const handleSaveEdit = async () => {
                 onClick={() => {
                   if (league.format?.includes("토너먼트")) {
                     navigate(`/league/${id}/tournament`);
+                  } else if (league.format === "GPT 인식") {
+                    navigate(`/league/${id}/openai-vision`);
                   } else {
                     navigate(`/league/${id}/bracket`);
                   }

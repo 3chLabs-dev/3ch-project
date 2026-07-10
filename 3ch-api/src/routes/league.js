@@ -9,12 +9,21 @@ const webpush = require('web-push');
 const { rebuildGroupRanking, getGroupIdByLeagueId } = require('../services/groupRanking');
 const { rebuildSportRankingByLeagueId } = require('../services/sportRanking');
 const { scanOmrImageWithPython } = require('../services/omrScanner');
+const { scanLeagueSheetWithOpenAIVision } = require('../services/openaiVisionScanner');
 
-webpush.setVapidDetails(
-  process.env.VAPID_MAILTO,
-  process.env.VAPID_PUBLIC_KEY,
-  process.env.VAPID_PRIVATE_KEY
+const isWebPushConfigured = Boolean(
+  process.env.VAPID_MAILTO && process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY,
 );
+
+if (isWebPushConfigured) {
+  webpush.setVapidDetails(
+    process.env.VAPID_MAILTO,
+    process.env.VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY,
+  );
+} else {
+  console.warn('VAPID 환경변수가 없어 푸시 알림을 비활성화합니다.');
+}
 
 async function triggerRankingRebuildByLeagueId(leagueId) {
   try {
@@ -51,7 +60,7 @@ async function assignLeagueCode(client, { groupId, startDate, leagueId }) {
 
 /** 참가자(participant_id)의 member_id로 push 발송 */
 async function sendPushToParticipant(participantId, payload) {
-  if (!participantId) return;
+  if (!isWebPushConfigured || !participantId) return;
   try {
     const r = await pool.query(
       'SELECT member_id FROM league_participants WHERE id = $1',
@@ -165,6 +174,20 @@ const omrScanSchema = z.object({
   ).min(1).max(4),
   darknessThreshold: z.number().min(0).max(100).default(20),
   marginThreshold: z.number().min(0).max(100).default(3.5),
+});
+
+const openAIVisionCellSchema = z.object({
+  rowPlayerName: z.string().trim(),
+  columnPlayerName: z.string().trim(),
+  rowIndex: z.number().int().min(0),
+  columnIndex: z.number().int().min(0),
+  score: z.number().int().min(0).max(3),
+  confidence: z.number().min(0).max(1),
+  needsReview: z.boolean(),
+});
+
+const openAIVisionResultSchema = z.object({
+  cells: z.array(openAIVisionCellSchema).default([]),
 });
 
 function parseOmrPayload(rawPayload) {
@@ -2391,8 +2414,12 @@ router.delete('/league/:id/matches', requireAuth, async (req, res) => {
   try {
     const access = await pool.query(
       `SELECT l.id FROM leagues l
-       INNER JOIN group_members gm ON gm.group_id = l.group_id
-       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+       LEFT JOIN group_members gm
+         ON gm.group_id = l.group_id
+        AND gm.user_id = $2
+        AND gm.role IN ('owner', 'admin')
+       WHERE l.id = $1
+         AND (l.created_by_id = $2 OR gm.user_id IS NOT NULL)`,
       [leagueId, userId],
     );
     if (access.rowCount === 0) return res.status(403).json({ message: '권한이 없습니다.' });
@@ -2455,8 +2482,12 @@ router.post('/league/:id/matches/init', requireAuth, async (req, res) => {
   try {
     const access = await pool.query(
       `SELECT l.id FROM leagues l
-       INNER JOIN group_members gm ON gm.group_id = l.group_id
-       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+       LEFT JOIN group_members gm
+         ON gm.group_id = l.group_id
+        AND gm.user_id = $2
+        AND gm.role IN ('owner', 'admin')
+       WHERE l.id = $1
+         AND (l.created_by_id = $2 OR gm.user_id IS NOT NULL)`,
       [leagueId, userId],
     );
     if (access.rowCount === 0) return res.status(403).json({ message: '권한이 없습니다.' });
@@ -2494,18 +2525,20 @@ router.post('/league/:id/matches/init', requireAuth, async (req, res) => {
     const participants = participantsRes.rows;
     if(participants.length < 2) return res.status(400).json({ message: '참가자가 2명 이상이어야 합니다.' });
 
-    const isGroupMode = hasGroupName && canWriteMatchGroupName && participants.some( p => p.group_name );
+    const groups = {};
+    if (hasGroupName && canWriteMatchGroupName) {
+      participants.forEach((participant) => {
+        if (!participant.group_name) return;
+        if (!groups[participant.group_name]) groups[participant.group_name] = [];
+        groups[participant.group_name].push(participant.id);
+      });
+    }
+    // 참가자가 모두 서로 다른 조인 경우에는 조별 경기 자체가 없으므로 전체 라운드로빈을 생성한다.
+    const isGroupMode = Object.values(groups).some((ids) => ids.length >= 2);
     let valuesArray = [];
     let matchIndex = 1;
 
     if( isGroupMode ) {
-      const groups = {};
-      participants.forEach( p => {
-        if(!p.group_name) return; //조가 없으면 패스
-        if(!groups[p.group_name]) groups[p.group_name] = [];
-        groups[p.group_name].push(p.id);
-      });
-
       for(const gName in groups){
         const ids = groups[gName];
         if (ids.length < 2) continue;
@@ -3267,6 +3300,140 @@ router.post('/league/:id/omr/scan', optionalAuth, omrUpload.single('image'), asy
     }
 
     console.error('Error scanning OMR image:', error);
+    return res.status(500).json({ message: '서버 오류' });
+  }
+});
+
+router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('image'), async (req, res) => {
+  const leagueId = req.params.id;
+  const userId = Number(req.user.sub);
+
+  try {
+    const leagueRow = await pool.query(
+      `SELECT l.join_permission, l.group_id
+         FROM leagues l
+         LEFT JOIN group_members gm
+           ON gm.group_id = l.group_id
+          AND gm.user_id = $2
+          AND gm.role IN ('owner', 'admin')
+        WHERE l.id = $1
+          AND (l.created_by_id = $2 OR gm.user_id IS NOT NULL)`,
+      [leagueId, userId],
+    );
+    if (leagueRow.rowCount === 0) {
+      return res.status(403).json({ message: 'Vision 인식은 리그 생성자 또는 클럽 운영진만 사용할 수 있습니다.' });
+    }
+
+    const joinPermission = leagueRow.rows[0].join_permission;
+    if (joinPermission === 'club_only') {
+      const memberCheck = await pool.query(
+        `SELECT 1
+           FROM group_members
+          WHERE group_id = $1 AND user_id = $2`,
+        [leagueRow.rows[0].group_id, userId],
+      );
+      if (memberCheck.rowCount === 0) {
+        return res.status(403).json({ message: '클럽 회원만 Vision 인식을 사용할 수 있습니다.' });
+      }
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: '이미지 파일이 필요합니다.' });
+    }
+    if (!String(req.file.mimetype || '').startsWith('image/')) {
+      return res.status(400).json({ message: '이미지 파일만 업로드할 수 있습니다.' });
+    }
+
+    const participantsResult = await pool.query(
+      `SELECT id, name
+         FROM league_participants
+        WHERE league_id = $1
+        ORDER BY sort_order ASC NULLS LAST, division ASC, created_at ASC`,
+      [leagueId],
+    );
+    const participants = participantsResult.rows;
+    if (participants.length < 2) {
+      return res.status(400).json({ message: '참가자가 2명 이상이어야 Vision 인식을 사용할 수 있습니다.' });
+    }
+
+    const matchesResult = await pool.query(
+      `SELECT id, participant_a_id, participant_b_id
+         FROM league_matches
+        WHERE league_id = $1 AND bracket IS NULL`,
+      [leagueId],
+    );
+    const matchLookup = new Map();
+    for (const match of matchesResult.rows) {
+      if (!match.participant_a_id || !match.participant_b_id) continue;
+      matchLookup.set(`${match.participant_a_id}__${match.participant_b_id}`, match);
+      matchLookup.set(`${match.participant_b_id}__${match.participant_a_id}`, match);
+    }
+
+    const vision = await scanLeagueSheetWithOpenAIVision({
+      imageBuffer: req.file.buffer,
+      mimeType: req.file.mimetype,
+      participants,
+    });
+    const parsed = openAIVisionResultSchema.parse(vision.result);
+
+    const cells = parsed.cells.map((cell) => {
+      const rowParticipant = participants[cell.rowIndex];
+      const columnParticipant = participants[cell.columnIndex];
+      const issues = [];
+      if (!rowParticipant) issues.push('행 참가자 위치를 확인할 수 없습니다.');
+      if (!columnParticipant) issues.push('열 참가자 위치를 확인할 수 없습니다.');
+      if (rowParticipant && cell.rowPlayerName && rowParticipant.name !== cell.rowPlayerName) {
+        issues.push('행 참가자 이름이 대진표 순서와 일치하지 않습니다.');
+      }
+      if (columnParticipant && cell.columnPlayerName && columnParticipant.name !== cell.columnPlayerName) {
+        issues.push('열 참가자 이름이 대진표 순서와 일치하지 않습니다.');
+      }
+      if (cell.rowIndex === cell.columnIndex) issues.push('대각선 셀은 점수를 입력할 수 없습니다.');
+
+      const match = rowParticipant && columnParticipant
+        ? matchLookup.get(`${rowParticipant.id}__${columnParticipant.id}`)
+        : null;
+      if (!match && rowParticipant && columnParticipant && cell.rowIndex !== cell.columnIndex) {
+        issues.push('해당 참가자 간 경기가 존재하지 않습니다.');
+      }
+
+      const playerId = match
+        ? match.participant_a_id === rowParticipant?.id
+          ? match.participant_a_id
+          : match.participant_b_id
+        : undefined;
+
+      return {
+        rowPlayerName: cell.rowPlayerName,
+        columnPlayerName: cell.columnPlayerName,
+        rowIndex: cell.rowIndex,
+        columnIndex: cell.columnIndex,
+        score: cell.score,
+        confidence: cell.confidence,
+        needsReview: cell.needsReview || issues.length > 0,
+        matchId: match?.id,
+        playerId,
+        issue: issues.join(' '),
+      };
+    });
+
+    return res.json({
+      engine: vision.engine,
+      cells,
+      rawCellCount: parsed.cells.length,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ message: 'OpenAI Vision 응답 형식이 올바르지 않습니다.', issues: error.issues });
+    }
+    if (error?.code === 'OPENAI_API_KEY_MISSING') {
+      return res.status(503).json({ message: error.message, code: error.code });
+    }
+    if (error?.code === 'OPENAI_VISION_FAILED') {
+      return res.status(502).json({ message: error.message, code: error.code, details: error.details });
+    }
+
+    console.error('Error scanning OpenAI Vision image:', error);
     return res.status(500).json({ message: '서버 오류' });
   }
 });

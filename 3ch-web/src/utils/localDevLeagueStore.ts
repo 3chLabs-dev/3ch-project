@@ -3,7 +3,9 @@ import type {
   CreateLeagueRequest,
   League,
   LeagueListItem,
+  LeagueMatch,
   LeagueParticipantItem,
+  UpdateMatchRequest,
   UpdateParticipantRequest,
 } from "../features/league/leagueApi";
 import { LOCAL_DEV_GROUP, LOCAL_DEV_USER } from "./localDevAuth";
@@ -11,6 +13,7 @@ import { LOCAL_DEV_GROUP, LOCAL_DEV_USER } from "./localDevAuth";
 const LOCAL_DEV_LEAGUES_KEY = "local-dev-leagues";
 const LOCAL_DEV_PARTICIPANTS_KEY = "local-dev-participants";
 const LOCAL_DEV_PROGRAMS_KEY = "local-dev-programs";
+const LOCAL_DEV_MATCHES_KEY = "local-dev-matches";
 
 function readJson<T>(key: string, fallback: T): T {
   try {
@@ -36,6 +39,60 @@ export function getLocalDevLeague(id: string) {
 export function getLocalDevParticipants(leagueId: string) {
   const all = readJson<Record<string, LeagueParticipantItem[]>>(LOCAL_DEV_PARTICIPANTS_KEY, {});
   return all[leagueId] ?? [];
+}
+
+export function getLocalDevMatches(leagueId: string) {
+  const all = readJson<Record<string, LeagueMatch[]>>(LOCAL_DEV_MATCHES_KEY, {});
+  return all[leagueId] ?? [];
+}
+
+function saveLocalDevMatches(leagueId: string, matches: LeagueMatch[]) {
+  const all = readJson<Record<string, LeagueMatch[]>>(LOCAL_DEV_MATCHES_KEY, {});
+  all[leagueId] = matches;
+  writeJson(LOCAL_DEV_MATCHES_KEY, all);
+}
+
+export function initLocalDevMatches(leagueId: string, force = false) {
+  const existing = getLocalDevMatches(leagueId);
+  if (existing.length > 0 && !force) return existing;
+
+  const participants = getLocalDevParticipants(leagueId);
+  const matches: LeagueMatch[] = [];
+  let matchOrder = 1;
+
+  for (let a = 0; a < participants.length; a += 1) {
+    for (let b = a + 1; b < participants.length; b += 1) {
+      const participantA = participants[a];
+      const participantB = participants[b];
+      matches.push({
+        id: `${leagueId}-M${matchOrder}`,
+        match_order: matchOrder,
+        participant_a_id: participantA.id,
+        participant_b_id: participantB.id,
+        participant_a_name: participantA.name,
+        participant_a_division: participantA.division ?? null,
+        participant_b_name: participantB.name,
+        participant_b_division: participantB.division ?? null,
+        score_a: null,
+        score_b: null,
+        court: null,
+        status: "pending",
+        bracket: null,
+      });
+      matchOrder += 1;
+    }
+  }
+
+  saveLocalDevMatches(leagueId, matches);
+  return matches;
+}
+
+export function updateLocalDevMatch(leagueId: string, matchId: string, updates: UpdateMatchRequest) {
+  const matches = getLocalDevMatches(leagueId).map((match) => (
+    match.id === matchId ? { ...match, ...updates } : match
+  ));
+  saveLocalDevMatches(leagueId, matches);
+  return matches.find((match) => match.id === matchId) ?? null;
 }
 
 function saveLocalDevParticipants(leagueId: string, participants: LeagueParticipantItem[]) {

@@ -63,9 +63,10 @@ export default function LeagueStep5Participants() {
   const SORT_OPTIONS = ["부수", "이름", "랜덤"];
 
   const isFourPlayerOmr = formatSelection === "four-player-omr";
+  const isFourPlayerFixed = isFourPlayerOmr || formatSelection === "gpt-recognition";
   const isClubEvent = typeSelection === "club_event";
   const [participants, setParticipants] = useState<Participant[]>(existing);
-  const [recruitCount, setRecruitCount] = useState<number | "">(isFourPlayerOmr ? 4 : "");
+  const [recruitCount, setRecruitCount] = useState<number | "">(isFourPlayerFixed ? 4 : "");
   const [sortOrder, setSortOrder] = useState<string>("");
   const [division, setDivision] = useState("");
   const [name, setName] = useState("");
@@ -75,10 +76,10 @@ export default function LeagueStep5Participants() {
   const [deleteTarget, setDeleteTarget] = useState<{ idx: number; division: string; name: string } | null>(null);
   const [openCancelDialog, setOpenCancelDialog] = useState<boolean>(false);
 
-  const effectiveRecruitCount = isFourPlayerOmr ? 4 : recruitCount;
+  const effectiveRecruitCount = isFourPlayerFixed ? 4 : recruitCount;
   const isFull = effectiveRecruitCount !== "" && participants.length >= effectiveRecruitCount;
   const canAdd = useMemo(() => Boolean(division.trim() && name.trim()), [division, name]);
-  const canNext = effectiveRecruitCount !== "" && sortOrder !== "" && (!isFourPlayerOmr || participants.length === 4);
+  const canNext = effectiveRecruitCount !== "" && sortOrder !== "" && (!isFourPlayerFixed || participants.length === 4);
 
   const handleCancelDelete = () => {
     setOpenCancelDialog(false);
@@ -167,7 +168,7 @@ export default function LeagueStep5Participants() {
                 const v = e.target.value;
                 setRecruitCount(v === "" ? "" : Number(v));
               }}
-              disabled={isFourPlayerOmr}
+              disabled={isFourPlayerFixed}
               size="small"
               sx={{
                 borderRadius: 0.6,

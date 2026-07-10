@@ -7,9 +7,12 @@ import {
   deleteLocalDevParticipant,
   getLocalDevLeague,
   getLocalDevLeagues,
+  getLocalDevMatches,
   getLocalDevParticipants,
   getLocalDevProgram,
+  initLocalDevMatches,
   saveLocalDevProgram,
+  updateLocalDevMatch,
   updateLocalDevParticipant,
 } from "../../utils/localDevLeagueStore";
 
@@ -270,6 +273,30 @@ export interface ScanLeagueOmrResponse {
       yOffset?: number;
     }>;
   }>;
+}
+
+export interface OpenAIVisionCell {
+  rowPlayerName: string;
+  columnPlayerName: string;
+  rowIndex: number;
+  columnIndex: number;
+  score: number;
+  confidence: number;
+  needsReview: boolean;
+  matchId?: string;
+  playerId?: string;
+  issue?: string;
+}
+
+export interface ScanLeagueOpenAIVisionRequest {
+  leagueId: string;
+  file: File;
+}
+
+export interface ScanLeagueOpenAIVisionResponse {
+  engine: string;
+  cells: OpenAIVisionCell[];
+  rawCellCount: number;
 }
 
 export interface ScanOcrRequest {
@@ -651,12 +678,29 @@ export const leagueApi = baseApi.injectEndpoints({
     }),
 
     getLeagueMatches: builder.query<GetLeagueMatchesResponse, string>({
-      query: (id) => `/league/${id}/matches`,
+      async queryFn(id, api, _extraOptions, fetchWithBQ) {
+        const token = (api.getState() as RootState).auth?.token;
+        if (isLocalDevToken(token)) {
+          return { data: { matches: getLocalDevMatches(id) } };
+        }
+        const result = await fetchWithBQ(`/league/${id}/matches`);
+        return result.error ? { error: result.error } : { data: result.data as GetLeagueMatchesResponse };
+      },
       providesTags: (_result, _error, id) => [{ type: "League", id: `matches-${id}` }],
     }),
 
     initLeagueMatches: builder.mutation<GetLeagueMatchesResponse, { id: string; force?: boolean }>({
-      query: ({ id, force }) => ({ url: `/league/${id}/matches/init${force ? "?force=true" : ""}`, method: "POST" }),
+      async queryFn({ id, force }, api, _extraOptions, fetchWithBQ) {
+        const token = (api.getState() as RootState).auth?.token;
+        if (isLocalDevToken(token)) {
+          return { data: { matches: initLocalDevMatches(id, force) } };
+        }
+        const result = await fetchWithBQ({
+          url: `/league/${id}/matches/init${force ? "?force=true" : ""}`,
+          method: "POST",
+        });
+        return result.error ? { error: result.error } : { data: result.data as GetLeagueMatchesResponse };
+      },
       invalidatesTags: (_result, _error, { id }) => [{ type: "League", id: `matches-${id}` }],
     }),
 
@@ -677,11 +721,19 @@ export const leagueApi = baseApi.injectEndpoints({
       { match: LeagueMatch },
       { leagueId: string; matchId: string; updates: UpdateMatchRequest }
     >({
-      query: ({ leagueId, matchId, updates }) => ({
-        url: `/league/${leagueId}/matches/${matchId}`,
-        method: "PATCH",
-        body: updates,
-      }),
+      async queryFn({ leagueId, matchId, updates }, api, _extraOptions, fetchWithBQ) {
+        const token = (api.getState() as RootState).auth?.token;
+        if (isLocalDevToken(token)) {
+          const match = updateLocalDevMatch(leagueId, matchId, updates);
+          return match ? { data: { match } } : { error: { status: 404, data: "Not Found" } };
+        }
+        const result = await fetchWithBQ({
+          url: `/league/${leagueId}/matches/${matchId}`,
+          method: "PATCH",
+          body: updates,
+        });
+        return result.error ? { error: result.error } : { data: result.data as { match: LeagueMatch } };
+      },
       async onQueryStarted({ leagueId, matchId, updates }, { dispatch, queryFulfilled }) {
         const patch = dispatch(
           leagueApi.util.updateQueryData("getLeagueMatches", leagueId, (draft) => {
@@ -708,6 +760,18 @@ export const leagueApi = baseApi.injectEndpoints({
         );
         return {
           url: `/league/${leagueId}/omr/scan`,
+          method: "POST",
+          body: formData,
+        };
+      },
+    }),
+
+    scanLeagueOpenAIVision: builder.mutation<ScanLeagueOpenAIVisionResponse, ScanLeagueOpenAIVisionRequest>({
+      query: ({ leagueId, file }) => {
+        const formData = new FormData();
+        formData.append("image", file);
+        return {
+          url: `/league/${leagueId}/openai-vision/scan`,
           method: "POST",
           body: formData,
         };
@@ -839,6 +903,7 @@ export const {
   useInitLeagueMatchesMutation,
   useUpdateLeagueMatchMutation,
   useScanLeagueOmrMutation,
+  useScanLeagueOpenAIVisionMutation,
   useScanOcrMutation,
   useReorderLeagueMatchesMutation,
   useDeleteLeagueMatchMutation,

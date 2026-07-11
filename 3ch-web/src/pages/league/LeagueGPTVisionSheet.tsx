@@ -1397,7 +1397,7 @@ export default function LeagueGPTVisionSheet() {
     const requiredWinScore = getWinScore(league?.rules) ?? 3;
     const grouped = new Map<string, { match: LeagueMatch; scoreA: number | null; scoreB: number | null }>();
     previewCells.forEach((cell) => {
-      if (!cell.matchId || !cell.playerId || cell.needsReview || cell.issue) return;
+      if (!cell.matchId || !cell.playerId) return;
       const match = matches.find((item) => item.id === cell.matchId);
       if (!match) return;
       const current = grouped.get(match.id) ?? { match, scoreA: null, scoreB: null };
@@ -1408,12 +1408,25 @@ export default function LeagueGPTVisionSheet() {
 
     try {
       let saved = 0;
+      const invalidMatchIds = new Set<string>();
       for (const { match, scoreA, scoreB } of grouped.values()) {
-        if (scoreA == null || scoreB == null || [scoreA, scoreB].filter((score) => score === requiredWinScore).length !== 1) continue;
+        if (scoreA == null || scoreB == null || [scoreA, scoreB].filter((score) => score === requiredWinScore).length !== 1) {
+          invalidMatchIds.add(match.id);
+          continue;
+        }
         await updateMatch({ leagueId: id ?? "", matchId: match.id, updates: { score_a: scoreA, score_b: scoreB, status: "done" } }).unwrap();
         saved += 1;
       }
       await refetchMatches();
+      if (invalidMatchIds.size > 0) {
+        setPreviewCells((cells) => cells.map((cell) => (
+          cell.matchId && invalidMatchIds.has(cell.matchId)
+            ? { ...cell, needsReview: true, issue: "두 세트스코어 중 하나는 승리 세트 수여야 합니다." }
+            : cell
+        )));
+        setVisionNotice({ type: "info", message: `${saved}개 경기는 저장했습니다. ${invalidMatchIds.size}개 경기는 세트스코어 조합을 수정해 주세요.` });
+        return;
+      }
       setPreviewOpen(false);
       setVisionNotice({ type: "success", message: `${saved}개 경기 결과를 저장했습니다.` });
     } catch (error) {
@@ -1443,6 +1456,15 @@ export default function LeagueGPTVisionSheet() {
   // portrait: 90° 회전이므로 시각 너비=naturalTh, 시각 높이=naturalTw
   const visualW = naturalTw > 0 ? (landscape ? naturalTw : naturalTh) * appliedScale : 0;
   const visualH = naturalTh > 0 ? (landscape ? naturalTh : naturalTw) * appliedScale : 0;
+  const mobileDialogPaperSx = landscape
+    ? {}
+    : {
+        width: "calc(100vh - 48px)",
+        maxWidth: "none",
+        maxHeight: "calc(100vw - 48px)",
+        transform: "rotate(90deg)",
+        transformOrigin: "center",
+      };
 
   // ── JSX ───────────────────────────────────────────────────────────────────
   return createPortal(
@@ -1718,7 +1740,7 @@ export default function LeagueGPTVisionSheet() {
       <input ref={fileInputRef} type="file" accept="image/*,.jpg,.jpeg,.png,.heic,.heif,.webp" hidden onChange={handleVisionFile} />
       <input ref={galleryInputRef} type="file" accept="image/*,video/*" hidden onChange={handleVisionFile} />
 
-      <Dialog open={resultDialogOpen} onClose={() => !isScanning && setResultDialogOpen(false)} maxWidth="xs" fullWidth sx={{ zIndex: 10002 }} slotProps={{ paper: { sx: { borderRadius: 3, overflow: "hidden", width: "min(360px, calc(100% - 48px))" } } }}>
+      <Dialog open={resultDialogOpen} onClose={() => !isScanning && setResultDialogOpen(false)} maxWidth="xs" fullWidth sx={{ zIndex: 10002 }} slotProps={{ paper: { sx: { borderRadius: 3, overflow: "hidden", width: "min(360px, calc(100% - 48px))", ...mobileDialogPaperSx } } }}>
         <DialogTitle sx={{ fontSize: 16, fontWeight: 900, px: 2.5, py: 2 }}>작업 선택</DialogTitle>
         <DialogContent sx={{ p: 0, borderTop: "1px solid #E5E7EB" }}>
           <Stack direction="row" justifyContent="space-around" sx={{ py: 2.8 }}>
@@ -1729,20 +1751,20 @@ export default function LeagueGPTVisionSheet() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isScanning} maxWidth="xs" fullWidth sx={{ zIndex: 10002 }}>
+      <Dialog open={isScanning} maxWidth="xs" fullWidth sx={{ zIndex: 10002 }} slotProps={{ paper: { sx: mobileDialogPaperSx } }}>
         <DialogContent sx={{ py: 4, textAlign: "center" }}>
           <CircularProgress size={34} />
           <Typography sx={{ mt: 2, fontWeight: 900 }}>GPT Vision이 점수 격자를 인식하는 중입니다.</Typography>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={Boolean(visionError)} onClose={() => setVisionError(null)} maxWidth="xs" fullWidth sx={{ zIndex: 10002 }}>
+      <Dialog open={Boolean(visionError)} onClose={() => setVisionError(null)} maxWidth="xs" fullWidth sx={{ zIndex: 10002 }} slotProps={{ paper: { sx: mobileDialogPaperSx } }}>
         <DialogTitle sx={{ fontWeight: 900 }}>사진 인식 실패</DialogTitle>
         <DialogContent dividers><Typography>{visionError}</Typography></DialogContent>
         <DialogActions><Button onClick={() => setVisionError(null)}>확인</Button></DialogActions>
       </Dialog>
 
-      <Dialog open={previewOpen} onClose={() => !isScanning && setPreviewOpen(false)} maxWidth="lg" fullWidth sx={{ zIndex: 10002 }}>
+      <Dialog open={previewOpen} onClose={() => !isScanning && setPreviewOpen(false)} maxWidth="lg" fullWidth sx={{ zIndex: 10002 }} slotProps={{ paper: { sx: mobileDialogPaperSx } }}>
         <DialogTitle sx={{ fontWeight: 900 }}>GPT Vision 인식 결과 확인</DialogTitle>
         <DialogContent dividers>
           <Typography sx={{ mb: 1.5, color: "#6B7280", fontSize: 13, fontWeight: 700 }}>별표부터 시작하는 점수 격자만 인식했습니다. 노란색 또는 잘못된 점수는 저장 전에 수정해 주세요.</Typography>
@@ -1760,7 +1782,6 @@ export default function LeagueGPTVisionSheet() {
                         <Typography sx={{ minWidth: 24, fontSize: 20, fontWeight: 900, color: needsReview ? "#B45309" : "#111827" }}>{cell?.score ?? 0}</Typography>
                         <IconButton size="small" onClick={() => updatePreviewCell(rowIndex, columnIndex, (cell?.score ?? 0) + 1)}>+</IconButton>
                       </Stack>
-                      <Typography sx={{ fontSize: 10, color: needsReview ? "#B45309" : "#64748B", fontWeight: 800 }}>{Math.round((cell?.confidence ?? 0) * 100)}%</Typography>
                     </td>;
                   })}
                 </tr>

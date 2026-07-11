@@ -48,6 +48,7 @@ import {
   useGetLeagueParticipantsQuery,
   useGetLeagueMatchesQuery,
   useGetLeagueProgramQuery,
+  useInitLeagueMatchesMutation,
   useUpdateLeagueMatchMutation,
   useScanLeagueOpenAIVisionMutation,
   useReorderLeagueParticipantsMutation,
@@ -935,6 +936,7 @@ export default function LeagueGPTVisionSheet() {
   );
   const programMatchesAll = serverProgramMatchesAll.length > 0 ? serverProgramMatchesAll : generatedProgramMatchesAll;
   const [updateMatch] = useUpdateLeagueMatchMutation();
+  const [initMatches, { isLoading: isIniting }] = useInitLeagueMatchesMutation();
   const [scanVision, { isLoading: isScanning }] = useScanLeagueOpenAIVisionMutation();
   const [resultDialogOpen, setResultDialogOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -943,6 +945,7 @@ export default function LeagueGPTVisionSheet() {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+  const autoInitRequestedRef = useRef(false);
   const updateProgramMatch = useCallback((matchId: string, updates: ProgramMatchPatch) => {
     if (!id) return;
     if (serverProgramMatchesAll.some((match) => match.id === matchId)) {
@@ -1077,6 +1080,19 @@ export default function LeagueGPTVisionSheet() {
     ?? authUser?.name
     ?? (id ? localStorage.getItem(`guestName_${id}`) : null)
     ?? null;
+
+  // 기존에 브라켓으로 바로 진입한 GPT 리그도 경기 순서 데이터를 복구한다.
+  useEffect(() => {
+    if (isProgramMode || !id || !canManage || !matchData || matchData.matches.length > 0 || rawParticipants.length < 2 || isIniting || autoInitRequestedRef.current) return;
+    autoInitRequestedRef.current = true;
+    initMatches({ id })
+      .unwrap()
+      .then(() => refetchMatches())
+      .catch((error) => {
+        autoInitRequestedRef.current = false;
+        setVisionNotice({ type: "error", message: getErrorMessage(error, "경기 순서 생성에 실패했습니다.") });
+      });
+  }, [canManage, id, initMatches, isIniting, isProgramMode, matchData, rawParticipants.length, refetchMatches]);
 
   // 5. 로컬 정렬 상태 (조를 바꿀 때마다 초기화)
   useEffect(() => {
@@ -1627,7 +1643,7 @@ export default function LeagueGPTVisionSheet() {
               variant="contained"
               size="small"
               onClick={() => setResultDialogOpen(true)}
-              disabled={!canManage || !matches.length || isScanning}
+              disabled={!canManage || !matches.length || isScanning || isIniting}
               sx={{ borderRadius: 2, fontWeight: 900, bgcolor: "#16A34A", minWidth: 76, height: 32, whiteSpace: "nowrap", ...(landscape ? {} : { transform: "rotate(90deg)" }), "&:hover": { bgcolor: "#15803D" } }}
             >
               결과 등록

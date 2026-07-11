@@ -34,6 +34,13 @@ import PrintIcon from "@mui/icons-material/Print";
 import CameraAltIcon from "@mui/icons-material/CameraAlt";
 import FolderIcon from "@mui/icons-material/Folder";
 import ImageIcon from "@mui/icons-material/Image";
+import RotateLeftIcon from "@mui/icons-material/RotateLeft";
+import RotateRightIcon from "@mui/icons-material/RotateRight";
+import CropIcon from "@mui/icons-material/Crop";
+import NavigateBeforeIcon from "@mui/icons-material/NavigateBefore";
+import NavigateNextIcon from "@mui/icons-material/NavigateNext";
+import ReactCrop, { type Crop, type PixelCrop } from "react-image-crop";
+import "react-image-crop/dist/ReactCrop.css";
 import QRCode from "react-qr-code";
 import { formatLeagueDate } from "../../utils/dateUtils";
 import {
@@ -96,6 +103,12 @@ const NEXT_STATUS: Record<string, "pending" | "playing" | "done"> = {
 };
 
 const AUTO_COMPLETE_DELAY_MS = 4000;
+
+const VISION_GUIDE_IMAGES = [
+  "/og-image.png",
+  "/128_첫번째 아이콘.png",
+  "/128_두번째 아이콘.png",
+];
 
 function escapeHtml(value: string): string {
   return value
@@ -883,6 +896,21 @@ type VisionPreviewCell = OpenAIVisionCell & {
   issue?: string;
 };
 
+type FilePickerHandle = { getFile: () => Promise<File> };
+type FilePickerWindow = Window & {
+  showOpenFilePicker?: (options: {
+    multiple: boolean;
+    excludeAcceptAllOption: boolean;
+    types: Array<{ description: string; accept: Record<string, string[]> }>;
+  }) => Promise<FilePickerHandle[]>;
+};
+
+type ImageEditorState = {
+  file: File;
+  url: string;
+};
+
+
 function getErrorMessage(error: unknown, fallback: string) {
   if (!error || typeof error !== "object") return fallback;
   const value = error as {
@@ -946,9 +974,18 @@ export default function LeagueGPTVisionSheet() {
   const [previewCells, setPreviewCells] = useState<VisionPreviewCell[]>([]);
   const [visionError, setVisionError] = useState<string | null>(null);
   const [visionNotice, setVisionNotice] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
+  const [imageEditor, setImageEditor] = useState<ImageEditorState | null>(null);
+  const [cropMode, setCropMode] = useState(false);
+  const [crop, setCrop] = useState<Crop>();
+  const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
+  const [editorLoaded, setEditorLoaded] = useState(false);
+  const [guideSlide, setGuideSlide] = useState(0);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+  const editorImageRef = useRef<HTMLImageElement>(null);
+  const guideCarouselRef = useRef<HTMLDivElement>(null);
+  const guideDragRef = useRef<{ pointerId: number; startX: number; startScrollLeft: number } | null>(null);
   const updateProgramMatch = useCallback((matchId: string, updates: ProgramMatchPatch) => {
     if (!id) return;
     if (serverProgramMatchesAll.some((match) => match.id === matchId)) {
@@ -1319,11 +1356,116 @@ export default function LeagueGPTVisionSheet() {
     )));
   };
 
+  useEffect(() => {
+    if (!imageEditor) return;
+    return () => URL.revokeObjectURL(imageEditor.url);
+  }, [imageEditor]);
+
+  const openImageEditor = (file?: File) => {
+    if (!file) return;
+    setResultDialogOpen(false);
+    setVisionError(null);
+    setCropMode(false);
+    setCrop(undefined);
+    setCompletedCrop(undefined);
+    setEditorLoaded(false);
+    setImageEditor({ file, url: URL.createObjectURL(file) });
+  };
+
+  const closeImageEditor = () => setImageEditor(null);
+
+  const handleEditorImageLoad = () => {
+    setCropMode(false);
+    setCrop(undefined);
+    setCompletedCrop(undefined);
+    setEditorLoaded(true);
+  };
+
+  const enableCrop = () => {
+    const image = editorImageRef.current;
+    if (!image) return;
+    setCropMode(true);
+    setCrop({ unit: "%", x: 10, y: 10, width: 80, height: 80 });
+    setCompletedCrop({ x: image.naturalWidth * 0.1, y: image.naturalHeight * 0.1, width: image.naturalWidth * 0.8, height: image.naturalHeight * 0.8, unit: "px" });
+  };
+
+  const rotateEditorImage = async (degrees: number) => {
+    const image = editorImageRef.current;
+    if (!image || !imageEditor) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = image.naturalHeight;
+    canvas.height = image.naturalWidth;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    context.translate(canvas.width / 2, canvas.height / 2);
+    context.rotate(degrees * Math.PI / 180);
+    context.drawImage(image, -image.naturalWidth / 2, -image.naturalHeight / 2);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
+    if (!blob) return;
+    const name = imageEditor.file.name.replace(/\.[^.]+$/, "") || "league-score-sheet";
+    setEditorLoaded(false);
+    setImageEditor({ file: new File([blob], `${name}.jpg`, { type: "image/jpeg" }), url: URL.createObjectURL(blob) });
+  };
+
+  const createEditedImage = async () => {
+    const image = editorImageRef.current;
+    if (!imageEditor || !image) return;
+    const pixelCrop = cropMode && completedCrop
+      ? completedCrop
+      : { x: 0, y: 0, width: image.naturalWidth, height: image.naturalHeight, unit: "px" as const };
+    const outputWidth = Math.min(2000, Math.max(1, Math.round(pixelCrop.width)));
+    const outputHeight = Math.max(1, Math.round(pixelCrop.height * outputWidth / pixelCrop.width));
+    const canvas = document.createElement("canvas");
+    canvas.width = outputWidth;
+    canvas.height = outputHeight;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    context.drawImage(image, pixelCrop.x, pixelCrop.y, pixelCrop.width, pixelCrop.height, 0, 0, outputWidth, outputHeight);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
+    if (!blob) return;
+    const name = imageEditor.file.name.replace(/\.[^.]+$/, "") || "league-score-sheet";
+    closeImageEditor();
+    await handleVisionImage(new File([blob], `${name}.jpg`, { type: "image/jpeg" }));
+  };
+
+  const handleGuideScroll = () => {
+    const carousel = guideCarouselRef.current;
+    if (!carousel) return;
+    setGuideSlide(Math.round(carousel.scrollLeft / Math.max(carousel.clientWidth, 1)));
+  };
+
+  const selectGuideSlide = (index: number) => {
+    guideCarouselRef.current?.scrollTo({ left: guideCarouselRef.current.clientWidth * index, behavior: "smooth" });
+    setGuideSlide(index);
+  };
+
+  const moveGuideSlide = (direction: -1 | 1) => {
+    selectGuideSlide(Math.min(Math.max(guideSlide + direction, 0), VISION_GUIDE_IMAGES.length - 1));
+  };
+
+  const handleGuidePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    const carousel = guideCarouselRef.current;
+    if (!carousel) return;
+    guideDragRef.current = { pointerId: event.pointerId, startX: event.clientX, startScrollLeft: carousel.scrollLeft };
+    carousel.setPointerCapture(event.pointerId);
+  };
+
+  const handleGuidePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const carousel = guideCarouselRef.current;
+    const drag = guideDragRef.current;
+    if (!carousel || !drag || drag.pointerId !== event.pointerId) return;
+    carousel.scrollLeft = drag.startScrollLeft - (event.clientX - drag.startX);
+  };
+
+  const handleGuidePointerEnd = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (guideDragRef.current?.pointerId !== event.pointerId) return;
+    guideDragRef.current = null;
+    handleGuideScroll();
+  };
+
   const handleOpenResultDialog = () => setResultDialogOpen(true);
 
-  const handleVisionFile = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
+  const handleVisionImage = async (file?: File) => {
     setResultDialogOpen(false);
     setVisionError(null);
     if (!file || !id || !localOrder.length) return;
@@ -1390,6 +1532,36 @@ export default function LeagueGPTVisionSheet() {
       const message = getErrorMessage(error, "GPT Vision 인식에 실패했습니다.");
       setVisionNotice({ type: "error", message });
       setVisionError(message);
+    }
+  };
+
+  const handleVisionFile = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    openImageEditor(file);
+  };
+
+  const handleOpenFilePicker = async () => {
+    const filePicker = (window as FilePickerWindow).showOpenFilePicker;
+    if (!filePicker) {
+      fileInputRef.current?.click();
+      return;
+    }
+
+    try {
+      const [handle] = await filePicker({
+        multiple: false,
+        excludeAcceptAllOption: false,
+        types: [{
+          description: "이미지 파일",
+          accept: { "image/*": [".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"] },
+        }],
+      });
+      openImageEditor(await handle?.getFile());
+    } catch (error) {
+      if ((error as { name?: string }).name !== "AbortError") {
+        fileInputRef.current?.click();
+      }
     }
   };
 
@@ -1738,17 +1910,55 @@ export default function LeagueGPTVisionSheet() {
       {visionNotice ? <Alert severity={visionNotice.type} onClose={() => setVisionNotice(null)} sx={{ position: "fixed", top: 64, left: "50%", transform: "translateX(-50%)", zIndex: 10001, minWidth: 280 }}>{visionNotice.message}</Alert> : null}
       <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" hidden onChange={handleVisionFile} />
       <input ref={fileInputRef} type="file" accept="image/*,.jpg,.jpeg,.png,.heic,.heif,.webp" hidden onChange={handleVisionFile} />
-      <input ref={galleryInputRef} type="file" accept="image/*,video/*" hidden onChange={handleVisionFile} />
+      <input ref={galleryInputRef} type="file" accept="image/*" hidden onChange={handleVisionFile} />
 
       <Dialog open={resultDialogOpen} onClose={() => !isScanning && setResultDialogOpen(false)} maxWidth="xs" fullWidth sx={{ zIndex: 10002 }} slotProps={{ paper: { sx: { borderRadius: 3, overflow: "hidden", width: "min(360px, calc(100% - 48px))", ...mobileDialogPaperSx } } }}>
         <DialogTitle sx={{ fontSize: 16, fontWeight: 900, px: 2.5, py: 2 }}>작업 선택</DialogTitle>
         <DialogContent sx={{ p: 0, borderTop: "1px solid #E5E7EB" }}>
+          <Box sx={{ px: 2.5, pt: 2 }}>
+            <Box sx={{ position: "relative" }}>
+              <Box ref={guideCarouselRef} onScroll={handleGuideScroll} onPointerDown={handleGuidePointerDown} onPointerMove={handleGuidePointerMove} onPointerUp={handleGuidePointerEnd} onPointerCancel={handleGuidePointerEnd} sx={{ display: "flex", overflowX: "auto", scrollSnapType: "x mandatory", borderRadius: 1.5, bgcolor: "#F3F4F6", touchAction: "pan-y", cursor: "grab", userSelect: "none", "&:active": { cursor: "grabbing" }, "&::-webkit-scrollbar": { display: "none" } }}>
+                {VISION_GUIDE_IMAGES.map((src, index) => (
+                  <Box key={src} sx={{ flex: "0 0 100%", height: 132, scrollSnapAlign: "center", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Box component="img" src={src} alt={`안내 이미지 ${index + 1}`} sx={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                  </Box>
+                ))}
+              </Box>
+              <Tooltip title="이전 이미지"><span><IconButton size="small" onClick={() => moveGuideSlide(-1)} disabled={guideSlide === 0} sx={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", bgcolor: "rgba(255,255,255,0.88)", boxShadow: "0 1px 4px rgba(0,0,0,0.2)", "&:hover": { bgcolor: "#fff" } }}><NavigateBeforeIcon /></IconButton></span></Tooltip>
+              <Tooltip title="다음 이미지"><span><IconButton size="small" onClick={() => moveGuideSlide(1)} disabled={guideSlide === VISION_GUIDE_IMAGES.length - 1} sx={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", bgcolor: "rgba(255,255,255,0.88)", boxShadow: "0 1px 4px rgba(0,0,0,0.2)", "&:hover": { bgcolor: "#fff" } }}><NavigateNextIcon /></IconButton></span></Tooltip>
+            </Box>
+            <Stack direction="row" justifyContent="center" spacing={0.65} sx={{ py: 1 }}>
+              {VISION_GUIDE_IMAGES.map((_, index) => (
+                <Box key={index} component="button" type="button" aria-label={`안내 이미지 ${index + 1}`} onClick={() => selectGuideSlide(index)} sx={{ p: 0, width: guideSlide === index ? 16 : 6, height: 6, border: 0, borderRadius: 4, bgcolor: guideSlide === index ? "#2563EB" : "#CBD5E1", cursor: "pointer", transition: "width 160ms ease" }} />
+              ))}
+            </Stack>
+          </Box>
           <Stack direction="row" justifyContent="space-around" sx={{ py: 2.8 }}>
             <Button onClick={() => cameraInputRef.current?.click()} disabled={isScanning} sx={{ flexDirection: "column", gap: 1, color: "#374151", minWidth: 86, fontWeight: 800 }}><CameraAltIcon sx={{ fontSize: 30, color: "#777" }} /><Typography sx={{ fontSize: 11, fontWeight: 800 }}>카메라</Typography></Button>
-            <Button onClick={() => fileInputRef.current?.click()} disabled={isScanning} sx={{ flexDirection: "column", gap: 1, color: "#374151", minWidth: 86, fontWeight: 800 }}><FolderIcon sx={{ fontSize: 32, color: "#777" }} /><Typography sx={{ fontSize: 11, fontWeight: 800 }}>내 파일</Typography></Button>
-            <Button onClick={() => galleryInputRef.current?.click()} disabled={isScanning} sx={{ flexDirection: "column", gap: 1, color: "#374151", minWidth: 86, fontWeight: 800 }}><ImageIcon sx={{ fontSize: 30, color: "#3156A6" }} /><Typography sx={{ fontSize: 11, fontWeight: 800 }}>사진 및 동영상</Typography></Button>
+            <Button onClick={() => galleryInputRef.current?.click()} disabled={isScanning} sx={{ flexDirection: "column", gap: 1, color: "#374151", minWidth: 86, fontWeight: 800 }}><ImageIcon sx={{ fontSize: 30, color: "#3156A6" }} /><Typography sx={{ fontSize: 11, fontWeight: 800 }}>사진</Typography></Button>
+            <Button onClick={() => void handleOpenFilePicker()} disabled={isScanning} sx={{ flexDirection: "column", gap: 1, color: "#374151", minWidth: 86, fontWeight: 800 }}><FolderIcon sx={{ fontSize: 32, color: "#777" }} /><Typography sx={{ fontSize: 11, fontWeight: 800 }}>내 파일</Typography></Button>
           </Stack>
         </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(imageEditor)} onClose={closeImageEditor} maxWidth="md" fullWidth sx={{ zIndex: 10002 }} slotProps={{ paper: { sx: { overflow: "hidden", ...mobileDialogPaperSx } } }}>
+        <DialogTitle sx={{ fontWeight: 900 }}>사진 확인</DialogTitle>
+        <DialogContent dividers sx={{ p: 1.5 }}>
+          <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: 300, maxHeight: 420, overflow: "auto", bgcolor: "#111827" }}>
+            {imageEditor ? <ReactCrop crop={crop} onChange={(_, percentCrop) => setCrop(percentCrop)} onComplete={(pixelCrop) => setCompletedCrop(pixelCrop)} disabled={!cropMode} keepSelection={cropMode}>
+              <img ref={editorImageRef} src={imageEditor.url} onLoad={handleEditorImageLoad} alt="선택한 대진표" draggable={false} style={{ display: "block", maxWidth: "100%", maxHeight: 420, objectFit: "contain" }} />
+            </ReactCrop> : null}
+          </Box>
+          <Stack direction="row" alignItems="center" justifyContent="center" spacing={1} sx={{ pt: 1.25 }}>
+            <Tooltip title="왼쪽 회전"><IconButton onClick={() => void rotateEditorImage(-90)}><RotateLeftIcon /></IconButton></Tooltip>
+            <Tooltip title="자르기"><IconButton color={cropMode ? "primary" : "default"} onClick={enableCrop}><CropIcon /></IconButton></Tooltip>
+            <Tooltip title="오른쪽 회전"><IconButton onClick={() => void rotateEditorImage(90)}><RotateRightIcon /></IconButton></Tooltip>
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 2.5, py: 1.5 }}>
+          <Button onClick={closeImageEditor}>취소</Button>
+          <Button variant="contained" onClick={() => void createEditedImage()} disabled={!editorLoaded}>인식 시작</Button>
+        </DialogActions>
       </Dialog>
 
       <Dialog open={isScanning} maxWidth="xs" fullWidth sx={{ zIndex: 10002 }} slotProps={{ paper: { sx: mobileDialogPaperSx } }}>

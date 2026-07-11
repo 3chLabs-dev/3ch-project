@@ -1624,7 +1624,7 @@ export default function LeagueGPTVisionSheet() {
           <MatchSchedulePanel matches={matches} localOrder={localOrder} landscape={landscape} leagueId={id ?? ""} onProgramMatchUpdate={isProgramMode ? updateProgramMatch : undefined} />
         </Box>
 
-        <Box sx={{ position: "absolute", bottom: landscape ? 380 : 220, right: landscape ? 14 : 85, zIndex: 10, display: "flex", flexDirection: "column", alignItems: "center", gap: 0.8 }}>
+        <Box sx={{ position: "absolute", bottom: landscape ? 380 : 220, right: landscape ? 14 : 85, zIndex: 20, display: "flex", flexDirection: "column", alignItems: "center", gap: 0.8, pointerEvents: "auto" }}>
           <Box sx={{ bgcolor: "#fff", p: 0.5, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>
             <QRCode value={`${window.location.origin}/league/${id}/gpt-vision`} size={landscape ? 66 : 72} />
           </Box>
@@ -1632,8 +1632,9 @@ export default function LeagueGPTVisionSheet() {
             <Button
               variant="contained"
               size="small"
+              type="button"
+              onPointerDown={(event) => event.stopPropagation()}
               onClick={handleOpenResultDialog}
-              disabled={isScanning}
               sx={{ borderRadius: 2, fontWeight: 900, bgcolor: "#16A34A", minWidth: 76, height: 32, whiteSpace: "nowrap", ...(landscape ? {} : { transform: "rotate(90deg)" }), "&:hover": { bgcolor: "#15803D" } }}
             >
               결과 등록

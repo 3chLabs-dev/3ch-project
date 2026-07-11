@@ -1367,19 +1367,20 @@ export default function LeagueGPTVisionSheet() {
           if (rowIndex === columnIndex) return;
           const match = matchLookup.get(`${rowPlayer.id}__${columnPlayer.id}`);
           const cell = byPosition.get(`${rowIndex}__${columnIndex}`);
-          completeCells.push(cell ?? {
-            rowPlayerName: rowPlayer.name,
-            columnPlayerName: columnPlayer.name,
-            rowIndex,
-            columnIndex,
-            score: 0,
-            confidence: 0,
-            needsReview: true,
-            issue: "인식하지 못한 점수 칸입니다.",
+          completeCells.push({
+            ...(cell ?? {
+              rowPlayerName: rowPlayer.name,
+              columnPlayerName: columnPlayer.name,
+              rowIndex,
+              columnIndex,
+              score: 0,
+              confidence: 0,
+              needsReview: true,
+              issue: "인식하지 못한 점수 칸입니다.",
+            }),
+            matchId: match?.id,
+            playerId: rowPlayer.id,
           });
-          const last = completeCells[completeCells.length - 1];
-          last.matchId = match?.id;
-          last.playerId = rowPlayer.id;
         });
       });
       setPreviewCells(completeCells);

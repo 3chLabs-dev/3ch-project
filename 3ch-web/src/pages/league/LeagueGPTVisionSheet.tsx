@@ -939,6 +939,7 @@ export default function LeagueGPTVisionSheet() {
   const [resultDialogOpen, setResultDialogOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewCells, setPreviewCells] = useState<VisionPreviewCell[]>([]);
+  const [visionError, setVisionError] = useState<string | null>(null);
   const [visionNotice, setVisionNotice] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1319,13 +1320,35 @@ export default function LeagueGPTVisionSheet() {
     const file = event.target.files?.[0];
     event.target.value = "";
     setResultDialogOpen(false);
+    setVisionError(null);
     if (!file || !id || !localOrder.length) return;
     if (!matches.length) {
       setVisionNotice({ type: "error", message: "경기 순서가 아직 생성되지 않았습니다. 결과 등록을 다시 눌러 주세요." });
       return;
     }
     if (isLocalDevToken(authToken)) {
-      setVisionNotice({ type: "info", message: "로컬 테스트 리그에서는 실제 GPT Vision 인식을 실행할 수 없습니다." });
+      const localPreview: VisionPreviewCell[] = [];
+      localOrder.forEach((rowPlayer, rowIndex) => {
+        localOrder.forEach((columnPlayer, columnIndex) => {
+          if (rowIndex === columnIndex) return;
+          const match = matchLookup.get(`${rowPlayer.id}__${columnPlayer.id}`);
+          localPreview.push({
+            rowPlayerName: rowPlayer.name,
+            columnPlayerName: columnPlayer.name,
+            rowIndex,
+            columnIndex,
+            score: 0,
+            confidence: 0,
+            needsReview: true,
+            issue: "로컬 테스트 미리보기입니다.",
+            matchId: match?.id,
+            playerId: rowPlayer.id,
+          });
+        });
+      });
+      setPreviewCells(localPreview);
+      setPreviewOpen(true);
+      setVisionNotice({ type: "info", message: "로컬에서는 실제 GPT 호출 없이 결과 확인 화면만 표시합니다." });
       return;
     }
 
@@ -1358,7 +1381,9 @@ export default function LeagueGPTVisionSheet() {
       setPreviewOpen(true);
       setVisionNotice({ type: "success", message: "GPT Vision 인식 결과를 확인해 주세요." });
     } catch (error) {
-      setVisionNotice({ type: "error", message: getErrorMessage(error, "GPT Vision 인식에 실패했습니다.") });
+      const message = getErrorMessage(error, "GPT Vision 인식에 실패했습니다.");
+      setVisionNotice({ type: "error", message });
+      setVisionError(message);
     }
   };
 
@@ -1628,17 +1653,15 @@ export default function LeagueGPTVisionSheet() {
           <Box sx={{ bgcolor: "#fff", p: 0.5, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>
             <QRCode value={`${window.location.origin}/league/${id}/gpt-vision`} size={landscape ? 66 : 72} />
           </Box>
-          <Box sx={{ width: landscape ? "auto" : 36, height: landscape ? "auto" : 76, display: "flex", alignItems: "center", justifyContent: "center", alignSelf: landscape ? "center" : "flex-end" }}>
-            <Button
-              variant="contained"
-              size="small"
+          <Box onClick={handleOpenResultDialog} sx={{ width: landscape ? "auto" : 36, height: landscape ? "auto" : 76, display: "flex", alignItems: "center", justifyContent: "center", alignSelf: landscape ? "center" : "flex-end", cursor: "pointer" }}>
+            <Box
+              component="button"
               type="button"
               onPointerDown={(event) => event.stopPropagation()}
-              onClick={handleOpenResultDialog}
-              sx={{ borderRadius: 2, fontWeight: 900, bgcolor: "#16A34A", minWidth: 76, height: 32, whiteSpace: "nowrap", ...(landscape ? {} : { transform: "rotate(90deg)" }), "&:hover": { bgcolor: "#15803D" } }}
+              sx={{ appearance: "none", border: 0, borderRadius: 2, color: "#fff", fontSize: 13, fontWeight: 900, bgcolor: "#16A34A", minWidth: 76, height: 32, whiteSpace: "nowrap", cursor: "pointer", ...(landscape ? {} : { transform: "rotate(90deg)" }), "&:hover": { bgcolor: "#15803D" } }}
             >
               결과 등록
-            </Button>
+            </Box>
           </Box>
         </Box>
 
@@ -1687,20 +1710,33 @@ export default function LeagueGPTVisionSheet() {
       {visionNotice ? <Alert severity={visionNotice.type} onClose={() => setVisionNotice(null)} sx={{ position: "fixed", top: 64, left: "50%", transform: "translateX(-50%)", zIndex: 10001, minWidth: 280 }}>{visionNotice.message}</Alert> : null}
       <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" hidden onChange={handleVisionFile} />
       <input ref={fileInputRef} type="file" accept="image/*,.jpg,.jpeg,.png,.heic,.heif,.webp" hidden onChange={handleVisionFile} />
-      <input ref={galleryInputRef} type="file" accept="image/*" hidden onChange={handleVisionFile} />
+      <input ref={galleryInputRef} type="file" accept="image/*,video/*" hidden onChange={handleVisionFile} />
 
-      <Dialog open={resultDialogOpen} onClose={() => !isScanning && setResultDialogOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 900 }}>결과 사진 선택</DialogTitle>
-        <DialogContent dividers>
-          <Stack direction="row" justifyContent="space-around" sx={{ py: 1 }}>
-            <Button onClick={() => cameraInputRef.current?.click()} disabled={isScanning} sx={{ flexDirection: "column", gap: 0.75 }}><CameraAltIcon /><Typography variant="caption">카메라</Typography></Button>
-            <Button onClick={() => fileInputRef.current?.click()} disabled={isScanning} sx={{ flexDirection: "column", gap: 0.75 }}><FolderIcon /><Typography variant="caption">파일</Typography></Button>
-            <Button onClick={() => galleryInputRef.current?.click()} disabled={isScanning} sx={{ flexDirection: "column", gap: 0.75 }}><ImageIcon /><Typography variant="caption">사진</Typography></Button>
+      <Dialog open={resultDialogOpen} onClose={() => !isScanning && setResultDialogOpen(false)} maxWidth="xs" fullWidth sx={{ zIndex: 10002 }} slotProps={{ paper: { sx: { borderRadius: 3, overflow: "hidden", width: "min(360px, calc(100% - 48px))" } } }}>
+        <DialogTitle sx={{ fontSize: 16, fontWeight: 900, px: 2.5, py: 2 }}>작업 선택</DialogTitle>
+        <DialogContent sx={{ p: 0, borderTop: "1px solid #E5E7EB" }}>
+          <Stack direction="row" justifyContent="space-around" sx={{ py: 2.8 }}>
+            <Button onClick={() => cameraInputRef.current?.click()} disabled={isScanning} sx={{ flexDirection: "column", gap: 1, color: "#374151", minWidth: 86, fontWeight: 800 }}><CameraAltIcon sx={{ fontSize: 30, color: "#777" }} /><Typography sx={{ fontSize: 11, fontWeight: 800 }}>카메라</Typography></Button>
+            <Button onClick={() => fileInputRef.current?.click()} disabled={isScanning} sx={{ flexDirection: "column", gap: 1, color: "#374151", minWidth: 86, fontWeight: 800 }}><FolderIcon sx={{ fontSize: 32, color: "#777" }} /><Typography sx={{ fontSize: 11, fontWeight: 800 }}>내 파일</Typography></Button>
+            <Button onClick={() => galleryInputRef.current?.click()} disabled={isScanning} sx={{ flexDirection: "column", gap: 1, color: "#374151", minWidth: 86, fontWeight: 800 }}><ImageIcon sx={{ fontSize: 30, color: "#3156A6" }} /><Typography sx={{ fontSize: 11, fontWeight: 800 }}>사진 및 동영상</Typography></Button>
           </Stack>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={previewOpen} onClose={() => !isScanning && setPreviewOpen(false)} maxWidth="lg" fullWidth>
+      <Dialog open={isScanning} maxWidth="xs" fullWidth sx={{ zIndex: 10002 }}>
+        <DialogContent sx={{ py: 4, textAlign: "center" }}>
+          <CircularProgress size={34} />
+          <Typography sx={{ mt: 2, fontWeight: 900 }}>GPT Vision이 점수 격자를 인식하는 중입니다.</Typography>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(visionError)} onClose={() => setVisionError(null)} maxWidth="xs" fullWidth sx={{ zIndex: 10002 }}>
+        <DialogTitle sx={{ fontWeight: 900 }}>사진 인식 실패</DialogTitle>
+        <DialogContent dividers><Typography>{visionError}</Typography></DialogContent>
+        <DialogActions><Button onClick={() => setVisionError(null)}>확인</Button></DialogActions>
+      </Dialog>
+
+      <Dialog open={previewOpen} onClose={() => !isScanning && setPreviewOpen(false)} maxWidth="lg" fullWidth sx={{ zIndex: 10002 }}>
         <DialogTitle sx={{ fontWeight: 900 }}>GPT Vision 인식 결과 확인</DialogTitle>
         <DialogContent dividers>
           <Typography sx={{ mb: 1.5, color: "#6B7280", fontSize: 13, fontWeight: 700 }}>별표부터 시작하는 점수 격자만 인식했습니다. 노란색 또는 잘못된 점수는 저장 전에 수정해 주세요.</Typography>

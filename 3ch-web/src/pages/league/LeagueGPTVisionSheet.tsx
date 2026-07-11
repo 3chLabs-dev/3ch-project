@@ -1329,11 +1329,32 @@ export default function LeagueGPTVisionSheet() {
     )));
   };
 
+  const handleOpenResultDialog = async () => {
+    if (!id) return;
+    if (matches.length > 0) {
+      setResultDialogOpen(true);
+      return;
+    }
+
+    try {
+      setVisionNotice({ type: "info", message: "경기 순서를 생성하는 중입니다." });
+      await initMatches({ id }).unwrap();
+      await refetchMatches();
+      setResultDialogOpen(true);
+    } catch (error) {
+      setVisionNotice({ type: "error", message: getErrorMessage(error, "경기 순서를 생성할 권한이 없거나 생성에 실패했습니다.") });
+    }
+  };
+
   const handleVisionFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
     setResultDialogOpen(false);
-    if (!file || !id || !localOrder.length || !matches.length) return;
+    if (!file || !id || !localOrder.length) return;
+    if (!matches.length) {
+      setVisionNotice({ type: "error", message: "경기 순서가 아직 생성되지 않았습니다. 결과 등록을 다시 눌러 주세요." });
+      return;
+    }
     if (isLocalDevToken(authToken)) {
       setVisionNotice({ type: "info", message: "로컬 테스트 리그에서는 실제 GPT Vision 인식을 실행할 수 없습니다." });
       return;
@@ -1642,8 +1663,8 @@ export default function LeagueGPTVisionSheet() {
             <Button
               variant="contained"
               size="small"
-              onClick={() => setResultDialogOpen(true)}
-              disabled={!canManage || !matches.length || isScanning || isIniting}
+              onClick={handleOpenResultDialog}
+              disabled={isScanning || isIniting}
               sx={{ borderRadius: 2, fontWeight: 900, bgcolor: "#16A34A", minWidth: 76, height: 32, whiteSpace: "nowrap", ...(landscape ? {} : { transform: "rotate(90deg)" }), "&:hover": { bgcolor: "#15803D" } }}
             >
               결과 등록

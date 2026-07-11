@@ -387,7 +387,7 @@
         return `/league/${id}/ocr`;
       }
       if (league?.format === "GPT 인식") {
-        return `/league/${id}/openai-vision`;
+        return `/league/${id}/gpt-vision`;
       }
       return `/league/${id}/matches`;
     };
@@ -1194,7 +1194,7 @@ const handleSaveEdit = async () => {
                   if (league.format?.includes("토너먼트")) {
                     navigate(`/league/${id}/tournament`);
                   } else if (league.format === "GPT 인식") {
-                    navigate(`/league/${id}/openai-vision`);
+                    navigate(`/league/${id}/gpt-vision`);
                   } else {
                     navigate(`/league/${id}/bracket`);
                   }

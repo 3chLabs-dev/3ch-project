@@ -3369,10 +3369,12 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
       matchLookup.set(`${match.participant_b_id}__${match.participant_a_id}`, match);
     }
 
+    const visionMode = req.body?.mode === 'star-grid' ? 'star-grid' : 'sheet';
     const vision = await scanLeagueSheetWithOpenAIVision({
       imageBuffer: req.file.buffer,
       mimeType: req.file.mimetype,
       participants,
+      mode: visionMode,
     });
     const parsed = openAIVisionResultSchema.parse(vision.result);
 
@@ -3382,10 +3384,10 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
       const issues = [];
       if (!rowParticipant) issues.push('행 참가자 위치를 확인할 수 없습니다.');
       if (!columnParticipant) issues.push('열 참가자 위치를 확인할 수 없습니다.');
-      if (rowParticipant && cell.rowPlayerName && rowParticipant.name !== cell.rowPlayerName) {
+      if (visionMode !== 'star-grid' && rowParticipant && cell.rowPlayerName && rowParticipant.name !== cell.rowPlayerName) {
         issues.push('행 참가자 이름이 대진표 순서와 일치하지 않습니다.');
       }
-      if (columnParticipant && cell.columnPlayerName && columnParticipant.name !== cell.columnPlayerName) {
+      if (visionMode !== 'star-grid' && columnParticipant && cell.columnPlayerName && columnParticipant.name !== cell.columnPlayerName) {
         issues.push('열 참가자 이름이 대진표 순서와 일치하지 않습니다.');
       }
       if (cell.rowIndex === cell.columnIndex) issues.push('대각선 셀은 점수를 입력할 수 없습니다.');
@@ -3404,8 +3406,8 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
         : undefined;
 
       return {
-        rowPlayerName: cell.rowPlayerName,
-        columnPlayerName: cell.columnPlayerName,
+        rowPlayerName: visionMode === 'star-grid' ? rowParticipant?.name ?? '' : cell.rowPlayerName,
+        columnPlayerName: visionMode === 'star-grid' ? columnParticipant?.name ?? '' : cell.columnPlayerName,
         rowIndex: cell.rowIndex,
         columnIndex: cell.columnIndex,
         score: cell.score,

@@ -291,6 +291,7 @@ export interface OpenAIVisionCell {
 export interface ScanLeagueOpenAIVisionRequest {
   leagueId: string;
   file: File;
+  mode?: "sheet" | "star-grid";
 }
 
 export interface ScanLeagueOpenAIVisionResponse {
@@ -767,9 +768,10 @@ export const leagueApi = baseApi.injectEndpoints({
     }),
 
     scanLeagueOpenAIVision: builder.mutation<ScanLeagueOpenAIVisionResponse, ScanLeagueOpenAIVisionRequest>({
-      query: ({ leagueId, file }) => {
+      query: ({ leagueId, file, mode = "sheet" }) => {
         const formData = new FormData();
         formData.append("image", file);
+        formData.append("mode", mode);
         return {
           url: `/league/${leagueId}/openai-vision/scan`,
           method: "POST",

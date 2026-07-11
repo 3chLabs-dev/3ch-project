@@ -29,7 +29,7 @@ export default function AppShell() {
     const currentStep = useSelector((s: RootState) => s.leagueCreation.currentStep);
     const isHome = location.pathname === "/";
     const isMyPage = location.pathname === "/mypage";
-    const isLeagueSheet = /^\/league\/[^/]+\/(omr|openai-vision)$/.test(location.pathname);
+    const isLeagueSheet = /^\/league\/[^/]+\/(omr|openai-vision|gpt-vision)$/.test(location.pathname);
 
     const contentRef = useRef<HTMLDivElement>(null);
     const bannerRef = useRef<HTMLDivElement>(null);

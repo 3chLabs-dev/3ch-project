@@ -43,6 +43,7 @@ import LeagueGrouping from "../pages/league/LeagueGrouping";
 import LeagueOmrSheet from "../pages/league/LeagueOmrSheet";
 import LeagueOcrSheet from "../pages/league/LeagueOcrSheet";
 import LeagueOpenAIVisionSheet from "../pages/league/LeagueOpenAIVisionSheet";
+import LeagueGPTVisionSheet from "../pages/league/LeagueGPTVisionSheet";
 import LeagueMatchOrder from "../pages/league/LeagueMatchOrder";
 import LeagueTournamentGenerate from "../pages/league/LeagueTournamentGenerate";
 import LeagueTournamentList from "../pages/league/LeagueTournamentList";
@@ -93,6 +94,7 @@ export const router = createBrowserRouter([
       { path: "/league/:id/omr", element: <LeagueOmrSheet /> },
       { path: "/league/:id/ocr", element: <LeagueOcrSheet /> },
       { path: "/league/:id/openai-vision", element: <LeagueOpenAIVisionSheet /> },
+      { path: "/league/:id/gpt-vision", element: <LeagueGPTVisionSheet /> },
       { path: "/league/:id/tournament", element: <LeagueTournamentList /> },
       { path: "/league/:id/tournament/new", element: <LeagueTournamentGenerate /> },
       { path: "/league/:id/tournament/bracket", element: <LeagueTournamentBracket /> },

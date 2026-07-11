@@ -19,6 +19,10 @@ The four large printed black squares at the corners of the game score matrix are
 Focus only on the handwritten digit inside each score cell, even when the paper is photographed at an angle or surrounded by blank space.
 Set needsReview=false only when that exact handwritten digit is clearly visible. If a digit is faint, obscured, cropped, or ambiguous, return score=0, confidence at most 0.5, and needsReview=true. Do not report high confidence for a guessed digit.`;
 
+const STAR_GRID_READING_RULES = `This image contains an N by N league score grid. A printed black star marks the top-left cell of the score grid at rowIndex=0 and columnIndex=0. Do not read participant names, divisions, rankings, or any other labels.
+Starting at the star, identify the complete evenly spaced N by N score grid. Return each non-diagonal handwritten score by its zero-based rowIndex and columnIndex. The diagonal cells have no score. Read each cell independently; do not infer an opposing score or a winner.
+The participant names provided below are server data only. Do not try to find them in the image. Copy the supplied name for each returned rowPlayerName and columnPlayerName according to rowIndex and columnIndex.`;
+
 function extractOutputText(response) {
   if (typeof response.output_text === 'string') return response.output_text;
   const parts = [];
@@ -73,7 +77,7 @@ function buildMockResult(participants) {
   return { cells };
 }
 
-async function scanLeagueSheetWithOpenAIVision({ imageBuffer, mimeType, participants }) {
+async function scanLeagueSheetWithOpenAIVision({ imageBuffer, mimeType, participants, mode = 'sheet' }) {
   if (isOpenAIVisionMockEnabled()) {
     return {
       engine: 'mock-openai-vision',
@@ -101,9 +105,9 @@ async function scanLeagueSheetWithOpenAIVision({ imageBuffer, mimeType, particip
         content: [
           {
             type: 'input_text',
-            text: `${SYSTEM_PROMPT}
+            text: `${mode === 'star-grid' ? STAR_GRID_READING_RULES : SYSTEM_PROMPT}
 
-${CELL_READING_RULES}
+${mode === 'star-grid' ? '' : CELL_READING_RULES}
 
 참가자 목록은 아래 순서와 같습니다.
 ${participantLines}

@@ -885,9 +885,14 @@ type VisionPreviewCell = OpenAIVisionCell & {
 
 function getErrorMessage(error: unknown, fallback: string) {
   if (!error || typeof error !== "object") return fallback;
-  const value = error as { status?: number | string; data?: { message?: string; details?: string } | string; error?: string };
+  const value = error as {
+    status?: number | string;
+    data?: { message?: string; details?: string } | string;
+    error?: string;
+    message?: string;
+  };
   if (typeof value.data === "string") return value.data;
-  const message = value.data?.message ?? value.data?.details ?? value.error;
+  const message = value.data?.message ?? value.data?.details ?? value.error ?? value.message;
   return message ? `${message}${value.status ? ` (HTTP ${value.status})` : ""}` : fallback;
 }
 

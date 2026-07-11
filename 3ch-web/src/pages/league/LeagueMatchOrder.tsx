@@ -454,6 +454,7 @@ export default function LeagueMatchOrder() {
 
   const { data: leagueData } = useGetLeagueQuery(leagueId, { skip: !leagueId });
   const league = leagueData?.league;
+  const isGroupLeague = league?.format?.startsWith("조별리그") ?? false;
   const groupId = league?.group_id ?? "";
 
   const { data: groupData, isLoading: groupLoading } = useGetGroupDetailQuery(groupId, { skip: !groupId });
@@ -566,9 +567,11 @@ export default function LeagueMatchOrder() {
       return Array.from(names).sort((a, b) => parseInt(a) - parseInt(b));
     }
 
+    if (!isGroupLeague) return [];
+
     const names = new Set(rawParticipants.map(p => p.group_name).filter(Boolean) as string[]);
     return Array.from(names).sort((a, b) => parseInt(a) - parseInt(b));
-  }, [currentProgramBlock?.format, isProgramMode, programMatches, rawParticipants]);
+  }, [currentProgramBlock?.format, isGroupLeague, isProgramMode, programMatches, rawParticipants]);
 
   // 2. 현재 선택된 조 상태 관리
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
@@ -842,7 +845,9 @@ export default function LeagueMatchOrder() {
             navigate(
               isProgramMode
                 ? `/league/${leagueId}/program/${bracketPath}?program=1&round=${programRound}&format=${currentProgramBlock?.format ?? ""}`
-                : `/league/${leagueId}/bracket`
+                : league?.format === "GPT 인식"
+                  ? `/league/${leagueId}/gpt-vision`
+                  : `/league/${leagueId}/bracket`
             )
           }
           sx={{

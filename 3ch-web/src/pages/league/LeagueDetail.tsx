@@ -386,9 +386,6 @@
       if (league?.format === "OCR 텍스트 인식") {
         return `/league/${id}/ocr`;
       }
-      if (league?.format === "GPT 인식") {
-        return `/league/${id}/gpt-vision`;
-      }
       return `/league/${id}/matches`;
     };
 

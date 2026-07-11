@@ -909,6 +909,7 @@ export default function LeagueGPTVisionSheet() {
   const { data: programData } = useGetLeagueProgramQuery(id ?? "", { skip: !isProgramMode || !id });
 
   const league          = leagueData?.league;
+  const isGroupLeague = league?.format?.startsWith("조별리그") ?? false;
   // useMemo로 감싸서 matchData 객체 참조가 바뀔 때만 재생성 (불필요한 하위 useMemo 재실행 방지)
   // bracket 필드가 있는 매치는 토너먼트 경기이므로 리그(라운드로빈) 뷰에서 제외
   // const matches         = useMemo(() => (matchData?.matches ?? []).filter((m) => !m.bracket), [matchData]);
@@ -1006,9 +1007,10 @@ export default function LeagueGPTVisionSheet() {
       const names = new Set(programMatchesAll.map((match) => match.match_label).filter(Boolean) as string[]);
       return Array.from(names).sort((a, b) => parseInt(a) - parseInt(b));
     }
+    if (!isGroupLeague) return [];
     const names = new Set(rawParticipants.map(p => p.group_name).filter(Boolean) as string[]);
     return Array.from(names).sort((a, b) => parseInt(a) - parseInt(b));
-  }, [isProgramMode, programMatchesAll, rawParticipants]);
+  }, [isGroupLeague, isProgramMode, programMatchesAll, rawParticipants]);
 
   // 2. 현재 선택된 조 상태 관리
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);

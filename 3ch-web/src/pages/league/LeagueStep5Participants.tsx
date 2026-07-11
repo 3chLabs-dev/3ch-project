@@ -63,7 +63,7 @@ export default function LeagueStep5Participants() {
   const SORT_OPTIONS = ["부수", "이름", "랜덤"];
 
   const isFourPlayerOmr = formatSelection === "four-player-omr";
-  const isFourPlayerFixed = isFourPlayerOmr || formatSelection === "gpt-recognition";
+  const isFourPlayerFixed = isFourPlayerOmr;
   const isClubEvent = typeSelection === "club_event";
   const [participants, setParticipants] = useState<Participant[]>(existing);
   const [recruitCount, setRecruitCount] = useState<number | "">(isFourPlayerFixed ? 4 : "");

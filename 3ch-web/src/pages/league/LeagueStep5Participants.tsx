@@ -63,9 +63,10 @@ export default function LeagueStep5Participants() {
   const SORT_OPTIONS = ["부수", "이름", "랜덤"];
 
   const isFourPlayerOmr = formatSelection === "four-player-omr";
-  const isClubEvent = typeSelection === "club_exchange";
+  const isFourPlayerFixed = isFourPlayerOmr;
+  const isClubEvent = typeSelection === "club_event";
   const [participants, setParticipants] = useState<Participant[]>(existing);
-  const [recruitCount, setRecruitCount] = useState<number | "">(isFourPlayerOmr ? 4 : "");
+  const [recruitCount, setRecruitCount] = useState<number | "">(isFourPlayerFixed ? 4 : "");
   const [sortOrder, setSortOrder] = useState<string>("");
   const [division, setDivision] = useState("");
   const [name, setName] = useState("");
@@ -75,10 +76,10 @@ export default function LeagueStep5Participants() {
   const [deleteTarget, setDeleteTarget] = useState<{ idx: number; division: string; name: string } | null>(null);
   const [openCancelDialog, setOpenCancelDialog] = useState<boolean>(false);
 
-  const effectiveRecruitCount = isFourPlayerOmr ? 4 : recruitCount;
+  const effectiveRecruitCount = isFourPlayerFixed ? 4 : recruitCount;
   const isFull = effectiveRecruitCount !== "" && participants.length >= effectiveRecruitCount;
   const canAdd = useMemo(() => Boolean(division.trim() && name.trim()), [division, name]);
-  const canNext = effectiveRecruitCount !== "" && sortOrder !== "" && (!isFourPlayerOmr || participants.length === 4);
+  const canNext = effectiveRecruitCount !== "" && sortOrder !== "" && (!isFourPlayerFixed || participants.length === 4);
 
   const handleCancelDelete = () => {
     setOpenCancelDialog(false);
@@ -167,7 +168,7 @@ export default function LeagueStep5Participants() {
                 const v = e.target.value;
                 setRecruitCount(v === "" ? "" : Number(v));
               }}
-              disabled={isFourPlayerOmr}
+              disabled={isFourPlayerFixed}
               size="small"
               sx={{
                 borderRadius: 0.6,
@@ -267,16 +268,58 @@ export default function LeagueStep5Participants() {
           mb: 1.2,
         }}
       >
-        <TextField placeholder="부수" value={division} onChange={(e) => setDivision(e.target.value)} sx={inputSx} />
         <TextField
-          placeholder="이름"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
+          placeholder="부수"
+          value={division}
+          onChange={(e) => setDivision(e.target.value)}
           sx={inputSx}
           onKeyDown={(e) => {
             if (e.key === "Enter") handleAdd();
           }}
         />
+        <Box sx={{ position: "relative", minWidth: 0 }}>
+        <TextField
+          placeholder="이름"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          sx={inputSx}
+          fullWidth
+          onKeyDown={(e) => {
+            if (e.key === "Enter") handleAdd();
+          }}
+        />
+          {canAdd && (
+            <Box
+              sx={{
+                position: "absolute",
+                right: -2,
+                top: -34,
+                bgcolor: "#111827",
+                color: "#fff",
+                px: 1.2,
+                py: 0.6,
+                borderRadius: 1,
+                fontSize: 11,
+                fontWeight: 700,
+                whiteSpace: "nowrap",
+                boxShadow: "0 4px 10px rgba(15,23,42,0.18)",
+                zIndex: 2,
+                "&::after": {
+                  content: '""',
+                  position: "absolute",
+                  right: 14,
+                  bottom: -5,
+                  width: 10,
+                  height: 10,
+                  bgcolor: "#111827",
+                  transform: "rotate(45deg)",
+                },
+              }}
+            >
+              Enter 키를 누르면 추가됩니다.
+            </Box>
+          )}
+        </Box>
 
         <Button
           variant="contained"

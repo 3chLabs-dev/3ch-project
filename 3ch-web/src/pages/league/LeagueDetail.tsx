@@ -99,6 +99,8 @@
   const FORMAT_OPTIONS = [
     { label: "단일리그", disabled: false },
     { label: "4인 리그 (OMR)", disabled: false },
+    { label: "OCR 텍스트 인식", disabled: false },
+    { label: "GPT 인식", disabled: false },
     { label: "조별리그", disabled: false },
     { label: "조별리그 + 본선리그", disabled: false },
     { label: "단일리그 + 토너먼트", disabled: false },
@@ -189,6 +191,7 @@
     const isPublicLeague = league?.join_permission === "public";
     const canInteract = isMember || isPublicLeague;
     const isClubEventLeague = league?.type === "클럽 이벤트" || league?.type === "클럽 교류전";
+    const isEventProgramFormat = league?.format === "이벤트 프로그램" || league?.format === "프로그램별 설정";
     const canViewProgram = isClubEventLeague && (canManage || (!canManage && league?.status === "active"));
 
     // const isEditing = canManage;
@@ -209,7 +212,7 @@
     };
 
     const rawParticipants = participantData?.participants ?? [];
-    const hasEventProgram = league?.format === "이벤트 프로그램" && Boolean(programData?.program);
+    const hasEventProgram = isEventProgramFormat && Boolean(programData?.program);
 
     const resetEventProgramBeforeParticipantChange = async () => {
       if (!id || !hasEventProgram) return true;
@@ -368,10 +371,11 @@
     };
 
     const getProgressPath = () => {
-      if (league?.format === "이벤트 프로그램") {
+      if (isEventProgramFormat) {
         const hasProgram = Boolean(programData?.program);
+        const activeRound = Number.parseInt(localStorage.getItem(`league-program-active-round-${id}`) ?? "1", 10) || 1;
         return hasProgram
-          ? `/league/${id}/program/matches?program=1&round=1`
+          ? `/league/${id}/program/matches?program=1&round=${activeRound}`
           : `/league/${id}/program`;
       }
       if (league?.format?.includes("토너먼트") && league?.format !== "단일리그 + 토너먼트") {
@@ -379,6 +383,9 @@
       }
       if (league?.format === "4인 리그 (OMR)") {
         return `/league/${id}/omr`;
+      }
+      if (league?.format === "OCR 텍스트 인식") {
+        return `/league/${id}/ocr`;
       }
       return `/league/${id}/matches`;
     };
@@ -1135,7 +1142,7 @@ const handleSaveEdit = async () => {
               </Button>
             </Stack>
           )}
-          {league.format !== "이벤트 프로그램" && ((!canManage  && league.status === "active") || canManage) && (
+          {!isEventProgramFormat && ((!canManage  && league.status === "active") || canManage) && (
             league.format === "조별리그" && (
               <Stack spacing={1} sx={{ mt: 1 }}>
                 <Button
@@ -1148,7 +1155,18 @@ const handleSaveEdit = async () => {
               </Stack>
             )
           )}
-          {league.format !== "이벤트 프로그램" && ((!canManage  && league.status === "active") || canManage) && (
+          {league.format === "OCR 텍스트 인식" && ((!canManage  && league.status === "active") || canManage) && (
+            <Stack spacing={1} sx={{ mt: 1 }}>
+              <Button
+                fullWidth variant="outlined" disableElevation
+                sx={{ mt: 1, borderRadius: 1, height: 40, fontWeight: 700, bgcolor: "#87B8FF", borderColor: "#87B8FF", color: "#FFF", "&:hover": { bgcolor: "#79AEFF" } }}
+                onClick={() => navigate(`/league/${id}/ocr`)}
+              >
+                OCR 텍스트 인식 열기
+              </Button>
+            </Stack>
+          )}
+          {!isEventProgramFormat && league.format !== "OCR 텍스트 인식" && ((!canManage  && league.status === "active") || canManage) && (
             league.format === "단일리그 + 토너먼트" ? (
               <Stack spacing={1} sx={{ mt: 1 }}>
                 <Button
@@ -1173,6 +1191,8 @@ const handleSaveEdit = async () => {
                 onClick={() => {
                   if (league.format?.includes("토너먼트")) {
                     navigate(`/league/${id}/tournament`);
+                  } else if (league.format === "GPT 인식") {
+                    navigate(`/league/${id}/gpt-vision`);
                   } else {
                     navigate(`/league/${id}/bracket`);
                   }

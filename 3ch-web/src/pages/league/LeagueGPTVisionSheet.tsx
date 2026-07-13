@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { createPortal } from "react-dom";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
-  Box, Button, CircularProgress, IconButton, Paper, Popover,
+  Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Paper, Popover,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Tooltip, Typography, Stack,
 } from "@mui/material";
@@ -31,6 +31,16 @@ import ZoomInIcon from "@mui/icons-material/ZoomIn";
 import ZoomOutIcon from "@mui/icons-material/ZoomOut";
 import DownloadIcon from "@mui/icons-material/Download";
 import PrintIcon from "@mui/icons-material/Print";
+import CameraAltIcon from "@mui/icons-material/CameraAlt";
+import FolderIcon from "@mui/icons-material/Folder";
+import ImageIcon from "@mui/icons-material/Image";
+import RotateLeftIcon from "@mui/icons-material/RotateLeft";
+import RotateRightIcon from "@mui/icons-material/RotateRight";
+import CropIcon from "@mui/icons-material/Crop";
+import NavigateBeforeIcon from "@mui/icons-material/NavigateBefore";
+import NavigateNextIcon from "@mui/icons-material/NavigateNext";
+import ReactCrop, { type Crop, type PixelCrop } from "react-image-crop";
+import "react-image-crop/dist/ReactCrop.css";
 import QRCode from "react-qr-code";
 import { formatLeagueDate } from "../../utils/dateUtils";
 import {
@@ -46,12 +56,15 @@ import {
   useGetLeagueMatchesQuery,
   useGetLeagueProgramQuery,
   useUpdateLeagueMatchMutation,
+  useScanLeagueOpenAIVisionMutation,
   useReorderLeagueParticipantsMutation,
   type LeagueParticipantItem,
   type LeagueMatch,
+  type OpenAIVisionCell,
 } from "../../features/league/leagueApi";
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
 import { useAppSelector } from "../../app/hooks";
+import { isLocalDevToken } from "../../utils/localDevAuth";
 
 // ─── 색상 상수 ────────────────────────────────────────────────────────────────
 // 매직 컬러 문자열을 한 곳에서 관리. 디자인 변경 시 여기만 수정하면 됨
@@ -90,6 +103,12 @@ const NEXT_STATUS: Record<string, "pending" | "playing" | "done"> = {
 };
 
 const AUTO_COMPLETE_DELAY_MS = 4000;
+
+const VISION_GUIDE_IMAGES = [
+  "/og-image.png",
+  "/128_첫번째 아이콘.png",
+  "/128_두번째 아이콘.png",
+];
 
 function escapeHtml(value: string): string {
   return value
@@ -132,7 +151,7 @@ const DiagonalBase = styled(TableCell)(({ theme }) => ({
  * - ResizeObserver로 셀의 실제 크기를 측정해 빗금 각도(angle)를 동적 계산
  * - landscape=true: 양수 각도 / false: 음수 각도 (writingMode 90° 회전에 대응)
  */
-function DiagonalScoreCell({ landscape }: { landscape: boolean }) {
+function DiagonalScoreCell({ landscape, isVisionStart = false }: { landscape: boolean; isVisionStart?: boolean }) {
   const ref = useRef<HTMLTableCellElement>(null);
   const [angle, setAngle] = useState(45);
 
@@ -155,7 +174,13 @@ function DiagonalScoreCell({ landscape }: { landscape: boolean }) {
       sx={(theme) => ({
         backgroundImage: `linear-gradient(${landscape ? angle : -angle}deg,transparent 49.5%,${theme.palette.divider} 50%,${theme.palette.divider} 50.5%,transparent 51%)`,
       })}
-    />
+    >
+      {isVisionStart ? (
+        <Box component="span" aria-label="GPT Vision 점수 영역 시작" sx={{ position: "absolute", top: 2, ...(landscape ? { left: 3 } : { right: 3 }), color: "#111", fontSize: 22, fontWeight: 900, lineHeight: 1, zIndex: 1 }}>
+          ★
+        </Box>
+      ) : null}
+    </DiagonalBase>
   );
 }
 
@@ -493,7 +518,7 @@ const SortableBracketRow = memo(function SortableBracketRow({
 
       {/* 점수 셀: 같은 인덱스(자기 자신)는 대각선 셀, 나머지는 점수 편집 셀 */}
       {localOrder.map((colPlayer, colIdx) => {
-        if (rowIdx === colIdx) return <DiagonalScoreCell key={colIdx} landscape={landscape} />;
+        if (rowIdx === colIdx) return <DiagonalScoreCell key={colIdx} landscape={landscape} isVisionStart={rowIdx === 0} />;
         const m   = matchLookup.get(`${participant.id}__${colPlayer.id}`);
         const isA = m?.participant_a_id === participant.id;
         return (
@@ -865,7 +890,41 @@ function MatchSchedulePanel({ matches, localOrder, landscape, leagueId, onProgra
  * 5. landscape(가로) ↔ portrait(세로, writingMode 활용) 전환
  * 6. 15초 폴링으로 실시간 경기 데이터 갱신
  */
-export default function LeagueBracket() {
+type VisionPreviewCell = OpenAIVisionCell & {
+  matchId?: string;
+  playerId?: string;
+  issue?: string;
+};
+
+type FilePickerHandle = { getFile: () => Promise<File> };
+type FilePickerWindow = Window & {
+  showOpenFilePicker?: (options: {
+    multiple: boolean;
+    excludeAcceptAllOption: boolean;
+    types: Array<{ description: string; accept: Record<string, string[]> }>;
+  }) => Promise<FilePickerHandle[]>;
+};
+
+type ImageEditorState = {
+  file: File;
+  url: string;
+};
+
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (!error || typeof error !== "object") return fallback;
+  const value = error as {
+    status?: number | string;
+    data?: { message?: string; details?: string } | string;
+    error?: string;
+    message?: string;
+  };
+  if (typeof value.data === "string") return value.data;
+  const message = value.data?.message ?? value.data?.details ?? value.error ?? value.message;
+  return message ? `${message}${value.status ? ` (HTTP ${value.status})` : ""}` : fallback;
+}
+
+export default function LeagueGPTVisionSheet() {
   const { id }   = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -909,6 +968,24 @@ export default function LeagueBracket() {
   );
   const programMatchesAll = serverProgramMatchesAll.length > 0 ? serverProgramMatchesAll : generatedProgramMatchesAll;
   const [updateMatch] = useUpdateLeagueMatchMutation();
+  const [scanVision, { isLoading: isScanning }] = useScanLeagueOpenAIVisionMutation();
+  const [resultDialogOpen, setResultDialogOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewCells, setPreviewCells] = useState<VisionPreviewCell[]>([]);
+  const [visionError, setVisionError] = useState<string | null>(null);
+  const [visionNotice, setVisionNotice] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
+  const [imageEditor, setImageEditor] = useState<ImageEditorState | null>(null);
+  const [cropMode, setCropMode] = useState(false);
+  const [crop, setCrop] = useState<Crop>();
+  const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
+  const [editorLoaded, setEditorLoaded] = useState(false);
+  const [guideSlide, setGuideSlide] = useState(0);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const editorImageRef = useRef<HTMLImageElement>(null);
+  const guideCarouselRef = useRef<HTMLDivElement>(null);
+  const guideDragRef = useRef<{ pointerId: number; startX: number; startScrollLeft: number } | null>(null);
   const updateProgramMatch = useCallback((matchId: string, updates: ProgramMatchPatch) => {
     if (!id) return;
     if (serverProgramMatchesAll.some((match) => match.id === matchId)) {
@@ -1034,6 +1111,7 @@ export default function LeagueBracket() {
   // canManage: 점수 편집 + 시드 순서 변경 가능 여부
   const { data: groupData } = useGetGroupDetailQuery(league?.group_id ?? "", { skip: !league?.group_id });
   const authUser  = useAppSelector((s) => s.auth.user);
+  const authToken = useAppSelector((s) => s.auth.token);
   const isCreator = !!authUser && league?.created_by_id === authUser.id;
   const canManage = groupData?.myRole === "owner" || groupData?.myRole === "admin" || isCreator;
   const canScore = canManage || league?.join_permission === "public";
@@ -1270,6 +1348,264 @@ export default function LeagueBracket() {
     return map;
   }, [matches]);
 
+  const updatePreviewCell = (rowIndex: number, columnIndex: number, score: number) => {
+    setPreviewCells((cells) => cells.map((cell) => (
+      cell.rowIndex === rowIndex && cell.columnIndex === columnIndex
+        ? { ...cell, score: Math.max(0, score), needsReview: false, issue: undefined }
+        : cell
+    )));
+  };
+
+  useEffect(() => {
+    if (!imageEditor) return;
+    return () => URL.revokeObjectURL(imageEditor.url);
+  }, [imageEditor]);
+
+  const openImageEditor = (file?: File) => {
+    if (!file) return;
+    setResultDialogOpen(false);
+    setVisionError(null);
+    setCropMode(false);
+    setCrop(undefined);
+    setCompletedCrop(undefined);
+    setEditorLoaded(false);
+    setImageEditor({ file, url: URL.createObjectURL(file) });
+  };
+
+  const closeImageEditor = () => setImageEditor(null);
+
+  const handleEditorImageLoad = () => {
+    setCropMode(false);
+    setCrop(undefined);
+    setCompletedCrop(undefined);
+    setEditorLoaded(true);
+  };
+
+  const enableCrop = () => {
+    const image = editorImageRef.current;
+    if (!image) return;
+    setCropMode(true);
+    setCrop({ unit: "%", x: 10, y: 10, width: 80, height: 80 });
+    setCompletedCrop({ x: image.naturalWidth * 0.1, y: image.naturalHeight * 0.1, width: image.naturalWidth * 0.8, height: image.naturalHeight * 0.8, unit: "px" });
+  };
+
+  const rotateEditorImage = async (degrees: number) => {
+    const image = editorImageRef.current;
+    if (!image || !imageEditor) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = image.naturalHeight;
+    canvas.height = image.naturalWidth;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    context.translate(canvas.width / 2, canvas.height / 2);
+    context.rotate(degrees * Math.PI / 180);
+    context.drawImage(image, -image.naturalWidth / 2, -image.naturalHeight / 2);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
+    if (!blob) return;
+    const name = imageEditor.file.name.replace(/\.[^.]+$/, "") || "league-score-sheet";
+    setEditorLoaded(false);
+    setImageEditor({ file: new File([blob], `${name}.jpg`, { type: "image/jpeg" }), url: URL.createObjectURL(blob) });
+  };
+
+  const createEditedImage = async () => {
+    const image = editorImageRef.current;
+    if (!imageEditor || !image) return;
+    const pixelCrop = cropMode && completedCrop
+      ? completedCrop
+      : { x: 0, y: 0, width: image.naturalWidth, height: image.naturalHeight, unit: "px" as const };
+    const outputWidth = Math.min(2000, Math.max(1, Math.round(pixelCrop.width)));
+    const outputHeight = Math.max(1, Math.round(pixelCrop.height * outputWidth / pixelCrop.width));
+    const canvas = document.createElement("canvas");
+    canvas.width = outputWidth;
+    canvas.height = outputHeight;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    context.drawImage(image, pixelCrop.x, pixelCrop.y, pixelCrop.width, pixelCrop.height, 0, 0, outputWidth, outputHeight);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
+    if (!blob) return;
+    const name = imageEditor.file.name.replace(/\.[^.]+$/, "") || "league-score-sheet";
+    closeImageEditor();
+    await handleVisionImage(new File([blob], `${name}.jpg`, { type: "image/jpeg" }));
+  };
+
+  const handleGuideScroll = () => {
+    const carousel = guideCarouselRef.current;
+    if (!carousel) return;
+    setGuideSlide(Math.round(carousel.scrollLeft / Math.max(carousel.clientWidth, 1)));
+  };
+
+  const selectGuideSlide = (index: number) => {
+    guideCarouselRef.current?.scrollTo({ left: guideCarouselRef.current.clientWidth * index, behavior: "smooth" });
+    setGuideSlide(index);
+  };
+
+  const moveGuideSlide = (direction: -1 | 1) => {
+    selectGuideSlide(Math.min(Math.max(guideSlide + direction, 0), VISION_GUIDE_IMAGES.length - 1));
+  };
+
+  const handleGuidePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    const carousel = guideCarouselRef.current;
+    if (!carousel) return;
+    guideDragRef.current = { pointerId: event.pointerId, startX: event.clientX, startScrollLeft: carousel.scrollLeft };
+    carousel.setPointerCapture(event.pointerId);
+  };
+
+  const handleGuidePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const carousel = guideCarouselRef.current;
+    const drag = guideDragRef.current;
+    if (!carousel || !drag || drag.pointerId !== event.pointerId) return;
+    carousel.scrollLeft = drag.startScrollLeft - (event.clientX - drag.startX);
+  };
+
+  const handleGuidePointerEnd = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (guideDragRef.current?.pointerId !== event.pointerId) return;
+    guideDragRef.current = null;
+    handleGuideScroll();
+  };
+
+  const handleOpenResultDialog = () => setResultDialogOpen(true);
+
+  const handleVisionImage = async (file?: File) => {
+    setResultDialogOpen(false);
+    setVisionError(null);
+    if (!file || !id || !localOrder.length) return;
+    if (!matches.length) {
+      setVisionNotice({ type: "error", message: "경기 순서가 아직 생성되지 않았습니다. 결과 등록을 다시 눌러 주세요." });
+      return;
+    }
+    if (isLocalDevToken(authToken)) {
+      const localPreview: VisionPreviewCell[] = [];
+      localOrder.forEach((rowPlayer, rowIndex) => {
+        localOrder.forEach((columnPlayer, columnIndex) => {
+          if (rowIndex === columnIndex) return;
+          const match = matchLookup.get(`${rowPlayer.id}__${columnPlayer.id}`);
+          localPreview.push({
+            rowPlayerName: rowPlayer.name,
+            columnPlayerName: columnPlayer.name,
+            rowIndex,
+            columnIndex,
+            score: 0,
+            confidence: 0,
+            needsReview: true,
+            issue: "로컬 테스트 미리보기입니다.",
+            matchId: match?.id,
+            playerId: rowPlayer.id,
+          });
+        });
+      });
+      setPreviewCells(localPreview);
+      setPreviewOpen(true);
+      setVisionNotice({ type: "info", message: "로컬에서는 실제 GPT 호출 없이 결과 확인 화면만 표시합니다." });
+      return;
+    }
+
+    try {
+      setVisionNotice({ type: "info", message: "별표 기준 점수 영역을 인식하는 중입니다." });
+      const result = await scanVision({ leagueId: id, file, mode: "star-grid" }).unwrap();
+      const byPosition = new Map(result.cells.map((cell) => [`${cell.rowIndex}__${cell.columnIndex}`, cell]));
+      const completeCells: VisionPreviewCell[] = [];
+      localOrder.forEach((rowPlayer, rowIndex) => {
+        localOrder.forEach((columnPlayer, columnIndex) => {
+          if (rowIndex === columnIndex) return;
+          const match = matchLookup.get(`${rowPlayer.id}__${columnPlayer.id}`);
+          const cell = byPosition.get(`${rowIndex}__${columnIndex}`);
+          completeCells.push({
+            ...(cell ?? {
+              rowPlayerName: rowPlayer.name,
+              columnPlayerName: columnPlayer.name,
+              rowIndex,
+              columnIndex,
+              score: 0,
+              confidence: 0,
+              needsReview: true,
+              issue: "인식하지 못한 점수 칸입니다.",
+            }),
+            matchId: match?.id,
+            playerId: rowPlayer.id,
+          });
+        });
+      });
+      setPreviewCells(completeCells);
+      setPreviewOpen(true);
+      setVisionNotice({ type: "success", message: "GPT Vision 인식 결과를 확인해 주세요." });
+    } catch (error) {
+      const message = getErrorMessage(error, "GPT Vision 인식에 실패했습니다.");
+      setVisionNotice({ type: "error", message });
+      setVisionError(message);
+    }
+  };
+
+  const handleVisionFile = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    openImageEditor(file);
+  };
+
+  const handleOpenFilePicker = async () => {
+    const filePicker = (window as FilePickerWindow).showOpenFilePicker;
+    if (!filePicker) {
+      fileInputRef.current?.click();
+      return;
+    }
+
+    try {
+      const [handle] = await filePicker({
+        multiple: false,
+        excludeAcceptAllOption: false,
+        types: [{
+          description: "이미지 파일",
+          accept: { "image/*": [".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"] },
+        }],
+      });
+      openImageEditor(await handle?.getFile());
+    } catch (error) {
+      if ((error as { name?: string }).name !== "AbortError") {
+        fileInputRef.current?.click();
+      }
+    }
+  };
+
+  const saveVisionPreview = async () => {
+    const requiredWinScore = getWinScore(league?.rules) ?? 3;
+    const grouped = new Map<string, { match: LeagueMatch; scoreA: number | null; scoreB: number | null }>();
+    previewCells.forEach((cell) => {
+      if (!cell.matchId || !cell.playerId) return;
+      const match = matches.find((item) => item.id === cell.matchId);
+      if (!match) return;
+      const current = grouped.get(match.id) ?? { match, scoreA: null, scoreB: null };
+      if (match.participant_a_id === cell.playerId) current.scoreA = cell.score;
+      if (match.participant_b_id === cell.playerId) current.scoreB = cell.score;
+      grouped.set(match.id, current);
+    });
+
+    try {
+      let saved = 0;
+      const invalidMatchIds = new Set<string>();
+      for (const { match, scoreA, scoreB } of grouped.values()) {
+        if (scoreA == null || scoreB == null || [scoreA, scoreB].filter((score) => score === requiredWinScore).length !== 1) {
+          invalidMatchIds.add(match.id);
+          continue;
+        }
+        await updateMatch({ leagueId: id ?? "", matchId: match.id, updates: { score_a: scoreA, score_b: scoreB, status: "done" } }).unwrap();
+        saved += 1;
+      }
+      await refetchMatches();
+      if (invalidMatchIds.size > 0) {
+        setPreviewCells((cells) => cells.map((cell) => (
+          cell.matchId && invalidMatchIds.has(cell.matchId)
+            ? { ...cell, needsReview: true, issue: "두 세트스코어 중 하나는 승리 세트 수여야 합니다." }
+            : cell
+        )));
+        setVisionNotice({ type: "info", message: `${saved}개 경기는 저장했습니다. ${invalidMatchIds.size}개 경기는 세트스코어 조합을 수정해 주세요.` });
+        return;
+      }
+      setPreviewOpen(false);
+      setVisionNotice({ type: "success", message: `${saved}개 경기 결과를 저장했습니다.` });
+    } catch (error) {
+      setVisionNotice({ type: "error", message: getErrorMessage(error, "인식 결과 저장에 실패했습니다.") });
+    }
+  };
+
   const { playerStats, rankings, tieSetDiffs } = useMatchStats(localOrder, matches, league?.rules);
 
   // ── 로딩 / 빈 상태 ───────────────────────────────────────────────────────
@@ -1287,10 +1623,20 @@ export default function LeagueBracket() {
   const date          = formatLeagueDate(league.start_date);
   const winScore      = getWinScore(league.rules);
   const appliedScale  = autoFitScale * userZoom;
+  const previewByPosition = new Map(previewCells.map((cell) => [`${cell.rowIndex}__${cell.columnIndex}`, cell]));
   // 줌 > 1이면 테이블이 화면을 초과 → 스크롤 가능하도록 시각적 크기를 spacer로 잡아줌
   // portrait: 90° 회전이므로 시각 너비=naturalTh, 시각 높이=naturalTw
   const visualW = naturalTw > 0 ? (landscape ? naturalTw : naturalTh) * appliedScale : 0;
   const visualH = naturalTh > 0 ? (landscape ? naturalTh : naturalTw) * appliedScale : 0;
+  const mobileDialogPaperSx = landscape
+    ? {}
+    : {
+        width: "calc(100vh - 48px)",
+        maxWidth: "none",
+        maxHeight: "calc(100vw - 48px)",
+        transform: "rotate(90deg)",
+        transformOrigin: "center",
+      };
 
   // ── JSX ───────────────────────────────────────────────────────────────────
   return createPortal(
@@ -1503,6 +1849,22 @@ export default function LeagueBracket() {
           <MatchSchedulePanel matches={matches} localOrder={localOrder} landscape={landscape} leagueId={id ?? ""} onProgramMatchUpdate={isProgramMode ? updateProgramMatch : undefined} />
         </Box>
 
+        <Box sx={{ position: "absolute", bottom: landscape ? 380 : 220, right: landscape ? 14 : 85, zIndex: 20, display: "flex", flexDirection: "column", alignItems: "center", gap: 0.8, pointerEvents: "auto" }}>
+          <Box sx={{ bgcolor: "#fff", p: 0.5, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>
+            <QRCode value={`${window.location.origin}/league/${id}/gpt-vision`} size={landscape ? 66 : 72} />
+          </Box>
+          <Box onClick={handleOpenResultDialog} sx={{ width: landscape ? "auto" : 36, height: landscape ? "auto" : 76, display: "flex", alignItems: "center", justifyContent: "center", alignSelf: landscape ? "center" : "flex-end", cursor: "pointer" }}>
+            <Box
+              component="button"
+              type="button"
+              onPointerDown={(event) => event.stopPropagation()}
+              sx={{ appearance: "none", border: 0, borderRadius: 2, color: "#fff", fontSize: 13, fontWeight: 900, bgcolor: "#16A34A", minWidth: 76, height: 32, whiteSpace: "nowrap", cursor: "pointer", ...(landscape ? {} : { transform: "rotate(90deg)" }), "&:hover": { bgcolor: "#15803D" } }}
+            >
+              결과 등록
+            </Box>
+          </Box>
+        </Box>
+
         {/* 플로팅 버튼들 (position: absolute, wrapperRef 기준 → 스크롤 영역 위에 고정) */}
 
         {/* 이미지 저장 / 인쇄 버튼 */}
@@ -1544,6 +1906,104 @@ export default function LeagueBracket() {
         </Tooltip>
 
       </Box>{/* /wrapperRef */}
+
+      {visionNotice ? <Alert severity={visionNotice.type} onClose={() => setVisionNotice(null)} sx={{ position: "fixed", top: 64, left: "50%", transform: "translateX(-50%)", zIndex: 10001, minWidth: 280 }}>{visionNotice.message}</Alert> : null}
+      <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" hidden onChange={handleVisionFile} />
+      <input ref={fileInputRef} type="file" accept="image/*,.jpg,.jpeg,.png,.heic,.heif,.webp" hidden onChange={handleVisionFile} />
+      <input ref={galleryInputRef} type="file" accept="image/*" hidden onChange={handleVisionFile} />
+
+      <Dialog open={resultDialogOpen} onClose={() => !isScanning && setResultDialogOpen(false)} maxWidth="xs" fullWidth sx={{ zIndex: 10002 }} slotProps={{ paper: { sx: { borderRadius: 3, overflow: "hidden", width: "min(360px, calc(100% - 48px))", ...mobileDialogPaperSx } } }}>
+        <DialogTitle sx={{ fontSize: 16, fontWeight: 900, px: 2.5, py: 2 }}>작업 선택</DialogTitle>
+        <DialogContent sx={{ p: 0, borderTop: "1px solid #E5E7EB" }}>
+          <Box sx={{ px: 2.5, pt: 2 }}>
+            <Box sx={{ position: "relative" }}>
+              <Box ref={guideCarouselRef} onScroll={handleGuideScroll} onPointerDown={handleGuidePointerDown} onPointerMove={handleGuidePointerMove} onPointerUp={handleGuidePointerEnd} onPointerCancel={handleGuidePointerEnd} sx={{ display: "flex", overflowX: "auto", scrollSnapType: "x mandatory", borderRadius: 1.5, bgcolor: "#F3F4F6", touchAction: "pan-y", cursor: "grab", userSelect: "none", "&:active": { cursor: "grabbing" }, "&::-webkit-scrollbar": { display: "none" } }}>
+                {VISION_GUIDE_IMAGES.map((src, index) => (
+                  <Box key={src} sx={{ flex: "0 0 100%", height: 132, scrollSnapAlign: "center", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Box component="img" src={src} alt={`안내 이미지 ${index + 1}`} sx={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                  </Box>
+                ))}
+              </Box>
+              <Tooltip title="이전 이미지"><span><IconButton size="small" onClick={() => moveGuideSlide(-1)} disabled={guideSlide === 0} sx={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", bgcolor: "rgba(255,255,255,0.88)", boxShadow: "0 1px 4px rgba(0,0,0,0.2)", "&:hover": { bgcolor: "#fff" } }}><NavigateBeforeIcon /></IconButton></span></Tooltip>
+              <Tooltip title="다음 이미지"><span><IconButton size="small" onClick={() => moveGuideSlide(1)} disabled={guideSlide === VISION_GUIDE_IMAGES.length - 1} sx={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", bgcolor: "rgba(255,255,255,0.88)", boxShadow: "0 1px 4px rgba(0,0,0,0.2)", "&:hover": { bgcolor: "#fff" } }}><NavigateNextIcon /></IconButton></span></Tooltip>
+            </Box>
+            <Stack direction="row" justifyContent="center" spacing={0.65} sx={{ py: 1 }}>
+              {VISION_GUIDE_IMAGES.map((_, index) => (
+                <Box key={index} component="button" type="button" aria-label={`안내 이미지 ${index + 1}`} onClick={() => selectGuideSlide(index)} sx={{ p: 0, width: guideSlide === index ? 16 : 6, height: 6, border: 0, borderRadius: 4, bgcolor: guideSlide === index ? "#2563EB" : "#CBD5E1", cursor: "pointer", transition: "width 160ms ease" }} />
+              ))}
+            </Stack>
+          </Box>
+          <Stack direction="row" justifyContent="space-around" sx={{ py: 2.8 }}>
+            <Button onClick={() => cameraInputRef.current?.click()} disabled={isScanning} sx={{ flexDirection: "column", gap: 1, color: "#374151", minWidth: 86, fontWeight: 800 }}><CameraAltIcon sx={{ fontSize: 30, color: "#777" }} /><Typography sx={{ fontSize: 11, fontWeight: 800 }}>카메라</Typography></Button>
+            <Button onClick={() => galleryInputRef.current?.click()} disabled={isScanning} sx={{ flexDirection: "column", gap: 1, color: "#374151", minWidth: 86, fontWeight: 800 }}><ImageIcon sx={{ fontSize: 30, color: "#3156A6" }} /><Typography sx={{ fontSize: 11, fontWeight: 800 }}>사진</Typography></Button>
+            <Button onClick={() => void handleOpenFilePicker()} disabled={isScanning} sx={{ flexDirection: "column", gap: 1, color: "#374151", minWidth: 86, fontWeight: 800 }}><FolderIcon sx={{ fontSize: 32, color: "#777" }} /><Typography sx={{ fontSize: 11, fontWeight: 800 }}>내 파일</Typography></Button>
+          </Stack>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(imageEditor)} onClose={closeImageEditor} maxWidth="md" fullWidth sx={{ zIndex: 10002 }} slotProps={{ paper: { sx: { overflow: "hidden", ...mobileDialogPaperSx } } }}>
+        <DialogTitle sx={{ fontWeight: 900 }}>사진 확인</DialogTitle>
+        <DialogContent dividers sx={{ p: 1.5 }}>
+          <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: 300, maxHeight: 420, overflow: "auto", bgcolor: "#111827" }}>
+            {imageEditor ? <ReactCrop crop={crop} onChange={(_, percentCrop) => setCrop(percentCrop)} onComplete={(pixelCrop) => setCompletedCrop(pixelCrop)} disabled={!cropMode} keepSelection={cropMode}>
+              <img ref={editorImageRef} src={imageEditor.url} onLoad={handleEditorImageLoad} alt="선택한 대진표" draggable={false} style={{ display: "block", maxWidth: "100%", maxHeight: 420, objectFit: "contain" }} />
+            </ReactCrop> : null}
+          </Box>
+          <Stack direction="row" alignItems="center" justifyContent="center" spacing={1} sx={{ pt: 1.25 }}>
+            <Tooltip title="왼쪽 회전"><IconButton onClick={() => void rotateEditorImage(-90)}><RotateLeftIcon /></IconButton></Tooltip>
+            <Tooltip title="자르기"><IconButton color={cropMode ? "primary" : "default"} onClick={enableCrop}><CropIcon /></IconButton></Tooltip>
+            <Tooltip title="오른쪽 회전"><IconButton onClick={() => void rotateEditorImage(90)}><RotateRightIcon /></IconButton></Tooltip>
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 2.5, py: 1.5 }}>
+          <Button onClick={closeImageEditor}>취소</Button>
+          <Button variant="contained" onClick={() => void createEditedImage()} disabled={!editorLoaded}>인식 시작</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={isScanning} maxWidth="xs" fullWidth sx={{ zIndex: 10002 }} slotProps={{ paper: { sx: mobileDialogPaperSx } }}>
+        <DialogContent sx={{ py: 4, textAlign: "center" }}>
+          <CircularProgress size={34} />
+          <Typography sx={{ mt: 2, fontWeight: 900 }}>GPT Vision이 점수 격자를 인식하는 중입니다.</Typography>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(visionError)} onClose={() => setVisionError(null)} maxWidth="xs" fullWidth sx={{ zIndex: 10002 }} slotProps={{ paper: { sx: mobileDialogPaperSx } }}>
+        <DialogTitle sx={{ fontWeight: 900 }}>사진 인식 실패</DialogTitle>
+        <DialogContent dividers><Typography>{visionError}</Typography></DialogContent>
+        <DialogActions><Button onClick={() => setVisionError(null)}>확인</Button></DialogActions>
+      </Dialog>
+
+      <Dialog open={previewOpen} onClose={() => !isScanning && setPreviewOpen(false)} maxWidth="lg" fullWidth sx={{ zIndex: 10002 }} slotProps={{ paper: { sx: mobileDialogPaperSx } }}>
+        <DialogTitle sx={{ fontWeight: 900 }}>GPT Vision 인식 결과 확인</DialogTitle>
+        <DialogContent dividers>
+          <Typography sx={{ mb: 1.5, color: "#6B7280", fontSize: 13, fontWeight: 700 }}>별표부터 시작하는 점수 격자만 인식했습니다. 노란색 또는 잘못된 점수는 저장 전에 수정해 주세요.</Typography>
+          <Box component="table" sx={{ width: "100%", tableLayout: "fixed", borderCollapse: "collapse", "& td, & th": { border: "1px solid #D1D5DB", textAlign: "center", p: 0.5 } }}>
+            <tbody>
+              {localOrder.map((rowPlayer, rowIndex) => (
+                <tr key={rowPlayer.id}>
+                  {localOrder.map((columnPlayer, columnIndex) => {
+                    if (rowIndex === columnIndex) return <td key={columnPlayer.id} style={{ background: "#E5E7EB" }} />;
+                    const cell = previewByPosition.get(`${rowIndex}__${columnIndex}`);
+                    const needsReview = cell?.needsReview || Boolean(cell?.issue);
+                    return <td key={columnPlayer.id} style={{ background: needsReview ? "#FFFBEB" : undefined }}>
+                      <Stack direction="row" alignItems="center" justifyContent="center" spacing={0.5}>
+                        <IconButton size="small" onClick={() => updatePreviewCell(rowIndex, columnIndex, (cell?.score ?? 0) - 1)} disabled={(cell?.score ?? 0) <= 0}>-</IconButton>
+                        <Typography sx={{ minWidth: 24, fontSize: 20, fontWeight: 900, color: needsReview ? "#B45309" : "#111827" }}>{cell?.score ?? 0}</Typography>
+                        <IconButton size="small" onClick={() => updatePreviewCell(rowIndex, columnIndex, (cell?.score ?? 0) + 1)}>+</IconButton>
+                      </Stack>
+                    </td>;
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 2.5, py: 1.5 }}>
+          <Button onClick={() => setPreviewOpen(false)}>취소</Button>
+          <Button variant="contained" onClick={saveVisionPreview} disabled={isScanning || leagueStarted}>인식 결과 저장</Button>
+        </DialogActions>
+      </Dialog>
     </Box>,
     document.body
   );

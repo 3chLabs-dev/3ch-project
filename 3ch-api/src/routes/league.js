@@ -9,12 +9,21 @@ const webpush = require('web-push');
 const { rebuildGroupRanking, getGroupIdByLeagueId } = require('../services/groupRanking');
 const { rebuildSportRankingByLeagueId } = require('../services/sportRanking');
 const { scanOmrImageWithPython } = require('../services/omrScanner');
+const { scanLeagueSheetWithOpenAIVision } = require('../services/openaiVisionScanner');
 
-webpush.setVapidDetails(
-  process.env.VAPID_MAILTO,
-  process.env.VAPID_PUBLIC_KEY,
-  process.env.VAPID_PRIVATE_KEY
+const isWebPushConfigured = Boolean(
+  process.env.VAPID_MAILTO && process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY,
 );
+
+if (isWebPushConfigured) {
+  webpush.setVapidDetails(
+    process.env.VAPID_MAILTO,
+    process.env.VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY,
+  );
+} else {
+  console.warn('VAPID 환경변수가 없어 푸시 알림을 비활성화합니다.');
+}
 
 async function triggerRankingRebuildByLeagueId(leagueId) {
   try {
@@ -51,7 +60,7 @@ async function assignLeagueCode(client, { groupId, startDate, leagueId }) {
 
 /** 참가자(participant_id)의 member_id로 push 발송 */
 async function sendPushToParticipant(participantId, payload) {
-  if (!participantId) return;
+  if (!isWebPushConfigured || !participantId) return;
   try {
     const r = await pool.query(
       'SELECT member_id FROM league_participants WHERE id = $1',
@@ -88,6 +97,64 @@ const omrUpload = multer({
   limits: { fileSize: 15 * 1024 * 1024 },
 });
 
+let participantGroupingColumnsPromise;
+let matchGroupingColumnPromise;
+
+async function getParticipantGroupingColumns(client = pool) {
+  if (!participantGroupingColumnsPromise) {
+    participantGroupingColumnsPromise = client
+      .query(
+        `SELECT column_name
+           FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'league_participants'
+            AND column_name IN ('group_name', 'is_leader')`,
+      )
+      .then((result) => {
+        const columns = new Set(result.rows.map((row) => row.column_name));
+        return {
+          hasGroupName: columns.has('group_name'),
+          hasIsLeader: columns.has('is_leader'),
+        };
+      })
+      .catch((error) => {
+        participantGroupingColumnsPromise = null;
+        throw error;
+      });
+  }
+  return participantGroupingColumnsPromise;
+}
+
+async function buildParticipantSelectColumns(client = pool) {
+  const { hasGroupName, hasIsLeader } = await getParticipantGroupingColumns(client);
+  return {
+    groupNameSelect: hasGroupName ? 'group_name' : 'NULL::text AS group_name',
+    isLeaderSelect: hasIsLeader ? 'is_leader' : 'FALSE AS is_leader',
+    hasGroupName,
+    hasIsLeader,
+  };
+}
+
+async function hasMatchGroupNameColumn(client = pool) {
+  if (!matchGroupingColumnPromise) {
+    matchGroupingColumnPromise = client
+      .query(
+        `SELECT 1
+           FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'league_matches'
+            AND column_name = 'group_name'
+          LIMIT 1`,
+      )
+      .then((result) => result.rowCount > 0)
+      .catch((error) => {
+        matchGroupingColumnPromise = null;
+        throw error;
+      });
+  }
+  return matchGroupingColumnPromise;
+}
+
 const omrMarkSchema = z.object({
   matchId: z.string().min(1),
   playerId: z.string().min(1),
@@ -107,6 +174,20 @@ const omrScanSchema = z.object({
   ).min(1).max(4),
   darknessThreshold: z.number().min(0).max(100).default(20),
   marginThreshold: z.number().min(0).max(100).default(3.5),
+});
+
+const openAIVisionCellSchema = z.object({
+  rowPlayerName: z.string().trim(),
+  columnPlayerName: z.string().trim(),
+  rowIndex: z.number().int().min(0),
+  columnIndex: z.number().int().min(0),
+  score: z.number().int().min(0).max(3),
+  confidence: z.number().min(0).max(1),
+  needsReview: z.boolean(),
+});
+
+const openAIVisionResultSchema = z.object({
+  cells: z.array(openAIVisionCellSchema).default([]),
 });
 
 function parseOmrPayload(rawPayload) {
@@ -273,7 +354,10 @@ pool.query(`
     ADD COLUMN IF NOT EXISTS next_match_id TEXT,
     ADD COLUMN IF NOT EXISTS next_slot TEXT,
     ADD COLUMN IF NOT EXISTS loser_next_match_id TEXT,
-    ADD COLUMN IF NOT EXISTS loser_next_slot TEXT
+    ADD COLUMN IF NOT EXISTS loser_next_slot TEXT,
+    ADD COLUMN IF NOT EXISTS is_program BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS program_round INT,
+    ADD COLUMN IF NOT EXISTS program_block_type TEXT
 `).catch((e) => console.error('league_matches 컬럼 추가 실패:', e.message));
 
 // ─── 토너먼트 브래킷 생성 유틸 ───────────────────────────────────────────────
@@ -694,24 +778,38 @@ async function reconcileTournamentMatches(db, leagueId, options = {}) {
   }
 }
 
-// league_code(AAA260316 01 형식)로 요청 시 실제 UUID로 자동 변환
+function normalizeLeagueCode(value) {
+  return String(value ?? '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+}
+
+async function resolveLeagueParam(value) {
+  const raw = String(value ?? '').trim();
+  const normalized = normalizeLeagueCode(raw);
+  if (!/^[A-Z]{3}\d{8}$/.test(normalized)) return raw;
+
+  const result = await pool.query(
+    `SELECT id
+       FROM leagues
+      WHERE league_code = $1
+         OR regexp_replace(upper(coalesce(league_code, '')), '[^A-Z0-9]', '', 'g') = $2
+      LIMIT 1`,
+    [raw, normalized],
+  );
+  return result.rows[0]?.id ?? raw;
+}
+
+// league_code(AAA26031601 또는 AAA260316 01 형식)로 요청 시 실제 UUID로 자동 변환
 router.param('id', async (req, _res, next, id) => {
-  if (/^[A-Z]{3}\d{6}\d{2}$/.test(id)) {
-    try {
-      const result = await pool.query('SELECT id FROM leagues WHERE league_code = $1', [id]);
-      if (result.rows.length > 0) req.params.id = result.rows[0].id;
-    } catch (e) { /* 변환 실패 시 원본 id 유지 */ }
-  }
+  try {
+    req.params.id = await resolveLeagueParam(id);
+  } catch (e) { /* 변환 실패 시 원본 id 유지 */ }
   next();
 });
 
 router.param('leagueId', async (req, _res, next, id) => {
-  if (/^[A-Z]{3}\d{6}\d{2}$/.test(id)) {
-    try {
-      const result = await pool.query('SELECT id FROM leagues WHERE league_code = $1', [id]);
-      if (result.rows.length > 0) req.params.leagueId = result.rows[0].id;
-    } catch (e) { /* 변환 실패 시 원본 id 유지 */ }
-  }
+  try {
+    req.params.leagueId = await resolveLeagueParam(id);
+  } catch (e) { /* 변환 실패 시 원본 id 유지 */ }
   next();
 });
 
@@ -856,6 +954,7 @@ const createLeagueSchema = z.object({
   advance_count: z.number().int().min(1).optional(), // 진출 수
   advance_method: z.string().optional(),          // 진출 방식
   finals_advance: z.number().int().min(2).optional(), // 결승 진출
+  program_data: z.unknown().optional(),
 });
 
 const updateLeagueSchema = z.object({
@@ -1087,6 +1186,7 @@ router.post('/league', requireAuth, async (req, res) => {
       advance_count,
       advance_method,
       finals_advance,
+      program_data,
     } = createLeagueSchema.parse(req.body);
 
     const userId = req.user.sub;
@@ -1202,8 +1302,9 @@ router.get('/league/:id/participants', optionalAuth, async (req, res) => {
       }
     }
 
+    const { groupNameSelect, isLeaderSelect } = await buildParticipantSelectColumns();
     const result = await pool.query(
-      `SELECT id, league_id, division, name, member_id, paid, arrived, "after", sort_order, created_at, group_name, is_leader
+      `SELECT id, league_id, division, name, member_id, paid, arrived, "after", sort_order, created_at, ${groupNameSelect}, ${isLeaderSelect}
        FROM league_participants
        WHERE league_id = $1
        ORDER BY sort_order ASC NULLS LAST, division ASC, created_at ASC`,
@@ -2045,11 +2146,134 @@ router.delete('/league/:id/program', requireAuth, async (req, res) => {
       return res.status(403).json({ message: '권한이 없습니다.' });
     }
 
+    await pool.query(`DELETE FROM league_matches WHERE league_id = $1 AND is_program = TRUE`, [leagueId]);
     await pool.query(`DELETE FROM league_programs WHERE league_id = $1`, [leagueId]);
+    await triggerRankingRebuildByLeagueId(leagueId);
     return res.json({ ok: true });
   } catch (err) {
     console.error('Error deleting league program:', err);
     return res.status(500).json({ message: '프로그램 삭제 중 서버 오류' });
+  }
+});
+
+// 이벤트 프로그램 경기 동기화 (owner/admin)
+// 단식 프로그램 경기만 league_matches에 저장해 개인 랭킹에 반영한다.
+router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) => {
+  const userId = Number(req.user.sub);
+  const leagueId = req.params.id;
+  const matches = Array.isArray(req.body?.matches) ? req.body.matches : [];
+
+  try {
+    const access = await pool.query(
+      `SELECT l.id
+       FROM leagues l
+       INNER JOIN group_members gm ON gm.group_id = l.group_id
+       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+      [leagueId, userId],
+    );
+
+    if (access.rowCount === 0) {
+      return res.status(403).json({ message: '권한이 없습니다.' });
+    }
+
+    const participantRows = await pool.query(
+      `SELECT id FROM league_participants WHERE league_id = $1`,
+      [leagueId],
+    );
+    const participantIds = new Set(participantRows.rows.map((row) => row.id));
+
+    const validMatches = matches
+      .filter((match) =>
+        match &&
+        match.id &&
+        match.program_block_type === 'SINGLES' &&
+        (
+          (participantIds.has(match.participant_a_id) && participantIds.has(match.participant_b_id)) ||
+          (match.bracket && Number(match.round_number) > 1)
+        )
+      )
+      .map((match, index) => ({
+        id: String(match.id),
+        match_order: Number.isFinite(Number(match.match_order)) ? Number(match.match_order) : index + 1,
+        participant_a_id: match.participant_a_id,
+        participant_b_id: match.participant_b_id,
+        bracket: match.bracket ?? null,
+        round_number: match.round_number == null ? null : Number(match.round_number),
+        match_label: match.match_label ?? null,
+        next_match_id: match.next_match_id ?? null,
+        next_slot: match.next_slot ?? null,
+        loser_next_match_id: match.loser_next_match_id ?? null,
+        loser_next_slot: match.loser_next_slot ?? null,
+        program_round: match.program_round == null ? null : Number(match.program_round),
+        program_block_type: 'SINGLES',
+      }));
+
+    await pool.query('BEGIN');
+    const targetProgramRounds = [...new Set(validMatches.map((match) => match.program_round).filter((round) => Number.isFinite(round)))];
+    const existingState = new Map();
+    if (targetProgramRounds.length > 0) {
+      const existingRows = await pool.query(
+        `SELECT id, score_a, score_b, court, status
+         FROM league_matches
+         WHERE league_id = $1 AND is_program = TRUE AND program_round = ANY($2::int[])`,
+        [leagueId, targetProgramRounds],
+      );
+      existingRows.rows.forEach((row) => existingState.set(row.id, row));
+    }
+
+    if (targetProgramRounds.length > 0) {
+      await pool.query(
+        `DELETE FROM league_matches WHERE league_id = $1 AND is_program = TRUE AND program_round = ANY($2::int[])`,
+        [leagueId, targetProgramRounds],
+      );
+    }
+
+    if (validMatches.length > 0) {
+      const values = [];
+      const placeholders = validMatches.map((match, index) => {
+        const base = index * 18;
+        const previous = existingState.get(match.id);
+        values.push(
+          match.id,
+          leagueId,
+          match.match_order,
+          match.participant_a_id,
+          match.participant_b_id,
+          match.bracket,
+          match.round_number,
+          match.match_label,
+          match.next_match_id,
+          match.next_slot,
+          match.loser_next_match_id,
+          match.loser_next_slot,
+          previous?.score_a ?? null,
+          previous?.score_b ?? null,
+          previous?.court ?? null,
+          previous?.status ?? 'pending',
+          match.program_round,
+          match.program_block_type,
+        );
+        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9}, $${base + 10}, $${base + 11}, $${base + 12}, $${base + 13}, $${base + 14}, $${base + 15}, $${base + 16}, TRUE, $${base + 17}, $${base + 18})`;
+      });
+
+      await pool.query(
+        `INSERT INTO league_matches
+         (id, league_id, match_order, participant_a_id, participant_b_id, bracket, round_number, match_label,
+          next_match_id, next_slot, loser_next_match_id, loser_next_slot, score_a, score_b, court, status,
+          is_program, program_round, program_block_type)
+         VALUES ${placeholders.join(', ')}`,
+        values,
+      );
+    }
+
+    await pool.query('COMMIT');
+    await triggerRankingRebuildByLeagueId(leagueId);
+
+    return res.json({ ok: true, inserted: validMatches.length });
+  } catch (err) {
+    await pool.query('ROLLBACK').catch(() => {});
+    console.error('Error syncing league program matches:', err);
+    return res.status(500).json({ message: '프로그램 경기 동기화 중 서버 오류' });
   }
 });
 
@@ -2131,6 +2355,7 @@ router.get('/league/:id/matches', optionalAuth, async (req, res) => {
       `SELECT
          m.id, m.match_order, m.score_a, m.score_b, m.court, m.status,
          m.participant_a_id, m.participant_b_id,
+         m.is_program, m.program_round, m.program_block_type,
          m.bracket, m.round_number, m.match_label,
          m.next_match_id, m.next_slot, m.loser_next_match_id, m.loser_next_slot,
          pa.name AS participant_a_name, pa.division AS participant_a_division,
@@ -2191,8 +2416,12 @@ router.delete('/league/:id/matches', requireAuth, async (req, res) => {
   try {
     const access = await pool.query(
       `SELECT l.id FROM leagues l
-       INNER JOIN group_members gm ON gm.group_id = l.group_id
-       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+       LEFT JOIN group_members gm
+         ON gm.group_id = l.group_id
+        AND gm.user_id = $2
+        AND gm.role IN ('owner', 'admin')
+       WHERE l.id = $1
+         AND (l.created_by_id = $2 OR gm.user_id IS NOT NULL)`,
       [leagueId, userId],
     );
     if (access.rowCount === 0) return res.status(403).json({ message: '권한이 없습니다.' });
@@ -2255,8 +2484,12 @@ router.post('/league/:id/matches/init', requireAuth, async (req, res) => {
   try {
     const access = await pool.query(
       `SELECT l.id FROM leagues l
-       INNER JOIN group_members gm ON gm.group_id = l.group_id
-       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+       LEFT JOIN group_members gm
+         ON gm.group_id = l.group_id
+        AND gm.user_id = $2
+        AND gm.role IN ('owner', 'admin')
+       WHERE l.id = $1
+         AND (l.created_by_id = $2 OR gm.user_id IS NOT NULL)`,
       [leagueId, userId],
     );
     if (access.rowCount === 0) return res.status(403).json({ message: '권한이 없습니다.' });
@@ -2284,26 +2517,30 @@ router.post('/league/:id/matches/init', requireAuth, async (req, res) => {
     
     // const participants = await pool.query(participantsQuery, [leagueId]);
     
+    const { groupNameSelect, hasGroupName } = await buildParticipantSelectColumns();
+    const canWriteMatchGroupName = await hasMatchGroupNameColumn();
     const participantsRes = await pool.query(
-      `SELECT id, group_name FROM league_participants WHERE league_id = $1 ORDER BY sort_order ASC NULLS LAST, division ASC, created_at ASC`,
+      `SELECT id, ${groupNameSelect} FROM league_participants WHERE league_id = $1 ORDER BY sort_order ASC NULLS LAST, division ASC, created_at ASC`,
       [leagueId]
     );
 
     const participants = participantsRes.rows;
     if(participants.length < 2) return res.status(400).json({ message: '참가자가 2명 이상이어야 합니다.' });
 
-    const isGroupMode = participants.some( p => p.group_name );
+    const groups = {};
+    if (hasGroupName && canWriteMatchGroupName) {
+      participants.forEach((participant) => {
+        if (!participant.group_name) return;
+        if (!groups[participant.group_name]) groups[participant.group_name] = [];
+        groups[participant.group_name].push(participant.id);
+      });
+    }
+    // 참가자가 모두 서로 다른 조인 경우에는 조별 경기 자체가 없으므로 전체 라운드로빈을 생성한다.
+    const isGroupMode = Object.values(groups).some((ids) => ids.length >= 2);
     let valuesArray = [];
     let matchIndex = 1;
 
     if( isGroupMode ) {
-      const groups = {};
-      participants.forEach( p => {
-        if(!p.group_name) return; //조가 없으면 패스
-        if(!groups[p.group_name]) groups[p.group_name] = [];
-        groups[p.group_name].push(p.id);
-      });
-
       for(const gName in groups){
         const ids = groups[gName];
         if (ids.length < 2) continue;
@@ -2317,14 +2554,18 @@ router.post('/league/:id/matches/init', requireAuth, async (req, res) => {
       // if (ids.length < 2) return res.status(400).json({ message: '참가자가 2명 이상이어야 합니다.' });
       const pairs = generateRoundRobin(ids.length);
       pairs.forEach(pair => {
-        valuesArray.push(`('${randomUUID()}', '${leagueId}', ${matchIndex++}, '${ids[pair[0]]}', '${ids[pair[1]]}', NULL)`);
+        const groupValue = canWriteMatchGroupName ? ', NULL' : '';
+        valuesArray.push(`('${randomUUID()}', '${leagueId}', ${matchIndex++}, '${ids[pair[0]]}', '${ids[pair[1]]}'${groupValue})`);
       });
     }
 
     // const values = pairs.map((pair, i) => `('${randomUUID()}', '${leagueId}', ${i + 1}, '${ids[pair[0]]}', '${ids[pair[1]]}')`).join(', ');
     const values = valuesArray.join(', ');
+    const matchColumns = canWriteMatchGroupName
+      ? 'id, league_id, match_order, participant_a_id, participant_b_id, group_name'
+      : 'id, league_id, match_order, participant_a_id, participant_b_id';
     await pool.query(
-      `INSERT INTO league_matches (id, league_id, match_order, participant_a_id, participant_b_id, group_name) VALUES ${values}`,
+      `INSERT INTO league_matches (${matchColumns}) VALUES ${values}`,
     );
 
     const result = await pool.query(
@@ -2381,8 +2622,10 @@ router.post('/league/:id/matches/extend', requireAuth, async (req, res) => {
     }
     
     // 현재 참가자 전체 조회
+    const { groupNameSelect, hasGroupName } = await buildParticipantSelectColumns(client);
+    const canWriteMatchGroupName = await hasMatchGroupNameColumn(client);
     const participantsQuery = await client.query(
-      `SELECT id, group_name FROM league_participants WHERE league_id = $1 ORDER BY sort_order ASC NULLS LAST, division ASC, created_at ASC`,
+      `SELECT id, ${groupNameSelect} FROM league_participants WHERE league_id = $1 ORDER BY sort_order ASC NULLS LAST, division ASC, created_at ASC`,
       [leagueId]
     );
 
@@ -2393,11 +2636,12 @@ router.post('/league/:id/matches/extend', requireAuth, async (req, res) => {
       return res.status(400).json({ message: '참가자가 2명 이상이어야 합니다.' });
     }
 
-    const isGroupMode = participants.some(p => p.group_name);
+    const isGroupMode = hasGroupName && canWriteMatchGroupName && participants.some(p => p.group_name);
 
     // 기존 경기 조회
+    const existingGroupNameSelect = canWriteMatchGroupName ? 'group_name' : 'NULL::text AS group_name';
     const existingMatches = await client.query(
-      `SELECT participant_a_id, participant_b_id, group_name
+      `SELECT participant_a_id, participant_b_id, ${existingGroupNameSelect}
        FROM league_matches
        WHERE league_id = $1`,
       [leagueId],
@@ -2492,25 +2736,32 @@ router.post('/league/:id/matches/extend', requireAuth, async (req, res) => {
     const queryValues = [];
 
     missingPairs.forEach(([aId, bId, gName], index) => {
-      const baseIndex = index * 6;
+      const valueCount = canWriteMatchGroupName ? 6 : 5;
+      const baseIndex = index * valueCount;
 
       insertValues.push(
-        `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6})`,
+        canWriteMatchGroupName
+          ? `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6})`
+          : `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5})`,
       );
 
-      queryValues.push(
+      const rowValues = [
         randomUUID(),
         leagueId,
         nextOrder++,
         aId,
         bId,
-        gName
-      );
+      ];
+      if (canWriteMatchGroupName) rowValues.push(gName);
+      queryValues.push(...rowValues);
     });
 
+    const matchColumns = canWriteMatchGroupName
+      ? 'id, league_id, match_order, participant_a_id, participant_b_id, group_name'
+      : 'id, league_id, match_order, participant_a_id, participant_b_id';
     await client.query(
       `INSERT INTO league_matches
-       (id, league_id, match_order, participant_a_id, participant_b_id, group_name)
+       (${matchColumns})
        VALUES ${insertValues.join(', ')}`,
       queryValues,
     );
@@ -2564,6 +2815,11 @@ router.post('/league/:id/grouping', requireAuth, async (req, res) => {
     // 데이터 유효성 검사
     if (!groupings || !Array.isArray(groupings)) {
       return res.status(400).json({ message: '잘못된 데이터 형식입니다.' });
+    }
+
+    const { hasGroupName, hasIsLeader } = await getParticipantGroupingColumns();
+    if (!hasGroupName || !hasIsLeader) {
+      return res.status(400).json({ message: '조 편성 컬럼이 없습니다. DB 마이그레이션을 먼저 적용해주세요.' });
     }
 
     // 2. 조 편성 데이터 업데이트 (pool.query 사용)
@@ -2877,6 +3133,7 @@ router.patch('/league/:id/matches/:matchId', optionalAuth, async (req, res) => {
       `SELECT
          m.id, m.match_order, m.score_a, m.score_b, m.court, m.status,
          m.participant_a_id, m.participant_b_id,
+         m.is_program, m.program_round, m.program_block_type,
          m.bracket, m.round_number, m.match_label,
          m.next_match_id, m.next_slot, m.loser_next_match_id, m.loser_next_slot,
          pa.name AS participant_a_name, pa.division AS participant_a_division,
@@ -3045,6 +3302,174 @@ router.post('/league/:id/omr/scan', optionalAuth, omrUpload.single('image'), asy
     }
 
     console.error('Error scanning OMR image:', error);
+    return res.status(500).json({ message: '서버 오류' });
+  }
+});
+
+router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('image'), async (req, res) => {
+  const leagueId = req.params.id;
+  const userId = Number(req.user.sub);
+
+  try {
+    const leagueRow = await pool.query(
+      `SELECT l.join_permission, l.group_id
+         FROM leagues l
+         LEFT JOIN group_members gm
+           ON gm.group_id = l.group_id
+          AND gm.user_id = $2
+          AND gm.role IN ('owner', 'admin')
+        WHERE l.id = $1
+          AND (l.created_by_id = $2 OR gm.user_id IS NOT NULL)`,
+      [leagueId, userId],
+    );
+    if (leagueRow.rowCount === 0) {
+      return res.status(403).json({ message: 'Vision 인식은 리그 생성자 또는 클럽 운영진만 사용할 수 있습니다.' });
+    }
+
+    if (program_data) {
+      await client.query(
+        `INSERT INTO league_programs (league_id, program_data, created_by_id)
+         VALUES ($1, $2::jsonb, $3)`,
+        [leagueId, JSON.stringify(program_data), userId],
+      );
+    }
+
+    const joinPermission = leagueRow.rows[0].join_permission;
+    if (joinPermission === 'club_only') {
+      const memberCheck = await pool.query(
+        `SELECT 1
+           FROM group_members
+          WHERE group_id = $1 AND user_id = $2`,
+        [leagueRow.rows[0].group_id, userId],
+      );
+      if (memberCheck.rowCount === 0) {
+        return res.status(403).json({ message: '클럽 회원만 Vision 인식을 사용할 수 있습니다.' });
+      }
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: '이미지 파일이 필요합니다.' });
+    }
+    if (!String(req.file.mimetype || '').startsWith('image/')) {
+      return res.status(400).json({ message: '이미지 파일만 업로드할 수 있습니다.' });
+    }
+
+    const participantsResult = await pool.query(
+      `SELECT id, name
+         FROM league_participants
+        WHERE league_id = $1
+        ORDER BY sort_order ASC NULLS LAST, division ASC, created_at ASC`,
+      [leagueId],
+    );
+    const participants = participantsResult.rows;
+    if (participants.length < 2) {
+      return res.status(400).json({ message: '참가자가 2명 이상이어야 Vision 인식을 사용할 수 있습니다.' });
+    }
+
+    const matchesResult = await pool.query(
+      `SELECT id, participant_a_id, participant_b_id
+         FROM league_matches
+        WHERE league_id = $1 AND bracket IS NULL`,
+      [leagueId],
+    );
+    const matchLookup = new Map();
+    for (const match of matchesResult.rows) {
+      if (!match.participant_a_id || !match.participant_b_id) continue;
+      matchLookup.set(`${match.participant_a_id}__${match.participant_b_id}`, match);
+      matchLookup.set(`${match.participant_b_id}__${match.participant_a_id}`, match);
+    }
+
+    const visionMode = req.body?.mode === 'star-grid' ? 'star-grid' : 'sheet';
+    const vision = await scanLeagueSheetWithOpenAIVision({
+      imageBuffer: req.file.buffer,
+      mimeType: req.file.mimetype,
+      participants,
+      mode: visionMode,
+    });
+    const parsed = openAIVisionResultSchema.parse(vision.result);
+
+    const cells = parsed.cells.map((cell) => {
+      const rowParticipant = participants[cell.rowIndex];
+      const columnParticipant = participants[cell.columnIndex];
+      const issues = [];
+      if (!rowParticipant) issues.push('행 참가자 위치를 확인할 수 없습니다.');
+      if (!columnParticipant) issues.push('열 참가자 위치를 확인할 수 없습니다.');
+      if (visionMode !== 'star-grid' && rowParticipant && cell.rowPlayerName && rowParticipant.name !== cell.rowPlayerName) {
+        issues.push('행 참가자 이름이 대진표 순서와 일치하지 않습니다.');
+      }
+      if (visionMode !== 'star-grid' && columnParticipant && cell.columnPlayerName && columnParticipant.name !== cell.columnPlayerName) {
+        issues.push('열 참가자 이름이 대진표 순서와 일치하지 않습니다.');
+      }
+      if (cell.rowIndex === cell.columnIndex) issues.push('대각선 셀은 점수를 입력할 수 없습니다.');
+
+      const match = rowParticipant && columnParticipant
+        ? matchLookup.get(`${rowParticipant.id}__${columnParticipant.id}`)
+        : null;
+      if (!match && rowParticipant && columnParticipant && cell.rowIndex !== cell.columnIndex) {
+        issues.push('해당 참가자 간 경기가 존재하지 않습니다.');
+      }
+
+      const playerId = match
+        ? match.participant_a_id === rowParticipant?.id
+          ? match.participant_a_id
+          : match.participant_b_id
+        : undefined;
+
+      return {
+        rowPlayerName: visionMode === 'star-grid' ? rowParticipant?.name ?? '' : cell.rowPlayerName,
+        columnPlayerName: visionMode === 'star-grid' ? columnParticipant?.name ?? '' : cell.columnPlayerName,
+        rowIndex: cell.rowIndex,
+        columnIndex: cell.columnIndex,
+        score: cell.score,
+        confidence: cell.confidence,
+        needsReview: cell.needsReview || issues.length > 0,
+        matchId: match?.id,
+        playerId,
+        issue: issues.join(' '),
+      };
+    });
+
+    // A completed match needs two opposing player cells and exactly one winning score of 3.
+    const cellsByMatch = new Map();
+    for (const cell of cells) {
+      if (!cell.matchId || !cell.playerId) continue;
+      const current = cellsByMatch.get(cell.matchId) ?? [];
+      current.push(cell);
+      cellsByMatch.set(cell.matchId, current);
+    }
+    for (const matchCells of cellsByMatch.values()) {
+      const distinctPlayers = new Set(matchCells.map((cell) => cell.playerId));
+      const hasValidPair = matchCells.length === 2
+        && distinctPlayers.size === 2
+        && matchCells.filter((cell) => cell.score === 3).length === 1;
+      if (hasValidPair) continue;
+
+      for (const cell of matchCells) {
+        cell.needsReview = true;
+        cell.confidence = Math.min(cell.confidence, 0.5);
+        cell.issue = [cell.issue, '경기 방식에 맞는 두 셀의 세트 점수를 확인해 주세요.']
+          .filter(Boolean)
+          .join(' ');
+      }
+    }
+
+    return res.json({
+      engine: vision.engine,
+      cells,
+      rawCellCount: parsed.cells.length,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ message: 'OpenAI Vision 응답 형식이 올바르지 않습니다.', issues: error.issues });
+    }
+    if (error?.code === 'OPENAI_API_KEY_MISSING') {
+      return res.status(503).json({ message: error.message, code: error.code });
+    }
+    if (error?.code === 'OPENAI_VISION_FAILED') {
+      return res.status(502).json({ message: error.message, code: error.code, details: error.details });
+    }
+
+    console.error('Error scanning OpenAI Vision image:', error);
     return res.status(500).json({ message: '서버 오류' });
   }
 });

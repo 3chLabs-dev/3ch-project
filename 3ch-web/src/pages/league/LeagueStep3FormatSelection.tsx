@@ -16,6 +16,8 @@ import { useAppDispatch, useAppSelector } from "../../app/hooks";
 const LeagueFormatOptions = [
   { value: "single-league", label: "단일리그", disabled: false },
   { value: "four-player-omr", label: "4인 리그 (OMR)", disabled: false },
+  { value: "ocr-assisted", label: "OCR 텍스트 인식", disabled: false },
+  { value: "gpt-recognition", label: "GPT 인식", disabled: false },
   { value: "group-league", label: "조별리그", disabled: false },
   { value: "group-and-knockout", label: "조별리그 + 본선리그", disabled: true },
   { value: "single-league-tournament", label: "단일리그 + 토너먼트", disabled: false },
@@ -28,7 +30,7 @@ const LeagueStep3FormatSelection: React.FC = () => {
   const dispatch = useAppDispatch();
   const existingFormat = useAppSelector((s) => s.leagueCreation.step3Format?.format ?? "");
   const selectedType = useAppSelector((s) => s.leagueCreation.step2Type?.selectedType);
-  const isClubEvent = selectedType === "club_exchange";
+  const isClubEvent = selectedType === "club_event";
 
   const [selectedFormat, setSelectedFormat] = useState<LeagueFormatValue | "">(existingFormat);
   const visibleOptions = useMemo(

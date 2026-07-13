@@ -7,9 +7,12 @@ import {
   deleteLocalDevParticipant,
   getLocalDevLeague,
   getLocalDevLeagues,
+  getLocalDevMatches,
   getLocalDevParticipants,
   getLocalDevProgram,
+  initLocalDevMatches,
   saveLocalDevProgram,
+  updateLocalDevMatch,
   updateLocalDevParticipant,
 } from "../../utils/localDevLeagueStore";
 
@@ -197,6 +200,9 @@ export interface LeagueMatch {
   next_slot?: string | null;
   loser_next_match_id?: string | null;
   loser_next_slot?: string | null;
+  is_program?: boolean;
+  program_round?: number | null;
+  program_block_type?: string | null;
 }
 
 export interface InitTournamentRequest {
@@ -216,6 +222,8 @@ export interface UpdateMatchRequest {
   score_b?: number | null;
   court?: string | null;
   status?: "pending" | "playing" | "done";
+  participant_a_id?: string | null;
+  participant_b_id?: string | null;
 }
 
 export interface LeagueOmrMark {
@@ -267,6 +275,78 @@ export interface ScanLeagueOmrResponse {
   }>;
 }
 
+export interface OpenAIVisionCell {
+  rowPlayerName: string;
+  columnPlayerName: string;
+  rowIndex: number;
+  columnIndex: number;
+  score: number;
+  confidence: number;
+  needsReview: boolean;
+  matchId?: string;
+  playerId?: string;
+  issue?: string;
+}
+
+export interface ScanLeagueOpenAIVisionRequest {
+  leagueId: string;
+  file: File;
+  mode?: "sheet" | "star-grid";
+}
+
+export interface ScanLeagueOpenAIVisionResponse {
+  engine: string;
+  cells: OpenAIVisionCell[];
+  rawCellCount: number;
+}
+
+export interface ScanOcrRequest {
+  file: File;
+  language?: string;
+  psm?: number;
+  maxSide?: number;
+}
+
+export interface ScanOcrResponse {
+  engine: string;
+  language: string;
+  text: string;
+  image: {
+    width: number;
+    height: number;
+  };
+  lines: Array<{
+    text: string;
+    confidence: number | null;
+    bbox: {
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+    };
+  }>;
+  words?: Array<{
+    text: string;
+    confidence: number | null;
+    bbox: {
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+    };
+  }>;
+  digitWords?: Array<{
+    text: string;
+    confidence: number | null;
+    bbox: {
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+    };
+  }>;
+}
+
 export interface AddParticipantsRequest {
   leagueId: string;
   participants: { division: string; name: string; member_id?: number | null }[];
@@ -307,6 +387,14 @@ export interface GetLeagueProgramResponse {
 export interface SaveLeagueProgramRequest {
   leagueId: string;
   program: unknown;
+}
+
+export interface SyncLeagueProgramMatchesRequest {
+  leagueId: string;
+  matches: Array<Partial<LeagueMatch> & {
+    program_round?: number | null;
+    program_block_type?: string | null;
+  }>;
 }
 
 /**
@@ -571,13 +659,49 @@ export const leagueApi = baseApi.injectEndpoints({
       ],
     }),
 
+    syncLeagueProgramMatches: builder.mutation<{ ok: boolean; inserted: number }, SyncLeagueProgramMatchesRequest>({
+      async queryFn({ leagueId, matches }, api, _extraOptions, fetchWithBQ) {
+        const token = (api.getState() as RootState).auth?.token;
+        if (isLocalDevToken(token)) {
+          return { data: { ok: true, inserted: matches.length } };
+        }
+        const result = await fetchWithBQ({
+          url: `/league/${leagueId}/program/matches/sync`,
+          method: "POST",
+          body: { matches },
+        });
+        return result.error ? { error: result.error } : { data: result.data as { ok: boolean; inserted: number } };
+      },
+      invalidatesTags: (_result, _error, { leagueId }) => [
+        { type: "League", id: `matches-${leagueId}` },
+        { type: "League", id: leagueId },
+      ],
+    }),
+
     getLeagueMatches: builder.query<GetLeagueMatchesResponse, string>({
-      query: (id) => `/league/${id}/matches`,
+      async queryFn(id, api, _extraOptions, fetchWithBQ) {
+        const token = (api.getState() as RootState).auth?.token;
+        if (isLocalDevToken(token)) {
+          return { data: { matches: getLocalDevMatches(id) } };
+        }
+        const result = await fetchWithBQ(`/league/${id}/matches`);
+        return result.error ? { error: result.error } : { data: result.data as GetLeagueMatchesResponse };
+      },
       providesTags: (_result, _error, id) => [{ type: "League", id: `matches-${id}` }],
     }),
 
     initLeagueMatches: builder.mutation<GetLeagueMatchesResponse, { id: string; force?: boolean }>({
-      query: ({ id, force }) => ({ url: `/league/${id}/matches/init${force ? "?force=true" : ""}`, method: "POST" }),
+      async queryFn({ id, force }, api, _extraOptions, fetchWithBQ) {
+        const token = (api.getState() as RootState).auth?.token;
+        if (isLocalDevToken(token)) {
+          return { data: { matches: initLocalDevMatches(id, force) } };
+        }
+        const result = await fetchWithBQ({
+          url: `/league/${id}/matches/init${force ? "?force=true" : ""}`,
+          method: "POST",
+        });
+        return result.error ? { error: result.error } : { data: result.data as GetLeagueMatchesResponse };
+      },
       invalidatesTags: (_result, _error, { id }) => [{ type: "League", id: `matches-${id}` }],
     }),
 
@@ -598,11 +722,19 @@ export const leagueApi = baseApi.injectEndpoints({
       { match: LeagueMatch },
       { leagueId: string; matchId: string; updates: UpdateMatchRequest }
     >({
-      query: ({ leagueId, matchId, updates }) => ({
-        url: `/league/${leagueId}/matches/${matchId}`,
-        method: "PATCH",
-        body: updates,
-      }),
+      async queryFn({ leagueId, matchId, updates }, api, _extraOptions, fetchWithBQ) {
+        const token = (api.getState() as RootState).auth?.token;
+        if (isLocalDevToken(token)) {
+          const match = updateLocalDevMatch(leagueId, matchId, updates);
+          return match ? { data: { match } } : { error: { status: 404, data: "Not Found" } };
+        }
+        const result = await fetchWithBQ({
+          url: `/league/${leagueId}/matches/${matchId}`,
+          method: "PATCH",
+          body: updates,
+        });
+        return result.error ? { error: result.error } : { data: result.data as { match: LeagueMatch } };
+      },
       async onQueryStarted({ leagueId, matchId, updates }, { dispatch, queryFulfilled }) {
         const patch = dispatch(
           leagueApi.util.updateQueryData("getLeagueMatches", leagueId, (draft) => {
@@ -629,6 +761,34 @@ export const leagueApi = baseApi.injectEndpoints({
         );
         return {
           url: `/league/${leagueId}/omr/scan`,
+          method: "POST",
+          body: formData,
+        };
+      },
+    }),
+
+    scanLeagueOpenAIVision: builder.mutation<ScanLeagueOpenAIVisionResponse, ScanLeagueOpenAIVisionRequest>({
+      query: ({ leagueId, file, mode = "sheet" }) => {
+        const formData = new FormData();
+        formData.append("image", file);
+        formData.append("mode", mode);
+        return {
+          url: `/league/${leagueId}/openai-vision/scan`,
+          method: "POST",
+          body: formData,
+        };
+      },
+    }),
+
+    scanOcr: builder.mutation<ScanOcrResponse, ScanOcrRequest>({
+      query: ({ file, language, psm, maxSide }) => {
+        const formData = new FormData();
+        formData.append("image", file);
+        if (language) formData.append("language", language);
+        if (psm !== undefined) formData.append("psm", String(psm));
+        if (maxSide !== undefined) formData.append("maxSide", String(maxSide));
+        return {
+          url: "/ocr/scan",
           method: "POST",
           body: formData,
         };
@@ -740,10 +900,13 @@ export const {
   useGetLeagueProgramQuery,
   useSaveLeagueProgramMutation,
   useDeleteLeagueProgramMutation,
+  useSyncLeagueProgramMatchesMutation,
   useGetLeagueMatchesQuery,
   useInitLeagueMatchesMutation,
   useUpdateLeagueMatchMutation,
   useScanLeagueOmrMutation,
+  useScanLeagueOpenAIVisionMutation,
+  useScanOcrMutation,
   useReorderLeagueMatchesMutation,
   useDeleteLeagueMatchMutation,
   useNotifyLeagueMatchMutation,

@@ -20,7 +20,7 @@ export type LeagueTypeValue =
   | "doubles"
   | "team"
   | "club_battle"
-  | "club_exchange";
+  | "club_event";
 
 export interface LeagueTypeInfo {
   selectedType: LeagueTypeValue;
@@ -30,6 +30,8 @@ export interface LeagueTypeInfo {
 export type LeagueFormatValue =
   | "single-league"
   | "four-player-omr"
+  | "ocr-assisted"
+  | "gpt-recognition"
   | "group-league"
   | "group-and-knockout"
   | "single-league-tournament"
@@ -162,7 +164,7 @@ export const createLeague = createAsyncThunk.withTypes<{ state: RootState }>()(
       doubles: "복식",
       team: "단체전",
       club_battle: "클럽 대항전",
-      club_exchange: "클럽 이벤트",
+      club_event: "클럽 이벤트",
     };
 
     // 리그 규칙 매핑
@@ -177,6 +179,8 @@ export const createLeague = createAsyncThunk.withTypes<{ state: RootState }>()(
     const formatMap: Record<string, string> = {
       "single-league": "단일리그",
       "four-player-omr": "4인 리그 (OMR)",
+      "ocr-assisted": "OCR 텍스트 인식",
+      "gpt-recognition": "GPT 인식",
       "group-league": "조별리그",
       "group-and-knockout": "조별리그 + 본선리그",
       "single-league-tournament": "단일리그 + 토너먼트",
@@ -207,14 +211,14 @@ export const createLeague = createAsyncThunk.withTypes<{ state: RootState }>()(
       description: s.step1BasicInfo.location ? `장소: ${s.step1BasicInfo.location}` : undefined,
       title: s.step1BasicInfo.title ? `${s.step1BasicInfo.title}` : undefined,
       type: typeMap[s.step2Type.selectedType],
-      format: s.step2Type.selectedType === "club_exchange"
+      format: s.step2Type.selectedType === "club_event"
         ? "이벤트 프로그램"
         : s.step3Format
           ? formatMap[s.step3Format.format]
           : undefined,
       sport: "탁구", // 탁구로 고정 (향후 확장 예정)
       start_date,
-      rules: s.step2Type.selectedType === "club_exchange"
+      rules: s.step2Type.selectedType === "club_event"
         ? "프로그램별 설정"
         : s.step4Rules
           ? rulesMap[s.step4Rules.rule]

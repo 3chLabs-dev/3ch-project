@@ -3,6 +3,20 @@ import { distributeSnake } from "../features/league/algorithms/distributeSnake";
 import type { ProgramBlock, ProgramOption } from "../features/league/types/tournament.types";
 import { generateRoundRobin } from "./leagueUtils";
 
+export type ProgramMatchPatch = Partial<Pick<
+  LeagueMatch,
+  | "score_a"
+  | "score_b"
+  | "status"
+  | "court"
+  | "participant_a_id"
+  | "participant_a_name"
+  | "participant_a_division"
+  | "participant_b_id"
+  | "participant_b_name"
+  | "participant_b_division"
+>>;
+
 type ProgramPlayer = {
   id: string;
   name: string;
@@ -79,6 +93,30 @@ function shuffleStable<T>(items: T[], seed: string) {
     [next[i], next[j]] = [next[j], next[i]];
   }
   return next;
+}
+
+function rotateBySeed<T>(items: T[], seed: number) {
+  if (items.length < 2) return items;
+  const offset = seed % items.length || 1;
+  const rotated = [...items.slice(offset), ...items.slice(0, offset)];
+  return Math.floor(seed / items.length) % 2 === 1
+    ? rotated.reverse()
+    : rotated;
+}
+
+function shuffleWithinLevel<T extends { level?: number; name?: string | null; id?: string | null }>(
+  items: T[],
+  seed?: number,
+) {
+  if (seed == null) return items;
+  const buckets = new Map<number, T[]>();
+  items.forEach((item) => {
+    const level = item.level ?? 999;
+    buckets.set(level, [...(buckets.get(level) ?? []), item]);
+  });
+  return [...buckets.keys()]
+    .sort((a, b) => a - b)
+    .flatMap((level) => rotateBySeed(buckets.get(level) ?? [], seed + level * 997));
 }
 
 function makeMatch(
@@ -214,10 +252,11 @@ function buildTournamentSlots(
   roundIndex: number,
   block: ProgramBlock,
   players: MatchUnit[],
+  forcedSeeding?: "manual" | "seed" | "random",
 ) {
   const bracketSize = 2 ** Math.ceil(Math.log2(Math.max(2, players.length)));
   const emptySlots = Array.from<MatchUnit | null>({ length: bracketSize }).fill(null);
-  const seeding = block.tournamentSeeding ?? "seed";
+  const seeding = forcedSeeding ?? block.tournamentSeeding ?? "seed";
 
   if (seeding === "manual") {
     return emptySlots;
@@ -238,14 +277,20 @@ function buildTournamentSlots(
   return slots;
 }
 
+function getTournamentRoundLabel(bracketSize: number, bracketRound: number) {
+  const roundSize = bracketSize / 2 ** (bracketRound - 1);
+  return roundSize <= 2 ? "결승" : `${roundSize}강`;
+}
+
 function buildTournamentMatches(
   leagueId: string,
   roundIndex: number,
   block: ProgramBlock,
   players: MatchUnit[],
+  forcedSeeding?: "manual" | "seed" | "random",
 ): LeagueMatch[] {
   const matches: LeagueMatch[] = [];
-  const slots = buildTournamentSlots(leagueId, roundIndex, block, players);
+  const slots = buildTournamentSlots(leagueId, roundIndex, block, players, forcedSeeding);
   const bracketSize = slots.length;
   let previousRoundIds: string[] = [];
 
@@ -269,7 +314,7 @@ function buildTournamentMatches(
         b,
         bracketRound,
         "upper",
-        bracketRound === 1 ? `1-${matchIndex + 1}` : `R${bracketRound}`,
+        getTournamentRoundLabel(bracketSize, bracketRound),
       );
       matches.push(match);
     }
@@ -288,6 +333,111 @@ function buildTournamentMatches(
   return matches;
 }
 
+function isPrelimToFinal(option: ProgramOption | null, round: number) {
+  const currentRound = option?.rounds?.[round - 1];
+  const previousRound = option?.rounds?.[round - 2];
+  const currentBlock = option?.blocks?.[round - 1];
+  const previousBlock = option?.blocks?.[round - 2];
+
+  return (
+    round > 1 &&
+    currentRound?.option === "FINAL" &&
+    previousRound?.option === "PRELIM" &&
+    currentBlock?.type === "SINGLES" &&
+    currentBlock?.format === "TOURNAMENT" &&
+    previousBlock?.type === "SINGLES"
+  );
+}
+
+function getRankedPlayersFromPreviousRound(
+  players: ProgramPlayer[],
+  sourceMatches: LeagueMatch[],
+  previousRound: number,
+): ProgramPlayer[] | null {
+  const previousMatches = sourceMatches.filter(
+    (match) =>
+      (match.program_round ?? match.round_number) === previousRound &&
+      !match.bracket &&
+      match.participant_a_id &&
+      match.participant_b_id,
+  );
+
+  if (previousMatches.length === 0 || previousMatches.some((match) => match.status !== "done")) {
+    return null;
+  }
+
+  const playerById = new Map(players.map((player) => [player.id, player]));
+  const playerIndex = new Map(players.map((player, index) => [player.id, index]));
+  const stats = new Map<string, { wins: number; losses: number; setTotal: number; played: number }>();
+  players.forEach((player) => stats.set(player.id, { wins: 0, losses: 0, setTotal: 0, played: 0 }));
+
+  previousMatches.forEach((match) => {
+    const aId = match.participant_a_id;
+    const bId = match.participant_b_id;
+    if (!aId || !bId || !playerById.has(aId) || !playerById.has(bId)) return;
+
+    const scoreA = match.score_a ?? 0;
+    const scoreB = match.score_b ?? 0;
+    const aStats = stats.get(aId)!;
+    const bStats = stats.get(bId)!;
+    aStats.played += 1;
+    bStats.played += 1;
+    aStats.setTotal += scoreA;
+    bStats.setTotal += scoreB;
+
+    if (scoreA > scoreB) {
+      aStats.wins += 1;
+      bStats.losses += 1;
+    } else if (scoreB > scoreA) {
+      bStats.wins += 1;
+      aStats.losses += 1;
+    }
+  });
+
+  const byWins = new Map<number, ProgramPlayer[]>();
+  players.forEach((player) => {
+    const wins = stats.get(player.id)?.wins ?? 0;
+    byWins.set(wins, [...(byWins.get(wins) ?? []), player]);
+  });
+
+  const tieWon = new Map<string, number>();
+  const tieLost = new Map<string, number>();
+  players.forEach((player) => {
+    tieWon.set(player.id, 0);
+    tieLost.set(player.id, 0);
+  });
+
+  for (const group of byWins.values()) {
+    if (group.length < 2) continue;
+    const groupIds = new Set(group.map((player) => player.id));
+    previousMatches.forEach((match) => {
+      const aId = match.participant_a_id;
+      const bId = match.participant_b_id;
+      if (!aId || !bId || !groupIds.has(aId) || !groupIds.has(bId)) return;
+      const scoreA = match.score_a ?? 0;
+      const scoreB = match.score_b ?? 0;
+      tieWon.set(aId, (tieWon.get(aId) ?? 0) + scoreA);
+      tieLost.set(aId, (tieLost.get(aId) ?? 0) + scoreB);
+      tieWon.set(bId, (tieWon.get(bId) ?? 0) + scoreB);
+      tieLost.set(bId, (tieLost.get(bId) ?? 0) + scoreA);
+    });
+  }
+
+  return [...players].sort((left, right) => {
+    const leftStats = stats.get(left.id)!;
+    const rightStats = stats.get(right.id)!;
+    if (leftStats.wins !== rightStats.wins) return rightStats.wins - leftStats.wins;
+
+    const leftTieLost = tieLost.get(left.id) ?? 0;
+    const rightTieLost = tieLost.get(right.id) ?? 0;
+    const leftRatio = leftTieLost === 0 ? Infinity : (tieWon.get(left.id) ?? 0) / leftTieLost;
+    const rightRatio = rightTieLost === 0 ? Infinity : (tieWon.get(right.id) ?? 0) / rightTieLost;
+    if (leftRatio !== rightRatio) return rightRatio - leftRatio;
+
+    return (playerIndex.get(left.id) ?? 0) - (playerIndex.get(right.id) ?? 0);
+  });
+}
+
 export function getStoredProgramOption(leagueId: string): ProgramOption | null {
   try {
     const raw = localStorage.getItem(`league-program-${leagueId}`);
@@ -297,19 +447,104 @@ export function getStoredProgramOption(leagueId: string): ProgramOption | null {
   }
 }
 
+function getProgramMatchStateKey(leagueId: string, round: number) {
+  return `league-program-match-state-${leagueId}-r${round}`;
+}
+
+export function readProgramMatchState(leagueId: string, round: number): Record<string, ProgramMatchPatch> {
+  try {
+    const raw = localStorage.getItem(getProgramMatchStateKey(leagueId, round));
+    return raw ? (JSON.parse(raw) as Record<string, ProgramMatchPatch>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeProgramMatchState(leagueId: string, round: number, state: Record<string, ProgramMatchPatch>) {
+  localStorage.setItem(getProgramMatchStateKey(leagueId, round), JSON.stringify(state));
+}
+
+export function saveProgramMatchPatch(leagueId: string, round: number, matchId: string, patch: ProgramMatchPatch) {
+  const state = readProgramMatchState(leagueId, round);
+  state[matchId] = { ...(state[matchId] ?? {}), ...patch };
+  writeProgramMatchState(leagueId, round, state);
+  return state;
+}
+
+export function applyProgramMatchState(matches: LeagueMatch[], leagueId: string, round: number): LeagueMatch[] {
+  const state = readProgramMatchState(leagueId, round);
+  return matches.map((match) => (state[match.id] ? { ...match, ...state[match.id] } : match));
+}
+
+function getTournamentWinner(match: LeagueMatch) {
+  if (match.status !== "done") return null;
+
+  const scoreA = match.score_a;
+  const scoreB = match.score_b;
+  const hasScoreA = typeof scoreA === "number";
+  const hasScoreB = typeof scoreB === "number";
+  const winnerSlot = hasScoreA && hasScoreB && scoreA !== scoreB
+    ? scoreA > scoreB ? "a" : "b"
+    : match.participant_a_id && !match.participant_b_id ? "a"
+    : match.participant_b_id && !match.participant_a_id ? "b"
+    : null;
+
+  if (!winnerSlot) return null;
+  return winnerSlot === "a"
+    ? {
+        id: match.participant_a_id,
+        name: match.participant_a_name,
+        division: match.participant_a_division,
+      }
+    : {
+        id: match.participant_b_id,
+        name: match.participant_b_name,
+        division: match.participant_b_division,
+      };
+}
+
+export function applyProgramTournamentAdvancement(matches: LeagueMatch[]): LeagueMatch[] {
+  const matchMap = new Map(matches.map((match) => [match.id, { ...match }]));
+  const orderedMatches = [...matchMap.values()].sort((a, b) => (a.round_number ?? 0) - (b.round_number ?? 0));
+
+  orderedMatches.forEach((match) => {
+    if (!match.next_match_id || !match.next_slot) return;
+    const parent = matchMap.get(match.next_match_id);
+    if (!parent) return;
+
+    const winner = getTournamentWinner(match);
+    if (!winner) return;
+
+    if (match.next_slot === "a") {
+      parent.participant_a_id = winner.id;
+      parent.participant_a_name = winner.name;
+      parent.participant_a_division = winner.division;
+    } else {
+      parent.participant_b_id = winner.id;
+      parent.participant_b_name = winner.name;
+      parent.participant_b_division = winner.division;
+    }
+  });
+
+  return matches.map((match) => matchMap.get(match.id) ?? match);
+}
+
 export function generateProgramRoundMatches(
   leagueId: string,
   option: ProgramOption | null,
   participants: LeagueParticipantItem[],
   round: number,
+  sourceMatches: LeagueMatch[] = [],
 ): LeagueMatch[] {
   const block = option?.blocks?.[round - 1];
   if (!block || participants.length < 2) return [];
 
   const players = toProgramPlayers(participants);
+  const defaultFormationSeed = round * 1000;
+  const teamFormationPlayers = shuffleWithinLevel(players, block.teamShuffleSeed ?? defaultFormationSeed + 101);
   const groupSizes = block.groupSizes?.length ? block.groupSizes : option?.groupSizes ?? [players.length];
   const matchUnits: MatchUnit[] = block.type === "TEAM"
-    ? toTeamUnitsFromGroupSizes(players, groupSizes)
+    ? toTeamUnitsFromGroupSizes(teamFormationPlayers, groupSizes)
     : block.type === "DOUBLES"
       ? toDoublesUnits(players)
       : players;
@@ -319,15 +554,48 @@ export function generateProgramRoundMatches(
   }
 
   if (block.format === "TOURNAMENT") {
+    if (isPrelimToFinal(option, round) && block.type === "SINGLES") {
+      const rankedPlayers = getRankedPlayersFromPreviousRound(players, sourceMatches, round - 1);
+      return buildTournamentMatches(
+        leagueId,
+        round - 1,
+        block,
+        rankedPlayers ?? players,
+        rankedPlayers ? "seed" : "manual",
+      );
+    }
+
     return buildTournamentMatches(leagueId, round - 1, block, matchUnits);
   }
 
   if (block.type === "TEAM") {
+    if (block.format === "GROUP") {
+      const teamGroupSizes = block.teamGroupSizes?.length
+        ? block.teamGroupSizes
+        : [Math.ceil(matchUnits.length / 2), Math.floor(matchUnits.length / 2)].filter((size) => size > 0);
+      const shuffledTeams = shuffleWithinLevel(matchUnits, block.groupShuffleSeed ?? defaultFormationSeed + 503);
+      const teamGroups = distributeSnake(shuffledTeams as ProgramPlayer[], teamGroupSizes);
+      return teamGroups.flatMap((group, groupIndex) =>
+        buildUnitRoundRobinMatches(
+          leagueId,
+          round - 1,
+          block,
+          group.players as MatchUnit[],
+          `${groupIndex + 1}조`,
+        ).map((match, index) => ({
+          ...match,
+          id: `${match.id}-${index + 1}`,
+          match_order: index + 1,
+        })),
+      ).map((match, index) => ({ ...match, match_order: index + 1 }));
+    }
+
     return buildUnitRoundRobinMatches(leagueId, round - 1, block, matchUnits);
   }
 
   if (block.format === "GROUP") {
-    const groups = distributeSnake(matchUnits as ProgramPlayer[], groupSizes);
+    const shuffledUnits = shuffleWithinLevel(matchUnits, block.groupShuffleSeed ?? defaultFormationSeed + 503);
+    const groups = distributeSnake(shuffledUnits as ProgramPlayer[], groupSizes);
     return groups.flatMap((group, groupIndex) =>
       buildUnitRoundRobinMatches(
         leagueId,

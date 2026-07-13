@@ -144,7 +144,7 @@ function SlotRow({ slot, name, seed, division, score, isWin, isR1, canManage, ca
 
 // ─── 매치 카드 ────────────────────────────────────────────────────────────────
 function MatchCard({
-  match, matchIndex, canManage, leagueId, seedA, seedB, isR1, onRegister, manualSeeding,
+  match, matchIndex, canManage, leagueId, seedA, seedB, isR1, onRegister, manualSeeding, onMatchStarted,
 }: {
   match: LeagueMatch;
   matchIndex: number;
@@ -155,6 +155,7 @@ function MatchCard({
   isR1: boolean;
   onRegister: (matchId: string, slot: "a" | "b") => void;
   manualSeeding: boolean;
+  onMatchStarted?: (matchId: string) => void;
 }) {
   const [updateMatch] = useUpdateLeagueMatchMutation();
   const [notifyMatch] = useNotifyLeagueMatchMutation();
@@ -194,8 +195,9 @@ function MatchCard({
       ? `${nA}(${sa}) VS (${sb})${nB}\n경기를 종료하겠습니까?`
       : `${nA} VS ${nB}\n경기를 시작하겠습니까?`;
     if (!window.confirm(msg)) return;
+    if (!isPlaying) onMatchStarted?.(match.id);
     updateMatch({ leagueId, matchId: match.id, updates: { status: NEXT_STATUS[match.status], score_a: sa, score_b: sb } });
-  }, [match, isPlaying, isDone, nameA, nameB, leagueId, sa, sb, updateMatch]);
+  }, [match, isPlaying, isDone, nameA, nameB, leagueId, sa, sb, onMatchStarted, updateMatch]);
 
   const handleAppNotify = useCallback(async () => {
     setMenuAnchor(null);
@@ -207,7 +209,11 @@ function MatchCard({
     const aDiv = match.participant_a_division ? `(${match.participant_a_division})` : "";
     const bDiv = match.participant_b_division ? `(${match.participant_b_division})` : "";
     const text = `${matchIndex}경기\n${aDiv}${nameA ?? "?"} VS ${bDiv}${nameB ?? "?"}\n곧 경기 시작! 지금 입장해 주세요`;
-    const kakao = (window as unknown as { Kakao?: { isInitialized?: () => boolean; Share?: { sendDefault: (o: unknown) => void } } }).Kakao;
+    const kakaoKey = import.meta.env.VITE_KAKAO_JS_KEY;
+    const kakao = (window as unknown as { Kakao?: { init?: (key: string) => void; isInitialized?: () => boolean; Share?: { sendDefault: (o: unknown) => void } } }).Kakao;
+    if (kakao && kakaoKey && !kakao.isInitialized?.()) {
+      kakao.init?.(kakaoKey);
+    }
     if (kakao?.isInitialized?.() && kakao.Share) {
       kakao.Share.sendDefault({ objectType: "text", text, link: { mobileWebUrl: window.location.href, webUrl: window.location.href } });
     } else {
@@ -318,6 +324,7 @@ export default function LeagueTournamentMatchOrder() {
   const [editMode, setEditMode] = useState(false);
   const [registerTarget, setRegisterTarget] = useState<{ matchId: string; slot: "a" | "b" } | null>(null);
   const [participantSearch, setParticipantSearch] = useState("");
+  const [startedMatchIds, setStartedMatchIds] = useState<string[]>([]);
 
   const { data: leagueData } = useGetLeagueQuery(id!);
   const { data: matchesData, isLoading } = useGetLeagueMatchesQuery(id!, { pollingInterval: 15000 });
@@ -378,8 +385,19 @@ export default function LeagueTournamentMatchOrder() {
     if (!tab) return [];
     return matches
       .filter((m) => (m.bracket ?? "upper") === tab.bracket && m.round_number === tab.roundNumber)
-      .sort((a, b) => a.match_order - b.match_order);
-  }, [matches, tabs, activeTab]);
+      .sort((a, b) => {
+        const aStartedIndex = startedMatchIds.indexOf(a.id);
+        const bStartedIndex = startedMatchIds.indexOf(b.id);
+        if (aStartedIndex !== -1 || bStartedIndex !== -1) {
+          if (aStartedIndex === -1) return 1;
+          if (bStartedIndex === -1) return -1;
+          return aStartedIndex - bStartedIndex;
+        }
+        if (a.status === "playing" && b.status !== "playing") return -1;
+        if (a.status !== "playing" && b.status === "playing") return 1;
+        return a.match_order - b.match_order;
+      });
+  }, [matches, tabs, activeTab, startedMatchIds]);
 
   // ── 시드맵 ────────────────────────────────────────────────────────────────
   const seedMap = useMemo(() => {
@@ -510,6 +528,7 @@ export default function LeagueTournamentMatchOrder() {
               seedB={seed?.b}
               isR1={isCurrentR1}
               manualSeeding={manualSeeding}
+              onMatchStarted={(matchId) => setStartedMatchIds((ids) => [matchId, ...ids.filter((id) => id !== matchId)])}
               onRegister={(matchId, slot) => {
                 setRegisterTarget({ matchId, slot });
                 setParticipantSearch("");

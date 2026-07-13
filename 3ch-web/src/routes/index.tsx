@@ -22,6 +22,7 @@ import SignUp from "../pages/sign/SignUp";
 import AuthSuccess from "../pages/util/AuthSuccess";
 import AuthFail from "../pages/util/AuthFail";
 import LeagueCreationWizard from "../pages/league/LeagueCreationWizard";
+import LeagueRenewalCreationWizard from "../pages/league/LeagueRenewalCreationWizard";
 import MyPage from "../pages/mypage/MyPage.tsx"
 import SocialSignUp from "../pages/sign/SocialSignUp.tsx";
 import GroupMain from "../pages/group/GroupMain";
@@ -41,6 +42,9 @@ import LeagueDetail from "../pages/league/LeagueDetail";
 import LeagueBracket from "../pages/league/LeagueBracket.tsx";
 import LeagueGrouping from "../pages/league/LeagueGrouping";
 import LeagueOmrSheet from "../pages/league/LeagueOmrSheet";
+import LeagueOcrSheet from "../pages/league/LeagueOcrSheet";
+import LeagueOpenAIVisionSheet from "../pages/league/LeagueOpenAIVisionSheet";
+import LeagueGPTVisionSheet from "../pages/league/LeagueGPTVisionSheet";
 import LeagueMatchOrder from "../pages/league/LeagueMatchOrder";
 import LeagueTournamentGenerate from "../pages/league/LeagueTournamentGenerate";
 import LeagueTournamentList from "../pages/league/LeagueTournamentList";
@@ -85,10 +89,14 @@ export const router = createBrowserRouter([
       { path: "/login", element: <Login />},
       { path: "/signup", element: <SignUp />},
       { path: "/league", element: <LeagueCreationWizard /> },
+      { path: "/league/renewal", element: <LeagueRenewalCreationWizard /> },
       { path: "/league/:id", element: <LeagueDetail /> },
       { path: "/league/:id/bracket", element: <LeagueBracket /> },
       { path: "/league/:id/grouping", element: <LeagueGrouping /> },
       { path: "/league/:id/omr", element: <LeagueOmrSheet /> },
+      { path: "/league/:id/ocr", element: <LeagueOcrSheet /> },
+      { path: "/league/:id/openai-vision", element: <LeagueOpenAIVisionSheet /> },
+      { path: "/league/:id/gpt-vision", element: <LeagueGPTVisionSheet /> },
       { path: "/league/:id/tournament", element: <LeagueTournamentList /> },
       { path: "/league/:id/tournament/new", element: <LeagueTournamentGenerate /> },
       { path: "/league/:id/tournament/bracket", element: <LeagueTournamentBracket /> },

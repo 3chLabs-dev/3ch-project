@@ -31,7 +31,7 @@ const LeagueStep4Rules: React.FC = () => {
   const format = useAppSelector((s) => s.leagueCreation.step3Format?.format);
   const selectedType = useAppSelector((s) => s.leagueCreation.step2Type?.selectedType);
   const existing = useAppSelector((s) => s.leagueCreation.step4Rules?.rule ?? "");
-  const isClubEvent = selectedType === "club_exchange" || format === "event-program";
+  const isClubEvent = selectedType === "club_event" || format === "event-program";
 
   const [rule, setRule] = useState<LeagueRuleValue | "">(existing);
   const visibleRules = useMemo(

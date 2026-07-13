@@ -1026,12 +1026,11 @@ export default function LeagueMatchOrder() {
         <Box
           sx={{
             position: "fixed",
-            left: 16,
-            right: 16,
+            left: "50%",
+            transform: "translateX(-50%)",
             bottom: "calc(72px + env(safe-area-inset-bottom))",
             zIndex: 1200,
-            maxWidth: 393,
-            mx: "auto",
+            width: "min(calc(100% - 32px), 393px)",
           }}
         >
           <Button
@@ -1055,13 +1054,13 @@ export default function LeagueMatchOrder() {
       )}
 
       <Tooltip title="상단으로">
-        <IconButton onClick={scrollToTop} sx={{ position: "absolute", bottom: 117, right: 14, zIndex: 10, bgcolor: "#fff", color: "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: "#F3F4F6" } }}>
+        <IconButton onClick={scrollToTop} sx={{ position: "absolute", bottom: "calc(202px + env(safe-area-inset-bottom))", right: 14, zIndex: 10, bgcolor: "#fff", color: "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: "#F3F4F6" } }}>
           <ArrowUpwardIcon sx={{ fontSize: 18 }} />
         </IconButton>
       </Tooltip>
 
       <Tooltip title="새로고침">
-        <IconButton onClick={handleRefresh} sx={{ position: "absolute", bottom: 67, right: 14, zIndex: 10, bgcolor: "#fff", color: "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: "#F3F4F6" } }}>
+        <IconButton onClick={handleRefresh} sx={{ position: "absolute", bottom: "calc(252px + env(safe-area-inset-bottom))", right: 14, zIndex: 10, bgcolor: "#fff", color: "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: "#F3F4F6" } }}>
           <RefreshIcon sx={{ fontSize: 18 }} />
         </IconButton>
       </Tooltip>

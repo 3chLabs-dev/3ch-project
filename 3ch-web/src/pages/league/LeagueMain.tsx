@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { Link as RouterLink, useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { resetLeagueCreation, setStep, setGroupId, setPreferredGroupId } from "../../features/league/leagueCreationSlice";
+import { resetRenewalLeagueCreation, setRenewalGroupId, setRenewalStep } from "../../features/league/leagueRenewalCreationSlice";
 import { useGetMyGroupsQuery } from "../../features/group/groupApi";
 import { useGetLeaguesQuery } from "../../features/league/leagueApi";
 import type { LeagueListItem } from "../../features/league/leagueApi";
@@ -18,6 +19,7 @@ type LeagueStatus = "scheduled" | "active" | "completed";
 
 export default function LeagueMainBody() {
   const dispatch = useAppDispatch();
+  const navigate = useNavigate();
   const token = useAppSelector((s) => s.auth.token);
   const preferredGroupId = useAppSelector((s) => s.leagueCreation.preferredGroupId);
   const isLoggedIn = !!token;
@@ -68,6 +70,15 @@ export default function LeagueMainBody() {
     dispatch(setGroupId(selectedGroup.id));
     dispatch(setPreferredGroupId(selectedGroup.id));
     dispatch(setStep(1));
+  };
+
+  const handleCreateRenewalLeague = () => {
+    if (!canCreate || !selectedGroup) return;
+    dispatch(resetRenewalLeagueCreation());
+    dispatch(setRenewalGroupId(selectedGroup.id));
+    dispatch(setPreferredGroupId(selectedGroup.id));
+    dispatch(setRenewalStep(1));
+    navigate("/league/renewal");
   };
 
   // 필터 조건
@@ -178,13 +189,22 @@ export default function LeagueMainBody() {
       />
 
       {canCreate && (
-        <Button
-          fullWidth variant="contained" disableElevation
-          onClick={handleCreateNewLeague}
-          sx={{ borderRadius: 1, fontWeight: 700 }}
-        >
-          신규 생성
-        </Button>
+        <Stack spacing={1}>
+          <Button
+            fullWidth variant="contained" disableElevation
+            onClick={handleCreateNewLeague}
+            sx={{ borderRadius: 1, fontWeight: 700 }}
+          >
+            신규 생성
+          </Button>
+          <Button
+            fullWidth variant="outlined" disableElevation
+            onClick={handleCreateRenewalLeague}
+            sx={{ borderRadius: 1, fontWeight: 700 }}
+          >
+            리뉴얼 생성 테스트
+          </Button>
+        </Stack>
       )}
 
       {/* 대회 일정 */}

@@ -126,6 +126,8 @@ export default function SupportChat() {
   };
 
   if (location.pathname === "/mypage/inquiry") return null;
+  const isProgramMatchOrder = location.pathname.endsWith("/program/matches");
+  const isLeagueDetail = /^\/league\/[^/]+\/?$/.test(location.pathname);
 
   return (
     <>
@@ -136,7 +138,11 @@ export default function SupportChat() {
           position: "absolute",
           zIndex: 21,
           right: 14,
-          bottom: "calc(68px + env(safe-area-inset-bottom))",
+          bottom: isProgramMatchOrder
+            ? "calc(132px + env(safe-area-inset-bottom))"
+            : isLeagueDetail
+              ? "calc(124px + env(safe-area-inset-bottom))"
+              : "calc(68px + env(safe-area-inset-bottom))",
           minWidth: 0,
           height: 54,
           px: 1.2,

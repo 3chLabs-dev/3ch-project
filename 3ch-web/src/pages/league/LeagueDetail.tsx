@@ -191,6 +191,7 @@
     const isPublicLeague = league?.join_permission === "public";
     const canInteract = isMember || isPublicLeague;
     const isClubEventLeague = league?.type === "클럽 이벤트" || league?.type === "클럽 교류전";
+    const isEventProgramFormat = league?.format === "이벤트 프로그램" || league?.format === "프로그램별 설정";
     const canViewProgram = isClubEventLeague && (canManage || (!canManage && league?.status === "active"));
 
     // const isEditing = canManage;
@@ -211,7 +212,7 @@
     };
 
     const rawParticipants = participantData?.participants ?? [];
-    const hasEventProgram = league?.format === "이벤트 프로그램" && Boolean(programData?.program);
+    const hasEventProgram = isEventProgramFormat && Boolean(programData?.program);
 
     const resetEventProgramBeforeParticipantChange = async () => {
       if (!id || !hasEventProgram) return true;
@@ -370,7 +371,7 @@
     };
 
     const getProgressPath = () => {
-      if (league?.format === "이벤트 프로그램") {
+      if (isEventProgramFormat) {
         const hasProgram = Boolean(programData?.program);
         const activeRound = Number.parseInt(localStorage.getItem(`league-program-active-round-${id}`) ?? "1", 10) || 1;
         return hasProgram
@@ -1141,7 +1142,7 @@ const handleSaveEdit = async () => {
               </Button>
             </Stack>
           )}
-          {league.format !== "이벤트 프로그램" && ((!canManage  && league.status === "active") || canManage) && (
+          {!isEventProgramFormat && ((!canManage  && league.status === "active") || canManage) && (
             league.format === "조별리그" && (
               <Stack spacing={1} sx={{ mt: 1 }}>
                 <Button
@@ -1165,7 +1166,7 @@ const handleSaveEdit = async () => {
               </Button>
             </Stack>
           )}
-          {league.format !== "이벤트 프로그램" && league.format !== "OCR 텍스트 인식" && ((!canManage  && league.status === "active") || canManage) && (
+          {!isEventProgramFormat && league.format !== "OCR 텍스트 인식" && ((!canManage  && league.status === "active") || canManage) && (
             league.format === "단일리그 + 토너먼트" ? (
               <Stack spacing={1} sx={{ mt: 1 }}>
                 <Button

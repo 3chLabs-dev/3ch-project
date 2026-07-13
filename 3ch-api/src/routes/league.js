@@ -954,6 +954,7 @@ const createLeagueSchema = z.object({
   advance_count: z.number().int().min(1).optional(), // 진출 수
   advance_method: z.string().optional(),          // 진출 방식
   finals_advance: z.number().int().min(2).optional(), // 결승 진출
+  program_data: z.unknown().optional(),
 });
 
 const updateLeagueSchema = z.object({
@@ -1185,6 +1186,7 @@ router.post('/league', requireAuth, async (req, res) => {
       advance_count,
       advance_method,
       finals_advance,
+      program_data,
     } = createLeagueSchema.parse(req.body);
 
     const userId = req.user.sub;
@@ -3322,6 +3324,14 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
     );
     if (leagueRow.rowCount === 0) {
       return res.status(403).json({ message: 'Vision 인식은 리그 생성자 또는 클럽 운영진만 사용할 수 있습니다.' });
+    }
+
+    if (program_data) {
+      await client.query(
+        `INSERT INTO league_programs (league_id, program_data, created_by_id)
+         VALUES ($1, $2::jsonb, $3)`,
+        [leagueId, JSON.stringify(program_data), userId],
+      );
     }
 
     const joinPermission = leagueRow.rows[0].join_permission;

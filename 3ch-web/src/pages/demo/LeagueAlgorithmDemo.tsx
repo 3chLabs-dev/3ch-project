@@ -6,7 +6,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { generateGroupOptions } from '../../features/league/algorithms/generateGroupOptions';
 import { useGetLeagueParticipantsQuery, useGetLeagueProgramQuery, useSaveLeagueProgramMutation, useSyncLeagueProgramMatchesMutation } from '../../features/league/leagueApi';
 import type { ProgramBlock, ProgramOption, ProgramType, TeamMatchType, RoundConfig } from '../../features/league/types/tournament.types';
-import { ToggleButton, ToggleButtonGroup, Button, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Chip, Checkbox, CircularProgress } from "@mui/material";
+import { ToggleButton, ToggleButtonGroup, Button, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Chip, Radio, CircularProgress } from "@mui/material";
 import { DndContext, PointerSensor, TouchSensor, useSensor, useSensors, closestCenter,
   type DragEndEvent, } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove, } from "@dnd-kit/sortable";
@@ -511,10 +511,30 @@ function RoundConfigEditor({
 }
 interface LeagueAlgorithmDemoProps {
   initialPlayerCount?: number;
+  initialCourtCount?: number;
+  initialStartTime?: string;
+  initialEndTime?: string;
+  embedded?: boolean;
+  hideSetupInputs?: boolean;
+  hideFormationActions?: boolean;
+  hideHeader?: boolean;
+  hideModeTabs?: boolean;
+  onComplete?: (program: ProgramOption) => void;
+  onBack?: () => void;
 }
 
 const LeagueAlgorithmDemo = ({
   initialPlayerCount = 24,
+  initialCourtCount = 4,
+  initialStartTime = "09:00",
+  initialEndTime = "15:00",
+  embedded: _embedded = false,
+  hideSetupInputs = false,
+  hideFormationActions = false,
+  hideHeader = false,
+  hideModeTabs = false,
+  onComplete,
+  onBack,
 }: LeagueAlgorithmDemoProps) => {
   const navigate = useNavigate();
   const { id: leagueId } = useParams<{ id: string }>();
@@ -531,11 +551,11 @@ const LeagueAlgorithmDemo = ({
   const [saveLeagueProgram] = useSaveLeagueProgramMutation();
   const [syncLeagueProgramMatches] = useSyncLeagueProgramMatchesMutation();
   const [playerCount, setPlayerCount] = useState(initialPlayerCount);
-  const [courtCount, setCourtCount] = useState(4);
-  const [startHour, setStartHour] = useState(9);
-  const [startMinute, setStartMinute] = useState(0);
-  const [endHour, setEndHour] = useState(15);
-  const [endMinute, setEndMinute] = useState(0);
+  const [courtCount, setCourtCount] = useState(initialCourtCount);
+  const [startHour, setStartHour] = useState(Number(initialStartTime.split(":" )[0]) || 9);
+  const [startMinute, setStartMinute] = useState(Number(initialStartTime.split(":" )[1]) || 0);
+  const [endHour, setEndHour] = useState(Number(initialEndTime.split(":" )[0]) || 15);
+  const [endMinute, setEndMinute] = useState(Number(initialEndTime.split(":" )[1]) || 0);
   const [teamPlayerCount] = useState(4);
   const [singlesEnabled] = useState(true);
   const [doublesEnabled] = useState(true);
@@ -593,6 +613,12 @@ const LeagueAlgorithmDemo = ({
     blockIndex: number;
     mode: "team" | "group";
   } | null>(null);
+
+  useEffect(() => {
+    if (hideSetupInputs) {
+      setIsProgramGenerated(true);
+    }
+  }, [hideSetupInputs]);
   const [pendingGroupSizes, setPendingGroupSizes] = useState<number[]>([]);
   const [groupResultDialog, setGroupResultDialog] = useState<{
     optionIndex: number;
@@ -995,6 +1021,11 @@ const LeagueAlgorithmDemo = ({
       },
     };
 
+    if (onComplete) {
+      onComplete(selectedOption);
+      return;
+    }
+
     if (leagueId) {
       localStorage.setItem(
         `league-program-${leagueId}`,
@@ -1320,6 +1351,7 @@ const LeagueAlgorithmDemo = ({
       }}
     >
       <div
+        hidden={hideHeader}
         style={{
           display: "flex",
           alignItems: "center",
@@ -1329,7 +1361,9 @@ const LeagueAlgorithmDemo = ({
         <IconButton
           size="small"
           onClick={() => {
-            if (leagueId) {
+            if (onBack) {
+              onBack();
+            } else if (leagueId) {
               navigate(`/league/${leagueId}/program`);
             } else {
               navigate(-1);
@@ -1354,7 +1388,7 @@ const LeagueAlgorithmDemo = ({
         </div>
       </div>
 
-      <div style={{ marginTop: '24px' }}>
+      <div style={{ marginTop: '24px', display: hideSetupInputs ? "none" : undefined }}>
         <div style={{
           fontWeight: 700,
           marginBottom: '8px',
@@ -1386,7 +1420,7 @@ const LeagueAlgorithmDemo = ({
         />
       </div>
 
-      <div style={{ marginTop: '24px' }}>
+      <div style={{ marginTop: '24px', display: hideSetupInputs ? "none" : undefined }}>
         <div style={{
           fontWeight: 700,
           marginBottom: '8px',
@@ -1418,7 +1452,7 @@ const LeagueAlgorithmDemo = ({
         />
       </div>
 
-      <div style={{ marginTop: "24px" }}>
+      <div style={{ marginTop: "24px", display: hideSetupInputs ? "none" : undefined }}>
         <div
           style={{
             fontWeight: 700,
@@ -1530,7 +1564,7 @@ const LeagueAlgorithmDemo = ({
             setIsGeneratingProgram(false);
           }, 600);
         }}
-        style={{ marginTop: "30px" }}
+        style={{ marginTop: "30px", display: hideSetupInputs ? "none" : undefined }}
       >
         프로그램 생성하기
       </Button>
@@ -1548,7 +1582,7 @@ const LeagueAlgorithmDemo = ({
         </div>
       )}
 
-      {isProgramGenerated && !isGeneratingProgram && (
+      {isProgramGenerated && !isGeneratingProgram && !hideModeTabs && (
       <div style={{ marginTop: "60px" }}>
         <ToggleButtonGroup
           exclusive
@@ -2093,7 +2127,7 @@ const LeagueAlgorithmDemo = ({
           minWidth: 0,
         }}
       >
-        <Checkbox
+        <Radio
           checked={selectedProgramOptionIndex === index}
           onChange={() => setSelectedProgramOptionIndex(index)}
           onClick={(event) => event.stopPropagation()}
@@ -2300,7 +2334,7 @@ const LeagueAlgorithmDemo = ({
               {formatTime(blockEndMinutes)}
             </div>
 
-            {block.type === "TEAM" && (
+            {!hideFormationActions && block.type === "TEAM" && (
               <div
                 style={{
                   display: "flex",
@@ -2346,7 +2380,7 @@ const LeagueAlgorithmDemo = ({
               </div>
             )}
 
-            {block.format === "GROUP" && (
+            {!hideFormationActions && block.format === "GROUP" && (
               <div
                 style={{
                   display: "flex",

@@ -6,6 +6,7 @@ on:
     paths:
       - "3ch-api/**"
       - ".github/workflows/deploy-api.yml"
+  workflow_dispatch:
 
 jobs:
   deploy:

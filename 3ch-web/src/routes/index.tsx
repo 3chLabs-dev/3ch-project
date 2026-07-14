@@ -22,6 +22,7 @@ import SignUp from "../pages/sign/SignUp";
 import AuthSuccess from "../pages/util/AuthSuccess";
 import AuthFail from "../pages/util/AuthFail";
 import LeagueRenewalCreationWizard from "../pages/league/LeagueRenewalCreationWizard";
+import LeagueMain from "../pages/league/LeagueMain";
 import MyPage from "../pages/mypage/MyPage.tsx"
 import SocialSignUp from "../pages/sign/SocialSignUp.tsx";
 import GroupMain from "../pages/group/GroupMain";
@@ -86,7 +87,8 @@ export const router = createBrowserRouter([
       { path: "/", element: <Home /> },
       { path: "/login", element: <Login />},
       { path: "/signup", element: <SignUp />},
-      { path: "/league", element: <LeagueRenewalCreationWizard /> },
+      { path: "/league", element: <LeagueMain /> },
+      { path: "/league/new", element: <LeagueRenewalCreationWizard /> },
       { path: "/league/renewal", element: <LeagueRenewalCreationWizard /> },
       { path: "/league/:id", element: <LeagueDetail /> },
       { path: "/league/:id/bracket", element: <LeagueGPTVisionSheet /> },

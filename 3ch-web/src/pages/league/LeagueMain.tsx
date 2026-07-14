@@ -19,6 +19,7 @@ type LeagueStatus = "scheduled" | "active" | "completed";
 
 export default function LeagueMainBody() {
   const dispatch = useAppDispatch();
+  const navigate = useNavigate();
   const token = useAppSelector((s) => s.auth.token);
   const preferredGroupId = useAppSelector((s) => s.leagueCreation.preferredGroupId);
   const isLoggedIn = !!token;
@@ -69,6 +70,7 @@ export default function LeagueMainBody() {
     dispatch(setRenewalGroupId(selectedGroup.id));
     dispatch(setPreferredGroupId(selectedGroup.id));
     dispatch(setRenewalStep(1));
+    navigate("/league/new");
   };
 
   // 필터 조건

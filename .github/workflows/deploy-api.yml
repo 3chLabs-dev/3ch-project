@@ -7,6 +7,11 @@ on:
       - "3ch-api/**"
       - ".github/workflows/deploy-api.yml"
   workflow_dispatch:
+    inputs:
+      reason:
+        description: "Manual deployment reason (optional)"
+        required: false
+        type: string
 
 jobs:
   deploy:

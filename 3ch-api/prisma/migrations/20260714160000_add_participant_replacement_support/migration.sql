@@ -5,9 +5,9 @@ ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'active',
 ADD COLUMN IF NOT EXISTS withdrawn_at TIMESTAMP(3);
 
 CREATE TABLE IF NOT EXISTS league_participant_replacements (
-  id UUID PRIMARY KEY,
-  league_id UUID NOT NULL REFERENCES leagues(id) ON DELETE CASCADE,
-  participant_id UUID NOT NULL REFERENCES league_participants(id) ON DELETE CASCADE,
+  id TEXT PRIMARY KEY,
+  league_id TEXT NOT NULL REFERENCES leagues(id) ON DELETE CASCADE,
+  participant_id TEXT NOT NULL REFERENCES league_participants(id) ON DELETE CASCADE,
   previous_member_id INTEGER,
   previous_name VARCHAR(255) NOT NULL,
   previous_division VARCHAR(50),

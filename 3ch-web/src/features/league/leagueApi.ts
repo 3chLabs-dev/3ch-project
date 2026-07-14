@@ -26,6 +26,8 @@ export interface CreateLeagueRequest {
   type: string;
   sport: string;
   start_date: string;
+  end_date?: string | null;
+  court_count?: number | null;
   rules?: string;
 }
 
@@ -37,6 +39,8 @@ export interface UpdateLeagueRequest {
   format?: string;
   sport?: string;
   start_date?: string;
+  end_date?: string | null;
+  court_count?: number | null;
   rules?: string;
   notice?: string;
   sort_order?: string;
@@ -64,6 +68,8 @@ export interface League {
   format?: string;
   sport: string;
   start_date: string;
+  end_date?: string | null;
+  court_count?: number | null;
   rules?: string;
   notice?: string;
   sort_order?: string;
@@ -112,6 +118,7 @@ export interface LeagueParticipantItem {
   sort_order?: number | null;
   created_at: string;
   group_name?: string | null;
+  status?: "active" | "withdrawn";
 }
 
 export interface GetLeagueParticipantsResponse {
@@ -178,6 +185,14 @@ export interface UpdateParticipantResponse {
 
 export interface DeleteParticipantResponse {
   message: string;
+}
+
+export interface ReplaceParticipantRequest {
+  leagueId: string;
+  participantId: string;
+  division: string;
+  name: string;
+  member_id?: number | null;
 }
 
 export interface LeagueMatch {
@@ -350,6 +365,12 @@ export interface ScanOcrResponse {
 export interface AddParticipantsRequest {
   leagueId: string;
   participants: { division: string; name: string; member_id?: number | null }[];
+  placement?: {
+    kind: "tournament";
+    program_round: number;
+    match_id: string;
+    slot: "a" | "b";
+  };
 }
 
 export interface AddParticipantsResponse {
@@ -558,8 +579,44 @@ export const leagueApi = baseApi.injectEndpoints({
       ],
     }),
 
+    replaceParticipant: builder.mutation<UpdateParticipantResponse, ReplaceParticipantRequest>({
+      async queryFn({ leagueId, participantId, ...body }, api, _extraOptions, fetchWithBQ) {
+        const token = (api.getState() as RootState).auth?.token;
+        if (isLocalDevToken(token) || (import.meta.env.DEV && Boolean(getLocalDevLeague(leagueId)))) {
+          const participant = updateLocalDevParticipant(leagueId, participantId, body);
+          return participant
+            ? { data: { message: "replaced", participant } }
+            : { error: { status: 404, data: "Not Found" } };
+        }
+        const result = await fetchWithBQ({
+          url: `/league/${leagueId}/participants/${participantId}/replace`,
+          method: "POST",
+          body,
+        });
+        return result.error ? { error: result.error } : { data: result.data as UpdateParticipantResponse };
+      },
+      async onQueryStarted({ leagueId, participantId, ...body }, { dispatch, queryFulfilled }) {
+        const patchResult = dispatch(
+          leagueApi.util.updateQueryData("getLeagueParticipants", leagueId, (draft) => {
+            const participant = draft.participants.find((item) => item.id === participantId);
+            if (participant) Object.assign(participant, body);
+          }),
+        );
+        try {
+          await queryFulfilled;
+        } catch {
+          patchResult.undo();
+        }
+      },
+      invalidatesTags: (_result, _error, { leagueId }) => [
+        { type: "League", id: leagueId },
+        { type: "League", id: "LIST" },
+        { type: "League", id: `matches-${leagueId}` },
+      ],
+    }),
+
     addParticipants: builder.mutation<AddParticipantsResponse, AddParticipantsRequest>({
-      async queryFn({ leagueId, participants }, api, _extraOptions, fetchWithBQ) {
+      async queryFn({ leagueId, participants, placement }, api, _extraOptions, fetchWithBQ) {
         const token = (api.getState() as RootState).auth?.token;
         if (isLocalDevToken(token)) {
           return { data: { message: "created", participants: addLocalDevParticipants({ leagueId, participants }) } };
@@ -567,7 +624,7 @@ export const leagueApi = baseApi.injectEndpoints({
         const result = await fetchWithBQ({
           url: `/league/${leagueId}/participants`,
           method: "POST",
-          body: { participants },
+          body: { participants, placement },
         });
         return result.error ? { error: result.error } : { data: result.data as AddParticipantsResponse };
       },
@@ -895,6 +952,7 @@ export const {
   useUpdateLeagueMutation,
   useUpdateParticipantMutation,
   useDeleteParticipantMutation,
+  useReplaceParticipantMutation,
   useAddParticipantsMutation,
   useDeleteLeagueMutation,
   useGetLeagueProgramQuery,

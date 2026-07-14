@@ -162,6 +162,10 @@ export const createRenewalLeague = createAsyncThunk.withTypes<{ state: RootState
       };
     }
     if (!programData) throw new Error("이벤트 프로그램을 선택해주세요.");
+    programData = {
+      ...programData,
+      compositionMode: state.compositionMode,
+    } as ProgramOption & { compositionMode: "recommend" | "custom" };
 
     const requestBody = {
       name: state.basicInfo.title,
@@ -171,6 +175,10 @@ export const createRenewalLeague = createAsyncThunk.withTypes<{ state: RootState
       format: formatMap["event-program"],
       sport: "탁구",
       start_date: new Date(`${state.basicInfo.date}T${state.basicInfo.startTime}:00`).toISOString(),
+      end_date: state.basicInfo.endTime
+        ? new Date(`${state.basicInfo.date}T${state.basicInfo.endTime}:00`).toISOString()
+        : undefined,
+      court_count: state.basicInfo.courtCount ?? undefined,
       rules: "프로그램별 설정",
       recruit_count: state.basicInfo.participantCount ?? 0,
       participant_count: state.participants.length,

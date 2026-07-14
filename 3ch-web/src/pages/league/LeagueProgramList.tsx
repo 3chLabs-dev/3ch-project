@@ -93,7 +93,7 @@ function getProgramBracketLabel() {
   return "대진표 보기";
 }
 
-export default function LeagueProgramList() {
+export default function LeagueProgramList({ embedded = false }: { embedded?: boolean }) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: leagueData, isLoading: leagueLoading } = useGetLeagueQuery(id!);
@@ -233,7 +233,8 @@ export default function LeagueProgramList() {
   }
 
   return (
-    <Box sx={{ maxWidth: 500, mx: "auto", pb: 8 }}>
+    <Box sx={{ maxWidth: 500, mx: "auto", pb: embedded ? 0 : 8 }}>
+      {!embedded && <>
       <Stack direction="row" alignItems="center" sx={{ px: 1, pt: 1.5, pb: 1 }}>
         <IconButton size="small" onClick={() => navigate(`/league/${id}`)} sx={{ mr: 0.5 }}>
           <ArrowBackIcon fontSize="small" />
@@ -272,14 +273,15 @@ export default function LeagueProgramList() {
           {league.rules && <Chip label={league.rules} size="small" sx={{ fontSize: 11, fontWeight: 700, bgcolor: "#F1F5F9", color: "#475569", height: 24 }} />}
         </Stack>
       )}
+      </>}
 
-      <Box sx={{ px: 2 }}>
+      <Box sx={{ px: embedded ? 0 : 2 }}>
         {hasProgram ? (
-          <Box sx={{ bgcolor: "#fff", border: "1px solid #E5E7EB", borderRadius: 2, overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
-            <Box sx={{ height: 4, bgcolor: "#2563EB", borderRadius: "8px 8px 0 0" }} />
+          <Box sx={{ bgcolor: "#fff", border: embedded ? 0 : "1px solid #E5E7EB", borderRadius: embedded ? 0 : 2, overflow: "hidden", boxShadow: embedded ? "none" : "0 1px 4px rgba(0,0,0,0.05)" }}>
+            {!embedded && <Box sx={{ height: 4, bgcolor: "#2563EB", borderRadius: "8px 8px 0 0" }} />}
 
-            <Box sx={{ px: 2.5, pt: 2, pb: 2 }}>
-              <Stack direction="row" alignItems="center" spacing={1.5} mb={1.5}>
+            <Box sx={{ px: embedded ? 0 : 2.5, pt: embedded ? 0.5 : 2, pb: embedded ? 1 : 2 }}>
+              {!embedded && <Stack direction="row" alignItems="center" spacing={1.5} mb={1.5}>
                 <Box sx={{ width: 40, height: 40, borderRadius: 2, bgcolor: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   <AccountTreeOutlinedIcon sx={{ fontSize: 20, color: "#2563EB" }} />
                 </Box>
@@ -293,13 +295,13 @@ export default function LeagueProgramList() {
                     </Typography>
                   )}
                 </Box>
-              </Stack>
+              </Stack>}
 
-              <Stack direction="row" spacing={0.75} flexWrap="wrap" mb={2}>
+              {(bracketSizeLabel || advancementLabel || (!embedded && seedingLabel)) && <Stack direction="row" spacing={0.75} flexWrap="wrap" mb={2}>
                 {bracketSizeLabel && <Chip label={bracketSizeLabel} size="small" sx={{ fontSize: 11, fontWeight: 700, bgcolor: "#EFF6FF", color: "#2563EB", height: 22, border: "1px solid #BFDBFE" }} />}
                 {advancementLabel && <Chip label={advancementLabel} size="small" sx={{ fontSize: 11, fontWeight: 700, bgcolor: "#F5F3FF", color: "#7C3AED", height: 22, border: "1px solid #DDD6FE" }} />}
-                {seedingLabel && <Chip label={`시드: ${seedingLabel}`} size="small" sx={{ fontSize: 11, fontWeight: 700, bgcolor: "#F0FDF4", color: "#16A34A", height: 22, border: "1px solid #BBF7D0" }} />}
-              </Stack>
+                {!embedded && seedingLabel && <Chip label={`시드: ${seedingLabel}`} size="small" sx={{ fontSize: 11, fontWeight: 700, bgcolor: "#F0FDF4", color: "#16A34A", height: 22, border: "1px solid #BBF7D0" }} />}
+              </Stack>}
 
               <Stack spacing={1}>
                 {programRounds.map((round) => (
@@ -359,7 +361,7 @@ export default function LeagueProgramList() {
                   </Box>
                 ))}
 
-                {canManage && (
+                {canManage && !embedded && (
                   <Stack direction="row" spacing={1}>
                     <Button
                       variant="outlined"

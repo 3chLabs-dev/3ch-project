@@ -104,6 +104,35 @@ const NEXT_STATUS: Record<string, "pending" | "playing" | "done"> = {
 
 const AUTO_COMPLETE_DELAY_MS = 4000;
 
+function getProgramTypeLabel(type?: string) {
+  if (type === "SINGLES") return "단식";
+  if (type === "DOUBLES") return "복식";
+  if (type === "TEAM") return "단체전";
+  return "";
+}
+
+function getProgramFormatLabel(format?: string) {
+  if (format === "LEAGUE") return "단일리그";
+  if (format === "GROUP") return "조별리그";
+  if (format === "TOURNAMENT") return "토너먼트";
+  return "";
+}
+
+function getProgramRuleLabel(rule?: string | null) {
+  if (rule === "BEST_OF_3" || rule?.includes("3전 2선승")) return "3전 2선승제";
+  if (rule === "BEST_OF_5" || rule?.includes("5전 3선승")) return "5전 3선승제";
+  if (rule === "THREE_SET" || rule?.includes("3세트")) return "3세트제";
+  return rule ?? "";
+}
+
+function getRuleDescription(rule?: string | null) {
+  if (rule?.includes("3전 2선승") || rule === "BEST_OF_3") return "세 번의 경기 중 두 번을 먼저 이기면 승리합니다.";
+  if (rule?.includes("5전 3선승") || rule === "BEST_OF_5") return "다섯 번의 경기 중 세 번을 먼저 이기면 승리합니다.";
+  if (rule?.includes("7전 4선승")) return "일곱 번의 경기 중 네 번을 먼저 이기면 승리합니다.";
+  if (rule?.includes("3세트") || rule === "THREE_SET") return "세 번의 경기를 모두 진행하며, 2 대 0인 경우에도 세 번째 경기를 진행합니다.";
+  return "경기 규칙에 따라 세트스코어를 입력합니다.";
+}
+
 const VISION_GUIDE_IMAGES = [
   "/og-image.png",
   "/128_첫번째 아이콘.png",
@@ -1622,6 +1651,11 @@ export default function LeagueGPTVisionSheet() {
   const leagueStarted = league.status === "completed"; // 완료 상태면 수정 버튼 숨김
   const date          = formatLeagueDate(league.start_date);
   const winScore      = getWinScore(league.rules);
+  const currentProgramBlock = programOption?.blocks?.[programRound - 1];
+  const currentRule = currentProgramBlock?.matchRule ?? league.rules;
+  const headerSummary = isProgramMode && currentProgramBlock
+    ? `${programRound}라운드 ${getProgramTypeLabel(currentProgramBlock.type)} ${getProgramFormatLabel(currentProgramBlock.format)} │ ${getProgramRuleLabel(currentRule)}`
+    : `${league.type} ${league.format} │ ${league.rules}`;
   const appliedScale  = autoFitScale * userZoom;
   const previewByPosition = new Map(previewCells.map((cell) => [`${cell.rowIndex}__${cell.columnIndex}`, cell]));
   // 줌 > 1이면 테이블이 화면을 초과 → 스크롤 가능하도록 시각적 크기를 spacer로 잡아줌
@@ -1651,9 +1685,18 @@ export default function LeagueGPTVisionSheet() {
         {/* 리그 정보 요약 + 규칙 설명 버튼 */}
         <Box sx={{ flex: 1, display: "flex", alignItems: "center", gap: 0.25, minWidth: 0 }}>
           <Typography sx={{ fontSize: 11, fontWeight: 600, lineHeight: 1.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {date} / {league.type} {league.format} / {league.rules}
+            {date} │ {headerSummary}
           </Typography>
-          <Tooltip title="경기 규칙 설명">
+          <Tooltip
+            title={(
+              <Box sx={{ py: 0.5 }}>
+                <Typography sx={{ fontSize: 12, fontWeight: 800, color: "inherit" }}>{getProgramRuleLabel(currentRule)}</Typography>
+                <Typography sx={{ mt: 0.25, fontSize: 11, lineHeight: 1.5, color: "inherit" }}>{getRuleDescription(currentRule)}</Typography>
+              </Box>
+            )}
+            arrow
+            slotProps={{ popper: { sx: { zIndex: 10001 } } }}
+          >
             <IconButton size="small" onClick={(e) => setRulesAnchor(rulesAnchor ? null : e.currentTarget)} sx={{ flexShrink: 0, p: 0.25 }}>
               <InfoOutlinedIcon sx={{ fontSize: 16, color: "#9CA3AF" }} />
             </IconButton>
@@ -1913,7 +1956,17 @@ export default function LeagueGPTVisionSheet() {
       <input ref={galleryInputRef} type="file" accept="image/*" hidden onChange={handleVisionFile} />
 
       <Dialog open={resultDialogOpen} onClose={() => !isScanning && setResultDialogOpen(false)} maxWidth="xs" fullWidth sx={{ zIndex: 10002 }} slotProps={{ paper: { sx: { borderRadius: 3, overflow: "hidden", width: "min(360px, calc(100% - 48px))", ...mobileDialogPaperSx } } }}>
-        <DialogTitle sx={{ fontSize: 16, fontWeight: 900, px: 2.5, py: 2 }}>작업 선택</DialogTitle>
+        <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 16, fontWeight: 900, pl: 2.5, pr: 1, py: 1.25 }}>
+          결과 등록
+          <IconButton
+            size="small"
+            aria-label="닫기"
+            disabled={isScanning}
+            onClick={() => setResultDialogOpen(false)}
+          >
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </DialogTitle>
         <DialogContent sx={{ p: 0, borderTop: "1px solid #E5E7EB" }}>
           <Box sx={{ px: 2.5, pt: 2 }}>
             <Box sx={{ position: "relative" }}>

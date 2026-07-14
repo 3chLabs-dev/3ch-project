@@ -62,6 +62,7 @@ type MemberEditDialogProps = {
   >;
 
   onOpenLoadMembers: () => void;
+  onReplaceParticipant: (participant: Participant) => void;
 };
 
 export default function MemberEditDialog({
@@ -79,6 +80,7 @@ export default function MemberEditDialog({
   handleParticipantFieldBlur,
   setDeleteParticipantTarget,
   onOpenLoadMembers,
+  onReplaceParticipant,
 }: MemberEditDialogProps) {
   return (
     <Dialog
@@ -137,7 +139,7 @@ export default function MemberEditDialog({
           <Box
             sx={{
               display: "grid",
-              gridTemplateColumns: "64px 1fr 40px 56px",
+              gridTemplateColumns: "58px minmax(0, 1fr) 36px 108px",
               px: 1.5,
               py: 0.8,
               bgcolor: "#F9FAFB",
@@ -159,7 +161,7 @@ export default function MemberEditDialog({
           <Box
             sx={{
               display: "grid",
-              gridTemplateColumns: "64px 1fr 40px 56px",
+              gridTemplateColumns: "58px minmax(0, 1fr) 36px 108px",
               gap: 0.8,
               px: 1.5,
               py: 0.8,
@@ -257,7 +259,7 @@ export default function MemberEditDialog({
                   key={p.id}
                   sx={{
                     display: "grid",
-                    gridTemplateColumns: "64px 1fr 40px 56px",
+                    gridTemplateColumns: "58px minmax(0, 1fr) 36px 108px",
                     alignItems: "center",
                     px: 1.5,
                     py: 0.9,
@@ -359,7 +361,15 @@ export default function MemberEditDialog({
                     </Box>
                   </Box>
 
-                  <Box sx={{ display: "flex", justifyContent: "center" }}>
+                  <Stack direction="row" spacing={0.5} sx={{ justifyContent: "center" }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => onReplaceParticipant(p)}
+                      sx={{ height: 28, minWidth: 0, px: 0.8, fontSize: 11, fontWeight: 700, borderRadius: 0.6 }}
+                    >
+                      교체
+                    </Button>
                     <Button
                       size="small"
                       variant="outlined"
@@ -374,15 +384,15 @@ export default function MemberEditDialog({
                       sx={{
                         height: 28,
                         minWidth: 0,
-                        px: 1,
-                        fontSize: 12,
+                        px: 0.8,
+                        fontSize: 11,
                         fontWeight: 700,
                         borderRadius: 0.6,
                       }}
                     >
                       삭제
                     </Button>
-                  </Box>
+                  </Stack>
                 </Box>
               );
             })

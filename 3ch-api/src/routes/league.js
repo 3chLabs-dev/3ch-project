@@ -942,6 +942,8 @@ const createLeagueSchema = z.object({
   format: z.string().optional(),
   sport: z.string().min(1, '스포츠 종목은 필수입니다.'),
   start_date: z.string().datetime('시작일은 올바른 ISO 8601 형식이어야 합니다.'),
+  end_date: z.string().datetime('종료일은 올바른 ISO 8601 형식이어야 합니다.').optional(),
+  court_count: z.number().int().min(1).optional(),
   rules: z.string().optional(),
   sort_order: z.string().optional(),
   recruit_count: z.number().int().min(0).default(0),
@@ -965,6 +967,8 @@ const updateLeagueSchema = z.object({
   format: z.string().optional(),
   sport: z.string().min(1, '스포츠 종목은 필수입니다.').optional(),
   start_date: z.string().datetime('시작일은 올바른 ISO 8601 형식이어야 합니다.').optional(),
+  end_date: z.string().datetime('종료일은 올바른 ISO 8601 형식이어야 합니다.').nullable().optional(),
+  court_count: z.number().int().min(1).nullable().optional(),
   rules: z.string().optional(),
   notice: z.string().optional(),
   sort_order: z.string().optional(),
@@ -1072,7 +1076,7 @@ router.get('/league', async (req, res) => {
 
     const listParams = [...params, limit, offset];
     const result = await pool.query(
-      `SELECT l.id, l.name, l.description, l.title, l.type, l.sport, l.start_date, l.status,
+      `SELECT l.id, l.name, l.description, l.title, l.type, l.sport, l.start_date, l.end_date, l.court_count, l.status,
               l.recruit_count, l.participant_count, l.group_id, l.created_at, l.league_code, l.title,
               u.name AS creator_name,
               g.name AS group_name
@@ -1174,6 +1178,8 @@ router.post('/league', requireAuth, async (req, res) => {
       format,
       sport,
       start_date,
+      end_date,
+      court_count,
       rules,
       sort_order,
       recruit_count,
@@ -1205,10 +1211,10 @@ router.post('/league', requireAuth, async (req, res) => {
     await client.query('BEGIN');
 
     const result = await client.query(
-      `INSERT INTO leagues (id, name, description, title, type, format, sport, start_date, rules, sort_order, recruit_count, participant_count, group_id, created_by_id, tournament_seeding, tournament_advancement, tournament_rules, advance_count, advance_method, finals_advance)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
-       RETURNING id, name, description, title, type, format, sport, start_date, status, rules, notice, sort_order, recruit_count, participant_count, group_id, tournament_seeding, tournament_advancement, tournament_rules, advance_count, advance_method, finals_advance, created_at, updated_at;`,
-      [leagueId, name, description, title, type, format, sport, start_date, rules, sort_order ?? null, recruit_count, participant_count, group_id, userId, tournament_seeding ?? null, tournament_advancement ?? null, tournament_rules ?? null, advance_count ?? null, advance_method ?? null, finals_advance ?? null],
+      `INSERT INTO leagues (id, name, description, title, type, format, sport, start_date, end_date, court_count, rules, sort_order, recruit_count, participant_count, group_id, created_by_id, tournament_seeding, tournament_advancement, tournament_rules, advance_count, advance_method, finals_advance)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+       RETURNING id, name, description, title, type, format, sport, start_date, end_date, court_count, status, rules, notice, sort_order, recruit_count, participant_count, group_id, tournament_seeding, tournament_advancement, tournament_rules, advance_count, advance_method, finals_advance, created_at, updated_at;`,
+      [leagueId, name, description, title, type, format, sport, start_date, end_date ?? null, court_count ?? null, rules, sort_order ?? null, recruit_count, participant_count, group_id, userId, tournament_seeding ?? null, tournament_advancement ?? null, tournament_rules ?? null, advance_count ?? null, advance_method ?? null, finals_advance ?? null],
     );
 
     const leagueCode = await assignLeagueCode(client, { groupId: group_id, startDate: start_date, leagueId });
@@ -1218,6 +1224,14 @@ router.post('/league', requireAuth, async (req, res) => {
         `INSERT INTO league_participants (id, league_id, division, name, member_id, paid, arrived, "after")
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
         [randomUUID(), leagueId, p.division ?? '', p.name, p.member_id ?? null, p.paid ?? false, p.arrived ?? false, p.after ?? false],
+      );
+    }
+
+    if (program_data) {
+      await client.query(
+        `INSERT INTO league_programs (league_id, program_data, created_by_id)
+         VALUES ($1, $2::jsonb, $3)`,
+        [leagueId, JSON.stringify(program_data), userId],
       );
     }
 
@@ -1304,9 +1318,9 @@ router.get('/league/:id/participants', optionalAuth, async (req, res) => {
 
     const { groupNameSelect, isLeaderSelect } = await buildParticipantSelectColumns();
     const result = await pool.query(
-      `SELECT id, league_id, division, name, member_id, paid, arrived, "after", sort_order, created_at, ${groupNameSelect}, ${isLeaderSelect}
+      `SELECT id, league_id, division, name, member_id, paid, arrived, "after", sort_order, status, created_at, ${groupNameSelect}, ${isLeaderSelect}
        FROM league_participants
-       WHERE league_id = $1
+       WHERE league_id = $1 AND status = 'active'
        ORDER BY sort_order ASC NULLS LAST, division ASC, created_at ASC`,
       [id],
     );
@@ -1416,10 +1430,33 @@ router.post('/league/:leagueId/participants', optionalAuth, async (req, res) => 
       member_id: z.number().int().nullable().optional(),
     }));
     const participants = addSchema.parse(rawParticipants);
+    const placement = z.object({
+      kind: z.literal('tournament'),
+      program_round: z.number().int().min(1),
+      match_id: z.string().min(1),
+      slot: z.enum(['a', 'b']),
+    }).optional().parse(req.body.placement);
+
+    const programRow = await pool.query(
+      `SELECT program_data FROM league_programs WHERE league_id = $1`,
+      [leagueId],
+    );
+    const programData = programRow.rows[0]?.program_data ?? null;
+    const programBlocks = Array.isArray(programData?.blocks) ? programData.blocks : [];
+    const placementBlock = placement ? programBlocks[placement.program_round - 1] : null;
+    const validTournamentPlacement = placement && participants.length === 1 &&
+      placementBlock?.type === 'SINGLES' && placementBlock?.format === 'TOURNAMENT';
+    if (programBlocks.length > 0 &&
+        !programBlocks.every((block) => block?.type === 'SINGLES' && block?.format === 'LEAGUE') &&
+        !validTournamentPlacement) {
+      return res.status(409).json({
+        message: '해당 프로그램에서는 참가자를 추가할 위치를 먼저 선택해야 합니다.',
+      });
+    }
 
     // 정원 초과 체크
     const leagueInfo = await pool.query(
-      `SELECT recruit_count, (SELECT COUNT(*) FROM league_participants WHERE league_id = $1) AS current_count
+      `SELECT recruit_count, (SELECT COUNT(*) FROM league_participants WHERE league_id = $1 AND status = 'active') AS current_count
        FROM leagues WHERE id = $1`,
       [leagueId],
     );
@@ -1445,10 +1482,31 @@ router.post('/league/:leagueId/participants', optionalAuth, async (req, res) => 
     // participant_count 실수 기반으로 갱신
     await pool.query(
       `UPDATE leagues SET participant_count = (
-         SELECT COUNT(*) FROM league_participants WHERE league_id = $1
+         SELECT COUNT(*) FROM league_participants WHERE league_id = $1 AND status = 'active'
        ), updated_at = NOW() WHERE id = $1`,
       [leagueId],
     );
+
+    await appendSingleLeagueMatchesForNewParticipants(
+      leagueId,
+      inserted.map((participant) => participant.id),
+      programBlocks,
+    );
+
+    if (validTournamentPlacement) {
+      try {
+        await placeParticipantInTournamentBye(leagueId, inserted[0].id, placement);
+      } catch (placementError) {
+        await pool.query(`DELETE FROM league_participants WHERE id = $1 AND league_id = $2`, [inserted[0].id, leagueId]);
+        await pool.query(
+          `UPDATE leagues SET participant_count = (
+             SELECT COUNT(*) FROM league_participants WHERE league_id = $1 AND status = 'active'
+           ), updated_at = NOW() WHERE id = $1`,
+          [leagueId],
+        );
+        throw placementError;
+      }
+    }
 
     return res.status(201).json({ message: '참가자가 추가되었습니다.', participants: inserted });
   } catch (error) {
@@ -1553,7 +1611,7 @@ router.get('/league/:id', optionalAuth, async (req, res) => {
 
     // 리그 정보 조회
     const leagueResult = await pool.query(
-      `SELECT id, name, description, title, type, format, sport, start_date, rules, status,
+      `SELECT id, name, description, title, type, format, sport, start_date, end_date, court_count, rules, status,
               sort_order, notice, league_code, recruit_count, participant_count, join_permission,
               group_id, created_by_id, tournament_seeding, tournament_advancement,
               tournament_rules, advance_count, advance_method, finals_advance,
@@ -1569,9 +1627,9 @@ router.get('/league/:id', optionalAuth, async (req, res) => {
 
     // 참가자 목록 조회
     const participantsResult = await pool.query(
-      `SELECT id, league_id, division, name, paid, arrived, "after", created_at
+      `SELECT id, league_id, division, name, paid, arrived, "after", status, created_at
        FROM league_participants
-       WHERE league_id = $1
+       WHERE league_id = $1 AND status = 'active'
        ORDER BY division ASC, created_at ASC`,
       [id],
     );
@@ -1665,7 +1723,7 @@ router.put('/league/:id', requireAuth, async (req, res) => {
       UPDATE leagues
       SET ${fields.join(', ')}, updated_at = NOW()
       WHERE id = $${queryIndex}
-      RETURNING id, name, description, title, type, format, sport, start_date, rules, notice, sort_order, status, recruit_count, participant_count, join_permission, created_by_id, tournament_seeding, tournament_advancement, tournament_rules, advance_count, advance_method, finals_advance, created_at, updated_at;
+      RETURNING id, name, description, title, type, format, sport, start_date, end_date, court_count, rules, notice, sort_order, status, recruit_count, participant_count, join_permission, created_by_id, tournament_seeding, tournament_advancement, tournament_rules, advance_count, advance_method, finals_advance, created_at, updated_at;
     `;
 
     const result = await pool.query(updateQuery, values);
@@ -1842,6 +1900,97 @@ router.put('/league/:leagueId/participants/:participantId', optionalAuth, async 
   }
 });
 
+// 운영 중 참가자 교체: 참가자 ID를 유지해 과거 결과와 남은 대진을 새 참가자에게 승계한다.
+router.post('/league/:leagueId/participants/:participantId/replace', requireAuth, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { leagueId, participantId } = req.params;
+    const userId = Number(req.user.sub);
+    const replacement = z.object({
+      division: z.string().default(''),
+      name: z.string().min(1, '이름은 필수입니다.'),
+      member_id: z.number().int().nullable().optional(),
+    }).parse(req.body);
+
+    const access = await client.query(
+      `SELECT 1 FROM leagues l
+       INNER JOIN group_members gm ON gm.group_id = l.group_id
+       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+      [leagueId, userId],
+    );
+    if (access.rowCount === 0) return res.status(403).json({ message: '참가자를 교체할 권한이 없습니다.' });
+
+    const replacementSupport = await client.query(
+      `SELECT
+         EXISTS (
+           SELECT 1 FROM information_schema.columns
+           WHERE table_schema = 'public' AND table_name = 'league_participants' AND column_name = 'status'
+         ) AS has_status,
+         EXISTS (
+           SELECT 1 FROM information_schema.tables
+           WHERE table_schema = 'public' AND table_name = 'league_participant_replacements'
+         ) AS has_history`,
+    );
+    const hasStatus = replacementSupport.rows[0]?.has_status === true;
+    const hasHistory = replacementSupport.rows[0]?.has_history === true;
+
+    await client.query('BEGIN');
+    const current = await client.query(
+      `SELECT id, member_id, name, division, ${hasStatus ? 'status' : "'active'::text AS status"}
+       FROM league_participants
+       WHERE id = $1 AND league_id = $2
+       FOR UPDATE`,
+      [participantId, leagueId],
+    );
+    if (current.rowCount === 0 || current.rows[0].status !== 'active') {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: '교체할 참가자를 찾을 수 없습니다.' });
+    }
+
+    if (replacement.member_id != null) {
+      const duplicate = await client.query(
+        `SELECT 1 FROM league_participants
+         WHERE league_id = $1 AND member_id = $2 ${hasStatus ? "AND status = 'active'" : ''} AND id <> $3`,
+        [leagueId, replacement.member_id, participantId],
+      );
+      if (duplicate.rowCount > 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ message: '이미 참가 중인 클럽 회원입니다.' });
+      }
+    }
+
+    const previous = current.rows[0];
+    if (hasHistory) {
+      await client.query(
+        `INSERT INTO league_participant_replacements
+         (id, league_id, participant_id, previous_member_id, previous_name, previous_division,
+          replacement_member_id, replacement_name, replacement_division, replaced_by_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [randomUUID(), leagueId, participantId, previous.member_id, previous.name, previous.division,
+          replacement.member_id ?? null, replacement.name, replacement.division, userId],
+      );
+    }
+
+    const updated = await client.query(
+      `UPDATE league_participants
+       SET member_id = $1, name = $2, division = $3${hasStatus ? ", status = 'active', withdrawn_at = NULL" : ''}
+       WHERE id = $4 AND league_id = $5
+       RETURNING id, league_id, division, name, member_id, paid, arrived, "after", ${hasStatus ? 'status' : "'active'::text AS status"}, created_at`,
+      [replacement.member_id ?? null, replacement.name, replacement.division, participantId, leagueId],
+    );
+    await client.query('COMMIT');
+    await triggerRankingRebuildByLeagueId(leagueId);
+    return res.json({ message: '참가자가 교체되었습니다.', participant: updated.rows[0] });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    if (error instanceof z.ZodError) return res.status(400).json({ errors: error.errors });
+    console.error('Replace participant error:', error);
+    return res.status(500).json({ message: '참가자 교체 중 서버 오류' });
+  } finally {
+    client.release();
+  }
+});
+
 /**
  * DELETE /league/:leagueId/participants/:participantId
  * 리그 참가자 삭제
@@ -1950,22 +2099,56 @@ router.delete('/league/:leagueId/participants/:participantId', requireAuth, asyn
       }
     }
 
-    // 참가자 삭제 (리그 아이디도 추가 체크)
-    const delResult = await pool.query(
-      `DELETE FROM league_participants
-      WHERE id = $1 AND league_id = $2
-      RETURNING id, league_id, division, name, paid, arrived, "after", created_at;`,
-      [participantId, leagueId],
+    const playingMatch = await pool.query(
+      `SELECT 1 FROM league_matches
+       WHERE league_id = $1 AND status = 'playing'
+         AND (participant_a_id = $2 OR participant_b_id = $2)
+       LIMIT 1`,
+      [leagueId, participantId],
     );
+    if (playingMatch.rowCount > 0) {
+      return res.status(409).json({ message: '진행 중인 경기를 종료한 후 참가자를 제외해주세요.' });
+    }
+
+    const hasMatchHistory = await pool.query(
+      `SELECT 1 FROM league_matches
+       WHERE league_id = $1 AND (participant_a_id = $2 OR participant_b_id = $2)
+       LIMIT 1`,
+      [leagueId, participantId],
+    );
+
+    const delResult = hasMatchHistory.rowCount > 0
+      ? await pool.query(
+          `UPDATE league_participants
+           SET status = 'withdrawn', withdrawn_at = NOW()
+           WHERE id = $1 AND league_id = $2 AND status = 'active'
+           RETURNING id, league_id, division, name, paid, arrived, "after", status, created_at`,
+          [participantId, leagueId],
+        )
+      : await pool.query(
+          `DELETE FROM league_participants
+           WHERE id = $1 AND league_id = $2
+           RETURNING id, league_id, division, name, paid, arrived, "after", created_at`,
+          [participantId, leagueId],
+        );
 
     if (delResult.rows.length === 0) {
       return res.status(404).json({ message: '참가자를 찾을 수 없습니다.' });
     }
 
+    if (hasMatchHistory.rowCount > 0) {
+      await pool.query(
+        `DELETE FROM league_matches
+         WHERE league_id = $1 AND status = 'pending'
+           AND (participant_a_id = $2 OR participant_b_id = $2)`,
+        [leagueId, participantId],
+      );
+    }
+
     // participant_count 실수 기반으로 갱신
     await pool.query(
       `UPDATE leagues SET participant_count = (
-         SELECT COUNT(*) FROM league_participants WHERE league_id = $1
+         SELECT COUNT(*) FROM league_participants WHERE league_id = $1 AND status = 'active'
        ), updated_at = NOW() WHERE id = $1`,
       [leagueId],
     );
@@ -2295,6 +2478,106 @@ function generateRoundRobin(n) {
     pos.splice(1, 0, last);
   }
   return games;
+}
+
+async function appendSingleLeagueMatchesForNewParticipants(leagueId, newParticipantIds, programBlocks = []) {
+  if (!newParticipantIds.length) return;
+
+  const participantRows = await pool.query(
+    `SELECT id FROM league_participants
+     WHERE league_id = $1
+     ORDER BY sort_order ASC NULLS LAST, division ASC, created_at ASC`,
+    [leagueId],
+  );
+  const allIds = participantRows.rows.map((row) => row.id);
+  const newIdSet = new Set(newParticipantIds);
+
+  const appendPairs = async ({ isProgram, programRound = null }) => {
+    const existingCount = await pool.query(
+      `SELECT COUNT(*)::int AS count, COALESCE(MAX(match_order), 0)::int AS max_order
+       FROM league_matches
+       WHERE league_id = $1 AND is_program = $2
+         AND ($3::int IS NULL OR program_round = $3)`,
+      [leagueId, isProgram, programRound],
+    );
+    if (Number(existingCount.rows[0]?.count ?? 0) === 0) return;
+
+    let matchOrder = Number(existingCount.rows[0]?.max_order ?? 0);
+    const pairs = [];
+    allIds.forEach((participantA, indexA) => {
+      allIds.slice(indexA + 1).forEach((participantB) => {
+        if (!newIdSet.has(participantA) && !newIdSet.has(participantB)) return;
+        pairs.push([participantA, participantB]);
+      });
+    });
+
+    for (const [participantA, participantB] of pairs) {
+      const duplicate = await pool.query(
+        `SELECT 1 FROM league_matches
+         WHERE league_id = $1 AND is_program = $2
+           AND ($3::int IS NULL OR program_round = $3)
+           AND ((participant_a_id = $4 AND participant_b_id = $5)
+             OR (participant_a_id = $5 AND participant_b_id = $4))
+         LIMIT 1`,
+        [leagueId, isProgram, programRound, participantA, participantB],
+      );
+      if (duplicate.rowCount > 0) continue;
+
+      matchOrder += 1;
+      await pool.query(
+        `INSERT INTO league_matches
+         (id, league_id, match_order, participant_a_id, participant_b_id, status,
+          is_program, program_round, program_block_type)
+         VALUES ($1, $2, $3, $4, $5, 'pending', $6, $7, $8)`,
+        [randomUUID(), leagueId, matchOrder, participantA, participantB, isProgram, programRound, isProgram ? 'SINGLES' : null],
+      );
+    }
+  };
+
+  await appendPairs({ isProgram: false });
+  for (let index = 0; index < programBlocks.length; index += 1) {
+    if (programBlocks[index]?.type !== 'SINGLES' || programBlocks[index]?.format !== 'LEAGUE') continue;
+    await appendPairs({ isProgram: true, programRound: index + 1 });
+  }
+}
+
+async function placeParticipantInTournamentBye(leagueId, participantId, placement) {
+  const slotColumn = placement.slot === 'a' ? 'participant_a_id' : 'participant_b_id';
+  const target = await pool.query(
+    `SELECT id, status, round_number, next_match_id, next_slot, participant_a_id, participant_b_id
+     FROM league_matches
+     WHERE id = $1 AND league_id = $2 AND is_program = TRUE AND program_round = $3
+     FOR UPDATE`,
+    [placement.match_id, leagueId, placement.program_round],
+  );
+  const match = target.rows[0];
+  if (!match || Number(match.round_number) !== 1 || match.status !== 'pending' || match[slotColumn] != null) {
+    throw new Error('선택한 BYE 자리에 참가자를 추가할 수 없습니다.');
+  }
+
+  if (match.next_match_id) {
+    const parent = await pool.query(
+      `SELECT id, status FROM league_matches WHERE id = $1 AND league_id = $2 FOR UPDATE`,
+      [match.next_match_id, leagueId],
+    );
+    if (parent.rows[0] && parent.rows[0].status !== 'pending') {
+      throw new Error('다음 라운드가 이미 시작되어 해당 BYE 자리를 사용할 수 없습니다.');
+    }
+    if (parent.rows[0] && ['a', 'b'].includes(match.next_slot)) {
+      const parentSlot = match.next_slot === 'a' ? 'participant_a_id' : 'participant_b_id';
+      await pool.query(
+        `UPDATE league_matches SET ${parentSlot} = NULL, score_a = NULL, score_b = NULL
+         WHERE id = $1 AND league_id = $2 AND status = 'pending'`,
+        [match.next_match_id, leagueId],
+      );
+    }
+  }
+
+  await pool.query(
+    `UPDATE league_matches SET ${slotColumn} = $1, score_a = NULL, score_b = NULL, status = 'pending'
+     WHERE id = $2 AND league_id = $3`,
+    [participantId, placement.match_id, leagueId],
+  );
 }
 
 /**
@@ -3324,14 +3607,6 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
     );
     if (leagueRow.rowCount === 0) {
       return res.status(403).json({ message: 'Vision 인식은 리그 생성자 또는 클럽 운영진만 사용할 수 있습니다.' });
-    }
-
-    if (program_data) {
-      await client.query(
-        `INSERT INTO league_programs (league_id, program_data, created_by_id)
-         VALUES ($1, $2::jsonb, $3)`,
-        [leagueId, JSON.stringify(program_data), userId],
-      );
     }
 
     const joinPermission = leagueRow.rows[0].join_permission;

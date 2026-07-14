@@ -16,6 +16,9 @@ type League = {
   type: string | null;
   format: string | null;
   start_date: string | null;
+  end_date?: string | null;
+  description?: string | null;
+  court_count?: number | null;
   title?: string | null;
   created_at: string;
   participant_count: number;
@@ -58,15 +61,6 @@ const TYPE_OPTIONS = [
 ];
 
 const LIMIT = 20;
-
-const TYPE_LABEL: Record<string, string> = {
-  league: "리그", tournament: "토너먼트", mixed: "혼합",
-  "클럽 이벤트": "클럽 이벤트",
-};
-
-const FORMAT_LABEL: Record<string, string> = {
-  single: "단식", double: "복식", mixed: "혼합복식",
-};
 
 export default function AdminLeaguePage() {
   const token = useAppSelector((s) => s.admin.token) ?? "";
@@ -118,6 +112,13 @@ export default function AdminLeaguePage() {
   };
 
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
+  const formatTime = (value?: string | null) => value ? value.slice(11, 16) : "";
+  const formatTimeRange = (league: League) => {
+    const start = formatTime(league.start_date);
+    const end = formatTime(league.end_date);
+    return end ? `${start} ~ ${end}` : start || "-";
+  };
+  const formatLocation = (description?: string | null) => description?.replace(/^장소:\s*/, "") || "-";
 
   return (
     <Box sx={{ p: 3 }}>
@@ -233,7 +234,7 @@ export default function AdminLeaguePage() {
         <Table size="small">
           <TableHead>
             <TableRow sx={{ bgcolor: "#F9FAFB" }}>
-              {["리그코드", "종목", "클럽", "리그날짜", "리그명", "유형", "방식", "프로그램", "생성자", "생성일시", "참가자"].map((h) => (
+              {["리그코드", "종목", "클럽", "리그명", "리그날짜", "시간", "장소", "탁구대", "참가자", "생성자", "생성일시"].map((h) => (
                 <TableCell key={h} sx={{ fontWeight: 800, fontSize: 12, color: "#374151", py: 1.2 }}>{h}</TableCell>
               ))}
             </TableRow>
@@ -261,28 +262,14 @@ export default function AdminLeaguePage() {
                     ) : "-"}
                   </TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{l.club_name ?? "-"}</TableCell>
-                  <TableCell sx={{ fontSize: 12 }}>{l.start_date ? l.start_date.slice(0, 10) : "-"}</TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{l.title ? l.title : "-"}</TableCell>
-                  <TableCell sx={{ fontSize: 12 }}>{l.type ? (TYPE_LABEL[l.type] ?? l.type) : "-"}</TableCell>
-                  <TableCell sx={{ fontSize: 12 }}>{l.format ? (FORMAT_LABEL[l.format] ?? l.format) : "-"}</TableCell>
-                  <TableCell sx={{ fontSize: 12 }}>
-                    {l.format === "이벤트 프로그램" ? (
-                      <Chip
-                        label={l.has_program ? "생성됨" : "미생성"}
-                        size="small"
-                        sx={{
-                          height: 20,
-                          fontSize: 11,
-                          fontWeight: 800,
-                          bgcolor: l.has_program ? "#EFF6FF" : "#F3F4F6",
-                          color: l.has_program ? "#2563EB" : "#6B7280",
-                        }}
-                      />
-                    ) : "-"}
-                  </TableCell>
+                  <TableCell sx={{ fontSize: 12 }}>{l.start_date ? l.start_date.slice(0, 10) : "-"}</TableCell>
+                  <TableCell sx={{ fontSize: 12, whiteSpace: "nowrap" }}>{formatTimeRange(l)}</TableCell>
+                  <TableCell sx={{ fontSize: 12 }}>{formatLocation(l.description)}</TableCell>
+                  <TableCell sx={{ fontSize: 12 }}>{l.court_count ? `${l.court_count}대` : "-"}</TableCell>
+                  <TableCell sx={{ fontSize: 12 }}>{l.participant_count ?? 0}명</TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{l.creator_name ?? "-"}</TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{l.created_at.slice(0, 10)}</TableCell>
-                  <TableCell sx={{ fontSize: 12 }}>{l.participant_count ?? 0}명</TableCell>
                 </TableRow>
               ))
             )}

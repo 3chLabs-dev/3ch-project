@@ -1,5 +1,6 @@
 ﻿  import { useMemo, useState } from "react";
   import { useNavigate, useParams } from "react-router-dom";
+  import { useEffect } from "react";
   import {
     Box,
     Stack,
@@ -41,14 +42,16 @@
     useUpdateLeagueMutation,
     useAddParticipantsMutation,
     useDeleteLeagueMutation,
-    useDeleteLeagueProgramMutation,
     useDeleteParticipantMutation,
+    useReplaceParticipantMutation,
+    useGetLeagueMatchesQuery,
   } from "../../features/league/leagueApi";
   import { toUTCDate, formatLeagueDate, formatLeagueTime } from "../../utils/dateUtils";
   import { useGetGroupDetailQuery } from "../../features/group/groupApi";
   import { useAppSelector } from "../../app/hooks";
   import LoadMembersDialog from "./LoadMembersDialog";
   import type { MemberRow } from "./LoadMembersDialog";
+  import LeagueProgramList from "./LeagueProgramList";
 
   import MemberEditDialog from "./MemberEditDialog.tsx";
 
@@ -129,6 +132,8 @@
     const [notice, setNotice] = useState("");
     const [editDate, setEditDate] = useState("");
     const [editTime, setEditTime] = useState("");
+    const [editEndTime, setEditEndTime] = useState("");
+    const [editCourtCount, setEditCourtCount] = useState<number | "">("");
     const [editLocation, setEditLocation] = useState("");
     const [editType, setEditType] = useState("");
     const [editFormat, setEditFormat] = useState("");
@@ -158,6 +163,13 @@
     const [deleteParticipantTarget, setDeleteParticipantTarget] = useState<{ id: string; division: string; name: string } | null>(null);
     const [editingParticipants, setEditingParticipants] = useState<Record<string, { division: string; name: string }>>({});
     const [openMemberEditDialog, setOpenMemberEditDialog] = useState(false);
+    const [replaceParticipantTarget, setReplaceParticipantTarget] = useState<{ id: string; division?: string | null; name: string } | null>(null);
+    const [replacementDivision, setReplacementDivision] = useState("");
+    const [replacementName, setReplacementName] = useState("");
+    const [replacementMemberId, setReplacementMemberId] = useState<number | null>(null);
+    const [loadMemberPurpose, setLoadMemberPurpose] = useState<"add" | "replace">("add");
+    const [tournamentPlacementOpen, setTournamentPlacementOpen] = useState(false);
+    const [selectedTournamentPlacement, setSelectedTournamentPlacement] = useState<{ program_round: number; match_id: string; slot: "a" | "b" } | null>(null);
 
     const { data: leagueData, isLoading: leagueLoading, refetch: refetchLeague } = useGetLeagueQuery(id ?? "", {
       skip: !id,
@@ -169,6 +181,7 @@
     const { data: programData } = useGetLeagueProgramQuery(id ?? "", {
       skip: !id,
     });
+    const { data: leagueMatchesData } = useGetLeagueMatchesQuery(id ?? "", { skip: !id });
 
     const authUser = useAppSelector((state) => state.auth.user);
 
@@ -176,8 +189,8 @@
     const [updateLeague, { isLoading: saving }] = useUpdateLeagueMutation();
     const [addParticipants] = useAddParticipantsMutation();
     const [deleteLeague] = useDeleteLeagueMutation();
-    const [deleteLeagueProgram] = useDeleteLeagueProgramMutation();
     const [deleteParticipant] = useDeleteParticipantMutation();
+    const [replaceParticipant, { isLoading: replacingParticipant }] = useReplaceParticipantMutation();
 
     const { data: groupData, isLoading: groupLoading } = useGetGroupDetailQuery(leagueData?.league?.group_id ?? "", {
       skip: !leagueData?.league?.group_id,
@@ -214,25 +227,47 @@
     const rawParticipants = participantData?.participants ?? [];
     const hasEventProgram = isEventProgramFormat && Boolean(programData?.program);
 
-    const resetEventProgramBeforeParticipantChange = async () => {
-      if (!id || !hasEventProgram) return true;
+    const tournamentByeSlots = useMemo(() => {
+      const program = programData?.program?.program_data as { blocks?: Array<{ type?: string; format?: string }> } | null;
+      const blocks = program?.blocks ?? [];
+      const matches = leagueMatchesData?.matches ?? [];
+      const matchMap = new Map(matches.map((match) => [match.id, match]));
+      return matches.flatMap((match) => {
+        const programRound = match.program_round ?? 0;
+        const block = blocks[programRound - 1];
+        if (!match.is_program || match.round_number !== 1 || match.status !== "pending" ||
+            block?.type !== "SINGLES" || block?.format !== "TOURNAMENT") return [];
+        const parent = match.next_match_id ? matchMap.get(match.next_match_id) : null;
+        if (parent && parent.status !== "pending") return [];
+        const slots: Array<{ program_round: number; match_id: string; slot: "a" | "b"; label: string }> = [];
+        if (!match.participant_a_id) slots.push({ program_round: programRound, match_id: match.id, slot: "a", label: `${programRound}라운드 ${match.match_label ?? "1회전"} 상단 BYE` });
+        if (!match.participant_b_id) slots.push({ program_round: programRound, match_id: match.id, slot: "b", label: `${programRound}라운드 ${match.match_label ?? "1회전"} 하단 BYE` });
+        return slots;
+      });
+    }, [leagueMatchesData?.matches, programData?.program?.program_data]);
 
-      const confirmed = window.confirm(
-        "참가자 정보가 변경되면 기존 이벤트 프로그램의 조 편성, 경기 순서, 대진표가 맞지 않을 수 있습니다.\n\n기존 이벤트 프로그램을 삭제하고 참가자 정보를 변경하시겠습니까?",
+    const canAddParticipantToProgram = useMemo(() => {
+      if (!hasEventProgram) return true;
+      const data = programData?.program?.program_data as {
+        blocks?: Array<{ type?: string; format?: string }>;
+      } | null;
+      return Boolean(data?.blocks?.length) && data!.blocks!.every(
+        (block) => block.type === "SINGLES" && block.format === "LEAGUE",
       );
-      if (!confirmed) return false;
+    }, [hasEventProgram, programData?.program?.program_data]);
 
-      try {
-        await deleteLeagueProgram({ leagueId: id }).unwrap();
-        localStorage.removeItem(`league-program-${id}`);
+    const confirmParticipantChange = (changeType: "add" | "edit" | "delete") => {
+      if (!hasEventProgram) return true;
+      if (!canAddParticipantToProgram) {
         setAlertSeverity("warning");
-        setAlertMsg("참가자 변경으로 기존 이벤트 프로그램이 삭제되었습니다. 프로그램을 다시 생성해주세요.");
-        return true;
-      } catch {
-        setAlertSeverity("error");
-        setAlertMsg("기존 이벤트 프로그램 삭제에 실패했습니다. 참가자 변경을 중단했습니다.");
+        setAlertMsg("현재는 단식 단일리그 프로그램에서만 참가자를 변경할 수 있습니다. 조별리그, 단체전, 토너먼트 참가자 변경은 추후 지원됩니다.");
         return false;
       }
+      return window.confirm(
+        changeType === "add"
+          ? "참가자를 추가하면 새 참가자의 경기가 각 단일리그 라운드 마지막에 추가됩니다. 계속하시겠습니까?"
+          : "참가자 정보 변경에 맞춰 프로그램 경기 데이터가 동기화됩니다. 계속하시겠습니까?",
+      );
     };
 
     const handleJoin = async (name?: string, division?: string) => {
@@ -250,7 +285,7 @@
         setAlertMsg("이름을 입력해주세요.");
         return;
       }
-      if (!(await resetEventProgramBeforeParticipantChange())) return;
+      if (!confirmParticipantChange("add")) return;
       try {
         await addParticipants({
           leagueId: id,
@@ -274,7 +309,7 @@
       if (!id) return;
       const myParticipant = rawParticipants.find((p) => p.name === myMember?.name);
       if (!myParticipant) return;
-      if (!(await resetEventProgramBeforeParticipantChange())) return;
+      if (!confirmParticipantChange("delete")) return;
       try {
         await deleteParticipant({ leagueId: id, participantId: myParticipant.id }).unwrap();
         setCancelJoinConfirm(false);
@@ -309,16 +344,18 @@
       );
     }, [participants, searchQuery]);
 
-    const handleAddParticipant = async () => {
+    const submitAddedParticipant = async (placement?: { program_round: number; match_id: string; slot: "a" | "b" }) => {
       if (!id || !inputName.trim()) return;
-      if (!(await resetEventProgramBeforeParticipantChange())) return;
       try {
         await addParticipants({
           leagueId: id,
           participants: [{ division: inputDivision.trim(), name: inputName.trim() }],
+          placement: placement ? { kind: "tournament", ...placement } : undefined,
         }).unwrap();
         setInputDivision("");
         setInputName("");
+        setTournamentPlacementOpen(false);
+        setSelectedTournamentPlacement(null);
       } catch (e: unknown) {
         const msg = (e as { data?: { message?: string } })?.data?.message;
         setAlertSeverity("warning");
@@ -328,6 +365,14 @@
 
     const handleLoadMembers = async (selected: MemberRow[]) => {
       if (!id || selected.length === 0) return;
+      if (loadMemberPurpose === "replace") {
+        const member = selected[0];
+        setReplacementDivision(member.division ?? "");
+        setReplacementName(member.name);
+        setReplacementMemberId(member.member_id);
+        setOpenLoadDialog(false);
+        return;
+      }
       const remaining = league?.recruit_count != null
         ? league.recruit_count - rawParticipants.length
         : Infinity;
@@ -336,7 +381,7 @@
         setAlertMsg(`모집 인원(${league!.recruit_count}명)을 초과합니다. 최대 ${remaining}명 추가 가능합니다.`);
         return;
       }
-      if (!(await resetEventProgramBeforeParticipantChange())) return;
+      if (!confirmParticipantChange("add")) return;
       try {
         await addParticipants({
           leagueId: id,
@@ -347,6 +392,49 @@
         setAlertMsg("불러오기에 실패했습니다.");
       }
       setOpenLoadDialog(false);
+    };
+
+    const openReplaceParticipantDialog = (participant: { id: string; division?: string | null; name: string }) => {
+      setReplaceParticipantTarget(participant);
+      setReplacementDivision("");
+      setReplacementName("");
+      setReplacementMemberId(null);
+    };
+
+    const handleReplaceParticipant = async () => {
+      if (!id || !replaceParticipantTarget || !replacementName.trim()) return;
+      try {
+        await replaceParticipant({
+          leagueId: id,
+          participantId: replaceParticipantTarget.id,
+          division: replacementDivision.trim(),
+          name: replacementName.trim(),
+          member_id: replacementMemberId,
+        }).unwrap();
+        setReplaceParticipantTarget(null);
+        setAlertSeverity("success");
+        setAlertMsg("참가자가 교체되었습니다. 기존 경기 결과와 남은 대진이 새 참가자에게 승계됩니다.");
+      } catch (error: unknown) {
+        const message = (error as { data?: { message?: string } })?.data?.message;
+        setAlertSeverity("error");
+        setAlertMsg(message ?? "참가자 교체에 실패했습니다.");
+      }
+    };
+
+    const handleAddParticipant = async () => {
+      if (!id || !inputName.trim()) return;
+      if (hasEventProgram && !canAddParticipantToProgram) {
+        if (tournamentByeSlots.length > 0) {
+          setSelectedTournamentPlacement(tournamentByeSlots[0]);
+          setTournamentPlacementOpen(true);
+        } else {
+          setAlertSeverity("warning");
+          setAlertMsg("현재 프로그램에는 참가자를 추가할 수 있는 BYE 자리가 없습니다.");
+        }
+        return;
+      }
+      if (!confirmParticipantChange("add")) return;
+      await submitAddedParticipant();
     };
 
     const handleToggle = (
@@ -449,6 +537,8 @@
 
       const currentDate = editDate || toDateInputValue(league.start_date);
       const currentTime = editTime || toTimeInputValue(league.start_date);
+      const currentEndTime = editEndTime || toTimeInputValue(league.end_date ?? undefined);
+      const currentCourtCount = editCourtCount === "" ? (league.court_count ?? "") : editCourtCount;
       const currentLocation = editLocation || parseLocation(league.description);
       const currentType = editType || league.type;
       const currentFormat = editFormat || league.format;
@@ -460,6 +550,8 @@
       return (
         currentDate !== toDateInputValue(league.start_date) ||
         currentTime !== toTimeInputValue(league.start_date) ||
+        currentEndTime !== toTimeInputValue(league.end_date ?? undefined) ||
+        currentCourtCount !== (league.court_count ?? "") ||
         currentLocation !== parseLocation(league.description) ||
         currentType !== league.type ||
         currentFormat !== league.format ||
@@ -472,6 +564,8 @@
       league,
       editDate,
       editTime,
+      editEndTime,
+      editCourtCount,
       editLocation,
       editType,
       editFormat,
@@ -487,7 +581,7 @@
       if (!id) return;
       const current = (editingParticipants[participantId]?.[field] ?? "").trim();
       if (current === originalValue.trim()) return;
-      if (!(await resetEventProgramBeforeParticipantChange())) return;
+      if (!confirmParticipantChange("edit")) return;
       try {
         await updateParticipant({ leagueId: id, participantId, updates: { [field]: current } }).unwrap();
       } catch {
@@ -498,7 +592,6 @@
 
     const handleDeleteParticipant = async () => {
       if (!id || !deleteParticipantTarget) return;
-      if (!(await resetEventProgramBeforeParticipantChange())) return;
       try {
         await deleteParticipant({ leagueId: id, participantId: deleteParticipantTarget.id }).unwrap();
         setDeleteParticipantTarget(null);
@@ -516,6 +609,7 @@ const handleSaveEdit = async () => {
 
   const safeDate = editDate || toDateInputValue(league.start_date);
   const safeTime = editTime || toTimeInputValue(league.start_date);
+  const safeEndTime = editEndTime || toTimeInputValue(league.end_date ?? undefined);
 
   const safeLocation = editLocation || parseLocation(league.description);
 
@@ -551,11 +645,14 @@ const handleSaveEdit = async () => {
     }
 
     const start_date = startDateTime.toISOString();
+    const endDateTime = safeEndTime ? new Date(`${safeDate}T${safeEndTime}:00`) : null;
 
     await updateLeague({
       id,
       updates: {
         start_date,
+        end_date: endDateTime ? endDateTime.toISOString() : null,
+        court_count: editCourtCount === "" ? (league.court_count ?? null) : Number(editCourtCount),
 
         description:
           safeLocation && safeLocation !== "-"
@@ -622,6 +719,33 @@ const handleSaveEdit = async () => {
   }
 };
 
+    useEffect(() => {
+      if (!canManage || !hasChanges || saving) return;
+
+      const timer = window.setTimeout(() => {
+        void handleSaveEdit();
+      }, 4000);
+
+      return () => window.clearTimeout(timer);
+    }, [
+      canManage,
+      hasChanges,
+      saving,
+      editDate,
+      editTime,
+      editEndTime,
+      editCourtCount,
+      editLocation,
+      editType,
+      editFormat,
+      editRules,
+      editSortOrder,
+      editRecruitCount,
+      editTournamentSeeding,
+      editTournamentAdvancement,
+      notice,
+    ]);
+
 
     if (leagueLoading) {
       return (
@@ -651,37 +775,6 @@ const handleSaveEdit = async () => {
           <Typography fontWeight={900} fontSize={18} sx={{ flex: 1 }}>
             {league.title}
           </Typography>
-          {canManage && (
-            <Button
-              variant="contained"
-              disableElevation
-              size="small"
-              onClick={handleSaveEdit}
-              disabled={saving || !hasChanges}
-              sx={{
-                borderRadius: 1,
-                height: 28,
-                px: 1.5,
-                mr: 0.5,
-                fontWeight: 900,
-                fontSize: 12,
-
-                bgcolor: hasChanges ? "#2F80ED" : "#BDBDBD",
-                color: "#fff",
-
-                "&:hover": {
-                  bgcolor: hasChanges ? "#79AEFF" : "#BDBDBD",
-                },
-
-                "&.Mui-disabled": {
-                  bgcolor: "#BDBDBD",
-                  color: "#fff",
-                },
-              }}
-            >
-              저장
-            </Button>
-            )}
           {/* {!isEditing && ( */}
           <>
 
@@ -735,7 +828,7 @@ const handleSaveEdit = async () => {
           <Box sx={infoRowSx}>
             <Typography sx={labelSx}>시 간</Typography>
             {canManage  ? (
-              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, flexWrap: "wrap" }}>
                 <Select
                   value={(editTime || toTimeInputValue(league.start_date)).split(":")[0] || ""}
                   onChange={(e) => {
@@ -769,9 +862,48 @@ const handleSaveEdit = async () => {
                     </MenuItem>
                   ))}
                 </Select>
+
+                <Typography sx={{ mx: 0.5, fontSize: 13, fontWeight: 700, color: "#6B7280" }}>~</Typography>
+
+                <Select
+                  value={(editEndTime || toTimeInputValue(league.end_date ?? undefined)).split(":")[0] || ""}
+                  onChange={(e) => {
+                    const baseTime = editEndTime || toTimeInputValue(league.end_date ?? undefined) || "00:00";
+                    setEditEndTime(`${e.target.value}:${baseTime.split(":")[1] || "00"}`);
+                  }}
+                  variant="standard"
+                  displayEmpty
+                  sx={selectSx}
+                >
+                  <MenuItem value="" sx={{ fontSize: 13, color: "#9CA3AF" }}>시</MenuItem>
+                  {HOUR_OPTIONS.map((h) => (
+                    <MenuItem key={h} value={h} sx={{ fontSize: 13 }}>{h}</MenuItem>
+                  ))}
+                </Select>
+
+                <Typography sx={{ fontSize: 13, fontWeight: 700, color: "#6B7280" }}>:</Typography>
+
+                <Select
+                  value={(editEndTime || toTimeInputValue(league.end_date ?? undefined)).split(":")[1] || ""}
+                  onChange={(e) => {
+                    const baseTime = editEndTime || toTimeInputValue(league.end_date ?? undefined) || "00:00";
+                    setEditEndTime(`${baseTime.split(":")[0] || "00"}:${e.target.value}`);
+                  }}
+                  variant="standard"
+                  displayEmpty
+                  sx={selectSx}
+                >
+                  <MenuItem value="" sx={{ fontSize: 13, color: "#9CA3AF" }}>분</MenuItem>
+                  {MINUTE_OPTIONS.map((m) => (
+                    <MenuItem key={m} value={m} sx={{ fontSize: 13 }}>{m}</MenuItem>
+                  ))}
+                </Select>
               </Box>
             ) : (
-              <Typography sx={valueSx}>{formatLeagueTime(league.start_date)}</Typography>
+              <Typography sx={valueSx}>
+                {formatLeagueTime(league.start_date)}
+                {league.end_date ? ` ~ ${formatLeagueTime(league.end_date)}` : ""}
+              </Typography>
             )}
           </Box>
 
@@ -793,6 +925,26 @@ const handleSaveEdit = async () => {
             )}
           </Box>
 
+          <Divider sx={{ borderColor: "#F3F4F6" }} />
+
+          <Box sx={infoRowSx}>
+            <Typography sx={labelSx}>탁구대</Typography>
+            {canManage ? (
+              <TextField
+                type="number"
+                value={editCourtCount === "" ? (league.court_count ?? "") : editCourtCount}
+                onChange={(e) => setEditCourtCount(e.target.value ? Number(e.target.value) : "")}
+                size="small"
+                variant="standard"
+                sx={{ ...inputSx, width: 64 }}
+                slotProps={{ htmlInput: { min: 1 } }}
+              />
+            ) : (
+              <Typography sx={valueSx}>{league.court_count ? `${league.court_count}대` : "-"}</Typography>
+            )}
+          </Box>
+
+          {!isEventProgramFormat && <>
           <Divider sx={{ borderColor: "#F3F4F6" }} />
 
           <Box sx={infoRowSx}>
@@ -941,6 +1093,27 @@ const handleSaveEdit = async () => {
                   </Typography>
                 )}
               </Box>
+            </>
+          )}
+          </>}
+
+          {isEventProgramFormat && canViewProgram && (
+            <>
+              <Divider sx={{ borderColor: "#F3F4F6" }} />
+              <Stack direction="row" alignItems="center" sx={{ py: 0.8 }}>
+                <Typography sx={{ ...labelSx, flex: 1 }}>프로그램</Typography>
+                {canManage && (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => navigate(`/league/${id}/program/new${hasEventProgram ? "?edit=true" : ""}`)}
+                    sx={{ minWidth: 44, height: 24, borderRadius: 1, px: 1.25, fontSize: 11, fontWeight: 800 }}
+                  >
+                    수정
+                  </Button>
+                )}
+              </Stack>
+              <LeagueProgramList embedded />
             </>
           )}
         </Box>
@@ -1119,7 +1292,8 @@ const handleSaveEdit = async () => {
             handleAddParticipant={handleAddParticipant}
             handleParticipantFieldBlur={handleParticipantFieldBlur}
             setDeleteParticipantTarget={setDeleteParticipantTarget}
-            onOpenLoadMembers={() => setOpenLoadDialog(true)}
+            onOpenLoadMembers={() => { setLoadMemberPurpose("add"); setOpenLoadDialog(true); }}
+            onReplaceParticipant={openReplaceParticipantDialog}
           />
 
           {canInteract && (
@@ -1130,17 +1304,6 @@ const handleSaveEdit = async () => {
             >
               경품 추첨
             </Button>
-          )}
-          {canViewProgram && (
-            <Stack spacing={1} sx={{ mt: 1 }}>
-              <Button
-                fullWidth variant="outlined" disableElevation
-                sx={{mt: 1, borderRadius: 1, height: 40, fontWeight: 700, bgcolor: "#87B8FF", borderColor: "#87B8FF", color: "#FFF", "&:hover": { bgcolor: "#79AEFF" }, }}
-                onClick={() => navigate(`/league/${id}/program`)}
-              >
-                {canManage ? "이벤트 프로그램 생성" : "이벤트 프로그램 보기"}
-              </Button>
-            </Stack>
           )}
           {!isEventProgramFormat && ((!canManage  && league.status === "active") || canManage) && (
             league.format === "조별리그" && (
@@ -1360,6 +1523,106 @@ const handleSaveEdit = async () => {
           </DialogActions>
         </Dialog>
 
+        <Dialog
+          open={tournamentPlacementOpen}
+          onClose={() => setTournamentPlacementOpen(false)}
+          maxWidth="xs"
+          fullWidth
+          slotProps={{ paper: { sx: { borderRadius: 1, mx: 2 } } }}
+        >
+          <DialogTitle sx={{ fontWeight: 900, fontSize: 17 }}>대진 위치 선택</DialogTitle>
+          <DialogContent>
+            <Typography sx={{ mb: 2, fontSize: 14 }}>
+              <b>{inputName.trim()}</b> 참가자를 추가할 BYE 위치를 선택해주세요.
+            </Typography>
+            <Select
+              fullWidth
+              size="small"
+              value={selectedTournamentPlacement ? `${selectedTournamentPlacement.match_id}:${selectedTournamentPlacement.slot}` : ""}
+              onChange={(event) => {
+                const [matchId, slot] = String(event.target.value).split(":");
+                const selected = tournamentByeSlots.find((item) => item.match_id === matchId && item.slot === slot);
+                if (selected) setSelectedTournamentPlacement(selected);
+              }}
+            >
+              {tournamentByeSlots.map((item) => (
+                <MenuItem key={`${item.match_id}:${item.slot}`} value={`${item.match_id}:${item.slot}`}>
+                  {item.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
+            <Button onClick={() => setTournamentPlacementOpen(false)}>취소</Button>
+            <Button
+              variant="contained"
+              disableElevation
+              disabled={!selectedTournamentPlacement}
+              onClick={() => selectedTournamentPlacement && submitAddedParticipant(selectedTournamentPlacement)}
+            >
+              확인
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog
+          open={!!replaceParticipantTarget}
+          onClose={() => !replacingParticipant && setReplaceParticipantTarget(null)}
+          maxWidth="xs"
+          fullWidth
+          slotProps={{ paper: { sx: { borderRadius: 1, mx: 2 } } }}
+        >
+          <DialogTitle>
+            <Stack direction="row" alignItems="center">
+              <Typography sx={{ flex: 1, fontWeight: 900, fontSize: 17 }}>참가자 교체</Typography>
+              <Button
+                variant="contained"
+                disableElevation
+                size="small"
+                onClick={() => { setLoadMemberPurpose("replace"); setOpenLoadDialog(true); }}
+                sx={{ height: 28, borderRadius: 1, px: 1.5, fontSize: 11, fontWeight: 900 }}
+              >
+                클럽회원 불러오기
+              </Button>
+            </Stack>
+          </DialogTitle>
+          <DialogContent>
+            <Typography sx={{ mb: 2, fontSize: 14 }}>
+              <b>{replaceParticipantTarget?.name}</b> 님을 누구와 교체하시겠습니까?
+            </Typography>
+            <Typography sx={{ mb: 2, fontSize: 12, color: "text.secondary" }}>
+              기존 경기 결과와 남은 경기, 승패 및 순위가 교체 참가자에게 이전됩니다.
+            </Typography>
+            <Stack direction="row" spacing={1}>
+              <TextField
+                label="부수"
+                value={replacementDivision}
+                onChange={(event) => { setReplacementDivision(event.target.value); setReplacementMemberId(null); }}
+                size="small"
+                sx={{ width: 92 }}
+              />
+              <TextField
+                label="이름"
+                value={replacementName}
+                onChange={(event) => { setReplacementName(event.target.value); setReplacementMemberId(null); }}
+                size="small"
+                fullWidth
+              />
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
+            <Button onClick={() => setReplaceParticipantTarget(null)} disabled={replacingParticipant}>취소</Button>
+            <Button
+              variant="contained"
+              disableElevation
+              disabled={!replacementName.trim() || replacingParticipant}
+              onClick={handleReplaceParticipant}
+            >
+              완료
+            </Button>
+          </DialogActions>
+        </Dialog>
+
         {/* 참가자 삭제 확인 다이얼로그 */}
         <Dialog open={!!deleteParticipantTarget} onClose={() => setDeleteParticipantTarget(null)}>
           <DialogTitle sx={{ fontWeight: 900, fontSize: 17 }}>참가자 삭제</DialogTitle>
@@ -1367,6 +1630,9 @@ const handleSaveEdit = async () => {
             <Typography fontWeight={700}>
               {deleteParticipantTarget?.division ? `(${deleteParticipantTarget.division}) ` : ""}
               {deleteParticipantTarget?.name} 님을 참가자 명단에서 삭제하겠습니까?
+            </Typography>
+            <Typography sx={{ mt: 1, fontSize: 12, color: "text.secondary" }}>
+              완료된 경기 결과는 유지되며, 시작하지 않은 남은 경기에서는 해당 참가자가 제외됩니다.
             </Typography>
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>

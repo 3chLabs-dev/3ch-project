@@ -91,6 +91,43 @@ const NEXT_STATUS: Record<string, "pending" | "playing" | "done"> = {
 
 const AUTO_COMPLETE_DELAY_MS = 4000;
 
+function getProgramTypeLabel(type?: string) {
+  if (type === "SINGLES") return "단식";
+  if (type === "DOUBLES") return "복식";
+  if (type === "TEAM") return "단체전";
+  return "";
+}
+
+function getProgramFormatLabel(format?: string) {
+  if (format === "LEAGUE") return "단일리그";
+  if (format === "GROUP") return "조별리그";
+  if (format === "TOURNAMENT") return "토너먼트";
+  return "";
+}
+
+function getProgramRuleLabel(rule?: string) {
+  if (rule === "BEST_OF_3" || rule?.includes("3전 2선승")) return "3전 2선승제";
+  if (rule === "BEST_OF_5" || rule?.includes("5전 3선승")) return "5전 3선승제";
+  if (rule === "THREE_SET" || rule?.includes("3세트")) return "3세트제";
+  return rule ?? "";
+}
+
+function getRuleDescription(rule?: string | null) {
+  if (rule?.includes("3전 2선승") || rule === "BEST_OF_3") {
+    return "세 번의 경기 중 두 번을 먼저 이기면 승리합니다.";
+  }
+  if (rule?.includes("5전 3선승") || rule === "BEST_OF_5") {
+    return "다섯 번의 경기 중 세 번을 먼저 이기면 승리합니다.";
+  }
+  if (rule?.includes("7전 4선승")) {
+    return "일곱 번의 경기 중 네 번을 먼저 이기면 승리합니다.";
+  }
+  if (rule?.includes("3세트") || rule === "THREE_SET") {
+    return "세 번의 경기를 모두 진행하며, 2 대 0인 경우에도 세 번째 경기를 진행합니다.";
+  }
+  return "경기 규칙에 따라 세트스코어를 입력합니다.";
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
@@ -1286,6 +1323,11 @@ export default function LeagueBracket() {
   const leagueStarted = league.status === "completed"; // 완료 상태면 수정 버튼 숨김
   const date          = formatLeagueDate(league.start_date);
   const winScore      = getWinScore(league.rules);
+  const currentProgramBlock = programOption?.blocks?.[programRound - 1];
+  const currentRule = currentProgramBlock?.matchRule ?? league.rules;
+  const headerSummary = isProgramMode && currentProgramBlock
+    ? `${programRound}라운드 ${getProgramTypeLabel(currentProgramBlock.type)} ${getProgramFormatLabel(currentProgramBlock.format)} │ ${getProgramRuleLabel(currentProgramBlock.matchRule)}`
+    : `${league.type} ${league.format} │ ${league.rules}`;
   const appliedScale  = autoFitScale * userZoom;
   // 줌 > 1이면 테이블이 화면을 초과 → 스크롤 가능하도록 시각적 크기를 spacer로 잡아줌
   // portrait: 90° 회전이므로 시각 너비=naturalTh, 시각 높이=naturalTw
@@ -1305,9 +1347,22 @@ export default function LeagueBracket() {
         {/* 리그 정보 요약 + 규칙 설명 버튼 */}
         <Box sx={{ flex: 1, display: "flex", alignItems: "center", gap: 0.25, minWidth: 0 }}>
           <Typography sx={{ fontSize: 11, fontWeight: 600, lineHeight: 1.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {date} / {league.type} {league.format} / {league.rules}
+            {date} │ {headerSummary}
           </Typography>
-          <Tooltip title="경기 규칙 설명">
+          <Tooltip
+            title={(
+              <Box sx={{ py: 0.5 }}>
+                <Typography sx={{ fontSize: 12, fontWeight: 800, color: "inherit" }}>
+                  {getProgramRuleLabel(currentRule ?? "")}
+                </Typography>
+                <Typography sx={{ mt: 0.25, fontSize: 11, lineHeight: 1.5, color: "inherit" }}>
+                  {getRuleDescription(currentRule)}
+                </Typography>
+              </Box>
+            )}
+            arrow
+            slotProps={{ popper: { sx: { zIndex: 10001 } } }}
+          >
             <IconButton size="small" onClick={(e) => setRulesAnchor(rulesAnchor ? null : e.currentTarget)} sx={{ flexShrink: 0, p: 0.25 }}>
               <InfoOutlinedIcon sx={{ fontSize: 16, color: "#9CA3AF" }} />
             </IconButton>
@@ -1502,6 +1557,33 @@ export default function LeagueBracket() {
         }}>
           <MatchSchedulePanel matches={matches} localOrder={localOrder} landscape={landscape} leagueId={id ?? ""} onProgramMatchUpdate={isProgramMode ? updateProgramMatch : undefined} />
         </Box>
+
+        {canScore && (
+          <Box sx={{ position: "absolute", bottom: landscape ? 380 : 220, right: landscape ? 14 : 85, zIndex: 20, display: "flex", flexDirection: "column", alignItems: "center", gap: 0.8, pointerEvents: "auto" }}>
+            <Box sx={{ bgcolor: "#fff", p: 0.5, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>
+              <QRCode
+                value={`${window.location.origin}/league/${id}/gpt-vision${searchParams.toString() ? `?${searchParams.toString()}` : ""}`}
+                size={landscape ? 66 : 72}
+              />
+            </Box>
+            <Box
+              onClick={() => {
+                const query = searchParams.toString();
+                navigate(`/league/${id}/gpt-vision${query ? `?${query}` : ""}`);
+              }}
+              sx={{ width: landscape ? "auto" : 36, height: landscape ? "auto" : 76, display: "flex", alignItems: "center", justifyContent: "center", alignSelf: landscape ? "center" : "flex-end", cursor: "pointer" }}
+            >
+              <Box
+                component="button"
+                type="button"
+                onPointerDown={(event) => event.stopPropagation()}
+                sx={{ appearance: "none", border: 0, borderRadius: 2, color: "#fff", fontSize: 13, fontWeight: 900, bgcolor: "#16A34A", minWidth: 76, height: 32, whiteSpace: "nowrap", cursor: "pointer", ...(landscape ? {} : { transform: "rotate(90deg)" }), "&:hover": { bgcolor: "#15803D" } }}
+              >
+                결과 등록
+              </Box>
+            </Box>
+          </Box>
+        )}
 
         {/* 플로팅 버튼들 (position: absolute, wrapperRef 기준 → 스크롤 영역 위에 고정) */}
 

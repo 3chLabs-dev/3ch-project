@@ -233,6 +233,8 @@ model League {
   format            String?
   sport             String
   start_date        DateTime
+  end_date          DateTime?
+  court_count       Int?
   status            String   @default("draft") // e.g., "draft", "active", "completed"
   rules             String?
   notice            String?
@@ -254,6 +256,7 @@ model League {
   matches        Match[]
   participants   LeagueParticipant[]
   league_matches LeagueMatch[]
+  participant_replacements LeagueParticipantReplacement[]
   program        LeagueProgram?
   draws          Draw[]
 
@@ -285,6 +288,8 @@ model LeagueParticipant {
   sort_order Int?
   group_name String?
   is_leader  Boolean  @default(false)
+  status     String   @default("active")
+  withdrawn_at DateTime?
   created_at DateTime @default(now())
 
   league_id String
@@ -292,9 +297,30 @@ model LeagueParticipant {
 
   matches_as_a LeagueMatch[] @relation("MatchParticipantA")
   matches_as_b LeagueMatch[] @relation("MatchParticipantB")
+  replacements LeagueParticipantReplacement[]
 
   @@index([league_id])
   @@map("league_participants")
+}
+
+model LeagueParticipantReplacement {
+  id                   String   @id @default(uuid())
+  league_id            String
+  participant_id       String
+  previous_member_id   Int?
+  previous_name        String
+  previous_division    String?
+  replacement_member_id Int?
+  replacement_name     String
+  replacement_division String?
+  replaced_by_id       Int
+  created_at           DateTime @default(now())
+
+  league      League            @relation(fields: [league_id], references: [id], onDelete: Cascade)
+  participant LeagueParticipant @relation(fields: [participant_id], references: [id], onDelete: Cascade)
+
+  @@index([league_id, participant_id])
+  @@map("league_participant_replacements")
 }
 
 model LeagueMatch {

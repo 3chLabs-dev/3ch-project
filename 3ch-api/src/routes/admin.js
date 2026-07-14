@@ -1244,7 +1244,6 @@ router.get('/leagues', requireAdmin, async (req, res) => {
     FROM leagues l
     LEFT JOIN users u ON u.id = l.created_by_id
     LEFT JOIN groups g ON g.id = l.group_id
-    LEFT JOIN league_programs lp ON lp.league_id = l.id
     ${whereClause}
   `;
 
@@ -1255,13 +1254,11 @@ router.get('/leagues', requireAdmin, async (req, res) => {
 
     const [dataResult, countResult] = await Promise.all([
       pool.query(
-        `SELECT l.id, l.league_code, l.name, l.sport, l.type, l.format, l.title,
-                l.start_date::text, l.created_at::text,
+        `SELECT l.id, l.league_code, l.name, l.sport, l.type, l.format, l.title, l.description,
+                l.start_date::text, l.end_date::text, l.court_count, l.created_at::text,
                 l.participant_count,
                 u.id AS creator_id, u.name AS creator_name,
-                g.name AS club_name,
-                (lp.id IS NOT NULL) AS has_program,
-                lp.updated_at::text AS program_updated_at
+                g.name AS club_name
          ${baseFrom}
          ORDER BY l.created_at DESC
          LIMIT $${limitIdx} OFFSET $${offsetIdx}`,

@@ -1,4 +1,5 @@
-import { Box, Typography } from "@mui/material";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import { Box, IconButton, Stack, Typography } from "@mui/material";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import LeagueAlgorithmDemo from "../demo/LeagueAlgorithmDemo";
 import { setRenewalConfiguration, setRenewalSelectedProgram, setRenewalStep } from "../../features/league/leagueRenewalCreationSlice";
@@ -18,15 +19,25 @@ export default function LeagueRenewalStep3Program() {
 
   return (
     <Box sx={{ pt: 2, pb: 10 }}>
-      <Typography sx={{ px: 2.5, fontSize: 22, fontWeight: 900, mb: 2 }}>
-        추천 프로그램
-      </Typography>
+      <Stack direction="row" alignItems="center" sx={{ px: 2.5, mb: 2 }}>
+        <IconButton
+          size="small"
+          aria-label="이전 단계로"
+          onClick={() => dispatch(setRenewalStep(2))}
+          sx={{ ml: -1, mr: 0.5 }}
+        >
+          <ArrowBackIcon />
+        </IconButton>
+        <Typography sx={{ fontSize: 22, fontWeight: 900 }}>추천 프로그램</Typography>
+      </Stack>
       <LeagueAlgorithmDemo
         embedded
         hideSetupInputs
         hideFormationActions
         hideHeader
         hideModeTabs
+        hideRecommendationTitle
+        compactCompleteButton
         initialPlayerCount={basicInfo.participantCount ?? 4}
         initialCourtCount={basicInfo.courtCount ?? 1}
         initialStartTime={basicInfo.startTime}

@@ -136,6 +136,8 @@ export function createLocalDevLeague(
     format: body.format,
     sport: body.sport,
     start_date: body.start_date,
+    end_date: body.end_date,
+    court_count: body.court_count,
     rules: body.rules,
     sort_order: body.sort_order,
     recruit_count: body.recruit_count ?? body.participants?.length ?? 0,

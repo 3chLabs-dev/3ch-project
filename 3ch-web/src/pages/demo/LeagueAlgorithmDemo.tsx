@@ -4,7 +4,7 @@ import { distributeSnake } from '../../features/league/algorithms/distributeSnak
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { generateGroupOptions } from '../../features/league/algorithms/generateGroupOptions';
-import { useGetLeagueParticipantsQuery, useGetLeagueProgramQuery, useSaveLeagueProgramMutation, useSyncLeagueProgramMatchesMutation } from '../../features/league/leagueApi';
+import { useGetLeagueParticipantsQuery, useGetLeagueProgramQuery, useGetLeagueQuery, useSaveLeagueProgramMutation, useSyncLeagueProgramMatchesMutation } from '../../features/league/leagueApi';
 import type { ProgramBlock, ProgramOption, ProgramType, TeamMatchType, RoundConfig } from '../../features/league/types/tournament.types';
 import { ToggleButton, ToggleButtonGroup, Button, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Chip, Radio, CircularProgress } from "@mui/material";
 import { DndContext, PointerSensor, TouchSensor, useSensor, useSensors, closestCenter,
@@ -14,6 +14,7 @@ import DragHandleIcon from "@mui/icons-material/DragHandle";
 import EditIcon from "@mui/icons-material/Edit";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { generateProgramRoundMatches } from '../../utils/programMatchGenerator';
+import { toUTCDate } from '../../utils/dateUtils';
 
 const formatTime = (totalMinutes: number) => {
   const minutesInDay = 24 * 60;
@@ -519,6 +520,8 @@ interface LeagueAlgorithmDemoProps {
   hideFormationActions?: boolean;
   hideHeader?: boolean;
   hideModeTabs?: boolean;
+  hideRecommendationTitle?: boolean;
+  compactCompleteButton?: boolean;
   onComplete?: (program: ProgramOption) => void;
   onBack?: () => void;
 }
@@ -533,6 +536,8 @@ const LeagueAlgorithmDemo = ({
   hideFormationActions = false,
   hideHeader = false,
   hideModeTabs = false,
+  hideRecommendationTitle = false,
+  compactCompleteButton = false,
   onComplete,
   onBack,
 }: LeagueAlgorithmDemoProps) => {
@@ -540,12 +545,16 @@ const LeagueAlgorithmDemo = ({
   const { id: leagueId } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const isEditMode = searchParams.get("edit") === "true";
+  const shouldHideSetupInputs = hideSetupInputs || isEditMode;
   const restoredRef = useRef(false);
   const skipNextResetRef = useRef(false);
   const { data: participantData } = useGetLeagueParticipantsQuery(leagueId ?? "", {
     skip: !leagueId,
   });
   const { data: savedProgramData } = useGetLeagueProgramQuery(leagueId ?? "", {
+    skip: !leagueId || !isEditMode,
+  });
+  const { data: leagueData } = useGetLeagueQuery(leagueId ?? "", {
     skip: !leagueId || !isEditMode,
   });
   const [saveLeagueProgram] = useSaveLeagueProgramMutation();
@@ -615,10 +624,10 @@ const LeagueAlgorithmDemo = ({
   } | null>(null);
 
   useEffect(() => {
-    if (hideSetupInputs) {
+    if (shouldHideSetupInputs) {
       setIsProgramGenerated(true);
     }
-  }, [hideSetupInputs]);
+  }, [shouldHideSetupInputs]);
   const [pendingGroupSizes, setPendingGroupSizes] = useState<number[]>([]);
   const [groupResultDialog, setGroupResultDialog] = useState<{
     optionIndex: number;
@@ -644,6 +653,7 @@ const LeagueAlgorithmDemo = ({
 
   type StoredProgramWithEditState = ProgramOption & {
     editState?: StoredProgramEditState;
+    compositionMode?: "recommend" | "custom";
   };
 
   const mockPlayers = [
@@ -892,7 +902,7 @@ const LeagueAlgorithmDemo = ({
   const getProgramOptionIndexByTitle = useCallback(
     (title?: string) => {
       const fixedTitleIndex = ["정규 경기", "밸런스형", "빠른 진행"].findIndex(
-        (fixedTitle) => fixedTitle === title
+        (fixedTitle) => title?.includes(fixedTitle)
       );
 
       if (fixedTitleIndex >= 0) {
@@ -909,7 +919,7 @@ const LeagueAlgorithmDemo = ({
   );
 
   useEffect(() => {
-    if (!isEditMode || !leagueId || restoredRef.current) {
+    if (!isEditMode || !leagueId || restoredRef.current || !leagueData?.league) {
       return;
     }
 
@@ -921,19 +931,26 @@ const LeagueAlgorithmDemo = ({
     try {
       const storedProgram = savedProgram;
       const editState = storedProgram.editState;
+      const restoredProgramMode =
+        storedProgram.compositionMode ??
+        editState?.programMode ??
+        (storedProgram.title?.includes("직접 구성") ? "custom" : "recommend");
+      const currentLeague = leagueData.league;
+      const currentStart = toUTCDate(currentLeague.start_date);
+      const currentEnd = currentLeague.end_date ? toUTCDate(currentLeague.end_date) : null;
 
       if (editState) {
         skipNextResetRef.current = true;
         const restoredSelectedIndex =
           editState.selectedProgramOptionIndex ??
           getProgramOptionIndexByTitle(storedProgram.title);
-        setPlayerCount(editState.playerCount);
-        setCourtCount(editState.courtCount);
-        setStartHour(editState.startHour);
-        setStartMinute(editState.startMinute);
-        setEndHour(editState.endHour);
-        setEndMinute(editState.endMinute);
-        setProgramMode(editState.programMode);
+        setPlayerCount(currentLeague.participant_count ?? leaguePlayers.length ?? editState.playerCount);
+        setCourtCount(currentLeague.court_count ?? editState.courtCount);
+        setStartHour(currentStart.getHours());
+        setStartMinute(currentStart.getMinutes());
+        setEndHour(currentEnd?.getHours() ?? editState.endHour);
+        setEndMinute(currentEnd?.getMinutes() ?? editState.endMinute);
+        setProgramMode(restoredProgramMode);
         setIsProgramGenerated(editState.isProgramGenerated);
         setIsCustomProgramCompleted(editState.isCustomProgramCompleted);
         setRounds(editState.rounds);
@@ -942,7 +959,10 @@ const LeagueAlgorithmDemo = ({
             editState.recommendationOptions.map((option, index) => [index, option])
           ),
           ...editState.customProgramOptions,
-          [restoredSelectedIndex]: storedProgram,
+          [restoredSelectedIndex]: {
+            ...storedProgram,
+            title: programOptions[restoredSelectedIndex]?.title ?? storedProgram.title,
+          },
         });
         setSelectedProgramOptionIndex(restoredSelectedIndex);
       } else {
@@ -950,9 +970,23 @@ const LeagueAlgorithmDemo = ({
         const restoredSelectedIndex = getProgramOptionIndexByTitle(storedProgram.title);
         skipNextResetRef.current = true;
         setIsProgramGenerated(true);
-        setProgramMode("recommend");
+        setProgramMode(restoredProgramMode);
+        setIsCustomProgramCompleted(restoredProgramMode === "custom");
         setRounds(restoredRounds);
-        setCustomProgramOptions({ [restoredSelectedIndex]: storedProgram });
+        setPlayerCount(currentLeague.participant_count ?? leaguePlayers.length ?? playerCount);
+        setCourtCount(currentLeague.court_count ?? courtCount);
+        setStartHour(currentStart.getHours());
+        setStartMinute(currentStart.getMinutes());
+        if (currentEnd) {
+          setEndHour(currentEnd.getHours());
+          setEndMinute(currentEnd.getMinutes());
+        }
+        setCustomProgramOptions({
+          [restoredSelectedIndex]: {
+            ...storedProgram,
+            title: programOptions[restoredSelectedIndex]?.title ?? storedProgram.title,
+          },
+        });
         setSelectedProgramOptionIndex(restoredSelectedIndex);
       }
 
@@ -960,7 +994,7 @@ const LeagueAlgorithmDemo = ({
     } catch {
       restoredRef.current = true;
     }
-  }, [getProgramOptionIndexByTitle, isEditMode, leagueId, rounds, savedProgramData]);
+  }, [courtCount, getProgramOptionIndexByTitle, isEditMode, leagueData, leagueId, leaguePlayers.length, playerCount, programOptions, rounds, savedProgramData]);
 
   const openProgramEditDialog = (index: number) => {
     const option = displayedProgramOptions[index];
@@ -1004,6 +1038,7 @@ const LeagueAlgorithmDemo = ({
 
     const selectedOption: StoredProgramWithEditState = {
       ...displayedProgramOptions[selectedProgramOptionIndex],
+      compositionMode: programMode,
       editState: {
         playerCount,
         courtCount,
@@ -1047,7 +1082,7 @@ const LeagueAlgorithmDemo = ({
       } catch (error) {
         console.error("Failed to sync program matches", error);
       }
-      navigate(`/league/${leagueId}/program`);
+      navigate(isEditMode ? `/league/${leagueId}` : `/league/${leagueId}/program`);
       return;
     }
 
@@ -1350,8 +1385,8 @@ const LeagueAlgorithmDemo = ({
         boxSizing: "border-box",
       }}
     >
+      {!hideHeader && (
       <div
-        hidden={hideHeader}
         style={{
           display: "flex",
           alignItems: "center",
@@ -1363,6 +1398,8 @@ const LeagueAlgorithmDemo = ({
           onClick={() => {
             if (onBack) {
               onBack();
+            } else if (isEditMode && leagueId) {
+              navigate(`/league/${leagueId}`);
             } else if (leagueId) {
               navigate(`/league/${leagueId}/program`);
             } else {
@@ -1384,11 +1421,12 @@ const LeagueAlgorithmDemo = ({
             lineHeight: 1.35,
           }}
         >
-          이벤트 프로그램 생성
+          {isEditMode ? "프로그램 수정" : "이벤트 프로그램 생성"}
         </div>
       </div>
+      )}
 
-      <div style={{ marginTop: '24px', display: hideSetupInputs ? "none" : undefined }}>
+      <div style={{ marginTop: '24px', display: shouldHideSetupInputs ? "none" : undefined }}>
         <div style={{
           fontWeight: 700,
           marginBottom: '8px',
@@ -1420,7 +1458,7 @@ const LeagueAlgorithmDemo = ({
         />
       </div>
 
-      <div style={{ marginTop: '24px', display: hideSetupInputs ? "none" : undefined }}>
+      <div style={{ marginTop: '24px', display: shouldHideSetupInputs ? "none" : undefined }}>
         <div style={{
           fontWeight: 700,
           marginBottom: '8px',
@@ -1452,7 +1490,7 @@ const LeagueAlgorithmDemo = ({
         />
       </div>
 
-      <div style={{ marginTop: "24px", display: hideSetupInputs ? "none" : undefined }}>
+      <div style={{ marginTop: "24px", display: shouldHideSetupInputs ? "none" : undefined }}>
         <div
           style={{
             fontWeight: 700,
@@ -1564,7 +1602,7 @@ const LeagueAlgorithmDemo = ({
             setIsGeneratingProgram(false);
           }, 600);
         }}
-        style={{ marginTop: "30px", display: hideSetupInputs ? "none" : undefined }}
+        style={{ marginTop: "30px", display: shouldHideSetupInputs ? "none" : undefined }}
       >
         프로그램 생성하기
       </Button>
@@ -1583,7 +1621,7 @@ const LeagueAlgorithmDemo = ({
       )}
 
       {isProgramGenerated && !isGeneratingProgram && !hideModeTabs && (
-      <div style={{ marginTop: "60px" }}>
+      <div style={{ marginTop: shouldHideSetupInputs ? "24px" : "60px" }}>
         <ToggleButtonGroup
           exclusive
           value={programMode}
@@ -2040,6 +2078,8 @@ const LeagueAlgorithmDemo = ({
           onClick={() => {
             setIsCompletingCustomProgram(true);
             setIsCustomProgramCompleted(false);
+            // 직접 구성 완료 시 복원된 과거 추천안보다 현재 라운드 설정을 우선한다.
+            setCustomProgramOptions({});
             window.setTimeout(() => {
               setIsCustomProgramCompleted(true);
               setIsCompletingCustomProgram(false);
@@ -2069,9 +2109,11 @@ const LeagueAlgorithmDemo = ({
         (programMode === "custom" && isCustomProgramCompleted)
       ) && (
       <>
-<h2 style={{ marginTop: '40px' }}>
-  프로그램 추천안
-</h2>
+{!hideRecommendationTitle && (
+  <h2 style={{ marginTop: '40px' }}>
+    프로그램 추천안
+  </h2>
+)}
 
 {displayedProgramOptions.length === 0 && (
   <div
@@ -2645,7 +2687,9 @@ const LeagueAlgorithmDemo = ({
             left: "50%",
             bottom: "calc(56px + env(safe-area-inset-bottom) + 16px)",
             transform: "translateX(-50%)",
-            width: "min(430px, calc(100% - 32px))",
+            width: compactCompleteButton
+              ? "min(360px, calc(100% - 48px))"
+              : "min(430px, calc(100% - 32px))",
             zIndex: 1200,
           }}
         >

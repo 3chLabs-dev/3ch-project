@@ -1,0 +1,3 @@
+ALTER TABLE leagues
+ADD COLUMN end_date TIMESTAMP(3),
+ADD COLUMN court_count INTEGER;

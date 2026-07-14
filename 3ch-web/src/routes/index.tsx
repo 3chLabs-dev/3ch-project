@@ -21,7 +21,6 @@ import Login from "../pages/sign/Login";
 import SignUp from "../pages/sign/SignUp";
 import AuthSuccess from "../pages/util/AuthSuccess";
 import AuthFail from "../pages/util/AuthFail";
-import LeagueCreationWizard from "../pages/league/LeagueCreationWizard";
 import LeagueRenewalCreationWizard from "../pages/league/LeagueRenewalCreationWizard";
 import MyPage from "../pages/mypage/MyPage.tsx"
 import SocialSignUp from "../pages/sign/SocialSignUp.tsx";
@@ -39,7 +38,6 @@ import GroupRankingDetailPage from "../pages/group/GroupRankingDetailPage";
 import GroupMemberRankingDetailPage from "../pages/group/GroupMemberRankingDetailPage";
 import DrawMain from "../pages/draw/DrawMain";
 import LeagueDetail from "../pages/league/LeagueDetail";
-import LeagueBracket from "../pages/league/LeagueBracket.tsx";
 import LeagueGrouping from "../pages/league/LeagueGrouping";
 import LeagueOmrSheet from "../pages/league/LeagueOmrSheet";
 import LeagueOcrSheet from "../pages/league/LeagueOcrSheet";
@@ -88,10 +86,10 @@ export const router = createBrowserRouter([
       { path: "/", element: <Home /> },
       { path: "/login", element: <Login />},
       { path: "/signup", element: <SignUp />},
-      { path: "/league", element: <LeagueCreationWizard /> },
+      { path: "/league", element: <LeagueRenewalCreationWizard /> },
       { path: "/league/renewal", element: <LeagueRenewalCreationWizard /> },
       { path: "/league/:id", element: <LeagueDetail /> },
-      { path: "/league/:id/bracket", element: <LeagueBracket /> },
+      { path: "/league/:id/bracket", element: <LeagueGPTVisionSheet /> },
       { path: "/league/:id/grouping", element: <LeagueGrouping /> },
       { path: "/league/:id/omr", element: <LeagueOmrSheet /> },
       { path: "/league/:id/ocr", element: <LeagueOcrSheet /> },
@@ -104,7 +102,7 @@ export const router = createBrowserRouter([
       { path: "/league/:id/program", element: <LeagueProgramList /> },
       { path: "/league/:id/program/new", element: <LeagueProgramGenerate /> },
       { path: "/league/:id/program/matches", element: <LeagueMatchOrder /> },
-      { path: "/league/:id/program/bracket", element: <LeagueBracket /> },
+      { path: "/league/:id/program/bracket", element: <LeagueGPTVisionSheet /> },
       { path: "/league/:id/program/tournament-bracket", element: <LeagueTournamentBracket /> },
       { path: "/league/:id/matches", element: <LeagueMatchOrder /> },
       { path: "/mypage", element: <MyPage />},

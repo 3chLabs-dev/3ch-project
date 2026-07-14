@@ -1,8 +1,10 @@
+-- This migration was partially reflected in the production schema before Prisma
+-- recorded it as failed.  Keep the DDL safe to retry after `migrate resolve`.
 ALTER TABLE league_participants
-ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'active',
-ADD COLUMN withdrawn_at TIMESTAMP(3);
+ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'active',
+ADD COLUMN IF NOT EXISTS withdrawn_at TIMESTAMP(3);
 
-CREATE TABLE league_participant_replacements (
+CREATE TABLE IF NOT EXISTS league_participant_replacements (
   id UUID PRIMARY KEY,
   league_id UUID NOT NULL REFERENCES leagues(id) ON DELETE CASCADE,
   participant_id UUID NOT NULL REFERENCES league_participants(id) ON DELETE CASCADE,
@@ -16,5 +18,5 @@ CREATE TABLE league_participant_replacements (
   created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX league_participant_replacements_league_participant_idx
+CREATE INDEX IF NOT EXISTS league_participant_replacements_league_participant_idx
 ON league_participant_replacements(league_id, participant_id);

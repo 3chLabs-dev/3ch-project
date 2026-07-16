@@ -98,6 +98,7 @@ model Group {
   ranking_events       GroupRankingEvent[]
   sport_ranking_events SportRankingEvent[]
   invited_leagues      LeagueInvitedGroup[]
+  league_participants  LeagueParticipant[] @relation("ParticipantSourceGroup")
 
   @@map("groups")
 }
@@ -299,6 +300,8 @@ model LeagueParticipant {
 
   league_id String
   league    League @relation(fields: [league_id], references: [id], onDelete: Cascade)
+  source_group_id String?
+  source_group Group? @relation("ParticipantSourceGroup", fields: [source_group_id], references: [id], onDelete: SetNull)
 
   matches_as_a LeagueMatch[] @relation("MatchParticipantA")
   matches_as_b LeagueMatch[] @relation("MatchParticipantB")
@@ -306,6 +309,7 @@ model LeagueParticipant {
   claim LeagueParticipantClaim?
 
   @@index([league_id])
+  @@index([source_group_id])
   @@map("league_participants")
 }
 

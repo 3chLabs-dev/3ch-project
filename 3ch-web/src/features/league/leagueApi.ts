@@ -112,6 +112,8 @@ export interface LeagueParticipantItem {
   division?: string | null;
   name: string;
   member_id?: number | null;
+  source_group_id?: string | null;
+  source_group_name?: string | null;
   paid: boolean;
   arrived: boolean;
   after: boolean;

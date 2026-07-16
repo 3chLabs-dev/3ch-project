@@ -17,6 +17,7 @@ type Participant = {
   division?: string | null;
   name: string;
   member_id?: string | number | null;
+  source_group_name?: string | null;
 };
 
 type EditingParticipants = Record<
@@ -63,6 +64,7 @@ type MemberEditDialogProps = {
 
   onOpenLoadMembers: () => void;
   onReplaceParticipant: (participant: Participant) => void;
+  showGroupName?: boolean;
 };
 
 export default function MemberEditDialog({
@@ -81,6 +83,7 @@ export default function MemberEditDialog({
   setDeleteParticipantTarget,
   onOpenLoadMembers,
   onReplaceParticipant,
+  showGroupName = false,
 }: MemberEditDialogProps) {
   return (
     <Dialog
@@ -301,38 +304,33 @@ export default function MemberEditDialog({
                     }}
                   />
 
-                  <TextField
-                    value={editName}
-                    onChange={(e) =>
-                      setEditingParticipants((prev) => ({
-                        ...prev,
-                        [p.id]: {
-                          ...(prev[p.id] ?? {
-                            division: p.division ?? "",
-                            name: p.name,
-                          }),
-                          name: e.target.value,
-                        },
-                      }))
-                    }
-                    onBlur={() =>
-                      handleParticipantFieldBlur(p.id, "name", p.name)
-                    }
-                    size="small"
-                    disabled={!isManual}
-                    sx={{
-                      mx: 0.5,
-                      "& .MuiOutlinedInput-root": {
-                        borderRadius: 0.6,
-                        height: 30,
-                        bgcolor: "#fff",
-                      },
-                      "& input": {
-                        fontSize: 13,
-                        py: 0.3,
-                      },
-                    }}
-                  />
+                  <Box sx={{ mx: 0.5, minWidth: 0 }}>
+                    <TextField
+                      value={editName}
+                      onChange={(e) =>
+                        setEditingParticipants((prev) => ({
+                          ...prev,
+                          [p.id]: {
+                            ...(prev[p.id] ?? { division: p.division ?? "", name: p.name }),
+                            name: e.target.value,
+                          },
+                        }))
+                      }
+                      onBlur={() => handleParticipantFieldBlur(p.id, "name", p.name)}
+                      size="small"
+                      disabled={!isManual}
+                      fullWidth
+                      sx={{
+                        "& .MuiOutlinedInput-root": { borderRadius: 0.6, height: 30, bgcolor: "#fff" },
+                        "& input": { fontSize: 13, py: 0.3 },
+                      }}
+                    />
+                    {showGroupName && p.source_group_name && (
+                      <Typography sx={{ mt: 0.35, px: 0.4, fontSize: 10, color: "#6B7280", lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {p.source_group_name}
+                      </Typography>
+                    )}
+                  </Box>
 
                   <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center" }}>
                     <Box

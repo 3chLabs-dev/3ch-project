@@ -209,6 +209,9 @@
       invitedGroupsData?.groups.some((invited) => invited.status === "accepted" && invited.group_id === group.id),
     );
     const isMember = !groupLoading && (!!groupData?.myRole || Boolean(invitedMembership));
+    const showParticipantGroups = Boolean(
+      invitedGroupsData?.groups.some((group) => group.status === "accepted"),
+    );
 
     const league = leagueData?.league;
 
@@ -1274,7 +1277,14 @@ const handleSaveEdit = async () => {
                         </Avatar>
                       </Box>
 
-                      <Typography fontWeight={800} fontSize={14} sx={{ textAlign: "center", color: isMe ? "#2F80ED" : "inherit", flex: 1, minWidth: 0 }}>{p.name}</Typography>
+                      <Box sx={{ flex: 1, minWidth: 0, textAlign: "center" }}>
+                        <Typography fontWeight={800} fontSize={14} sx={{ color: isMe ? "#2F80ED" : "inherit", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</Typography>
+                        {showParticipantGroups && p.source_group_name && (
+                          <Typography sx={{ mt: 0.2, color: "#6B7280", fontSize: 10, lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {p.source_group_name}
+                          </Typography>
+                        )}
+                      </Box>
 
                       <Box sx={{ width: 146, display: "flex", justifyContent: "center", flexShrink: 0 }}>
                         <Stack
@@ -1341,6 +1351,7 @@ const handleSaveEdit = async () => {
             setDeleteParticipantTarget={setDeleteParticipantTarget}
             onOpenLoadMembers={() => { setLoadMemberPurpose("add"); setOpenLoadDialog(true); }}
             onReplaceParticipant={openReplaceParticipantDialog}
+            showGroupName={showParticipantGroups}
           />
 
           {canInteract && (

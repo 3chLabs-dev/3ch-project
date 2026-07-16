@@ -1240,9 +1240,9 @@ router.post('/league', requireAuth, async (req, res) => {
     for (const p of participants) {
       const participantId = randomUUID();
       await client.query(
-        `INSERT INTO league_participants (id, league_id, division, name, member_id, paid, arrived, "after")
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-        [participantId, leagueId, p.division ?? '', p.name, p.member_id ?? null, p.paid ?? false, p.arrived ?? false, p.after ?? false],
+        `INSERT INTO league_participants (id, league_id, division, name, member_id, source_group_id, paid, arrived, "after")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [participantId, leagueId, p.division ?? '', p.name, p.member_id ?? null, p.member_id ? group_id : null, p.paid ?? false, p.arrived ?? false, p.after ?? false],
       );
       if (!p.member_id) {
         const code = makeClaimCode();
@@ -1499,7 +1499,22 @@ router.post('/league/:leagueId/participants/:participantId/claim', optionalAuth,
         await client.query('ROLLBACK');
         return res.status(409).json({ message: '이미 이 리그에 연결된 참가자가 있습니다.' });
       }
-      await client.query(`UPDATE league_participants SET member_id = $1 WHERE id = $2`, [userId, req.params.participantId]);
+      await client.query(
+        `UPDATE league_participants lp
+            SET member_id = $1,
+                source_group_id = COALESCE((
+                  SELECT gm.group_id
+                    FROM group_members gm
+                    JOIN leagues l ON l.id = lp.league_id
+                    LEFT JOIN league_invited_groups lig
+                      ON lig.league_id = l.id AND lig.group_id = gm.group_id AND lig.status = 'accepted'
+                   WHERE gm.user_id = $1 AND (gm.group_id = l.group_id OR lig.id IS NOT NULL)
+                   ORDER BY CASE WHEN gm.group_id = l.group_id THEN 0 ELSE 1 END
+                   LIMIT 1
+                ), lp.source_group_id)
+          WHERE lp.id = $2`,
+        [userId, req.params.participantId],
+      );
       await client.query(
         `UPDATE league_participant_claims SET claimed_by_id = $1, claimed_at = NOW(), code_hash = NULL, guest_token_hash = NULL, updated_at = NOW() WHERE participant_id = $2`,
         [userId, req.params.participantId],
@@ -1552,7 +1567,22 @@ router.post('/league/:leagueId/participant-claims/auto-link', requireAuth, async
       await client.query('ROLLBACK');
       return res.status(409).json({ message: '이미 이 리그에 연결된 참가자가 있습니다.' });
     }
-    await client.query(`UPDATE league_participants SET member_id = $1 WHERE id = $2`, [userId, claim.rows[0].participant_id]);
+    await client.query(
+      `UPDATE league_participants lp
+          SET member_id = $1,
+              source_group_id = COALESCE((
+                SELECT gm.group_id
+                  FROM group_members gm
+                  JOIN leagues l ON l.id = lp.league_id
+                  LEFT JOIN league_invited_groups lig
+                    ON lig.league_id = l.id AND lig.group_id = gm.group_id AND lig.status = 'accepted'
+                 WHERE gm.user_id = $1 AND (gm.group_id = l.group_id OR lig.id IS NOT NULL)
+                 ORDER BY CASE WHEN gm.group_id = l.group_id THEN 0 ELSE 1 END
+                 LIMIT 1
+              ), lp.source_group_id)
+        WHERE lp.id = $2`,
+      [userId, claim.rows[0].participant_id],
+    );
     await client.query(
       `UPDATE league_participant_claims SET claimed_by_id = $1, claimed_at = NOW(), guest_token_hash = NULL, updated_at = NOW() WHERE participant_id = $2`,
       [userId, claim.rows[0].participant_id],
@@ -1603,10 +1633,13 @@ router.get('/league/:id/participants', optionalAuth, async (req, res) => {
 
     const { groupNameSelect, isLeaderSelect } = await buildParticipantSelectColumns();
     const result = await pool.query(
-      `SELECT id, league_id, division, name, member_id, paid, arrived, "after", sort_order, status, created_at, ${groupNameSelect}, ${isLeaderSelect}
-       FROM league_participants
-       WHERE league_id = $1 AND status = 'active'
-       ORDER BY sort_order ASC NULLS LAST, division ASC, created_at ASC`,
+      `SELECT lp.id, lp.league_id, lp.division, lp.name, lp.member_id, lp.source_group_id,
+              sg.name AS source_group_name, lp.paid, lp.arrived, lp."after", lp.sort_order,
+              lp.status, lp.created_at, ${groupNameSelect}, ${isLeaderSelect}
+       FROM league_participants lp
+       LEFT JOIN groups sg ON sg.id = lp.source_group_id
+       WHERE lp.league_id = $1 AND lp.status = 'active'
+       ORDER BY lp.sort_order ASC NULLS LAST, lp.division ASC, lp.created_at ASC`,
       [id],
     );
 
@@ -1670,7 +1703,7 @@ router.post('/league/:leagueId/participants', optionalAuth, async (req, res) => 
 
     // 리그의 join_permission 확인
     const leaguePermRow = await pool.query(
-      `SELECT join_permission FROM leagues WHERE id = $1`,
+      `SELECT join_permission, group_id FROM leagues WHERE id = $1`,
       [leagueId],
     );
     if (leaguePermRow.rowCount === 0) {
@@ -1681,14 +1714,15 @@ router.post('/league/:leagueId/participants', optionalAuth, async (req, res) => 
     // 클럽 회원 여부 확인 (로그인한 경우에만)
     let isAdmin = false;
     let isClubMember = false;
+    let participantSourceGroupId = null;
     if (userId) {
       const authCheck = await pool.query(
-        `SELECT gm.role, true AS is_host
+        `SELECT gm.role, gm.group_id, true AS is_host
            FROM leagues l
            JOIN group_members gm ON gm.group_id = l.group_id
           WHERE l.id = $1 AND gm.user_id = $2
          UNION ALL
-         SELECT gm.role, false AS is_host
+         SELECT gm.role, gm.group_id, false AS is_host
            FROM league_invited_groups lig
            JOIN group_members gm ON gm.group_id = lig.group_id
           WHERE lig.league_id = $1 AND lig.status = 'accepted' AND gm.user_id = $2
@@ -1698,6 +1732,7 @@ router.post('/league/:leagueId/participants', optionalAuth, async (req, res) => 
       const userRole = authCheck.rows[0]?.role ?? null;
       isAdmin = authCheck.rows[0]?.is_host && (userRole === 'owner' || userRole === 'admin');
       isClubMember = authCheck.rowCount > 0;
+      participantSourceGroupId = authCheck.rows[0]?.group_id ?? null;
     }
 
     // club_only: 로그인 + 클럽 회원만 허용
@@ -1772,10 +1807,10 @@ router.post('/league/:leagueId/participants', optionalAuth, async (req, res) => 
     let guestClaimToken = null;
     for (const p of participants) {
       const result = await pool.query(
-        `INSERT INTO league_participants (id, league_id, division, name, member_id, paid, arrived, "after")
-         VALUES ($1, $2, $3, $4, $5, false, false, false)
-         RETURNING id, league_id, division, name, member_id, paid, arrived, "after", created_at`,
-        [randomUUID(), leagueId, p.division, p.name, isAdmin ? (p.member_id ?? null) : userId],
+        `INSERT INTO league_participants (id, league_id, division, name, member_id, source_group_id, paid, arrived, "after")
+         VALUES ($1, $2, $3, $4, $5, $6, false, false, false)
+         RETURNING id, league_id, division, name, member_id, source_group_id, paid, arrived, "after", created_at`,
+        [randomUUID(), leagueId, p.division, p.name, isAdmin ? (p.member_id ?? null) : userId, isAdmin ? (p.member_id ? leaguePermRow.rows[0].group_id : null) : participantSourceGroupId],
       );
       inserted.push(result.rows[0]);
       if (!userId) {

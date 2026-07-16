@@ -5,16 +5,101 @@ import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { generateGroupOptions } from '../../features/league/algorithms/generateGroupOptions';
 import { useGetLeagueParticipantsQuery, useGetLeagueProgramQuery, useGetLeagueQuery, useSaveLeagueProgramMutation, useSyncLeagueProgramMatchesMutation } from '../../features/league/leagueApi';
-import type { ProgramBlock, ProgramOption, ProgramType, TeamMatchType, RoundConfig } from '../../features/league/types/tournament.types';
-import { ToggleButton, ToggleButtonGroup, Button, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Chip, Radio, CircularProgress } from "@mui/material";
+import type { ProgramBlock, ProgramOption, ProgramType, TeamMatchType, RoundConfig, FormationAssignmentPlayer } from '../../features/league/types/tournament.types';
+import { ToggleButton, ToggleButtonGroup, Button, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Chip, Radio, CircularProgress, Box, Typography, Stack, Divider, Tooltip } from "@mui/material";
 import { DndContext, PointerSensor, TouchSensor, useSensor, useSensors, closestCenter,
-  type DragEndEvent, } from "@dnd-kit/core";
-import { SortableContext, verticalListSortingStrategy, arrayMove, } from "@dnd-kit/sortable";
+  useDroppable, type DragEndEvent, type DragOverEvent, } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable, } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import DragHandleIcon from "@mui/icons-material/DragHandle";
 import EditIcon from "@mui/icons-material/Edit";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { generateProgramRoundMatches } from '../../utils/programMatchGenerator';
 import { toUTCDate } from '../../utils/dateUtils';
+
+const FORMATION_COLORS = [
+  "#E53935", // 빨강
+  "#F57C00", // 주황
+  "#D4A000", // 노랑
+  "#2E7D32", // 초록
+  "#1976D2", // 파랑
+  "#303F9F", // 남색
+  "#7B1FA2", // 보라
+  "#212121", // 검정
+  "#D81B60", // 분홍
+  "#00897B", // 청록
+  "#0097A7", // 하늘
+  "#6D4C41", // 갈색
+];
+
+const formationPlayerId = (player: FormationAssignmentPlayer) =>
+  `formation-${player.name}-${player.level}`;
+
+const formationLevelSum = (players: FormationAssignmentPlayer[]): number =>
+  players.reduce(
+    (sum, player) => sum + (player.roster?.length
+      ? formationLevelSum(player.roster)
+      : Number.isFinite(player.level) ? player.level : 0),
+    0,
+  );
+
+function SortableFormationPlayer({ player }: { player: FormationAssignmentPlayer }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: formationPlayerId(player),
+  });
+
+  return (
+    <Box
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      {...attributes}
+      {...listeners}
+      sx={{
+        display: "flex", alignItems: "center", gap: 0.75, py: 0.65, px: 0.5,
+        borderRadius: 1, cursor: "grab", touchAction: "none",
+        bgcolor: isDragging ? "#EFF6FF" : "transparent", opacity: isDragging ? 0.55 : 1,
+      }}
+    >
+      <DragHandleIcon sx={{ color: "#9CA3AF", fontSize: 17, flexShrink: 0 }} />
+      <Box sx={{ width: 22, height: 22, borderRadius: "50%", bgcolor: "#FAAA47", display: "grid", placeItems: "center", fontSize: 10, fontWeight: 900, flexShrink: 0 }}>
+        {player.level}부
+      </Box>
+      <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{player.name}</Typography>
+    </Box>
+  );
+}
+
+function FormationEditCard({
+  players, index, label,
+}: {
+  players: FormationAssignmentPlayer[];
+  index: number;
+  label: string;
+}) {
+  const id = `formation-group-${index}`;
+  const { setNodeRef, isOver } = useDroppable({ id });
+  const accent = FORMATION_COLORS[index % FORMATION_COLORS.length];
+
+  return (
+    <Box sx={{ border: `1px solid ${isOver ? accent : "#E5E7EB"}`, borderTop: `3px solid ${accent}`, borderRadius: 1.5, bgcolor: isOver ? "#F8FAFF" : "#FFF", overflow: "hidden" }}>
+      <Box sx={{ px: 1.25, py: 1, display: "flex", justifyContent: "space-between", alignItems: "center", bgcolor: "#F8FAFC" }}>
+        <Typography sx={{ fontSize: 14, fontWeight: 900 }}>{label}</Typography>
+        <Typography sx={{ fontSize: 11, color: "text.secondary", fontWeight: 700 }}>{players.length}명</Typography>
+      </Box>
+      <Box ref={setNodeRef} sx={{ px: 0.75, py: 0.5, minHeight: 54 }}>
+        <SortableContext items={players.map(formationPlayerId)} strategy={verticalListSortingStrategy}>
+          {players.map((player) => <SortableFormationPlayer key={formationPlayerId(player)} player={player} />)}
+        </SortableContext>
+      </Box>
+      <Divider />
+      <Box sx={{ px: 1.25, py: 0.8 }}>
+        <Typography sx={{ fontSize: 12, color: "text.secondary", fontWeight: 700 }}>
+          합 <Box component="span" sx={{ color: accent, fontWeight: 900 }}>{formationLevelSum(players)}부</Box>
+        </Typography>
+      </Box>
+    </Box>
+  );
+}
 
 const formatTime = (totalMinutes: number) => {
   const minutesInDay = 24 * 60;
@@ -109,7 +194,7 @@ function RoundConfigEditor({
           items={rounds.map((r) => r.id)}
           strategy={verticalListSortingStrategy}
         >
-          {rounds.map((round) => (
+          {rounds.map((round, roundIndex) => (
             <div
               key={round.id}
               style={{
@@ -227,6 +312,10 @@ function RoundConfigEditor({
                                     value === "TOURNAMENT"
                                       ? x.tournamentSeeding ?? "seed"
                                       : x.tournamentSeeding,
+                                  tournamentBracketCount:
+                                    value === "TOURNAMENT"
+                                      ? x.tournamentBracketCount ?? 1
+                                      : 1,
                                 }
                             : x
                         )
@@ -340,6 +429,18 @@ function RoundConfigEditor({
                         하위
                       </ToggleButton>
                     </ToggleButtonGroup>
+                    {round.format === "TOURNAMENT" && round.option === "FINAL" && roundIndex > 0 && rounds[roundIndex - 1]?.format === "GROUP" && rounds[roundIndex - 1]?.option === "PRELIM" && (
+                      <div style={{ marginTop: "16px" }}>
+                        <div style={{ fontWeight: 700, marginBottom: "8px" }}>대진표 개수</div>
+                        <select
+                          value={round.tournamentBracketCount ?? 1}
+                          onChange={(event) => setRounds(rounds.map((x) => x.id === round.id ? { ...x, tournamentBracketCount: Number(event.target.value) } : x))}
+                          style={{ width: "100%", height: "40px", padding: "0 12px", border: "1px solid #d1d5db", borderRadius: "8px", background: "#fff", fontSize: "14px" }}
+                        >
+                          {Array.from({ length: 8 }, (_, index) => index + 1).map((count) => <option key={count} value={count}>{count}개</option>)}
+                        </select>
+                      </div>
+                    )}
                   </div>
               </div>
 
@@ -592,6 +693,7 @@ const LeagueAlgorithmDemo = ({
       teamPlayerCount: 4,
       teamMatchType: "SSS",
       tournamentSeeding: "seed",
+      tournamentBracketCount: 1,
     },
     {
       id: 2,
@@ -603,6 +705,7 @@ const LeagueAlgorithmDemo = ({
       teamPlayerCount: 4,
       teamMatchType: "SSS",
       tournamentSeeding: "seed",
+      tournamentBracketCount: 1,
     },
   ]);
 
@@ -634,6 +737,8 @@ const LeagueAlgorithmDemo = ({
     blockIndex: number;
     mode: "team" | "group";
   } | null>(null);
+  const [isFormationEditing, setIsFormationEditing] = useState(false);
+  const [formationDraft, setFormationDraft] = useState<FormationAssignmentPlayer[][]>([]);
 
   type StoredProgramEditState = {
     playerCount: number;
@@ -1222,6 +1327,14 @@ const LeagueAlgorithmDemo = ({
       teamShuffleSeed: mode === "team" && roundIndex === blockIndex
         ? nextTeamShuffleSeed
         : round.teamShuffleSeed,
+      groupAssignments: mode === "group" && roundIndex === blockIndex
+        ? undefined
+        : mode === "team" && roundIndex === blockIndex
+          ? undefined
+          : round.groupAssignments,
+      teamAssignments: mode === "team" && roundIndex === blockIndex
+        ? undefined
+        : round.teamAssignments,
     }));
     const updatedOption = buildProgramOptionFromRounds(baseOption, nextRounds);
     const nextBlocks = updatedOption.blocks.map((block, roundIndex) => {
@@ -1237,6 +1350,8 @@ const LeagueAlgorithmDemo = ({
         teamShuffleSeed: mode === "team"
           ? nextTeamShuffleSeed
           : block.teamShuffleSeed,
+        groupAssignments: mode === "group" || mode === "team" ? undefined : block.groupAssignments,
+        teamAssignments: mode === "team" ? undefined : block.teamAssignments,
       };
     });
 
@@ -1247,6 +1362,37 @@ const LeagueAlgorithmDemo = ({
         blocks: nextBlocks,
       },
     }));
+    setIsFormationEditing(false);
+    setFormationDraft([]);
+  };
+
+  const saveManualFormation = () => {
+    if (!groupResultDialog) return;
+    const { optionIndex, blockIndex, mode } = groupResultDialog;
+    const baseOption = customProgramOptions[optionIndex] ?? displayedProgramOptions[optionIndex];
+    const nextRounds = (baseOption.rounds ?? rounds).map((round, roundIndex) => {
+      if (roundIndex !== blockIndex) return { ...round, id: roundIndex + 1 };
+      if (mode === "team") {
+        return {
+          ...round,
+          id: roundIndex + 1,
+          groupSizes: formationDraft.map((group) => group.length),
+          teamAssignments: formationDraft,
+          groupAssignments: undefined,
+        };
+      }
+      return {
+        ...round,
+        id: roundIndex + 1,
+        groupAssignments: formationDraft,
+        ...(round.program === "TEAM"
+          ? { teamGroupSizes: formationDraft.map((group) => group.length) }
+          : { groupSizes: formationDraft.map((group) => group.length) }),
+      };
+    });
+    const updatedOption = buildProgramOptionFromRounds(baseOption, nextRounds);
+    setCustomProgramOptions((previous) => ({ ...previous, [optionIndex]: updatedOption }));
+    setIsFormationEditing(false);
   };
 
   const openGroupStructureDialog = (
@@ -1344,12 +1490,15 @@ const LeagueAlgorithmDemo = ({
     groupPlayers.slice(0, effectiveFormationPlayerCount),
     teamShuffleSeed,
   );
+  const savedTeamAssignments = groupResultRound?.teamAssignments ?? groupResultBlock?.teamAssignments;
   const teamResultGroups =
     groupResultOption && groupResultDialog
-      ? distributeSnake(
-          teamFormationPlayers,
-          getRoundGroupSizes(groupResultOption, groupResultDialog.blockIndex)
-        )
+      ? savedTeamAssignments?.length
+        ? savedTeamAssignments.map((players, index) => ({ name: `${String.fromCharCode(65 + index)}팀`, players }))
+        : distributeSnake(
+            teamFormationPlayers,
+            getRoundGroupSizes(groupResultOption, groupResultDialog.blockIndex)
+          )
       : [];
   const teamUnits = teamResultGroups.map((team, teamIndex) => {
     const leader = team.players[0];
@@ -1359,7 +1508,10 @@ const LeagueAlgorithmDemo = ({
       roster: team.players,
     };
   });
-  const dialogGroupResult =
+  const savedFormationAssignments = groupResultDialog?.mode === "team"
+    ? groupResultRound?.teamAssignments ?? groupResultBlock?.teamAssignments
+    : groupResultRound?.groupAssignments ?? groupResultBlock?.groupAssignments;
+  const calculatedDialogGroupResult =
     groupResultSizes.length > 0
       ? groupResultDialog?.mode === "team"
         ? teamResultGroups
@@ -1373,6 +1525,59 @@ const LeagueAlgorithmDemo = ({
               groupResultSizes
             )
       : [];
+  const dialogGroupResult = savedFormationAssignments?.length
+    ? savedFormationAssignments.map((players, index) => ({
+        name: groupResultDialog?.mode === "team"
+          ? `${String.fromCharCode(65 + index)}팀`
+          : `${index + 1}조`,
+        players,
+      }))
+    : calculatedDialogGroupResult;
+
+  const beginFormationEditing = () => {
+    setFormationDraft(dialogGroupResult.map((group) => group.players.map((player) => ({ ...player }))));
+    setIsFormationEditing(true);
+  };
+
+  const findFormationContainer = (groups: FormationAssignmentPlayer[][], id: string) => {
+    if (id.startsWith("formation-group-")) return Number(id.replace("formation-group-", ""));
+    return groups.findIndex((group) => group.some((player) => formationPlayerId(player) === id));
+  };
+
+  const handleFormationDragOver = ({ active, over }: DragOverEvent) => {
+    if (!over) return;
+    const activeId = String(active.id);
+    const overId = String(over.id);
+    setFormationDraft((previous) => {
+      const from = findFormationContainer(previous, activeId);
+      const to = findFormationContainer(previous, overId);
+      if (from < 0 || to < 0 || from === to) return previous;
+      const next = previous.map((group) => [...group]);
+      const itemIndex = next[from].findIndex((player) => formationPlayerId(player) === activeId);
+      if (itemIndex < 0) return previous;
+      const [item] = next[from].splice(itemIndex, 1);
+      const overIndex = next[to].findIndex((player) => formationPlayerId(player) === overId);
+      next[to].splice(overIndex < 0 ? next[to].length : overIndex, 0, item);
+      return next;
+    });
+  };
+
+  const handleFormationDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over) return;
+    const activeId = String(active.id);
+    const overId = String(over.id);
+    setFormationDraft((previous) => {
+      const container = findFormationContainer(previous, activeId);
+      const overContainer = findFormationContainer(previous, overId);
+      if (container < 0 || container !== overContainer) return previous;
+      const oldIndex = previous[container].findIndex((player) => formationPlayerId(player) === activeId);
+      const newIndex = previous[container].findIndex((player) => formationPlayerId(player) === overId);
+      if (oldIndex < 0 || newIndex < 0 || oldIndex === newIndex) return previous;
+      const next = previous.map((group) => [...group]);
+      next[container] = arrayMove(next[container], oldIndex, newIndex);
+      return next;
+    });
+  };
 
   return (
     <div
@@ -1662,7 +1867,7 @@ const LeagueAlgorithmDemo = ({
             strategy={verticalListSortingStrategy}
           >
 
-        {rounds.map((round) => (
+        {rounds.map((round, roundIndex) => (
           <div
             key={round.id}
             style={{
@@ -1790,6 +1995,10 @@ const LeagueAlgorithmDemo = ({
                                   value === "TOURNAMENT"
                                     ? x.tournamentSeeding ?? "seed"
                                     : x.tournamentSeeding,
+                                tournamentBracketCount:
+                                  value === "TOURNAMENT"
+                                    ? x.tournamentBracketCount ?? 1
+                                    : 1,
 	                            }
                           : x
                       )
@@ -1903,6 +2112,18 @@ const LeagueAlgorithmDemo = ({
                       하위
                     </ToggleButton>
                   </ToggleButtonGroup>
+                  {round.format === "TOURNAMENT" && round.option === "FINAL" && roundIndex > 0 && rounds[roundIndex - 1]?.format === "GROUP" && rounds[roundIndex - 1]?.option === "PRELIM" && (
+                    <div style={{ marginTop: "16px" }}>
+                      <div style={{ fontWeight: 700, marginBottom: "8px" }}>대진표 개수</div>
+                      <select
+                        value={round.tournamentBracketCount ?? 1}
+                        onChange={(event) => setRounds(rounds.map((x) => x.id === round.id ? { ...x, tournamentBracketCount: Number(event.target.value) } : x))}
+                        style={{ width: "100%", height: "40px", padding: "0 12px", border: "1px solid #d1d5db", borderRadius: "8px", background: "#fff", fontSize: "14px" }}
+                      >
+                        {Array.from({ length: 8 }, (_, index) => index + 1).map((count) => <option key={count} value={count}>{count}개</option>)}
+                      </select>
+                    </div>
+                  )}
                   <div style={{ marginTop: "16px" }}>
                     <div
                       style={{
@@ -2064,6 +2285,7 @@ const LeagueAlgorithmDemo = ({
                 teamPlayerCount: 4,
                 teamMatchType: "SSS",
                 tournamentSeeding: "seed",
+                tournamentBracketCount: 1,
               },
             ]);
           }}
@@ -2605,59 +2827,87 @@ const LeagueAlgorithmDemo = ({
 
       <Dialog
         open={groupResultDialog !== null}
-        onClose={() => setGroupResultDialog(null)}
+        onClose={() => {
+          setGroupResultDialog(null);
+          setIsFormationEditing(false);
+          setFormationDraft([]);
+        }}
         fullWidth
         maxWidth="sm"
       >
-        <DialogTitle>
+        <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontWeight: 900, fontSize: 18 }}>
           {isGroupResultTeam ? "팀 편성 결과" : "조 편성 결과"}
+          {isEditMode && !isFormationEditing && (
+            <Tooltip title="수동 편성">
+              <IconButton size="small" onClick={beginFormationEditing} aria-label="수동 편성">
+                <EditIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
         </DialogTitle>
 
         <DialogContent dividers>
-          <div
-            key={`${groupResultDialog?.optionIndex ?? "x"}-${groupResultDialog?.blockIndex ?? "x"}-${groupResultDialog?.mode ?? "x"}-${teamShuffleSeed}-${groupShuffleSeed}`}
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-              gap: "12px",
-            }}
-          >
-          {dialogGroupResult.map((group) => (
-            <div
-              key={group.name}
-              style={{
-                border: '1px solid #ddd',
-                borderRadius: '12px',
-                padding: '16px',
-              }}
+          {isFormationEditing ? (
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragOver={handleFormationDragOver} onDragEnd={handleFormationDragEnd}>
+              <Typography sx={{ mb: 1.5, fontSize: 12, color: "text.secondary" }}>
+                참가자를 길게 눌러 원하는 곳으로 이동해 주세요.
+              </Typography>
+              <Box sx={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 1.25 }}>
+                {formationDraft.map((players, index) => (
+                  <FormationEditCard
+                    key={index}
+                    players={players}
+                    index={index}
+                    label={isGroupResultTeam ? `${String.fromCharCode(65 + index)}팀` : `${index + 1}조`}
+                  />
+                ))}
+              </Box>
+            </DndContext>
+          ) : (
+            <Box
+              key={`${groupResultDialog?.optionIndex ?? "x"}-${groupResultDialog?.blockIndex ?? "x"}-${groupResultDialog?.mode ?? "x"}-${teamShuffleSeed}-${groupShuffleSeed}`}
+              sx={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 1.25 }}
             >
-              <h3>{isGroupResultTeam ? group.name.replace(/조$/, "팀") : group.name}</h3>
-
-              {group.players.map((player) => {
-                const roster = (player as typeof player & { roster?: Array<{ name: string; level: number }> }).roster;
-
+              {dialogGroupResult.map((group, groupIndex) => {
+                const accent = FORMATION_COLORS[groupIndex % FORMATION_COLORS.length];
                 return (
-                  <div key={player.name} style={{ marginTop: roster ? "8px" : 0 }}>
-                    {player.level}부 - {formatFormationName(player.name, player.level)}
-                    {roster && (
-                      <div style={{ paddingLeft: "12px", marginTop: "4px", color: "#6b7280" }}>
-                        {roster.map((member) => (
-                          <div key={member.name}>
-                            {member.level}부 - {formatFormationName(member.name, member.level)}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <Box key={group.name} sx={{ border: "1px solid #E5E7EB", borderTop: `3px solid ${accent}`, borderRadius: 1.5, overflow: "hidden", bgcolor: "#FFF" }}>
+                    <Box sx={{ px: 1.5, py: 1.1, bgcolor: "#F8FAFC", display: "flex", justifyContent: "space-between" }}>
+                      <Typography sx={{ fontSize: 15, fontWeight: 900 }}>{isGroupResultTeam ? `${String.fromCharCode(65 + groupIndex)}팀` : group.name}</Typography>
+                      <Typography sx={{ fontSize: 11, color: "text.secondary", fontWeight: 700 }}>{group.players.length}명</Typography>
+                    </Box>
+                    <Stack spacing={0.65} sx={{ px: 1.5, py: 1.25 }}>
+                      {group.players.map((player) => {
+                        const assignedPlayer = player as FormationAssignmentPlayer;
+                        const roster = assignedPlayer.roster;
+                        return (
+                          <Box key={player.name}>
+                            <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{player.level}부 - {formatFormationName(player.name, player.level)}</Typography>
+                            {roster && <Box sx={{ pl: 1.25, mt: 0.4 }}>{roster.map((member) => <Typography key={member.name} sx={{ fontSize: 12, color: "text.secondary" }}>{member.level}부 - {formatFormationName(member.name, member.level)}</Typography>)}</Box>}
+                          </Box>
+                        );
+                      })}
+                    </Stack>
+                    <Divider />
+                    <Box sx={{ px: 1.5, py: 0.9 }}>
+                      <Typography sx={{ fontSize: 12, color: "text.secondary", fontWeight: 700 }}>
+                        합 <Box component="span" sx={{ color: accent, fontWeight: 900 }}>{formationLevelSum(group.players)}부</Box>
+                      </Typography>
+                    </Box>
+                  </Box>
                 );
               })}
-            </div>
-          ))}
-          </div>
+            </Box>
+          )}
         </DialogContent>
 
         <DialogActions>
-          {groupResultDialog && (
+          {isFormationEditing ? (
+            <>
+              <Button onClick={() => { setIsFormationEditing(false); setFormationDraft([]); }}>취소</Button>
+              <Button variant="contained" onClick={saveManualFormation}>완료</Button>
+            </>
+          ) : groupResultDialog && (
             <Button
               variant="outlined"
               onClick={() => {
@@ -2671,9 +2921,9 @@ const LeagueAlgorithmDemo = ({
               재편성
             </Button>
           )}
-          <Button onClick={() => setGroupResultDialog(null)}>
+          {!isFormationEditing && <Button onClick={() => setGroupResultDialog(null)}>
             닫기
-          </Button>
+          </Button>}
         </DialogActions>
       </Dialog>
 

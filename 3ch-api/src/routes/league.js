@@ -1,6 +1,6 @@
 ﻿const express = require('express');
 const { z } = require('zod');
-const { randomUUID } = require('crypto');
+const { randomUUID, randomBytes, createHash } = require('crypto');
 const multer = require('multer');
 const pool = require('../db/pool');
 const { requireAuth, optionalAuth } = require('../middlewares/auth');
@@ -14,6 +14,21 @@ const { scanLeagueSheetWithOpenAIVision } = require('../services/openaiVisionSca
 const isWebPushConfigured = Boolean(
   process.env.VAPID_MAILTO && process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY,
 );
+
+const claimHash = (value) => createHash('sha256').update(String(value)).digest('hex');
+const makeClaimCode = () => randomBytes(4).toString('hex').toUpperCase();
+const makeGuestToken = () => randomBytes(24).toString('base64url');
+
+async function getLeagueManager(client, leagueId, userId) {
+  const result = await client.query(
+    `SELECT gm.role
+       FROM leagues l
+       JOIN group_members gm ON gm.group_id = l.group_id
+      WHERE l.id = $1 AND gm.user_id = $2`,
+    [leagueId, userId],
+  );
+  return ['owner', 'admin'].includes(result.rows[0]?.role);
+}
 
 if (isWebPushConfigured) {
   webpush.setVapidDetails(
@@ -957,6 +972,7 @@ const createLeagueSchema = z.object({
   advance_method: z.string().optional(),          // 진출 방식
   finals_advance: z.number().int().min(2).optional(), // 결승 진출
   program_data: z.unknown().optional(),
+  invited_group_ids: z.array(z.string().uuid()).default([]),
 });
 
 const updateLeagueSchema = z.object({
@@ -1193,6 +1209,7 @@ router.post('/league', requireAuth, async (req, res) => {
       advance_method,
       finals_advance,
       program_data,
+      invited_group_ids,
     } = createLeagueSchema.parse(req.body);
 
     const userId = req.user.sub;
@@ -1219,11 +1236,30 @@ router.post('/league', requireAuth, async (req, res) => {
 
     const leagueCode = await assignLeagueCode(client, { groupId: group_id, startDate: start_date, leagueId });
 
+    const participantClaimCodes = [];
     for (const p of participants) {
+      const participantId = randomUUID();
       await client.query(
         `INSERT INTO league_participants (id, league_id, division, name, member_id, paid, arrived, "after")
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-        [randomUUID(), leagueId, p.division ?? '', p.name, p.member_id ?? null, p.paid ?? false, p.arrived ?? false, p.after ?? false],
+        [participantId, leagueId, p.division ?? '', p.name, p.member_id ?? null, p.paid ?? false, p.arrived ?? false, p.after ?? false],
+      );
+      if (!p.member_id) {
+        const code = makeClaimCode();
+        await client.query(
+          `INSERT INTO league_participant_claims (participant_id, code_hash) VALUES ($1, $2)`,
+          [participantId, claimHash(code)],
+        );
+        participantClaimCodes.push({ participant_id: participantId, name: p.name, code });
+      }
+    }
+
+    for (const invitedGroupId of [...new Set(invited_group_ids)].filter((id) => id !== group_id)) {
+      await client.query(
+        `INSERT INTO league_invited_groups (id, league_id, group_id, invited_by_id)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (league_id, group_id) DO NOTHING`,
+        [randomUUID(), leagueId, invitedGroupId, userId],
       );
     }
 
@@ -1240,6 +1276,7 @@ router.post('/league', requireAuth, async (req, res) => {
     return res.status(201).json({
       message: '리그가 성공적으로 생성되었습니다.',
       league: { ...result.rows[0], league_code: leagueCode },
+      participant_claim_codes: participantClaimCodes,
     });
   } catch (error) {
     try {
@@ -1288,6 +1325,248 @@ router.post('/league', requireAuth, async (req, res) => {
  *       500:
  *         description: 서버 오류
  */
+router.get('/league/invitations/mine', requireAuth, async (req, res) => {
+  try {
+    const userId = Number(req.user.sub);
+    const result = await pool.query(
+      `SELECT lig.id AS invitation_id, lig.status AS invitation_status, lig.group_id,
+              g.name AS invited_group_name, l.*, host.name AS host_group_name,
+              gm.role AS my_role
+         FROM league_invited_groups lig
+         JOIN group_members gm ON gm.group_id = lig.group_id AND gm.user_id = $1
+         JOIN groups g ON g.id = lig.group_id
+         JOIN leagues l ON l.id = lig.league_id
+         LEFT JOIN groups host ON host.id = l.group_id
+        WHERE lig.status = 'accepted' OR gm.role IN ('owner', 'admin')
+        ORDER BY l.start_date DESC`,
+      [userId],
+    );
+    return res.json({ invitations: result.rows });
+  } catch (error) {
+    console.error('Get invited leagues error:', error);
+    return res.status(500).json({ message: '초대된 리그를 불러오지 못했습니다.' });
+  }
+});
+
+router.get('/league/:id/invited-groups', optionalAuth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT lig.id, lig.group_id, lig.status, lig.created_at, lig.responded_at,
+              g.name, g.sport, g.region_city, g.region_district
+         FROM league_invited_groups lig
+         JOIN groups g ON g.id = lig.group_id
+        WHERE lig.league_id = $1
+        ORDER BY lig.created_at`,
+      [req.params.id],
+    );
+    return res.json({ groups: result.rows });
+  } catch (error) {
+    return res.status(500).json({ message: '참여 클럽을 불러오지 못했습니다.' });
+  }
+});
+
+router.post('/league/:id/invited-groups', requireAuth, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const userId = Number(req.user.sub);
+    if (!await getLeagueManager(client, req.params.id, userId)) {
+      return res.status(403).json({ message: '참여 클럽을 초대할 권한이 없습니다.' });
+    }
+    const groupIds = z.array(z.string().uuid()).min(1).parse(req.body.group_ids);
+    const host = await client.query(`SELECT group_id FROM leagues WHERE id = $1`, [req.params.id]);
+    const filtered = [...new Set(groupIds)].filter((groupId) => groupId !== host.rows[0]?.group_id);
+    const invitations = [];
+    for (const groupId of filtered) {
+      const result = await client.query(
+        `INSERT INTO league_invited_groups (id, league_id, group_id, invited_by_id)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (league_id, group_id) DO UPDATE
+           SET status = 'pending', invited_by_id = EXCLUDED.invited_by_id,
+               accepted_by_id = NULL, responded_at = NULL
+         RETURNING *`,
+        [randomUUID(), req.params.id, groupId, userId],
+      );
+      invitations.push(result.rows[0]);
+    }
+    return res.status(201).json({ invitations });
+  } catch (error) {
+    if (error instanceof z.ZodError) return res.status(400).json({ errors: error.errors });
+    console.error('Invite league groups error:', error);
+    return res.status(500).json({ message: '클럽 초대에 실패했습니다.' });
+  } finally {
+    client.release();
+  }
+});
+
+router.patch('/league/invitations/:invitationId', requireAuth, async (req, res) => {
+  try {
+    const userId = Number(req.user.sub);
+    const status = z.enum(['accepted', 'declined']).parse(req.body.status);
+    const result = await pool.query(
+      `UPDATE league_invited_groups lig
+          SET status = $1, accepted_by_id = $2, responded_at = NOW()
+        WHERE lig.id = $3
+          AND EXISTS (
+            SELECT 1 FROM group_members gm
+             WHERE gm.group_id = lig.group_id AND gm.user_id = $2
+               AND gm.role IN ('owner', 'admin')
+          )
+        RETURNING *`,
+      [status, userId, req.params.invitationId],
+    );
+    if (!result.rowCount) return res.status(403).json({ message: '초대에 응답할 권한이 없습니다.' });
+    return res.json({ invitation: result.rows[0] });
+  } catch (error) {
+    if (error instanceof z.ZodError) return res.status(400).json({ errors: error.errors });
+    return res.status(500).json({ message: '초대 응답에 실패했습니다.' });
+  }
+});
+
+router.get('/league/:id/participant-claims', optionalAuth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT lp.id, lp.name, lp.division
+         FROM league_participants lp
+        WHERE lp.league_id = $1 AND lp.status = 'active' AND lp.member_id IS NULL
+        ORDER BY lp.sort_order NULLS LAST, lp.created_at`,
+      [req.params.id],
+    );
+    return res.json({ participants: result.rows });
+  } catch (error) {
+    return res.status(500).json({ message: '전환 가능한 참가자를 불러오지 못했습니다.' });
+  }
+});
+
+router.post('/league/:leagueId/participants/:participantId/claim-code', requireAuth, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const userId = Number(req.user.sub);
+    if (!await getLeagueManager(client, req.params.leagueId, userId)) {
+      return res.status(403).json({ message: '연결코드를 발급할 권한이 없습니다.' });
+    }
+    const participant = await client.query(
+      `SELECT id FROM league_participants WHERE id = $1 AND league_id = $2 AND member_id IS NULL`,
+      [req.params.participantId, req.params.leagueId],
+    );
+    if (!participant.rowCount) return res.status(409).json({ message: '이미 계정과 연결된 참가자입니다.' });
+    const code = makeClaimCode();
+    await client.query(
+      `INSERT INTO league_participant_claims (participant_id, code_hash, updated_at)
+       VALUES ($1, $2, NOW())
+       ON CONFLICT (participant_id) DO UPDATE
+         SET code_hash = EXCLUDED.code_hash, guest_token_hash = NULL,
+             claimed_by_id = NULL, claimed_at = NULL, updated_at = NOW()`,
+      [req.params.participantId, claimHash(code)],
+    );
+    return res.json({ participant_id: req.params.participantId, code });
+  } catch (error) {
+    console.error('Issue participant claim code error:', error);
+    return res.status(500).json({ message: '연결코드 발급에 실패했습니다.' });
+  } finally {
+    client.release();
+  }
+});
+
+router.post('/league/:leagueId/participants/:participantId/claim', optionalAuth, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const userId = req.user ? Number(req.user.sub) : null;
+    const code = z.string().min(6).max(32).parse(req.body.code).trim().toUpperCase();
+    await client.query('BEGIN');
+    const claim = await client.query(
+      `SELECT lp.id, lp.member_id, l.group_id, l.id AS league_id
+         FROM league_participants lp
+         JOIN leagues l ON l.id = lp.league_id
+         JOIN league_participant_claims lpc ON lpc.participant_id = lp.id
+        WHERE lp.id = $1 AND lp.league_id = $2 AND lpc.code_hash = $3
+        FOR UPDATE`,
+      [req.params.participantId, req.params.leagueId, claimHash(code)],
+    );
+    if (!claim.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: '연결코드가 올바르지 않습니다.' });
+    }
+    if (claim.rows[0].member_id) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: '이미 다른 계정과 연결된 참가자입니다.' });
+    }
+    if (userId) {
+      const duplicate = await client.query(
+        `SELECT 1 FROM league_participants WHERE league_id = $1 AND member_id = $2 AND status = 'active'`,
+        [req.params.leagueId, userId],
+      );
+      if (duplicate.rowCount) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ message: '이미 이 리그에 연결된 참가자가 있습니다.' });
+      }
+      await client.query(`UPDATE league_participants SET member_id = $1 WHERE id = $2`, [userId, req.params.participantId]);
+      await client.query(
+        `UPDATE league_participant_claims SET claimed_by_id = $1, claimed_at = NOW(), code_hash = NULL, guest_token_hash = NULL, updated_at = NOW() WHERE participant_id = $2`,
+        [userId, req.params.participantId],
+      );
+      await client.query('COMMIT');
+      return res.json({ linked: true, participant_id: req.params.participantId });
+    }
+    const guestToken = makeGuestToken();
+    await client.query(
+      `UPDATE league_participant_claims SET guest_token_hash = $1, code_hash = NULL, expires_at = NOW() + INTERVAL '90 days', updated_at = NOW() WHERE participant_id = $2`,
+      [claimHash(guestToken), req.params.participantId],
+    );
+    await client.query('COMMIT');
+    return res.json({ linked: false, participant_id: req.params.participantId, guest_token: guestToken });
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch {}
+    if (error instanceof z.ZodError) return res.status(400).json({ errors: error.errors });
+    console.error('Claim participant error:', error);
+    return res.status(500).json({ message: '참가자 연결에 실패했습니다.' });
+  } finally {
+    client.release();
+  }
+});
+
+router.post('/league/:leagueId/participant-claims/auto-link', requireAuth, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const userId = Number(req.user.sub);
+    const guestToken = z.string().min(20).parse(req.body.guest_token);
+    await client.query('BEGIN');
+    const claim = await client.query(
+      `SELECT lpc.participant_id
+         FROM league_participant_claims lpc
+         JOIN league_participants lp ON lp.id = lpc.participant_id
+        WHERE lp.league_id = $1 AND lp.member_id IS NULL
+          AND lpc.guest_token_hash = $2
+          AND (lpc.expires_at IS NULL OR lpc.expires_at > NOW())
+        FOR UPDATE`,
+      [req.params.leagueId, claimHash(guestToken)],
+    );
+    if (!claim.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: '연결할 비회원 신청 기록이 없습니다.' });
+    }
+    const duplicate = await client.query(
+      `SELECT 1 FROM league_participants WHERE league_id = $1 AND member_id = $2 AND status = 'active'`,
+      [req.params.leagueId, userId],
+    );
+    if (duplicate.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: '이미 이 리그에 연결된 참가자가 있습니다.' });
+    }
+    await client.query(`UPDATE league_participants SET member_id = $1 WHERE id = $2`, [userId, claim.rows[0].participant_id]);
+    await client.query(
+      `UPDATE league_participant_claims SET claimed_by_id = $1, claimed_at = NOW(), guest_token_hash = NULL, updated_at = NOW() WHERE participant_id = $2`,
+      [userId, claim.rows[0].participant_id],
+    );
+    await client.query('COMMIT');
+    return res.json({ linked: true, participant_id: claim.rows[0].participant_id });
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch {}
+    return res.status(500).json({ message: '비회원 신청 연결에 실패했습니다.' });
+  } finally {
+    client.release();
+  }
+});
+
 router.get('/league/:id/participants', optionalAuth, async (req, res) => {
   try {
     const { id } = req.params;
@@ -1307,8 +1586,14 @@ router.get('/league/:id/participants', optionalAuth, async (req, res) => {
       if (!userId) return res.status(403).json({ message: '클럽 회원만 조회할 수 있습니다.' });
       const accessCheck = await pool.query(
         `SELECT 1 FROM leagues l
-         INNER JOIN group_members gm ON gm.group_id = l.group_id
-         WHERE l.id = $1 AND gm.user_id = $2`,
+         WHERE l.id = $1 AND (
+           EXISTS (SELECT 1 FROM group_members gm WHERE gm.group_id = l.group_id AND gm.user_id = $2)
+           OR EXISTS (
+             SELECT 1 FROM league_invited_groups lig
+             JOIN group_members gm ON gm.group_id = lig.group_id
+             WHERE lig.league_id = l.id AND lig.status = 'accepted' AND gm.user_id = $2
+           )
+         )`,
         [id, userId],
       );
       if (accessCheck.rowCount === 0) {
@@ -1398,14 +1683,20 @@ router.post('/league/:leagueId/participants', optionalAuth, async (req, res) => 
     let isClubMember = false;
     if (userId) {
       const authCheck = await pool.query(
-        `SELECT gm.role
-         FROM leagues l
-         INNER JOIN group_members gm ON gm.group_id = l.group_id
-         WHERE l.id = $1 AND gm.user_id = $2`,
+        `SELECT gm.role, true AS is_host
+           FROM leagues l
+           JOIN group_members gm ON gm.group_id = l.group_id
+          WHERE l.id = $1 AND gm.user_id = $2
+         UNION ALL
+         SELECT gm.role, false AS is_host
+           FROM league_invited_groups lig
+           JOIN group_members gm ON gm.group_id = lig.group_id
+          WHERE lig.league_id = $1 AND lig.status = 'accepted' AND gm.user_id = $2
+         LIMIT 1`,
         [leagueId, userId],
       );
       const userRole = authCheck.rows[0]?.role ?? null;
-      isAdmin = userRole === 'owner' || userRole === 'admin';
+      isAdmin = authCheck.rows[0]?.is_host && (userRole === 'owner' || userRole === 'admin');
       isClubMember = authCheck.rowCount > 0;
     }
 
@@ -1422,6 +1713,15 @@ router.post('/league/:leagueId/participants', optionalAuth, async (req, res) => 
     // 관리자가 아니면 1명만 신청 가능
     if (!isAdmin && rawParticipants.length > 1) {
       return res.status(403).json({ message: '본인만 참가 신청할 수 있습니다.' });
+    }
+    if (!isAdmin && userId) {
+      const existingParticipant = await pool.query(
+        `SELECT 1 FROM league_participants WHERE league_id = $1 AND member_id = $2 AND status = 'active'`,
+        [leagueId, userId],
+      );
+      if (existingParticipant.rowCount) {
+        return res.status(409).json({ message: '이미 참가 신청이 완료된 계정입니다.' });
+      }
     }
 
     const addSchema = z.array(z.object({
@@ -1469,14 +1769,23 @@ router.post('/league/:leagueId/participants', optionalAuth, async (req, res) => 
     }
 
     const inserted = [];
+    let guestClaimToken = null;
     for (const p of participants) {
       const result = await pool.query(
         `INSERT INTO league_participants (id, league_id, division, name, member_id, paid, arrived, "after")
          VALUES ($1, $2, $3, $4, $5, false, false, false)
          RETURNING id, league_id, division, name, member_id, paid, arrived, "after", created_at`,
-        [randomUUID(), leagueId, p.division, p.name, p.member_id ?? null],
+        [randomUUID(), leagueId, p.division, p.name, isAdmin ? (p.member_id ?? null) : userId],
       );
       inserted.push(result.rows[0]);
+      if (!userId) {
+        guestClaimToken = makeGuestToken();
+        await pool.query(
+          `INSERT INTO league_participant_claims (participant_id, guest_token_hash, expires_at)
+           VALUES ($1, $2, NOW() + INTERVAL '90 days')`,
+          [result.rows[0].id, claimHash(guestClaimToken)],
+        );
+      }
     }
 
     // participant_count 실수 기반으로 갱신
@@ -1508,7 +1817,7 @@ router.post('/league/:leagueId/participants', optionalAuth, async (req, res) => 
       }
     }
 
-    return res.status(201).json({ message: '참가자가 추가되었습니다.', participants: inserted });
+    return res.status(201).json({ message: '참가자가 추가되었습니다.', participants: inserted, guest_claim_token: guestClaimToken });
   } catch (error) {
     console.error('Add participants error:', error);
     return res.status(500).json({ message: '서버 오류가 발생했습니다.' });

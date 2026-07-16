@@ -1997,15 +1997,33 @@ export default function LeagueGPTVisionSheet() {
       <Dialog open={Boolean(imageEditor)} onClose={closeImageEditor} maxWidth="md" fullWidth sx={{ zIndex: 10002 }} slotProps={{ paper: { sx: { overflow: "hidden", ...mobileDialogPaperSx } } }}>
         <DialogTitle sx={{ fontWeight: 900 }}>사진 확인</DialogTitle>
         <DialogContent dividers sx={{ p: 1.5 }}>
+          <Typography sx={{ mb: 1.5, color: "#6B7280", fontSize: 13, lineHeight: 1.6, fontWeight: 700 }}>
+            점수가 잘 인식될 수 있도록 정방향으로 맞춰주고, 대진표 부분만 인식 영역으로 지정해 주세요.
+          </Typography>
           <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: 300, maxHeight: 420, overflow: "auto", bgcolor: "#111827" }}>
             {imageEditor ? <ReactCrop crop={crop} onChange={(_, percentCrop) => setCrop(percentCrop)} onComplete={(pixelCrop) => setCompletedCrop(pixelCrop)} disabled={!cropMode} keepSelection={cropMode}>
               <img ref={editorImageRef} src={imageEditor.url} onLoad={handleEditorImageLoad} alt="선택한 대진표" draggable={false} style={{ display: "block", maxWidth: "100%", maxHeight: 420, objectFit: "contain" }} />
             </ReactCrop> : null}
           </Box>
-          <Stack direction="row" alignItems="center" justifyContent="center" spacing={1} sx={{ pt: 1.25 }}>
-            <Tooltip title="왼쪽 회전"><IconButton onClick={() => void rotateEditorImage(-90)}><RotateLeftIcon /></IconButton></Tooltip>
-            <Tooltip title="자르기"><IconButton color={cropMode ? "primary" : "default"} onClick={enableCrop}><CropIcon /></IconButton></Tooltip>
-            <Tooltip title="오른쪽 회전"><IconButton onClick={() => void rotateEditorImage(90)}><RotateRightIcon /></IconButton></Tooltip>
+          <Stack direction="row" alignItems="flex-start" justifyContent="center" spacing={2} sx={{ pt: 1.25 }}>
+            <Stack alignItems="center" sx={{ width: 88 }}>
+              <Tooltip title="왼쪽으로 회전">
+                <IconButton onClick={() => void rotateEditorImage(-90)}><RotateLeftIcon /></IconButton>
+              </Tooltip>
+              <Typography sx={{ fontSize: 11, fontWeight: 700, color: "#6B7280" }}>왼쪽으로 회전</Typography>
+            </Stack>
+            <Stack alignItems="center" sx={{ width: 88 }}>
+              <Tooltip title="자르기">
+                <IconButton color={cropMode ? "primary" : "default"} onClick={enableCrop}><CropIcon /></IconButton>
+              </Tooltip>
+              <Typography sx={{ fontSize: 11, fontWeight: 700, color: cropMode ? "#1976D2" : "#6B7280" }}>자르기</Typography>
+            </Stack>
+            <Stack alignItems="center" sx={{ width: 88 }}>
+              <Tooltip title="오른쪽으로 회전">
+                <IconButton onClick={() => void rotateEditorImage(90)}><RotateRightIcon /></IconButton>
+              </Tooltip>
+              <Typography sx={{ fontSize: 11, fontWeight: 700, color: "#6B7280" }}>오른쪽으로 회전</Typography>
+            </Stack>
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 2.5, py: 1.5 }}>
@@ -2017,7 +2035,7 @@ export default function LeagueGPTVisionSheet() {
       <Dialog open={isScanning} maxWidth="xs" fullWidth sx={{ zIndex: 10002 }} slotProps={{ paper: { sx: mobileDialogPaperSx } }}>
         <DialogContent sx={{ py: 4, textAlign: "center" }}>
           <CircularProgress size={34} />
-          <Typography sx={{ mt: 2, fontWeight: 900 }}>GPT Vision이 점수 격자를 인식하는 중입니다.</Typography>
+          <Typography sx={{ mt: 2, fontWeight: 900 }}>AI가 사진 속 점수를 인식하는 중입니다.</Typography>
         </DialogContent>
       </Dialog>
 
@@ -2028,9 +2046,9 @@ export default function LeagueGPTVisionSheet() {
       </Dialog>
 
       <Dialog open={previewOpen} onClose={() => !isScanning && setPreviewOpen(false)} maxWidth="lg" fullWidth sx={{ zIndex: 10002 }} slotProps={{ paper: { sx: mobileDialogPaperSx } }}>
-        <DialogTitle sx={{ fontWeight: 900 }}>GPT Vision 인식 결과 확인</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 900 }}>AI 인식 결과</DialogTitle>
         <DialogContent dividers>
-          <Typography sx={{ mb: 1.5, color: "#6B7280", fontSize: 13, fontWeight: 700 }}>별표부터 시작하는 점수 격자만 인식했습니다. 노란색 또는 잘못된 점수는 저장 전에 수정해 주세요.</Typography>
+          <Typography sx={{ mb: 1.5, color: "#6B7280", fontSize: 13, fontWeight: 700 }}>별 표시한 부분부터 점수를 인식했습니다. 잘못 인식된 점수는 직접 수정한 후 저장해 주세요.</Typography>
           <Box component="table" sx={{ width: "100%", tableLayout: "fixed", borderCollapse: "collapse", "& td, & th": { border: "1px solid #D1D5DB", textAlign: "center", p: 0.5 } }}>
             <tbody>
               {localOrder.map((rowPlayer, rowIndex) => (
@@ -2038,11 +2056,10 @@ export default function LeagueGPTVisionSheet() {
                   {localOrder.map((columnPlayer, columnIndex) => {
                     if (rowIndex === columnIndex) return <td key={columnPlayer.id} style={{ background: "#E5E7EB" }} />;
                     const cell = previewByPosition.get(`${rowIndex}__${columnIndex}`);
-                    const needsReview = cell?.needsReview || Boolean(cell?.issue);
-                    return <td key={columnPlayer.id} style={{ background: needsReview ? "#FFFBEB" : undefined }}>
+                    return <td key={columnPlayer.id} style={{ background: "#FFFFFF" }}>
                       <Stack direction="row" alignItems="center" justifyContent="center" spacing={0.5}>
                         <IconButton size="small" onClick={() => updatePreviewCell(rowIndex, columnIndex, (cell?.score ?? 0) - 1)} disabled={(cell?.score ?? 0) <= 0}>-</IconButton>
-                        <Typography sx={{ minWidth: 24, fontSize: 20, fontWeight: 900, color: needsReview ? "#B45309" : "#111827" }}>{cell?.score ?? 0}</Typography>
+                        <Typography sx={{ minWidth: 24, fontSize: 20, fontWeight: 900, color: "#111827" }}>{cell?.score ?? 0}</Typography>
                         <IconButton size="small" onClick={() => updatePreviewCell(rowIndex, columnIndex, (cell?.score ?? 0) + 1)}>+</IconButton>
                       </Stack>
                     </td>;
@@ -2054,7 +2071,7 @@ export default function LeagueGPTVisionSheet() {
         </DialogContent>
         <DialogActions sx={{ px: 2.5, py: 1.5 }}>
           <Button onClick={() => setPreviewOpen(false)}>취소</Button>
-          <Button variant="contained" onClick={saveVisionPreview} disabled={isScanning || leagueStarted}>인식 결과 저장</Button>
+          <Button variant="contained" onClick={saveVisionPreview} disabled={isScanning || leagueStarted}>저장</Button>
         </DialogActions>
       </Dialog>
     </Box>,

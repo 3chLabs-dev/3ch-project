@@ -34,6 +34,9 @@ model User {
   sport_ranking_events  SportRankingEvent[]  @relation("SportRankingEventMember")
   support_chat_room     SupportChatRoom?
   support_chat_messages SupportChatMessage[]
+  sent_league_invitations LeagueInvitedGroup[] @relation("LeagueInvitationSender")
+  accepted_league_invitations LeagueInvitedGroup[] @relation("LeagueInvitationAccepter")
+  participant_claims LeagueParticipantClaim[]
 
   @@map("users")
 }
@@ -94,6 +97,7 @@ model Group {
   rankings             GroupRanking[]
   ranking_events       GroupRankingEvent[]
   sport_ranking_events SportRankingEvent[]
+  invited_leagues      LeagueInvitedGroup[]
 
   @@map("groups")
 }
@@ -259,6 +263,7 @@ model League {
   participant_replacements LeagueParticipantReplacement[]
   program        LeagueProgram?
   draws          Draw[]
+  invited_groups LeagueInvitedGroup[]
 
   @@map("leagues")
 }
@@ -298,9 +303,47 @@ model LeagueParticipant {
   matches_as_a LeagueMatch[] @relation("MatchParticipantA")
   matches_as_b LeagueMatch[] @relation("MatchParticipantB")
   replacements LeagueParticipantReplacement[]
+  claim LeagueParticipantClaim?
 
   @@index([league_id])
   @@map("league_participants")
+}
+
+model LeagueInvitedGroup {
+  id             String   @id @default(uuid())
+  league_id      String
+  group_id       String
+  status         String   @default("pending")
+  invited_by_id  Int
+  accepted_by_id Int?
+  created_at     DateTime @default(now())
+  responded_at   DateTime?
+
+  league      League @relation(fields: [league_id], references: [id], onDelete: Cascade)
+  group       Group  @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  invited_by  User   @relation("LeagueInvitationSender", fields: [invited_by_id], references: [id])
+  accepted_by User?  @relation("LeagueInvitationAccepter", fields: [accepted_by_id], references: [id])
+
+  @@unique([league_id, group_id])
+  @@index([group_id, status])
+  @@map("league_invited_groups")
+}
+
+model LeagueParticipantClaim {
+  participant_id   String   @id
+  code_hash        String?
+  guest_token_hash String?
+  claimed_by_id    Int?
+  claimed_at       DateTime?
+  expires_at       DateTime?
+  created_at       DateTime @default(now())
+  updated_at       DateTime @default(now()) @updatedAt
+
+  participant LeagueParticipant @relation(fields: [participant_id], references: [id], onDelete: Cascade)
+  claimed_by  User? @relation(fields: [claimed_by_id], references: [id], onDelete: SetNull)
+
+  @@index([guest_token_hash])
+  @@map("league_participant_claims")
 }
 
 model LeagueParticipantReplacement {

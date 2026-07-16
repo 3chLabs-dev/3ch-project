@@ -218,6 +218,9 @@ export interface LeagueMatch {
   is_program?: boolean;
   program_round?: number | null;
   program_block_type?: string | null;
+  tournament_bracket_index?: number | null;
+  participant_a_seed_label?: string | null;
+  participant_b_seed_label?: string | null;
 }
 
 export interface InitTournamentRequest {
@@ -376,6 +379,31 @@ export interface AddParticipantsRequest {
 export interface AddParticipantsResponse {
   message: string;
   participants: LeagueParticipantItem[];
+  guest_claim_token?: string | null;
+}
+
+export interface LeagueInvitedGroup {
+  id: string;
+  group_id: string;
+  name: string;
+  status: "pending" | "accepted" | "declined";
+  sport?: string | null;
+  region_city?: string | null;
+  region_district?: string | null;
+}
+
+export interface LeagueInvitationItem extends LeagueListItem {
+  invitation_id: string;
+  invitation_status: "pending" | "accepted" | "declined";
+  invited_group_name: string;
+  host_group_name?: string | null;
+  my_role: string;
+}
+
+export interface ParticipantClaimCandidate {
+  id: string;
+  name: string;
+  division?: string | null;
 }
 
 export interface SaveLeagueGroupingItem {
@@ -495,6 +523,60 @@ export const leagueApi = baseApi.injectEndpoints({
         return result.error ? { error: result.error } : { data: result.data as GetLeagueParticipantsResponse };
       },
       providesTags: (_result, _error, id) => [{ type: "League", id }],
+    }),
+
+    getMyLeagueInvitations: builder.query<{ invitations: LeagueInvitationItem[] }, void>({
+      query: () => "/league/invitations/mine",
+      providesTags: [{ type: "League", id: "INVITATIONS" }],
+    }),
+
+    getLeagueInvitedGroups: builder.query<{ groups: LeagueInvitedGroup[] }, string>({
+      query: (leagueId) => `/league/${leagueId}/invited-groups`,
+      providesTags: (_result, _error, leagueId) => [{ type: "League", id: `invited-groups-${leagueId}` }],
+    }),
+
+    inviteGroupsToLeague: builder.mutation<{ invitations: unknown[] }, { leagueId: string; groupIds: string[] }>({
+      query: ({ leagueId, groupIds }) => ({
+        url: `/league/${leagueId}/invited-groups`, method: "POST", body: { group_ids: groupIds },
+      }),
+      invalidatesTags: (_r, _e, { leagueId }) => [
+        { type: "League", id: `invited-groups-${leagueId}` },
+        { type: "League", id: "INVITATIONS" },
+      ],
+    }),
+
+    respondLeagueInvitation: builder.mutation<unknown, { invitationId: string; status: "accepted" | "declined" }>({
+      query: ({ invitationId, status }) => ({
+        url: `/league/invitations/${invitationId}`, method: "PATCH", body: { status },
+      }),
+      invalidatesTags: [{ type: "League", id: "INVITATIONS" }, { type: "League", id: "LIST" }],
+    }),
+
+    getParticipantClaimCandidates: builder.query<{ participants: ParticipantClaimCandidate[] }, string>({
+      query: (leagueId) => `/league/${leagueId}/participant-claims`,
+      providesTags: (_r, _e, leagueId) => [{ type: "League", id: `claims-${leagueId}` }],
+    }),
+
+    issueParticipantClaimCode: builder.mutation<{ participant_id: string; code: string }, { leagueId: string; participantId: string }>({
+      query: ({ leagueId, participantId }) => ({
+        url: `/league/${leagueId}/participants/${participantId}/claim-code`, method: "POST",
+      }),
+    }),
+
+    claimLeagueParticipant: builder.mutation<{ linked: boolean; participant_id: string; guest_token?: string }, { leagueId: string; participantId: string; code: string }>({
+      query: ({ leagueId, participantId, code }) => ({
+        url: `/league/${leagueId}/participants/${participantId}/claim`, method: "POST", body: { code },
+      }),
+      invalidatesTags: (_r, _e, { leagueId }) => [
+        { type: "League", id: leagueId }, { type: "League", id: `claims-${leagueId}` },
+      ],
+    }),
+
+    autoLinkGuestParticipant: builder.mutation<{ linked: boolean; participant_id: string }, { leagueId: string; guestToken: string }>({
+      query: ({ leagueId, guestToken }) => ({
+        url: `/league/${leagueId}/participant-claims/auto-link`, method: "POST", body: { guest_token: guestToken },
+      }),
+      invalidatesTags: (_r, _e, { leagueId }) => [{ type: "League", id: leagueId }],
     }),
 
     /**
@@ -949,6 +1031,14 @@ export const {
   useCreateLeagueMutation,
   useGetLeagueQuery,
   useGetLeagueParticipantsQuery,
+  useGetMyLeagueInvitationsQuery,
+  useGetLeagueInvitedGroupsQuery,
+  useInviteGroupsToLeagueMutation,
+  useRespondLeagueInvitationMutation,
+  useGetParticipantClaimCandidatesQuery,
+  useIssueParticipantClaimCodeMutation,
+  useClaimLeagueParticipantMutation,
+  useAutoLinkGuestParticipantMutation,
   useUpdateLeagueMutation,
   useUpdateParticipantMutation,
   useDeleteParticipantMutation,

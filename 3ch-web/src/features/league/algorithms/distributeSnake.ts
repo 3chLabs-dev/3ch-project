@@ -15,7 +15,7 @@ export function distributeSnake(
   const groupCount = groupSizes.length;
 
   const groups: GroupResult[] = groupSizes.map((_, index) => ({
-    name: `${String.fromCharCode(65 + index)}조`,
+    name: `${index + 1}조`,
     players: [],
   }));
 

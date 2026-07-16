@@ -3,7 +3,7 @@ import React, { useCallback, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Box, Button, CircularProgress, IconButton, InputAdornment,
-  TextField, Tooltip, Typography,
+  TextField, Tooltip, Typography, Tabs, Tab,
 } from "@mui/material";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
@@ -664,6 +664,7 @@ export default function LeagueTournamentBracket() {
   // 참가자 등록 팝업
   const [registerTarget, setRegisterTarget] = useState<{ matchId: string; slot: "a" | "b" } | null>(null);
   const [participantSearch, setParticipantSearch] = useState("");
+  const [selectedBracketIndex, setSelectedBracketIndex] = useState(1);
 
   // 스왑 모드: 첫 번째 선택 슬롯
   const [swapFirst, setSwapFirst] = useState<{
@@ -708,7 +709,7 @@ export default function LeagueTournamentBracket() {
     () => (matchesData?.matches ?? []).filter((match) => match.is_program && match.program_round === programRound),
     [matchesData?.matches, programRound],
   );
-  const programMatches = useMemo(() => {
+  const allProgramMatches = useMemo(() => {
     if (!isProgramMode) return [];
     const generatedMatches = applyProgramMatchState(
       generateProgramRoundMatches(id ?? "", programOption, participants, programRound, programSourceMatches),
@@ -729,6 +730,14 @@ export default function LeagueTournamentBracket() {
     });
     return applyProgramTournamentAdvancement(hydratedMatches).filter((match) => match.bracket);
   }, [isProgramMode, id, programOption, participants, programRound, programSourceMatches, serverProgramMatches]);
+  const tournamentBracketIndexes = useMemo(
+    () => [...new Set(allProgramMatches.map((match) => match.tournament_bracket_index ?? 1))].sort((a, b) => a - b),
+    [allProgramMatches],
+  );
+  const programMatches = useMemo(
+    () => allProgramMatches.filter((match) => (match.tournament_bracket_index ?? 1) === selectedBracketIndex),
+    [allProgramMatches, selectedBracketIndex],
+  );
   const matches = useMemo(
     () => isProgramMode ? programMatches : matchesData?.matches ?? [],
     [isProgramMode, programMatches, matchesData],
@@ -1044,6 +1053,18 @@ export default function LeagueTournamentBracket() {
       </Box>
 
       {/* ── 대진표 스크롤 영역 ── */}
+      {isProgramMode && tournamentBracketIndexes.length > 1 && (
+        <Tabs
+          value={selectedBracketIndex}
+          onChange={(_, value) => setSelectedBracketIndex(value)}
+          variant="fullWidth"
+          sx={{ minHeight: 40, borderBottom: "1px solid #E5E7EB", flexShrink: 0, "& .MuiTab-root": { minHeight: 40, py: 0.5, fontSize: 13, fontWeight: 800 } }}
+        >
+          {tournamentBracketIndexes.map((index) => (
+            <Tab key={index} value={index} label={`본선 ${String.fromCharCode(64 + index)}`} />
+          ))}
+        </Tabs>
+      )}
       <Box sx={{ flex: 1, overflow: "hidden", position: "relative", minHeight: 0, bgcolor: "#F0F2F5" }}>
         <Box sx={{ position: "absolute", top: 0, bottom: 0, left: 0, right: registerTarget ? 260 : 0, overflow: "auto", display: "flex", alignItems: "flex-start", justifyContent: "flex-start", transition: "right 0.2s ease" }}>
           <Box sx={{ minWidth: "100%", minHeight: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>

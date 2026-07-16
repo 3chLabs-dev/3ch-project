@@ -4,7 +4,7 @@ import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { setPreferredGroupId } from "../../features/league/leagueCreationSlice";
 import { resetRenewalLeagueCreation, setRenewalGroupId, setRenewalStep } from "../../features/league/leagueRenewalCreationSlice";
 import { useGetMyGroupsQuery } from "../../features/group/groupApi";
-import { useGetLeaguesQuery } from "../../features/league/leagueApi";
+import { useGetLeaguesQuery, useGetMyLeagueInvitationsQuery, useRespondLeagueInvitationMutation } from "../../features/league/leagueApi";
 import type { LeagueListItem } from "../../features/league/leagueApi";
 import {
   Stack, Typography, Card, CardContent, Button, IconButton, Box
@@ -58,6 +58,9 @@ export default function LeagueMainBody() {
     { skip: !isLoggedIn || !effectiveGroupId, refetchOnMountOrArgChange: true }
   );
   const leagues = useMemo(() => leagueData?.leagues ?? [], [leagueData]);
+  const { data: invitationData } = useGetMyLeagueInvitationsQuery(undefined, { skip: !isLoggedIn, refetchOnMountOrArgChange: true });
+  const [respondInvitation] = useRespondLeagueInvitationMutation();
+  const invitations = invitationData?.invitations ?? [];
 
   const canCreate =
     isLoggedIn &&
@@ -179,6 +182,30 @@ export default function LeagueMainBody() {
           setLeagueFilterStatus(status);
         }}
       />
+
+      {isLoggedIn && invitations.length > 0 && (
+        <>
+          <LeagueSectionHeader title="초대된 리그" />
+          <Stack spacing={1}>
+            {invitations.map((invitation) => (
+              <Card key={invitation.invitation_id} elevation={2} sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
+                <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
+                  <Typography sx={{ fontWeight: 800 }}>{invitation.title ?? invitation.name}</Typography>
+                  <Typography sx={{ fontSize: 12, color: "text.secondary" }}>{invitation.host_group_name} · {formatLeagueDateTime(invitation.start_date)}</Typography>
+                  {invitation.invitation_status === "pending" && (invitation.my_role === "owner" || invitation.my_role === "admin") ? (
+                    <Stack direction="row" spacing={1} sx={{ mt: 1.5 }}>
+                      <Button fullWidth variant="outlined" onClick={() => respondInvitation({ invitationId: invitation.invitation_id, status: "declined" })}>거절</Button>
+                      <Button fullWidth variant="contained" disableElevation onClick={() => respondInvitation({ invitationId: invitation.invitation_id, status: "accepted" })}>수락</Button>
+                    </Stack>
+                  ) : (
+                    <Button fullWidth variant="outlined" sx={{ mt: 1.5 }} onClick={() => navigate(`/league/${invitation.league_code ?? invitation.id}`)}>리그 보기</Button>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </Stack>
+        </>
+      )}
 
       {canCreate && (
         <Stack spacing={1}>

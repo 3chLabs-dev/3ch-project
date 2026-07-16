@@ -45,15 +45,19 @@
     useDeleteParticipantMutation,
     useReplaceParticipantMutation,
     useGetLeagueMatchesQuery,
+    useAutoLinkGuestParticipantMutation,
+    useGetLeagueInvitedGroupsQuery,
   } from "../../features/league/leagueApi";
   import { toUTCDate, formatLeagueDate, formatLeagueTime } from "../../utils/dateUtils";
-  import { useGetGroupDetailQuery } from "../../features/group/groupApi";
+  import { useGetGroupDetailQuery, useGetMyGroupsQuery } from "../../features/group/groupApi";
   import { useAppSelector } from "../../app/hooks";
   import LoadMembersDialog from "./LoadMembersDialog";
   import type { MemberRow } from "./LoadMembersDialog";
   import LeagueProgramList from "./LeagueProgramList";
 
   import MemberEditDialog from "./MemberEditDialog.tsx";
+  import ParticipantClaimDialog from "./ParticipantClaimDialog";
+  import LeagueInvitedGroupsDialog from "./LeagueInvitedGroupsDialog";
 
   function parseLocation(description?: string) {
     if (!description) return "-";
@@ -170,6 +174,9 @@
     const [loadMemberPurpose, setLoadMemberPurpose] = useState<"add" | "replace">("add");
     const [tournamentPlacementOpen, setTournamentPlacementOpen] = useState(false);
     const [selectedTournamentPlacement, setSelectedTournamentPlacement] = useState<{ program_round: number; match_id: string; slot: "a" | "b" } | null>(null);
+    const [participantClaimOpen, setParticipantClaimOpen] = useState(false);
+    const [invitedGroupsOpen, setInvitedGroupsOpen] = useState(false);
+    const authUser = useAppSelector((state) => state.auth.user);
 
     const { data: leagueData, isLoading: leagueLoading, refetch: refetchLeague } = useGetLeagueQuery(id ?? "", {
       skip: !id,
@@ -182,8 +189,8 @@
       skip: !id,
     });
     const { data: leagueMatchesData } = useGetLeagueMatchesQuery(id ?? "", { skip: !id });
-
-    const authUser = useAppSelector((state) => state.auth.user);
+    const { data: invitedGroupsData } = useGetLeagueInvitedGroupsQuery(id ?? "", { skip: !id });
+    const { data: myGroupsData } = useGetMyGroupsQuery(undefined, { skip: !authUser });
 
     const [updateParticipant] = useUpdateParticipantMutation();
     const [updateLeague, { isLoading: saving }] = useUpdateLeagueMutation();
@@ -191,13 +198,17 @@
     const [deleteLeague] = useDeleteLeagueMutation();
     const [deleteParticipant] = useDeleteParticipantMutation();
     const [replaceParticipant, { isLoading: replacingParticipant }] = useReplaceParticipantMutation();
+    const [autoLinkGuestParticipant] = useAutoLinkGuestParticipantMutation();
 
     const { data: groupData, isLoading: groupLoading } = useGetGroupDetailQuery(leagueData?.league?.group_id ?? "", {
       skip: !leagueData?.league?.group_id,
     });
     // groupLoading 중엔 판단 보류 (플리커 방지)
     const canManage = !groupLoading && (groupData?.myRole === "owner" || groupData?.myRole === "admin");
-    const isMember = !groupLoading && !!groupData?.myRole;
+    const invitedMembership = myGroupsData?.groups.find((group) =>
+      invitedGroupsData?.groups.some((invited) => invited.status === "accepted" && invited.group_id === group.id),
+    );
+    const isMember = !groupLoading && (!!groupData?.myRole || Boolean(invitedMembership));
 
     const league = leagueData?.league;
 
@@ -209,10 +220,12 @@
 
     // const isEditing = canManage;
 
-    const myMember = useMemo(
-      () => groupData?.members?.find((m) => m.user_id === authUser?.id),
-      [groupData, authUser],
-    );
+    const myMember = useMemo(() => {
+      const hostMember = groupData?.members?.find((m) => m.user_id === authUser?.id);
+      if (hostMember) return hostMember;
+      if (!authUser || !invitedMembership) return undefined;
+      return { user_id: authUser.id, name: authUser.name ?? "", division: invitedMembership.division ?? "" };
+    }, [groupData, authUser, invitedMembership]);
     const myName = myMember?.name ?? authUser?.name ?? (id ? localStorage.getItem(`guestName_${id}`) : null) ?? null;
     const isMyParticipant = (participant: { member_id?: number | null; name: string }) => {
       if (myMember?.user_id != null && participant.member_id != null) {
@@ -225,6 +238,21 @@
     };
 
     const rawParticipants = participantData?.participants ?? [];
+
+    useEffect(() => {
+      if (!id || !authUser) return;
+      const guestToken = localStorage.getItem(`guestClaimToken_${id}`);
+      if (!guestToken) return;
+      autoLinkGuestParticipant({ leagueId: id, guestToken })
+        .unwrap()
+        .then(() => {
+          localStorage.removeItem(`guestClaimToken_${id}`);
+          refetchParticipants();
+          setAlertSeverity("success");
+          setAlertMsg("비회원 참가 신청을 현재 계정에 연결했습니다.");
+        })
+        .catch(() => undefined);
+    }, [id, authUser, autoLinkGuestParticipant, refetchParticipants]);
     const hasEventProgram = isEventProgramFormat && Boolean(programData?.program);
 
     const tournamentByeSlots = useMemo(() => {
@@ -287,14 +315,17 @@
       }
       if (!confirmParticipantChange("add")) return;
       try {
-        await addParticipants({
+        const result = await addParticipants({
           leagueId: id,
           participants: [{ division: participantDivision, name: participantName }],
         }).unwrap();
         setAlertSeverity("success");
         setAlertMsg("참가 신청이 완료되었습니다.");
         // 비로그인 게스트 하이라이트용: 입력한 이름을 리그별로 저장
-        if (!authUser && id) localStorage.setItem(`guestName_${id}`, participantName);
+        if (!authUser && id) {
+          localStorage.setItem(`guestName_${id}`, participantName);
+          if (result.guest_claim_token) localStorage.setItem(`guestClaimToken_${id}`, result.guest_claim_token);
+        }
         setGuestJoinOpen(false);
         setGuestName("");
         setGuestDivision("");
@@ -1116,6 +1147,13 @@ const handleSaveEdit = async () => {
               <LeagueProgramList embedded />
             </>
           )}
+          <Divider sx={{ borderColor: "#F3F4F6" }} />
+          <Stack direction="row" alignItems="center" sx={{ py: 0.8 }}>
+            <Typography sx={{ ...labelSx, flex: 1 }}>참여 클럽</Typography>
+            <Button size="small" variant="outlined" onClick={() => setInvitedGroupsOpen(true)} sx={{ minWidth: 44, height: 24, borderRadius: 1, px: 1.25, fontSize: 11, fontWeight: 800 }}>
+              {canManage ? "관리" : "보기"}
+            </Button>
+          </Stack>
         </Box>
 
         {/* 참가자 */}
@@ -1150,6 +1188,14 @@ const handleSaveEdit = async () => {
               )}
               <Typography fontSize={13} fontWeight={700} color="text.secondary">)</Typography>
             </Stack>
+            <Stack direction="row" spacing={0.8}>
+            <Button
+              variant="outlined" disableElevation size="small"
+              onClick={() => setParticipantClaimOpen(true)}
+              sx={{ borderRadius: 1, height: 28, px: 1.2, fontWeight: 700, fontSize: 12 }}
+            >
+              {canManage ? "연결코드" : "사전등록 전환"}
+            </Button>
             {canManage && (
               <Button
                 variant="outlined"
@@ -1167,6 +1213,7 @@ const handleSaveEdit = async () => {
                 추가/삭제
               </Button>
             )}
+            </Stack>
           </Stack>
 
           {/* 뷰 모드: 검색 */}
@@ -1957,6 +2004,22 @@ const handleSaveEdit = async () => {
             </Box>
           );
         })()}
+        {id && (
+          <><ParticipantClaimDialog
+            open={participantClaimOpen}
+            leagueId={id}
+            loggedIn={Boolean(authUser)}
+            canManage={canManage}
+            onClose={() => setParticipantClaimOpen(false)}
+            onLinked={() => refetchParticipants()}
+          /><LeagueInvitedGroupsDialog
+            open={invitedGroupsOpen}
+            leagueId={id}
+            hostGroupId={league?.group_id}
+            canManage={canManage}
+            onClose={() => setInvitedGroupsOpen(false)}
+          /></>
+        )}
       </Box>
     );
   }

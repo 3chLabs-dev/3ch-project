@@ -48,6 +48,7 @@ export interface RenewalLeagueCreationState {
   selectedProgram: ProgramOption | null;
   rounds: RenewalRoundConfig[];
   participants: Participant[];
+  invitedGroupIds: string[];
   createStatus: "idle" | "loading" | "succeeded" | "failed";
   createError: string | null;
   createdLeagueId: string | null;
@@ -65,8 +66,9 @@ const initialState: RenewalLeagueCreationState = {
   },
   compositionMode: null,
   selectedProgram: null,
-  rounds: [{ id: 1, expanded: true, program: null, format: null, option: null, matchRule: null, teamPlayerCount: null, teamMatchType: null, tournamentSeeding: "seed" }],
+  rounds: [{ id: 1, expanded: true, program: null, format: null, option: null, matchRule: null, teamPlayerCount: null, teamMatchType: null, tournamentSeeding: "seed", tournamentBracketCount: 1 }],
   participants: [],
+  invitedGroupIds: [],
   createStatus: "idle",
   createError: null,
   createdLeagueId: null,
@@ -114,7 +116,7 @@ export const createRenewalLeague = createAsyncThunk.withTypes<{ state: RootState
       const playerCount = Math.max(2, configuredPlayerCount);
       const courtCount = Math.max(1, state.basicInfo.courtCount ?? 1);
       const groupSizes = generateGroupOptions(playerCount)[0]?.groups ?? [playerCount];
-      const rounds = state.rounds.map((round) => ({
+      const rounds = state.rounds.map((round, roundIndex) => ({
         ...round,
         program: round.program!,
         format: round.format!,
@@ -124,6 +126,12 @@ export const createRenewalLeague = createAsyncThunk.withTypes<{ state: RootState
         teamMatchType: round.teamMatchType ?? "SSS",
         groupSizes: round.groupSizes ?? groupSizes,
         tournamentSeeding: round.tournamentSeeding ?? "seed",
+        tournamentBracketCount:
+          round.format === "TOURNAMENT" && round.option === "FINAL" &&
+          roundIndex > 0 && state.rounds[roundIndex - 1]?.format === "GROUP" &&
+          state.rounds[roundIndex - 1]?.option === "PRELIM"
+            ? round.tournamentBracketCount ?? 1
+            : 1,
       })) as RoundConfig[];
       let elapsedMinutes = 0;
       const blocks = generateProgramBlocks(
@@ -185,6 +193,7 @@ export const createRenewalLeague = createAsyncThunk.withTypes<{ state: RootState
       group_id: resolvedGroupId ?? undefined,
       sort_order: "부수",
       participants: state.participants,
+      invited_group_ids: state.invitedGroupIds,
       tournament_seeding: "seed",
       program_data: programData,
     };
@@ -230,6 +239,9 @@ const leagueRenewalCreationSlice = createSlice({
     setRenewalParticipants: (state, action: PayloadAction<Participant[]>) => {
       state.participants = action.payload;
     },
+    setRenewalInvitedGroupIds: (state, action: PayloadAction<string[]>) => {
+      state.invitedGroupIds = action.payload;
+    },
     resetRenewalCreateStatus: (state) => {
       state.createStatus = "idle";
       state.createError = null;
@@ -264,6 +276,7 @@ export const {
   setRenewalSelectedProgram,
   setRenewalRounds,
   setRenewalParticipants,
+  setRenewalInvitedGroupIds,
   resetRenewalCreateStatus,
   resetRenewalLeagueCreation,
 } = leagueRenewalCreationSlice.actions;

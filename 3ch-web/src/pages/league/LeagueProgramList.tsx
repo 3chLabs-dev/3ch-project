@@ -51,7 +51,29 @@ type StoredProgramBlock = {
   teamGroupSizes?: number[];
   groupShuffleSeed?: number;
   teamShuffleSeed?: number;
+  groupAssignments?: FormationPlayer[][];
+  teamAssignments?: FormationPlayer[][];
 };
+
+type FormationPlayer = {
+  name: string;
+  level: number;
+  roster?: FormationPlayer[];
+};
+
+const FORMATION_COLORS = [
+  "#E53935", "#F57C00", "#D4A000", "#2E7D32",
+  "#1976D2", "#303F9F", "#7B1FA2", "#212121",
+  "#D81B60", "#00897B", "#0097A7", "#6D4C41",
+];
+
+const formationLevelSum = (players: FormationPlayer[]): number =>
+  players.reduce(
+    (sum, player) => sum + (player.roster?.length
+      ? formationLevelSum(player.roster)
+      : Number.isFinite(player.level) ? player.level : 0),
+    0,
+  );
 
 type StoredProgramOption = {
   title?: string;
@@ -191,7 +213,9 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
     activeFormationBlock?.teamShuffleSeed ?? defaultFormationSeed + 101,
   );
   const teamResultGroups = activeFormationBlock
-    ? distributeSnake(teamFormationPlayers, teamGroupSizes)
+    ? activeFormationBlock.teamAssignments?.length
+      ? activeFormationBlock.teamAssignments.map((players, index) => ({ name: `${String.fromCharCode(65 + index)}팀`, players }))
+      : distributeSnake(teamFormationPlayers, teamGroupSizes)
     : [];
   const teamUnits = teamResultGroups.map((team, teamIndex) => {
     const leader = team.players[0];
@@ -206,9 +230,11 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
     : activeFormationBlock?.groupSizes ?? storedProgram?.groupSizes ?? [programPlayers.length];
   const formationGroups = formationDialog?.mode === "team"
     ? teamResultGroups
-    : activeFormationBlock?.type === "TEAM"
-      ? distributeSnake(reshuffleWithinLevel(teamUnits, activeFormationBlock?.groupShuffleSeed ?? defaultFormationSeed + 503), groupResultSizes)
-      : distributeSnake(reshuffleWithinLevel(programPlayers, activeFormationBlock?.groupShuffleSeed ?? defaultFormationSeed + 503), groupResultSizes);
+    : activeFormationBlock?.groupAssignments?.length
+      ? activeFormationBlock.groupAssignments.map((players, index) => ({ name: `${index + 1}조`, players }))
+      : activeFormationBlock?.type === "TEAM"
+        ? distributeSnake(reshuffleWithinLevel(teamUnits, activeFormationBlock?.groupShuffleSeed ?? defaultFormationSeed + 503), groupResultSizes)
+        : distributeSnake(reshuffleWithinLevel(programPlayers, activeFormationBlock?.groupShuffleSeed ?? defaultFormationSeed + 503), groupResultSizes);
 
   const handleDelete = async () => {
     setConfirmOpen(false);
@@ -438,20 +464,26 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
                 gap: 1.25,
               }}
             >
-            {formationGroups.map((group) => (
+            {formationGroups.map((group, groupIndex) => {
+              const accent = FORMATION_COLORS[groupIndex % FORMATION_COLORS.length];
+              return (
             <Box
               key={group.name}
               sx={{
                 border: "1px solid #E5E7EB",
+                borderTop: `3px solid ${accent}`,
                 borderRadius: 1.5,
-                p: 1.5,
                 bgcolor: "#fff",
+                overflow: "hidden",
               }}
             >
-              <Typography sx={{ fontSize: 15, fontWeight: 900, mb: 1.25 }}>
-                {formationDialog?.mode === "team" ? group.name.replace(/조$/, "팀") : group.name}
+              <Box sx={{ px: 1.5, py: 1.1, bgcolor: "#F8FAFC", display: "flex", justifyContent: "space-between" }}>
+              <Typography sx={{ fontSize: 15, fontWeight: 900 }}>
+                {formationDialog?.mode === "team" ? `${String.fromCharCode(65 + groupIndex)}팀` : group.name}
               </Typography>
-              <Stack spacing={0.75}>
+              <Typography sx={{ fontSize: 11, color: "text.secondary", fontWeight: 700 }}>{group.players.length}명</Typography>
+              </Box>
+              <Stack spacing={0.75} sx={{ px: 1.5, py: 1.25 }}>
                 {group.players.map((player) => {
                   const roster = (player as typeof player & { roster?: Array<{ name: string; level: number }> }).roster;
                   return (
@@ -472,8 +504,14 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
                   );
                 })}
               </Stack>
+              <Box sx={{ borderTop: "1px solid #E5E7EB", px: 1.5, py: 0.9 }}>
+                <Typography sx={{ fontSize: 12, color: "text.secondary", fontWeight: 700 }}>
+                  합 <Box component="span" sx={{ color: accent, fontWeight: 900 }}>{formationLevelSum(group.players)}부</Box>
+                </Typography>
+              </Box>
             </Box>
-            ))}
+              );
+            })}
             </Box>
           )}
         </DialogContent>

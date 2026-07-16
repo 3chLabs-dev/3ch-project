@@ -5,6 +5,7 @@ import { setRenewalParticipants, setRenewalStep } from "../../features/league/le
 import type { Participant } from "../../features/league/leagueCreationSlice";
 import LoadMembersDialog, { type MemberRow } from "./LoadMembersDialog";
 import { mergeMembers } from "./mergeMember";
+import LeagueInvitedGroupsPicker from "./LeagueInvitedGroupsPicker";
 
 const headCellSx = { fontSize: 12, fontWeight: 900, color: "#6B7280", textAlign: "center" as const };
 const cellCenter = { display: "flex", justifyContent: "center", alignItems: "center" };
@@ -86,6 +87,8 @@ export default function LeagueRenewalStep5Participants() {
         <Box sx={cellCenter}><Button variant="contained" disableElevation onClick={() => setDeleteTarget({ idx: index, division: participant.division, name: participant.name })} sx={{ borderRadius: 1, height: 28, fontWeight: 900, bgcolor: "#D1D5DB", color: "#111827", "&:hover": { bgcolor: "#D1D5DB" } }}>삭제</Button></Box>
       </Box>)}
     </Box>}
+
+    <LeagueInvitedGroupsPicker />
 
     <Stack direction="row" spacing={2} sx={{ mt: 4 }}>
       <Button fullWidth variant="contained" disableElevation onClick={() => dispatch(setRenewalStep(compositionMode === "recommend" ? 3 : 6))} sx={{ borderRadius: 1, height: 44, fontWeight: 900, bgcolor: "#777", "&:hover": { bgcolor: "#777" } }}>이전</Button>

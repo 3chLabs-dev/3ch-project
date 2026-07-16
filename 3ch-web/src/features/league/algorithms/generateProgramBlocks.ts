@@ -1,11 +1,10 @@
 import { calculateDuration } from "./calculateDuration";
-import { calculateGroupMatchCount, calculateRoundRobinMatchCount, calculateTournamentMatchCount, } from "./calculateMatchCount";
+import { calculateGroupMatchCount, calculateRoundRobinMatchCount } from "./calculateMatchCount";
 
 import {
   calculateTeamCount,
   calculateTeamLeagueMatchCount,
   calculateTeamGroupMatchCount,
-  calculateTeamTournamentMatchCount,
 } from "./calculateTeamMatchCount";
 
 import type {
@@ -52,6 +51,10 @@ function splitIntoTwoGroups(count: number) {
   if (count <= 0) return [];
   if (count <= 2) return [count];
   return [Math.ceil(count / 2), Math.floor(count / 2)];
+}
+
+function calculateMultipleTournamentMatchCount(count: number, bracketCount = 1) {
+  return Math.max(0, count - Math.min(Math.max(1, bracketCount), count));
 }
 
 export function generateProgramBlocks(
@@ -134,10 +137,7 @@ export function generateProgramBlocks(
     }
 
     if (round.format === "TOURNAMENT") {
-      matchCount =
-        calculateTournamentMatchCount(
-          playerCount
-        );
+      matchCount = calculateMultipleTournamentMatchCount(playerCount, round.tournamentBracketCount);
     }
 
   const duration =
@@ -159,6 +159,9 @@ export function generateProgramBlocks(
 	    groupSizes: roundGroupSizes,
       groupShuffleSeed: round.groupShuffleSeed,
       teamShuffleSeed: round.teamShuffleSeed,
+      groupAssignments: round.groupAssignments,
+      teamAssignments: round.teamAssignments,
+      tournamentBracketCount: round.tournamentBracketCount ?? 1,
       tournamentSeeding: round.tournamentSeeding,
 	  });
 }
@@ -178,10 +181,7 @@ export function generateProgramBlocks(
     }
 
     if (round.format === "TOURNAMENT") {
-      matchCount =
-        calculateTournamentMatchCount(
-          Math.floor(playerCount / 2)
-        );
+      matchCount = calculateMultipleTournamentMatchCount(Math.floor(playerCount / 2), round.tournamentBracketCount);
     }
     const duration =
       calculateDuration(
@@ -202,6 +202,9 @@ export function generateProgramBlocks(
 	      groupSizes: roundGroupSizes,
         groupShuffleSeed: round.groupShuffleSeed,
         teamShuffleSeed: round.teamShuffleSeed,
+        groupAssignments: round.groupAssignments,
+        teamAssignments: round.teamAssignments,
+        tournamentBracketCount: round.tournamentBracketCount ?? 1,
         tournamentSeeding: round.tournamentSeeding,
 	    });
   }
@@ -237,10 +240,7 @@ export function generateProgramBlocks(
       }
 
       if (round.format === "TOURNAMENT") {
-        matchCount =
-          calculateTeamTournamentMatchCount(
-            teamCount
-          );
+        matchCount = calculateMultipleTournamentMatchCount(teamCount, round.tournamentBracketCount);
       }
 
     const duration =
@@ -266,6 +266,9 @@ export function generateProgramBlocks(
         teamGroupSizes,
         groupShuffleSeed: round.groupShuffleSeed,
         teamShuffleSeed: round.teamShuffleSeed,
+        groupAssignments: round.groupAssignments,
+        teamAssignments: round.teamAssignments,
+        tournamentBracketCount: round.tournamentBracketCount ?? 1,
         tournamentSeeding: round.tournamentSeeding,
 	    });
   }

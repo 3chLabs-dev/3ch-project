@@ -1,7 +1,7 @@
 CREATE TABLE "league_invited_groups" (
-  "id" UUID NOT NULL,
-  "league_id" UUID NOT NULL,
-  "group_id" UUID NOT NULL,
+  "id" TEXT NOT NULL,
+  "league_id" TEXT NOT NULL,
+  "group_id" TEXT NOT NULL,
   "status" VARCHAR(20) NOT NULL DEFAULT 'pending',
   "invited_by_id" INTEGER NOT NULL,
   "accepted_by_id" INTEGER,
@@ -17,7 +17,7 @@ CREATE UNIQUE INDEX "league_invited_groups_league_id_group_id_key" ON "league_in
 CREATE INDEX "league_invited_groups_group_id_status_idx" ON "league_invited_groups"("group_id", "status");
 
 CREATE TABLE "league_participant_claims" (
-  "participant_id" UUID NOT NULL,
+  "participant_id" TEXT NOT NULL,
   "code_hash" VARCHAR(64),
   "guest_token_hash" VARCHAR(64),
   "claimed_by_id" INTEGER,

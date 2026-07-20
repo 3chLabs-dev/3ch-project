@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
-import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Radio, Stack, TextField, Typography } from "@mui/material";
+import { useEffect, useMemo, useState } from "react";
+import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Radio, Stack, Typography } from "@mui/material";
 import {
-  useClaimLeagueParticipantMutation,
   useGetParticipantClaimCandidatesQuery,
-  useIssueParticipantClaimCodeMutation,
+  useRequestParticipantClaimMutation,
+  useReviewParticipantClaimMutation,
 } from "../../features/league/leagueApi";
 
 type Props = {
@@ -17,70 +17,129 @@ type Props = {
 
 export default function ParticipantClaimDialog({ open, leagueId, loggedIn, canManage = false, onClose, onLinked }: Props) {
   const { data, refetch } = useGetParticipantClaimCandidatesQuery(leagueId, { skip: !open || !leagueId });
-  const [claimParticipant, { isLoading }] = useClaimLeagueParticipantMutation();
-  const [issueCode] = useIssueParticipantClaimCodeMutation();
+  const [requestClaim, { isLoading: isRequesting }] = useRequestParticipantClaimMutation();
+  const [reviewClaim, { isLoading: isReviewing }] = useReviewParticipantClaimMutation();
   const [selectedId, setSelectedId] = useState("");
-  const [code, setCode] = useState("");
-  const [issuedCode, setIssuedCode] = useState("");
   const [message, setMessage] = useState("");
+  const [messageSeverity, setMessageSeverity] = useState<"success" | "warning">("success");
   const candidates = data?.participants ?? [];
+  const pendingClaims = useMemo(
+    () => candidates.filter((participant) => participant.claim_status === "pending" && participant.requested_by_id),
+    [candidates],
+  );
 
   useEffect(() => {
-    if (!open) { setSelectedId(""); setCode(""); setIssuedCode(""); setMessage(""); }
+    if (!open) {
+      setSelectedId("");
+      setMessage("");
+      setMessageSeverity("success");
+    }
   }, [open]);
 
-  const handleClaim = async () => {
-    if (!selectedId || !code.trim()) return;
+  const handleRequest = async () => {
+    if (!selectedId || !loggedIn) return;
     try {
-      const result = await claimParticipant({ leagueId, participantId: selectedId, code }).unwrap();
-      if (result.guest_token) localStorage.setItem(`guestClaimToken_${leagueId}`, result.guest_token);
-      setMessage(loggedIn ? "참가자 계정 연결이 완료되었습니다." : "참가 기록을 이 기기에 안전하게 연결했습니다.");
+      await requestClaim({ leagueId, participantId: selectedId }).unwrap();
+      setMessageSeverity("success");
+      setMessage("참가자 전환을 신청했습니다. 리더·운영진의 승인을 기다려 주세요.");
       await refetch();
-      onLinked();
     } catch (error) {
-      setMessage((error as { data?: { message?: string } })?.data?.message ?? "참가자 연결에 실패했습니다.");
+      setMessageSeverity("warning");
+      setMessage((error as { data?: { message?: string } })?.data?.message ?? "참가자 전환 신청에 실패했습니다.");
     }
   };
 
-  const handleIssue = async () => {
-    if (!selectedId) return;
+  const handleReview = async (participantId: string, status: "approved" | "declined") => {
     try {
-      const result = await issueCode({ leagueId, participantId: selectedId }).unwrap();
-      setIssuedCode(result.code);
+      await reviewClaim({ leagueId, participantId, status }).unwrap();
+      setMessageSeverity("success");
+      setMessage(status === "approved" ? "참가자 전환을 승인했습니다." : "참가자 전환을 거절했습니다.");
+      await refetch();
+      if (status === "approved") onLinked();
     } catch (error) {
-      setMessage((error as { data?: { message?: string } })?.data?.message ?? "연결코드를 발급하지 못했습니다.");
+      setMessageSeverity("warning");
+      setMessage((error as { data?: { message?: string } })?.data?.message ?? "참가자 전환 신청 처리에 실패했습니다.");
     }
   };
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs" PaperProps={{ sx: { borderRadius: 2 } }}>
-      <DialogTitle sx={{ fontWeight: 900 }}>사전 등록 참가자 전환</DialogTitle>
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs" slotProps={{ paper: { sx: { borderRadius: 2, mx: 2 } } }}>
+      <DialogTitle sx={{ fontWeight: 900 }}>
+        {canManage ? "참가자 전환 신청" : "사전등록 참가자 전환"}
+      </DialogTitle>
       <DialogContent dividers>
         <Typography sx={{ color: "text.secondary", fontSize: 13, mb: 1.5 }}>
-          본인 이름을 선택하고 전달받은 연결코드를 입력해 주세요.
+          {canManage
+            ? "신청자와 사전등록 참가자를 확인한 후 승인해 주세요."
+            : "사전등록된 본인 이름을 선택해 전환을 신청해 주세요."}
         </Typography>
-        <Stack spacing={0.8}>
-          {candidates.map((participant) => (
-            <Box key={participant.id} onClick={() => { setSelectedId(participant.id); setIssuedCode(""); }} sx={{ display: "flex", alignItems: "center", border: "1px solid #E5E7EB", borderRadius: 1, px: 1, py: 0.5, cursor: "pointer", bgcolor: selectedId === participant.id ? "#EFF6FF" : "#fff" }}>
-              <Radio checked={selectedId === participant.id} size="small" />
-              <Box sx={{ width: 34, height: 34, borderRadius: "50%", bgcolor: "#FAAA47", display: "grid", placeItems: "center", fontSize: 11, fontWeight: 900 }}>{participant.division || "-"}</Box>
-              <Typography sx={{ ml: 1.2, fontWeight: 800 }}>{participant.name}</Typography>
-            </Box>
-          ))}
-          {!candidates.length && <Typography sx={{ py: 2, textAlign: "center", color: "text.secondary" }}>전환 가능한 참가자가 없습니다.</Typography>}
-        </Stack>
-        {selectedId && (
-          <Stack spacing={1} sx={{ mt: 2 }}>
-            {canManage && <Button variant="outlined" onClick={handleIssue}>연결코드 재발급</Button>}
-            {issuedCode && <Alert severity="info">새 연결코드: <strong>{issuedCode}</strong></Alert>}
-            {!canManage && <TextField fullWidth label="연결코드" value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} inputProps={{ maxLength: 32 }} />}
+
+        {canManage ? (
+          <Stack spacing={1}>
+            {pendingClaims.map((participant) => (
+              <Box key={participant.id} sx={{ border: "1px solid #E5E7EB", borderRadius: 1, p: 1.25, bgcolor: "#fff" }}>
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <Box sx={{ width: 34, height: 34, borderRadius: "50%", bgcolor: "#FAAA47", display: "grid", placeItems: "center", fontSize: 11, fontWeight: 900, flexShrink: 0 }}>
+                    {participant.division || "-"}
+                  </Box>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography sx={{ fontWeight: 900 }}>{participant.name}</Typography>
+                    <Typography sx={{ color: "text.secondary", fontSize: 12 }}>
+                      신청자: {participant.requester_name || "회원"}
+                    </Typography>
+                  </Box>
+                </Stack>
+                <Stack direction="row" spacing={1} justifyContent="flex-end" sx={{ mt: 1.25 }}>
+                  <Button size="small" variant="outlined" color="inherit" disabled={isReviewing} onClick={() => void handleReview(participant.id, "declined")}>거절</Button>
+                  <Button size="small" variant="contained" disableElevation disabled={isReviewing} onClick={() => void handleReview(participant.id, "approved")}>승인</Button>
+                </Stack>
+              </Box>
+            ))}
+            {!pendingClaims.length && (
+              <Typography sx={{ py: 3, textAlign: "center", color: "text.secondary", fontSize: 13 }}>
+                대기 중인 전환 신청이 없습니다.
+              </Typography>
+            )}
           </Stack>
+        ) : (
+          <>
+            {!loggedIn && <Alert severity="info" sx={{ mb: 1.5 }}>로그인 후 참가자 전환을 신청할 수 있습니다.</Alert>}
+            <Stack spacing={0.8}>
+              {candidates.map((participant) => {
+                const isPending = participant.claim_status === "pending";
+                return (
+                  <Box
+                    key={participant.id}
+                    onClick={() => !isPending && loggedIn && setSelectedId(participant.id)}
+                    sx={{
+                      display: "flex", alignItems: "center", border: "1px solid #E5E7EB", borderRadius: 1,
+                      px: 1, py: 0.5, cursor: isPending || !loggedIn ? "default" : "pointer",
+                      bgcolor: selectedId === participant.id ? "#EFF6FF" : "#fff", opacity: isPending ? 0.7 : 1,
+                    }}
+                  >
+                    <Radio checked={selectedId === participant.id} disabled={isPending || !loggedIn} size="small" />
+                    <Box sx={{ width: 34, height: 34, borderRadius: "50%", bgcolor: "#FAAA47", display: "grid", placeItems: "center", fontSize: 11, fontWeight: 900 }}>
+                      {participant.division || "-"}
+                    </Box>
+                    <Typography sx={{ ml: 1.2, fontWeight: 800, flex: 1 }}>{participant.name}</Typography>
+                    {isPending && <Typography sx={{ fontSize: 11, color: "#1976D2", fontWeight: 800 }}>승인 대기</Typography>}
+                  </Box>
+                );
+              })}
+              {!candidates.length && <Typography sx={{ py: 2, textAlign: "center", color: "text.secondary" }}>전환 가능한 참가자가 없습니다.</Typography>}
+            </Stack>
+          </>
         )}
-        {message && <Alert severity={message.includes("완료") || message.includes("안전하게") ? "success" : "warning"} sx={{ mt: 2 }}>{message}</Alert>}
+
+        {message && <Alert severity={messageSeverity} sx={{ mt: 2 }}>{message}</Alert>}
       </DialogContent>
       <DialogActions sx={{ p: 2 }}>
-        <Button onClick={onClose}>취소</Button>
-        {!canManage && <Button variant="contained" disableElevation disabled={!selectedId || !code.trim() || isLoading} onClick={handleClaim}>신청</Button>}
+        <Button onClick={onClose}>닫기</Button>
+        {!canManage && (
+          <Button variant="contained" disableElevation disabled={!selectedId || !loggedIn || isRequesting} onClick={() => void handleRequest()}>
+            전환 신청
+          </Button>
+        )}
       </DialogActions>
     </Dialog>
   );

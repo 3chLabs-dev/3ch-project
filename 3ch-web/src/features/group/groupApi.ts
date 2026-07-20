@@ -62,6 +62,24 @@ export interface GroupMember {
   email: string;
 }
 
+export interface GroupPreMember {
+  id: string;
+  name: string;
+  division?: string | null;
+  status: "active" | "linked" | "deleted";
+  created_at: string;
+  claim_id?: string | null;
+  claim_status?: "pending" | "approved" | "declined" | null;
+  requested_by_id?: number | null;
+  requester_name?: string | null;
+  requested_at?: string | null;
+}
+
+export interface GroupPreMembersResponse {
+  pre_members: GroupPreMember[];
+  myRole?: string | null;
+}
+
 export interface SearchGroupsParams {
   q?: string;
   region_city?: string;
@@ -365,6 +383,41 @@ export const groupApi = baseApi.injectEndpoints({
       invalidatesTags: ["Group"],
     }),
 
+    getGroupPreMembers: builder.query<GroupPreMembersResponse, string>({
+      query: (groupId) => `/group/${groupId}/pre-members`,
+      providesTags: (_result, _error, groupId) => [{ type: "Group", id: `pre-members-${groupId}` }],
+    }),
+
+    createGroupPreMember: builder.mutation<
+      { message: string; pre_member: GroupPreMember },
+      { groupId: string; name: string; division?: string }
+    >({
+      query: ({ groupId, ...body }) => ({ url: `/group/${groupId}/pre-members`, method: "POST", body }),
+      invalidatesTags: (_r, _e, { groupId }) => [{ type: "Group", id: `pre-members-${groupId}` }],
+    }),
+
+    deleteGroupPreMember: builder.mutation<{ message: string }, { groupId: string; preMemberId: string }>({
+      query: ({ groupId, preMemberId }) => ({ url: `/group/${groupId}/pre-members/${preMemberId}`, method: "DELETE" }),
+      invalidatesTags: (_r, _e, { groupId }) => [{ type: "Group", id: `pre-members-${groupId}` }],
+    }),
+
+    requestGroupMemberClaim: builder.mutation<{ message: string }, { groupId: string; preMemberId: string }>({
+      query: ({ groupId, preMemberId }) => ({ url: `/group/${groupId}/pre-members/${preMemberId}/claim-request`, method: "POST" }),
+      invalidatesTags: (_r, _e, { groupId }) => [{ type: "Group", id: `pre-members-${groupId}` }],
+    }),
+
+    reviewGroupMemberClaim: builder.mutation<
+      { message: string },
+      { groupId: string; preMemberId: string; action: "approve" | "decline" }
+    >({
+      query: ({ groupId, preMemberId, action }) => ({
+        url: `/group/${groupId}/pre-members/${preMemberId}/claim-request`, method: "PATCH", body: { action },
+      }),
+      invalidatesTags: (_r, _e, { groupId }) => [
+        { type: "Group", id: `pre-members-${groupId}` }, { type: "Group", id: groupId }, "Group",
+      ],
+    }),
+
     updateMemberRole: builder.mutation<
       { message: string },
       { groupId: string; userId: string; role: "member" | "admin" }
@@ -501,6 +554,11 @@ export const {
   useSearchGroupsQuery,
   useLazyCheckGroupNameQuery,
   useJoinGroupMutation,
+  useGetGroupPreMembersQuery,
+  useCreateGroupPreMemberMutation,
+  useDeleteGroupPreMemberMutation,
+  useRequestGroupMemberClaimMutation,
+  useReviewGroupMemberClaimMutation,
   useUpdateMemberRoleMutation,
   useUpdateMemberMutation,
   useRemoveMemberMutation,

@@ -1380,7 +1380,7 @@ export default function LeagueGPTVisionSheet() {
   const updatePreviewCell = (rowIndex: number, columnIndex: number, score: number) => {
     setPreviewCells((cells) => cells.map((cell) => (
       cell.rowIndex === rowIndex && cell.columnIndex === columnIndex
-        ? { ...cell, score: Math.max(0, score), needsReview: false, issue: undefined }
+        ? { ...cell, score: Math.min(30, Math.max(0, score)), needsReview: false, issue: undefined }
         : cell
     )));
   };
@@ -1414,8 +1414,8 @@ export default function LeagueGPTVisionSheet() {
     const image = editorImageRef.current;
     if (!image) return;
     setCropMode(true);
-    setCrop({ unit: "%", x: 10, y: 10, width: 80, height: 80 });
-    setCompletedCrop({ x: image.naturalWidth * 0.1, y: image.naturalHeight * 0.1, width: image.naturalWidth * 0.8, height: image.naturalHeight * 0.8, unit: "px" });
+    setCrop({ unit: "%", x: 2, y: 2, width: 96, height: 96 });
+    setCompletedCrop({ x: image.width * 0.02, y: image.height * 0.02, width: image.width * 0.96, height: image.height * 0.96, unit: "px" });
   };
 
   const rotateEditorImage = async (degrees: number) => {
@@ -1439,9 +1439,17 @@ export default function LeagueGPTVisionSheet() {
   const createEditedImage = async () => {
     const image = editorImageRef.current;
     if (!imageEditor || !image) return;
-    const pixelCrop = cropMode && completedCrop
+    const displayCrop = cropMode && completedCrop
       ? completedCrop
-      : { x: 0, y: 0, width: image.naturalWidth, height: image.naturalHeight, unit: "px" as const };
+      : { x: 0, y: 0, width: image.width, height: image.height, unit: "px" as const };
+    const scaleX = image.naturalWidth / Math.max(image.width, 1);
+    const scaleY = image.naturalHeight / Math.max(image.height, 1);
+    const pixelCrop = {
+      x: displayCrop.x * scaleX,
+      y: displayCrop.y * scaleY,
+      width: displayCrop.width * scaleX,
+      height: displayCrop.height * scaleY,
+    };
     const outputWidth = Math.min(2000, Math.max(1, Math.round(pixelCrop.width)));
     const outputHeight = Math.max(1, Math.round(pixelCrop.height * outputWidth / pixelCrop.width));
     const canvas = document.createElement("canvas");
@@ -2000,8 +2008,19 @@ export default function LeagueGPTVisionSheet() {
           <Typography sx={{ mb: 1.5, color: "#6B7280", fontSize: 13, lineHeight: 1.6, fontWeight: 700 }}>
             점수가 잘 인식될 수 있도록 정방향으로 맞춰주고, 대진표 부분만 인식 영역으로 지정해 주세요.
           </Typography>
-          <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: 300, maxHeight: 420, overflow: "auto", bgcolor: "#111827" }}>
-            {imageEditor ? <ReactCrop crop={crop} onChange={(_, percentCrop) => setCrop(percentCrop)} onComplete={(pixelCrop) => setCompletedCrop(pixelCrop)} disabled={!cropMode} keepSelection={cropMode}>
+          <Box
+            sx={{
+              display: "flex", justifyContent: "center", alignItems: "center", minHeight: 300, maxHeight: 420, overflow: "auto", bgcolor: "#111827",
+              "& .ReactCrop": { lineHeight: 0, "--rc-drag-handle-mobile-size": "30px" },
+              "& .ReactCrop__crop-mask": { fill: "rgba(0, 0, 0, 0.62)" },
+              "& .ReactCrop__crop-selection": { border: "2px solid #fff", backgroundImage: "none", animation: "none" },
+              "& .ReactCrop__drag-handle": { bgcolor: "#fff", border: "2px solid rgba(17, 24, 39, 0.45)", borderRadius: "2px" },
+              "& .ReactCrop__drag-handle.ord-n, & .ReactCrop__drag-handle.ord-s": { width: 48, height: 5, borderRadius: 3 },
+              "& .ReactCrop__drag-handle.ord-e, & .ReactCrop__drag-handle.ord-w": { width: 5, height: 48, borderRadius: 3 },
+              "& .ReactCrop__rule-of-thirds-vt::before, & .ReactCrop__rule-of-thirds-vt::after, & .ReactCrop__rule-of-thirds-hz::before, & .ReactCrop__rule-of-thirds-hz::after": { bgcolor: "rgba(255,255,255,0.45)" },
+            }}
+          >
+            {imageEditor ? <ReactCrop crop={crop} onChange={(_, percentCrop) => setCrop(percentCrop)} onComplete={(pixelCrop) => setCompletedCrop(pixelCrop)} disabled={!cropMode} keepSelection={cropMode} ruleOfThirds={cropMode}>
               <img ref={editorImageRef} src={imageEditor.url} onLoad={handleEditorImageLoad} alt="선택한 대진표" draggable={false} style={{ display: "block", maxWidth: "100%", maxHeight: 420, objectFit: "contain" }} />
             </ReactCrop> : null}
           </Box>
@@ -2060,7 +2079,7 @@ export default function LeagueGPTVisionSheet() {
                       <Stack direction="row" alignItems="center" justifyContent="center" spacing={0.5}>
                         <IconButton size="small" onClick={() => updatePreviewCell(rowIndex, columnIndex, (cell?.score ?? 0) - 1)} disabled={(cell?.score ?? 0) <= 0}>-</IconButton>
                         <Typography sx={{ minWidth: 24, fontSize: 20, fontWeight: 900, color: "#111827" }}>{cell?.score ?? 0}</Typography>
-                        <IconButton size="small" onClick={() => updatePreviewCell(rowIndex, columnIndex, (cell?.score ?? 0) + 1)}>+</IconButton>
+                        <IconButton size="small" onClick={() => updatePreviewCell(rowIndex, columnIndex, (cell?.score ?? 0) + 1)} disabled={(cell?.score ?? 0) >= 20}>+</IconButton>
                       </Stack>
                     </td>;
                   })}

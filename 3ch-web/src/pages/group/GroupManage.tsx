@@ -48,6 +48,7 @@ import { useGetLeaguesQuery, useGetLeagueParticipantsQuery, useUpdateParticipant
 import type { LeagueParticipantItem } from "../../features/league/leagueApi";
 import ParticipantDetailDialog from "../league/ParticipantDetailDialog";
 import MemberEditDialog from "./MemberEditDialog";
+import GroupPreMemberDialog from "./GroupPreMemberDialog";
 import type { Participant } from "../../features/league/leagueCreationSlice";
 import { getRoleLabel } from "../../utils/permissions";
 import { REGION_DATA } from "./regionData";
@@ -97,6 +98,7 @@ export default function GroupManage() {
     const [participantDetailOpen, setParticipantDetailOpen] = useState(false);
     const [selectedParticipant, setSelectedParticipant] = useState<{ leagueId: string; participant: LeagueParticipantItem } | null>(null);
     const [memberEditOpen, setMemberEditOpen] = useState(false);
+    const [preMemberDialogOpen, setPreMemberDialogOpen] = useState(false);
     const [selectedMember, setSelectedMember] = useState<{ id: string; name: string; email: string; role: "owner" | "admin" | "member"; division?: string } | null>(null);
 
     const leagueManagementRef = useRef<HTMLDivElement>(null);
@@ -518,6 +520,11 @@ export default function GroupManage() {
                     >
                         <EmojiEventsOutlinedIcon />
                     </IconButton>
+                    {canManage && (
+                        <Button size="small" variant="outlined" onClick={() => setPreMemberDialogOpen(true)} sx={{ borderRadius: 1, fontWeight: 700 }}>
+                            사전등록 관리
+                        </Button>
+                    )}
                 </Stack>
 
                 <Card elevation={2} sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
@@ -610,6 +617,13 @@ export default function GroupManage() {
                     </List>
                 </Card>
             </Box>
+
+            <GroupPreMemberDialog
+                open={preMemberDialogOpen}
+                onClose={() => setPreMemberDialogOpen(false)}
+                groupId={group.id}
+                manager
+            />
 
             {/* 리그 관리 섹션 */}
             {showLeagueManagement && (

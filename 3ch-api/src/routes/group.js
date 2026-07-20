@@ -909,6 +909,170 @@ router.get('/group/:id', requireAuth, async (req, res) => {
   }
 });
 
+// 수동 등록된 클럽 회원과 회원 전환 신청 목록
+router.get('/group/:id/pre-members', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = Number(req.user.sub);
+    const roleResult = await pool.query(
+      `SELECT role FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      [id, userId]
+    );
+    const myRole = roleResult.rows[0]?.role || null;
+    const canManage = myRole === 'owner' || myRole === 'admin';
+    const result = await pool.query(
+      `SELECT pm.id, pm.name, pm.division, pm.status, pm.created_at,
+              c.id AS claim_id, c.status AS claim_status, c.requested_by_id,
+              c.requested_at, u.name AS requester_name
+       FROM group_pre_members pm
+       LEFT JOIN group_member_claims c ON c.pre_member_id = pm.id
+       LEFT JOIN users u ON u.id = c.requested_by_id
+       WHERE pm.group_id = $1
+         AND pm.status <> 'deleted'
+         AND ($2::boolean OR pm.status = 'active')
+       ORDER BY pm.created_at ASC`,
+      [id, canManage]
+    );
+    res.json({ pre_members: result.rows, myRole });
+  } catch (error) {
+    console.error('Error fetching group pre-members:', error);
+    res.status(500).json({ message: '사전등록 회원을 불러오지 못했습니다.' });
+  }
+});
+
+router.post('/group/:id/pre-members', requireAuth, requireGroupAdmin, async (req, res) => {
+  try {
+    const name = String(req.body?.name || '').trim();
+    const division = String(req.body?.division || '').trim() || null;
+    if (!name) return res.status(400).json({ message: '이름을 입력해 주세요.' });
+    const duplicate = await pool.query(
+      `SELECT id FROM group_pre_members
+       WHERE group_id = $1 AND status = 'active' AND name = $2`,
+      [req.params.id, name]
+    );
+    if (duplicate.rowCount) return res.status(409).json({ message: '같은 이름의 사전등록 회원이 있습니다.' });
+    const result = await pool.query(
+      `INSERT INTO group_pre_members (id, group_id, name, division, created_by_id)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, name, division, status, created_at`,
+      [randomUUID(), req.params.id, name, division, Number(req.user.sub)]
+    );
+    res.status(201).json({ message: '회원을 사전등록했습니다.', pre_member: result.rows[0] });
+  } catch (error) {
+    console.error('Error creating group pre-member:', error);
+    res.status(500).json({ message: '회원 사전등록에 실패했습니다.' });
+  }
+});
+
+router.delete('/group/:id/pre-members/:preMemberId', requireAuth, requireGroupAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `UPDATE group_pre_members SET status = 'deleted', updated_at = NOW()
+       WHERE id = $1 AND group_id = $2 AND status <> 'linked' RETURNING id`,
+      [req.params.preMemberId, req.params.id]
+    );
+    if (!result.rowCount) return res.status(404).json({ message: '삭제할 사전등록 회원이 없습니다.' });
+    res.json({ message: '사전등록 회원을 삭제했습니다.' });
+  } catch (error) {
+    console.error('Error deleting group pre-member:', error);
+    res.status(500).json({ message: '사전등록 회원 삭제에 실패했습니다.' });
+  }
+});
+
+router.post('/group/:id/pre-members/:preMemberId/claim-request', requireAuth, async (req, res) => {
+  try {
+    const { id, preMemberId } = req.params;
+    const userId = Number(req.user.sub);
+    const preMember = await pool.query(
+      `SELECT id FROM group_pre_members WHERE id = $1 AND group_id = $2 AND status = 'active'`,
+      [preMemberId, id]
+    );
+    if (!preMember.rowCount) return res.status(404).json({ message: '전환할 회원을 찾을 수 없습니다.' });
+    const existing = await pool.query(
+      `SELECT 1 FROM group_member_claims c
+       JOIN group_pre_members pm ON pm.id = c.pre_member_id
+       WHERE pm.group_id = $1 AND c.status = 'pending'
+         AND (c.pre_member_id = $2 OR c.requested_by_id = $3)`,
+      [id, preMemberId, userId]
+    );
+    if (existing.rowCount) return res.status(409).json({ message: '이미 처리 중인 전환 신청이 있습니다.' });
+    await pool.query(
+      `INSERT INTO group_member_claims (id, pre_member_id, requested_by_id)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (pre_member_id) DO UPDATE
+       SET requested_by_id = EXCLUDED.requested_by_id, status = 'pending',
+           requested_at = NOW(), reviewed_by_id = NULL, reviewed_at = NULL`,
+      [randomUUID(), preMemberId, userId]
+    );
+    res.status(201).json({ message: '회원 전환을 신청했습니다. 리더 또는 운영진의 승인을 기다려 주세요.' });
+  } catch (error) {
+    console.error('Error requesting group member claim:', error);
+    res.status(500).json({ message: '회원 전환 신청에 실패했습니다.' });
+  }
+});
+
+router.patch('/group/:id/pre-members/:preMemberId/claim-request', requireAuth, requireGroupAdmin, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const action = req.body?.action;
+    if (!['approve', 'decline'].includes(action)) {
+      return res.status(400).json({ message: '처리 방식을 확인해 주세요.' });
+    }
+    await client.query('BEGIN');
+    const claimResult = await client.query(
+      `SELECT c.id, c.requested_by_id, pm.name, pm.division
+       FROM group_member_claims c
+       JOIN group_pre_members pm ON pm.id = c.pre_member_id
+       WHERE pm.id = $1 AND pm.group_id = $2 AND pm.status = 'active' AND c.status = 'pending'
+       FOR UPDATE`,
+      [req.params.preMemberId, req.params.id]
+    );
+    if (!claimResult.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: '처리할 전환 신청이 없습니다.' });
+    }
+    const claim = claimResult.rows[0];
+    if (action === 'decline') {
+      await client.query(
+        `UPDATE group_member_claims SET status = 'declined', reviewed_by_id = $1, reviewed_at = NOW() WHERE id = $2`,
+        [Number(req.user.sub), claim.id]
+      );
+      await client.query('COMMIT');
+      return res.json({ message: '회원 전환 신청을 거절했습니다.' });
+    }
+    await client.query(
+      `INSERT INTO group_members (id, group_id, user_id, role, division)
+       VALUES ($1, $2, $3, 'member', $4)
+       ON CONFLICT (group_id, user_id) DO UPDATE SET division = EXCLUDED.division`,
+      [randomUUID(), req.params.id, claim.requested_by_id, claim.division]
+    );
+    await client.query(
+      `UPDATE league_participants lp
+       SET member_id = $1, division = COALESCE(NULLIF($2, ''), lp.division)
+       FROM leagues l
+       WHERE lp.league_id = l.id AND l.group_id = $3
+         AND lp.member_id IS NULL AND lp.name = $4`,
+      [claim.requested_by_id, claim.division, req.params.id, claim.name]
+    );
+    await client.query(
+      `UPDATE group_pre_members SET status = 'linked', linked_user_id = $1, updated_at = NOW() WHERE id = $2`,
+      [claim.requested_by_id, req.params.preMemberId]
+    );
+    await client.query(
+      `UPDATE group_member_claims SET status = 'approved', reviewed_by_id = $1, reviewed_at = NOW() WHERE id = $2`,
+      [Number(req.user.sub), claim.id]
+    );
+    await client.query('COMMIT');
+    res.json({ message: '회원 전환을 승인했습니다.' });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error reviewing group member claim:', error);
+    res.status(500).json({ message: '회원 전환 처리에 실패했습니다.' });
+  } finally {
+    client.release();
+  }
+});
+
 /**
  * @openapi
  * /group/{id}/member:

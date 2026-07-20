@@ -14,7 +14,7 @@ import { CSS } from "@dnd-kit/utilities";
 import DragHandleIcon from "@mui/icons-material/DragHandle";
 import EditIcon from "@mui/icons-material/Edit";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import { generateProgramRoundMatches } from '../../utils/programMatchGenerator';
+import { clearProgramMatchState, generateProgramRoundMatches } from '../../utils/programMatchGenerator';
 import { toUTCDate } from '../../utils/dateUtils';
 
 const FORMATION_COLORS = [
@@ -1167,6 +1167,34 @@ const LeagueAlgorithmDemo = ({
     }
 
     if (leagueId) {
+      const previousProgram = savedProgramData?.program?.program_data as ProgramOption | undefined;
+      if (isEditMode && previousProgram) {
+        selectedOption.blocks.forEach((block, blockIndex) => {
+          const previousBlock = previousProgram.blocks?.[blockIndex];
+          if (block.type !== "TEAM" && previousBlock?.type !== "TEAM") return;
+
+          const previousFormation = JSON.stringify({
+            type: previousBlock?.type,
+            format: previousBlock?.format,
+            groupSizes: previousBlock?.groupSizes ?? [],
+            teamGroupSizes: previousBlock?.teamGroupSizes ?? [],
+            groupAssignments: previousBlock?.groupAssignments ?? [],
+            teamAssignments: previousBlock?.teamAssignments ?? [],
+          });
+          const nextFormation = JSON.stringify({
+            type: block.type,
+            format: block.format,
+            groupSizes: block.groupSizes ?? [],
+            teamGroupSizes: block.teamGroupSizes ?? [],
+            groupAssignments: block.groupAssignments ?? [],
+            teamAssignments: block.teamAssignments ?? [],
+          });
+
+          if (previousFormation !== nextFormation) {
+            clearProgramMatchState(leagueId, blockIndex + 1);
+          }
+        });
+      }
       localStorage.setItem(
         `league-program-${leagueId}`,
         JSON.stringify(selectedOption)
@@ -1289,6 +1317,12 @@ const LeagueAlgorithmDemo = ({
         teamGroupSizes: mode === "group" && roundIndex === blockIndex
           ? groupSizes
           : round.teamGroupSizes,
+        teamAssignments: mode === "team" && roundIndex === blockIndex
+          ? undefined
+          : round.teamAssignments,
+        groupAssignments: roundIndex === blockIndex
+          ? undefined
+          : round.groupAssignments,
       })
     );
     const updatedOption = buildProgramOptionFromRounds(

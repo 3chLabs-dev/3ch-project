@@ -11,6 +11,7 @@ import {
   DialogTitle,
   IconButton,
   Stack,
+  Tooltip,
   Typography,
   Chip,
 } from "@mui/material";
@@ -20,6 +21,13 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import AddIcon from "@mui/icons-material/Add";
 import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import DragHandleIcon from "@mui/icons-material/DragHandle";
+import {
+  DndContext, PointerSensor, TouchSensor, closestCenter, useDroppable, useSensor, useSensors,
+  type DragEndEvent, type DragOverEvent,
+} from "@dnd-kit/core";
+import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import {
   useDeleteAllLeagueMatchesMutation,
   useDeleteLeagueProgramMutation,
@@ -27,10 +35,14 @@ import {
   useGetLeagueMatchesQuery,
   useGetLeagueParticipantsQuery,
   useGetLeagueQuery,
+  useSaveLeagueProgramMutation,
+  useSyncLeagueProgramMatchesMutation,
 } from "../../features/league/leagueApi";
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
 import { formatLeagueDate } from "../../utils/dateUtils";
 import { distributeSnake } from "../../features/league/algorithms/distributeSnake";
+import { clearProgramMatchState, generateProgramRoundMatches } from "../../utils/programMatchGenerator";
+import type { ProgramOption } from "../../features/league/types/tournament.types";
 
 const ADVANCEMENT_LABEL: Record<string, string> = {
   "upper-only": "상위 진출",
@@ -75,10 +87,64 @@ const formationLevelSum = (players: FormationPlayer[]): number =>
     0,
   );
 
+const formationPlayerId = (player: FormationPlayer) =>
+  `formation-${player.name}-${player.level}`;
+
+function SortableFormationPlayer({ player }: { player: FormationPlayer }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: formationPlayerId(player),
+  });
+
+  return (
+    <Box
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      {...attributes}
+      {...listeners}
+      sx={{
+        display: "flex", alignItems: "center", gap: 0.75, py: 0.65, px: 0.5,
+        borderRadius: 1, cursor: "grab", touchAction: "none",
+        bgcolor: isDragging ? "#EFF6FF" : "transparent", opacity: isDragging ? 0.55 : 1,
+      }}
+    >
+      <DragHandleIcon sx={{ color: "#9CA3AF", fontSize: 17, flexShrink: 0 }} />
+      <Box sx={{ width: 22, height: 22, borderRadius: "50%", bgcolor: "#FAAA47", display: "grid", placeItems: "center", fontSize: 10, fontWeight: 900, flexShrink: 0 }}>
+        {player.level}부
+      </Box>
+      <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{player.name}</Typography>
+    </Box>
+  );
+}
+
+function FormationEditCard({ players, index, label }: { players: FormationPlayer[]; index: number; label: string }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `formation-group-${index}` });
+  const accent = FORMATION_COLORS[index % FORMATION_COLORS.length];
+
+  return (
+    <Box sx={{ border: `1px solid ${isOver ? accent : "#E5E7EB"}`, borderTop: `3px solid ${accent}`, borderRadius: 1.5, bgcolor: isOver ? "#F8FAFF" : "#FFF", overflow: "hidden" }}>
+      <Box sx={{ px: 1.25, py: 1, display: "flex", justifyContent: "space-between", alignItems: "center", bgcolor: "#F8FAFC" }}>
+        <Typography sx={{ fontSize: 14, fontWeight: 900 }}>{label}</Typography>
+        <Typography sx={{ fontSize: 11, color: "text.secondary", fontWeight: 700 }}>{players.length}명</Typography>
+      </Box>
+      <Box ref={setNodeRef} sx={{ px: 0.75, py: 0.5, minHeight: 54 }}>
+        <SortableContext items={players.map(formationPlayerId)} strategy={verticalListSortingStrategy}>
+          {players.map((player) => <SortableFormationPlayer key={formationPlayerId(player)} player={player} />)}
+        </SortableContext>
+      </Box>
+      <Box sx={{ borderTop: "1px solid #E5E7EB", px: 1.25, py: 0.8 }}>
+        <Typography sx={{ fontSize: 12, color: "text.secondary", fontWeight: 700 }}>
+          합 <Box component="span" sx={{ color: accent, fontWeight: 900 }}>{formationLevelSum(players)}부</Box>
+        </Typography>
+      </Box>
+    </Box>
+  );
+}
+
 type StoredProgramOption = {
   title?: string;
   groupSizes?: number[];
   blocks?: StoredProgramBlock[];
+  rounds?: StoredProgramBlock[];
 };
 
 function getProgramTypeLabel(type?: StoredProgramBlock["type"]) {
@@ -128,10 +194,19 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
   );
   const [deleteAllMatches, { isLoading: isDeleting }] = useDeleteAllLeagueMatchesMutation();
   const [deleteLeagueProgram] = useDeleteLeagueProgramMutation();
+  const [saveLeagueProgram, { isLoading: isSavingFormation }] = useSaveLeagueProgramMutation();
+  const [syncLeagueProgramMatches] = useSyncLeagueProgramMatchesMutation();
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [storedProgram, setStoredProgram] = useState<StoredProgramOption | null>(null);
   const [formationDialog, setFormationDialog] = useState<{ roundIndex: number; mode: "team" | "group" } | null>(null);
+  const [formationDraft, setFormationDraft] = useState<FormationPlayer[][]>([]);
+  const [isFormationEditing, setIsFormationEditing] = useState(false);
+  const [reshuffleConfirmOpen, setReshuffleConfirmOpen] = useState(false);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
+  );
 
   const league = leagueData?.league;
   const matches = matchesData?.matches ?? [];
@@ -235,6 +310,165 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
       : activeFormationBlock?.type === "TEAM"
         ? distributeSnake(reshuffleWithinLevel(teamUnits, activeFormationBlock?.groupShuffleSeed ?? defaultFormationSeed + 503), groupResultSizes)
         : distributeSnake(reshuffleWithinLevel(programPlayers, activeFormationBlock?.groupShuffleSeed ?? defaultFormationSeed + 503), groupResultSizes);
+
+  const closeFormationDialog = () => {
+    setFormationDialog(null);
+    setFormationDraft([]);
+    setIsFormationEditing(false);
+    setReshuffleConfirmOpen(false);
+  };
+
+  const persistFormation = async (nextProgram: StoredProgramOption, roundIndex: number) => {
+    if (!id || !canManage) return;
+    setStoredProgram(nextProgram);
+    localStorage.setItem(`league-program-${id}`, JSON.stringify(nextProgram));
+    clearProgramMatchState(id, roundIndex + 1);
+    await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
+
+    const block = nextProgram.blocks?.[roundIndex];
+    if (block?.type === "SINGLES") {
+      const roundMatches = generateProgramRoundMatches(
+        id,
+        nextProgram as ProgramOption,
+        participants,
+        roundIndex + 1,
+        matches,
+      ).map((match) => ({
+        ...match,
+        program_round: roundIndex + 1,
+        program_block_type: block.type,
+      }));
+      await syncLeagueProgramMatches({ leagueId: id, matches: roundMatches }).unwrap();
+    }
+  };
+
+  const beginFormationEditing = () => {
+    setFormationDraft(formationGroups.map((group) => group.players.map((player) => ({ ...player }))));
+    setIsFormationEditing(true);
+  };
+
+  const findFormationContainer = (groups: FormationPlayer[][], itemId: string) => {
+    if (itemId.startsWith("formation-group-")) return Number(itemId.replace("formation-group-", ""));
+    return groups.findIndex((group) => group.some((player) => formationPlayerId(player) === itemId));
+  };
+
+  const handleFormationDragOver = ({ active, over }: DragOverEvent) => {
+    if (!over) return;
+    const activeId = String(active.id);
+    const overId = String(over.id);
+    setFormationDraft((previous) => {
+      const from = findFormationContainer(previous, activeId);
+      const to = findFormationContainer(previous, overId);
+      if (from < 0 || to < 0 || from === to) return previous;
+      const next = previous.map((group) => [...group]);
+      const itemIndex = next[from].findIndex((player) => formationPlayerId(player) === activeId);
+      if (itemIndex < 0) return previous;
+      const [item] = next[from].splice(itemIndex, 1);
+      const overIndex = next[to].findIndex((player) => formationPlayerId(player) === overId);
+      next[to].splice(overIndex < 0 ? next[to].length : overIndex, 0, item);
+      return next;
+    });
+  };
+
+  const handleFormationDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over) return;
+    const activeId = String(active.id);
+    const overId = String(over.id);
+    setFormationDraft((previous) => {
+      const container = findFormationContainer(previous, activeId);
+      const overContainer = findFormationContainer(previous, overId);
+      if (container < 0 || container !== overContainer) return previous;
+      const oldIndex = previous[container].findIndex((player) => formationPlayerId(player) === activeId);
+      const newIndex = previous[container].findIndex((player) => formationPlayerId(player) === overId);
+      if (oldIndex < 0 || newIndex < 0 || oldIndex === newIndex) return previous;
+      const next = previous.map((group) => [...group]);
+      next[container] = arrayMove(next[container], oldIndex, newIndex);
+      return next;
+    });
+  };
+
+  const saveManualFormation = async () => {
+    if (!formationDialog || !storedProgram?.blocks) return;
+    const { roundIndex, mode } = formationDialog;
+    const nextBlocks = storedProgram.blocks.map((block, index) => {
+      if (index !== roundIndex) return block;
+      if (mode === "team") {
+        return {
+          ...block,
+          groupSizes: formationDraft.map((group) => group.length),
+          teamAssignments: formationDraft,
+          groupAssignments: undefined,
+        };
+      }
+      return {
+        ...block,
+        groupAssignments: formationDraft,
+        ...(block.type === "TEAM"
+          ? { teamGroupSizes: formationDraft.map((group) => group.length) }
+          : { groupSizes: formationDraft.map((group) => group.length) }),
+      };
+    });
+    const nextRounds = storedProgram.rounds?.map((round, index) => {
+      if (index !== roundIndex) return round;
+      if (mode === "team") {
+        return {
+          ...round,
+          groupSizes: formationDraft.map((group) => group.length),
+          teamAssignments: formationDraft,
+          groupAssignments: undefined,
+        };
+      }
+      return {
+        ...round,
+        groupAssignments: formationDraft,
+        ...(activeFormationBlock?.type === "TEAM"
+          ? { teamGroupSizes: formationDraft.map((group) => group.length) }
+          : { groupSizes: formationDraft.map((group) => group.length) }),
+      };
+    });
+    await persistFormation({ ...storedProgram, blocks: nextBlocks, ...(nextRounds ? { rounds: nextRounds } : {}) }, roundIndex);
+    setIsFormationEditing(false);
+    setFormationDraft([]);
+  };
+
+  const reshuffleFormation = async () => {
+    if (!formationDialog || !storedProgram?.blocks) return;
+    const { roundIndex, mode } = formationDialog;
+    const nextBlocks = storedProgram.blocks.map((block, index) => {
+      if (index !== roundIndex) return block;
+      if (mode === "team") {
+        return {
+          ...block,
+          teamShuffleSeed: (block.teamShuffleSeed ?? (roundIndex + 1) * 1000 + 101) + 1,
+          teamAssignments: undefined,
+          groupAssignments: undefined,
+        };
+      }
+      return {
+        ...block,
+        groupShuffleSeed: (block.groupShuffleSeed ?? (roundIndex + 1) * 1000 + 503) + 1,
+        groupAssignments: undefined,
+      };
+    });
+    const nextRounds = storedProgram.rounds?.map((round, index) => {
+      if (index !== roundIndex) return round;
+      if (mode === "team") {
+        return {
+          ...round,
+          teamShuffleSeed: (round.teamShuffleSeed ?? (roundIndex + 1) * 1000 + 101) + 1,
+          teamAssignments: undefined,
+          groupAssignments: undefined,
+        };
+      }
+      return {
+        ...round,
+        groupShuffleSeed: (round.groupShuffleSeed ?? (roundIndex + 1) * 1000 + 503) + 1,
+        groupAssignments: undefined,
+      };
+    });
+    setReshuffleConfirmOpen(false);
+    await persistFormation({ ...storedProgram, blocks: nextBlocks, ...(nextRounds ? { rounds: nextRounds } : {}) }, roundIndex);
+  };
 
   const handleDelete = async () => {
     setConfirmOpen(false);
@@ -443,16 +677,39 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
 
       <Dialog
         open={formationDialog !== null}
-        onClose={() => setFormationDialog(null)}
+        onClose={closeFormationDialog}
         fullWidth
         maxWidth="sm"
         slotProps={{ paper: { sx: { borderRadius: 2, mx: 2 } } }}
       >
-        <DialogTitle sx={{ fontWeight: 900, fontSize: 16 }}>
+        <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontWeight: 900, fontSize: 16 }}>
           {formationDialog?.mode === "team" ? "팀 편성 결과" : "조 편성 결과"}
+          {canManage && !isFormationEditing && (
+            <Tooltip title="수동 편성">
+              <IconButton size="small" onClick={beginFormationEditing} aria-label="수동 편성">
+                <EditOutlinedIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
         </DialogTitle>
         <DialogContent dividers>
-          {formationGroups.length === 0 ? (
+          {isFormationEditing ? (
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragOver={handleFormationDragOver} onDragEnd={handleFormationDragEnd}>
+              <Typography sx={{ mb: 1.5, fontSize: 12, color: "text.secondary" }}>
+                참가자를 길게 눌러 원하는 곳으로 이동해 주세요.
+              </Typography>
+              <Box sx={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 1.25 }}>
+                {formationDraft.map((players, index) => (
+                  <FormationEditCard
+                    key={index}
+                    players={players}
+                    index={index}
+                    label={formationDialog?.mode === "team" ? `${String.fromCharCode(65 + index)}팀` : `${index + 1}조`}
+                  />
+                ))}
+              </Box>
+            </DndContext>
+          ) : formationGroups.length === 0 ? (
             <Typography sx={{ fontSize: 13, color: "text.secondary", py: 2, textAlign: "center" }}>
               편성 결과가 없습니다.
             </Typography>
@@ -516,9 +773,46 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
           )}
         </DialogContent>
         <DialogActions sx={{ px: 2, pb: 2 }}>
-          <Button onClick={() => setFormationDialog(null)} sx={{ fontWeight: 700 }}>
-            닫기
-          </Button>
+          {isFormationEditing ? (
+            <>
+              <Button onClick={() => { setIsFormationEditing(false); setFormationDraft([]); }} disabled={isSavingFormation}>취소</Button>
+              <Button variant="contained" onClick={() => void saveManualFormation()} disabled={isSavingFormation}>완료</Button>
+            </>
+          ) : (
+            <>
+              {canManage && (
+                <Button variant="outlined" onClick={() => setReshuffleConfirmOpen(true)} disabled={isSavingFormation}>
+                  재편성
+                </Button>
+              )}
+              <Button onClick={closeFormationDialog} sx={{ fontWeight: 700 }} disabled={isSavingFormation}>
+                닫기
+              </Button>
+            </>
+          )}
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={reshuffleConfirmOpen}
+        onClose={() => setReshuffleConfirmOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        slotProps={{ paper: { sx: { borderRadius: 2, mx: 2 } } }}
+      >
+        <DialogTitle sx={{ fontWeight: 900, fontSize: 16 }}>
+          {formationDialog?.mode === "team" ? "팀 재편성" : "조 재편성"}
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ fontSize: 14, color: "text.primary" }}>
+            {formationDialog?.mode === "team"
+              ? "전체 팀 편성을 전부 재편성하겠습니까?"
+              : "전체 조 편성을 전부 재편성하겠습니까?"}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 2, pb: 2 }}>
+          <Button onClick={() => setReshuffleConfirmOpen(false)} disabled={isSavingFormation}>취소</Button>
+          <Button variant="contained" onClick={() => void reshuffleFormation()} disabled={isSavingFormation}>확인</Button>
         </DialogActions>
       </Dialog>
 

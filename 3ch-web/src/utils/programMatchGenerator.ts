@@ -588,6 +588,10 @@ export function saveProgramMatchPatch(leagueId: string, round: number, matchId: 
   return state;
 }
 
+export function clearProgramMatchState(leagueId: string, round: number) {
+  localStorage.removeItem(getProgramMatchStateKey(leagueId, round));
+}
+
 export function applyProgramMatchState(matches: LeagueMatch[], leagueId: string, round: number): LeagueMatch[] {
   const state = readProgramMatchState(leagueId, round);
   return matches.map((match) => (state[match.id] ? { ...match, ...state[match.id] } : match));

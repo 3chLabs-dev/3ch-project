@@ -1197,7 +1197,7 @@ const handleSaveEdit = async () => {
               onClick={() => setParticipantClaimOpen(true)}
               sx={{ borderRadius: 1, height: 28, px: 1.2, fontWeight: 700, fontSize: 12 }}
             >
-              {canManage ? "연결코드" : "사전등록 전환"}
+              {canManage ? "전환 신청" : "사전등록 전환"}
             </Button>
             {canManage && (
               <Button

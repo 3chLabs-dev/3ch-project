@@ -259,6 +259,11 @@ export default function LeagueStep5Participants() {
       </Box>
 
       <Box
+        component="form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          handleAdd();
+        }}
         sx={{
           display: "grid",
           gridTemplateColumns: "56px minmax(0,1fr) 56px",
@@ -272,21 +277,17 @@ export default function LeagueStep5Participants() {
           placeholder="부수"
           value={division}
           onChange={(e) => setDivision(e.target.value)}
+          slotProps={{ htmlInput: { enterKeyHint: "done" } }}
           sx={inputSx}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") handleAdd();
-          }}
         />
         <Box sx={{ position: "relative", minWidth: 0 }}>
         <TextField
           placeholder="이름"
           value={name}
           onChange={(e) => setName(e.target.value)}
+          slotProps={{ htmlInput: { enterKeyHint: "done" } }}
           sx={inputSx}
           fullWidth
-          onKeyDown={(e) => {
-            if (e.key === "Enter") handleAdd();
-          }}
         />
           {canAdd && (
             <Box
@@ -322,9 +323,9 @@ export default function LeagueStep5Participants() {
         </Box>
 
         <Button
+          type="submit"
           variant="contained"
           disableElevation
-          onClick={handleAdd}
           disabled={!canAdd}
           sx={{
             borderRadius: 1,

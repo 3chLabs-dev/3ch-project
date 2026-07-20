@@ -406,6 +406,10 @@ export interface ParticipantClaimCandidate {
   id: string;
   name: string;
   division?: string | null;
+  claim_status?: "pending" | "approved" | "declined" | null;
+  requested_by_id?: number | null;
+  requester_name?: string | null;
+  requested_at?: string | null;
 }
 
 export interface SaveLeagueGroupingItem {
@@ -557,6 +561,23 @@ export const leagueApi = baseApi.injectEndpoints({
     getParticipantClaimCandidates: builder.query<{ participants: ParticipantClaimCandidate[] }, string>({
       query: (leagueId) => `/league/${leagueId}/participant-claims`,
       providesTags: (_r, _e, leagueId) => [{ type: "League", id: `claims-${leagueId}` }],
+    }),
+
+    requestParticipantClaim: builder.mutation<{ requested: boolean; participant_id: string }, { leagueId: string; participantId: string }>({
+      query: ({ leagueId, participantId }) => ({
+        url: `/league/${leagueId}/participants/${participantId}/claim-request`, method: "POST",
+      }),
+      invalidatesTags: (_r, _e, { leagueId }) => [{ type: "League", id: `claims-${leagueId}` }],
+    }),
+
+    reviewParticipantClaim: builder.mutation<{ status: "approved" | "declined"; participant_id: string }, { leagueId: string; participantId: string; status: "approved" | "declined" }>({
+      query: ({ leagueId, participantId, status }) => ({
+        url: `/league/${leagueId}/participants/${participantId}/claim-request`, method: "PATCH", body: { status },
+      }),
+      invalidatesTags: (_r, _e, { leagueId }) => [
+        { type: "League", id: `claims-${leagueId}` },
+        { type: "League", id: leagueId },
+      ],
     }),
 
     issueParticipantClaimCode: builder.mutation<{ participant_id: string; code: string }, { leagueId: string; participantId: string }>({
@@ -1038,6 +1059,8 @@ export const {
   useInviteGroupsToLeagueMutation,
   useRespondLeagueInvitationMutation,
   useGetParticipantClaimCandidatesQuery,
+  useRequestParticipantClaimMutation,
+  useReviewParticipantClaimMutation,
   useIssueParticipantClaimCodeMutation,
   useClaimLeagueParticipantMutation,
   useAutoLinkGuestParticipantMutation,

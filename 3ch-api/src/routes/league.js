@@ -196,7 +196,7 @@ const openAIVisionCellSchema = z.object({
   columnPlayerName: z.string().trim(),
   rowIndex: z.number().int().min(0),
   columnIndex: z.number().int().min(0),
-  score: z.number().int().min(0).max(3),
+  score: z.number().int().min(0).max(30),
   confidence: z.number().min(0).max(1),
   needsReview: z.boolean(),
 });
@@ -1424,16 +1424,174 @@ router.patch('/league/invitations/:invitationId', requireAuth, async (req, res) 
 
 router.get('/league/:id/participant-claims', optionalAuth, async (req, res) => {
   try {
+    const userId = req.user ? Number(req.user.sub) : null;
+    const canManage = userId ? await getLeagueManager(pool, req.params.id, userId) : false;
     const result = await pool.query(
-      `SELECT lp.id, lp.name, lp.division
+      `SELECT lp.id, lp.name, lp.division,
+              CASE
+                WHEN $2::boolean OR lpc.requested_by_id = $3 THEN lpc.status
+                ELSE NULL
+              END AS claim_status,
+              CASE WHEN $2::boolean THEN lpc.requested_by_id ELSE NULL END AS requested_by_id,
+              CASE WHEN $2::boolean THEN COALESCE(u.nickname, u.name, u.email) ELSE NULL END AS requester_name,
+              CASE WHEN $2::boolean THEN lpc.requested_at ELSE NULL END AS requested_at
          FROM league_participants lp
+         LEFT JOIN league_participant_claims lpc ON lpc.participant_id = lp.id
+         LEFT JOIN users u ON u.id = lpc.requested_by_id
         WHERE lp.league_id = $1 AND lp.status = 'active' AND lp.member_id IS NULL
+          AND ($2::boolean OR lpc.status IS DISTINCT FROM 'pending' OR lpc.requested_by_id = $3)
         ORDER BY lp.sort_order NULLS LAST, lp.created_at`,
-      [req.params.id],
+      [req.params.id, canManage, userId],
     );
-    return res.json({ participants: result.rows });
+    return res.json({ participants: result.rows, can_manage: canManage });
   } catch (error) {
     return res.status(500).json({ message: '전환 가능한 참가자를 불러오지 못했습니다.' });
+  }
+});
+
+router.post('/league/:leagueId/participants/:participantId/claim-request', requireAuth, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const userId = Number(req.user.sub);
+    await client.query('BEGIN');
+    const participant = await client.query(
+      `SELECT lp.id, lp.member_id, lpc.status AS claim_status, lpc.requested_by_id
+         FROM league_participants lp
+         LEFT JOIN league_participant_claims lpc ON lpc.participant_id = lp.id
+        WHERE lp.id = $1 AND lp.league_id = $2 AND lp.status = 'active'
+        FOR UPDATE`,
+      [req.params.participantId, req.params.leagueId],
+    );
+    if (!participant.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: '전환할 참가자를 찾을 수 없습니다.' });
+    }
+    if (participant.rows[0].member_id) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: '이미 다른 계정과 연결된 참가자입니다.' });
+    }
+    if (participant.rows[0].claim_status === 'pending') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        message: Number(participant.rows[0].requested_by_id) === userId
+          ? '이미 승인 대기 중인 전환 신청입니다.'
+          : '다른 회원의 전환 신청이 승인 대기 중입니다.',
+      });
+    }
+    const duplicate = await client.query(
+      `SELECT 1 FROM league_participants
+        WHERE league_id = $1 AND member_id = $2 AND status = 'active'`,
+      [req.params.leagueId, userId],
+    );
+    if (duplicate.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: '이미 이 리그에 연결된 참가자가 있습니다.' });
+    }
+    const pendingElsewhere = await client.query(
+      `SELECT 1
+         FROM league_participant_claims lpc
+         JOIN league_participants lp ON lp.id = lpc.participant_id
+        WHERE lp.league_id = $1 AND lpc.requested_by_id = $2
+          AND lpc.status = 'pending' AND lpc.participant_id <> $3`,
+      [req.params.leagueId, userId, req.params.participantId],
+    );
+    if (pendingElsewhere.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: '이미 다른 참가자 전환을 신청했습니다.' });
+    }
+    await client.query(
+      `INSERT INTO league_participant_claims
+         (participant_id, requested_by_id, status, requested_at, reviewed_by_id, reviewed_at, updated_at)
+       VALUES ($1, $2, 'pending', NOW(), NULL, NULL, NOW())
+       ON CONFLICT (participant_id) DO UPDATE
+         SET requested_by_id = EXCLUDED.requested_by_id,
+             status = 'pending', requested_at = NOW(),
+             reviewed_by_id = NULL, reviewed_at = NULL,
+             code_hash = NULL, guest_token_hash = NULL, updated_at = NOW()`,
+      [req.params.participantId, userId],
+    );
+    await client.query('COMMIT');
+    return res.status(201).json({ requested: true, participant_id: req.params.participantId });
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch {}
+    console.error('Participant claim request error:', error);
+    return res.status(500).json({ message: '참가자 전환 신청에 실패했습니다.' });
+  } finally {
+    client.release();
+  }
+});
+
+router.patch('/league/:leagueId/participants/:participantId/claim-request', requireAuth, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const managerId = Number(req.user.sub);
+    const status = z.enum(['approved', 'declined']).parse(req.body.status);
+    if (!await getLeagueManager(client, req.params.leagueId, managerId)) {
+      return res.status(403).json({ message: '전환 신청을 처리할 권한이 없습니다.' });
+    }
+    await client.query('BEGIN');
+    const claim = await client.query(
+      `SELECT lp.id, lp.member_id, lpc.requested_by_id, lpc.status
+         FROM league_participants lp
+         JOIN league_participant_claims lpc ON lpc.participant_id = lp.id
+        WHERE lp.id = $1 AND lp.league_id = $2
+        FOR UPDATE`,
+      [req.params.participantId, req.params.leagueId],
+    );
+    if (!claim.rowCount || claim.rows[0].status !== 'pending' || !claim.rows[0].requested_by_id) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: '처리할 전환 신청이 없습니다.' });
+    }
+    if (claim.rows[0].member_id) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: '이미 다른 계정과 연결된 참가자입니다.' });
+    }
+    const requestedById = Number(claim.rows[0].requested_by_id);
+    if (status === 'approved') {
+      const duplicate = await client.query(
+        `SELECT 1 FROM league_participants
+          WHERE league_id = $1 AND member_id = $2 AND status = 'active' AND id <> $3`,
+        [req.params.leagueId, requestedById, req.params.participantId],
+      );
+      if (duplicate.rowCount) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ message: '신청자에게 이미 연결된 참가자가 있습니다.' });
+      }
+      await client.query(
+        `UPDATE league_participants lp
+            SET member_id = $1,
+                source_group_id = COALESCE((
+                  SELECT gm.group_id
+                    FROM group_members gm
+                    JOIN leagues l ON l.id = lp.league_id
+                    LEFT JOIN league_invited_groups lig
+                      ON lig.league_id = l.id AND lig.group_id = gm.group_id AND lig.status = 'accepted'
+                   WHERE gm.user_id = $1 AND (gm.group_id = l.group_id OR lig.id IS NOT NULL)
+                   ORDER BY CASE WHEN gm.group_id = l.group_id THEN 0 ELSE 1 END
+                   LIMIT 1
+                ), lp.source_group_id)
+          WHERE lp.id = $2`,
+        [requestedById, req.params.participantId],
+      );
+    }
+    await client.query(
+      `UPDATE league_participant_claims
+          SET status = $1, reviewed_by_id = $2, reviewed_at = NOW(),
+              claimed_by_id = CASE WHEN $1 = 'approved' THEN requested_by_id ELSE claimed_by_id END,
+              claimed_at = CASE WHEN $1 = 'approved' THEN NOW() ELSE claimed_at END,
+              updated_at = NOW()
+        WHERE participant_id = $3`,
+      [status, managerId, req.params.participantId],
+    );
+    await client.query('COMMIT');
+    return res.json({ status, participant_id: req.params.participantId });
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch {}
+    if (error instanceof z.ZodError) return res.status(400).json({ errors: error.errors });
+    console.error('Review participant claim request error:', error);
+    return res.status(500).json({ message: '참가자 전환 신청 처리에 실패했습니다.' });
+  } finally {
+    client.release();
   }
 });
 
@@ -4048,7 +4206,7 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
       };
     });
 
-    // A completed match needs two opposing player cells and exactly one winning score of 3.
+    // A recognized result needs two opposing cells and one clear winner. Team totals may exceed 3.
     const cellsByMatch = new Map();
     for (const cell of cells) {
       if (!cell.matchId || !cell.playerId) continue;
@@ -4060,7 +4218,7 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
       const distinctPlayers = new Set(matchCells.map((cell) => cell.playerId));
       const hasValidPair = matchCells.length === 2
         && distinctPlayers.size === 2
-        && matchCells.filter((cell) => cell.score === 3).length === 1;
+        && matchCells[0].score !== matchCells[1].score;
       if (hasValidPair) continue;
 
       for (const cell of matchCells) {

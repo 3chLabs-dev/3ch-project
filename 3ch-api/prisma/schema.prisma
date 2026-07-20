@@ -36,7 +36,13 @@ model User {
   support_chat_messages SupportChatMessage[]
   sent_league_invitations LeagueInvitedGroup[] @relation("LeagueInvitationSender")
   accepted_league_invitations LeagueInvitedGroup[] @relation("LeagueInvitationAccepter")
-  participant_claims LeagueParticipantClaim[]
+  participant_claims LeagueParticipantClaim[] @relation("ParticipantClaimApprovedUser")
+  requested_participant_claims LeagueParticipantClaim[] @relation("ParticipantClaimRequester")
+  reviewed_participant_claims LeagueParticipantClaim[] @relation("ParticipantClaimReviewer")
+  created_group_pre_members GroupPreMember[] @relation("GroupPreMemberCreator")
+  linked_group_pre_members GroupPreMember[] @relation("GroupPreMemberLinkedUser")
+  requested_group_member_claims GroupMemberClaim[] @relation("GroupMemberClaimRequester")
+  reviewed_group_member_claims GroupMemberClaim[] @relation("GroupMemberClaimReviewer")
 
   @@map("users")
 }
@@ -99,6 +105,7 @@ model Group {
   sport_ranking_events SportRankingEvent[]
   invited_leagues      LeagueInvitedGroup[]
   league_participants  LeagueParticipant[] @relation("ParticipantSourceGroup")
+  pre_members          GroupPreMember[]
 
   @@map("groups")
 }
@@ -313,6 +320,43 @@ model LeagueParticipant {
   @@map("league_participants")
 }
 
+model GroupPreMember {
+  id             String   @id @default(uuid())
+  group_id       String
+  name           String
+  division       String?
+  status         String   @default("active")
+  created_by_id  Int
+  linked_user_id Int?
+  created_at     DateTime @default(now())
+  updated_at     DateTime @default(now()) @updatedAt
+
+  group       Group @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  creator     User  @relation("GroupPreMemberCreator", fields: [created_by_id], references: [id])
+  linked_user User? @relation("GroupPreMemberLinkedUser", fields: [linked_user_id], references: [id], onDelete: SetNull)
+  claim       GroupMemberClaim?
+
+  @@index([group_id, status])
+  @@map("group_pre_members")
+}
+
+model GroupMemberClaim {
+  id              String    @id @default(uuid())
+  pre_member_id   String    @unique
+  requested_by_id Int
+  reviewed_by_id  Int?
+  status          String    @default("pending")
+  requested_at    DateTime  @default(now())
+  reviewed_at     DateTime?
+
+  pre_member GroupPreMember @relation(fields: [pre_member_id], references: [id], onDelete: Cascade)
+  requester  User @relation("GroupMemberClaimRequester", fields: [requested_by_id], references: [id], onDelete: Cascade)
+  reviewer   User? @relation("GroupMemberClaimReviewer", fields: [reviewed_by_id], references: [id], onDelete: SetNull)
+
+  @@index([requested_by_id, status])
+  @@map("group_member_claims")
+}
+
 model LeagueInvitedGroup {
   id             String   @id @default(uuid())
   league_id      String
@@ -338,15 +382,23 @@ model LeagueParticipantClaim {
   code_hash        String?
   guest_token_hash String?
   claimed_by_id    Int?
+  requested_by_id  Int?
+  reviewed_by_id   Int?
+  status           String?
+  requested_at     DateTime?
+  reviewed_at      DateTime?
   claimed_at       DateTime?
   expires_at       DateTime?
   created_at       DateTime @default(now())
   updated_at       DateTime @default(now()) @updatedAt
 
   participant LeagueParticipant @relation(fields: [participant_id], references: [id], onDelete: Cascade)
-  claimed_by  User? @relation(fields: [claimed_by_id], references: [id], onDelete: SetNull)
+  claimed_by  User? @relation("ParticipantClaimApprovedUser", fields: [claimed_by_id], references: [id], onDelete: SetNull)
+  requested_by User? @relation("ParticipantClaimRequester", fields: [requested_by_id], references: [id], onDelete: SetNull)
+  reviewed_by User? @relation("ParticipantClaimReviewer", fields: [reviewed_by_id], references: [id], onDelete: SetNull)
 
   @@index([guest_token_hash])
+  @@index([requested_by_id, status])
   @@map("league_participant_claims")
 }
 

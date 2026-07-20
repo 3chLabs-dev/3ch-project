@@ -162,6 +162,11 @@ export default function MemberEditDialog({
           </Box>
 
           <Box
+            component="form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              handleAddParticipant();
+            }}
             sx={{
               display: "grid",
               gridTemplateColumns: "58px minmax(0, 1fr) 36px 108px",
@@ -175,6 +180,7 @@ export default function MemberEditDialog({
               placeholder="부수"
               value={inputDivision}
               onChange={(e) => setInputDivision(e.target.value)}
+              slotProps={{ htmlInput: { enterKeyHint: "done" } }}
               size="small"
               sx={{
                 "& .MuiOutlinedInput-root": {
@@ -194,9 +200,7 @@ export default function MemberEditDialog({
               placeholder="이름"
               value={inputName}
               onChange={(e) => setInputName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleAddParticipant();
-              }}
+              slotProps={{ htmlInput: { enterKeyHint: "done" } }}
               size="small"
               sx={{
                 mx: 0.5,
@@ -216,9 +220,9 @@ export default function MemberEditDialog({
 
             <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center" }}>
               <Button
+                type="submit"
                 variant="contained"
                 disableElevation
-                onClick={handleAddParticipant}
                 disabled={!inputName.trim()}
                 sx={{
                   borderRadius: 0.6,

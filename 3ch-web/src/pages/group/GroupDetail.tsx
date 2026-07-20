@@ -18,6 +18,8 @@ import EmojiEventsOutlinedIcon from "@mui/icons-material/EmojiEventsOutlined";
 import { useGetGroupDetailQuery, useJoinGroupMutation } from "../../features/group/groupApi";
 import { useAppSelector } from "../../app/hooks";
 import { getRoleLabel } from "../../utils/permissions";
+import GroupPreMemberDialog from "./GroupPreMemberDialog";
+import { useState } from "react";
 
 const SPORT_EMOJI: Record<string, string> = {
   탁구: "🏓",
@@ -38,6 +40,7 @@ export default function GroupDetail() {
   });
 
   const [joinGroup, { isLoading: isJoining }] = useJoinGroupMutation();
+  const [preMemberDialogOpen, setPreMemberDialogOpen] = useState(false);
 
   const handleJoin = async () => {
     if (!isLoggedIn) {
@@ -261,6 +264,17 @@ export default function GroupDetail() {
         </Card>
       </Box>
 
+      {isAlreadyMember && (
+        <Button
+          fullWidth
+          variant="outlined"
+          onClick={() => setPreMemberDialogOpen(true)}
+          sx={{ borderRadius: 1, fontWeight: 700 }}
+        >
+          사전등록 회원 전환
+        </Button>
+      )}
+
       {isAlreadyMember ? (
         <Button
           fullWidth
@@ -293,6 +307,11 @@ export default function GroupDetail() {
           </Button>
         </Box>
       )}
+      <GroupPreMemberDialog
+        open={preMemberDialogOpen}
+        onClose={() => setPreMemberDialogOpen(false)}
+        groupId={group.id}
+      />
     </Stack>
   );
 }

@@ -1,12 +1,12 @@
 CREATE TABLE "group_pre_members" (
-  "id" UUID NOT NULL, "group_id" UUID NOT NULL, "name" TEXT NOT NULL, "division" TEXT,
+  "id" TEXT NOT NULL, "group_id" TEXT NOT NULL, "name" TEXT NOT NULL, "division" TEXT,
   "status" TEXT NOT NULL DEFAULT 'active', "created_by_id" INTEGER NOT NULL,
   "linked_user_id" INTEGER, "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "group_pre_members_pkey" PRIMARY KEY ("id")
 );
 CREATE TABLE "group_member_claims" (
-  "id" UUID NOT NULL, "pre_member_id" UUID NOT NULL, "requested_by_id" INTEGER NOT NULL,
+  "id" TEXT NOT NULL, "pre_member_id" TEXT NOT NULL, "requested_by_id" INTEGER NOT NULL,
   "reviewed_by_id" INTEGER, "status" TEXT NOT NULL DEFAULT 'pending',
   "requested_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "reviewed_at" TIMESTAMP(3),
   CONSTRAINT "group_member_claims_pkey" PRIMARY KEY ("id")

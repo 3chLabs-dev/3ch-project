@@ -16,12 +16,14 @@ const SYSTEM_PROMPT = `이 이미지는 우리리그 조별 리그 대진표입�
 
 const CELL_READING_RULES = `Read every non-diagonal score cell independently. Do not copy a value from another cell, infer a score from a win/loss/rank, or complete a result from its opposing cell.
 The four large printed black squares at the corners of the game score matrix are fixed alignment markers. They are not scores. Use them to locate the complete score matrix, then ignore every printed number, label, line, and black square on the sheet. Read only the large handwritten integer inside each matrix cell.
-A score may be any integer from 0 through 30. Two-digit scores such as 10, 11, 12, 20, and 30 are one complete cell value. Never split a two-digit score into separate cells or discard its second digit.
+A score may be any integer from 0 through 99. Two-digit scores such as 10, 11, 21, 31, and 99 are one complete cell value. Never split a two-digit score into separate cells or discard its second digit.
+The 0 through 99 range is output validation only, not a clue for interpreting the handwriting. Transcribe the integer exactly as it appears. For example, if the handwriting appears to be 31, return 31; never change it to 21 or 30 merely because those values seem more plausible for a match.
+Players sometimes draw a circle around a winning score, especially 2 in a best-of-3 match or 3 in a best-of-5 match. Treat the surrounding circle as emphasis only, not as the digit 0 and not as part of the score. A handwritten circled 2 or the symbol ② must be returned as score=2; a handwritten circled 3 or the symbol ③ must be returned as score=3. Apply the same rule to any clearly circled integer and return only the integer inside the circle.
 Focus only on the handwritten integer inside each score cell, even when the paper is photographed at an angle or surrounded by blank space.
-Set needsReview=false only when that exact handwritten integer is clearly visible. If a number is faint, obscured, cropped, outside 0 through 30, or ambiguous, return score=0, confidence at most 0.5, and needsReview=true. Do not report high confidence for a guessed number.`;
+Set needsReview=false only when that exact handwritten integer is clearly visible. If a number is faint, obscured, cropped, outside 0 through 99, or ambiguous, return score=0, confidence at most 0.5, and needsReview=true. Do not report high confidence for a guessed number.`;
 
 const STAR_GRID_READING_RULES = `This image contains an N by N league score grid. A printed black star marks the top-left cell of the score grid at rowIndex=0 and columnIndex=0. Do not read participant names, divisions, rankings, or any other labels.
-Starting at the star, identify the complete evenly spaced N by N score grid. Return each non-diagonal handwritten score by its zero-based rowIndex and columnIndex. Each score is one integer from 0 through 30, and two-digit values such as 10, 20, or 30 belong to one cell. The diagonal cells have no score. Read each cell independently; do not infer an opposing score or a winner.
+Starting at the star, identify the complete evenly spaced N by N score grid. Return each non-diagonal handwritten score by its zero-based rowIndex and columnIndex. Each score is one integer from 0 through 99, and two-digit values such as 10, 21, 31, or 99 belong to one cell. The 0 through 99 range is output validation only, not a clue for changing an unclear value into a more plausible table-tennis score. Transcribe exactly what is visible; for example, return 31 when the cell appears to contain 31 rather than changing it to 21 or 30. Players may circle a winning score. Treat that surrounding circle as emphasis only: return a circled 2 or ② as score=2, and a circled 3 or ③ as score=3. Never read the surrounding circle as 0 or append it to the inner number. The diagonal cells have no score. Read each cell independently; do not infer an opposing score or a winner.
 The participant names provided below are server data only. Do not try to find them in the image. Copy the supplied name for each returned rowPlayerName and columnPlayerName according to rowIndex and columnIndex.`;
 
 function extractOutputText(response) {
@@ -143,7 +145,7 @@ ${participantLines}
                   columnPlayerName: { type: 'string' },
                   rowIndex: { type: 'integer' },
                   columnIndex: { type: 'integer' },
-                  score: { type: 'integer', minimum: 0, maximum: 30 },
+                  score: { type: 'integer', minimum: 0, maximum: 99 },
                   confidence: { type: 'number' },
                   needsReview: { type: 'boolean' },
                 },

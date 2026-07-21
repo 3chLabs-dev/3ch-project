@@ -1380,7 +1380,7 @@ export default function LeagueGPTVisionSheet() {
   const updatePreviewCell = (rowIndex: number, columnIndex: number, score: number) => {
     setPreviewCells((cells) => cells.map((cell) => (
       cell.rowIndex === rowIndex && cell.columnIndex === columnIndex
-        ? { ...cell, score: Math.min(30, Math.max(0, score)), needsReview: false, issue: undefined }
+        ? { ...cell, score: Math.min(99, Math.max(0, score)), needsReview: false, issue: undefined }
         : cell
     )));
   };
@@ -1414,8 +1414,8 @@ export default function LeagueGPTVisionSheet() {
     const image = editorImageRef.current;
     if (!image) return;
     setCropMode(true);
-    setCrop({ unit: "%", x: 2, y: 2, width: 96, height: 96 });
-    setCompletedCrop({ x: image.width * 0.02, y: image.height * 0.02, width: image.width * 0.96, height: image.height * 0.96, unit: "px" });
+    setCrop({ unit: "%", x: 0, y: 0, width: 100, height: 100 });
+    setCompletedCrop({ x: 0, y: 0, width: image.width, height: image.height, unit: "px" });
   };
 
   const rotateEditorImage = async (degrees: number) => {
@@ -1673,12 +1673,15 @@ export default function LeagueGPTVisionSheet() {
   const mobileDialogPaperSx = landscape
     ? {}
     : {
-        width: "calc(100vh - 48px)",
+        width: "calc(100dvh - 8px)",
         maxWidth: "none",
-        maxHeight: "calc(100vw - 48px)",
+        maxHeight: "calc(100vw - 8px)",
         transform: "rotate(90deg)",
         transformOrigin: "center",
       };
+  const editorImageMaxHeight = landscape
+    ? "clamp(120px, calc(100dvh - 230px), 420px)"
+    : "clamp(120px, calc(100vw - 230px), 260px)";
 
   // ── JSX ───────────────────────────────────────────────────────────────────
   return createPortal(
@@ -2002,29 +2005,51 @@ export default function LeagueGPTVisionSheet() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={Boolean(imageEditor)} onClose={closeImageEditor} maxWidth="md" fullWidth sx={{ zIndex: 10002 }} slotProps={{ paper: { sx: { overflow: "hidden", ...mobileDialogPaperSx } } }}>
-        <DialogTitle sx={{ fontWeight: 900 }}>사진 확인</DialogTitle>
-        <DialogContent dividers sx={{ p: 1.5 }}>
-          <Typography sx={{ mb: 1.5, color: "#6B7280", fontSize: 13, lineHeight: 1.6, fontWeight: 700 }}>
+      <Dialog open={Boolean(imageEditor)} onClose={closeImageEditor} maxWidth="md" fullWidth sx={{ zIndex: 10002 }} slotProps={{ paper: { sx: { overflow: "hidden", display: "flex", flexDirection: "column", ...mobileDialogPaperSx, ...(landscape ? { "@media (max-width: 900px)": { width: "calc(100vw - 8px)", maxWidth: "none", maxHeight: "calc(100dvh - 8px)", m: "4px" } } : {}) } } }}>
+        <DialogTitle sx={{ px: 2, py: 1, fontWeight: 900 }}>사진 확인</DialogTitle>
+        <DialogContent dividers sx={{ p: 1, overflow: "hidden", flex: "1 1 auto", minHeight: 0, display: "flex", flexDirection: "column" }}>
+          <Typography sx={{ mb: 0.5, color: "#6B7280", fontSize: 12, lineHeight: 1.35, fontWeight: 700 }}>
             점수가 잘 인식될 수 있도록 정방향으로 맞춰주고, 대진표 부분만 인식 영역으로 지정해 주세요.
           </Typography>
           <Box
             sx={{
-              display: "flex", justifyContent: "center", alignItems: "center", minHeight: 300, maxHeight: 420, overflow: "auto", bgcolor: "#111827",
-              "& .ReactCrop": { lineHeight: 0, "--rc-drag-handle-mobile-size": "30px" },
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              width: "100%",
+              minHeight: 120,
+              height: editorImageMaxHeight,
+              maxHeight: editorImageMaxHeight,
+              flex: "1 1 auto",
+              overflow: "hidden",
+              bgcolor: "#111827",
+              "& .ReactCrop": { lineHeight: 0, maxWidth: "100%", maxHeight: "100%", touchAction: "none" },
               "& .ReactCrop__crop-mask": { fill: "rgba(0, 0, 0, 0.62)" },
-              "& .ReactCrop__crop-selection": { border: "2px solid #fff", backgroundImage: "none", animation: "none" },
-              "& .ReactCrop__drag-handle": { bgcolor: "#fff", border: "2px solid rgba(17, 24, 39, 0.45)", borderRadius: "2px" },
-              "& .ReactCrop__drag-handle.ord-n, & .ReactCrop__drag-handle.ord-s": { width: 48, height: 5, borderRadius: 3 },
-              "& .ReactCrop__drag-handle.ord-e, & .ReactCrop__drag-handle.ord-w": { width: 5, height: 48, borderRadius: 3 },
+              "& .ReactCrop__crop-selection": { border: "1px solid rgba(255,255,255,0.9)", backgroundImage: "none", animation: "none" },
+              "& .ReactCrop__drag-handle": { display: "block !important", width: 28, height: 28, bgcolor: "transparent", border: 0, borderRadius: 0 },
+              "& .ReactCrop__drag-handle.ord-nw": { top: 0, left: 0, transform: "none", borderTop: "3px solid #fff", borderLeft: "3px solid #fff" },
+              "& .ReactCrop__drag-handle.ord-ne": { top: 0, right: 0, transform: "none", borderTop: "3px solid #fff", borderRight: "3px solid #fff" },
+              "& .ReactCrop__drag-handle.ord-se": { right: 0, bottom: 0, transform: "none", borderRight: "3px solid #fff", borderBottom: "3px solid #fff" },
+              "& .ReactCrop__drag-handle.ord-sw": { bottom: 0, left: 0, transform: "none", borderBottom: "3px solid #fff", borderLeft: "3px solid #fff" },
+              "& .ReactCrop__drag-handle.ord-n, & .ReactCrop__drag-handle.ord-s": { display: "block !important", width: 48, height: 24, left: "50%" },
+              "& .ReactCrop__drag-handle.ord-n": { top: 0, transform: "translateX(-50%)", borderTop: "3px solid #fff" },
+              "& .ReactCrop__drag-handle.ord-s": { bottom: 0, transform: "translateX(-50%)", borderBottom: "3px solid #fff" },
+              "& .ReactCrop__drag-handle.ord-e, & .ReactCrop__drag-handle.ord-w": { display: "block !important", width: 24, height: 48, top: "50%" },
+              "& .ReactCrop__drag-handle.ord-e": { right: 0, transform: "translateY(-50%)", borderRight: "3px solid #fff" },
+              "& .ReactCrop__drag-handle.ord-w": { left: 0, transform: "translateY(-50%)", borderLeft: "3px solid #fff" },
               "& .ReactCrop__rule-of-thirds-vt::before, & .ReactCrop__rule-of-thirds-vt::after, & .ReactCrop__rule-of-thirds-hz::before, & .ReactCrop__rule-of-thirds-hz::after": { bgcolor: "rgba(255,255,255,0.45)" },
             }}
+            onPointerDownCapture={(event) => {
+              if (cropMode && event.target instanceof Element && !event.target.closest(".ReactCrop__crop-selection")) {
+                event.stopPropagation();
+              }
+            }}
           >
-            {imageEditor ? <ReactCrop crop={crop} onChange={(_, percentCrop) => setCrop(percentCrop)} onComplete={(pixelCrop) => setCompletedCrop(pixelCrop)} disabled={!cropMode} keepSelection={cropMode} ruleOfThirds={cropMode}>
-              <img ref={editorImageRef} src={imageEditor.url} onLoad={handleEditorImageLoad} alt="선택한 대진표" draggable={false} style={{ display: "block", maxWidth: "100%", maxHeight: 420, objectFit: "contain" }} />
+            {imageEditor ? <ReactCrop crop={crop} onChange={(_, percentCrop) => setCrop(percentCrop)} onComplete={(pixelCrop) => setCompletedCrop(pixelCrop)} disabled={!cropMode} keepSelection={cropMode} minWidth={48} minHeight={48} ruleOfThirds={cropMode}>
+              <img ref={editorImageRef} src={imageEditor.url} onLoad={handleEditorImageLoad} alt="선택한 대진표" draggable={false} style={{ display: "block", maxWidth: "100%", maxHeight: editorImageMaxHeight, objectFit: "contain" }} />
             </ReactCrop> : null}
           </Box>
-          <Stack direction="row" alignItems="flex-start" justifyContent="center" spacing={2} sx={{ pt: 1.25 }}>
+          <Stack direction="row" alignItems="flex-start" justifyContent="center" spacing={1} sx={{ pt: 1, minHeight: 64, flexShrink: 0 }}>
             <Stack alignItems="center" sx={{ width: 88 }}>
               <Tooltip title="왼쪽으로 회전">
                 <IconButton onClick={() => void rotateEditorImage(-90)}><RotateLeftIcon /></IconButton>
@@ -2045,9 +2070,9 @@ export default function LeagueGPTVisionSheet() {
             </Stack>
           </Stack>
         </DialogContent>
-        <DialogActions sx={{ px: 2.5, py: 1.5 }}>
-          <Button onClick={closeImageEditor}>취소</Button>
-          <Button variant="contained" onClick={() => void createEditedImage()} disabled={!editorLoaded}>인식 시작</Button>
+        <DialogActions sx={{ px: 2.5, py: 1.25, flexShrink: 0 }}>
+          <Button onClick={closeImageEditor} sx={{ minHeight: 40, px: 2 }}>취소</Button>
+          <Button variant="contained" onClick={() => void createEditedImage()} disabled={!editorLoaded} sx={{ minHeight: 40, px: 2.5 }}>인식 시작</Button>
         </DialogActions>
       </Dialog>
 
@@ -2078,8 +2103,47 @@ export default function LeagueGPTVisionSheet() {
                     return <td key={columnPlayer.id} style={{ background: "#FFFFFF" }}>
                       <Stack direction="row" alignItems="center" justifyContent="center" spacing={0.5}>
                         <IconButton size="small" onClick={() => updatePreviewCell(rowIndex, columnIndex, (cell?.score ?? 0) - 1)} disabled={(cell?.score ?? 0) <= 0}>-</IconButton>
-                        <Typography sx={{ minWidth: 24, fontSize: 20, fontWeight: 900, color: "#111827" }}>{cell?.score ?? 0}</Typography>
-                        <IconButton size="small" onClick={() => updatePreviewCell(rowIndex, columnIndex, (cell?.score ?? 0) + 1)} disabled={(cell?.score ?? 0) >= 20}>+</IconButton>
+                        <Box
+                          component="input"
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          maxLength={2}
+                          aria-label={`${rowPlayer.name} 대 ${columnPlayer.name} 점수`}
+                          value={cell?.score ?? 0}
+                          onFocus={(event) => event.currentTarget.select()}
+                          onChange={(event) => {
+                            const digits = event.currentTarget.value.replace(/\D/g, "").slice(0, 2);
+                            updatePreviewCell(rowIndex, columnIndex, digits ? Number(digits) : 0);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") event.currentTarget.blur();
+                            if (event.key === "ArrowUp") {
+                              event.preventDefault();
+                              updatePreviewCell(rowIndex, columnIndex, (cell?.score ?? 0) + 1);
+                            }
+                            if (event.key === "ArrowDown") {
+                              event.preventDefault();
+                              updatePreviewCell(rowIndex, columnIndex, (cell?.score ?? 0) - 1);
+                            }
+                          }}
+                          sx={{
+                            width: 52,
+                            height: 40,
+                            p: 0,
+                            border: "1px solid #9CA3AF",
+                            borderRadius: 1,
+                            bgcolor: "#fff",
+                            color: "#111827",
+                            fontSize: 24,
+                            fontWeight: 900,
+                            lineHeight: 1,
+                            textAlign: "center",
+                            outline: "none",
+                            "&:focus": { borderColor: "#1976D2", boxShadow: "0 0 0 1px #1976D2" },
+                          }}
+                        />
+                        <IconButton size="small" onClick={() => updatePreviewCell(rowIndex, columnIndex, (cell?.score ?? 0) + 1)} disabled={(cell?.score ?? 0) >= 99}>+</IconButton>
                       </Stack>
                     </td>;
                   })}

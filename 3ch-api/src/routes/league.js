@@ -196,7 +196,7 @@ const openAIVisionCellSchema = z.object({
   columnPlayerName: z.string().trim(),
   rowIndex: z.number().int().min(0),
   columnIndex: z.number().int().min(0),
-  score: z.number().int().min(0).max(30),
+  score: z.number().int().min(0).max(99),
   confidence: z.number().min(0).max(1),
   needsReview: z.boolean(),
 });

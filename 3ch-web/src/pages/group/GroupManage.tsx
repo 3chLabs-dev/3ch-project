@@ -522,7 +522,7 @@ export default function GroupManage() {
                     </IconButton>
                     {canManage && (
                         <Button size="small" variant="outlined" onClick={() => setPreMemberDialogOpen(true)} sx={{ borderRadius: 1, fontWeight: 700 }}>
-                            사전등록 관리
+                            회원 사전등록
                         </Button>
                     )}
                 </Stack>

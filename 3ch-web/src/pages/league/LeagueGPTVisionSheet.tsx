@@ -89,9 +89,9 @@ const COLOR = {
  */
 function getWinScore(rules?: string | null): number | null {
   if (!rules) return null;
-  if (rules.includes("3세트제"))    return null;
-  if (rules.includes("3전 2선승"))  return 2;
-  if (rules.includes("5전 3선승"))  return 3;
+  if (rules === "THREE_SET" || rules.includes("3세트제"))    return null;
+  if (rules === "BEST_OF_3" || rules.includes("3전 2선승"))  return 2;
+  if (rules === "BEST_OF_5" || rules.includes("5전 3선승"))  return 3;
   if (rules.includes("7전 4선승"))  return 4;
   return null;
 }
@@ -1603,7 +1603,10 @@ export default function LeagueGPTVisionSheet() {
   };
 
   const saveVisionPreview = async () => {
-    const requiredWinScore = getWinScore(league?.rules) ?? 3;
+    const roundBlock = isProgramMode ? programOption?.blocks?.[programRound - 1] : undefined;
+    const roundRule = roundBlock?.matchRule ?? league?.rules;
+    const requiredWinScore = getWinScore(roundRule);
+    const isTeamAggregate = roundBlock?.type === "TEAM";
     const grouped = new Map<string, { match: LeagueMatch; scoreA: number | null; scoreB: number | null }>();
     previewCells.forEach((cell) => {
       if (!cell.matchId || !cell.playerId) return;
@@ -1619,7 +1622,13 @@ export default function LeagueGPTVisionSheet() {
       let saved = 0;
       const invalidMatchIds = new Set<string>();
       for (const { match, scoreA, scoreB } of grouped.values()) {
-        if (scoreA == null || scoreB == null || [scoreA, scoreB].filter((score) => score === requiredWinScore).length !== 1) {
+        const hasBothScores = scoreA != null && scoreB != null;
+        const hasWinner = hasBothScores && scoreA !== scoreB;
+        const hasValidWinningScore = hasBothScores && requiredWinScore != null
+          ? Math.max(scoreA, scoreB) === requiredWinScore && Math.min(scoreA, scoreB) < requiredWinScore
+          : hasWinner;
+        const isValidResult = isTeamAggregate ? hasWinner : hasValidWinningScore;
+        if (!isValidResult) {
           invalidMatchIds.add(match.id);
           continue;
         }
@@ -1630,7 +1639,7 @@ export default function LeagueGPTVisionSheet() {
       if (invalidMatchIds.size > 0) {
         setPreviewCells((cells) => cells.map((cell) => (
           cell.matchId && invalidMatchIds.has(cell.matchId)
-            ? { ...cell, needsReview: true, issue: "두 세트스코어 중 하나는 승리 세트 수여야 합니다." }
+            ? { ...cell, needsReview: true, issue: isTeamAggregate ? "두 팀의 최종 합산 점수를 확인해 주세요." : "경기방식에 맞는 두 세트스코어를 확인해 주세요." }
             : cell
         )));
         setVisionNotice({ type: "info", message: `${saved}개 경기는 저장했습니다. ${invalidMatchIds.size}개 경기는 세트스코어 조합을 수정해 주세요.` });

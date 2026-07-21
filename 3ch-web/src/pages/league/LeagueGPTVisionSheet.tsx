@@ -1015,10 +1015,10 @@ export default function LeagueGPTVisionSheet() {
   const editorImageRef = useRef<HTMLImageElement>(null);
   const guideCarouselRef = useRef<HTMLDivElement>(null);
   const guideDragRef = useRef<{ pointerId: number; startX: number; startScrollLeft: number } | null>(null);
-  const updateProgramMatch = useCallback((matchId: string, updates: ProgramMatchPatch) => {
+  const updateProgramMatch = useCallback(async (matchId: string, updates: ProgramMatchPatch) => {
     if (!id) return;
     if (serverProgramMatchesAll.some((match) => match.id === matchId)) {
-      updateMatch({ leagueId: id, matchId, updates });
+      await updateMatch({ leagueId: id, matchId, updates }).unwrap();
       return;
     }
     saveProgramMatchPatch(id, programRound, matchId, updates);
@@ -1632,10 +1632,17 @@ export default function LeagueGPTVisionSheet() {
           invalidMatchIds.add(match.id);
           continue;
         }
-        await updateMatch({ leagueId: id ?? "", matchId: match.id, updates: { score_a: scoreA, score_b: scoreB, status: "done" } }).unwrap();
+        const updates = { score_a: scoreA, score_b: scoreB, status: "done" as const };
+        if (isProgramMode) {
+          await updateProgramMatch(match.id, updates);
+        } else {
+          await updateMatch({ leagueId: id ?? "", matchId: match.id, updates }).unwrap();
+        }
         saved += 1;
       }
-      await refetchMatches();
+      if (!isProgramMode || serverProgramMatchesAll.length > 0) {
+        await refetchMatches();
+      }
       if (invalidMatchIds.size > 0) {
         setPreviewCells((cells) => cells.map((cell) => (
           cell.matchId && invalidMatchIds.has(cell.matchId)

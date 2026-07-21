@@ -369,7 +369,7 @@ export interface ScanOcrResponse {
 
 export interface AddParticipantsRequest {
   leagueId: string;
-  participants: { division: string; name: string; member_id?: number | null }[];
+  participants: { division: string; name: string; member_id?: number | null; source_group_id?: string | null }[];
   placement?: {
     kind: "tournament";
     program_round: number;

@@ -1460,7 +1460,7 @@ router.post('/league/:leagueId/participants/:participantId/claim-request', requi
          FROM league_participants lp
          LEFT JOIN league_participant_claims lpc ON lpc.participant_id = lp.id
         WHERE lp.id = $1 AND lp.league_id = $2 AND lp.status = 'active'
-        FOR UPDATE`,
+        FOR UPDATE OF lp`,
       [req.params.participantId, req.params.leagueId],
     );
     if (!participant.rowCount) {
@@ -1922,8 +1922,20 @@ router.post('/league/:leagueId/participants', optionalAuth, async (req, res) => 
       division: z.string().default(''),
       name: z.string().min(1, '이름은 필수입니다.'),
       member_id: z.number().int().nullable().optional(),
+      source_group_id: z.string().uuid().nullable().optional(),
     }));
     const participants = addSchema.parse(rawParticipants);
+    const allowedSourceGroups = new Set([leaguePermRow.rows[0].group_id]);
+    if (isAdmin) {
+      const acceptedGroups = await pool.query(
+        `SELECT group_id FROM league_invited_groups WHERE league_id = $1 AND status = 'accepted'`,
+        [leagueId],
+      );
+      acceptedGroups.rows.forEach((row) => allowedSourceGroups.add(row.group_id));
+      if (participants.some((participant) => participant.source_group_id && !allowedSourceGroups.has(participant.source_group_id))) {
+        return res.status(400).json({ message: '참여 클럽에 포함되지 않은 소속입니다.' });
+      }
+    }
     const placement = z.object({
       kind: z.literal('tournament'),
       program_round: z.number().int().min(1),
@@ -1969,7 +1981,7 @@ router.post('/league/:leagueId/participants', optionalAuth, async (req, res) => 
         `INSERT INTO league_participants (id, league_id, division, name, member_id, source_group_id, paid, arrived, "after")
          VALUES ($1, $2, $3, $4, $5, $6, false, false, false)
          RETURNING id, league_id, division, name, member_id, source_group_id, paid, arrived, "after", created_at`,
-        [randomUUID(), leagueId, p.division, p.name, isAdmin ? (p.member_id ?? null) : userId, isAdmin ? (p.member_id ? leaguePermRow.rows[0].group_id : null) : participantSourceGroupId],
+        [randomUUID(), leagueId, p.division, p.name, isAdmin ? (p.member_id ?? null) : userId, isAdmin ? (p.source_group_id ?? (p.member_id ? leaguePermRow.rows[0].group_id : null)) : participantSourceGroupId],
       );
       inserted.push(result.rows[0]);
       if (!userId) {

@@ -105,6 +105,7 @@ export interface ProgramBlock {
   teamShuffleSeed?: number;
   groupAssignments?: FormationAssignmentPlayer[][];
   teamAssignments?: FormationAssignmentPlayer[][];
+  doublesAssignments?: FormationAssignmentPlayer[][];
   tournamentBracketCount?: number;
   tournamentSeeding?: TournamentSeedingType;
 }
@@ -167,6 +168,7 @@ export interface RoundConfig {
   teamShuffleSeed?: number;
   groupAssignments?: FormationAssignmentPlayer[][];
   teamAssignments?: FormationAssignmentPlayer[][];
+  doublesAssignments?: FormationAssignmentPlayer[][];
   tournamentBracketCount?: number;
   tournamentSeeding?: TournamentSeedingType;
 }

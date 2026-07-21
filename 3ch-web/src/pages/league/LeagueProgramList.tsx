@@ -65,6 +65,7 @@ type StoredProgramBlock = {
   teamShuffleSeed?: number;
   groupAssignments?: FormationPlayer[][];
   teamAssignments?: FormationPlayer[][];
+  doublesAssignments?: FormationPlayer[][];
 };
 
 type FormationPlayer = {
@@ -199,7 +200,7 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [storedProgram, setStoredProgram] = useState<StoredProgramOption | null>(null);
-  const [formationDialog, setFormationDialog] = useState<{ roundIndex: number; mode: "team" | "group" } | null>(null);
+  const [formationDialog, setFormationDialog] = useState<{ roundIndex: number; mode: "team" | "doubles" | "group" } | null>(null);
   const [formationDraft, setFormationDraft] = useState<FormationPlayer[][]>([]);
   const [isFormationEditing, setIsFormationEditing] = useState(false);
   const [reshuffleConfirmOpen, setReshuffleConfirmOpen] = useState(false);
@@ -292,6 +293,14 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
       ? activeFormationBlock.teamAssignments.map((players, index) => ({ name: `${String.fromCharCode(65 + index)}팀`, players }))
       : distributeSnake(teamFormationPlayers, teamGroupSizes)
     : [];
+  const doublesResultGroups = activeFormationBlock?.type === "DOUBLES"
+    ? activeFormationBlock.doublesAssignments?.length
+      ? activeFormationBlock.doublesAssignments.map((players, index) => ({ name: `${index + 1}복식`, players }))
+      : distributeSnake(
+          teamFormationPlayers,
+          Array.from({ length: Math.floor(programPlayers.length / 2) }, () => 2),
+        ).filter((group) => group.players.length === 2)
+    : [];
   const teamUnits = teamResultGroups.map((team, teamIndex) => {
     const leader = team.players[0];
     return {
@@ -300,16 +309,32 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
       roster: team.players,
     };
   });
+  const doublesUnits = doublesResultGroups.map((pair, pairIndex) => ({
+    name: pair.players.map((player) => formatFormationName(player.name, player.level)).join(" · "),
+    level: pairIndex + 1,
+    roster: pair.players,
+  }));
+  const configuredGroupSizes = activeFormationBlock?.groupSizes ?? storedProgram?.groupSizes;
+  const validDoublesGroupSizes = configuredGroupSizes?.reduce((sum, size) => sum + size, 0) === doublesUnits.length
+    ? configuredGroupSizes
+    : splitIntoTwoGroups(doublesUnits.length);
   const groupResultSizes = activeFormationBlock?.type === "TEAM"
     ? activeFormationBlock?.teamGroupSizes ?? splitIntoTwoGroups(teamUnits.length)
-    : activeFormationBlock?.groupSizes ?? storedProgram?.groupSizes ?? [programPlayers.length];
+    : activeFormationBlock?.type === "DOUBLES"
+      ? validDoublesGroupSizes
+      : configuredGroupSizes ?? [programPlayers.length];
   const formationGroups = formationDialog?.mode === "team"
     ? teamResultGroups
+    : formationDialog?.mode === "doubles"
+      ? doublesResultGroups
     : activeFormationBlock?.groupAssignments?.length
       ? activeFormationBlock.groupAssignments.map((players, index) => ({ name: `${index + 1}조`, players }))
       : activeFormationBlock?.type === "TEAM"
         ? distributeSnake(reshuffleWithinLevel(teamUnits, activeFormationBlock?.groupShuffleSeed ?? defaultFormationSeed + 503), groupResultSizes)
+        : activeFormationBlock?.type === "DOUBLES"
+          ? distributeSnake(reshuffleWithinLevel(doublesUnits, activeFormationBlock?.groupShuffleSeed ?? defaultFormationSeed + 503), groupResultSizes)
         : distributeSnake(reshuffleWithinLevel(programPlayers, activeFormationBlock?.groupShuffleSeed ?? defaultFormationSeed + 503), groupResultSizes);
+  const isDoublesGroupResult = formationDialog?.mode === "group" && activeFormationBlock?.type === "DOUBLES";
 
   const closeFormationDialog = () => {
     setFormationDialog(null);
@@ -326,7 +351,7 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
     await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
 
     const block = nextProgram.blocks?.[roundIndex];
-    if (block?.type === "SINGLES") {
+    if (block) {
       const roundMatches = generateProgramRoundMatches(
         id,
         nextProgram as ProgramOption,
@@ -390,6 +415,7 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
   const saveManualFormation = async () => {
     if (!formationDialog || !storedProgram?.blocks) return;
     const { roundIndex, mode } = formationDialog;
+    if (mode === "doubles" && formationDraft.some((group) => group.length !== 2)) return;
     const nextBlocks = storedProgram.blocks.map((block, index) => {
       if (index !== roundIndex) return block;
       if (mode === "team") {
@@ -399,6 +425,9 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
           teamAssignments: formationDraft,
           groupAssignments: undefined,
         };
+      }
+      if (mode === "doubles") {
+        return { ...block, doublesAssignments: formationDraft };
       }
       return {
         ...block,
@@ -417,6 +446,9 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
           teamAssignments: formationDraft,
           groupAssignments: undefined,
         };
+      }
+      if (mode === "doubles") {
+        return { ...round, doublesAssignments: formationDraft };
       }
       return {
         ...round,
@@ -444,6 +476,13 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
           groupAssignments: undefined,
         };
       }
+      if (mode === "doubles") {
+        return {
+          ...block,
+          teamShuffleSeed: (block.teamShuffleSeed ?? (roundIndex + 1) * 1000 + 101) + 1,
+          doublesAssignments: undefined,
+        };
+      }
       return {
         ...block,
         groupShuffleSeed: (block.groupShuffleSeed ?? (roundIndex + 1) * 1000 + 503) + 1,
@@ -458,6 +497,13 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
           teamShuffleSeed: (round.teamShuffleSeed ?? (roundIndex + 1) * 1000 + 101) + 1,
           teamAssignments: undefined,
           groupAssignments: undefined,
+        };
+      }
+      if (mode === "doubles") {
+        return {
+          ...round,
+          teamShuffleSeed: (round.teamShuffleSeed ?? (roundIndex + 1) * 1000 + 101) + 1,
+          doublesAssignments: undefined,
         };
       }
       return {
@@ -594,7 +640,7 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
                       </Button>
                     </Stack>
 
-                    {(round.type === "TEAM" || round.format === "GROUP") && (
+                    {(round.type === "TEAM" || round.type === "DOUBLES" || round.format === "GROUP") && (
                       <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
                         {round.type === "TEAM" && (
                           <Button
@@ -604,6 +650,16 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
                             sx={{ flex: 1, height: 34, fontWeight: 700, fontSize: 12, borderRadius: 1.5, textTransform: "none", whiteSpace: "nowrap" }}
                           >
                             팀 편성 결과
+                          </Button>
+                        )}
+                        {round.type === "DOUBLES" && (
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={() => setFormationDialog({ roundIndex: round.round - 1, mode: "doubles" })}
+                            sx={{ flex: 1, height: 34, fontWeight: 700, fontSize: 12, borderRadius: 1.5, textTransform: "none", whiteSpace: "nowrap" }}
+                          >
+                            복식 편성 결과
                           </Button>
                         )}
                         {round.format === "GROUP" && (
@@ -683,7 +739,7 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
         slotProps={{ paper: { sx: { borderRadius: 2, mx: 2 } } }}
       >
         <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontWeight: 900, fontSize: 16 }}>
-          {formationDialog?.mode === "team" ? "팀 편성 결과" : "조 편성 결과"}
+          {formationDialog?.mode === "team" ? "팀 편성 결과" : formationDialog?.mode === "doubles" ? "복식 편성 결과" : "조 편성 결과"}
           {canManage && !isFormationEditing && (
             <Tooltip title="수동 편성">
               <IconButton size="small" onClick={beginFormationEditing} aria-label="수동 편성">
@@ -698,13 +754,18 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
               <Typography sx={{ mb: 1.5, fontSize: 12, color: "text.secondary" }}>
                 참가자를 길게 눌러 원하는 곳으로 이동해 주세요.
               </Typography>
+              {formationDialog?.mode === "doubles" && (
+                <Typography sx={{ mb: 1.5, fontSize: 12, color: formationDraft.every((group) => group.length === 2) ? "text.secondary" : "error.main" }}>
+                  각 복식 조합은 정확히 2명으로 구성해 주세요.
+                </Typography>
+              )}
               <Box sx={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 1.25 }}>
                 {formationDraft.map((players, index) => (
                   <FormationEditCard
                     key={index}
                     players={players}
                     index={index}
-                    label={formationDialog?.mode === "team" ? `${String.fromCharCode(65 + index)}팀` : `${index + 1}조`}
+                    label={formationDialog?.mode === "team" ? `${String.fromCharCode(65 + index)}팀` : formationDialog?.mode === "doubles" ? `${index + 1}복식` : `${index + 1}조`}
                   />
                 ))}
               </Box>
@@ -736,9 +797,11 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
             >
               <Box sx={{ px: 1.5, py: 1.1, bgcolor: "#F8FAFC", display: "flex", justifyContent: "space-between" }}>
               <Typography sx={{ fontSize: 15, fontWeight: 900 }}>
-                {formationDialog?.mode === "team" ? `${String.fromCharCode(65 + groupIndex)}팀` : group.name}
+                {formationDialog?.mode === "team" ? `${String.fromCharCode(65 + groupIndex)}팀` : formationDialog?.mode === "doubles" ? `${group.players.map((player) => formatFormationName(player.name, player.level)).join(" · ")}` : group.name}
               </Typography>
-              <Typography sx={{ fontSize: 11, color: "text.secondary", fontWeight: 700 }}>{group.players.length}명</Typography>
+              <Typography sx={{ fontSize: 11, color: "text.secondary", fontWeight: 700 }}>
+                {group.players.length}{isDoublesGroupResult ? "팀" : "명"}
+              </Typography>
               </Box>
               <Stack spacing={0.75} sx={{ px: 1.5, py: 1.25 }}>
                 {group.players.map((player) => {
@@ -746,10 +809,12 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
                   return (
                     <Box key={player.name}>
                       <Typography sx={{ fontSize: 13, fontWeight: 700 }}>
-                        {player.level}부 - {formatFormationName(player.name, player.level)}
+                        {isDoublesGroupResult && roster
+                          ? formatFormationName(player.name, player.level)
+                          : `${player.level}부 - ${formatFormationName(player.name, player.level)}`}
                       </Typography>
                       {roster && (
-                        <Box sx={{ pl: 1.5, mt: 0.5, color: "#6B7280" }}>
+                        <Box sx={{ pl: isDoublesGroupResult ? 0 : 1.5, mt: 0.5, color: "#6B7280" }}>
                           {roster.map((member) => (
                             <Typography key={member.name} sx={{ fontSize: 12 }}>
                               {member.level}부 - {formatFormationName(member.name, member.level)}
@@ -776,7 +841,13 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
           {isFormationEditing ? (
             <>
               <Button onClick={() => { setIsFormationEditing(false); setFormationDraft([]); }} disabled={isSavingFormation}>취소</Button>
-              <Button variant="contained" onClick={() => void saveManualFormation()} disabled={isSavingFormation}>완료</Button>
+              <Button
+                variant="contained"
+                onClick={() => void saveManualFormation()}
+                disabled={isSavingFormation || (formationDialog?.mode === "doubles" && formationDraft.some((group) => group.length !== 2))}
+              >
+                완료
+              </Button>
             </>
           ) : (
             <>
@@ -801,12 +872,14 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
         slotProps={{ paper: { sx: { borderRadius: 2, mx: 2 } } }}
       >
         <DialogTitle sx={{ fontWeight: 900, fontSize: 16 }}>
-          {formationDialog?.mode === "team" ? "팀 재편성" : "조 재편성"}
+          {formationDialog?.mode === "team" ? "팀 재편성" : formationDialog?.mode === "doubles" ? "복식 재편성" : "조 재편성"}
         </DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ fontSize: 14, color: "text.primary" }}>
             {formationDialog?.mode === "team"
               ? "전체 팀 편성을 전부 재편성하겠습니까?"
+              : formationDialog?.mode === "doubles"
+                ? "전체 복식 편성을 전부 재편성하겠습니까?"
               : "전체 조 편성을 전부 재편성하겠습니까?"}
           </DialogContentText>
         </DialogContent>

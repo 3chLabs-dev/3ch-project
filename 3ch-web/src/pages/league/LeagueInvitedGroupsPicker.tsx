@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
-import { Box, Chip, CircularProgress, IconButton, InputAdornment, Stack, TextField, Typography } from "@mui/material";
+import { Box, Button, Chip, CircularProgress, InputAdornment, Stack, TextField, Typography } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
-import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { useSearchGroupsQuery } from "../../features/group/groupApi";
 import { setRenewalInvitedGroupIds } from "../../features/league/leagueRenewalCreationSlice";
@@ -57,9 +56,16 @@ export default function LeagueInvitedGroupsPicker() {
                 <Typography sx={{ fontWeight: 800 }}>{group.name}</Typography>
                 <Typography sx={{ color: "text.secondary", fontSize: 12 }}>{[group.region_city, group.region_district].filter(Boolean).join(" ")}</Typography>
               </Box>
-              <IconButton color={selectedIds.includes(group.id) ? "primary" : "default"} onClick={() => toggle(group.id)} aria-label={`${group.name} 초대`}>
-                <AddCircleOutlineIcon />
-              </IconButton>
+              <Button
+                size="small"
+                variant="contained"
+                disableElevation
+                disabled={selectedIds.includes(group.id)}
+                onClick={() => toggle(group.id)}
+                sx={{ minWidth: 56, borderRadius: 1, fontWeight: 700 }}
+              >
+                {selectedIds.includes(group.id) ? "추가됨" : "추가"}
+              </Button>
             </Box>
           ))}
         </Stack>

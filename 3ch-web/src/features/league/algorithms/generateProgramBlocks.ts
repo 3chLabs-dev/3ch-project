@@ -204,6 +204,7 @@ export function generateProgramBlocks(
         teamShuffleSeed: round.teamShuffleSeed,
         groupAssignments: round.groupAssignments,
         teamAssignments: round.teamAssignments,
+        doublesAssignments: round.doublesAssignments,
         tournamentBracketCount: round.tournamentBracketCount ?? 1,
         tournamentSeeding: round.tournamentSeeding,
 	    });

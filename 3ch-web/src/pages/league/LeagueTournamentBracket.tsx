@@ -374,7 +374,7 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
             )}
           </Box>
         ) : (
-          <Typography sx={{ fontSize: 11, fontWeight: isByeA ? 400 : 600, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: winA ? "#16A34A" : isByeA ? "#9CA3AF" : "text.primary", fontStyle: isByeA ? "italic" : "normal" }}>
+          <Typography sx={{ fontSize: nameA?.includes(" · ") ? 9 : 11, fontWeight: isByeA ? 400 : 600, flex: 1, overflow: "hidden", whiteSpace: "normal", lineHeight: 1.1, color: winA ? "#16A34A" : isByeA ? "#9CA3AF" : "text.primary", fontStyle: isByeA ? "italic" : "normal" }}>
             {nameA ?? (isByeA ? "BYE" : "")}
           </Typography>
         )}
@@ -402,7 +402,7 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
             )}
           </Box>
         ) : (
-          <Typography sx={{ fontSize: 11, fontWeight: isByeB ? 400 : 600, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: winB ? "#16A34A" : isByeB ? "#9CA3AF" : "text.primary", fontStyle: isByeB ? "italic" : "normal" }}>
+          <Typography sx={{ fontSize: nameB?.includes(" · ") ? 9 : 11, fontWeight: isByeB ? 400 : 600, flex: 1, overflow: "hidden", whiteSpace: "normal", lineHeight: 1.1, color: winB ? "#16A34A" : isByeB ? "#9CA3AF" : "text.primary", fontStyle: isByeB ? "italic" : "normal" }}>
             {nameB ?? (isByeB ? "BYE" : "")}
           </Typography>
         )}
@@ -495,7 +495,7 @@ function SingleSlotBox({ pos, slot, actions, manualSeeding = false }: { pos: Mat
             )}
           </Box>
         ) : (
-          <Typography sx={{ fontSize: 11, fontWeight: isBye ? 400 : 700, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: win ? "#16A34A" : isBye ? "#9CA3AF" : "#111827", fontStyle: isBye ? "italic" : "normal" }}>
+          <Typography sx={{ fontSize: name?.includes(" · ") ? 9 : 11, fontWeight: isBye ? 400 : 700, flex: 1, overflow: "hidden", whiteSpace: "normal", lineHeight: 1.1, color: win ? "#16A34A" : isBye ? "#9CA3AF" : "#111827", fontStyle: isBye ? "italic" : "normal" }}>
             {name ?? (isBye ? "BYE" : "")}
           </Typography>
         )}

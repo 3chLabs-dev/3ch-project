@@ -81,6 +81,11 @@ function seededBracket(n: number): number[] {
 
 const AUTO_COMPLETE_DELAY_MS = 4000;
 
+function participantNameIncludes(name: string | null | undefined, targetName: string | null | undefined) {
+  if (!name || !targetName) return false;
+  return name.split(" · ").some((part) => part.trim() === targetName.trim());
+}
+
 function getWinScore(rules?: string | null): number | null {
   if (!rules) return null;
   if (rules.includes("3세트제")) return null;
@@ -116,7 +121,7 @@ function ParticipantRow({
             {division}
           </Box>
         )}
-        <Typography noWrap sx={{ fontWeight: 700, fontSize: 14, color: wins ? "#16A34A" : isMe ? "#2F80ED" : "#111827" }}>
+        <Typography sx={{ fontWeight: 700, fontSize: 14, lineHeight: 1.25, whiteSpace: "normal", color: wins ? "#16A34A" : isMe ? "#2F80ED" : "#111827" }}>
           {name ?? "?"}
         </Typography>
       </Stack>
@@ -376,7 +381,7 @@ function MatchCard({
             name={match.participant_a_name}
             division={match.participant_a_division}
             seedLabel={seedA}
-            isMe={!!myName && match.participant_a_name === myName}
+            isMe={participantNameIncludes(match.participant_a_name, myName)}
             score={sa} wins={aWins} canEditScore={canEditScore}
             onMinus={() => handleScore("a", -1)}
             onPlus={() => handleScore("a", 1)}
@@ -389,7 +394,7 @@ function MatchCard({
             name={match.participant_b_name}
             division={match.participant_b_division}
             seedLabel={seedB}
-            isMe={!!myName && match.participant_b_name === myName}
+            isMe={participantNameIncludes(match.participant_b_name, myName)}
             score={sb} wins={bWins} canEditScore={canEditScore}
             onMinus={() => handleScore("b", -1)}
             onPlus={() => handleScore("b", 1)}
@@ -692,7 +697,10 @@ export default function LeagueMatchOrder() {
   const displayedMatches = useMemo(() => {
     let filtered = visibleMatches;
     if (mineOnly && myName) {
-      filtered = filtered.filter((match) => match.participant_a_name === myName || match.participant_b_name === myName);
+      filtered = filtered.filter(
+        (match) => participantNameIncludes(match.participant_a_name, myName)
+          || participantNameIncludes(match.participant_b_name, myName)
+      );
     }
     if (!search.trim()) return filtered;
 

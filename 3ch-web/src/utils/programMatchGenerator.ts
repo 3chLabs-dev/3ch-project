@@ -185,19 +185,19 @@ function buildRoundRobinMatches(
 }
 
 function pairLabel(players: ProgramPlayer[]) {
-  return players.map((player) => player.name).join(" / ");
+  return players.map((player) => player.name).join(" · ");
 }
 
-function toDoublesUnits(players: ProgramPlayer[]): MatchUnit[] {
-  const units = [];
-  for (let i = 0; i < players.length; i += 2) {
-    const unit = players.slice(i, i + 2);
-    if (unit.length === 2) units.push(unit);
-  }
+function toDoublesUnits(players: ProgramPlayer[], assignments?: FormationAssignmentPlayer[][]): MatchUnit[] {
+  const units = assignments?.length
+    ? assignedPlayers(assignments, players).filter((unit) => unit.length === 2)
+    : distributeSnake(players, Array.from({ length: Math.floor(players.length / 2) }, () => 2))
+      .map((group) => group.players as ProgramPlayer[])
+      .filter((unit) => unit.length === 2);
 
   return units.map((unit, index) => ({
     id: unit.map((player) => player.id).join("+"),
-    name: `페어 ${pairLabel(unit)}`,
+    name: pairLabel(unit),
     division: null,
     level: index + 1,
     roster: unit.map((player) => player.name),
@@ -669,7 +669,7 @@ export function generateProgramRoundMatches(
       ? teamUnitsFromAssignments(block.teamAssignments, players)
       : toTeamUnitsFromGroupSizes(teamFormationPlayers, groupSizes)
     : block.type === "DOUBLES"
-      ? toDoublesUnits(players)
+      ? toDoublesUnits(players, block.doublesAssignments)
       : players;
 
   if (matchUnits.length < 2) {
@@ -739,8 +739,10 @@ export function generateProgramRoundMatches(
 
   if (block.format === "GROUP") {
     const shuffledUnits = shuffleWithinLevel(matchUnits, block.groupShuffleSeed ?? defaultFormationSeed + 503);
-    const groups = block.groupAssignments?.length && block.type === "SINGLES"
-      ? assignedPlayers(block.groupAssignments, players).map((groupPlayers, index) => ({ name: `${index + 1}조`, players: groupPlayers }))
+    const groups = block.groupAssignments?.length
+      ? block.type === "DOUBLES"
+        ? assignedTeamGroups(block.groupAssignments, matchUnits).map((groupPlayers, index) => ({ name: `${index + 1}조`, players: groupPlayers }))
+        : assignedPlayers(block.groupAssignments, players).map((groupPlayers, index) => ({ name: `${index + 1}조`, players: groupPlayers }))
       : distributeSnake(shuffledUnits as ProgramPlayer[], groupSizes);
     return groups.flatMap((group, groupIndex) =>
       buildUnitRoundRobinMatches(

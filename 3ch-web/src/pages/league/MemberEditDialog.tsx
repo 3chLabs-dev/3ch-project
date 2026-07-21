@@ -7,6 +7,8 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  MenuItem,
+  Select,
   Stack,
   TextField,
   Typography,
@@ -50,6 +52,10 @@ type MemberEditDialogProps = {
   inputName: string;
   setInputName: Dispatch<SetStateAction<string>>;
 
+  sourceGroupId?: string;
+  setSourceGroupId?: Dispatch<SetStateAction<string>>;
+  sourceGroupOptions?: Array<{ id: string; name: string }>;
+
   handleAddParticipant: () => void;
 
   handleParticipantFieldBlur: (
@@ -78,6 +84,9 @@ export default function MemberEditDialog({
   setInputDivision,
   inputName,
   setInputName,
+  sourceGroupId = "",
+  setSourceGroupId,
+  sourceGroupOptions = [],
   handleAddParticipant,
   handleParticipantFieldBlur,
   setDeleteParticipantTarget,
@@ -139,6 +148,23 @@ export default function MemberEditDialog({
             overflow: "hidden",
           }}
         >
+          {sourceGroupOptions.length > 1 && setSourceGroupId && (
+            <Box sx={{ px: 1.5, pt: 1, pb: 0.2 }}>
+              <Select
+                fullWidth
+                size="small"
+                value={sourceGroupId}
+                onChange={(event) => setSourceGroupId(String(event.target.value))}
+                displayEmpty
+                sx={{ height: 34, borderRadius: 0.6, fontSize: 13 }}
+              >
+                <MenuItem value="" disabled>소속 클럽 선택</MenuItem>
+                {sourceGroupOptions.map((group) => (
+                  <MenuItem key={group.id} value={group.id}>{group.name}</MenuItem>
+                ))}
+              </Select>
+            </Box>
+          )}
           <Box
             sx={{
               display: "grid",

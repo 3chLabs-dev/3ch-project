@@ -155,6 +155,7 @@
     const [searchQuery, setSearchQuery] = useState("");
     const [inputDivision, setInputDivision] = useState("");
     const [inputName, setInputName] = useState("");
+    const [inputSourceGroupId, setInputSourceGroupId] = useState("");
     const [openLoadDialog, setOpenLoadDialog] = useState(false);
     const [alertMsg, setAlertMsg] = useState("");
     const [alertSeverity, setAlertSeverity] = useState<"success" | "warning" | "error">("warning");
@@ -203,6 +204,7 @@
     const { data: groupData, isLoading: groupLoading } = useGetGroupDetailQuery(leagueData?.league?.group_id ?? "", {
       skip: !leagueData?.league?.group_id,
     });
+    const league = leagueData?.league;
     // groupLoading 중엔 판단 보류 (플리커 방지)
     const canManage = !groupLoading && (groupData?.myRole === "owner" || groupData?.myRole === "admin");
     const invitedMembership = myGroupsData?.groups.find((group) =>
@@ -212,8 +214,25 @@
     const showParticipantGroups = Boolean(
       invitedGroupsData?.groups.some((group) => group.status === "accepted"),
     );
+    const participantSourceGroupOptions = useMemo(() => {
+      const options = groupData?.group
+        ? [{ id: groupData.group.id, name: groupData.group.name }]
+        : league?.group_id
+          ? [{ id: league.group_id, name: "개설 클럽" }]
+          : [];
+      invitedGroupsData?.groups.forEach((group) => {
+        if (group.status === "accepted" && !options.some((item) => item.id === group.group_id)) {
+          options.push({ id: group.group_id, name: group.name });
+        }
+      });
+      return options;
+    }, [groupData?.group, invitedGroupsData?.groups, league?.group_id]);
 
-    const league = leagueData?.league;
+    useEffect(() => {
+      if (!inputSourceGroupId && participantSourceGroupOptions.length > 0) {
+        setInputSourceGroupId(participantSourceGroupOptions[0].id);
+      }
+    }, [inputSourceGroupId, participantSourceGroupOptions]);
 
     const isPublicLeague = league?.join_permission === "public";
     const canInteract = isMember || isPublicLeague;
@@ -237,7 +256,7 @@
       if (authUser?.id != null && participant.member_id != null) {
         return participant.member_id === authUser.id;
       }
-      return !!myName && participant.name === myName;
+      return !authUser && !!myName && participant.name === myName;
     };
 
     const rawParticipants = participantData?.participants ?? [];
@@ -383,7 +402,11 @@
       try {
         await addParticipants({
           leagueId: id,
-          participants: [{ division: inputDivision.trim(), name: inputName.trim() }],
+          participants: [{
+            division: inputDivision.trim(),
+            name: inputName.trim(),
+            source_group_id: showParticipantGroups ? inputSourceGroupId || null : undefined,
+          }],
           placement: placement ? { kind: "tournament", ...placement } : undefined,
         }).unwrap();
         setInputDivision("");
@@ -1346,6 +1369,9 @@ const handleSaveEdit = async () => {
             setInputDivision={setInputDivision}
             inputName={inputName}
             setInputName={setInputName}
+            sourceGroupId={inputSourceGroupId}
+            setSourceGroupId={setInputSourceGroupId}
+            sourceGroupOptions={participantSourceGroupOptions}
             handleAddParticipant={handleAddParticipant}
             handleParticipantFieldBlur={handleParticipantFieldBlur}
             setDeleteParticipantTarget={setDeleteParticipantTarget}

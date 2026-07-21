@@ -955,7 +955,8 @@ export default function LeagueBracket() {
     saveProgramMatchPatch(id, programRound, matchId, updates);
     setProgramMatchStateVersion((version) => version + 1);
   }, [id, programRound, serverProgramMatchesAll, updateMatch]);
-  const isProgramTeamRound = isProgramMode && programOption?.blocks?.[programRound - 1]?.type === "TEAM";
+  const programRoundType = programOption?.blocks?.[programRound - 1]?.type;
+  const isProgramTeamRound = isProgramMode && (programRoundType === "TEAM" || programRoundType === "DOUBLES");
   const programTeamParticipants = useMemo(() => {
     if (!isProgramTeamRound) return [];
 
@@ -973,7 +974,9 @@ export default function LeagueBracket() {
         id: teamId,
         league_id: id ?? "",
         division: division ?? null,
-        name: roster?.length ? [teamName, ...roster.slice(1)].join("\n") : teamName,
+        name: roster?.length
+          ? programRoundType === "DOUBLES" ? roster.join("\n") : [teamName, ...roster.slice(1)].join("\n")
+          : teamName,
         member_id: null,
         paid: false,
         arrived: false,
@@ -1002,7 +1005,7 @@ export default function LeagueBracket() {
       ...participant,
       teamRoster: rosterMap.get(participant.id),
     }));
-  }, [id, isProgramTeamRound, programMatchesAll]);
+  }, [id, isProgramTeamRound, programMatchesAll, programRoundType]);
 
   // 1. 조 이름 목록 추출 ("1조", "2조" ...)
   const groupNames = useMemo(() => {

@@ -735,7 +735,7 @@ const LeagueAlgorithmDemo = ({
   const [groupResultDialog, setGroupResultDialog] = useState<{
     optionIndex: number;
     blockIndex: number;
-    mode: "team" | "group";
+    mode: "team" | "doubles" | "group";
   } | null>(null);
   const [isFormationEditing, setIsFormationEditing] = useState(false);
   const [formationDraft, setFormationDraft] = useState<FormationAssignmentPlayer[][]>([]);
@@ -1171,7 +1171,12 @@ const LeagueAlgorithmDemo = ({
       if (isEditMode && previousProgram) {
         selectedOption.blocks.forEach((block, blockIndex) => {
           const previousBlock = previousProgram.blocks?.[blockIndex];
-          if (block.type !== "TEAM" && previousBlock?.type !== "TEAM") return;
+          if (
+            block.type !== "TEAM"
+            && previousBlock?.type !== "TEAM"
+            && block.type !== "DOUBLES"
+            && previousBlock?.type !== "DOUBLES"
+          ) return;
 
           const previousFormation = JSON.stringify({
             type: previousBlock?.type,
@@ -1180,6 +1185,7 @@ const LeagueAlgorithmDemo = ({
             teamGroupSizes: previousBlock?.teamGroupSizes ?? [],
             groupAssignments: previousBlock?.groupAssignments ?? [],
             teamAssignments: previousBlock?.teamAssignments ?? [],
+            doublesAssignments: previousBlock?.doublesAssignments ?? [],
           });
           const nextFormation = JSON.stringify({
             type: block.type,
@@ -1188,6 +1194,7 @@ const LeagueAlgorithmDemo = ({
             teamGroupSizes: block.teamGroupSizes ?? [],
             groupAssignments: block.groupAssignments ?? [],
             teamAssignments: block.teamAssignments ?? [],
+            doublesAssignments: block.doublesAssignments ?? [],
           });
 
           if (previousFormation !== nextFormation) {
@@ -1287,17 +1294,26 @@ const LeagueAlgorithmDemo = ({
   const getStructureSizes = (
     option: ProgramOption,
     blockIndex: number,
-    mode: "team" | "group"
+    mode: "team" | "doubles" | "group"
   ) => {
     const block = option.blocks[blockIndex];
 
     if (mode === "team") {
       return getRoundGroupSizes(option, blockIndex);
     }
+    if (mode === "doubles") {
+      return Array.from({ length: Math.floor(effectiveFormationPlayerCount / 2) }, () => 2);
+    }
 
-    return block?.type === "TEAM"
-      ? getRoundTeamGroupSizes(option, blockIndex)
-      : getRoundGroupSizes(option, blockIndex);
+    if (block?.type === "TEAM") return getRoundTeamGroupSizes(option, blockIndex);
+    if (block?.type === "DOUBLES") {
+      const pairCount = Math.floor(effectiveFormationPlayerCount / 2);
+      const configured = getRoundGroupSizes(option, blockIndex);
+      return configured.reduce((sum, size) => sum + size, 0) === pairCount
+        ? configured
+        : splitIntoTwoGroups(pairCount);
+    }
+    return getRoundGroupSizes(option, blockIndex);
   };
 
   const updateProgramRoundGroupSizes = (
@@ -1339,7 +1355,7 @@ const LeagueAlgorithmDemo = ({
   const updateProgramRoundShuffleSeed = (
     optionIndex: number,
     blockIndex: number,
-    mode: "team" | "group"
+    mode: "team" | "doubles" | "group"
   ) => {
     const baseOption = customProgramOptions[optionIndex] ?? displayedProgramOptions[optionIndex];
     const defaultSeed = (blockIndex + 1) * 1000;
@@ -1358,7 +1374,7 @@ const LeagueAlgorithmDemo = ({
       groupShuffleSeed: mode === "group" && roundIndex === blockIndex
         ? nextGroupShuffleSeed
         : round.groupShuffleSeed,
-      teamShuffleSeed: mode === "team" && roundIndex === blockIndex
+      teamShuffleSeed: (mode === "team" || mode === "doubles") && roundIndex === blockIndex
         ? nextTeamShuffleSeed
         : round.teamShuffleSeed,
       groupAssignments: mode === "group" && roundIndex === blockIndex
@@ -1369,6 +1385,9 @@ const LeagueAlgorithmDemo = ({
       teamAssignments: mode === "team" && roundIndex === blockIndex
         ? undefined
         : round.teamAssignments,
+      doublesAssignments: mode === "doubles" && roundIndex === blockIndex
+        ? undefined
+        : round.doublesAssignments,
     }));
     const updatedOption = buildProgramOptionFromRounds(baseOption, nextRounds);
     const nextBlocks = updatedOption.blocks.map((block, roundIndex) => {
@@ -1381,11 +1400,12 @@ const LeagueAlgorithmDemo = ({
         groupShuffleSeed: mode === "group"
           ? nextGroupShuffleSeed
           : block.groupShuffleSeed,
-        teamShuffleSeed: mode === "team"
+        teamShuffleSeed: mode === "team" || mode === "doubles"
           ? nextTeamShuffleSeed
           : block.teamShuffleSeed,
         groupAssignments: mode === "group" || mode === "team" ? undefined : block.groupAssignments,
         teamAssignments: mode === "team" ? undefined : block.teamAssignments,
+        doublesAssignments: mode === "doubles" ? undefined : block.doublesAssignments,
       };
     });
 
@@ -1403,6 +1423,7 @@ const LeagueAlgorithmDemo = ({
   const saveManualFormation = () => {
     if (!groupResultDialog) return;
     const { optionIndex, blockIndex, mode } = groupResultDialog;
+    if (mode === "doubles" && formationDraft.some((group) => group.length !== 2)) return;
     const baseOption = customProgramOptions[optionIndex] ?? displayedProgramOptions[optionIndex];
     const nextRounds = (baseOption.rounds ?? rounds).map((round, roundIndex) => {
       if (roundIndex !== blockIndex) return { ...round, id: roundIndex + 1 };
@@ -1414,6 +1435,9 @@ const LeagueAlgorithmDemo = ({
           teamAssignments: formationDraft,
           groupAssignments: undefined,
         };
+      }
+      if (mode === "doubles") {
+        return { ...round, id: roundIndex + 1, doublesAssignments: formationDraft };
       }
       return {
         ...round,
@@ -1492,6 +1516,9 @@ const LeagueAlgorithmDemo = ({
     groupStructureDialog?.mode === "group" &&
     groupStructureOption?.blocks[groupStructureDialog.blockIndex]?.type === "TEAM"
       ? getTeamCount(groupStructureOption, groupStructureDialog.blockIndex)
+      : groupStructureDialog?.mode === "group" &&
+          groupStructureOption?.blocks[groupStructureDialog.blockIndex]?.type === "DOUBLES"
+        ? Math.floor(effectiveFormationPlayerCount / 2)
       : effectiveFormationPlayerCount;
   const groupStructureOptions = useMemo(
     () => generateGroupOptions(groupStructureOptionCount),
@@ -1534,6 +1561,15 @@ const LeagueAlgorithmDemo = ({
             getRoundGroupSizes(groupResultOption, groupResultDialog.blockIndex)
           )
       : [];
+  const savedDoublesAssignments = groupResultRound?.doublesAssignments ?? groupResultBlock?.doublesAssignments;
+  const doublesResultGroups = groupResultOption && groupResultDialog
+    ? savedDoublesAssignments?.length
+      ? savedDoublesAssignments.map((players, index) => ({ name: `${index + 1}복식`, players }))
+      : distributeSnake(
+          teamFormationPlayers,
+          Array.from({ length: Math.floor(effectiveFormationPlayerCount / 2) }, () => 2),
+        ).filter((group) => group.players.length === 2)
+    : [];
   const teamUnits = teamResultGroups.map((team, teamIndex) => {
     const leader = team.players[0];
     return {
@@ -1542,18 +1578,32 @@ const LeagueAlgorithmDemo = ({
       roster: team.players,
     };
   });
+  const doublesUnits = doublesResultGroups.map((pair, pairIndex) => ({
+    name: pair.players.map((player) => formatFormationName(player.name, player.level)).join(" · "),
+    level: pairIndex + 1,
+    roster: pair.players,
+  }));
   const savedFormationAssignments = groupResultDialog?.mode === "team"
     ? groupResultRound?.teamAssignments ?? groupResultBlock?.teamAssignments
-    : groupResultRound?.groupAssignments ?? groupResultBlock?.groupAssignments;
+    : groupResultDialog?.mode === "doubles"
+      ? savedDoublesAssignments
+      : groupResultRound?.groupAssignments ?? groupResultBlock?.groupAssignments;
   const calculatedDialogGroupResult =
     groupResultSizes.length > 0
       ? groupResultDialog?.mode === "team"
         ? teamResultGroups
+        : groupResultDialog?.mode === "doubles"
+          ? doublesResultGroups
         : groupResultDialog?.mode === "group" && groupResultOption?.blocks[groupResultDialog.blockIndex]?.type === "TEAM"
           ? distributeSnake(
               reshuffleWithinLevel(teamUnits, groupShuffleSeed),
               groupResultSizes
             )
+          : groupResultDialog?.mode === "group" && groupResultOption?.blocks[groupResultDialog.blockIndex]?.type === "DOUBLES"
+            ? distributeSnake(
+                reshuffleWithinLevel(doublesUnits, groupShuffleSeed),
+                groupResultSizes
+              )
           : distributeSnake(
               reshuffleWithinLevel(groupPlayers.slice(0, effectiveFormationPlayerCount), groupShuffleSeed),
               groupResultSizes
@@ -1563,10 +1613,11 @@ const LeagueAlgorithmDemo = ({
     ? savedFormationAssignments.map((players, index) => ({
         name: groupResultDialog?.mode === "team"
           ? `${String.fromCharCode(65 + index)}팀`
-          : `${index + 1}조`,
+          : groupResultDialog?.mode === "doubles" ? `${index + 1}복식` : `${index + 1}조`,
         players,
       }))
     : calculatedDialogGroupResult;
+  const isDoublesGroupResult = groupResultDialog?.mode === "group" && groupResultBlock?.type === "DOUBLES";
 
   const beginFormationEditing = () => {
     setFormationDraft(dialogGroupResult.map((group) => group.players.map((player) => ({ ...player }))));
@@ -2678,6 +2729,22 @@ const LeagueAlgorithmDemo = ({
               </div>
             )}
 
+            {!hideFormationActions && block.type === "DOUBLES" && (
+              <div style={{ display: "flex", gap: "8px", marginTop: "8px", paddingLeft: "12px" }}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  sx={{ color: "#FFFFFF", backgroundColor: "#1976D2", borderColor: "#1976D2", "&:hover": { backgroundColor: "#1565C0", borderColor: "#1976D2" } }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setGroupResultDialog({ optionIndex: index, blockIndex, mode: "doubles" });
+                  }}
+                >
+                  복식 편성 결과
+                </Button>
+              </div>
+            )}
+
             {!hideFormationActions && block.format === "GROUP" && (
               <div
                 style={{
@@ -2870,7 +2937,7 @@ const LeagueAlgorithmDemo = ({
         maxWidth="sm"
       >
         <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontWeight: 900, fontSize: 18 }}>
-          {isGroupResultTeam ? "팀 편성 결과" : "조 편성 결과"}
+          {isGroupResultTeam ? "팀 편성 결과" : groupResultDialog?.mode === "doubles" ? "복식 편성 결과" : "조 편성 결과"}
           {isEditMode && !isFormationEditing && (
             <Tooltip title="수동 편성">
               <IconButton size="small" onClick={beginFormationEditing} aria-label="수동 편성">
@@ -2886,13 +2953,18 @@ const LeagueAlgorithmDemo = ({
               <Typography sx={{ mb: 1.5, fontSize: 12, color: "text.secondary" }}>
                 참가자를 길게 눌러 원하는 곳으로 이동해 주세요.
               </Typography>
+              {groupResultDialog?.mode === "doubles" && (
+                <Typography sx={{ mb: 1.5, fontSize: 12, color: formationDraft.every((group) => group.length === 2) ? "text.secondary" : "error.main" }}>
+                  각 복식 조합은 정확히 2명으로 구성해 주세요.
+                </Typography>
+              )}
               <Box sx={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 1.25 }}>
                 {formationDraft.map((players, index) => (
                   <FormationEditCard
                     key={index}
                     players={players}
                     index={index}
-                    label={isGroupResultTeam ? `${String.fromCharCode(65 + index)}팀` : `${index + 1}조`}
+                    label={isGroupResultTeam ? `${String.fromCharCode(65 + index)}팀` : groupResultDialog?.mode === "doubles" ? `${index + 1}복식` : `${index + 1}조`}
                   />
                 ))}
               </Box>
@@ -2907,8 +2979,10 @@ const LeagueAlgorithmDemo = ({
                 return (
                   <Box key={group.name} sx={{ border: "1px solid #E5E7EB", borderTop: `3px solid ${accent}`, borderRadius: 1.5, overflow: "hidden", bgcolor: "#FFF" }}>
                     <Box sx={{ px: 1.5, py: 1.1, bgcolor: "#F8FAFC", display: "flex", justifyContent: "space-between" }}>
-                      <Typography sx={{ fontSize: 15, fontWeight: 900 }}>{isGroupResultTeam ? `${String.fromCharCode(65 + groupIndex)}팀` : group.name}</Typography>
-                      <Typography sx={{ fontSize: 11, color: "text.secondary", fontWeight: 700 }}>{group.players.length}명</Typography>
+                      <Typography sx={{ fontSize: 15, fontWeight: 900 }}>{isGroupResultTeam ? `${String.fromCharCode(65 + groupIndex)}팀` : groupResultDialog?.mode === "doubles" ? group.players.map((player) => formatFormationName(player.name, player.level)).join(" · ") : group.name}</Typography>
+                      <Typography sx={{ fontSize: 11, color: "text.secondary", fontWeight: 700 }}>
+                        {group.players.length}{isDoublesGroupResult ? "팀" : "명"}
+                      </Typography>
                     </Box>
                     <Stack spacing={0.65} sx={{ px: 1.5, py: 1.25 }}>
                       {group.players.map((player) => {
@@ -2916,8 +2990,12 @@ const LeagueAlgorithmDemo = ({
                         const roster = assignedPlayer.roster;
                         return (
                           <Box key={player.name}>
-                            <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{player.level}부 - {formatFormationName(player.name, player.level)}</Typography>
-                            {roster && <Box sx={{ pl: 1.25, mt: 0.4 }}>{roster.map((member) => <Typography key={member.name} sx={{ fontSize: 12, color: "text.secondary" }}>{member.level}부 - {formatFormationName(member.name, member.level)}</Typography>)}</Box>}
+                            <Typography sx={{ fontSize: 13, fontWeight: 700 }}>
+                              {isDoublesGroupResult && roster
+                                ? formatFormationName(player.name, player.level)
+                                : `${player.level}부 - ${formatFormationName(player.name, player.level)}`}
+                            </Typography>
+                            {roster && <Box sx={{ pl: isDoublesGroupResult ? 0 : 1.25, mt: 0.4 }}>{roster.map((member) => <Typography key={member.name} sx={{ fontSize: 12, color: "text.secondary" }}>{member.level}부 - {formatFormationName(member.name, member.level)}</Typography>)}</Box>}
                           </Box>
                         );
                       })}
@@ -2939,7 +3017,13 @@ const LeagueAlgorithmDemo = ({
           {isFormationEditing ? (
             <>
               <Button onClick={() => { setIsFormationEditing(false); setFormationDraft([]); }}>취소</Button>
-              <Button variant="contained" onClick={saveManualFormation}>완료</Button>
+              <Button
+                variant="contained"
+                onClick={saveManualFormation}
+                disabled={groupResultDialog?.mode === "doubles" && formationDraft.some((group) => group.length !== 2)}
+              >
+                완료
+              </Button>
             </>
           ) : groupResultDialog && (
             <Button

@@ -95,13 +95,14 @@ async function scanLeagueSheetWithOpenAIVision({ imageBuffer, mimeType, particip
     throw error;
   }
 
-  const model = process.env.OPENAI_VISION_MODEL || 'gpt-4o-mini';
+  const model = process.env.OPENAI_VISION_MODEL || 'gpt-4.1-mini';
   const dataUrl = `data:${mimeType};base64,${imageBuffer.toString('base64')}`;
   const participantLines = participants.map((participant, index) => `${index + 1}. ${participant.name}`).join('\n');
+  const expectedCellCount = participants.length * Math.max(0, participants.length - 1);
 
   const body = {
     model,
-    ...(model.startsWith('gpt-4o') ? { temperature: 0 } : {}),
+    ...(model.startsWith('gpt-4') ? { temperature: 0 } : {}),
     input: [
       {
         role: 'user',
@@ -111,6 +112,8 @@ async function scanLeagueSheetWithOpenAIVision({ imageBuffer, mimeType, particip
             text: `${mode === 'star-grid' ? STAR_GRID_READING_RULES : SYSTEM_PROMPT}
 
 ${mode === 'star-grid' ? '' : CELL_READING_RULES}
+
+There are exactly ${participants.length} participants, so the completed result must contain exactly ${expectedCellCount} non-diagonal cells. Inspect the grid in row-major order, then perform a second visual pass over every returned cell to verify both digits and cell positions before producing JSON. Do not silently omit a faint cell; return it with score=0 and needsReview=true instead.
 
 참가자 목록은 아래 순서와 같습니다.
 ${participantLines}

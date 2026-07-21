@@ -49,7 +49,8 @@ export default function GroupDetail() {
     }
 
     try {
-      await joinGroup(id!).unwrap();
+      const result = await joinGroup(id!).unwrap();
+      if (result.claim_requested) window.alert(result.message);
       navigate(`/club/${id}/manage`);
     } catch (error) {
       console.error("Failed to join group:", error);

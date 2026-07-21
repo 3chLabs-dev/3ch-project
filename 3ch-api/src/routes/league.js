@@ -1329,7 +1329,8 @@ router.get('/league/invitations/mine', requireAuth, async (req, res) => {
   try {
     const userId = Number(req.user.sub);
     const result = await pool.query(
-      `SELECT lig.id AS invitation_id, lig.status AS invitation_status, lig.group_id,
+      `SELECT lig.id AS invitation_id, lig.status AS invitation_status,
+              lig.group_id AS invited_group_id, l.group_id AS host_group_id,
               g.name AS invited_group_name, l.*, host.name AS host_group_name,
               gm.role AS my_role
          FROM league_invited_groups lig

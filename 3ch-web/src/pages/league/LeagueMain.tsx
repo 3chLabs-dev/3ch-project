@@ -61,6 +61,12 @@ export default function LeagueMainBody() {
   const { data: invitationData } = useGetMyLeagueInvitationsQuery(undefined, { skip: !isLoggedIn, refetchOnMountOrArgChange: true });
   const [respondInvitation] = useRespondLeagueInvitationMutation();
   const invitations = invitationData?.invitations ?? [];
+  const visibleInvitations = useMemo(
+    () => invitations.filter((invitation) => (
+      invitation.invited_group_id === effectiveGroupId || invitation.host_group_id === effectiveGroupId
+    )),
+    [effectiveGroupId, invitations],
+  );
 
   const canCreate =
     isLoggedIn &&
@@ -183,11 +189,23 @@ export default function LeagueMainBody() {
         }}
       />
 
-      {isLoggedIn && invitations.length > 0 && (
+      {canCreate && (
+        <Stack spacing={1}>
+          <Button
+            fullWidth variant="contained" disableElevation
+            onClick={handleCreateNewLeague}
+            sx={{ borderRadius: 1, fontWeight: 700 }}
+          >
+            신규 생성
+          </Button>
+        </Stack>
+      )}
+
+      {isLoggedIn && visibleInvitations.length > 0 && (
         <>
           <LeagueSectionHeader title="초대된 리그" />
           <Stack spacing={1}>
-            {invitations.map((invitation) => (
+            {visibleInvitations.map((invitation) => (
               <Card key={invitation.invitation_id} elevation={2} sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
                 <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
                   <Typography sx={{ fontWeight: 800 }}>{invitation.title ?? invitation.name}</Typography>
@@ -205,18 +223,6 @@ export default function LeagueMainBody() {
             ))}
           </Stack>
         </>
-      )}
-
-      {canCreate && (
-        <Stack spacing={1}>
-          <Button
-            fullWidth variant="contained" disableElevation
-            onClick={handleCreateNewLeague}
-            sx={{ borderRadius: 1, fontWeight: 700 }}
-          >
-            신규 생성
-          </Button>
-        </Stack>
       )}
 
       {/* 대회 일정 */}

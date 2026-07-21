@@ -1003,6 +1003,13 @@ export default function LeagueGPTVisionSheet() {
   const [previewCells, setPreviewCells] = useState<VisionPreviewCell[]>([]);
   const [visionError, setVisionError] = useState<string | null>(null);
   const [visionNotice, setVisionNotice] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
+
+  useEffect(() => {
+    if (!visionNotice || visionNotice.type === "error") return;
+    const timeoutId = window.setTimeout(() => setVisionNotice(null), 4000);
+    return () => window.clearTimeout(timeoutId);
+  }, [visionNotice]);
+
   const [imageEditor, setImageEditor] = useState<ImageEditorState | null>(null);
   const [cropMode, setCropMode] = useState(false);
   const [crop, setCrop] = useState<Crop>();

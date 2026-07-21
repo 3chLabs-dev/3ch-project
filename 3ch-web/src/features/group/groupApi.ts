@@ -375,7 +375,7 @@ export const groupApi = baseApi.injectEndpoints({
       query: (name) => `/group/check-name?name=${encodeURIComponent(name)}`,
     }),
 
-    joinGroup: builder.mutation<{ message: string }, string>({
+    joinGroup: builder.mutation<{ message: string; claim_requested?: boolean }, string>({
       query: (groupId) => ({
         url: `/group/${groupId}/join`,
         method: "POST",

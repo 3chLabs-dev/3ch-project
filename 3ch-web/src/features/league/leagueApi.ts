@@ -397,6 +397,8 @@ export interface LeagueInvitedGroup {
 export interface LeagueInvitationItem extends LeagueListItem {
   invitation_id: string;
   invitation_status: "pending" | "accepted" | "declined";
+  invited_group_id: string;
+  host_group_id: string;
   invited_group_name: string;
   host_group_name?: string | null;
   my_role: string;

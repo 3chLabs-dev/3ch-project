@@ -1186,39 +1186,76 @@ router.post('/group/:id/member', requireAuth, requireGroupAdmin, async (req, res
  *         description: 서버 오류
  */
 router.post('/group/:id/join', requireAuth, async (req, res) => {
+  const client = await pool.connect();
   try {
     const { id } = req.params;
     const userId = req.user.sub;
 
+    await client.query('BEGIN');
+
     // 클럽 존재 확인
-    const groupCheck = await pool.query(
+    const groupCheck = await client.query(
       `SELECT id FROM groups WHERE id = $1`,
       [id]
     );
     if (groupCheck.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ message: '클럽을 찾을 수 없습니다' });
     }
 
     // 이미 멤버인지 확인
-    const existing = await pool.query(
+    const existing = await client.query(
       `SELECT id FROM group_members WHERE group_id = $1 AND user_id = $2`,
       [id, userId]
     );
     if (existing.rows.length > 0) {
+      await client.query('ROLLBACK');
       return res.status(409).json({ message: '이미 가입된 클럽입니다' });
     }
 
     const memberId = randomUUID();
-    await pool.query(
+    await client.query(
       `INSERT INTO group_members (id, group_id, user_id, role)
        VALUES ($1, $2, $3, 'member')`,
       [memberId, id, userId]
     );
 
-    res.status(201).json({ message: '클럽에 가입되었습니다' });
+    const matchingPreMembers = await client.query(
+      `SELECT pm.id
+       FROM group_pre_members pm
+       JOIN users u ON u.id = $2
+       WHERE pm.group_id = $1 AND pm.status = 'active'
+         AND BTRIM(pm.name) = BTRIM(u.name)`,
+      [id, userId]
+    );
+    const matchingPreMemberId = matchingPreMembers.rowCount === 1
+      ? matchingPreMembers.rows[0].id
+      : null;
+
+    if (matchingPreMemberId) {
+      await client.query(
+        `INSERT INTO group_member_claims (id, pre_member_id, requested_by_id)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (pre_member_id) DO UPDATE
+         SET requested_by_id = EXCLUDED.requested_by_id, status = 'pending',
+             requested_at = NOW(), reviewed_by_id = NULL, reviewed_at = NULL`,
+        [randomUUID(), matchingPreMemberId, userId]
+      );
+    }
+
+    await client.query('COMMIT');
+    res.status(201).json({
+      message: matchingPreMemberId
+        ? '클럽에 가입되었습니다. 사전등록 회원 전환 승인을 기다려 주세요.'
+        : '클럽에 가입되었습니다',
+      claim_requested: Boolean(matchingPreMemberId),
+    });
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('Error joining group:', error);
     res.status(500).json({ message: '내부 서버 오류' });
+  } finally {
+    client.release();
   }
 });
 

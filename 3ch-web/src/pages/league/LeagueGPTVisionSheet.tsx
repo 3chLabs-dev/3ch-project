@@ -1603,10 +1603,6 @@ export default function LeagueGPTVisionSheet() {
   };
 
   const saveVisionPreview = async () => {
-    const roundBlock = isProgramMode ? programOption?.blocks?.[programRound - 1] : undefined;
-    const roundRule = roundBlock?.matchRule ?? league?.rules;
-    const requiredWinScore = getWinScore(roundRule);
-    const isTeamAggregate = roundBlock?.type === "TEAM";
     const grouped = new Map<string, { match: LeagueMatch; scoreA: number | null; scoreB: number | null }>();
     previewCells.forEach((cell) => {
       if (!cell.matchId || !cell.playerId) return;
@@ -1620,19 +1616,12 @@ export default function LeagueGPTVisionSheet() {
 
     try {
       let saved = 0;
-      const invalidMatchIds = new Set<string>();
       for (const { match, scoreA, scoreB } of grouped.values()) {
-        const hasBothScores = scoreA != null && scoreB != null;
-        const hasWinner = hasBothScores && scoreA !== scoreB;
-        const hasValidWinningScore = hasBothScores && requiredWinScore != null
-          ? Math.max(scoreA, scoreB) === requiredWinScore && Math.min(scoreA, scoreB) < requiredWinScore
-          : hasWinner;
-        const isValidResult = isTeamAggregate ? hasWinner : hasValidWinningScore;
-        if (!isValidResult) {
-          invalidMatchIds.add(match.id);
-          continue;
-        }
-        const updates = { score_a: scoreA, score_b: scoreB, status: "done" as const };
+        const updates: ProgramMatchPatch = {};
+        if (scoreA != null) updates.score_a = scoreA;
+        if (scoreB != null) updates.score_b = scoreB;
+        if (scoreA != null && scoreB != null) updates.status = "done";
+        if (Object.keys(updates).length === 0) continue;
         if (isProgramMode) {
           await updateProgramMatch(match.id, updates);
         } else {
@@ -1642,15 +1631,6 @@ export default function LeagueGPTVisionSheet() {
       }
       if (!isProgramMode || serverProgramMatchesAll.length > 0) {
         await refetchMatches();
-      }
-      if (invalidMatchIds.size > 0) {
-        setPreviewCells((cells) => cells.map((cell) => (
-          cell.matchId && invalidMatchIds.has(cell.matchId)
-            ? { ...cell, needsReview: true, issue: isTeamAggregate ? "두 팀의 최종 합산 점수를 확인해 주세요." : "경기방식에 맞는 두 세트스코어를 확인해 주세요." }
-            : cell
-        )));
-        setVisionNotice({ type: "info", message: `${saved}개 경기는 저장했습니다. ${invalidMatchIds.size}개 경기는 세트스코어 조합을 수정해 주세요.` });
-        return;
       }
       setPreviewOpen(false);
       setVisionNotice({ type: "success", message: `${saved}개 경기 결과를 저장했습니다.` });

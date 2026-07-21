@@ -216,7 +216,7 @@ function DiagonalScoreCell({ landscape, isVisionStart = false }: { landscape: bo
 // ─── 부 배지 ──────────────────────────────────────────────────────────────────
 // 참가자 이름 옆에 표시하는 "부수" 원형 배지 (예: 3부 → "3")
 // division이 없으면 렌더링하지 않음
-function DivBadge({ division }: { division?: string | null }) {
+function DivBadge({ division, aggregate = false }: { division?: string | null; aggregate?: boolean }) {
   if (!division) return null;
   return (
     <Box
@@ -224,7 +224,7 @@ function DivBadge({ division }: { division?: string | null }) {
       sx={{
         display: "inline-flex", alignItems: "center", justifyContent: "center",
         width: 20, height: 20, borderRadius: "50%",
-        bgcolor: COLOR.divBadge, color: "#000",
+        bgcolor: COLOR.divBadge, color: aggregate ? "#6A1B9A" : "#000",
         fontSize: 9, fontWeight: 900, lineHeight: 1,
         flexShrink: 0, verticalAlign: "middle",
       }}
@@ -995,7 +995,26 @@ export default function LeagueGPTVisionSheet() {
     () => (matchData?.matches ?? []).filter((match) => match.is_program && match.program_round === programRound),
     [matchData?.matches, programRound],
   );
-  const programMatchesAll = serverProgramMatchesAll.length > 0 ? serverProgramMatchesAll : generatedProgramMatchesAll;
+  const programRoundType = programOption?.blocks?.[programRound - 1]?.type;
+  const isProgramUnitRound = programRoundType === "TEAM" || programRoundType === "DOUBLES";
+  const programMatchesAll = useMemo(() => {
+    if (!isProgramUnitRound) {
+      return serverProgramMatchesAll.length > 0 ? serverProgramMatchesAll : generatedProgramMatchesAll;
+    }
+    const serverById = new Map(serverProgramMatchesAll.map((match) => [match.id, match]));
+    return generatedProgramMatchesAll.map((match) => {
+      const serverMatch = serverById.get(match.id);
+      return serverMatch
+        ? {
+            ...match,
+            score_a: serverMatch.score_a,
+            score_b: serverMatch.score_b,
+            court: serverMatch.court,
+            status: serverMatch.status,
+          }
+        : match;
+    });
+  }, [generatedProgramMatchesAll, isProgramUnitRound, serverProgramMatchesAll]);
   const [updateMatch] = useUpdateLeagueMatchMutation();
   const [scanVision, { isLoading: isScanning }] = useScanLeagueOpenAIVisionMutation();
   const [resultDialogOpen, setResultDialogOpen] = useState(false);
@@ -1031,7 +1050,7 @@ export default function LeagueGPTVisionSheet() {
     saveProgramMatchPatch(id, programRound, matchId, updates);
     setProgramMatchStateVersion((version) => version + 1);
   }, [id, programRound, serverProgramMatchesAll, updateMatch]);
-  const isProgramTeamRound = isProgramMode && programOption?.blocks?.[programRound - 1]?.type === "TEAM";
+  const isProgramTeamRound = isProgramMode && isProgramUnitRound;
   const programTeamParticipants = useMemo(() => {
     if (!isProgramTeamRound) return [];
 
@@ -1049,7 +1068,11 @@ export default function LeagueGPTVisionSheet() {
         id: teamId,
         league_id: id ?? "",
         division: division ?? null,
-        name: roster?.length ? [teamName, ...roster.slice(1)].join("\n") : teamName,
+        name: programRoundType === "DOUBLES"
+          ? teamName
+          : roster?.length
+            ? [teamName, ...roster.slice(1)].join("\n")
+            : teamName,
         member_id: null,
         paid: false,
         arrived: false,
@@ -1058,12 +1081,12 @@ export default function LeagueGPTVisionSheet() {
         created_at: "",
         group_name: null,
       });
-      if (rosterDetails?.length) {
+      if (rosterDetails?.length && programRoundType !== "DOUBLES") {
         rosterMap.set(teamId, rosterDetails);
       }
     };
 
-    programMatchesAll.forEach((match) => {
+    generatedProgramMatchesAll.forEach((match) => {
       const withRoster = match as LeagueMatch & {
         participant_a_roster?: string[];
         participant_b_roster?: string[];
@@ -1078,7 +1101,7 @@ export default function LeagueGPTVisionSheet() {
       ...participant,
       teamRoster: rosterMap.get(participant.id),
     }));
-  }, [id, isProgramTeamRound, programMatchesAll]);
+  }, [generatedProgramMatchesAll, id, isProgramTeamRound, programRoundType]);
 
   // 1. 조 이름 목록 추출 ("1조", "2조" ...)
   const groupNames = useMemo(() => {
@@ -1845,7 +1868,7 @@ export default function LeagueGPTVisionSheet() {
                       return (
                         <NameHeaderCell key={p.id} sx={isMe ? { bgcolor: COLOR.myHighlight } : undefined}>
                           <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0.4, flexWrap: "wrap" }}>
-                            <DivBadge division={p.division} />
+                            <DivBadge division={p.division} aggregate={isProgramTeamRound} />
                             {/* portrait: minHeight로 세로 공간 확보 */}
                             <Box component="span" sx={{ minHeight: landscape ? "" : "70px", color: isMe ? COLOR.myText : "inherit", fontWeight: isMe ? 700 : "inherit" }}>
                               {isProgramTeamRound ? p.name.split("\n")[0] : p.name}

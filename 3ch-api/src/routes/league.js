@@ -2855,7 +2855,7 @@ router.delete('/league/:id/program', requireAuth, async (req, res) => {
 });
 
 // 이벤트 프로그램 경기 동기화 (owner/admin)
-// 단식 프로그램 경기만 league_matches에 저장해 개인 랭킹에 반영한다.
+// 단식은 참가자 FK를 유지하고, 복식/단체전은 경기 상태만 저장한 뒤 프로그램 편성 데이터로 참가 단위를 복원한다.
 router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) => {
   const userId = Number(req.user.sub);
   const leagueId = req.params.id;
@@ -2880,21 +2880,23 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
     );
     const participantIds = new Set(participantRows.rows.map((row) => row.id));
 
+    const validBlockTypes = new Set(['SINGLES', 'DOUBLES', 'TEAM']);
     const validMatches = matches
-      .filter((match) =>
-        match &&
-        match.id &&
-        match.program_block_type === 'SINGLES' &&
-        (
+      .filter((match) => {
+        if (!match || !match.id || !validBlockTypes.has(match.program_block_type)) return false;
+        if (match.program_block_type !== 'SINGLES') return true;
+        return (
           (participantIds.has(match.participant_a_id) && participantIds.has(match.participant_b_id)) ||
           (match.bracket && Number(match.round_number) > 1)
-        )
-      )
-      .map((match, index) => ({
+        );
+      })
+      .map((match, index) => {
+        const isSingles = match.program_block_type === 'SINGLES';
+        return ({
         id: String(match.id),
         match_order: Number.isFinite(Number(match.match_order)) ? Number(match.match_order) : index + 1,
-        participant_a_id: match.participant_a_id,
-        participant_b_id: match.participant_b_id,
+        participant_a_id: isSingles && participantIds.has(match.participant_a_id) ? match.participant_a_id : null,
+        participant_b_id: isSingles && participantIds.has(match.participant_b_id) ? match.participant_b_id : null,
         bracket: match.bracket ?? null,
         round_number: match.round_number == null ? null : Number(match.round_number),
         match_label: match.match_label ?? null,
@@ -2903,8 +2905,9 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
         loser_next_match_id: match.loser_next_match_id ?? null,
         loser_next_slot: match.loser_next_slot ?? null,
         program_round: match.program_round == null ? null : Number(match.program_round),
-        program_block_type: 'SINGLES',
-      }));
+        program_block_type: match.program_block_type,
+      });
+      });
 
     await pool.query('BEGIN');
     const targetProgramRounds = [...new Set(validMatches.map((match) => match.program_round).filter((round) => Number.isFinite(round)))];

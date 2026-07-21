@@ -198,7 +198,7 @@ function toDoublesUnits(players: ProgramPlayer[], assignments?: FormationAssignm
   return units.map((unit, index) => ({
     id: unit.map((player) => player.id).join("+"),
     name: pairLabel(unit),
-    division: null,
+    division: String(unit.reduce((sum, player) => sum + (player.level ?? 0), 0)),
     level: index + 1,
     roster: unit.map((player) => player.name),
     rosterDetails: unit.map((player) => ({
@@ -220,7 +220,7 @@ function toTeamUnitsFromGroupSizes(
       return {
         id: roster.map((player) => player.id).join("+"),
         name: `팀 ${leader.name}`,
-        division: leader.division,
+        division: String(roster.reduce((sum, player) => sum + (player.level ?? 0), 0)),
         level: index + 1,
         roster: roster.map((player) => player.name),
         rosterDetails: roster.map((player) => ({
@@ -251,7 +251,7 @@ function teamUnitsFromAssignments(
     .map((roster, index) => ({
       id: roster.map((player) => player.id).join("+"),
       name: `팀 ${roster[0].name}`,
-      division: roster[0].division,
+      division: String(roster.reduce((sum, player) => sum + (player.level ?? 0), 0)),
       level: index + 1,
       roster: roster.map((player) => player.name),
       rosterDetails: roster.map((player) => ({ name: player.name, division: player.division })),

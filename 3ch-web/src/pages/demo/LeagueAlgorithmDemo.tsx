@@ -1209,13 +1209,11 @@ const LeagueAlgorithmDemo = ({
       localStorage.setItem(`league-program-active-round-${leagueId}`, "1");
       await saveLeagueProgram({ leagueId, program: selectedOption }).unwrap();
       const programMatches = selectedOption.blocks.flatMap((block, blockIndex) =>
-        block.type === "SINGLES"
-          ? generateProgramRoundMatches(leagueId, selectedOption, participantData?.participants ?? [], blockIndex + 1).map((match) => ({
-              ...match,
-              program_round: blockIndex + 1,
-              program_block_type: block.type,
-            }))
-          : []
+        generateProgramRoundMatches(leagueId, selectedOption, participantData?.participants ?? [], blockIndex + 1).map((match) => ({
+          ...match,
+          program_round: blockIndex + 1,
+          program_block_type: block.type,
+        }))
       );
       try {
         await syncLeagueProgramMatches({ leagueId, matches: programMatches }).unwrap();

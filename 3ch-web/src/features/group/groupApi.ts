@@ -86,6 +86,7 @@ export interface SearchGroupsParams {
   region_district?: string;
   limit?: number;
   sort_by_region?: boolean;
+  include_joined?: boolean;
 }
 
 export interface SearchGroupsResponse {
@@ -366,6 +367,7 @@ export const groupApi = baseApi.injectEndpoints({
         if (params.region_district) sp.set("region_district", params.region_district);
         if (params.limit) sp.set("limit", String(params.limit));
         if (params.sort_by_region !== undefined) sp.set("sort_by_region", String(params.sort_by_region));
+        if (params.include_joined !== undefined) sp.set("include_joined", String(params.include_joined));
         return `/group/search?${sp.toString()}`;
       },
       providesTags: ["Group"],

@@ -11,7 +11,7 @@ export default function LeagueInvitedGroupsPicker() {
   const selectedIds = useAppSelector((state) => state.leagueRenewalCreation.invitedGroupIds);
   const selectedOptions = useAppSelector((state) => state.leagueRenewalCreation.invitedGroupOptions);
   const [query, setQuery] = useState("");
-  const { data, isFetching } = useSearchGroupsQuery({ q: query, limit: 20 }, { skip: query.trim().length < 2 });
+  const { data, isFetching } = useSearchGroupsQuery({ q: query, limit: 20, include_joined: true }, { skip: query.trim().length < 2 });
   const groups = useMemo(
     () => (data?.groups ?? []).filter((group) => group.id !== hostGroupId),
     [data?.groups, hostGroupId],

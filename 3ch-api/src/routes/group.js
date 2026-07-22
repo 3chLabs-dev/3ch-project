@@ -394,13 +394,18 @@ router.post('/group', requireAuth, async (req, res) => {
 router.get('/group/search', requireAuth, async (req, res) => {
   try {
     const userId = req.user.sub;
-    const { q, region_city, region_district, limit = '20', sort_by_region } = req.query;
+    const { q, region_city, region_district, limit = '20', sort_by_region, include_joined } = req.query;
 
-    const conditions = [
-      `g.id NOT IN (SELECT group_id FROM group_members WHERE user_id = $1)`
-    ];
-    const params = [userId];
-    let paramIdx = 2;
+    const conditions = [];
+    const params = [];
+    let paramIdx = 1;
+
+    // 일반 클럽 검색에서는 가입한 클럽을 제외하지만, 리그 초대 검색에서는 포함할 수 있다.
+    if (include_joined !== 'true') {
+      conditions.push(`g.id NOT IN (SELECT group_id FROM group_members WHERE user_id = $${paramIdx})`);
+      params.push(userId);
+      paramIdx++;
+    }
 
     // 검색어가 있으면 필터링
     if (q && q.trim()) {
@@ -439,7 +444,7 @@ router.get('/group/search', requireAuth, async (req, res) => {
       `SELECT g.id, g.name, g.description, g.sport, g.region_city, g.region_district, g.created_at,
               (SELECT COUNT(*) FROM group_members WHERE group_id = g.id)::int AS member_count
        FROM groups g
-       WHERE ${conditions.join(' AND ')}
+       ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''}
        ORDER BY ${orderBy}
        LIMIT $${paramIdx}`,
       params

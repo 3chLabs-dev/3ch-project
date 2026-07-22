@@ -9,7 +9,7 @@ type Props = { open: boolean; leagueId: string; hostGroupId?: string | null; can
 export default function LeagueInvitedGroupsDialog({ open, leagueId, hostGroupId, canManage, onClose }: Props) {
   const [query, setQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const { data, isFetching } = useSearchGroupsQuery({ q: query, limit: 20 }, { skip: !open || !canManage || query.trim().length < 2 });
+  const { data, isFetching } = useSearchGroupsQuery({ q: query, limit: 20, include_joined: true }, { skip: !open || !canManage || query.trim().length < 2 });
   const { data: invitedData } = useGetLeagueInvitedGroupsQuery(leagueId, { skip: !open });
   const [inviteGroups, { isLoading }] = useInviteGroupsToLeagueMutation();
   const existingIds = new Set((invitedData?.groups ?? []).map((group) => group.group_id));

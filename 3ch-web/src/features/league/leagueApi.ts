@@ -223,6 +223,7 @@ export interface LeagueMatch {
   tournament_bracket_index?: number | null;
   participant_a_seed_label?: string | null;
   participant_b_seed_label?: string | null;
+  is_no_game?: boolean;
 }
 
 export interface InitTournamentRequest {

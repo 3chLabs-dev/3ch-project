@@ -108,13 +108,19 @@ export interface ProgramBlock {
   doublesAssignments?: FormationAssignmentPlayer[][];
   tournamentBracketCount?: number;
   tournamentSeeding?: TournamentSeedingType;
+  crossClubGrouping?: boolean;
+  crossClubOnlyMatches?: boolean;
+  unitClubMode?: UnitClubMode;
 }
 
 export interface FormationAssignmentPlayer {
   name: string;
   level: number;
+  sourceGroupId?: string | null;
   roster?: FormationAssignmentPlayer[];
 }
+
+export type UnitClubMode = "same" | "mixed";
 
 export type TeamMatchType =
   | "SINGLES"
@@ -171,6 +177,9 @@ export interface RoundConfig {
   doublesAssignments?: FormationAssignmentPlayer[][];
   tournamentBracketCount?: number;
   tournamentSeeding?: TournamentSeedingType;
+  crossClubGrouping?: boolean;
+  crossClubOnlyMatches?: boolean;
+  unitClubMode?: UnitClubMode;
 }
 
 export interface ProgramPreferences {

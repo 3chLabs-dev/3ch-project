@@ -4,7 +4,7 @@ import { distributeSnake } from '../../features/league/algorithms/distributeSnak
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { generateGroupOptions } from '../../features/league/algorithms/generateGroupOptions';
-import { useGetLeagueParticipantsQuery, useGetLeagueProgramQuery, useGetLeagueQuery, useSaveLeagueProgramMutation, useSyncLeagueProgramMatchesMutation } from '../../features/league/leagueApi';
+import { useGetLeagueInvitedGroupsQuery, useGetLeagueParticipantsQuery, useGetLeagueProgramQuery, useGetLeagueQuery, useSaveLeagueProgramMutation, useSyncLeagueProgramMatchesMutation } from '../../features/league/leagueApi';
 import type { ProgramBlock, ProgramOption, ProgramType, TeamMatchType, RoundConfig, FormationAssignmentPlayer } from '../../features/league/types/tournament.types';
 import { ToggleButton, ToggleButtonGroup, Button, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Chip, Radio, CircularProgress, Box, Typography, Stack, Divider, Tooltip } from "@mui/material";
 import { DndContext, PointerSensor, TouchSensor, useSensor, useSensors, closestCenter,
@@ -33,7 +33,7 @@ const FORMATION_COLORS = [
 ];
 
 const formationPlayerId = (player: FormationAssignmentPlayer) =>
-  `formation-${player.name}-${player.level}`;
+  `formation-${player.sourceGroupId ?? "unknown"}-${player.name}-${player.level}`;
 
 const formationLevelSum = (players: FormationAssignmentPlayer[]): number =>
   players.reduce(
@@ -42,6 +42,73 @@ const formationLevelSum = (players: FormationAssignmentPlayer[]): number =>
       : Number.isFinite(player.level) ? player.level : 0),
     0,
   );
+
+const formationClubIds = (player: FormationAssignmentPlayer): string[] => {
+  const players = player.roster?.length ? player.roster : [player];
+  return [...new Set(players.map((member) => member.sourceGroupId).filter((id): id is string => Boolean(id)))];
+};
+
+const distributeFormationClubAware = (
+  players: FormationAssignmentPlayer[],
+  groupSizes: number[],
+) => {
+  const groups = groupSizes.map((_, index) => ({ name: `${index + 1}조`, players: [] as FormationAssignmentPlayer[] }));
+  const ordered = [...players].sort((a, b) => a.level - b.level);
+  ordered.forEach((player) => {
+    const clubIds = formationClubIds(player);
+    const candidates = groups
+      .map((group, index) => ({ group, index }))
+      .filter(({ group, index }) => group.players.length < groupSizes[index]);
+    candidates.sort((a, b) => {
+      const duplicateA = a.group.players.reduce((sum, member) => sum + formationClubIds(member).filter((id) => clubIds.includes(id)).length, 0);
+      const duplicateB = b.group.players.reduce((sum, member) => sum + formationClubIds(member).filter((id) => clubIds.includes(id)).length, 0);
+      return duplicateA - duplicateB
+        || a.group.players.length - b.group.players.length
+        || formationLevelSum(a.group.players) - formationLevelSum(b.group.players);
+    });
+    candidates[0]?.group.players.push(player);
+  });
+  return groups;
+};
+
+const buildFormationUnits = (
+  players: FormationAssignmentPlayer[],
+  unitSize: number,
+  mode: "same" | "mixed",
+) => {
+  if (unitSize <= 0) return [];
+  if (mode === "same") {
+    const byClub = new Map<string, FormationAssignmentPlayer[]>();
+    players.forEach((player) => {
+      const key = player.sourceGroupId ?? "unknown";
+      byClub.set(key, [...(byClub.get(key) ?? []), player]);
+    });
+    return [...byClub.values()].flatMap((clubPlayers) => {
+      const unitCount = Math.ceil(clubPlayers.length / unitSize);
+      return distributeSnake(clubPlayers, Array.from({ length: unitCount }, (_, index) =>
+        Math.min(unitSize, Math.max(0, clubPlayers.length - index * unitSize))));
+    });
+  }
+  const unitCount = Math.ceil(players.length / unitSize);
+  return distributeFormationClubAware(players, Array.from({ length: unitCount }, (_, index) =>
+    Math.min(unitSize, Math.max(0, players.length - index * unitSize))));
+};
+
+function ClubPolicyControls({ round, enabled, onChange }: { round: RoundConfig; enabled: boolean; onChange: (patch: Partial<RoundConfig>) => void }) {
+  if (!enabled) return null;
+  const unitRound = round.program === "DOUBLES" || round.program === "TEAM";
+  const canRestrictMatches = round.program === "SINGLES" || round.unitClubMode === "same";
+  const yesNo = (value: boolean | undefined, change: (next: boolean) => void) => (
+    <ToggleButtonGroup exclusive fullWidth value={value ? "yes" : "no"} onChange={(_, next) => next && change(next === "yes")}>
+      <ToggleButton value="yes">예</ToggleButton><ToggleButton value="no">아니오</ToggleButton>
+    </ToggleButtonGroup>
+  );
+  return <>
+    {unitRound && <div style={{ marginTop: 16 }}><div style={{ fontWeight: 700, marginBottom: 8 }}>{round.program === "TEAM" ? "팀 구성" : "복식 구성"}</div><ToggleButtonGroup exclusive fullWidth value={round.unitClubMode ?? "mixed"} onChange={(_, value) => value && onChange({ unitClubMode: value, teamAssignments: undefined, doublesAssignments: undefined, groupAssignments: undefined })}><ToggleButton value="same">같은 클럽만</ToggleButton><ToggleButton value="mixed">섞어서</ToggleButton></ToggleButtonGroup></div>}
+    {round.format !== "LEAGUE" && <div style={{ marginTop: 16 }}><div style={{ fontWeight: 700, marginBottom: 8 }}>타클럽 편성</div>{yesNo(round.crossClubGrouping, (next) => onChange({ crossClubGrouping: next, groupAssignments: undefined, ...(!next ? { crossClubOnlyMatches: false } : {}) }))}</div>}
+    {round.format !== "TOURNAMENT" && canRestrictMatches && (round.format === "LEAGUE" || round.crossClubGrouping) && <div style={{ marginTop: 16 }}><div style={{ fontWeight: 700, marginBottom: 8 }}>타클럽만 매칭</div>{yesNo(round.crossClubOnlyMatches, (next) => onChange({ crossClubOnlyMatches: next }))}</div>}
+  </>;
+}
 
 function SortableFormationPlayer({ player }: { player: FormationAssignmentPlayer }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -132,11 +199,13 @@ const getRoundFormatLabel = (
 interface RoundConfigEditorProps {
   rounds: RoundConfig[];
   setRounds: (rounds: RoundConfig[]) => void;
+  clubPoliciesEnabled: boolean;
 }
 
 function RoundConfigEditor({
   rounds,
   setRounds,
+  clubPoliciesEnabled,
 }: RoundConfigEditorProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -582,6 +651,7 @@ function RoundConfigEditor({
                   </ToggleButton>
                 </ToggleButtonGroup>
               </div>
+              <ClubPolicyControls round={round} enabled={clubPoliciesEnabled} onChange={(patch) => setRounds(rounds.map((item) => item.id === round.id ? { ...item, ...patch } : item))} />
             </div>
           ))}
         </SortableContext>
@@ -623,6 +693,7 @@ interface LeagueAlgorithmDemoProps {
   hideModeTabs?: boolean;
   hideRecommendationTitle?: boolean;
   compactCompleteButton?: boolean;
+  hasParticipatingClubs?: boolean;
   onComplete?: (program: ProgramOption) => void;
   onBack?: () => void;
 }
@@ -639,6 +710,7 @@ const LeagueAlgorithmDemo = ({
   hideModeTabs = false,
   hideRecommendationTitle = false,
   compactCompleteButton = false,
+  hasParticipatingClubs = false,
   onComplete,
   onBack,
 }: LeagueAlgorithmDemoProps) => {
@@ -794,6 +866,7 @@ const LeagueAlgorithmDemo = ({
       return {
         name: participant.name,
         level: Number.isNaN(parsedLevel) ? 999 : parsedLevel,
+        sourceGroupId: participant.source_group_id ?? null,
       };
     });
   }, [participantData]);
@@ -1554,18 +1627,20 @@ const LeagueAlgorithmDemo = ({
     groupResultOption && groupResultDialog
       ? savedTeamAssignments?.length
         ? savedTeamAssignments.map((players, index) => ({ name: `${String.fromCharCode(65 + index)}팀`, players }))
-        : distributeSnake(
+        : buildFormationUnits(
             teamFormationPlayers,
-            getRoundGroupSizes(groupResultOption, groupResultDialog.blockIndex)
-          )
+            Math.max(1, groupResultRound?.teamPlayerCount ?? 4),
+            groupResultRound?.unitClubMode ?? groupResultBlock?.unitClubMode ?? "mixed",
+          ).map((group, index) => ({ ...group, name: `${String.fromCharCode(65 + index)}팀` }))
       : [];
   const savedDoublesAssignments = groupResultRound?.doublesAssignments ?? groupResultBlock?.doublesAssignments;
   const doublesResultGroups = groupResultOption && groupResultDialog
     ? savedDoublesAssignments?.length
       ? savedDoublesAssignments.map((players, index) => ({ name: `${index + 1}복식`, players }))
-      : distributeSnake(
+      : buildFormationUnits(
           teamFormationPlayers,
-          Array.from({ length: Math.floor(effectiveFormationPlayerCount / 2) }, () => 2),
+          2,
+          groupResultRound?.unitClubMode ?? groupResultBlock?.unitClubMode ?? "mixed",
         ).filter((group) => group.players.length === 2)
     : [];
   const teamUnits = teamResultGroups.map((team, teamIndex) => {
@@ -1574,12 +1649,20 @@ const LeagueAlgorithmDemo = ({
       name: `팀 ${leader?.name ?? teamIndex + 1}`,
       level: leader?.level ?? teamIndex + 1,
       roster: team.players,
+      sourceGroupId: formationClubIds({ name: "", level: 0, roster: team.players }).length === 1
+        ? formationClubIds({ name: "", level: 0, roster: team.players })[0]
+        : null,
     };
   });
+  const { data: invitedGroupsData } = useGetLeagueInvitedGroupsQuery(leagueId ?? "", { skip: !leagueId });
+  const clubPoliciesEnabled = hasParticipatingClubs || Boolean(invitedGroupsData?.groups?.length);
   const doublesUnits = doublesResultGroups.map((pair, pairIndex) => ({
     name: pair.players.map((player) => formatFormationName(player.name, player.level)).join(" · "),
     level: pairIndex + 1,
     roster: pair.players,
+    sourceGroupId: formationClubIds({ name: "", level: 0, roster: pair.players }).length === 1
+      ? formationClubIds({ name: "", level: 0, roster: pair.players })[0]
+      : null,
   }));
   const savedFormationAssignments = groupResultDialog?.mode === "team"
     ? groupResultRound?.teamAssignments ?? groupResultBlock?.teamAssignments
@@ -1593,19 +1676,16 @@ const LeagueAlgorithmDemo = ({
         : groupResultDialog?.mode === "doubles"
           ? doublesResultGroups
         : groupResultDialog?.mode === "group" && groupResultOption?.blocks[groupResultDialog.blockIndex]?.type === "TEAM"
-          ? distributeSnake(
-              reshuffleWithinLevel(teamUnits, groupShuffleSeed),
-              groupResultSizes
-            )
+          ? (groupResultRound?.crossClubGrouping ?? groupResultBlock?.crossClubGrouping
+              ? distributeFormationClubAware(reshuffleWithinLevel(teamUnits, groupShuffleSeed), groupResultSizes)
+              : distributeSnake(reshuffleWithinLevel(teamUnits, groupShuffleSeed), groupResultSizes))
           : groupResultDialog?.mode === "group" && groupResultOption?.blocks[groupResultDialog.blockIndex]?.type === "DOUBLES"
-            ? distributeSnake(
-                reshuffleWithinLevel(doublesUnits, groupShuffleSeed),
-                groupResultSizes
-              )
-          : distributeSnake(
-              reshuffleWithinLevel(groupPlayers.slice(0, effectiveFormationPlayerCount), groupShuffleSeed),
-              groupResultSizes
-            )
+            ? (groupResultRound?.crossClubGrouping ?? groupResultBlock?.crossClubGrouping
+                ? distributeFormationClubAware(reshuffleWithinLevel(doublesUnits, groupShuffleSeed), groupResultSizes)
+                : distributeSnake(reshuffleWithinLevel(doublesUnits, groupShuffleSeed), groupResultSizes))
+          : (groupResultRound?.crossClubGrouping ?? groupResultBlock?.crossClubGrouping
+              ? distributeFormationClubAware(reshuffleWithinLevel(groupPlayers.slice(0, effectiveFormationPlayerCount), groupShuffleSeed), groupResultSizes)
+              : distributeSnake(reshuffleWithinLevel(groupPlayers.slice(0, effectiveFormationPlayerCount), groupShuffleSeed), groupResultSizes))
       : [];
   const dialogGroupResult = savedFormationAssignments?.length
     ? savedFormationAssignments.map((players, index) => ({
@@ -2249,6 +2329,7 @@ const LeagueAlgorithmDemo = ({
                       </ToggleButton>
                     </ToggleButtonGroup>
                   </div>
+                  <ClubPolicyControls round={round} enabled={clubPoliciesEnabled} onChange={(patch) => setRounds(rounds.map((item) => item.id === round.id ? { ...item, ...patch } : item))} />
                 </div>
             </div>
 
@@ -2813,6 +2894,7 @@ const LeagueAlgorithmDemo = ({
           <RoundConfigEditor
             rounds={editingRounds}
             setRounds={setEditingRounds}
+            clubPoliciesEnabled={clubPoliciesEnabled}
           />
         </DialogContent>
 

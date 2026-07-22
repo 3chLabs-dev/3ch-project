@@ -224,7 +224,7 @@ function DivBadge({ division, aggregate = false }: { division?: string | null; a
       sx={{
         display: "inline-flex", alignItems: "center", justifyContent: "center",
         width: 20, height: 20, borderRadius: "50%",
-        bgcolor: COLOR.divBadge, color: aggregate ? "#6A1B9A" : "#000",
+        bgcolor: COLOR.divBadge, color: aggregate ? "#FF0000" : "#000",
         fontSize: 9, fontWeight: 900, lineHeight: 1,
         flexShrink: 0, verticalAlign: "middle",
       }}
@@ -345,6 +345,10 @@ function BracketScoreCell({ match, isA, leagueId, winScore, canManage, landscape
   };
 
   const winnerStyle = { color: isWinner ? COLOR.win : "inherit", fontWeight: isWinner ? 700 : 400 };
+
+  if (match?.is_no_game) {
+    return <StyledTableCell sx={{ color: "#E53935", fontWeight: 900, fontSize: 11, textAlign: "center" }}>NO-GAME</StyledTableCell>;
+  }
 
   // 편집 불가: 점수 숫자만 표시 (빈 칸 또는 숫자)
   if (!canEdit) {
@@ -997,8 +1001,9 @@ export default function LeagueGPTVisionSheet() {
   );
   const programRoundType = programOption?.blocks?.[programRound - 1]?.type;
   const isProgramUnitRound = programRoundType === "TEAM" || programRoundType === "DOUBLES";
+  const hasProgramClubPolicy = Boolean(programOption?.blocks?.[programRound - 1]?.crossClubGrouping || programOption?.blocks?.[programRound - 1]?.crossClubOnlyMatches);
   const programMatchesAll = useMemo(() => {
-    if (!isProgramUnitRound) {
+    if (!isProgramUnitRound && !hasProgramClubPolicy) {
       return serverProgramMatchesAll.length > 0 ? serverProgramMatchesAll : generatedProgramMatchesAll;
     }
     const serverById = new Map(serverProgramMatchesAll.map((match) => [match.id, match]));
@@ -1014,7 +1019,7 @@ export default function LeagueGPTVisionSheet() {
           }
         : match;
     });
-  }, [generatedProgramMatchesAll, isProgramUnitRound, serverProgramMatchesAll]);
+  }, [generatedProgramMatchesAll, hasProgramClubPolicy, isProgramUnitRound, serverProgramMatchesAll]);
   const [updateMatch] = useUpdateLeagueMatchMutation();
   const [scanVision, { isLoading: isScanning }] = useScanLeagueOpenAIVisionMutation();
   const [resultDialogOpen, setResultDialogOpen] = useState(false);

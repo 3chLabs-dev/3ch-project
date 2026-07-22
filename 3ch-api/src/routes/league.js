@@ -832,6 +832,7 @@ const participantSchema = z.object({
   division: z.string().default(''),
   name: z.string().min(1, '참가자 이름은 필수입니다.'),
   member_id: z.number().int().nullable().optional(),
+  source_group_id: z.string().uuid().nullable().optional(),
   paid: z.boolean().default(false),
   arrived: z.boolean().default(false),
   after: z.boolean().default(false),
@@ -1237,12 +1238,16 @@ router.post('/league', requireAuth, async (req, res) => {
     const leagueCode = await assignLeagueCode(client, { groupId: group_id, startDate: start_date, leagueId });
 
     const participantClaimCodes = [];
+    const allowedSourceGroupIds = new Set([group_id, ...invited_group_ids]);
+    if (participants.some((participant) => participant.source_group_id && !allowedSourceGroupIds.has(participant.source_group_id))) {
+      throw new Error('참여 클럽에 포함되지 않은 참가자 소속입니다.');
+    }
     for (const p of participants) {
       const participantId = randomUUID();
       await client.query(
         `INSERT INTO league_participants (id, league_id, division, name, member_id, source_group_id, paid, arrived, "after")
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [participantId, leagueId, p.division ?? '', p.name, p.member_id ?? null, p.member_id ? group_id : null, p.paid ?? false, p.arrived ?? false, p.after ?? false],
+        [participantId, leagueId, p.division ?? '', p.name, p.member_id ?? null, p.source_group_id ?? group_id, p.paid ?? false, p.arrived ?? false, p.after ?? false],
       );
       if (!p.member_id) {
         const code = makeClaimCode();

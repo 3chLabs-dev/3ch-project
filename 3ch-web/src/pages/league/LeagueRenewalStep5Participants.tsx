@@ -1,11 +1,10 @@
 import { useMemo, useState } from "react";
-import { Alert, Box, Button, Dialog, DialogActions, DialogContent, Divider, Snackbar, Stack, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, Dialog, DialogActions, DialogContent, Divider, MenuItem, Snackbar, Stack, TextField, Typography } from "@mui/material";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { setRenewalParticipants, setRenewalStep } from "../../features/league/leagueRenewalCreationSlice";
 import type { Participant } from "../../features/league/leagueCreationSlice";
 import LoadMembersDialog, { type MemberRow } from "./LoadMembersDialog";
 import { mergeMembers } from "./mergeMember";
-import LeagueInvitedGroupsPicker from "./LeagueInvitedGroupsPicker";
 
 const headCellSx = { fontSize: 12, fontWeight: 900, color: "#6B7280", textAlign: "center" as const };
 const cellCenter = { display: "flex", justifyContent: "center", alignItems: "center" };
@@ -19,9 +18,12 @@ export default function LeagueRenewalStep5Participants() {
   const basicInfo = useAppSelector((state) => state.leagueRenewalCreation.basicInfo);
   const storedParticipants = useAppSelector((state) => state.leagueRenewalCreation.participants);
   const compositionMode = useAppSelector((state) => state.leagueRenewalCreation.compositionMode);
+  const hostGroupId = useAppSelector((state) => state.leagueRenewalCreation.groupId);
+  const invitedGroupOptions = useAppSelector((state) => state.leagueRenewalCreation.invitedGroupOptions);
   const [participants, setParticipants] = useState<Participant[]>(storedParticipants);
   const [division, setDivision] = useState("");
   const [name, setName] = useState("");
+  const [sourceGroupId, setSourceGroupId] = useState(hostGroupId ?? "");
   const [openLoad, setOpenLoad] = useState(false);
   const [alertMsg, setAlertMsg] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<{ idx: number; division: string; name: string } | null>(null);
@@ -35,7 +37,7 @@ export default function LeagueRenewalStep5Participants() {
       setAlertMsg(`모집 인원(${targetCount}명)을 초과할 수 없습니다.`);
       return;
     }
-    const next = { division: division.trim(), name: name.trim(), paid: false, arrived: false, after: false };
+    const next = { division: division.trim(), name: name.trim(), source_group_id: sourceGroupId || hostGroupId, paid: false, arrived: false, after: false };
     if (participants.some((participant) => participant.division === next.division && participant.name === next.name)) return;
     setParticipants((current) => [...current, next]);
     setDivision("");
@@ -68,6 +70,11 @@ export default function LeagueRenewalStep5Participants() {
     </Box>
     <Divider sx={{ mb: 1.2, borderColor: "#D9DDE6" }} />
 
+    {invitedGroupOptions.length > 0 && <TextField select fullWidth size="small" label="소속 클럽" value={sourceGroupId || hostGroupId || ""} onChange={(event) => setSourceGroupId(String(event.target.value))} sx={{ mb: 1.2 }}>
+      {hostGroupId && <MenuItem value={hostGroupId}>주최 클럽</MenuItem>}
+      {invitedGroupOptions.map((group) => <MenuItem key={group.id} value={group.id}>{group.name}</MenuItem>)}
+    </TextField>}
+
     <Box sx={{ display: "grid", gridTemplateColumns: "56px minmax(0,1fr) 56px", gap: 1, alignItems: "center", px: 0.5, mb: 0.8 }}>
       <Typography sx={headCellSx}>부수</Typography><Typography sx={headCellSx}>이름</Typography><Typography sx={headCellSx}>관리</Typography>
     </Box>
@@ -87,8 +94,6 @@ export default function LeagueRenewalStep5Participants() {
         <Box sx={cellCenter}><Button variant="contained" disableElevation onClick={() => setDeleteTarget({ idx: index, division: participant.division, name: participant.name })} sx={{ borderRadius: 1, height: 28, fontWeight: 900, bgcolor: "#D1D5DB", color: "#111827", "&:hover": { bgcolor: "#D1D5DB" } }}>삭제</Button></Box>
       </Box>)}
     </Box>}
-
-    <LeagueInvitedGroupsPicker />
 
     <Stack direction="row" spacing={2} sx={{ mt: 4 }}>
       <Button fullWidth variant="contained" disableElevation onClick={() => dispatch(setRenewalStep(compositionMode === "recommend" ? 3 : 6))} sx={{ borderRadius: 1, height: 44, fontWeight: 900, bgcolor: "#777", "&:hover": { bgcolor: "#777" } }}>이전</Button>

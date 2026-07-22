@@ -23,6 +23,7 @@ type ProgramPlayer = {
   division: string | null;
   level: number;
   seedLabel?: string;
+  sourceGroupId?: string | null;
 };
 
 type MatchUnit = {
@@ -33,6 +34,7 @@ type MatchUnit = {
   roster?: string[];
   rosterDetails?: Array<{ name: string; division: string | null }>;
   seedLabel?: string;
+  sourceGroupIds?: string[];
 };
 
 function toProgramPlayers(participants: LeagueParticipantItem[]): ProgramPlayer[] {
@@ -44,6 +46,7 @@ function toProgramPlayers(participants: LeagueParticipantItem[]): ProgramPlayer[
         name: participant.name,
         division: participant.division ?? null,
         level: Number.isNaN(level) ? 999 : level,
+        sourceGroupId: participant.source_group_id ?? null,
       };
     })
     .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
@@ -121,6 +124,55 @@ function shuffleWithinLevel<T extends { level?: number; name?: string | null; id
     .flatMap((level) => rotateBySeed(buckets.get(level) ?? [], seed + level * 997));
 }
 
+function sourceGroupsOf(unit: { sourceGroupId?: string | null; sourceGroupIds?: string[] }) {
+  if (unit.sourceGroupIds?.length) return unit.sourceGroupIds;
+  if (unit.sourceGroupId) return [unit.sourceGroupId];
+  return [];
+}
+
+function sameClubMatch(left: ProgramPlayer | MatchUnit, right: ProgramPlayer | MatchUnit) {
+  const rightGroups = new Set(sourceGroupsOf(right));
+  const leftGroups = sourceGroupsOf(left);
+  return leftGroups.length > 0 && leftGroups.some((groupId) => rightGroups.has(groupId));
+}
+
+function distributeClubAware<T extends { level?: number; sourceGroupId?: string | null; sourceGroupIds?: string[] }>(items: T[], sizes: number[]) {
+  const groups = sizes.map(() => [] as T[]);
+  const sums = sizes.map(() => 0);
+  [...items].sort((a, b) => (a.level ?? 999) - (b.level ?? 999)).forEach((item) => {
+    const itemGroups = sourceGroupsOf(item);
+    const target = groups.map((group, index) => ({
+      index,
+      full: group.length >= sizes[index],
+      overlap: group.reduce((count, member) => count + (sourceGroupsOf(member).some((id) => itemGroups.includes(id)) ? 1 : 0), 0),
+      size: group.length,
+      sum: sums[index],
+    })).filter((candidate) => !candidate.full).sort((a, b) => a.overlap - b.overlap || a.size - b.size || a.sum - b.sum)[0]?.index;
+    if (target == null) return;
+    groups[target].push(item);
+    sums[target] += item.level ?? 0;
+  });
+  return groups;
+}
+
+function unitRosters(players: ProgramPlayer[], size: number, mode: "same" | "mixed") {
+  if (mode === "same") {
+    const byClub = new Map<string, ProgramPlayer[]>();
+    players.forEach((player) => {
+      const key = player.sourceGroupId ?? `unknown-${player.id}`;
+      byClub.set(key, [...(byClub.get(key) ?? []), player]);
+    });
+    return [...byClub.values()].flatMap((clubPlayers) => {
+      const count = Math.max(1, Math.floor(clubPlayers.length / size));
+      const sizes = Array.from({ length: count }, (_, index) => Math.floor(clubPlayers.length / count) + (index < clubPlayers.length % count ? 1 : 0));
+      return distributeSnake(clubPlayers, sizes).map((group) => group.players as ProgramPlayer[]);
+    });
+  }
+  const count = Math.max(1, Math.floor(players.length / size));
+  const sizes = Array.from({ length: count }, (_, index) => Math.floor(players.length / count) + (index < players.length % count ? 1 : 0));
+  return distributeClubAware(players, sizes);
+}
+
 function makeMatch(
   id: string,
   order: number,
@@ -171,8 +223,8 @@ function buildRoundRobinMatches(
   players: ProgramPlayer[],
   groupName?: string,
 ): LeagueMatch[] {
-  return generateRoundRobin(players.length).map(([leftIndex, rightIndex], index) =>
-    makeMatch(
+  return generateRoundRobin(players.length).map(([leftIndex, rightIndex], index) => {
+    const match = makeMatch(
       `program-${leagueId}-r${roundIndex + 1}-${groupName ?? "all"}-${index + 1}`,
       index + 1,
       players[leftIndex],
@@ -180,19 +232,19 @@ function buildRoundRobinMatches(
       roundIndex + 1,
       null,
       block.format === "GROUP" && groupName ? groupName : undefined,
-    )
-  );
+    );
+    return { ...match, is_no_game: Boolean(block.crossClubOnlyMatches && sameClubMatch(players[leftIndex], players[rightIndex])) };
+  });
 }
 
 function pairLabel(players: ProgramPlayer[]) {
   return players.map((player) => player.name).join(" · ");
 }
 
-function toDoublesUnits(players: ProgramPlayer[], assignments?: FormationAssignmentPlayer[][]): MatchUnit[] {
+function toDoublesUnits(players: ProgramPlayer[], assignments?: FormationAssignmentPlayer[][], clubMode: "same" | "mixed" = "mixed"): MatchUnit[] {
   const units = assignments?.length
     ? assignedPlayers(assignments, players).filter((unit) => unit.length === 2)
-    : distributeSnake(players, Array.from({ length: Math.floor(players.length / 2) }, () => 2))
-      .map((group) => group.players as ProgramPlayer[])
+    : unitRosters(players, 2, clubMode)
       .filter((unit) => unit.length === 2);
 
   return units.map((unit, index) => ({
@@ -205,17 +257,19 @@ function toDoublesUnits(players: ProgramPlayer[], assignments?: FormationAssignm
       name: player.name,
       division: player.division,
     })),
+    sourceGroupIds: [...new Set(unit.flatMap((player) => player.sourceGroupId ? [player.sourceGroupId] : []))],
   }));
 }
 
 function toTeamUnitsFromGroupSizes(
   players: ProgramPlayer[],
   groupSizes: number[],
+  clubMode: "same" | "mixed" = "mixed",
 ): MatchUnit[] {
-  return distributeSnake(players, groupSizes)
-    .filter((group) => group.players.length > 0)
-    .map((group, index) => {
-      const roster = group.players as ProgramPlayer[];
+  const targetSize = Math.max(1, Math.round(players.length / Math.max(1, groupSizes.length)));
+  return unitRosters(players, targetSize, clubMode)
+    .filter((roster) => roster.length > 0)
+    .map((roster, index) => {
       const leader = roster[0];
       return {
         id: roster.map((player) => player.id).join("+"),
@@ -227,6 +281,7 @@ function toTeamUnitsFromGroupSizes(
           name: player.name,
           division: player.division,
         })),
+        sourceGroupIds: [...new Set(roster.flatMap((player) => player.sourceGroupId ? [player.sourceGroupId] : []))],
       };
     });
 }
@@ -255,6 +310,7 @@ function teamUnitsFromAssignments(
       level: index + 1,
       roster: roster.map((player) => player.name),
       rosterDetails: roster.map((player) => ({ name: player.name, division: player.division })),
+      sourceGroupIds: [...new Set(roster.flatMap((player) => player.sourceGroupId ? [player.sourceGroupId] : []))],
     }));
 }
 
@@ -280,8 +336,8 @@ function buildUnitRoundRobinMatches(
   units: MatchUnit[],
   groupName?: string,
 ): LeagueMatch[] {
-  return generateRoundRobin(units.length).map(([leftIndex, rightIndex], index) =>
-    makeMatch(
+  return generateRoundRobin(units.length).map(([leftIndex, rightIndex], index) => {
+    const match = makeMatch(
       `program-${leagueId}-r${roundIndex + 1}-${groupName ?? "units"}-${index + 1}`,
       index + 1,
       units[leftIndex],
@@ -289,8 +345,9 @@ function buildUnitRoundRobinMatches(
       roundIndex + 1,
       null,
       block.format === "GROUP" && groupName ? groupName : undefined,
-    )
-  );
+    );
+    return { ...match, is_no_game: Boolean(block.crossClubOnlyMatches && sameClubMatch(units[leftIndex], units[rightIndex])) };
+  });
 }
 
 function buildTournamentSlots(
@@ -319,6 +376,16 @@ function buildTournamentSlots(
     const slotIndex = seedPositions.indexOf(seedNumber);
     if (slotIndex >= 0) slots[slotIndex] = player;
   });
+
+  if (block.crossClubGrouping) {
+    for (let index = 0; index < slots.length; index += 2) {
+      const left = slots[index];
+      const right = slots[index + 1];
+      if (!left || !right || !sameClubMatch(left, right)) continue;
+      const swapIndex = slots.findIndex((candidate, candidateIndex) => candidateIndex > index + 1 && candidate && !sameClubMatch(left, candidate));
+      if (swapIndex >= 0) [slots[index + 1], slots[swapIndex]] = [slots[swapIndex], slots[index + 1]];
+    }
+  }
 
   return slots;
 }
@@ -667,9 +734,9 @@ export function generateProgramRoundMatches(
   const matchUnits: MatchUnit[] = block.type === "TEAM"
     ? block.teamAssignments?.length
       ? teamUnitsFromAssignments(block.teamAssignments, players)
-      : toTeamUnitsFromGroupSizes(teamFormationPlayers, groupSizes)
+      : toTeamUnitsFromGroupSizes(teamFormationPlayers, groupSizes, block.unitClubMode ?? "mixed")
     : block.type === "DOUBLES"
-      ? toDoublesUnits(players, block.doublesAssignments)
+      ? toDoublesUnits(players, block.doublesAssignments, block.unitClubMode ?? "mixed")
       : players;
 
   if (matchUnits.length < 2) {
@@ -718,7 +785,9 @@ export function generateProgramRoundMatches(
       const shuffledTeams = shuffleWithinLevel(matchUnits, block.groupShuffleSeed ?? defaultFormationSeed + 503);
       const teamGroups = block.groupAssignments?.length
         ? assignedTeamGroups(block.groupAssignments, matchUnits).map((players, index) => ({ name: `${index + 1}조`, players }))
-        : distributeSnake(shuffledTeams as ProgramPlayer[], teamGroupSizes);
+        : block.crossClubGrouping
+          ? distributeClubAware(shuffledTeams, teamGroupSizes).map((groupPlayers, index) => ({ name: `${index + 1}조`, players: groupPlayers }))
+          : distributeSnake(shuffledTeams as ProgramPlayer[], teamGroupSizes);
       return teamGroups.flatMap((group, groupIndex) =>
         buildUnitRoundRobinMatches(
           leagueId,
@@ -743,7 +812,9 @@ export function generateProgramRoundMatches(
       ? block.type === "DOUBLES"
         ? assignedTeamGroups(block.groupAssignments, matchUnits).map((groupPlayers, index) => ({ name: `${index + 1}조`, players: groupPlayers }))
         : assignedPlayers(block.groupAssignments, players).map((groupPlayers, index) => ({ name: `${index + 1}조`, players: groupPlayers }))
-      : distributeSnake(shuffledUnits as ProgramPlayer[], groupSizes);
+      : block.crossClubGrouping
+        ? distributeClubAware(shuffledUnits, groupSizes).map((groupPlayers, index) => ({ name: `${index + 1}조`, players: groupPlayers }))
+        : distributeSnake(shuffledUnits as ProgramPlayer[], groupSizes);
     return groups.flatMap((group, groupIndex) =>
       buildUnitRoundRobinMatches(
         leagueId,

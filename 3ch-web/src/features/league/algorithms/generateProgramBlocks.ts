@@ -163,6 +163,9 @@ export function generateProgramBlocks(
       teamAssignments: round.teamAssignments,
       tournamentBracketCount: round.tournamentBracketCount ?? 1,
       tournamentSeeding: round.tournamentSeeding,
+      crossClubGrouping: round.crossClubGrouping,
+      crossClubOnlyMatches: round.crossClubOnlyMatches,
+      unitClubMode: round.unitClubMode,
 	  });
 }
 
@@ -207,6 +210,9 @@ export function generateProgramBlocks(
         doublesAssignments: round.doublesAssignments,
         tournamentBracketCount: round.tournamentBracketCount ?? 1,
         tournamentSeeding: round.tournamentSeeding,
+        crossClubGrouping: round.crossClubGrouping,
+        crossClubOnlyMatches: round.crossClubOnlyMatches,
+        unitClubMode: round.unitClubMode,
 	    });
   }
 
@@ -271,6 +277,9 @@ export function generateProgramBlocks(
         teamAssignments: round.teamAssignments,
         tournamentBracketCount: round.tournamentBracketCount ?? 1,
         tournamentSeeding: round.tournamentSeeding,
+        crossClubGrouping: round.crossClubGrouping,
+        crossClubOnlyMatches: round.crossClubOnlyMatches,
+        unitClubMode: round.unitClubMode,
 	    });
   }
 }

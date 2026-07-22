@@ -117,7 +117,7 @@ function ParticipantRow({
       {/* 배지 + 이름 */}
       <Stack direction="row" alignItems="center" spacing={0.5} flex={1} px={1.5} minWidth={0}>
         {division && (
-          <Box component="span" sx={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 22, height: 22, borderRadius: "50%", bgcolor: "#FAAA47", color: name?.startsWith("팀 ") || name?.includes(" · ") ? "#6A1B9A" : "#000", fontSize: 9, fontWeight: 900, flexShrink: 0, px: 0.3 }}>
+          <Box component="span" sx={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 22, height: 22, borderRadius: "50%", bgcolor: "#FAAA47", color: name?.startsWith("팀 ") || name?.includes(" · ") ? "#FF0000" : "#000", fontSize: 9, fontWeight: 900, flexShrink: 0, px: 0.3 }}>
             {division}
           </Box>
         )}
@@ -534,7 +534,8 @@ export default function LeagueMatchOrder() {
   const programMatches = useMemo(() => {
     const isMultipleTournament = (currentProgramBlock?.tournamentBracketCount ?? 1) > 1;
     const isUnitRound = currentProgramBlock?.type === "TEAM" || currentProgramBlock?.type === "DOUBLES";
-    if (!isProgramFinalFromPrelim && !isMultipleTournament && !isUnitRound) {
+    const hasClubPolicy = Boolean(currentProgramBlock?.crossClubGrouping || currentProgramBlock?.crossClubOnlyMatches);
+    if (!isProgramFinalFromPrelim && !isMultipleTournament && !isUnitRound && !hasClubPolicy) {
       return serverProgramMatches.length > 0 ? serverProgramMatches : generatedProgramMatches;
     }
 
@@ -696,7 +697,7 @@ export default function LeagueMatchOrder() {
     return matches.filter((match) => match.bracket === "upper" && match.round_number === currentTab.roundNumber);
   }, [activeTournamentTab, isTournamentProgramRound, matches, tournamentTabs]);
   const displayedMatches = useMemo(() => {
-    let filtered = visibleMatches;
+    let filtered = visibleMatches.filter((match) => !match.is_no_game);
     if (mineOnly && myName) {
       filtered = filtered.filter(
         (match) => participantNameIncludes(match.participant_a_name, myName)

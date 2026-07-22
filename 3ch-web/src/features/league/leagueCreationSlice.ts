@@ -78,6 +78,7 @@ export interface Participant {
   division: string;
   name: string;
   member_id?: number | null;
+  source_group_id?: string | null;
   paid: boolean;
   arrived: boolean;
   after: boolean;

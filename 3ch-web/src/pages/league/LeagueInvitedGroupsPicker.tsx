@@ -3,30 +3,29 @@ import { Box, Button, Chip, CircularProgress, InputAdornment, Stack, TextField, 
 import SearchIcon from "@mui/icons-material/Search";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { useSearchGroupsQuery } from "../../features/group/groupApi";
-import { setRenewalInvitedGroupIds } from "../../features/league/leagueRenewalCreationSlice";
+import { setRenewalInvitedGroupIds, setRenewalInvitedGroupOptions } from "../../features/league/leagueRenewalCreationSlice";
 
 export default function LeagueInvitedGroupsPicker() {
   const dispatch = useAppDispatch();
   const hostGroupId = useAppSelector((state) => state.leagueRenewalCreation.groupId);
   const selectedIds = useAppSelector((state) => state.leagueRenewalCreation.invitedGroupIds);
+  const selectedOptions = useAppSelector((state) => state.leagueRenewalCreation.invitedGroupOptions);
   const [query, setQuery] = useState("");
   const { data, isFetching } = useSearchGroupsQuery({ q: query, limit: 20 }, { skip: query.trim().length < 2 });
   const groups = useMemo(
     () => (data?.groups ?? []).filter((group) => group.id !== hostGroupId),
     [data?.groups, hostGroupId],
   );
-  const selectedGroups = groups.filter((group) => selectedIds.includes(group.id));
+  const selectedGroups = selectedOptions;
 
-  const toggle = (groupId: string) => {
-    dispatch(setRenewalInvitedGroupIds(
-      selectedIds.includes(groupId)
-        ? selectedIds.filter((id) => id !== groupId)
-        : [...selectedIds, groupId],
-    ));
+  const toggle = (group: { id: string; name: string }) => {
+    const isSelected = selectedIds.includes(group.id);
+    dispatch(setRenewalInvitedGroupIds(isSelected ? selectedIds.filter((id) => id !== group.id) : [...selectedIds, group.id]));
+    dispatch(setRenewalInvitedGroupOptions(isSelected ? selectedOptions.filter((item) => item.id !== group.id) : [...selectedOptions, group]));
   };
 
   return (
-    <Box sx={{ mt: "100px", border: "1px solid #D9DDE6", borderRadius: 1, px: 2, py: 2 }}>
+    <Box sx={{ mt: 6, border: "1px solid #D9DDE6", borderRadius: 1, px: 2, py: 2 }}>
       <Typography sx={{ fontSize: 17, fontWeight: 900, mb: 0.6, lineHeight: 1.45 }}>
         🤝 다른 클럽과 교류할 수 있는 리그를 생성해 보는 건 어떠신가요?
       </Typography>
@@ -43,7 +42,7 @@ export default function LeagueInvitedGroupsPicker() {
       />
       {selectedGroups.length > 0 && (
         <Stack direction="row" spacing={0.8} useFlexGap flexWrap="wrap" sx={{ mt: 1 }}>
-          {selectedGroups.map((group) => <Chip key={group.id} label={group.name} onDelete={() => toggle(group.id)} size="small" />)}
+          {selectedGroups.map((group) => <Chip key={group.id} label={group.name} onDelete={() => toggle(group)} size="small" />)}
         </Stack>
       )}
       {query.trim().length >= 2 && (
@@ -61,7 +60,7 @@ export default function LeagueInvitedGroupsPicker() {
                 variant="contained"
                 disableElevation
                 disabled={selectedIds.includes(group.id)}
-                onClick={() => toggle(group.id)}
+                onClick={() => toggle(group)}
                 sx={{ minWidth: 56, borderRadius: 1, fontWeight: 700 }}
               >
                 {selectedIds.includes(group.id) ? "추가됨" : "추가"}

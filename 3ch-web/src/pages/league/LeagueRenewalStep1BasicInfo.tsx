@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { Box, Button, MenuItem, Select, Stack, TextField, Typography } from "@mui/material";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { setRenewalBasicInfo, setRenewalStep } from "../../features/league/leagueRenewalCreationSlice";
+import LeagueInvitedGroupsPicker from "./LeagueInvitedGroupsPicker";
 
 const rowSx = { display: "grid", gridTemplateColumns: "72px 1fr", alignItems: "center", gap: 2, py: 1.2, borderBottom: "1px solid #D9DDE6" };
 const fieldSx = { "& .MuiOutlinedInput-root": { borderRadius: 0.6, bgcolor: "#fff", height: 32 }, "& .MuiOutlinedInput-input": { py: 0.5, fontSize: "0.95rem" } };
@@ -53,9 +54,10 @@ export default function LeagueRenewalStep1BasicInfo() {
         </Stack>
       </Box>
       <Box sx={rowSx}><Typography sx={{ fontWeight: 900 }}>장소</Typography><TextField value={location} onChange={(event) => setLocation(event.target.value)} sx={fieldSx} /></Box>
-      <Box sx={rowSx}><Typography sx={{ fontWeight: 900 }}>참가자 수</Typography><TextField select value={participantCount} onChange={(event) => setParticipantCount(event.target.value === "" ? "" : Number(event.target.value))} SelectProps={{ displayEmpty: true }} sx={{ ...fieldSx, "& .MuiSelect-select": { color: participantCount === "" ? "#B0B5BD" : "inherit" } }}><MenuItem value="" sx={{ color: "#B0B5BD" }}>선택</MenuItem>{participantCounts.map((count) => <MenuItem key={count} value={count}>{count}명</MenuItem>)}</TextField></Box>
       <Box sx={rowSx}><Typography sx={{ fontWeight: 900 }}>탁구대 수</Typography><TextField select value={courtCount} onChange={(event) => setCourtCount(event.target.value === "" ? "" : Number(event.target.value))} SelectProps={{ displayEmpty: true }} sx={{ ...fieldSx, "& .MuiSelect-select": { color: courtCount === "" ? "#B0B5BD" : "inherit" } }}><MenuItem value="" sx={{ color: "#B0B5BD" }}>선택</MenuItem>{[1, 2, 3, 4, 5, 6, 8, 10, 12].map((count) => <MenuItem key={count} value={count}>{count}대</MenuItem>)}</TextField></Box>
+      <Box sx={rowSx}><Typography sx={{ fontWeight: 900 }}>참가자 수</Typography><TextField select value={participantCount} onChange={(event) => setParticipantCount(event.target.value === "" ? "" : Number(event.target.value))} SelectProps={{ displayEmpty: true }} sx={{ ...fieldSx, "& .MuiSelect-select": { color: participantCount === "" ? "#B0B5BD" : "inherit" } }}><MenuItem value="" sx={{ color: "#B0B5BD" }}>선택</MenuItem>{participantCounts.map((count) => <MenuItem key={count} value={count}>{count}명</MenuItem>)}</TextField></Box>
     </Box>
+    <LeagueInvitedGroupsPicker />
     <Stack direction="row" spacing={2} sx={{ mt: 4 }}><Button fullWidth variant="contained" disableElevation onClick={() => dispatch(setRenewalStep(0))} sx={{ height: 44, borderRadius: 1, fontWeight: 900, bgcolor: "#777", "&:hover": { bgcolor: "#777" } }}>이전</Button><Button fullWidth variant="contained" disableElevation disabled={!canNext} onClick={saveAndNext} sx={{ height: 44, borderRadius: 1, fontWeight: 900, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" }, "&.Mui-disabled": { bgcolor: "#CFE1FB", color: "#fff" } }}>다음</Button></Stack>
   </Box>;
 }

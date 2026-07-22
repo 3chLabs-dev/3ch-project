@@ -49,6 +49,7 @@ export interface RenewalLeagueCreationState {
   rounds: RenewalRoundConfig[];
   participants: Participant[];
   invitedGroupIds: string[];
+  invitedGroupOptions: Array<{ id: string; name: string }>;
   createStatus: "idle" | "loading" | "succeeded" | "failed";
   createError: string | null;
   createdLeagueId: string | null;
@@ -69,6 +70,7 @@ const initialState: RenewalLeagueCreationState = {
   rounds: [{ id: 1, expanded: true, program: null, format: null, option: null, matchRule: null, teamPlayerCount: null, teamMatchType: null, tournamentSeeding: "seed", tournamentBracketCount: 1 }],
   participants: [],
   invitedGroupIds: [],
+  invitedGroupOptions: [],
   createStatus: "idle",
   createError: null,
   createdLeagueId: null,
@@ -242,6 +244,9 @@ const leagueRenewalCreationSlice = createSlice({
     setRenewalInvitedGroupIds: (state, action: PayloadAction<string[]>) => {
       state.invitedGroupIds = action.payload;
     },
+    setRenewalInvitedGroupOptions: (state, action: PayloadAction<Array<{ id: string; name: string }>>) => {
+      state.invitedGroupOptions = action.payload;
+    },
     resetRenewalCreateStatus: (state) => {
       state.createStatus = "idle";
       state.createError = null;
@@ -277,6 +282,7 @@ export const {
   setRenewalRounds,
   setRenewalParticipants,
   setRenewalInvitedGroupIds,
+  setRenewalInvitedGroupOptions,
   resetRenewalCreateStatus,
   resetRenewalLeagueCreation,
 } = leagueRenewalCreationSlice.actions;

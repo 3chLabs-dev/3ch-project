@@ -8,6 +8,7 @@ import type { ProgramOption } from "../../features/league/types/tournament.types
 export default function LeagueRenewalStep3Program() {
   const dispatch = useAppDispatch();
   const basicInfo = useAppSelector((state) => state.leagueRenewalCreation.basicInfo);
+  const hasParticipatingClubs = useAppSelector((state) => state.leagueRenewalCreation.invitedGroupIds.length > 0);
 
   if (!basicInfo) return null;
 
@@ -38,6 +39,7 @@ export default function LeagueRenewalStep3Program() {
         hideModeTabs
         hideRecommendationTitle
         compactCompleteButton
+        hasParticipatingClubs={hasParticipatingClubs}
         initialPlayerCount={basicInfo.participantCount ?? 4}
         initialCourtCount={basicInfo.courtCount ?? 1}
         initialStartTime={basicInfo.startTime}

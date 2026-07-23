@@ -914,6 +914,15 @@ router.get('/group/:id', requireAuth, async (req, res) => {
   }
 });
 
+const rankingSeasonSchema = z.object({
+  start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  auto_renew: z.boolean().optional().default(false),
+}).refine((value) => value.end_date >= value.start_date, {
+  message: '종료일은 시작일보다 빠를 수 없습니다.',
+  path: ['end_date'],
+});
+
 // 수동 등록된 클럽 회원과 회원 전환 신청 목록
 router.get('/group/:id/pre-members', requireAuth, async (req, res) => {
   try {
@@ -1846,6 +1855,7 @@ router.get('/group/:id/ranking/points', requireAuth, async (req, res) => {
     const userId = Number(req.user.sub);
     const { id: groupId } = req.params;
     const year = req.query.year ? Number(req.query.year) : undefined;
+    const seasonId = req.query.season_id ? String(req.query.season_id) : undefined;
     const scope = req.query.scope === 'national' ? 'national' : 'club';
 
     const accessCheck = await pool.query(
@@ -1856,7 +1866,7 @@ router.get('/group/:id/ranking/points', requireAuth, async (req, res) => {
       return res.status(403).json({ message: '권한이 없습니다.' });
     }
 
-    const data = await getPointRanking(groupId, year, scope);
+    const data = await getPointRanking(groupId, year, scope, seasonId);
     if (!data) return res.status(404).json({ message: '클럽을 찾을 수 없습니다.' });
 
     return res.json({
@@ -1866,6 +1876,75 @@ router.get('/group/:id/ranking/points', requireAuth, async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching point ranking:', error);
+    return res.status(500).json({ message: '서버 오류' });
+  }
+});
+
+router.get('/group/:id/ranking/seasons', requireAuth, async (req, res) => {
+  try {
+    const userId = Number(req.user.sub);
+    const { id: groupId } = req.params;
+    const accessCheck = await pool.query(
+      `SELECT role FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      [groupId, userId],
+    );
+    if (accessCheck.rowCount === 0) return res.status(403).json({ message: '권한이 없습니다.' });
+    const result = await pool.query(
+      `SELECT id, name, start_date, end_date, auto_renew, created_at
+         FROM group_ranking_seasons
+        WHERE group_id = $1
+        ORDER BY start_date DESC, created_at DESC`,
+      [groupId],
+    );
+    return res.json({ seasons: result.rows, myRole: accessCheck.rows[0].role });
+  } catch (error) {
+    console.error('Error fetching ranking seasons:', error);
+    return res.status(500).json({ message: '서버 오류' });
+  }
+});
+
+router.post('/group/:id/ranking/seasons', requireAuth, requireGroupAdmin, async (req, res) => {
+  try {
+    const { id: groupId } = req.params;
+    const userId = Number(req.user.sub);
+    const payload = rankingSeasonSchema.parse(req.body);
+    const overlap = await pool.query(
+      `SELECT 1 FROM group_ranking_seasons
+        WHERE group_id = $1
+          AND start_date <= $3::date
+          AND end_date >= $2::date
+        LIMIT 1`,
+      [groupId, payload.start_date, payload.end_date],
+    );
+    if (overlap.rowCount > 0) {
+      return res.status(409).json({ message: '기존 시즌과 기간이 겹칩니다.' });
+    }
+    const name = `${payload.start_date.replaceAll('-', '.')} ~ ${payload.end_date.replaceAll('-', '.')}`;
+    const result = await pool.query(
+      `INSERT INTO group_ranking_seasons (group_id, name, start_date, end_date, auto_renew, created_by_id)
+       VALUES ($1, $2, $3::date, $4::date, $5, $6)
+       RETURNING id, name, start_date, end_date, auto_renew, created_at`,
+      [groupId, name, payload.start_date, payload.end_date, payload.auto_renew, userId],
+    );
+    return res.status(201).json({ message: '시즌 기간이 설정되었습니다.', season: result.rows[0] });
+  } catch (error) {
+    if (error instanceof z.ZodError) return res.status(400).json({ errors: error.errors });
+    console.error('Error creating ranking season:', error);
+    return res.status(500).json({ message: '서버 오류' });
+  }
+});
+
+router.delete('/group/:id/ranking/seasons/:seasonId', requireAuth, requireGroupAdmin, async (req, res) => {
+  try {
+    const { id: groupId, seasonId } = req.params;
+    const result = await pool.query(
+      `DELETE FROM group_ranking_seasons WHERE id = $1 AND group_id = $2 RETURNING id`,
+      [seasonId, groupId],
+    );
+    if (result.rowCount === 0) return res.status(404).json({ message: '시즌을 찾을 수 없습니다.' });
+    return res.json({ message: '시즌이 삭제되었습니다.' });
+  } catch (error) {
+    console.error('Error deleting ranking season:', error);
     return res.status(500).json({ message: '서버 오류' });
   }
 });

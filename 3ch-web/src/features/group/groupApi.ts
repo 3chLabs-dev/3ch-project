@@ -265,11 +265,24 @@ export interface PointRankingRow {
   total_points: number;
 }
 
+export interface GroupRankingSeason {
+  id: string;
+  name: string;
+  start_date: string;
+  end_date: string;
+  auto_renew?: boolean;
+  created_at?: string;
+}
+
 export interface GroupPointRankingResponse {
   group: { id: string; name: string; sport?: string | null };
   year: number;
   scope: "club" | "national";
   available_years: number[];
+  season_id?: string | null;
+  season?: GroupRankingSeason | null;
+  seasons: GroupRankingSeason[];
+  no_active_season?: boolean;
   myRole: string;
   currentUserId: number;
   league: {
@@ -520,15 +533,38 @@ export const groupApi = baseApi.injectEndpoints({
       providesTags: (_result, _error, { groupId }) => [{ type: "Group", id: `ranking-${groupId}` }],
     }),
 
-    getGroupPointRanking: builder.query<GroupPointRankingResponse, { groupId: string; year?: number; scope: "club" | "national" }>({
-      query: ({ groupId, year, scope }) => ({
+    getGroupPointRanking: builder.query<GroupPointRankingResponse, { groupId: string; year?: number; seasonId?: string; scope: "club" | "national" }>({
+      query: ({ groupId, year, seasonId, scope }) => ({
         url: `/group/${groupId}/ranking/points`,
         params: {
           scope,
           ...(year ? { year } : {}),
+          ...(seasonId ? { season_id: seasonId } : {}),
         },
       }),
-      providesTags: (_result, _error, { groupId, year, scope }) => [{ type: "Group", id: `point-ranking-${groupId}-${scope}-${year ?? "latest"}` }],
+      providesTags: (_result, _error, { groupId, year, seasonId, scope }) => [{ type: "Group", id: `point-ranking-${groupId}-${scope}-${seasonId ?? year ?? "latest"}` }],
+    }),
+
+    getGroupRankingSeasons: builder.query<{ seasons: GroupRankingSeason[]; myRole: string }, string>({
+      query: (groupId) => `/group/${groupId}/ranking/seasons`,
+      providesTags: (_result, _error, groupId) => [{ type: "Group", id: `ranking-seasons-${groupId}` }],
+    }),
+
+    createGroupRankingSeason: builder.mutation<{ message: string; season: GroupRankingSeason }, { groupId: string; startDate: string; endDate: string; autoRenew: boolean }>({
+      query: ({ groupId, startDate, endDate, autoRenew }) => ({
+        url: `/group/${groupId}/ranking/seasons`, method: "POST",
+        body: { start_date: startDate, end_date: endDate, auto_renew: autoRenew },
+      }),
+      invalidatesTags: (_result, _error, { groupId }) => [
+        { type: "Group", id: `ranking-seasons-${groupId}` }, "Group",
+      ],
+    }),
+
+    deleteGroupRankingSeason: builder.mutation<{ message: string }, { groupId: string; seasonId: string }>({
+      query: ({ groupId, seasonId }) => ({ url: `/group/${groupId}/ranking/seasons/${seasonId}`, method: "DELETE" }),
+      invalidatesTags: (_result, _error, { groupId }) => [
+        { type: "Group", id: `ranking-seasons-${groupId}` }, "Group",
+      ],
     }),
 
     getGroupRankingDetail: builder.query<GroupRankingDetailResponse, { groupId: string; memberId: number }>({
@@ -573,6 +609,9 @@ export const {
   useGetGroupMemberLeagueHistoryQuery,
   useGetGroupRankingQuery,
   useGetGroupPointRankingQuery,
+  useGetGroupRankingSeasonsQuery,
+  useCreateGroupRankingSeasonMutation,
+  useDeleteGroupRankingSeasonMutation,
   useGetGroupRankingDetailQuery,
   useRebuildGroupRankingMutation,
 } = groupApi;

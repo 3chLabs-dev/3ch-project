@@ -112,7 +112,53 @@ function getAvailableYears(rows) {
   return Array.from(years).sort((a, b) => b - a);
 }
 
-async function getPointRanking(groupId, year, scope) {
+function toDateOnly(value) {
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return String(value ?? "").slice(0, 10);
+}
+
+function addUtcDays(value, days) {
+  const date = new Date(`${toDateOnly(value)}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+async function ensureAutoRenewedSeasons(groupId) {
+  const today = new Date().toISOString().slice(0, 10);
+  for (let index = 0; index < 24; index += 1) {
+    const latestResult = await pool.query(
+      `SELECT id, start_date, end_date, auto_renew, created_by_id
+         FROM group_ranking_seasons
+        WHERE group_id = $1
+        ORDER BY end_date DESC, created_at DESC
+        LIMIT 1`,
+      [groupId],
+    );
+    const latest = latestResult.rows[0];
+    if (!latest?.auto_renew || toDateOnly(latest.end_date) >= today) break;
+
+    const start = toDateOnly(latest.start_date);
+    const end = toDateOnly(latest.end_date);
+    const durationDays = Math.max(0, Math.round((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86400000));
+    const nextStart = addUtcDays(end, 1);
+    const nextEnd = addUtcDays(nextStart, durationDays);
+    const overlap = await pool.query(
+      `SELECT 1 FROM group_ranking_seasons
+        WHERE group_id = $1 AND start_date <= $3::date AND end_date >= $2::date
+        LIMIT 1`,
+      [groupId, nextStart, nextEnd],
+    );
+    if (overlap.rowCount > 0) break;
+    const name = `${nextStart.replaceAll('-', '.')} ~ ${nextEnd.replaceAll('-', '.')}`;
+    await pool.query(
+      `INSERT INTO group_ranking_seasons (group_id, name, start_date, end_date, auto_renew, created_by_id)
+       VALUES ($1, $2, $3::date, $4::date, true, $5)`,
+      [groupId, name, nextStart, nextEnd, latest.created_by_id],
+    );
+  }
+}
+
+async function getPointRanking(groupId, year, scope, seasonId) {
   const groupResult = await pool.query(
     `SELECT id, name, sport FROM groups WHERE id = $1`,
     [groupId],
@@ -120,6 +166,7 @@ async function getPointRanking(groupId, year, scope) {
   if (groupResult.rowCount === 0) return null;
 
   const group = groupResult.rows[0];
+  await ensureAutoRenewedSeasons(groupId);
   const normalizedScope = scope === "national" ? "national" : "club";
   const scopeValue = normalizedScope === "club"
     ? String(groupId)
@@ -133,14 +180,37 @@ async function getPointRanking(groupId, year, scope) {
     [String(groupId), String(group.sport ?? "")],
   );
   const availableYears = getAvailableYears(yearSourceResult.rows);
+  const seasonResult = normalizedScope === "club"
+    ? await pool.query(
+      `SELECT id, name, start_date, end_date, auto_renew
+         FROM group_ranking_seasons
+        WHERE group_id = $1
+        ORDER BY start_date DESC, created_at DESC`,
+      [groupId],
+    )
+    : { rows: [] };
+  const seasons = seasonResult.rows.map((season) => ({
+    id: season.id,
+    name: season.name,
+    start_date: toDateOnly(season.start_date),
+    end_date: toDateOnly(season.end_date),
+    auto_renew: Boolean(season.auto_renew),
+  }));
+  const today = new Date().toISOString().slice(0, 10);
+  const selectedSeason = seasons.find((season) => season.id === seasonId)
+    ?? (!year ? seasons.find((season) => season.start_date <= today && season.end_date >= today) : null)
+    ?? null;
+  const noActiveSeason = normalizedScope === "club" && seasons.length > 0 && !selectedSeason && !year;
   const targetYear = Number.isFinite(Number(year))
     ? Number(year)
-    : (availableYears[0] ?? new Date().getFullYear());
+    : (selectedSeason ? Number(selectedSeason.start_date.slice(0, 4)) : (availableYears[0] ?? new Date().getFullYear()));
+  const rangeStart = noActiveSeason ? "0001-01-01" : (selectedSeason?.start_date ?? `${targetYear}-01-01`);
+  const rangeEnd = noActiveSeason ? "0001-01-01" : (selectedSeason?.end_date ?? `${targetYear}-12-31`);
 
   const leagueFilterSql = normalizedScope === "club"
     ? `l.group_id = $1::text`
     : `l.sport = $1::text`;
-  const scopedYearPlaceholder = `$2`;
+  const scopedDateSql = `l.start_date::date BETWEEN $2::date AND $3::date`;
 
   const memberResult = normalizedScope === "club"
     ? await pool.query(
@@ -175,10 +245,10 @@ async function getPointRanking(groupId, year, scope) {
            AND u2.name = lp.name
         ) matched ON lp.member_id IS NULL
        WHERE ${leagueFilterSql}
-        AND EXTRACT(YEAR FROM l.start_date) = ${scopedYearPlaceholder}
+        AND ${scopedDateSql}
         AND COALESCE(lp.member_id, CASE WHEN matched.matched_count = 1 THEN matched.user_id ELSE NULL END) IS NOT NULL
        ORDER BY name ASC`,
-      [scopeValue, targetYear],
+      [scopeValue, rangeStart, rangeEnd],
     );
 
   const baseMembers = new Map();
@@ -216,10 +286,10 @@ async function getPointRanking(groupId, year, scope) {
          AND u2.name = lp.name
      ) matched ON lp.member_id IS NULL
      WHERE ${leagueFilterSql}
-       AND EXTRACT(YEAR FROM l.start_date) = ${scopedYearPlaceholder}
+       AND ${scopedDateSql}
        AND COALESCE(lp.member_id, CASE WHEN matched.matched_count = 1 THEN matched.user_id ELSE NULL END) IS NOT NULL
      ORDER BY l.start_date ASC, lp.created_at ASC`,
-    [scopeValue, targetYear],
+    [scopeValue, rangeStart, rangeEnd],
   );
 
   const matchResult = await pool.query(
@@ -272,13 +342,13 @@ async function getPointRanking(groupId, year, scope) {
          AND u2.name = pb.name
      ) matched_b ON pb.member_id IS NULL
      WHERE ${leagueFilterSql}
-       AND EXTRACT(YEAR FROM l.start_date) = ${scopedYearPlaceholder}
+       AND ${scopedDateSql}
        AND COALESCE(pa.member_id, CASE WHEN matched_a.matched_count = 1 THEN matched_a.user_id ELSE NULL END) IS NOT NULL
        AND COALESCE(pb.member_id, CASE WHEN matched_b.matched_count = 1 THEN matched_b.user_id ELSE NULL END) IS NOT NULL
        AND COALESCE(pa.member_id, CASE WHEN matched_a.matched_count = 1 THEN matched_a.user_id ELSE NULL END)
            <> COALESCE(pb.member_id, CASE WHEN matched_b.matched_count = 1 THEN matched_b.user_id ELSE NULL END)
      ORDER BY l.start_date ASC, m.created_at ASC, m.match_order ASC`,
-    [scopeValue, targetYear],
+    [scopeValue, rangeStart, rangeEnd],
   );
 
   const leagueRows = new Map();
@@ -530,6 +600,10 @@ async function getPointRanking(groupId, year, scope) {
       sport: group.sport,
     },
     year: targetYear,
+    season_id: selectedSeason?.id ?? null,
+    season: selectedSeason,
+    seasons,
+    no_active_season: noActiveSeason,
     scope: normalizedScope,
     available_years: availableYears,
     league: {

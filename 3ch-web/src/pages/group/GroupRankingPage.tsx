@@ -15,22 +15,36 @@ import {
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import type { PointRankingRow } from "../../features/group/groupApi";
 import { useGetGroupPointRankingQuery } from "../../features/group/groupApi";
+import GroupRankingSeasonDialog from "./GroupRankingSeasonDialog";
 
 export default function GroupRankingPage() {
   const { id: groupId = "" } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [selectedYear, setSelectedYear] = useState<number | undefined>(undefined);
+  const [selectedSeasonId, setSelectedSeasonId] = useState<string | undefined>(undefined);
+  const [seasonDialogOpen, setSeasonDialogOpen] = useState(false);
 
   const { data, isLoading } = useGetGroupPointRankingQuery(
-    { groupId, year: selectedYear, scope: "club" },
+    { groupId, year: selectedYear, seasonId: selectedSeasonId, scope: "club" },
     { skip: !groupId },
   );
 
   const activeYear = selectedYear ?? data?.year ?? new Date().getFullYear();
   const yearOptions = data?.available_years?.length ? data.available_years : [activeYear];
+  const activeSelectValue = selectedSeasonId
+    ? `season:${selectedSeasonId}`
+    : selectedYear
+      ? `year:${selectedYear}`
+      : data?.no_active_season
+        ? "inactive"
+      : data?.season_id
+        ? `season:${data.season_id}`
+        : `year:${activeYear}`;
+  const canManage = data?.myRole === "owner";
 
   const handleOpenDetail = () => {
-    navigate(`/club/${groupId}/ranking/detail?year=${activeYear}`);
+    const seasonId = selectedSeasonId ?? data?.season_id;
+    navigate(`/club/${groupId}/ranking/detail?${seasonId ? `season=${seasonId}` : `year=${activeYear}`}`);
   };
 
   if (isLoading) {
@@ -60,16 +74,30 @@ export default function GroupRankingPage() {
         </Typography>
         <Select
           size="small"
-          value={String(activeYear)}
-          onChange={(event) => setSelectedYear(Number(event.target.value))}
-          sx={{ minWidth: 96, fontSize: 13, fontWeight: 700 }}
+          value={activeSelectValue}
+          onChange={(event) => {
+            const [kind, value] = String(event.target.value).split(":");
+            if (kind === "season") {
+              setSelectedSeasonId(value);
+              setSelectedYear(undefined);
+            } else {
+              setSelectedYear(Number(value));
+              setSelectedSeasonId(undefined);
+            }
+          }}
+          sx={{ minWidth: 118, fontSize: 13, fontWeight: 700 }}
         >
+          {data.no_active_season && <MenuItem value="inactive" disabled sx={{ fontSize: 13 }}>현재 시즌 없음</MenuItem>}
+          {data.seasons.map((season) => (
+            <MenuItem key={season.id} value={`season:${season.id}`} sx={{ fontSize: 13 }}>{season.name}</MenuItem>
+          ))}
           {yearOptions.map((year) => (
-            <MenuItem key={year} value={String(year)} sx={{ fontSize: 13 }}>
+            <MenuItem key={year} value={`year:${year}`} sx={{ fontSize: 13 }}>
               {year}년
             </MenuItem>
           ))}
         </Select>
+        {canManage && <Button size="small" variant="outlined" onClick={() => setSeasonDialogOpen(true)} sx={{ minWidth: 72, color: "#111827", borderColor: "#D1D5DB", fontWeight: 800 }}>기간 설정</Button>}
       </Stack>
 
       <SectionHeader title="리그" onOpenDetail={handleOpenDetail} />
@@ -77,6 +105,7 @@ export default function GroupRankingPage() {
 
       <SectionHeader title="대회" onOpenDetail={handleOpenDetail} />
       <PointRankingList rows={data.tournament.rankings} currentUserId={data.currentUserId} />
+      <GroupRankingSeasonDialog open={seasonDialogOpen} groupId={groupId} onClose={() => setSeasonDialogOpen(false)} onCreated={(seasonId) => { setSelectedSeasonId(seasonId); setSelectedYear(undefined); }} />
     </Stack>
   );
 }

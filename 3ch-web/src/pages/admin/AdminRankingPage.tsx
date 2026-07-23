@@ -17,7 +17,7 @@ import {
 } from "@mui/material";
 import type { SelectChangeEvent } from "@mui/material";
 import { useAppSelector } from "../../app/hooks";
-import type { PointRankingRow } from "../../features/group/groupApi";
+import type { GroupRankingSeason, PointRankingRow } from "../../features/group/groupApi";
 
 type ScopeValue = "club" | "national";
 type RankingMode = "point" | "rating";
@@ -34,6 +34,9 @@ type AdminPointRankingResponse = {
   year: number;
   scope: ScopeValue;
   available_years: number[];
+  season_id?: string | null;
+  seasons: GroupRankingSeason[];
+  no_active_season?: boolean;
   league: { rankings: PointRankingRow[] };
   tournament: { rankings: PointRankingRow[] };
 };
@@ -96,6 +99,7 @@ export default function AdminRankingPage() {
   const [scope, setScope] = useState<ScopeValue>("club");
   const [mode, setMode] = useState<RankingMode>("point");
   const [selectedYear, setSelectedYear] = useState<number | undefined>(undefined);
+  const [selectedSeasonId, setSelectedSeasonId] = useState<string | undefined>(undefined);
   const [loadingClubs, setLoadingClubs] = useState(false);
   const [loadingRanking, setLoadingRanking] = useState(false);
   const [pointRanking, setPointRanking] = useState<AdminPointRankingResponse | null>(null);
@@ -168,6 +172,7 @@ export default function AdminRankingPage() {
       if (selectedYear) {
         params.set("year", String(selectedYear));
       }
+      if (selectedSeasonId && scope === "club") params.set("season_id", selectedSeasonId);
 
       const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/admin/rankings/points?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -177,7 +182,7 @@ export default function AdminRankingPage() {
     } finally {
       setLoadingRanking(false);
     }
-  }, [scope, selectedGroupId, selectedYear, token]);
+  }, [scope, selectedGroupId, selectedSeasonId, selectedYear, token]);
 
   const fetchRatingRanking = useCallback(async () => {
     if (!token) return;
@@ -212,6 +217,9 @@ export default function AdminRankingPage() {
   }, [fetchPointRanking, fetchRatingRanking, mode]);
 
   const activeYear = selectedYear ?? pointRanking?.year ?? new Date().getFullYear();
+  const activePeriodValue = selectedSeasonId
+    ? `season:${selectedSeasonId}`
+    : selectedYear ? `year:${selectedYear}` : pointRanking?.no_active_season ? "inactive" : pointRanking?.season_id ? `season:${pointRanking.season_id}` : `year:${activeYear}`;
   const yearOptions = useMemo(() => {
     if (pointRanking?.available_years?.length) {
       return pointRanking.available_years;
@@ -287,10 +295,12 @@ export default function AdminRankingPage() {
                         setSelectedSport(nextClub.sport);
                       }
                       setSelectedYear(undefined);
+                      setSelectedSeasonId(undefined);
                     }}
                     sx={{ fontSize: 12, height: 36 }}
                     disabled={loadingClubs || clubs.length === 0}
                   >
+                    {pointRanking?.no_active_season && <MenuItem value="inactive" disabled sx={{ fontSize: 12 }}>현재 시즌 없음</MenuItem>}
                     {clubs.map((club) => (
                       <MenuItem key={club.id} value={club.id} sx={{ fontSize: 12 }}>
                         {club.name} {club.sport ? `(${club.sport})` : ""}
@@ -307,6 +317,7 @@ export default function AdminRankingPage() {
                     onChange={(event: SelectChangeEvent) => {
                       setSelectedSport(event.target.value);
                       setSelectedYear(undefined);
+                      setSelectedSeasonId(undefined);
                     }}
                     sx={{ fontSize: 12, height: 36 }}
                     disabled={sportOptions.length === 0}
@@ -325,13 +336,20 @@ export default function AdminRankingPage() {
                   <Select
                     size="small"
                     fullWidth
-                    value={String(activeYear)}
-                    onChange={(event: SelectChangeEvent) => setSelectedYear(Number(event.target.value))}
+                    value={activePeriodValue}
+                    onChange={(event: SelectChangeEvent) => {
+                      const [kind, value] = String(event.target.value).split(":");
+                      if (kind === "season") { setSelectedSeasonId(value); setSelectedYear(undefined); }
+                      else { setSelectedYear(Number(value)); setSelectedSeasonId(undefined); }
+                    }}
                     sx={{ fontSize: 12, height: 36 }}
                     disabled={!pointRanking}
                   >
+                    {scope === "club" && pointRanking?.seasons.map((season) => (
+                      <MenuItem key={season.id} value={`season:${season.id}`} sx={{ fontSize: 12 }}>{season.name}</MenuItem>
+                    ))}
                     {yearOptions.map((year) => (
-                      <MenuItem key={year} value={String(year)} sx={{ fontSize: 12 }}>
+                      <MenuItem key={year} value={`year:${year}`} sx={{ fontSize: 12 }}>
                         {year}년
                       </MenuItem>
                     ))}
@@ -348,6 +366,7 @@ export default function AdminRankingPage() {
                     const nextScope = event.target.value as ScopeValue;
                     setScope(nextScope);
                     setSelectedYear(undefined);
+                    setSelectedSeasonId(undefined);
                     if (nextScope === "national" && !selectedSport && selectedClub?.sport) {
                       setSelectedSport(selectedClub.sport);
                     }

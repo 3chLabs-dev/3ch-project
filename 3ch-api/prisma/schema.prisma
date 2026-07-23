@@ -43,6 +43,7 @@ model User {
   linked_group_pre_members GroupPreMember[] @relation("GroupPreMemberLinkedUser")
   requested_group_member_claims GroupMemberClaim[] @relation("GroupMemberClaimRequester")
   reviewed_group_member_claims GroupMemberClaim[] @relation("GroupMemberClaimReviewer")
+  created_ranking_seasons GroupRankingSeason[] @relation("GroupRankingSeasonCreator")
 
   @@map("users")
 }
@@ -106,6 +107,7 @@ model Group {
   invited_leagues      LeagueInvitedGroup[]
   league_participants  LeagueParticipant[] @relation("ParticipantSourceGroup")
   pre_members          GroupPreMember[]
+  ranking_seasons      GroupRankingSeason[]
 
   @@map("groups")
 }
@@ -318,6 +320,24 @@ model LeagueParticipant {
   @@index([league_id])
   @@index([source_group_id])
   @@map("league_participants")
+}
+
+model GroupRankingSeason {
+  id            String   @id @default(uuid())
+  group_id      String
+  name          String
+  start_date    DateTime @db.Date
+  end_date      DateTime @db.Date
+  auto_renew    Boolean  @default(false)
+  created_by_id Int
+  created_at    DateTime @default(now())
+  updated_at    DateTime @default(now()) @updatedAt
+
+  group   Group @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  creator User  @relation("GroupRankingSeasonCreator", fields: [created_by_id], references: [id])
+
+  @@index([group_id, start_date, end_date])
+  @@map("group_ranking_seasons")
 }
 
 model GroupPreMember {

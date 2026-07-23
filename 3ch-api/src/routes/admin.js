@@ -640,13 +640,14 @@ router.get('/rankings/points', requireAdmin, async (req, res) => {
   const groupId = String(req.query.group_id ?? '').trim();
   const scope = req.query.scope === 'national' ? 'national' : 'club';
   const year = req.query.year ? Number(req.query.year) : undefined;
+  const seasonId = req.query.season_id ? String(req.query.season_id) : undefined;
 
   if (!groupId) {
     return res.status(400).json({ ok: false, error: 'GROUP_ID_REQUIRED' });
   }
 
   try {
-    const data = await getPointRanking(groupId, year, scope);
+    const data = await getPointRanking(groupId, year, scope, seasonId);
     if (!data) {
       return res.status(404).json({ ok: false, error: 'GROUP_NOT_FOUND' });
     }

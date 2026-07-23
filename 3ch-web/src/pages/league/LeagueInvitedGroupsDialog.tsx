@@ -4,9 +4,9 @@ import SearchIcon from "@mui/icons-material/Search";
 import { useSearchGroupsQuery } from "../../features/group/groupApi";
 import { useGetLeagueInvitedGroupsQuery, useInviteGroupsToLeagueMutation } from "../../features/league/leagueApi";
 
-type Props = { open: boolean; leagueId: string; hostGroupId?: string | null; canManage: boolean; onClose: () => void };
+type Props = { open: boolean; leagueId: string; hostGroupId?: string | null; hostGroupName?: string | null; canManage: boolean; onClose: () => void };
 
-export default function LeagueInvitedGroupsDialog({ open, leagueId, hostGroupId, canManage, onClose }: Props) {
+export default function LeagueInvitedGroupsDialog({ open, leagueId, hostGroupId, hostGroupName, canManage, onClose }: Props) {
   const [query, setQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const { data, isFetching } = useSearchGroupsQuery({ q: query, limit: 20, include_joined: true }, { skip: !open || !canManage || query.trim().length < 2 });
@@ -27,13 +27,19 @@ export default function LeagueInvitedGroupsDialog({ open, leagueId, hostGroupId,
       <DialogTitle sx={{ fontWeight: 900 }}>참여 클럽</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={1}>
+          {hostGroupId && (
+            <Box sx={{ display: "flex", alignItems: "center", border: "1px solid #E5E7EB", borderRadius: 1, px: 1.5, py: 1 }}>
+              <Typography sx={{ flex: 1, fontWeight: 800 }}>{hostGroupName || "주최 클럽"}</Typography>
+              <Chip size="small" label="주최" sx={{ bgcolor: "#FFF7ED", color: "#C2410C", fontWeight: 800 }} />
+            </Box>
+          )}
           {(invitedData?.groups ?? []).map((group) => (
             <Box key={group.id} sx={{ display: "flex", alignItems: "center", border: "1px solid #E5E7EB", borderRadius: 1, px: 1.5, py: 1 }}>
               <Typography sx={{ flex: 1, fontWeight: 800 }}>{group.name}</Typography>
               <Chip size="small" label={group.status === "accepted" ? "참여" : group.status === "declined" ? "거절" : "대기"} color={group.status === "accepted" ? "primary" : "default"} />
             </Box>
           ))}
-          {!invitedData?.groups.length && <Typography sx={{ color: "text.secondary", textAlign: "center", py: 1 }}>초대된 클럽이 없습니다.</Typography>}
+          {!hostGroupId && !invitedData?.groups.length && <Typography sx={{ color: "text.secondary", textAlign: "center", py: 1 }}>참여 클럽이 없습니다.</Typography>}
         </Stack>
         {canManage && (
           <Box sx={{ mt: 2.5 }}>

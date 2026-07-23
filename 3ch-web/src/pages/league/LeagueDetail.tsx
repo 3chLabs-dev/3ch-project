@@ -2053,6 +2053,7 @@ const handleSaveEdit = async () => {
             open={invitedGroupsOpen}
             leagueId={id}
             hostGroupId={league?.group_id}
+            hostGroupName={groupData?.group?.name}
             canManage={canManage}
             onClose={() => setInvitedGroupsOpen(false)}
           /></>

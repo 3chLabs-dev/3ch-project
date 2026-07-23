@@ -513,6 +513,11 @@ export default function GroupManage() {
                     <Typography variant="subtitle1" fontWeight={900} flex={1}>
                         클럽 회원 ({members.length}명)
                     </Typography>
+                    {canManage && (
+                        <Button size="small" variant="outlined" onClick={() => setPreMemberDialogOpen(true)} sx={{ borderRadius: 1, fontWeight: 700 }}>
+                            회원 사전등록
+                        </Button>
+                    )}
                     <IconButton
                         size="small"
                         onClick={() => navigate(`/club/${id}/ranking`)}
@@ -520,11 +525,6 @@ export default function GroupManage() {
                     >
                         <EmojiEventsOutlinedIcon />
                     </IconButton>
-                    {canManage && (
-                        <Button size="small" variant="outlined" onClick={() => setPreMemberDialogOpen(true)} sx={{ borderRadius: 1, fontWeight: 700 }}>
-                            회원 사전등록
-                        </Button>
-                    )}
                 </Stack>
 
                 <Card elevation={2} sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>

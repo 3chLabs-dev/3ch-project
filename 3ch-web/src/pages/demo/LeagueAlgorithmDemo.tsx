@@ -32,6 +32,43 @@ const FORMATION_COLORS = [
   "#6D4C41", // 갈색
 ];
 
+const LEGACY_TEAM_MATCH_COUNTS = {
+  SSS: { singles: 3, doubles: 0 },
+  SDS: { singles: 2, doubles: 1 },
+  DSD: { singles: 1, doubles: 2 },
+  DDD: { singles: 0, doubles: 3 },
+} as const;
+
+const getTeamMatchCounts = (round: RoundConfig) => {
+  const legacy = LEGACY_TEAM_MATCH_COUNTS[round.teamMatchType] ?? LEGACY_TEAM_MATCH_COUNTS.SSS;
+  return {
+    singles: round.teamSinglesCount ?? legacy.singles,
+    doubles: round.teamDoublesCount ?? legacy.doubles,
+  };
+};
+
+function MatchCountStepper({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <Stack direction="row" alignItems="center" spacing={1}>
+      <Typography sx={{ flex: 1, fontSize: 14, fontWeight: 700 }}>{label}</Typography>
+      <Button variant="outlined" onClick={() => onChange(Math.max(0, value - 1))} sx={{ minWidth: 36, width: 36, height: 36, p: 0 }}>-</Button>
+      <Box sx={{ width: 42, height: 36, border: "1px solid #D1D5DB", borderRadius: 1, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800 }}>
+        {value}
+      </Box>
+      <Button variant="outlined" onClick={() => onChange(value + 1)} sx={{ minWidth: 36, width: 36, height: 36, p: 0 }}>+</Button>
+      <Typography sx={{ width: 28, fontSize: 13 }}>경기</Typography>
+    </Stack>
+  );
+}
+
 const formationPlayerId = (player: FormationAssignmentPlayer) =>
   `formation-${player.sourceGroupId ?? "unknown"}-${player.name}-${player.level}`;
 
@@ -569,42 +606,18 @@ function RoundConfigEditor({
                     >
                       단체전 구성
                     </div>
-
-                    <ToggleButtonGroup
-                      exclusive
-                      value={round.teamMatchType}
-                      fullWidth
-                      onChange={(_, value) => {
-                        if (!value) return;
-
-                        setRounds(
-                          rounds.map((x) =>
-                            x.id === round.id
-                              ? {
-                                  ...x,
-                                  teamMatchType: value,
-                                }
-                              : x
-                          )
-                        );
-                      }}
-                    >
-                      <ToggleButton value="SSS">
-                        단단단
-                      </ToggleButton>
-
-                      <ToggleButton value="SDS">
-                        단복단
-                      </ToggleButton>
-
-                      <ToggleButton value="DSD">
-                        복단복
-                      </ToggleButton>
-
-                      <ToggleButton value="DDD">
-                        복복복
-                      </ToggleButton>
-                    </ToggleButtonGroup>
+                    <Stack spacing={1}>
+                      <MatchCountStepper
+                        label="단식"
+                        value={getTeamMatchCounts(round).singles}
+                        onChange={(value) => setRounds(rounds.map((x) => x.id === round.id ? { ...x, teamSinglesCount: value } : x))}
+                      />
+                      <MatchCountStepper
+                        label="복식"
+                        value={getTeamMatchCounts(round).doubles}
+                        onChange={(value) => setRounds(rounds.map((x) => x.id === round.id ? { ...x, teamDoublesCount: value } : x))}
+                      />
+                    </Stack>
                   </div>
                 </div>
               )}
@@ -2386,46 +2399,22 @@ const LeagueAlgorithmDemo = ({
                       fontWeight: 700,
                       marginBottom: "8px",
                     }}
-                  >
-                    단체전 구성
+                    >
+                      단체전 구성
+                    </div>
+                    <Stack spacing={1}>
+                      <MatchCountStepper
+                        label="단식"
+                        value={getTeamMatchCounts(round).singles}
+                        onChange={(value) => setRounds(rounds.map((x) => x.id === round.id ? { ...x, teamSinglesCount: value } : x))}
+                      />
+                      <MatchCountStepper
+                        label="복식"
+                        value={getTeamMatchCounts(round).doubles}
+                        onChange={(value) => setRounds(rounds.map((x) => x.id === round.id ? { ...x, teamDoublesCount: value } : x))}
+                      />
+                    </Stack>
                   </div>
-
-                  <ToggleButtonGroup
-                    exclusive
-                    value={round.teamMatchType}
-                    fullWidth
-                    onChange={(_, value) => {
-                      if (!value) return;
-
-                      setRounds(
-                        rounds.map((x) =>
-                          x.id === round.id
-                            ? {
-                                ...x,
-                                teamMatchType: value,
-                              }
-                            : x
-                        )
-                      );
-                    }}
-                  >
-                    <ToggleButton value="SSS">
-                      단단단
-                    </ToggleButton>
-
-                    <ToggleButton value="SDS">
-                      단복단
-                    </ToggleButton>
-
-                    <ToggleButton value="DSD">
-                      복단복
-                    </ToggleButton>
-                    
-                    <ToggleButton value="DDD">
-                      복복복
-                    </ToggleButton>
-                  </ToggleButtonGroup>
-                </div>
               </div>
             )}
           </div>

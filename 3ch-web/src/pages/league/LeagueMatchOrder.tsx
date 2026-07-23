@@ -545,13 +545,15 @@ export default function LeagueMatchOrder() {
       if (!serverMatch) return match;
       return {
         ...match,
+        match_order: serverMatch.match_order,
         score_a: match.score_a ?? serverMatch.score_a,
         score_b: match.score_b ?? serverMatch.score_b,
         court: match.court ?? serverMatch.court,
         status: match.status !== "pending" ? match.status : serverMatch.status,
       };
     });
-    return applyProgramTournamentAdvancement(hydratedMatches);
+    return applyProgramTournamentAdvancement(hydratedMatches)
+      .sort((left, right) => left.match_order - right.match_order);
   }, [currentProgramBlock?.tournamentBracketCount, currentProgramBlock?.type, generatedProgramMatches, isProgramFinalFromPrelim, serverProgramMatches]);
   const tournamentBracketIndexes = useMemo(
     () => [...new Set(programMatches.map((match) => match.tournament_bracket_index ?? 1))].sort((a, b) => a - b),
@@ -807,17 +809,23 @@ export default function LeagueMatchOrder() {
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
   );
 
-  const handleDragEnd = useCallback((event: DragEndEvent) => {
+  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     const oldIdx = matches.findIndex((m) => m.id === active.id);
     const newIdx = matches.findIndex((m) => m.id === over.id);
     if (oldIdx === -1 || newIdx === -1) return;
     const reordered = arrayMove(matches, oldIdx, newIdx);
-    setLocalOrder(reordered.map((m) => m.id));
-    if (isProgramMode) return;
-    reorderMatches({ leagueId, order: reordered.map((m) => m.id) });
-  }, [isProgramMode, matches, leagueId, reorderMatches]);
+    const previousOrder = matches.map((match) => match.id);
+    const nextOrder = reordered.map((match) => match.id);
+    setLocalOrder(nextOrder);
+    try {
+      await reorderMatches({ leagueId, order: nextOrder }).unwrap();
+    } catch {
+      setLocalOrder(previousOrder);
+      window.alert("경기 순서를 저장하지 못했습니다. 다시 시도해 주세요.");
+    }
+  }, [matches, leagueId, reorderMatches]);
 
   useEffect(() => {
     if (!isProgramMode || !programOption) return;

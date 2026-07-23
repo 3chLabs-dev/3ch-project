@@ -1368,6 +1368,65 @@ router.get('/league/invitations/mine', requireAuth, async (req, res) => {
   }
 });
 
+router.get('/league/program-templates', requireAuth, async (req, res) => {
+  try {
+    const userId = Number(req.user.sub);
+    const result = await pool.query(
+      `SELECT id, name, template_data, created_at, updated_at
+         FROM league_program_templates
+        WHERE user_id = $1
+        ORDER BY created_at DESC`,
+      [userId],
+    );
+    return res.json({ templates: result.rows });
+  } catch (error) {
+    console.error('리그 구성 즐겨찾기 조회 실패:', error);
+    return res.status(500).json({ message: '리그 구성 즐겨찾기를 불러오지 못했습니다.' });
+  }
+});
+
+router.post('/league/program-templates', requireAuth, async (req, res) => {
+  try {
+    const userId = Number(req.user.sub);
+    const name = String(req.body?.name ?? '').trim().slice(0, 100);
+    const templateData = req.body?.template_data;
+
+    if (!name || !templateData || !Array.isArray(templateData.rounds) || templateData.rounds.length === 0) {
+      return res.status(400).json({ message: '저장할 리그 구성 정보가 올바르지 않습니다.' });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO league_program_templates (user_id, name, template_data)
+       VALUES ($1, $2, $3::jsonb)
+       RETURNING id, name, template_data, created_at, updated_at`,
+      [userId, name, JSON.stringify(templateData)],
+    );
+    return res.status(201).json({ template: result.rows[0] });
+  } catch (error) {
+    console.error('리그 구성 즐겨찾기 저장 실패:', error);
+    return res.status(500).json({ message: '리그 구성 즐겨찾기를 저장하지 못했습니다.' });
+  }
+});
+
+router.delete('/league/program-templates/:templateId', requireAuth, async (req, res) => {
+  try {
+    const userId = Number(req.user.sub);
+    const result = await pool.query(
+      `DELETE FROM league_program_templates
+        WHERE id = $1 AND user_id = $2
+        RETURNING id`,
+      [req.params.templateId, userId],
+    );
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: '리그 구성 즐겨찾기를 찾을 수 없습니다.' });
+    }
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error('리그 구성 즐겨찾기 삭제 실패:', error);
+    return res.status(500).json({ message: '리그 구성 즐겨찾기를 삭제하지 못했습니다.' });
+  }
+});
+
 router.get('/league/:id/invited-groups', optionalAuth, async (req, res) => {
   try {
     const result = await pool.query(
@@ -4042,10 +4101,29 @@ router.delete('/league/:id/matches/:matchId', requireAuth, async (req, res) => {
     if (access.rowCount === 0) return res.status(403).json({ message: '권한이 없습니다.' });
 
     const del = await pool.query(
-      `DELETE FROM league_matches WHERE id = $1 AND league_id = $2 RETURNING id`,
+      `DELETE FROM league_matches WHERE id = $1 AND league_id = $2
+       RETURNING id, is_program, program_round`,
       [matchId, leagueId],
     );
     if (del.rowCount === 0) return res.status(404).json({ message: '경기를 찾을 수 없습니다.' });
+
+    const deletedMatch = del.rows[0];
+    if (deletedMatch.is_program && Number.isFinite(Number(deletedMatch.program_round))) {
+      const programResult = await pool.query(
+        `SELECT program_data FROM league_programs WHERE league_id = $1`,
+        [leagueId],
+      );
+      const programData = programResult.rows[0]?.program_data;
+      const blockIndex = Number(deletedMatch.program_round) - 1;
+      if (programData && Array.isArray(programData.blocks) && programData.blocks[blockIndex]) {
+        const block = programData.blocks[blockIndex];
+        block.deletedMatchIds = [...new Set([...(block.deletedMatchIds ?? []), matchId])];
+        await pool.query(
+          `UPDATE league_programs SET program_data = $2::jsonb, updated_at = NOW() WHERE league_id = $1`,
+          [leagueId, JSON.stringify(programData)],
+        );
+      }
+    }
 
     // match_order 재정렬
     await pool.query(

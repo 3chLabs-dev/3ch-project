@@ -2,6 +2,7 @@ const pool = require("../db/pool");
 
 const DEFAULT_POINT_RULES = Object.freeze({
   attendance: { league: 1, tournament: 2 },
+  matchPoints: { mode: "sets", winPoints: 3 },
   rankings: {
     league: { first: 30, second: 20, thirdFourth: 10 },
     group: { first: 30, second: 15, thirdFourth: 10 },
@@ -13,6 +14,7 @@ const DEFAULT_POINT_RULES = Object.freeze({
 function normalizePointRules(value) {
   const input = value && typeof value === "object" ? value : {};
   const attendance = input.attendance && typeof input.attendance === "object" ? input.attendance : {};
+  const matchPoints = input.matchPoints && typeof input.matchPoints === "object" ? input.matchPoints : {};
   const rankings = input.rankings && typeof input.rankings === "object" ? input.rankings : {};
   const numberOr = (candidate, fallback) => {
     const parsed = Number(candidate);
@@ -27,6 +29,10 @@ function normalizePointRules(value) {
     attendance: {
       league: numberOr(attendance.league, DEFAULT_POINT_RULES.attendance.league),
       tournament: numberOr(attendance.tournament, DEFAULT_POINT_RULES.attendance.tournament),
+    },
+    matchPoints: {
+      mode: matchPoints.mode === "win" ? "win" : "sets",
+      winPoints: numberOr(matchPoints.winPoints, DEFAULT_POINT_RULES.matchPoints.winPoints),
     },
     rankings: {
       league: normalizeRankRule(rankings.league, DEFAULT_POINT_RULES.rankings.league),
@@ -489,8 +495,13 @@ async function getPointRanking(groupId, year, scope, seasonId) {
 
     rowA.matches_played += 1;
     rowB.matches_played += 1;
-    rowA.score_points += scoreA;
-    rowB.score_points += scoreB;
+    if (pointRules.matchPoints.mode === "win") {
+      if (scoreA > scoreB) rowA.score_points += pointRules.matchPoints.winPoints;
+      else rowB.score_points += pointRules.matchPoints.winPoints;
+    } else {
+      rowA.score_points += scoreA;
+      rowB.score_points += scoreB;
+    }
 
     if (scoreA > scoreB) {
       rowA.wins += 1;

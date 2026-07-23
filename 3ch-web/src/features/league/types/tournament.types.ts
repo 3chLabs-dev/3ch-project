@@ -111,6 +111,9 @@ export interface ProgramBlock {
   crossClubGrouping?: boolean;
   crossClubOnlyMatches?: boolean;
   unitClubMode?: UnitClubMode;
+  deletedMatchIds?: string[];
+  teamSinglesCount?: number;
+  teamDoublesCount?: number;
 }
 
 export interface FormationAssignmentPlayer {
@@ -168,6 +171,8 @@ export interface RoundConfig {
   matchRule: MatchRuleType;
   teamPlayerCount: number;
   teamMatchType: TeamLineupType;
+  teamSinglesCount?: number;
+  teamDoublesCount?: number;
   groupSizes?: number[];
   teamGroupSizes?: number[];
   groupShuffleSeed?: number;

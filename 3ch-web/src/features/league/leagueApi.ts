@@ -1,6 +1,7 @@
 import { baseApi } from "../api/baseApi";
 import type { RootState } from "../../app/store";
 import { isLocalDevToken } from "../../utils/localDevAuth";
+import type { RoundConfig } from "./types/tournament.types";
 import {
   addLocalDevParticipants,
   deleteLocalDevProgram,
@@ -449,6 +450,22 @@ export interface SaveLeagueProgramRequest {
   program: unknown;
 }
 
+export interface LeagueProgramTemplate {
+  id: string;
+  name: string;
+  template_data: {
+    sourceMode: "recommend" | "custom";
+    sourceTitle?: string;
+    rounds: RoundConfig[];
+  };
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GetLeagueProgramTemplatesResponse {
+  templates: LeagueProgramTemplate[];
+}
+
 export interface SyncLeagueProgramMatchesRequest {
   leagueId: string;
   matches: Array<Partial<LeagueMatch> & {
@@ -754,6 +771,80 @@ export const leagueApi = baseApi.injectEndpoints({
       invalidatesTags: [{ type: "League", id: "LIST" }],
     }),
 
+    getLeagueProgramTemplates: builder.query<GetLeagueProgramTemplatesResponse, void>({
+      async queryFn(_arg, api, _extraOptions, fetchWithBQ) {
+        const token = (api.getState() as RootState).auth?.token;
+        if (isLocalDevToken(token)) {
+          const templates = JSON.parse(
+            localStorage.getItem("3ch-local-program-templates") ?? "[]",
+          ) as LeagueProgramTemplate[];
+          return { data: { templates } };
+        }
+        const result = await fetchWithBQ("/league/program-templates");
+        return result.error
+          ? { error: result.error }
+          : { data: result.data as GetLeagueProgramTemplatesResponse };
+      },
+      providesTags: [{ type: "League", id: "PROGRAM_TEMPLATES" }],
+    }),
+
+    saveLeagueProgramTemplate: builder.mutation<
+      { template: LeagueProgramTemplate },
+      { name: string; template_data: LeagueProgramTemplate["template_data"] }
+    >({
+      async queryFn(payload, api, _extraOptions, fetchWithBQ) {
+        const token = (api.getState() as RootState).auth?.token;
+        if (isLocalDevToken(token)) {
+          const templates = JSON.parse(
+            localStorage.getItem("3ch-local-program-templates") ?? "[]",
+          ) as LeagueProgramTemplate[];
+          const now = new Date().toISOString();
+          const template: LeagueProgramTemplate = {
+            id: crypto.randomUUID(),
+            ...payload,
+            created_at: now,
+            updated_at: now,
+          };
+          localStorage.setItem(
+            "3ch-local-program-templates",
+            JSON.stringify([template, ...templates]),
+          );
+          return { data: { template } };
+        }
+        const result = await fetchWithBQ({
+          url: "/league/program-templates",
+          method: "POST",
+          body: payload,
+        });
+        return result.error
+          ? { error: result.error }
+          : { data: result.data as { template: LeagueProgramTemplate } };
+      },
+      invalidatesTags: [{ type: "League", id: "PROGRAM_TEMPLATES" }],
+    }),
+
+    deleteLeagueProgramTemplate: builder.mutation<{ ok: boolean }, string>({
+      async queryFn(templateId, api, _extraOptions, fetchWithBQ) {
+        const token = (api.getState() as RootState).auth?.token;
+        if (isLocalDevToken(token)) {
+          const templates = JSON.parse(
+            localStorage.getItem("3ch-local-program-templates") ?? "[]",
+          ) as LeagueProgramTemplate[];
+          localStorage.setItem(
+            "3ch-local-program-templates",
+            JSON.stringify(templates.filter((template) => template.id !== templateId)),
+          );
+          return { data: { ok: true } };
+        }
+        const result = await fetchWithBQ({
+          url: `/league/program-templates/${templateId}`,
+          method: "DELETE",
+        });
+        return result.error ? { error: result.error } : { data: result.data as { ok: boolean } };
+      },
+      invalidatesTags: [{ type: "League", id: "PROGRAM_TEMPLATES" }],
+    }),
+
     getLeagueProgram: builder.query<GetLeagueProgramResponse, string>({
       async queryFn(id, api, _extraOptions, fetchWithBQ) {
         const token = (api.getState() as RootState).auth?.token;
@@ -978,7 +1069,10 @@ export const leagueApi = baseApi.injectEndpoints({
         url: `/league/${leagueId}/matches/${matchId}`,
         method: "DELETE",
       }),
-      invalidatesTags: (_result, _error, { leagueId }) => [{ type: "League", id: `matches-${leagueId}` }],
+      invalidatesTags: (_result, _error, { leagueId }) => [
+        { type: "League", id: `matches-${leagueId}` },
+        { type: "League", id: `program-${leagueId}` },
+      ],
     }),
 
     notifyLeagueMatch: builder.mutation<{ ok: boolean }, { leagueId: string; matchId: string }>({
@@ -1077,6 +1171,9 @@ export const {
   useReplaceParticipantMutation,
   useAddParticipantsMutation,
   useDeleteLeagueMutation,
+  useGetLeagueProgramTemplatesQuery,
+  useSaveLeagueProgramTemplateMutation,
+  useDeleteLeagueProgramTemplateMutation,
   useGetLeagueProgramQuery,
   useSaveLeagueProgramMutation,
   useDeleteLeagueProgramMutation,

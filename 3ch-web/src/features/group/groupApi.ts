@@ -280,6 +280,10 @@ export interface GroupRankingPointRules {
     league: number;
     tournament: number;
   };
+  matchPoints: {
+    mode: "sets" | "win";
+    winPoints: number;
+  };
   rankings: {
     league: { first: number; second: number; thirdFourth: number };
     group: { first: number; second: number; thirdFourth: number };

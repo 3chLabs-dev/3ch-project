@@ -66,6 +66,9 @@ type StoredProgramBlock = {
   groupAssignments?: FormationPlayer[][];
   teamAssignments?: FormationPlayer[][];
   doublesAssignments?: FormationPlayer[][];
+  description?: string;
+  teamSinglesCount?: number;
+  teamDoublesCount?: number;
 };
 
 type FormationPlayer = {
@@ -216,7 +219,11 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
   const canManage = !groupLoading && (groupData?.myRole === "owner" || groupData?.myRole === "admin");
 
   const programRounds = storedProgram?.blocks?.length
-    ? storedProgram.blocks.map((block, index) => ({
+    ? storedProgram.blocks.map((block, index) => {
+        const legacySinglesCount = block.description?.match(/단식/g)?.length;
+        const legacyDoublesCount = block.description?.match(/복식/g)?.length;
+
+        return {
         round: index + 1,
         title: block.title ?? `${index + 1}라운드 ${getProgramTypeLabel(block.type)}`.trim(),
         format: block.format ?? "GROUP",
@@ -224,7 +231,10 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
         bracketLabel: getProgramBracketLabel(),
         bracketPath: getProgramBracketPath(block.format),
         type: block.type,
-      }))
+        teamSinglesCount: block.teamSinglesCount ?? legacySinglesCount ?? 3,
+        teamDoublesCount: block.teamDoublesCount ?? legacyDoublesCount ?? 0,
+      };
+      })
     : [];
 
   const r1Match = matches.find((m) => m.round_number === 1 && m.bracket === "upper");
@@ -618,6 +628,12 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
                       </Typography>
                       <Chip label={round.formatLabel} size="small" sx={{ height: 22, fontSize: 11, fontWeight: 700, bgcolor: "#F5F3FF", color: "#7C3AED", border: "1px solid #DDD6FE" }} />
                     </Stack>
+
+                    {round.type === "TEAM" && (
+                      <Typography sx={{ mb: 1, fontSize: 12, fontWeight: 700, color: "#475569" }}>
+                        단식 {round.teamSinglesCount ?? 3}, 복식 {round.teamDoublesCount ?? 0}
+                      </Typography>
+                    )}
 
                     <Stack direction="row" spacing={1}>
                       <Button

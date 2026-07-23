@@ -224,10 +224,12 @@ export function generateProgramBlocks(
         round.teamPlayerCount
       );
 
-    const teamInfo =
-      getTeamMatchInfo(
-        round.teamMatchType
-      );
+    const legacyTeamInfo = getTeamMatchInfo(round.teamMatchType);
+    const teamInfo = {
+      singles: round.teamSinglesCount ?? legacyTeamInfo.singles,
+      doubles: round.teamDoublesCount ?? legacyTeamInfo.doubles,
+      description: `단식 ${round.teamSinglesCount ?? legacyTeamInfo.singles}, 복식 ${round.teamDoublesCount ?? legacyTeamInfo.doubles}`,
+    };
     const teamGroupSizes =
       round.teamGroupSizes ??
       splitIntoTwoGroups(teamCount);
@@ -280,6 +282,8 @@ export function generateProgramBlocks(
         crossClubGrouping: round.crossClubGrouping,
         crossClubOnlyMatches: round.crossClubOnlyMatches,
         unitClubMode: round.unitClubMode,
+        teamSinglesCount: teamInfo.singles,
+        teamDoublesCount: teamInfo.doubles,
 	    });
   }
 }

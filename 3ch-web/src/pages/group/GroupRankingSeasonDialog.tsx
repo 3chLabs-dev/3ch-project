@@ -11,6 +11,8 @@ import {
   Divider,
   FormControlLabel,
   IconButton,
+  Radio,
+  RadioGroup,
   Stack,
   TextField,
   Typography,
@@ -35,6 +37,7 @@ type Props = {
 
 const DEFAULT_POINT_RULES: GroupRankingPointRules = {
   attendance: { league: 1, tournament: 2 },
+  matchPoints: { mode: "sets", winPoints: 3 },
   rankings: {
     league: { first: 30, second: 20, thirdFourth: 10 },
     group: { first: 30, second: 15, thirdFourth: 10 },
@@ -69,7 +72,16 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
       setStartDate(selectedSeason.start_date.slice(0, 10));
       setEndDate(selectedSeason.end_date.slice(0, 10));
       setAutoRenew(Boolean(selectedSeason.auto_renew));
-      setPointRules(selectedSeason.point_rules ?? DEFAULT_POINT_RULES);
+      const savedRules = selectedSeason.point_rules;
+      setPointRules(savedRules
+        ? {
+            ...DEFAULT_POINT_RULES,
+            ...savedRules,
+            attendance: { ...DEFAULT_POINT_RULES.attendance, ...savedRules.attendance },
+            matchPoints: { ...DEFAULT_POINT_RULES.matchPoints, ...savedRules.matchPoints },
+            rankings: { ...DEFAULT_POINT_RULES.rankings, ...savedRules.rankings },
+          }
+        : DEFAULT_POINT_RULES);
     } else {
       setStartDate(today);
       setEndDate("");
@@ -90,6 +102,13 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
     setPointRules((previous) => ({
       ...previous,
       attendance: { ...previous.attendance, [key]: value },
+    }));
+  };
+
+  const updateMatchPoints = (updates: Partial<GroupRankingPointRules["matchPoints"]>) => {
+    setPointRules((previous) => ({
+      ...previous,
+      matchPoints: { ...previous.matchPoints, ...updates },
     }));
   };
 
@@ -129,7 +148,7 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
       <IconButton onClick={onClose} sx={{ position: "absolute", right: 10, top: 10 }}><CloseIcon /></IconButton>
       <DialogContent dividers>
         <Stack spacing={2.25}>
-          <Typography sx={{ fontSize: 15, fontWeight: 900 }}>기간</Typography>
+          <Typography sx={{ fontSize: 15, fontWeight: 900 }}>기간 설정</Typography>
           <Stack direction="row" spacing={1} alignItems="center">
             <TextField type="date" size="small" fullWidth value={startDate} onChange={(event) => setStartDate(event.target.value)} inputProps={{ "aria-label": "시작일" }} />
             <Typography>~</Typography>
@@ -148,11 +167,39 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
 
           <Divider />
 
-          <Typography sx={{ fontSize: 15, fontWeight: 900 }}>포인트</Typography>
+          <Typography sx={{ fontSize: 15, fontWeight: 900 }}>포인트 설정</Typography>
           <Stack spacing={1}>
             <PointRow label="리그 참석" value={pointRules.attendance.league} onChange={(value) => updateAttendance("league", value)} />
             <PointRow label="대회 참석" value={pointRules.attendance.tournament} onChange={(value) => updateAttendance("tournament", value)} />
           </Stack>
+          <Box>
+            <Typography sx={{ fontSize: 13, fontWeight: 800, mb: 0.5 }}>경기당 승점</Typography>
+            <RadioGroup
+              value={pointRules.matchPoints.mode}
+              onChange={(event) => updateMatchPoints({ mode: event.target.value as "sets" | "win" })}
+            >
+              <FormControlLabel
+                value="sets"
+                control={<Radio size="small" />}
+                label={<Typography sx={{ fontSize: 13 }}>획득한 세트스코어</Typography>}
+              />
+              <FormControlLabel
+                value="win"
+                control={<Radio size="small" />}
+                label={(
+                  <Stack direction="row" spacing={0.75} alignItems="center">
+                    <Typography sx={{ fontSize: 13 }}>승점</Typography>
+                    <PointInput
+                      value={pointRules.matchPoints.winPoints}
+                      onChange={(value) => updateMatchPoints({ winPoints: value })}
+                      ariaLabel="경기당 승점"
+                    />
+                    <Typography sx={{ fontSize: 13 }}>점</Typography>
+                  </Stack>
+                )}
+              />
+            </RadioGroup>
+          </Box>
           <Stack spacing={1.5}>
             <RankingPointRow label="단일리그" values={pointRules.rankings.league} onChange={(rank, value) => updateRanking("league", rank, value)} />
             <RankingPointRow label="조별리그" values={pointRules.rankings.group} onChange={(rank, value) => updateRanking("group", rank, value)} />

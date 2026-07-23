@@ -29,6 +29,7 @@ model User {
   group_memberships     GroupMember[]
   draws                 Draw[]               @relation("DrawCreator")
   league_programs       LeagueProgram[]      @relation("LeagueProgramCreator")
+  league_program_templates LeagueProgramTemplate[]
   group_rankings        GroupRanking[]
   group_ranking_events  GroupRankingEvent[]  @relation("GroupRankingEventMember")
   sport_rankings        SportRanking[]
@@ -321,6 +322,20 @@ model LeagueParticipant {
   @@index([league_id])
   @@index([source_group_id])
   @@map("league_participants")
+}
+
+model LeagueProgramTemplate {
+  id            String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  user_id       Int
+  name          String   @db.VarChar(100)
+  template_data Json
+  created_at    DateTime @default(now())
+  updated_at    DateTime @default(now()) @updatedAt
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, created_at])
+  @@map("league_program_templates")
 }
 
 model GroupRankingSeason {

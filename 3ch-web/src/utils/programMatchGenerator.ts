@@ -726,6 +726,8 @@ export function generateProgramRoundMatches(
 ): LeagueMatch[] {
   const block = option?.blocks?.[round - 1];
   if (!block || participants.length < 2) return [];
+  const deletedMatchIds = new Set(block.deletedMatchIds ?? []);
+  const withoutDeleted = (matches: LeagueMatch[]) => matches.filter((match) => !deletedMatchIds.has(match.id));
 
   const players = toProgramPlayers(participants);
   const defaultFormationSeed = round * 1000;
@@ -760,7 +762,7 @@ export function generateProgramRoundMatches(
         : placeholderBrackets?.length
           ? placeholderBrackets
         : splitTournamentUnits(ranked, bracketCount);
-      return tournamentBrackets.flatMap((bracketPlayers, bracketIndex) =>
+      return withoutDeleted(tournamentBrackets.flatMap((bracketPlayers, bracketIndex) =>
         buildTournamentMatches(
           leagueId,
           round - 1,
@@ -769,12 +771,12 @@ export function generateProgramRoundMatches(
           rankedPlayers || placeholderBrackets ? "seed" : "manual",
           bracketIndex + 1,
         ),
-      );
+      ));
     }
 
-    return splitTournamentUnits(matchUnits, block.tournamentBracketCount ?? 1).flatMap((bracketPlayers, bracketIndex) =>
+    return withoutDeleted(splitTournamentUnits(matchUnits, block.tournamentBracketCount ?? 1).flatMap((bracketPlayers, bracketIndex) =>
       buildTournamentMatches(leagueId, round - 1, block, bracketPlayers, undefined, bracketIndex + 1),
-    );
+    ));
   }
 
   if (block.type === "TEAM") {
@@ -788,7 +790,7 @@ export function generateProgramRoundMatches(
         : block.crossClubGrouping
           ? distributeClubAware(shuffledTeams, teamGroupSizes).map((groupPlayers, index) => ({ name: `${index + 1}조`, players: groupPlayers }))
           : distributeSnake(shuffledTeams as ProgramPlayer[], teamGroupSizes);
-      return teamGroups.flatMap((group, groupIndex) =>
+      return withoutDeleted(teamGroups.flatMap((group, groupIndex) =>
         buildUnitRoundRobinMatches(
           leagueId,
           round - 1,
@@ -800,10 +802,10 @@ export function generateProgramRoundMatches(
           id: `${match.id}-${index + 1}`,
           match_order: index + 1,
         })),
-      ).map((match, index) => ({ ...match, match_order: index + 1 }));
+      ).map((match, index) => ({ ...match, match_order: index + 1 })));
     }
 
-    return buildUnitRoundRobinMatches(leagueId, round - 1, block, matchUnits);
+    return withoutDeleted(buildUnitRoundRobinMatches(leagueId, round - 1, block, matchUnits));
   }
 
   if (block.format === "GROUP") {
@@ -815,7 +817,7 @@ export function generateProgramRoundMatches(
       : block.crossClubGrouping
         ? distributeClubAware(shuffledUnits, groupSizes).map((groupPlayers, index) => ({ name: `${index + 1}조`, players: groupPlayers }))
         : distributeSnake(shuffledUnits as ProgramPlayer[], groupSizes);
-    return groups.flatMap((group, groupIndex) =>
+    return withoutDeleted(groups.flatMap((group, groupIndex) =>
       buildUnitRoundRobinMatches(
         leagueId,
         round - 1,
@@ -827,10 +829,10 @@ export function generateProgramRoundMatches(
         id: `${match.id}-${index + 1}`,
         match_order: index + 1,
       })),
-    ).map((match, index) => ({ ...match, match_order: index + 1 }));
+    ).map((match, index) => ({ ...match, match_order: index + 1 })));
   }
 
-  return block.type === "SINGLES"
+  return withoutDeleted(block.type === "SINGLES"
     ? buildRoundRobinMatches(leagueId, round - 1, block, players)
-    : buildUnitRoundRobinMatches(leagueId, round - 1, block, matchUnits);
+    : buildUnitRoundRobinMatches(leagueId, round - 1, block, matchUnits));
 }

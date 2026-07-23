@@ -123,7 +123,7 @@ export default function PasswordResetRequestPage(props: Record<string, unknown>)
                     >
                         비밀번호는 암호화 저장되어{"\n"}
                         분실 시 찾을 수 없는 정보 입니다.{"\n"}
-                        인증메일을 통해 암호를 재설정해주세요.
+                        채팅 문의를 통해 암호를 재설정해주세요.
                     </Typography>
 
                     {/* 폼 */}

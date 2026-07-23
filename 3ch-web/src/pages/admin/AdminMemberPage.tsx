@@ -61,6 +61,13 @@ const SPORT_OPTIONS = [
 
 const LIMIT = 20;
 
+const AUTH_PROVIDER_LABELS: Record<string, string> = {
+  google: "구글",
+  kakao: "카카오",
+  naver: "네이버",
+  local: "이메일",
+};
+
 export default function AdminMemberPage() {
   const token = useAppSelector((s) => s.admin.token) ?? "";
 
@@ -674,7 +681,12 @@ export default function AdminMemberPage() {
 
               {/* 아이디 (read-only) */}
               <FormRow label="아이디">
-                <Typography sx={{ fontSize: 13, color: "#374151" }}>{editMember.email}</Typography>
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <Typography sx={{ fontSize: 12, color: "#6B7280", flexShrink: 0 }}>
+                    ({AUTH_PROVIDER_LABELS[editMember.auth_provider] ?? editMember.auth_provider})
+                  </Typography>
+                  <Typography sx={{ fontSize: 13, color: "#374151" }}>{editMember.email}</Typography>
+                </Stack>
               </FormRow>
 
               {/* 이름 */}

@@ -111,7 +111,7 @@ export default function PasswordHelpPage(props: Record<string, unknown>) {
                     >
                         비밀번호는 암호화 저장되어{"\n"}
                         분실 시 찾을 수 없는 정보 입니다.{"\n"}
-                        고객센터에 문의하여 암호를 재설정해주세요.
+                        채팅 문의를 통해 암호를 재설정해주세요.
                     </Typography>
 
                     <Typography

@@ -208,9 +208,11 @@ export default function LeagueMainBody() {
             {visibleInvitations.map((invitation) => (
               <Card key={invitation.invitation_id} elevation={2} sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
                 <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
-                  <Stack direction="row" spacing={0.75} alignItems="center">
+                  <Stack direction="row" spacing={0.75} alignItems="center" useFlexGap flexWrap="wrap">
                     <Typography sx={{ fontWeight: 800 }}>{invitation.title ?? invitation.name}</Typography>
-                    <Chip label="참여 클럽" size="small" sx={{ height: 21, bgcolor: "#F3E8FF", color: "#7C3AED", fontSize: 11, fontWeight: 800 }} />
+                    {[invitation.host_group_name, ...(invitation.invited_group_names ?? [])]
+                      .filter((name, index, names): name is string => Boolean(name) && name !== invitation.invited_group_name && names.indexOf(name) === index)
+                      .map((name) => <Chip key={name} label={name} size="small" sx={{ height: 21, bgcolor: "#F3E8FF", color: "#7C3AED", fontSize: 11, fontWeight: 800 }} />)}
                   </Stack>
                   <Typography sx={{ fontSize: 12, color: "text.secondary" }}>{invitation.host_group_name} · {formatLeagueDateTime(invitation.start_date)}</Typography>
                   {invitation.invitation_status === "pending" && (invitation.my_role === "owner" || invitation.my_role === "admin") ? (
@@ -295,9 +297,9 @@ function LeagueCard({ league }: { league: LeagueListItem }) {
       <CardContent sx={{ py: 1.8, px: 2.5, "&:last-child": { pb: 1.8 } }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center">
           <Box>
-            <Stack direction="row" spacing={0.75} alignItems="center">
+            <Stack direction="row" spacing={0.75} alignItems="center" useFlexGap flexWrap="wrap">
               <Typography fontWeight={700} fontSize={15}>{league.title}</Typography>
-              {Number(league.invited_group_count ?? 0) > 0 && <Chip label="참여 클럽" size="small" sx={{ height: 21, bgcolor: "#F3E8FF", color: "#7C3AED", fontSize: 11, fontWeight: 800 }} />}
+              {(league.invited_group_names ?? []).map((name) => <Chip key={name} label={name} size="small" sx={{ height: 21, bgcolor: "#F3E8FF", color: "#7C3AED", fontSize: 11, fontWeight: 800 }} />)}
             </Stack>
             <Typography fontSize={12} color="text.secondary">
               {formatLeagueDateTime(league.start_date)}

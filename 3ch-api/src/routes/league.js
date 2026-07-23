@@ -1098,7 +1098,12 @@ router.get('/league', async (req, res) => {
               u.name AS creator_name,
               g.name AS group_name,
               (SELECT COUNT(*)::int FROM league_invited_groups lig
-                WHERE lig.league_id = l.id AND lig.status <> 'declined') AS invited_group_count
+                WHERE lig.league_id = l.id AND lig.status <> 'declined') AS invited_group_count,
+              ARRAY(SELECT invited.name
+                      FROM league_invited_groups lig
+                      JOIN groups invited ON invited.id = lig.group_id
+                     WHERE lig.league_id = l.id AND lig.status <> 'declined'
+                     ORDER BY lig.created_at) AS invited_group_names
        FROM leagues l
        LEFT JOIN users u ON l.created_by_id = u.id
        LEFT JOIN groups g ON l.group_id = g.id
@@ -1341,7 +1346,12 @@ router.get('/league/invitations/mine', requireAuth, async (req, res) => {
               g.name AS invited_group_name, l.*, host.name AS host_group_name,
               gm.role AS my_role,
               (SELECT COUNT(*)::int FROM league_invited_groups all_lig
-                WHERE all_lig.league_id = l.id AND all_lig.status <> 'declined') AS invited_group_count
+                WHERE all_lig.league_id = l.id AND all_lig.status <> 'declined') AS invited_group_count,
+              ARRAY(SELECT participating.name
+                      FROM league_invited_groups all_lig
+                      JOIN groups participating ON participating.id = all_lig.group_id
+                     WHERE all_lig.league_id = l.id AND all_lig.status <> 'declined'
+                     ORDER BY all_lig.created_at) AS invited_group_names
          FROM league_invited_groups lig
          JOIN group_members gm ON gm.group_id = lig.group_id AND gm.user_id = $1
          JOIN groups g ON g.id = lig.group_id

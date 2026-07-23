@@ -893,12 +893,12 @@ router.get('/group/:id', requireAuth, async (req, res) => {
          FROM group_members gm
          INNER JOIN users u ON gm.user_id = u.id
          WHERE gm.group_id = $1
-         ORDER BY gm.joined_at ASC`
+         ORDER BY CASE gm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, gm.joined_at ASC`
       : `SELECT gm.id, gm.role, gm.division, gm.joined_at, u.id AS user_id, u.name
          FROM group_members gm
          INNER JOIN users u ON gm.user_id = u.id
          WHERE gm.group_id = $1
-         ORDER BY gm.joined_at ASC`;
+         ORDER BY CASE gm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, gm.joined_at ASC`;
     const membersResult = await pool.query(membersQuery, [id]);
     const members = membersResult.rows;
 

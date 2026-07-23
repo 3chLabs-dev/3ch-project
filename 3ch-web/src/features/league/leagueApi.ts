@@ -105,6 +105,7 @@ export interface LeagueListItem extends League {
   group_id?: string;
   group_name?: string;
   invited_group_count?: number;
+  invited_group_names?: string[];
 }
 
 export interface LeagueParticipantItem {

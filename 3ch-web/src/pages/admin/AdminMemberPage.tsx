@@ -94,6 +94,7 @@ export default function AdminMemberPage() {
   const [editLoading,   setEditLoading]   = useState(false);
   const [editSuccess,   setEditSuccess]   = useState(false);
   const [editError,     setEditError]     = useState("");
+  const [resetLoading,  setResetLoading]  = useState(false);
 
   const fetchMembers = useCallback(async (q: Filters, p: number) => {
     setLoading(true);
@@ -230,6 +231,34 @@ export default function AdminMemberPage() {
       setEditOpen(false);
       fetchMembers(query, page);
     } catch { /* ignore */ }
+  };
+
+  const handleResetPassword = async () => {
+    if (!editMember || resetLoading) return;
+    if (!window.confirm(`${editMember.name ?? editMember.email} 회원의 비밀번호를 초기화하시겠습니까?`)) return;
+    setResetLoading(true);
+    setEditError("");
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL}/admin/members/${editMember.id}/reset-password`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setEditError("비밀번호 초기화에 실패했습니다.");
+        return;
+      }
+      window.alert(
+        `비밀번호가 초기화되었습니다.\n\n임시 비밀번호: ${data.tempPassword}\n\n회원에게 임시 비밀번호를 전달해 주세요.`,
+      );
+    } catch {
+      setEditError("비밀번호 초기화에 실패했습니다.");
+    } finally {
+      setResetLoading(false);
+    }
   };
 
   const handleSearch = () => { setPage(1); setQuery({ ...filters }); };
@@ -682,6 +711,11 @@ export default function AdminMemberPage() {
 
               {/* 위험 액션 */}
               <Stack direction="row" spacing={2} pt={0.5}>
+                <Button size="small" onClick={handleResetPassword}
+                  disabled={resetLoading || editMember.auth_provider !== "local"}
+                  sx={{ fontSize: 12, color: "#2F80ED", p: 0, minWidth: 0, fontWeight: 700 }}>
+                  {resetLoading ? "초기화 중..." : "비밀번호 초기화"}
+                </Button>
                 <Button size="small" onClick={handleDeleteAccount}
                   sx={{ fontSize: 12, color: "#9CA3AF", p: 0, minWidth: 0, fontWeight: 700 }}>
                   계정 삭제

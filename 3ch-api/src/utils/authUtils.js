@@ -36,6 +36,19 @@ function signSignupTicket({ id, email }) {
   );
 }
 
+function signPasswordResetTicket({ id, email }) {
+  return jwt.sign(
+    { sub: String(id), email, purpose: "password-reset" },
+    getJwtSecret(),
+    {
+      algorithm: "HS256",
+      issuer: JWT_OPTIONS.issuer,
+      audience: JWT_OPTIONS.audience,
+      expiresIn: "15m",
+    },
+  );
+}
+
 function verifyToken(token, expectedPurpose = "access") {
   const payload = jwt.verify(token, getJwtSecret(), JWT_OPTIONS);
   if (payload.purpose !== expectedPurpose) {
@@ -44,4 +57,4 @@ function verifyToken(token, expectedPurpose = "access") {
   return payload;
 }
 
-module.exports = { signToken, signSignupTicket, verifyToken };
+module.exports = { signToken, signSignupTicket, signPasswordResetTicket, verifyToken };

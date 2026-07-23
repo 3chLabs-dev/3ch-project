@@ -433,6 +433,36 @@ router.put('/members/:id', requireAdmin, async (req, res) => {
   }
 });
 
+// POST /admin/members/:id/reset-password - 임시 비밀번호 발급 및 강제 재설정
+router.post('/members/:id/reset-password', requireAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) {
+    return res.status(400).json({ ok: false, error: 'INVALID_MEMBER_ID' });
+  }
+
+  try {
+    const tempPassword = `Wr${Math.floor(100000 + Math.random() * 900000)}!`;
+    const hash = await bcrypt.hash(tempPassword, 12);
+    const result = await pool.query(
+      `UPDATE users
+          SET password_hash = $1,
+              password_reset_required = true
+        WHERE id = $2
+          AND is_admin = false
+          AND deleted_at IS NULL
+          AND auth_provider = 'local'
+        RETURNING id`,
+      [hash, id],
+    );
+    if (result.rowCount === 0) {
+      return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
+    }
+    return res.json({ ok: true, tempPassword });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
+});
+
 /**
  * @openapi
  * /api/admin/members/{id}/club:

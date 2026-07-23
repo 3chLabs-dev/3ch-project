@@ -22,7 +22,12 @@ const verifyPasswordSchema = z.object({
   password: z.string().min(1),
 });
 
-const { signToken, signSignupTicket, verifyToken } = require("../utils/authUtils");
+const {
+  signToken,
+  signSignupTicket,
+  signPasswordResetTicket,
+  verifyToken,
+} = require("../utils/authUtils");
 const { generateMemberCode } = require("../utils/memberCodeUtils");
 
 function getDefaultFrontendOrigin() {
@@ -465,7 +470,10 @@ router.post("/login", async (req, res) => {
 
   try {
     const result = await pool.query(
-      "select id, email, password_hash, nickname, name, phone, auth_provider from users where email = $1 and deleted_at is null",
+      `select id, email, password_hash, nickname, name, phone, auth_provider,
+              password_reset_required
+         from users
+        where email = $1 and deleted_at is null`,
       [email],
     );
 
@@ -484,12 +492,56 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ ok: false, error: "INVALID_CREDENTIALS" });
     }
 
+    if (user.password_reset_required) {
+      const resetToken = signPasswordResetTicket({ id: user.id, email: user.email });
+      return res.json({ ok: true, passwordResetRequired: true, resetToken });
+    }
+
     const token = signToken({ id: user.id, email: user.email });
 
     // 비번 해시는 절대 반환 금지
     delete user.password_hash;
 
     return res.json({ ok: true, token, user });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
+});
+
+router.post("/reset-required-password", async (req, res) => {
+  const { resetToken, password } = req.body || {};
+  const passwordSchema = z.string()
+    .min(8)
+    .max(12)
+    .regex(/[A-Za-z]/)
+    .regex(/\d/)
+    .regex(/[^A-Za-z\d]/);
+
+  const parsedPassword = passwordSchema.safeParse(password);
+  if (!resetToken || !parsedPassword.success) {
+    return res.status(400).json({ ok: false, error: "VALIDATION_ERROR" });
+  }
+
+  let payload;
+  try {
+    payload = verifyToken(resetToken, "password-reset");
+  } catch {
+    return res.status(401).json({ ok: false, error: "INVALID_RESET_TOKEN" });
+  }
+
+  try {
+    const hash = await bcrypt.hash(parsedPassword.data, 12);
+    const result = await pool.query(
+      `update users
+          set password_hash = $1, password_reset_required = false
+        where id = $2 and deleted_at is null and password_reset_required = true
+        returning id`,
+      [hash, Number(payload.sub)],
+    );
+    if (result.rowCount === 0) {
+      return res.status(409).json({ ok: false, error: "RESET_NOT_REQUIRED" });
+    }
+    return res.json({ ok: true });
   } catch (e) {
     return res.status(500).json({ ok: false, error: String(e.message || e) });
   }

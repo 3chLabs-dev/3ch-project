@@ -222,6 +222,12 @@ try {
       const token = res.data?.token;
       const user = res.data?.user;
 
+      if (res.data?.passwordResetRequired && res.data?.resetToken) {
+        sessionStorage.setItem("passwordResetToken", res.data.resetToken);
+        navigate("/password/reset-required", { replace: true });
+        return;
+      }
+
       if (!token) {
         alert("토큰을 받지 못했습니다.");
         return;

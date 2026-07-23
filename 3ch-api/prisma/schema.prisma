@@ -11,6 +11,7 @@ model User {
   id            Int       @id @default(autoincrement())
   email         String    @unique
   password_hash String?
+  password_reset_required Boolean @default(false)
   name          String?
   nickname      String?
   phone         String?

@@ -58,6 +58,7 @@ import MemberEditPage from "../pages/mypage/userinfo/MemberEditPage.tsx";
 import SettingsPage from "../pages/mypage/SettingsPage.tsx";
 import PasswordHelpPage from "../pages/sign/findPassword/PasswordHelpPage.tsx";
 import PasswordResetRequestPage from "../pages/sign/findPassword/PasswordResetRequestPage.tsx";
+import RequiredPasswordResetPage from "../pages/sign/RequiredPasswordResetPage.tsx";
 import NoticePage from "../pages/mypage/NoticePage.tsx";
 import InquiryPage from "../pages/mypage/InquiryPage.tsx";
 import FaqPage from "../pages/mypage/FaqPage.tsx";
@@ -127,6 +128,7 @@ export const router = createBrowserRouter([
       { path: "/mypage/settings", element: <SettingsPage />},
       { path: "/password/help", element: <PasswordHelpPage />},
       { path: "/password/verify-email", element: <PasswordResetRequestPage />},
+      { path: "/password/reset-required", element: <RequiredPasswordResetPage />},
       { path: "/mypage/notice", element: <NoticePage />},
       { path: "/mypage/support", element: <SupportCenterPage />},
       { path: "/mypage/donate", element: <DonatePage />},

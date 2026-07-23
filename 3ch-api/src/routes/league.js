@@ -1881,7 +1881,7 @@ router.post('/league/:leagueId/participants', optionalAuth, async (req, res) => 
 
     // 리그의 join_permission 확인
     const leaguePermRow = await pool.query(
-      `SELECT join_permission, group_id FROM leagues WHERE id = $1`,
+      `SELECT join_permission, group_id, status FROM leagues WHERE id = $1`,
       [leagueId],
     );
     if (leaguePermRow.rowCount === 0) {
@@ -1968,10 +1968,11 @@ router.post('/league/:leagueId/participants', optionalAuth, async (req, res) => 
     );
     const programData = programRow.rows[0]?.program_data ?? null;
     const programBlocks = Array.isArray(programData?.blocks) ? programData.blocks : [];
+    const isLeagueActive = leaguePermRow.rows[0].status === 'active';
     const placementBlock = placement ? programBlocks[placement.program_round - 1] : null;
     const validTournamentPlacement = placement && participants.length === 1 &&
       placementBlock?.type === 'SINGLES' && placementBlock?.format === 'TOURNAMENT';
-    if (programBlocks.length > 0 &&
+    if (isLeagueActive && programBlocks.length > 0 &&
         !programBlocks.every((block) => block?.type === 'SINGLES' && block?.format === 'LEAGUE') &&
         !validTournamentPlacement) {
       return res.status(409).json({
@@ -2021,11 +2022,31 @@ router.post('/league/:leagueId/participants', optionalAuth, async (req, res) => 
       [leagueId],
     );
 
-    await appendSingleLeagueMatchesForNewParticipants(
-      leagueId,
-      inserted.map((participant) => participant.id),
-      programBlocks,
-    );
+    if (!isLeagueActive && programBlocks.length > 0) {
+      const resetProgramData = {
+        ...programData,
+        blocks: programBlocks.map((block) => ({
+          ...block,
+          groupAssignments: [],
+          teamAssignments: [],
+          doublesAssignments: [],
+        })),
+      };
+      await pool.query(
+        `UPDATE league_programs SET program_data = $2::jsonb, updated_at = NOW() WHERE league_id = $1`,
+        [leagueId, JSON.stringify(resetProgramData)],
+      );
+      await pool.query(
+        `DELETE FROM league_matches WHERE league_id = $1 AND is_program = TRUE`,
+        [leagueId],
+      );
+    } else {
+      await appendSingleLeagueMatchesForNewParticipants(
+        leagueId,
+        inserted.map((participant) => participant.id),
+        programBlocks,
+      );
+    }
 
     if (validTournamentPlacement) {
       try {

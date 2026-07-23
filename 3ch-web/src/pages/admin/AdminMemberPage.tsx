@@ -42,9 +42,9 @@ const EMPTY_FILTERS: Filters = {
 
 const ROLE_OPTIONS = [
   { value: "",       label: "선택" },
-  { value: "owner",  label: "클럽장" },
-  { value: "admin",  label: "관리자" },
-  { value: "member", label: "일반" },
+  { value: "owner",  label: "리더" },
+  { value: "admin",  label: "운영진" },
+  { value: "member", label: "회원" },
 ];
 
 const SPORT_OPTIONS = [
@@ -472,11 +472,20 @@ export default function AdminMemberPage() {
                   </TableCell>
                   <TableCell sx={{ fontSize: 12 }}>
                     {m.role ? (
-                      <Chip label={m.role === "owner" ? "클럽장" : m.role === "admin" ? "관리자" : "일반"}
+                      <Chip label={m.role === "owner" ? "리더" : m.role === "admin" ? "운영진" : "회원"}
                         size="small" sx={{ height: 20, fontSize: 11, fontWeight: 700 }} />
                     ) : "-"}
                   </TableCell>
-                  <TableCell sx={{ fontSize: 12 }}>{m.email}</TableCell>
+                  <TableCell sx={{ fontSize: 12 }}>
+                    <Stack direction="row" alignItems="center" spacing={0.75}>
+                      <Typography component="span" sx={{ fontSize: 11, color: "#6B7280", flexShrink: 0 }}>
+                        ({AUTH_PROVIDER_LABELS[m.auth_provider] ?? m.auth_provider})
+                      </Typography>
+                      <Typography component="span" sx={{ fontSize: 12 }}>
+                        {m.email}
+                      </Typography>
+                    </Stack>
+                  </TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{m.grade ?? "-"}</TableCell>
                   <TableCell sx={{ fontSize: 12, fontWeight: 700 }}>{m.name ?? "-"}</TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{m.created_at.slice(0, 10)}</TableCell>

@@ -914,10 +914,48 @@ router.get('/group/:id', requireAuth, async (req, res) => {
   }
 });
 
+const defaultRankingPointRules = {
+  attendance: { league: 1, tournament: 2 },
+  rankings: {
+    league: { first: 30, second: 20, thirdFourth: 10 },
+    group: { first: 30, second: 15, thirdFourth: 10 },
+    tournamentUpper: { first: 50, second: 30, thirdFourth: 20 },
+    tournamentLower: { first: 20, second: 10, thirdFourth: 7 },
+  },
+};
+
 const rankingSeasonSchema = z.object({
   start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   auto_renew: z.boolean().optional().default(false),
+  point_rules: z.object({
+    attendance: z.object({
+      league: z.number().int().min(0).max(1000),
+      tournament: z.number().int().min(0).max(1000),
+    }),
+    rankings: z.object({
+      league: z.object({
+        first: z.number().int().min(0).max(10000),
+        second: z.number().int().min(0).max(10000),
+        thirdFourth: z.number().int().min(0).max(10000),
+      }),
+      group: z.object({
+        first: z.number().int().min(0).max(10000),
+        second: z.number().int().min(0).max(10000),
+        thirdFourth: z.number().int().min(0).max(10000),
+      }),
+      tournamentUpper: z.object({
+        first: z.number().int().min(0).max(10000),
+        second: z.number().int().min(0).max(10000),
+        thirdFourth: z.number().int().min(0).max(10000),
+      }),
+      tournamentLower: z.object({
+        first: z.number().int().min(0).max(10000),
+        second: z.number().int().min(0).max(10000),
+        thirdFourth: z.number().int().min(0).max(10000),
+      }),
+    }),
+  }).optional().default(defaultRankingPointRules),
 }).refine((value) => value.end_date >= value.start_date, {
   message: '종료일은 시작일보다 빠를 수 없습니다.',
   path: ['end_date'],
@@ -1890,7 +1928,7 @@ router.get('/group/:id/ranking/seasons', requireAuth, async (req, res) => {
     );
     if (accessCheck.rowCount === 0) return res.status(403).json({ message: '권한이 없습니다.' });
     const result = await pool.query(
-      `SELECT id, name, start_date, end_date, auto_renew, created_at
+      `SELECT id, name, start_date, end_date, auto_renew, point_rules, created_at
          FROM group_ranking_seasons
         WHERE group_id = $1
         ORDER BY start_date DESC, created_at DESC`,
@@ -1921,15 +1959,54 @@ router.post('/group/:id/ranking/seasons', requireAuth, requireGroupAdmin, async 
     }
     const name = `${payload.start_date.replaceAll('-', '.')} ~ ${payload.end_date.replaceAll('-', '.')}`;
     const result = await pool.query(
-      `INSERT INTO group_ranking_seasons (group_id, name, start_date, end_date, auto_renew, created_by_id)
-       VALUES ($1, $2, $3::date, $4::date, $5, $6)
-       RETURNING id, name, start_date, end_date, auto_renew, created_at`,
-      [groupId, name, payload.start_date, payload.end_date, payload.auto_renew, userId],
+      `INSERT INTO group_ranking_seasons
+         (group_id, name, start_date, end_date, auto_renew, point_rules, created_by_id)
+       VALUES ($1, $2, $3::date, $4::date, $5, $6::jsonb, $7)
+       RETURNING id, name, start_date, end_date, auto_renew, point_rules, created_at`,
+      [groupId, name, payload.start_date, payload.end_date, payload.auto_renew, JSON.stringify(payload.point_rules), userId],
     );
     return res.status(201).json({ message: '시즌 기간이 설정되었습니다.', season: result.rows[0] });
   } catch (error) {
     if (error instanceof z.ZodError) return res.status(400).json({ errors: error.errors });
     console.error('Error creating ranking season:', error);
+    return res.status(500).json({ message: '서버 오류' });
+  }
+});
+
+router.put('/group/:id/ranking/seasons/:seasonId', requireAuth, requireGroupAdmin, async (req, res) => {
+  try {
+    const { id: groupId, seasonId } = req.params;
+    const payload = rankingSeasonSchema.parse(req.body);
+    const overlap = await pool.query(
+      `SELECT 1 FROM group_ranking_seasons
+        WHERE group_id = $1
+          AND id <> $2
+          AND start_date <= $4::date
+          AND end_date >= $3::date
+        LIMIT 1`,
+      [groupId, seasonId, payload.start_date, payload.end_date],
+    );
+    if (overlap.rowCount > 0) {
+      return res.status(409).json({ message: '기존 시즌과 기간이 겹칩니다.' });
+    }
+    const name = `${payload.start_date.replaceAll('-', '.')} ~ ${payload.end_date.replaceAll('-', '.')}`;
+    const result = await pool.query(
+      `UPDATE group_ranking_seasons
+          SET name = $1,
+              start_date = $2::date,
+              end_date = $3::date,
+              auto_renew = $4,
+              point_rules = $5::jsonb,
+              updated_at = NOW()
+        WHERE id = $6 AND group_id = $7
+        RETURNING id, name, start_date, end_date, auto_renew, point_rules, created_at`,
+      [name, payload.start_date, payload.end_date, payload.auto_renew, JSON.stringify(payload.point_rules), seasonId, groupId],
+    );
+    if (result.rowCount === 0) return res.status(404).json({ message: '시즌을 찾을 수 없습니다.' });
+    return res.json({ message: '시즌 설정이 변경되었습니다.', season: result.rows[0] });
+  } catch (error) {
+    if (error instanceof z.ZodError) return res.status(400).json({ errors: error.errors });
+    console.error('Error updating ranking season:', error);
     return res.status(500).json({ message: '서버 오류' });
   }
 });

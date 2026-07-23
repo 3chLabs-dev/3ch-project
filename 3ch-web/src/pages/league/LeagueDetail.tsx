@@ -298,13 +298,14 @@
 
     const canAddParticipantToProgram = useMemo(() => {
       if (!hasEventProgram) return true;
+      if (league?.status !== "active") return true;
       const data = programData?.program?.program_data as {
         blocks?: Array<{ type?: string; format?: string }>;
       } | null;
       return Boolean(data?.blocks?.length) && data!.blocks!.every(
         (block) => block.type === "SINGLES" && block.format === "LEAGUE",
       );
-    }, [hasEventProgram, programData?.program?.program_data]);
+    }, [hasEventProgram, league?.status, programData?.program?.program_data]);
 
     const confirmParticipantChange = (changeType: "add" | "edit" | "delete") => {
       if (!hasEventProgram) return true;
@@ -314,7 +315,9 @@
         return false;
       }
       return window.confirm(
-        changeType === "add"
+        league?.status !== "active"
+          ? "참가자 변경에 맞춰 프로그램 편성과 경기 데이터를 다시 생성합니다. 계속하시겠습니까?"
+          : changeType === "add"
           ? "참가자를 추가하면 새 참가자의 경기가 각 단일리그 라운드 마지막에 추가됩니다. 계속하시겠습니까?"
           : "참가자 정보 변경에 맞춰 프로그램 경기 데이터가 동기화됩니다. 계속하시겠습니까?",
       );

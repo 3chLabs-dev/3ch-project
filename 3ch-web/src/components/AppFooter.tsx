@@ -36,9 +36,9 @@ export default function AppFooter() {
 
             <Collapse in={bizOpen} timeout={180}>
                 <Typography variant="caption" color="text.secondary" sx={{ display: "block", pb: 1 }}>
-                    대표: 조하진 · 사업자등록번호: 000-00-00000
+                    대표: 조하진 · 사업자등록번호: 467-04-03722
                     <br />주소: 서울특별시 광진구 광나루로 478, 광진경제허브센터 도약관 102-11호
-                    <br />고객센터: 0000-0000 · 이메일: 3chlabs@gmail.com
+                    <br />이메일: 3chlabs@naver.com
                 </Typography>
             </Collapse>
 

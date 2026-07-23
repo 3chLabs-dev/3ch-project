@@ -330,6 +330,7 @@ model GroupRankingSeason {
   start_date    DateTime @db.Date
   end_date      DateTime @db.Date
   auto_renew    Boolean  @default(false)
+  point_rules   Json?
   created_by_id Int
   created_at    DateTime @default(now())
   updated_at    DateTime @default(now()) @updatedAt

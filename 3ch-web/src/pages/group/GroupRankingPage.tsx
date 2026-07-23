@@ -13,6 +13,7 @@ import {
   Typography,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import SettingsIcon from "@mui/icons-material/Settings";
 import type { PointRankingRow } from "../../features/group/groupApi";
 import { useGetGroupPointRankingQuery } from "../../features/group/groupApi";
 import GroupRankingSeasonDialog from "./GroupRankingSeasonDialog";
@@ -97,7 +98,17 @@ export default function GroupRankingPage() {
             </MenuItem>
           ))}
         </Select>
-        {canManage && <Button size="small" variant="outlined" onClick={() => setSeasonDialogOpen(true)} sx={{ minWidth: 72, color: "#111827", borderColor: "#D1D5DB", fontWeight: 800 }}>기간 설정</Button>}
+        {canManage && (
+          <IconButton
+            size="small"
+            onClick={() => setSeasonDialogOpen(true)}
+            aria-label="시즌 설정"
+            title="시즌 설정"
+            sx={{ border: "1px solid", borderColor: "#D1D5DB", borderRadius: 1 }}
+          >
+            <SettingsIcon fontSize="small" />
+          </IconButton>
+        )}
       </Stack>
 
       <SectionHeader title="리그" onOpenDetail={handleOpenDetail} />
@@ -105,7 +116,13 @@ export default function GroupRankingPage() {
 
       <SectionHeader title="대회" onOpenDetail={handleOpenDetail} />
       <PointRankingList rows={data.tournament.rankings} currentUserId={data.currentUserId} />
-      <GroupRankingSeasonDialog open={seasonDialogOpen} groupId={groupId} onClose={() => setSeasonDialogOpen(false)} onCreated={(seasonId) => { setSelectedSeasonId(seasonId); setSelectedYear(undefined); }} />
+      <GroupRankingSeasonDialog
+        open={seasonDialogOpen}
+        groupId={groupId}
+        seasonId={selectedSeasonId ?? data.season_id ?? undefined}
+        onClose={() => setSeasonDialogOpen(false)}
+        onCreated={(seasonId) => { setSelectedSeasonId(seasonId); setSelectedYear(undefined); }}
+      />
     </Stack>
   );
 }

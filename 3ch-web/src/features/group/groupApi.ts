@@ -271,7 +271,21 @@ export interface GroupRankingSeason {
   start_date: string;
   end_date: string;
   auto_renew?: boolean;
+  point_rules?: GroupRankingPointRules;
   created_at?: string;
+}
+
+export interface GroupRankingPointRules {
+  attendance: {
+    league: number;
+    tournament: number;
+  };
+  rankings: {
+    league: { first: number; second: number; thirdFourth: number };
+    group: { first: number; second: number; thirdFourth: number };
+    tournamentUpper: { first: number; second: number; thirdFourth: number };
+    tournamentLower: { first: number; second: number; thirdFourth: number };
+  };
 }
 
 export interface GroupPointRankingResponse {
@@ -283,6 +297,7 @@ export interface GroupPointRankingResponse {
   season?: GroupRankingSeason | null;
   seasons: GroupRankingSeason[];
   no_active_season?: boolean;
+  point_rules: GroupRankingPointRules;
   myRole: string;
   currentUserId: number;
   league: {
@@ -550,10 +565,20 @@ export const groupApi = baseApi.injectEndpoints({
       providesTags: (_result, _error, groupId) => [{ type: "Group", id: `ranking-seasons-${groupId}` }],
     }),
 
-    createGroupRankingSeason: builder.mutation<{ message: string; season: GroupRankingSeason }, { groupId: string; startDate: string; endDate: string; autoRenew: boolean }>({
-      query: ({ groupId, startDate, endDate, autoRenew }) => ({
+    createGroupRankingSeason: builder.mutation<{ message: string; season: GroupRankingSeason }, { groupId: string; startDate: string; endDate: string; autoRenew: boolean; pointRules: GroupRankingPointRules }>({
+      query: ({ groupId, startDate, endDate, autoRenew, pointRules }) => ({
         url: `/group/${groupId}/ranking/seasons`, method: "POST",
-        body: { start_date: startDate, end_date: endDate, auto_renew: autoRenew },
+        body: { start_date: startDate, end_date: endDate, auto_renew: autoRenew, point_rules: pointRules },
+      }),
+      invalidatesTags: (_result, _error, { groupId }) => [
+        { type: "Group", id: `ranking-seasons-${groupId}` }, "Group",
+      ],
+    }),
+
+    updateGroupRankingSeason: builder.mutation<{ message: string; season: GroupRankingSeason }, { groupId: string; seasonId: string; startDate: string; endDate: string; autoRenew: boolean; pointRules: GroupRankingPointRules }>({
+      query: ({ groupId, seasonId, startDate, endDate, autoRenew, pointRules }) => ({
+        url: `/group/${groupId}/ranking/seasons/${seasonId}`, method: "PUT",
+        body: { start_date: startDate, end_date: endDate, auto_renew: autoRenew, point_rules: pointRules },
       }),
       invalidatesTags: (_result, _error, { groupId }) => [
         { type: "Group", id: `ranking-seasons-${groupId}` }, "Group",
@@ -611,6 +636,7 @@ export const {
   useGetGroupPointRankingQuery,
   useGetGroupRankingSeasonsQuery,
   useCreateGroupRankingSeasonMutation,
+  useUpdateGroupRankingSeasonMutation,
   useDeleteGroupRankingSeasonMutation,
   useGetGroupRankingDetailQuery,
   useRebuildGroupRankingMutation,

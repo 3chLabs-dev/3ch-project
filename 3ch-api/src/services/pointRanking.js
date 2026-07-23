@@ -1,32 +1,55 @@
 const pool = require("../db/pool");
 
-const ATTENDANCE_POINTS = {
-  league: 1,
-  tournament: 2,
-};
+const DEFAULT_POINT_RULES = Object.freeze({
+  attendance: { league: 1, tournament: 2 },
+  rankings: {
+    league: { first: 30, second: 20, thirdFourth: 10 },
+    group: { first: 30, second: 15, thirdFourth: 10 },
+    tournamentUpper: { first: 50, second: 30, thirdFourth: 20 },
+    tournamentLower: { first: 20, second: 10, thirdFourth: 7 },
+  },
+});
 
-const BONUS_RULES = {
-  league: {
-    default: { first: 30, second: 20, thirdFourth: 10 },
-    "단일리그": { first: 30, second: 20, thirdFourth: 10 },
-    "조별리그": { first: 30, second: 15, thirdFourth: 10 },
-    "조별리그 + 본선리그": { first: 60, second: 40, thirdFourth: 30 },
-  },
-  tournament: {
-    default: { first: 50, second: 30, thirdFourth: 20 },
-    "상·하위 토너먼트": { first: 20, second: 10, thirdFourth: 7 },
-    "단일리그 + 토너먼트": { first: 50, second: 30, thirdFourth: 20 },
-    "조별리그 + 토너먼트": { first: 50, second: 30, thirdFourth: 20 },
-  },
-};
+function normalizePointRules(value) {
+  const input = value && typeof value === "object" ? value : {};
+  const attendance = input.attendance && typeof input.attendance === "object" ? input.attendance : {};
+  const rankings = input.rankings && typeof input.rankings === "object" ? input.rankings : {};
+  const numberOr = (candidate, fallback) => {
+    const parsed = Number(candidate);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+  };
+  const normalizeRankRule = (rule, fallback) => ({
+    first: numberOr(rule?.first, fallback.first),
+    second: numberOr(rule?.second, fallback.second),
+    thirdFourth: numberOr(rule?.thirdFourth, fallback.thirdFourth),
+  });
+  return {
+    attendance: {
+      league: numberOr(attendance.league, DEFAULT_POINT_RULES.attendance.league),
+      tournament: numberOr(attendance.tournament, DEFAULT_POINT_RULES.attendance.tournament),
+    },
+    rankings: {
+      league: normalizeRankRule(rankings.league, DEFAULT_POINT_RULES.rankings.league),
+      group: normalizeRankRule(rankings.group, DEFAULT_POINT_RULES.rankings.group),
+      tournamentUpper: normalizeRankRule(rankings.tournamentUpper, DEFAULT_POINT_RULES.rankings.tournamentUpper),
+      tournamentLower: normalizeRankRule(rankings.tournamentLower, DEFAULT_POINT_RULES.rankings.tournamentLower),
+    },
+  };
+}
 
 function toKey(value) {
   return String(value ?? "");
 }
 
-function getBonusRule(section, format) {
-  const normalized = String(format ?? "").trim();
-  return BONUS_RULES[section][normalized] ?? BONUS_RULES[section].default;
+function getBonusRule(pointRules, section, format, option) {
+  if (section === "tournament") {
+    return option === "LOWER"
+      ? pointRules.rankings.tournamentLower
+      : pointRules.rankings.tournamentUpper;
+  }
+  return format === "GROUP"
+    ? pointRules.rankings.group
+    : pointRules.rankings.league;
 }
 
 function createSectionRow(base) {
@@ -86,10 +109,10 @@ function awardBonus(row, rank, rule) {
   if (rank === 1) row.championships += 1;
 }
 
-function finalizeRows(sectionMap) {
+function finalizeRows(sectionMap, pointRules) {
   const rows = Array.from(sectionMap.values());
   rows.forEach((row) => {
-    row.attendance_points = row.attendance_count * ATTENDANCE_POINTS[row.section];
+    row.attendance_points = row.attendance_count * pointRules.attendance[row.section];
     row.total_points = row.attendance_points + row.score_points + row.bonus_points;
     row.win_rate = row.matches_played > 0
       ? Number((row.wins / row.matches_played).toFixed(3))
@@ -123,11 +146,30 @@ function addUtcDays(value, days) {
   return date.toISOString().slice(0, 10);
 }
 
+function getProgramRoundMeta(programData, programRound) {
+  const index = Math.max(0, Number(programRound || 1) - 1);
+  const block = Array.isArray(programData?.blocks) ? programData.blocks[index] : null;
+  const round = Array.isArray(programData?.rounds) ? programData.rounds[index] : null;
+  return {
+    type: block?.type ?? round?.program ?? null,
+    format: block?.format ?? round?.format ?? null,
+    option: round?.option ?? block?.option ?? "NONE",
+  };
+}
+
+function isSinglesEntry(row) {
+  if (row.is_program) {
+    return row.program_block_type === "SINGLES"
+      || getProgramRoundMeta(row.program_data, row.program_round).type === "SINGLES";
+  }
+  return String(row.league_type ?? "").trim() === "단식";
+}
+
 async function ensureAutoRenewedSeasons(groupId) {
   const today = new Date().toISOString().slice(0, 10);
   for (let index = 0; index < 24; index += 1) {
     const latestResult = await pool.query(
-      `SELECT id, start_date, end_date, auto_renew, created_by_id
+      `SELECT id, start_date, end_date, auto_renew, point_rules, created_by_id
          FROM group_ranking_seasons
         WHERE group_id = $1
         ORDER BY end_date DESC, created_at DESC
@@ -151,9 +193,10 @@ async function ensureAutoRenewedSeasons(groupId) {
     if (overlap.rowCount > 0) break;
     const name = `${nextStart.replaceAll('-', '.')} ~ ${nextEnd.replaceAll('-', '.')}`;
     await pool.query(
-      `INSERT INTO group_ranking_seasons (group_id, name, start_date, end_date, auto_renew, created_by_id)
-       VALUES ($1, $2, $3::date, $4::date, true, $5)`,
-      [groupId, name, nextStart, nextEnd, latest.created_by_id],
+      `INSERT INTO group_ranking_seasons
+         (group_id, name, start_date, end_date, auto_renew, point_rules, created_by_id)
+       VALUES ($1, $2, $3::date, $4::date, true, $5::jsonb, $6)`,
+      [groupId, name, nextStart, nextEnd, JSON.stringify(normalizePointRules(latest.point_rules)), latest.created_by_id],
     );
   }
 }
@@ -182,7 +225,7 @@ async function getPointRanking(groupId, year, scope, seasonId) {
   const availableYears = getAvailableYears(yearSourceResult.rows);
   const seasonResult = normalizedScope === "club"
     ? await pool.query(
-      `SELECT id, name, start_date, end_date, auto_renew
+      `SELECT id, name, start_date, end_date, auto_renew, point_rules
          FROM group_ranking_seasons
         WHERE group_id = $1
         ORDER BY start_date DESC, created_at DESC`,
@@ -195,6 +238,7 @@ async function getPointRanking(groupId, year, scope, seasonId) {
     start_date: toDateOnly(season.start_date),
     end_date: toDateOnly(season.end_date),
     auto_renew: Boolean(season.auto_renew),
+    point_rules: normalizePointRules(season.point_rules),
   }));
   const today = new Date().toISOString().slice(0, 10);
   const selectedSeason = seasons.find((season) => season.id === seasonId)
@@ -206,6 +250,7 @@ async function getPointRanking(groupId, year, scope, seasonId) {
     : (selectedSeason ? Number(selectedSeason.start_date.slice(0, 4)) : (availableYears[0] ?? new Date().getFullYear()));
   const rangeStart = noActiveSeason ? "0001-01-01" : (selectedSeason?.start_date ?? `${targetYear}-01-01`);
   const rangeEnd = noActiveSeason ? "0001-01-01" : (selectedSeason?.end_date ?? `${targetYear}-12-31`);
+  const pointRules = normalizePointRules(selectedSeason?.point_rules);
 
   const leagueFilterSql = normalizedScope === "club"
     ? `l.group_id = $1::text`
@@ -264,14 +309,17 @@ async function getPointRanking(groupId, year, scope, seasonId) {
     `SELECT
        l.id AS league_id,
        l.name AS league_name,
+       l.type AS league_type,
        l.format,
        l.group_id,
+       prog.program_data,
        lp.id AS participant_id,
        COALESCE(lp.member_id, CASE WHEN matched.matched_count = 1 THEN matched.user_id ELSE NULL END) AS member_id,
        COALESCE(lp.division, CASE WHEN matched.matched_count = 1 THEN matched.division ELSE '' END, '') AS division,
        COALESCE(u.name, u.email, CASE WHEN matched.matched_count = 1 THEN matched.name ELSE NULL END, lp.name) AS name
      FROM leagues l
      JOIN league_participants lp ON lp.league_id = l.id
+     LEFT JOIN league_programs prog ON prog.league_id = l.id
      LEFT JOIN users u ON u.id = lp.member_id
      LEFT JOIN LATERAL (
        SELECT
@@ -296,9 +344,14 @@ async function getPointRanking(groupId, year, scope, seasonId) {
     `SELECT
        l.id AS league_id,
        l.name AS league_name,
+       l.type AS league_type,
        l.format,
        l.group_id,
+       prog.program_data,
        m.id AS match_id,
+       m.is_program,
+       m.program_round,
+       m.program_block_type,
        m.bracket,
        m.round_number,
        m.match_label,
@@ -306,15 +359,18 @@ async function getPointRanking(groupId, year, scope, seasonId) {
        COALESCE(m.score_a, 0) AS score_a,
        COALESCE(m.score_b, 0) AS score_b,
        pa.id AS participant_a_id,
+       pa.group_name AS group_name_a,
        COALESCE(pa.member_id, CASE WHEN matched_a.matched_count = 1 THEN matched_a.user_id ELSE NULL END) AS member_a_id,
        COALESCE(pa.division, '') AS division_a,
        COALESCE(ua.name, ua.email, CASE WHEN matched_a.matched_count = 1 THEN matched_a.name ELSE NULL END, pa.name) AS name_a,
        pb.id AS participant_b_id,
+       pb.group_name AS group_name_b,
        COALESCE(pb.member_id, CASE WHEN matched_b.matched_count = 1 THEN matched_b.user_id ELSE NULL END) AS member_b_id,
        COALESCE(pb.division, '') AS division_b,
        COALESCE(ub.name, ub.email, CASE WHEN matched_b.matched_count = 1 THEN matched_b.name ELSE NULL END, pb.name) AS name_b
      FROM leagues l
      JOIN league_matches m ON m.league_id = l.id
+     LEFT JOIN league_programs prog ON prog.league_id = l.id
      JOIN league_participants pa ON pa.id = m.participant_a_id
      JOIN league_participants pb ON pb.id = m.participant_b_id
      LEFT JOIN users ua ON ua.id = pa.member_id
@@ -398,7 +454,16 @@ async function getPointRanking(groupId, year, scope, seasonId) {
   const leagueHasRegularPhase = new Set();
 
   matchResult.rows.forEach((match) => {
-    const section = match.bracket ? "tournament" : "league";
+    if (!isSinglesEntry(match)) return;
+    const roundMeta = getProgramRoundMeta(match.program_data, match.program_round);
+    const section = roundMeta.format === "TOURNAMENT" || match.bracket ? "tournament" : "league";
+    match._rankingFormat = roundMeta.format
+      ?? (String(match.format ?? "").includes("조별리그") ? "GROUP" : section === "tournament" ? "TOURNAMENT" : "LEAGUE");
+    match._rankingOption = roundMeta.option;
+    if (String(match.bracket ?? "").toLowerCase().includes("lower")
+        || String(match.bracket ?? "").includes("하위")) {
+      match._rankingOption = "LOWER";
+    }
     if (!match.bracket) {
       leagueHasRegularPhase.add(match.league_id);
     }
@@ -406,22 +471,15 @@ async function getPointRanking(groupId, year, scope, seasonId) {
     const memberAId = Number(match.member_a_id);
     const memberBId = Number(match.member_b_id);
 
-    if (section === "tournament") {
-      if (!tournamentParticipantSets.has(memberAId)) tournamentParticipantSets.set(memberAId, new Set());
-      if (!tournamentParticipantSets.has(memberBId)) tournamentParticipantSets.set(memberBId, new Set());
-      tournamentParticipantSets.get(memberAId).add(match.league_id);
-      tournamentParticipantSets.get(memberBId).add(match.league_id);
-    }
+    const attendanceSets = section === "tournament" ? tournamentParticipantSets : leagueParticipantSets;
+    if (!attendanceSets.has(memberAId)) attendanceSets.set(memberAId, new Set());
+    if (!attendanceSets.has(memberBId)) attendanceSets.set(memberBId, new Set());
+    const attendanceKey = match.league_id;
+    attendanceSets.get(memberAId).add(attendanceKey);
+    attendanceSets.get(memberBId).add(attendanceKey);
 
     if (match.status !== "done" || Number(match.score_a) === Number(match.score_b)) {
       return;
-    }
-
-    if (section === "league") {
-      if (!leagueParticipantSets.has(memberAId)) leagueParticipantSets.set(memberAId, new Set());
-      if (!leagueParticipantSets.has(memberBId)) leagueParticipantSets.set(memberBId, new Set());
-      leagueParticipantSets.get(memberAId).add(match.league_id);
-      leagueParticipantSets.get(memberBId).add(match.league_id);
     }
 
     const scoreA = Number(match.score_a);
@@ -444,27 +502,30 @@ async function getPointRanking(groupId, year, scope, seasonId) {
 
     const leagueKey = match.league_id;
     if (section === "league") {
-      const divisionKey = String(match.format ?? "").includes("조별리그")
-        ? `${leagueKey}:${toKey(match.division_a)}`
-        : `${leagueKey}:__all__`;
+      const roundKey = `${leagueKey}:${match.program_round ?? 0}`;
+      const divisionKey = match._rankingFormat === "GROUP"
+        ? `${roundKey}:${toKey(match.group_name_a)}`
+        : `${roundKey}:__all__`;
       const existing = leagueGroups.get(divisionKey) ?? [];
       existing.push(match);
       leagueGroups.set(divisionKey, existing);
 
-      if (String(match.format ?? "").includes("조별리그") && toKey(match.division_b) !== toKey(match.division_a)) {
-        const otherKey = `${leagueKey}:${toKey(match.division_b)}`;
+      if (match._rankingFormat === "GROUP" && toKey(match.group_name_b) !== toKey(match.group_name_a)) {
+        const otherKey = `${roundKey}:${toKey(match.group_name_b)}`;
         const otherExisting = leagueGroups.get(otherKey) ?? [];
         otherExisting.push(match);
         leagueGroups.set(otherKey, otherExisting);
       }
     } else {
-      const existing = tournamentGroups.get(leagueKey) ?? [];
+      const tournamentKey = `${leagueKey}:${match.program_round ?? 0}:${match._rankingOption}:${match.bracket ?? "main"}`;
+      const existing = tournamentGroups.get(tournamentKey) ?? [];
       existing.push(match);
-      tournamentGroups.set(leagueKey, existing);
+      tournamentGroups.set(tournamentKey, existing);
     }
   });
 
   participantResult.rows.forEach((row) => {
+    if (row.program_data || String(row.league_type ?? "").trim() !== "단식") return;
     const memberId = Number(row.member_id);
     const format = String(row.format ?? "");
     const hasLeaguePhase = format !== "상·하위 토너먼트"
@@ -490,9 +551,9 @@ async function getPointRanking(groupId, year, scope, seasonId) {
     const statMap = new Map();
 
     matches.forEach((match) => {
-      const divisionKey = groupKey.split(":").slice(1).join(":");
-      const includeA = divisionKey === "__all__" || toKey(match.division_a) === divisionKey;
-      const includeB = divisionKey === "__all__" || toKey(match.division_b) === divisionKey;
+      const divisionKey = groupKey.split(":").at(-1);
+      const includeA = divisionKey === "__all__" || toKey(match.group_name_a) === divisionKey;
+      const includeB = divisionKey === "__all__" || toKey(match.group_name_b) === divisionKey;
       if (!includeA || !includeB) return;
 
       const memberAId = Number(match.member_a_id);
@@ -522,7 +583,7 @@ async function getPointRanking(groupId, year, scope, seasonId) {
     });
 
     const standings = Array.from(statMap.values()).sort(compareStanding);
-    const bonusRule = getBonusRule("league", sample.format);
+    const bonusRule = getBonusRule(pointRules, "league", sample._rankingFormat, sample._rankingOption);
     standings.slice(0, 4).forEach((standing, index) => {
       const row = leagueRows.get(Number(standing.member_id));
       if (row) awardBonus(row, index + 1, bonusRule);
@@ -583,15 +644,15 @@ async function getPointRanking(groupId, year, scope, seasonId) {
       if ((b.max_round ?? 0) !== (a.max_round ?? 0)) return (b.max_round ?? 0) - (a.max_round ?? 0);
       return compareStanding(a, b);
     });
-    const bonusRule = getBonusRule("tournament", sample.format);
+    const bonusRule = getBonusRule(pointRules, "tournament", sample._rankingFormat, sample._rankingOption);
     standings.slice(0, 4).forEach((standing, index) => {
       const row = tournamentRows.get(Number(standing.member_id));
       if (row) awardBonus(row, index + 1, bonusRule);
     });
   });
 
-  const leagueRankings = finalizeRows(leagueRows);
-  const tournamentRankings = finalizeRows(tournamentRows);
+  const leagueRankings = finalizeRows(leagueRows, pointRules);
+  const tournamentRankings = finalizeRows(tournamentRows, pointRules);
 
   return {
     group: {
@@ -603,6 +664,7 @@ async function getPointRanking(groupId, year, scope, seasonId) {
     season_id: selectedSeason?.id ?? null,
     season: selectedSeason,
     seasons,
+    point_rules: pointRules,
     no_active_season: noActiveSeason,
     scope: normalizedScope,
     available_years: availableYears,

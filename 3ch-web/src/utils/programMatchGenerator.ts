@@ -315,17 +315,28 @@ function buildUnitRoundRobinMatches(
   units: MatchUnit[],
   groupName?: string,
 ): LeagueMatch[] {
-  return generateRoundRobin(units.length).map(([leftIndex, rightIndex], index) => {
+  const orderedUnits = units.map((unit, index) => ({
+    ...unit,
+    seedLabel: String(index + 1),
+  }));
+
+  return generateRoundRobin(orderedUnits.length).map(([leftIndex, rightIndex], index) => {
     const match = makeMatch(
       `program-${leagueId}-r${roundIndex + 1}-${groupName ?? "units"}-${index + 1}`,
       index + 1,
-      units[leftIndex],
-      units[rightIndex],
+      orderedUnits[leftIndex],
+      orderedUnits[rightIndex],
       roundIndex + 1,
       null,
       block.format === "GROUP" && groupName ? groupName : undefined,
     );
-    return { ...match, is_no_game: Boolean(block.crossClubOnlyMatches && sameClubMatch(units[leftIndex], units[rightIndex])) };
+    return {
+      ...match,
+      is_no_game: Boolean(
+        block.crossClubOnlyMatches
+        && sameClubMatch(orderedUnits[leftIndex], orderedUnits[rightIndex]),
+      ),
+    };
   });
 }
 
@@ -990,7 +1001,9 @@ export function generateProgramRoundMatches(
   }
 
   const currentRound = option?.rounds?.[round - 1];
-  const isFinalRound = round > 1 && currentRound?.option === "FINAL";
+  const isFinalRound =
+    round > 1 &&
+    (currentRound?.option === "FINAL" || block.title.includes("본선"));
   const sourceRound = block.sourceRoundId ?? round - 1;
   const previousBlock = option?.blocks?.[sourceRound - 1];
   const rankedPools = isFinalRound

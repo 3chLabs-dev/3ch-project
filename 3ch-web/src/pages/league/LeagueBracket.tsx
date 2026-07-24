@@ -936,7 +936,10 @@ export default function LeagueBracket() {
   const currentProgramBlock = isProgramMode ? programOption?.blocks?.[programRound - 1] : undefined;
   const isProgramFinalRound =
     isProgramMode &&
-    programOption?.rounds?.[programRound - 1]?.option === "FINAL";
+    (
+      programOption?.rounds?.[programRound - 1]?.option === "FINAL" ||
+      currentProgramBlock?.title.includes("본선") === true
+    );
   const [programMatchStateVersion, setProgramMatchStateVersion] = useState(0);
   const programSourceMatches = useMemo(() => {
     if (!isProgramMode || !id || !programOption) return matchData?.matches ?? [];
@@ -1098,28 +1101,50 @@ export default function LeagueBracket() {
 
   // 3. 선택된 조의 팀원만 필터링 (조가 없으면 전체)
   const targetParticipants = useMemo(() => {
+    const sortByProgramSeed = <T extends { id: string }>(participants: T[], selectedMatches: LeagueMatch[]) => {
+      const seedById = new Map<string, number>();
+      selectedMatches.forEach((match) => {
+        const aSeed = Number(match.participant_a_seed_label);
+        const bSeed = Number(match.participant_b_seed_label);
+        if (match.participant_a_id && Number.isFinite(aSeed)) seedById.set(match.participant_a_id, aSeed);
+        if (match.participant_b_id && Number.isFinite(bSeed)) seedById.set(match.participant_b_id, bSeed);
+      });
+      return [...participants].sort(
+        (a, b) => (seedById.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (seedById.get(b.id) ?? Number.MAX_SAFE_INTEGER),
+      );
+    };
+
     if (isProgramTeamRound) {
       if (groupNames.length > 0 && selectedGroup) {
         const selectedMatches = programMatchesAll.filter((match) => match.match_label === selectedGroup);
         const ids = new Set(
           selectedMatches.flatMap((match) => [match.participant_a_id, match.participant_b_id]).filter(Boolean) as string[],
         );
-        return programTeamParticipants.filter((participant) => ids.has(participant.id));
+        return sortByProgramSeed(
+          programTeamParticipants.filter((participant) => ids.has(participant.id)),
+          selectedMatches,
+        );
       }
-      return programTeamParticipants;
+      return sortByProgramSeed(programTeamParticipants, programMatchesAll);
     }
     if (isProgramMode && groupNames.length > 0 && selectedGroup) {
       const selectedMatches = programMatchesAll.filter((match) => match.match_label === selectedGroup);
       const ids = new Set(
         selectedMatches.flatMap((match) => [match.participant_a_id, match.participant_b_id]).filter(Boolean) as string[],
       );
-      return rawParticipants.filter((participant) => ids.has(participant.id));
+      return sortByProgramSeed(
+        rawParticipants.filter((participant) => ids.has(participant.id)),
+        selectedMatches,
+      );
     }
     if (isProgramMode) {
       const ids = new Set(
         programMatchesAll.flatMap((match) => [match.participant_a_id, match.participant_b_id]).filter(Boolean) as string[],
       );
-      return rawParticipants.filter((participant) => ids.has(participant.id));
+      return sortByProgramSeed(
+        rawParticipants.filter((participant) => ids.has(participant.id)),
+        programMatchesAll,
+      );
     }
     if (groupNames.length > 0 && selectedGroup) {
       return rawParticipants.filter(p => p.group_name === selectedGroup);

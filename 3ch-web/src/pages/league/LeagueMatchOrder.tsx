@@ -500,7 +500,10 @@ export default function LeagueMatchOrder() {
   const isTournamentProgramRound = isProgramMode && currentProgramBlock?.format === "TOURNAMENT";
   const isProgramFinalRound =
     isProgramMode &&
-    programOption?.rounds?.[programRound - 1]?.option === "FINAL";
+    (
+      programOption?.rounds?.[programRound - 1]?.option === "FINAL" ||
+      currentProgramBlock?.title.includes("본선") === true
+    );
   const programSourceMatches = useMemo(() => {
     if (!isProgramMode || !leagueId || !programOption) return matchData?.matches ?? [];
 
@@ -709,6 +712,18 @@ export default function LeagueMatchOrder() {
             const groupB = match.participant_b_id ? participantGroupMap.get(match.participant_b_id) : null;
             return groupA === selectedGroup || groupB === selectedGroup;
           });
+    }
+
+    if (isProgramMode) {
+      sourceMatches.forEach((match) => {
+        if (match.participant_a_id && match.participant_a_seed_label) {
+          map.set(match.participant_a_id, match.participant_a_seed_label);
+        }
+        if (match.participant_b_id && match.participant_b_seed_label) {
+          map.set(match.participant_b_id, match.participant_b_seed_label);
+        }
+      });
+      if (map.size > 0) return map;
     }
 
     const participantIds = new Set(

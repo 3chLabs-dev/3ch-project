@@ -66,7 +66,7 @@ export default function LoadMembersDialog({
     const [page, setPage] = useState(1);
     const [checked, setChecked] = useState<Record<string, boolean>>({});
 
-    const pageSize = 5;
+    const pageSize = 20;
 
     // 클럽 멤버 불러오기
     useEffect(() => {
@@ -136,8 +136,29 @@ export default function LoadMembersDialog({
         [rows, checked]
     );
 
+    const selectedPageCount = view.reduce(
+        (count, row) => count + (checked[row.id] ? 1 : 0),
+        0
+    );
+    const isCurrentPageSelected =
+        view.length > 0 && selectedPageCount === view.length;
+    const isCurrentPageIndeterminate =
+        selectedPageCount > 0 && selectedPageCount < view.length;
+
     const toggle = (id: string) =>
         setChecked((prev) => ({ ...prev, [id]: !prev[id] }));
+
+    const toggleCurrentPage = () => {
+        if (view.length === 0) return;
+        setChecked((prev) => {
+            const next = { ...prev };
+            const shouldSelect = !view.every((row) => prev[row.id]);
+            view.forEach((row) => {
+                next[row.id] = shouldSelect;
+            });
+            return next;
+        });
+    };
 
     const resetLocal = () => {
         setQ("");
@@ -223,7 +244,15 @@ export default function LoadMembersDialog({
                                 mb: 0.7,
                             }}
                         >
-                            <Typography sx={{ fontSize: 12, color: "#6B7280", fontWeight: 900 }}>선택</Typography>
+                            <Checkbox
+                                checked={isCurrentPageSelected}
+                                indeterminate={isCurrentPageIndeterminate}
+                                disabled={view.length === 0}
+                                onChange={toggleCurrentPage}
+                                size="small"
+                                inputProps={{ "aria-label": "현재 페이지 회원 전체 선택" }}
+                                sx={{ p: 0 }}
+                            />
                             <Typography sx={{ fontSize: 12, color: "#6B7280", fontWeight: 900, textAlign: "center" }}>
                                 부수
                             </Typography>

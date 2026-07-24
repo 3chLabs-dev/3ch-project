@@ -934,12 +934,6 @@ export default function LeagueBracket() {
     [isProgramMode, id, programData],
   );
   const currentProgramBlock = isProgramMode ? programOption?.blocks?.[programRound - 1] : undefined;
-  const isProgramFinalRound =
-    isProgramMode &&
-    (
-      programOption?.rounds?.[programRound - 1]?.option === "FINAL" ||
-      currentProgramBlock?.title.includes("본선") === true
-    );
   const [programMatchStateVersion, setProgramMatchStateVersion] = useState(0);
   const programSourceMatches = useMemo(() => {
     if (!isProgramMode || !id || !programOption) return matchData?.matches ?? [];
@@ -996,11 +990,7 @@ export default function LeagueBracket() {
       || (unitMatch.participant_b_roster?.length ?? 0) > 1;
   });
   const isProgramUnitRound = programRoundType === "TEAM" || programRoundType === "DOUBLES" || hasGeneratedUnitRoster;
-  const hasProgramClubPolicy = Boolean(programOption?.blocks?.[programRound - 1]?.crossClubGrouping || programOption?.blocks?.[programRound - 1]?.crossClubOnlyMatches);
   const programMatchesAll = useMemo(() => {
-    if (!isProgramFinalRound && !isProgramUnitRound && !hasProgramClubPolicy) {
-      return serverProgramMatchesAll.length > 0 ? serverProgramMatchesAll : generatedProgramMatchesAll;
-    }
     const serverById = new Map(serverProgramMatchesAll.map((match) => [match.id, match]));
     return generatedProgramMatchesAll.map((match) => {
       const serverMatch = serverById.get(match.id);
@@ -1014,7 +1004,7 @@ export default function LeagueBracket() {
           }
         : match;
     });
-  }, [generatedProgramMatchesAll, hasProgramClubPolicy, isProgramFinalRound, isProgramUnitRound, serverProgramMatchesAll]);
+  }, [generatedProgramMatchesAll, serverProgramMatchesAll]);
   const [updateMatch] = useUpdateLeagueMatchMutation();
   const updateProgramMatch = useCallback((matchId: string, updates: ProgramMatchPatch) => {
     if (!id) return;

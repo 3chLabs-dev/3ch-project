@@ -552,13 +552,6 @@ export default function LeagueMatchOrder() {
     [matchData?.matches, programRound],
   );
   const programMatches = useMemo(() => {
-    const isMultipleTournament = (currentProgramBlock?.tournamentBracketCount ?? 1) > 1;
-    const isUnitRound = currentProgramBlock?.type === "TEAM" || currentProgramBlock?.type === "DOUBLES";
-    const hasClubPolicy = Boolean(currentProgramBlock?.crossClubGrouping || currentProgramBlock?.crossClubOnlyMatches);
-    if (!isProgramFinalRound && !isMultipleTournament && !isUnitRound && !hasClubPolicy) {
-      return serverProgramMatches.length > 0 ? serverProgramMatches : generatedProgramMatches;
-    }
-
     const serverById = new Map(serverProgramMatches.map((match) => [match.id, match]));
     const hydratedMatches = generatedProgramMatches.map((match) => {
       const serverMatch = serverById.get(match.id);
@@ -574,7 +567,7 @@ export default function LeagueMatchOrder() {
     });
     return applyProgramTournamentAdvancement(hydratedMatches)
       .sort((left, right) => left.match_order - right.match_order);
-  }, [currentProgramBlock?.tournamentBracketCount, currentProgramBlock?.type, generatedProgramMatches, isProgramFinalRound, serverProgramMatches]);
+  }, [generatedProgramMatches, serverProgramMatches]);
   const tournamentBracketIndexes = useMemo(
     () => [...new Set(programMatches.map((match) => match.tournament_bracket_index ?? 1))].sort((a, b) => a - b),
     [programMatches],

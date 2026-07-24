@@ -3,6 +3,7 @@ import {
   Button,
   FormControl,
   FormControlLabel,
+  IconButton,
   MenuItem,
   Radio,
   RadioGroup,
@@ -83,14 +84,53 @@ function AdvancementCount({
   return (
     <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 2 }}>
       <Typography sx={{ fontWeight: 900 }}>상위</Typography>
-      <TextField
-        type="number"
-        value={value}
-        onChange={(event) => onChange(Math.max(1, Number(event.target.value) || 1))}
-        inputProps={{ min: 1, inputMode: "numeric" }}
-        size="small"
-        sx={{ width: 92 }}
-      />
+      <Stack direction="row" alignItems="center" spacing={0.5}>
+        <IconButton
+          aria-label="본선 진출 인원 감소"
+          onClick={() => onChange(Math.max(1, value - 1))}
+          disabled={value <= 1}
+          sx={{ width: 36, height: 36, border: "1px solid #D9DDE6", fontSize: 22 }}
+        >
+          −
+        </IconButton>
+        <TextField
+          type="number"
+          value={value}
+          onFocus={(event) => event.currentTarget.select()}
+          onChange={(event) => {
+            if (event.target.value === "") return;
+            onChange(Math.min(99, Math.max(1, Number(event.target.value) || 1)));
+          }}
+          inputProps={{
+            min: 1,
+            max: 99,
+            inputMode: "numeric",
+            "aria-label": "본선 진출 인원",
+          }}
+          size="small"
+          sx={{
+            width: 48,
+            "& .MuiInputBase-root": { height: 36 },
+            "& input": {
+              p: 0,
+              textAlign: "center",
+              fontWeight: 900,
+              MozAppearance: "textfield",
+            },
+            "& input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button": {
+              m: 0,
+              WebkitAppearance: "none",
+            },
+          }}
+        />
+        <IconButton
+          aria-label="본선 진출 인원 증가"
+          onClick={() => onChange(value + 1)}
+          sx={{ width: 36, height: 36, border: "1px solid #D9DDE6", color: "#1976D2", fontSize: 22 }}
+        >
+          +
+        </IconButton>
+      </Stack>
       <Typography sx={{ fontWeight: 900 }}>명</Typography>
     </Stack>
   );

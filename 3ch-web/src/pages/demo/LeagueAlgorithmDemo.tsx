@@ -69,6 +69,64 @@ function MatchCountStepper({
   );
 }
 
+function AdvancementStepper({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  const buttonStyle = {
+    width: "36px",
+    height: "36px",
+    border: "1px solid #d1d5db",
+  } as const;
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+      <IconButton
+        aria-label="본선 진출 인원 감소"
+        disabled={value <= 1}
+        onClick={() => onChange(Math.max(1, value - 1))}
+        sx={{ ...buttonStyle, fontSize: 22 }}
+      >
+        −
+      </IconButton>
+      <input
+        type="number"
+        min={1}
+        max={99}
+        inputMode="numeric"
+        aria-label="본선 진출 인원"
+        value={value}
+        onFocus={(event) => event.currentTarget.select()}
+        onChange={(event) => {
+          if (event.target.value === "") return;
+          onChange(Math.min(99, Math.max(1, Number(event.target.value) || 1)));
+        }}
+        style={{
+          width: "48px",
+          height: "36px",
+          boxSizing: "border-box",
+          border: "1px solid #d1d5db",
+          borderRadius: "8px",
+          background: "#fff",
+          fontWeight: 700,
+          textAlign: "center",
+          fontSize: "14px",
+        }}
+      />
+      <IconButton
+        aria-label="본선 진출 인원 증가"
+        onClick={() => onChange(value + 1)}
+        sx={{ ...buttonStyle, color: "#1976D2", fontSize: 22 }}
+      >
+        +
+      </IconButton>
+    </div>
+  );
+}
+
 function RoundDivisionEditor({
   round,
   roundIndex,
@@ -169,12 +227,9 @@ function RoundDivisionEditor({
         <>
           <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "16px" }}>
             <strong>상위</strong>
-            <input
-              type="number"
-              min={1}
+            <AdvancementStepper
               value={round.advanceCount ?? 2}
-              onChange={(event) => update({ advanceCount: Math.max(1, Number(event.target.value) || 1), finalAdvancementMode: "top-n" })}
-              style={{ ...controlStyle, width: "84px" }}
+              onChange={(advanceCount) => update({ advanceCount, finalAdvancementMode: "top-n" })}
             />
             <strong>명</strong>
           </div>
@@ -199,12 +254,9 @@ function RoundDivisionEditor({
           {(round.finalAdvancementMode ?? "top-n") === "top-n" && (
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "12px" }}>
               <strong>상위</strong>
-              <input
-                type="number"
-                min={1}
+              <AdvancementStepper
                 value={round.advanceCount ?? 2}
-                onChange={(event) => update({ advanceCount: Math.max(1, Number(event.target.value) || 1) })}
-                style={{ ...controlStyle, width: "84px" }}
+                onChange={(advanceCount) => update({ advanceCount })}
               />
               <strong>명</strong>
             </div>

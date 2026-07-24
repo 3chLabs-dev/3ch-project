@@ -5,14 +5,15 @@ import {
   Button,
   Chip,
   CircularProgress,
-  Divider,
   IconButton,
   Radio,
   Stack,
   Typography,
 } from "@mui/material";
 import { useState } from "react";
-import { useAppDispatch } from "../../app/hooks";
+import { useAppDispatch, useAppSelector } from "../../app/hooks";
+import { generateGroupOptions } from "../../features/league/algorithms/generateGroupOptions";
+import { generateProgramBlocks } from "../../features/league/algorithms/generateProgramBlocks";
 import {
   setRenewalCompositionMode,
   setRenewalConfiguration,
@@ -57,8 +58,33 @@ const teamCounts = (round: RoundConfig) => {
   };
 };
 
+const matchRuleLabel = (rule: RoundConfig["matchRule"]) =>
+  ({
+    BEST_OF_3: "3전 2선승제",
+    BEST_OF_5: "5전 3선승제",
+    THREE_SET: "3세트제",
+  })[rule];
+
+const durationLabel = (minutes: number) => {
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return `${hours > 0 ? `${hours}시간 ` : ""}${remainingMinutes}분`;
+};
+
+const averageMatchesPerPlayer = (
+  blocks: ReturnType<typeof generateProgramBlocks>,
+  playerCount: number,
+) => {
+  const appearances = blocks.reduce((sum, block) => {
+    if (block.type === "DOUBLES") return sum + block.matchCount * 4;
+    return sum + block.matchCount * 2;
+  }, 0);
+  return (appearances / Math.max(1, playerCount)).toFixed(1);
+};
+
 export default function LeagueRenewalStepSavedPrograms() {
   const dispatch = useAppDispatch();
+  const basicInfo = useAppSelector((state) => state.leagueRenewalCreation.basicInfo);
   const { data, isLoading, isError } = useGetLeagueProgramTemplatesQuery();
   const [deleteTemplate] = useDeleteLeagueProgramTemplateMutation();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -77,7 +103,7 @@ export default function LeagueRenewalStepSavedPrograms() {
   return (
     <Box sx={{ px: 2.5, pt: 2, pb: 4 }}>
       <Typography sx={{ fontSize: 22, fontWeight: 900, mb: 2 }}>
-        리그 구성 불러오기
+        저장한 구성 불러오기
       </Typography>
 
       {isLoading && (
@@ -106,6 +132,27 @@ export default function LeagueRenewalStepSavedPrograms() {
       <Stack spacing={1.5}>
         {data?.templates.map((template) => {
           const selected = selectedId === template.id;
+          const playerCount = Math.max(2, basicInfo?.participantCount ?? 2);
+          const courtCount = Math.max(1, basicInfo?.courtCount ?? 1);
+          const defaultGroupSizes = generateGroupOptions(playerCount)[0]?.groups ?? [playerCount];
+          const previewBlocks = generateProgramBlocks(
+            {
+              singlesEnabled: template.template_data.rounds.some((round) => round.program === "SINGLES"),
+              doublesEnabled: template.template_data.rounds.some((round) => round.program === "DOUBLES"),
+              teamEnabled: template.template_data.rounds.some((round) => round.program === "TEAM"),
+              teamMatchRounds: [],
+              programOrder: template.template_data.rounds.map((round) => round.program),
+              teamPlayerCount:
+                template.template_data.rounds.find((round) => round.program === "TEAM")?.teamPlayerCount ?? 4,
+              rounds: template.template_data.rounds,
+            },
+            playerCount,
+            courtCount,
+            defaultGroupSizes,
+          );
+          const totalMatchCount = previewBlocks.reduce((sum, block) => sum + block.matchCount, 0);
+          const totalMinutes = previewBlocks.reduce((sum, block) => sum + block.expectedMinutes, 0);
+
           return (
             <Box
               key={template.id}
@@ -119,25 +166,36 @@ export default function LeagueRenewalStepSavedPrograms() {
                 position: "relative",
                 p: 2,
                 cursor: "pointer",
-                border: "1px solid",
+                border: selected ? "2px solid" : "1px solid",
                 borderColor: selected ? "#2F80ED" : "#D9DDE6",
-                borderRadius: 1,
+                borderRadius: 1.5,
                 bgcolor: selected ? "#EFF6FF" : "#fff",
               }}
             >
-              <Stack direction="row" alignItems="center" spacing={1} sx={{ pr: 3.5 }}>
-                <Radio checked={selected} size="small" sx={{ p: 0 }} />
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography sx={{ fontWeight: 900 }}>{template.name}</Typography>
-                  <Typography sx={{ mt: 0.25, fontSize: 12, color: "#64748B" }}>
-                    {template.template_data.rounds.length}라운드 구성
-                  </Typography>
-                </Box>
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ pr: 4 }}>
+                <Radio
+                  checked={selected}
+                  size="small"
+                  sx={{ p: 0, color: "#9CA3AF", "&.Mui-checked": { color: "#2F80ED" } }}
+                />
+                <Typography aria-hidden sx={{ color: "#F59E0B", fontSize: 21, lineHeight: 1 }}>
+                  ★
+                </Typography>
+                <Typography sx={{ flex: 1, minWidth: 0, fontSize: 17, fontWeight: 900 }}>
+                  {template.name}
+                </Typography>
               </Stack>
-              <Divider sx={{ my: 1.5 }} />
-              <Stack spacing={2}>
+              <Stack spacing={0.25} sx={{ mt: 1.5, pl: 4.5 }}>
+                <Typography sx={{ fontSize: 14 }}>- 총 경기수: {totalMatchCount}경기</Typography>
+                <Typography sx={{ fontSize: 14 }}>
+                  - 1인 평균 경기수: {averageMatchesPerPlayer(previewBlocks, playerCount)}경기
+                </Typography>
+                <Typography sx={{ fontSize: 14 }}>- 예상 소요시간: {durationLabel(totalMinutes)}</Typography>
+              </Stack>
+              <Stack spacing={3.5} sx={{ mt: 2.25, pl: 2.5 }}>
                 {template.template_data.rounds.map((round, index) => {
                   const counts = round.program === "TEAM" ? teamCounts(round) : null;
+                  const block = previewBlocks[index];
                   return (
                     <Box key={`${template.id}-${round.id}`}>
                       <Stack direction="row" alignItems="center" flexWrap="wrap" gap={0.75}>
@@ -150,10 +208,20 @@ export default function LeagueRenewalStepSavedPrograms() {
                         <Chip label={typeLabel(round.program)} size="small" sx={{ height: 22, fontSize: 11, fontWeight: 700 }} />
                         <Chip label={formatLabel(round.format)} size="small" sx={{ height: 22, fontSize: 11, fontWeight: 700 }} />
                       </Stack>
-                      <Stack spacing={0.35} sx={{ mt: 1, pl: 1 }}>
+                      <Stack spacing={0.35} sx={{ mt: 1, pl: 1.5 }}>
                         <Typography sx={{ fontSize: 13, color: "#334155" }}>
-                          경기방식: {round.matchRule}
+                          경기방식: {matchRuleLabel(round.matchRule)}
                         </Typography>
+                        {block && (
+                          <>
+                            <Typography sx={{ fontSize: 13, color: "#334155" }}>
+                              경기수: {block.matchCount}경기
+                            </Typography>
+                            <Typography sx={{ fontSize: 13, color: "#334155" }}>
+                              예상시간: {durationLabel(block.expectedMinutes)}
+                            </Typography>
+                          </>
+                        )}
                         {round.program === "TEAM" && counts && (
                           <>
                             <Typography sx={{ fontSize: 13, color: "#334155" }}>

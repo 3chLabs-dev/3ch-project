@@ -38,8 +38,8 @@ const choices: Array<{
   },
   {
     value: "saved",
-    title: "리그 구성 불러오기",
-    description: "자주 생성하는 리그 구성 방식을 불러올 수 있습니다.",
+    title: "저장한 구성 불러오기",
+    description: "즐겨찾기에 저장한 리그 구성을 불러와 빠르게 생성할 수 있습니다.",
   },
 ];
 

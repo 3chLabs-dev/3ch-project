@@ -556,6 +556,10 @@ export default function LeagueMatchOrder() {
     const hydratedMatches = generatedProgramMatches.map((match) => {
       const serverMatch = serverById.get(match.id);
       if (!serverMatch) return match;
+      const hasSameParticipants =
+        serverMatch.participant_a_id === match.participant_a_id
+        && serverMatch.participant_b_id === match.participant_b_id;
+      if (!hasSameParticipants) return match;
       return {
         ...match,
         match_order: serverMatch.match_order,

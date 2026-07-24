@@ -994,7 +994,10 @@ export default function LeagueBracket() {
     const serverById = new Map(serverProgramMatchesAll.map((match) => [match.id, match]));
     return generatedProgramMatchesAll.map((match) => {
       const serverMatch = serverById.get(match.id);
-      return serverMatch
+      const hasSameParticipants =
+        serverMatch?.participant_a_id === match.participant_a_id
+        && serverMatch?.participant_b_id === match.participant_b_id;
+      return serverMatch && hasSameParticipants
         ? {
             ...match,
             score_a: serverMatch.score_a,
@@ -1183,6 +1186,16 @@ export default function LeagueBracket() {
   // editOrder≠null: 사용자가 순서를 변경한 로컬 상태 (서버에도 즉시 반영)
   const [editOrder, setEditOrder] = useState<LeagueParticipantItem[] | null>(null);
   const localOrder = editOrder ?? targetParticipants;
+  const targetParticipantKey = targetParticipants.map((participant) => participant.id).join("|");
+
+  useEffect(() => {
+    setEditOrder((current) => {
+      if (!current) return null;
+      const currentKey = current.map((participant) => participant.id).join("|");
+      return currentKey === targetParticipantKey ? current : null;
+    });
+  }, [targetParticipantKey]);
+
   const setLocalOrder = useCallback(
     (fn: (prev: LeagueParticipantItem[]) => LeagueParticipantItem[]) =>
       setEditOrder((prev) => fn(prev ?? targetParticipants)),

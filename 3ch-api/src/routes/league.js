@@ -3015,7 +3015,8 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
     const existingState = new Map();
     if (targetProgramRounds.length > 0) {
       const existingRows = await pool.query(
-        `SELECT id, score_a, score_b, court, status
+        `SELECT id, participant_a_id, participant_b_id, program_block_type,
+                score_a, score_b, court, status
          FROM league_matches
          WHERE league_id = $1 AND is_program = TRUE AND program_round = ANY($2::int[])`,
         [leagueId, targetProgramRounds],
@@ -3035,6 +3036,14 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
       const placeholders = validMatches.map((match, index) => {
         const base = index * 18;
         const previous = existingState.get(match.id);
+        const canPreserveState = previous && (
+          match.program_block_type !== 'SINGLES' ||
+          (
+            previous.program_block_type === match.program_block_type &&
+            previous.participant_a_id === match.participant_a_id &&
+            previous.participant_b_id === match.participant_b_id
+          )
+        );
         values.push(
           match.id,
           leagueId,
@@ -3048,10 +3057,10 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
           match.next_slot,
           match.loser_next_match_id,
           match.loser_next_slot,
-          previous?.score_a ?? null,
-          previous?.score_b ?? null,
-          previous?.court ?? null,
-          previous?.status ?? 'pending',
+          canPreserveState ? previous.score_a : null,
+          canPreserveState ? previous.score_b : null,
+          canPreserveState ? previous.court : null,
+          canPreserveState ? previous.status : 'pending',
           match.program_round,
           match.program_block_type,
         );

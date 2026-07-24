@@ -5,7 +5,7 @@ import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { generateGroupOptions } from '../../features/league/algorithms/generateGroupOptions';
 import { useGetLeagueInvitedGroupsQuery, useGetLeagueParticipantsQuery, useGetLeagueProgramQuery, useGetLeagueQuery, useSaveLeagueProgramMutation, useSyncLeagueProgramMatchesMutation } from '../../features/league/leagueApi';
-import type { ProgramBlock, ProgramOption, ProgramType, TeamMatchType, RoundConfig, FormationAssignmentPlayer } from '../../features/league/types/tournament.types';
+import type { ProgramBlock, ProgramOption, ProgramType, TeamMatchType, RoundConfig, FormationAssignmentPlayer, FinalAdvancementMode, RoundOption, TournamentMode } from '../../features/league/types/tournament.types';
 import { ToggleButton, ToggleButtonGroup, Button, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Chip, Radio, CircularProgress, Box, Typography, Stack, Divider, Tooltip } from "@mui/material";
 import { DndContext, PointerSensor, TouchSensor, useSensor, useSensors, closestCenter,
   useDroppable, type DragEndEvent, type DragOverEvent, } from "@dnd-kit/core";
@@ -66,6 +66,175 @@ function MatchCountStepper({
       <Button variant="outlined" onClick={() => onChange(value + 1)} sx={{ minWidth: 36, width: 36, height: 36, p: 0 }}>+</Button>
       <Typography sx={{ width: 28, fontSize: 13 }}>경기</Typography>
     </Stack>
+  );
+}
+
+function RoundDivisionEditor({
+  round,
+  roundIndex,
+  rounds,
+  setRounds,
+}: {
+  round: RoundConfig;
+  roundIndex: number;
+  rounds: RoundConfig[];
+  setRounds: (rounds: RoundConfig[]) => void;
+}) {
+  const update = (patch: Partial<RoundConfig>) =>
+    setRounds(rounds.map((item) => item.id === round.id ? { ...item, ...patch } : item));
+  const multipleRounds = rounds.length > 1;
+  const controlStyle = {
+    width: "100%",
+    height: "40px",
+    padding: "0 12px",
+    border: "1px solid #d1d5db",
+    borderRadius: "8px",
+    background: "#fff",
+    fontSize: "14px",
+  } as const;
+  const helperStyle = {
+    margin: "8px 0 0",
+    color: "#64748B",
+    fontSize: "13px",
+    lineHeight: 1.55,
+  } as const;
+
+  let choices: Array<{ value: string; label: string }> = [];
+  let value: string = round.option;
+  let disabledLabel: string | null = null;
+
+  if (!multipleRounds && round.format !== "TOURNAMENT") {
+    disabledLabel = "해당 없음";
+  } else if (!multipleRounds) {
+    choices = [
+      { value: "NONE:single", label: "일반" },
+      { value: "NONE:upper-lower", label: "상·하위" },
+    ];
+    value = `NONE:${round.tournamentMode ?? "single"}`;
+  } else if (roundIndex === 0 && round.format !== "TOURNAMENT") {
+    disabledLabel = "예선";
+  } else if (round.format === "TOURNAMENT") {
+    choices = [
+      { value: "PRELIM:single", label: "예선(일반)" },
+      ...(roundIndex > 0 ? [{ value: "FINAL:single", label: "본선(일반)" }] : []),
+      { value: "PRELIM:upper-lower", label: "예선(상·하위)" },
+      ...(roundIndex > 0 ? [{ value: "FINAL:upper-lower", label: "본선(상·하위)" }] : []),
+    ];
+    value = `${round.option}:${round.tournamentMode ?? "single"}`;
+  } else {
+    choices = [
+      { value: "PRELIM", label: "예선" },
+      { value: "FINAL", label: "본선" },
+    ];
+  }
+
+  const handleChoice = (choice: string) => {
+    if (choice.includes(":")) {
+      const [option, tournamentMode] = choice.split(":");
+      update({
+        option: option as RoundOption,
+        tournamentMode: tournamentMode as TournamentMode,
+        sourceRoundId: roundIndex > 0 ? rounds[roundIndex - 1].id : undefined,
+      });
+      return;
+    }
+    update({
+      option: choice as RoundOption,
+      sourceRoundId: roundIndex > 0 ? rounds[roundIndex - 1].id : undefined,
+      finalAdvancementMode: round.finalAdvancementMode ?? "top-n",
+      advanceCount: round.advanceCount ?? 2,
+    });
+  };
+
+  return (
+    <div style={{ marginTop: "16px" }}>
+      <div style={{ fontWeight: 700, marginBottom: "8px" }}>라운드 구분</div>
+      {disabledLabel ? (
+        <input disabled value={disabledLabel} style={{ ...controlStyle, color: "#9ca3af" }} />
+      ) : (
+        <select value={value} onChange={(event) => handleChoice(event.target.value)} style={controlStyle}>
+          {choices.map((choice) => <option key={choice.value} value={choice.value}>{choice.label}</option>)}
+        </select>
+      )}
+
+      {round.format === "TOURNAMENT" && !disabledLabel && (
+        <p style={helperStyle}>
+          {round.tournamentMode === "upper-lower"
+            ? "첫 경기에서 이기면 상위부로, 지면 하위부로 진출하는 토너먼트입니다."
+            : "경기에서 이긴 참가자가 다음 단계로 진출하는 일반적인 토너먼트입니다."}
+        </p>
+      )}
+
+      {roundIndex > 0 && round.option === "FINAL" && round.format === "LEAGUE" && (
+        <>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "16px" }}>
+            <strong>상위</strong>
+            <input
+              type="number"
+              min={1}
+              value={round.advanceCount ?? 2}
+              onChange={(event) => update({ advanceCount: Math.max(1, Number(event.target.value) || 1), finalAdvancementMode: "top-n" })}
+              style={{ ...controlStyle, width: "84px" }}
+            />
+            <strong>명</strong>
+          </div>
+          <p style={helperStyle}>
+            예선 순위 결과에 따라 상위 순위권 참가자만 본선 라운드를 진행합니다.
+          </p>
+        </>
+      )}
+
+      {roundIndex > 0 && round.option === "FINAL" && round.format === "GROUP" && (
+        <div style={{ marginTop: "16px" }}>
+          <div style={{ fontWeight: 700, marginBottom: "8px" }}>본선 편성</div>
+          <select
+            value={round.finalAdvancementMode ?? "top-n"}
+            onChange={(event) => update({ finalAdvancementMode: event.target.value as FinalAdvancementMode })}
+            style={controlStyle}
+          >
+            <option value="top-n">상위 인원</option>
+            <option value="upper-lower-groups">상·하위부</option>
+            <option value="rank-groups">순위대로</option>
+          </select>
+          {(round.finalAdvancementMode ?? "top-n") === "top-n" && (
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "12px" }}>
+              <strong>상위</strong>
+              <input
+                type="number"
+                min={1}
+                value={round.advanceCount ?? 2}
+                onChange={(event) => update({ advanceCount: Math.max(1, Number(event.target.value) || 1) })}
+                style={{ ...controlStyle, width: "84px" }}
+              />
+              <strong>명</strong>
+            </div>
+          )}
+          <p style={helperStyle}>
+            {(round.finalAdvancementMode ?? "top-n") === "upper-lower-groups"
+              ? "예선 순위 결과에 따라 상위부와 하위부로 나누어 본선 라운드를 진행합니다."
+              : (round.finalAdvancementMode ?? "top-n") === "rank-groups"
+                ? "예선 순위 결과에 따라 같은 순위끼리 각 순위조에 배정하여 본선 라운드를 진행합니다."
+                : "예선 순위 결과에 따라 상위 순위권 참가자만 본선 라운드를 진행합니다."}
+          </p>
+        </div>
+      )}
+
+      {round.format === "TOURNAMENT" && round.option === "FINAL" && roundIndex > 0 &&
+        rounds[roundIndex - 1]?.format === "GROUP" && rounds[roundIndex - 1]?.option === "PRELIM" && (
+          <div style={{ marginTop: "16px" }}>
+            <div style={{ fontWeight: 700, marginBottom: "8px" }}>대진표 개수</div>
+            <select
+              value={round.tournamentBracketCount ?? 1}
+              onChange={(event) => update({ tournamentBracketCount: Number(event.target.value) })}
+              style={controlStyle}
+            >
+              {Array.from({ length: 8 }, (_, index) => index + 1).map((count) => (
+                <option key={count} value={count}>{count}개</option>
+              ))}
+            </select>
+          </div>
+        )}
+    </div>
   );
 }
 
@@ -282,6 +451,7 @@ function RoundConfigEditor({
           (round, index) => ({
             ...round,
             id: index + 1,
+            sourceRoundId: index > 0 ? index : undefined,
           })
         )
       );
@@ -348,9 +518,11 @@ function RoundConfigEditor({
                     setRounds(
                       rounds
                         .filter((x) => x.id !== round.id)
-                        .map((x, index) => ({
+                        .map((x, index, remaining) => ({
                           ...x,
                           id: index + 1,
+                          option: remaining.length === 1 ? "NONE" : index === 0 ? "PRELIM" : x.option,
+                          sourceRoundId: index > 0 ? index : undefined,
                         }))
                     );
                   }}
@@ -414,6 +586,11 @@ function RoundConfigEditor({
                               ? {
                                   ...x,
                                   format: value,
+                                  option: rounds.length === 1 ? "NONE" : "PRELIM",
+                                  tournamentMode: value === "TOURNAMENT" ? "single" : undefined,
+                                  finalAdvancementMode: "top-n",
+                                  advanceCount: x.advanceCount ?? 2,
+                                  sourceRoundId: roundIndex > 0 ? rounds[roundIndex - 1].id : undefined,
                                   tournamentSeeding:
                                     value === "TOURNAMENT"
                                       ? x.tournamentSeeding ?? "seed"
@@ -486,68 +663,12 @@ function RoundConfigEditor({
                       </div>
                     )}
 
-	                  <div style={{ marginTop: "16px" }}>
-                    <div
-                      style={{
-                        fontWeight: 700,
-                        marginBottom: "8px",
-                      }}
-                    >
-                      옵션
-                    </div>
-
-                    <ToggleButtonGroup
-                      exclusive
-                      value={round.option}
-                      fullWidth
-                      onChange={(_, value) => {
-                        if (!value) return;
-
-                        setRounds(
-                          rounds.map((x) =>
-                            x.id === round.id
-                              ? {
-                                  ...x,
-                                  option: value,
-                                }
-                              : x
-                          )
-                        );
-                      }}
-                    >
-                      <ToggleButton value="NONE">
-                        없음
-                      </ToggleButton>
-
-                      <ToggleButton value="PRELIM">
-                        예선
-                      </ToggleButton>
-
-                      <ToggleButton value="FINAL">
-                        본선
-                      </ToggleButton>
-
-                      <ToggleButton value="UPPER">
-                        상위
-                      </ToggleButton>
-
-                      <ToggleButton value="LOWER">
-                        하위
-                      </ToggleButton>
-                    </ToggleButtonGroup>
-                    {round.format === "TOURNAMENT" && round.option === "FINAL" && roundIndex > 0 && rounds[roundIndex - 1]?.format === "GROUP" && rounds[roundIndex - 1]?.option === "PRELIM" && (
-                      <div style={{ marginTop: "16px" }}>
-                        <div style={{ fontWeight: 700, marginBottom: "8px" }}>대진표 개수</div>
-                        <select
-                          value={round.tournamentBracketCount ?? 1}
-                          onChange={(event) => setRounds(rounds.map((x) => x.id === round.id ? { ...x, tournamentBracketCount: Number(event.target.value) } : x))}
-                          style={{ width: "100%", height: "40px", padding: "0 12px", border: "1px solid #d1d5db", borderRadius: "8px", background: "#fff", fontSize: "14px" }}
-                        >
-                          {Array.from({ length: 8 }, (_, index) => index + 1).map((count) => <option key={count} value={count}>{count}개</option>)}
-                        </select>
-                      </div>
-                    )}
-                  </div>
+                    <RoundDivisionEditor
+                      round={round}
+                      roundIndex={roundIndex}
+                      rounds={rounds}
+                      setRounds={setRounds}
+                    />
               </div>
 
               {round.program === "TEAM" && (
@@ -675,16 +796,23 @@ function RoundConfigEditor({
         fullWidth
         onClick={() => {
           setRounds([
-            ...rounds,
+            ...rounds.map((item, index) => ({
+              ...item,
+              option: index === 0 ? "PRELIM" as const : item.option,
+            })),
             {
               id: rounds.length + 1,
               expanded: true,
               program: "SINGLES",
               format: "GROUP",
-              option: "NONE",
+              option: "PRELIM",
               matchRule: "BEST_OF_3",
               teamPlayerCount: 4,
               teamMatchType: "SSS",
+              tournamentMode: "single",
+              finalAdvancementMode: "top-n",
+              advanceCount: 2,
+              sourceRoundId: rounds.length,
             },
           ]);
         }}
@@ -947,7 +1075,11 @@ const LeagueAlgorithmDemo = ({
           rounds,
           oldIndex,
           newIndex
-        )
+        ).map((round, index) => ({
+          ...round,
+          id: index + 1,
+          sourceRoundId: index > 0 ? index : undefined,
+        }))
       );
     },
     [rounds]
@@ -2102,9 +2234,14 @@ const LeagueAlgorithmDemo = ({
                 variant="outlined"
                 onClick={() => {
                   setRounds(
-                    rounds.filter(
-                      (x) => x.id !== round.id
-                    )
+                    rounds
+                      .filter((x) => x.id !== round.id)
+                      .map((item, index, remaining) => ({
+                        ...item,
+                        id: index + 1,
+                        option: remaining.length === 1 ? "NONE" : index === 0 ? "PRELIM" : item.option,
+                        sourceRoundId: index > 0 ? index : undefined,
+                      }))
                   );
                 }}
               >
@@ -2167,6 +2304,11 @@ const LeagueAlgorithmDemo = ({
 	                          ? {
 	                              ...x,
 	                              format: value,
+                                option: rounds.length === 1 ? "NONE" : "PRELIM",
+                                tournamentMode: value === "TOURNAMENT" ? "single" : undefined,
+                                finalAdvancementMode: "top-n",
+                                advanceCount: x.advanceCount ?? 2,
+                                sourceRoundId: roundIndex > 0 ? rounds[roundIndex - 1].id : undefined,
                                 tournamentSeeding:
                                   value === "TOURNAMENT"
                                     ? x.tournamentSeeding ?? "seed"
@@ -2239,67 +2381,12 @@ const LeagueAlgorithmDemo = ({
                     </div>
                   )}
 
-	                <div style={{ marginTop: "16px" }}>
-                  <div
-                    style={{
-                      fontWeight: 700,
-                      marginBottom: "8px",
-                    }}
-                  >
-                    옵션
-                  </div>
-
-                  <ToggleButtonGroup
-                    exclusive
-                    value={round.option}
-                    fullWidth
-                    onChange={(_, value) => {
-                      if (!value) return;
-
-                      setRounds(
-                        rounds.map((x) =>
-                          x.id === round.id
-                            ? {
-                                ...x,
-                                option: value,
-                              }
-                            : x
-                        )
-                      );
-                    }}
-                  >
-                    <ToggleButton value="NONE">
-                      없음
-                    </ToggleButton>
-
-                    <ToggleButton value="PRELIM">
-                      예선
-                    </ToggleButton>
-
-                    <ToggleButton value="FINAL">
-                      본선
-                    </ToggleButton>
-
-                    <ToggleButton value="UPPER">
-                      상위
-                    </ToggleButton>
-
-                    <ToggleButton value="LOWER">
-                      하위
-                    </ToggleButton>
-                  </ToggleButtonGroup>
-                  {round.format === "TOURNAMENT" && round.option === "FINAL" && roundIndex > 0 && rounds[roundIndex - 1]?.format === "GROUP" && rounds[roundIndex - 1]?.option === "PRELIM" && (
-                    <div style={{ marginTop: "16px" }}>
-                      <div style={{ fontWeight: 700, marginBottom: "8px" }}>대진표 개수</div>
-                      <select
-                        value={round.tournamentBracketCount ?? 1}
-                        onChange={(event) => setRounds(rounds.map((x) => x.id === round.id ? { ...x, tournamentBracketCount: Number(event.target.value) } : x))}
-                        style={{ width: "100%", height: "40px", padding: "0 12px", border: "1px solid #d1d5db", borderRadius: "8px", background: "#fff", fontSize: "14px" }}
-                      >
-                        {Array.from({ length: 8 }, (_, index) => index + 1).map((count) => <option key={count} value={count}>{count}개</option>)}
-                      </select>
-                    </div>
-                  )}
+                  <RoundDivisionEditor
+                    round={round}
+                    roundIndex={roundIndex}
+                    rounds={rounds}
+                    setRounds={setRounds}
+                  />
                   <div style={{ marginTop: "16px" }}>
                     <div
                       style={{
@@ -2344,7 +2431,6 @@ const LeagueAlgorithmDemo = ({
                   </div>
                   <ClubPolicyControls round={round} enabled={clubPoliciesEnabled} onChange={(patch) => setRounds(rounds.map((item) => item.id === round.id ? { ...item, ...patch } : item))} />
                 </div>
-            </div>
 
             {round.program === "TEAM" && (
               <div style={{ marginTop: "16px" }}>
@@ -2427,18 +2513,25 @@ const LeagueAlgorithmDemo = ({
           fullWidth
           onClick={() => {
             setRounds([
-              ...rounds,
+              ...rounds.map((item, index) => ({
+                ...item,
+                option: index === 0 ? "PRELIM" as const : item.option,
+              })),
               {
                 id: rounds.length + 1,
                 expanded: true,
                 program: "SINGLES",
                 format: "GROUP",
-                option: "NONE",
+                option: "PRELIM",
                 matchRule: "BEST_OF_3",
                 teamPlayerCount: 4,
                 teamMatchType: "SSS",
                 tournamentSeeding: "seed",
                 tournamentBracketCount: 1,
+                tournamentMode: "single",
+                finalAdvancementMode: "top-n",
+                advanceCount: 2,
+                sourceRoundId: rounds.length,
               },
             ]);
           }}
@@ -2696,7 +2789,9 @@ const LeagueAlgorithmDemo = ({
                 option.rounds[blockIndex].option !== "NONE" && (
                   <Chip
                     label={
-                      option.rounds[blockIndex].option === "PRELIM"
+                      block.format === "TOURNAMENT"
+                        ? `${option.rounds[blockIndex].option === "PRELIM" ? "예선" : "본선"}(${block.tournamentMode === "upper-lower" ? "상·하위" : "일반"})`
+                        : option.rounds[blockIndex].option === "PRELIM"
                         ? "예선"
                         : option.rounds[blockIndex].option === "FINAL"
                           ? "본선"
@@ -2738,6 +2833,22 @@ const LeagueAlgorithmDemo = ({
             <div style={{ paddingLeft: '12px' }}>
               경기수: {block.matchCount}경기
             </div>
+
+            {option.rounds?.[blockIndex]?.option === "FINAL" && block.format === "LEAGUE" && (
+              <div style={{ paddingLeft: "12px" }}>
+                본선 진출: 이전 라운드 상위 {block.advanceCount ?? 2}명
+              </div>
+            )}
+
+            {option.rounds?.[blockIndex]?.option === "FINAL" && block.format === "GROUP" && (
+              <div style={{ paddingLeft: "12px" }}>
+                본선 편성: {block.finalAdvancementMode === "upper-lower-groups"
+                  ? "상·하위부"
+                  : block.finalAdvancementMode === "rank-groups"
+                    ? "순위대로"
+                    : `상위 ${block.advanceCount ?? 2}명`}
+              </div>
+            )}
 
             <div style={{ paddingLeft: '12px' }}>
               예상시간:{" "}

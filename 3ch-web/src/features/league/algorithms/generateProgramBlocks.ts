@@ -163,6 +163,10 @@ export function generateProgramBlocks(
       teamAssignments: round.teamAssignments,
       tournamentBracketCount: round.tournamentBracketCount ?? 1,
       tournamentSeeding: round.tournamentSeeding,
+      tournamentMode: round.tournamentMode,
+      finalAdvancementMode: round.finalAdvancementMode,
+      advanceCount: round.advanceCount,
+      sourceRoundId: round.sourceRoundId,
       crossClubGrouping: round.crossClubGrouping,
       crossClubOnlyMatches: round.crossClubOnlyMatches,
       unitClubMode: round.unitClubMode,
@@ -210,6 +214,10 @@ export function generateProgramBlocks(
         doublesAssignments: round.doublesAssignments,
         tournamentBracketCount: round.tournamentBracketCount ?? 1,
         tournamentSeeding: round.tournamentSeeding,
+        tournamentMode: round.tournamentMode,
+        finalAdvancementMode: round.finalAdvancementMode,
+        advanceCount: round.advanceCount,
+        sourceRoundId: round.sourceRoundId,
         crossClubGrouping: round.crossClubGrouping,
         crossClubOnlyMatches: round.crossClubOnlyMatches,
         unitClubMode: round.unitClubMode,
@@ -228,7 +236,7 @@ export function generateProgramBlocks(
     const teamInfo = {
       singles: round.teamSinglesCount ?? legacyTeamInfo.singles,
       doubles: round.teamDoublesCount ?? legacyTeamInfo.doubles,
-      description: `단식 ${round.teamSinglesCount ?? legacyTeamInfo.singles}, 복식 ${round.teamDoublesCount ?? legacyTeamInfo.doubles}`,
+      description: `단식 ${round.teamSinglesCount ?? legacyTeamInfo.singles}경기, 복식 ${round.teamDoublesCount ?? legacyTeamInfo.doubles}경기`,
     };
     const teamGroupSizes =
       round.teamGroupSizes ??
@@ -279,6 +287,10 @@ export function generateProgramBlocks(
         teamAssignments: round.teamAssignments,
         tournamentBracketCount: round.tournamentBracketCount ?? 1,
         tournamentSeeding: round.tournamentSeeding,
+        tournamentMode: round.tournamentMode,
+        finalAdvancementMode: round.finalAdvancementMode,
+        advanceCount: round.advanceCount,
+        sourceRoundId: round.sourceRoundId,
         crossClubGrouping: round.crossClubGrouping,
         crossClubOnlyMatches: round.crossClubOnlyMatches,
         unitClubMode: round.unitClubMode,

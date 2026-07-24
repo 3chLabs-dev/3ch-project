@@ -108,6 +108,10 @@ export interface ProgramBlock {
   doublesAssignments?: FormationAssignmentPlayer[][];
   tournamentBracketCount?: number;
   tournamentSeeding?: TournamentSeedingType;
+  tournamentMode?: TournamentMode;
+  finalAdvancementMode?: FinalAdvancementMode;
+  advanceCount?: number;
+  sourceRoundId?: number;
   crossClubGrouping?: boolean;
   crossClubOnlyMatches?: boolean;
   unitClubMode?: UnitClubMode;
@@ -143,6 +147,15 @@ export type TournamentSeedingType =
   | "seed"
   | "random"
   | "manual";
+
+export type TournamentMode =
+  | "single"
+  | "upper-lower";
+
+export type FinalAdvancementMode =
+  | "top-n"
+  | "upper-lower-groups"
+  | "rank-groups";
 
 export type RoundOption =
   | "NONE"
@@ -182,6 +195,10 @@ export interface RoundConfig {
   doublesAssignments?: FormationAssignmentPlayer[][];
   tournamentBracketCount?: number;
   tournamentSeeding?: TournamentSeedingType;
+  tournamentMode?: TournamentMode;
+  finalAdvancementMode?: FinalAdvancementMode;
+  advanceCount?: number;
+  sourceRoundId?: number;
   crossClubGrouping?: boolean;
   crossClubOnlyMatches?: boolean;
   unitClubMode?: UnitClubMode;

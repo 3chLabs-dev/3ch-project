@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Box, Button, CircularProgress, IconButton, InputAdornment,
@@ -23,6 +23,7 @@ import {
   useGetLeagueParticipantsQuery,
   useGetLeagueProgramQuery,
   useAssignMatchParticipantMutation,
+  useSyncLeagueProgramMatchesMutation,
   type LeagueMatch,
 } from "../../features/league/leagueApi";
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
@@ -698,9 +699,23 @@ export default function LeagueTournamentBracket() {
         id,
         round,
       );
-      const existingIds = new Set(sourceMatches.map((match) => match.id));
       generatedRoundMatches.forEach((match) => {
-        if (!existingIds.has(match.id)) sourceMatches.push(match);
+        const existingIndex = sourceMatches.findIndex((sourceMatch) => sourceMatch.id === match.id);
+        if (existingIndex < 0) {
+          sourceMatches.push(match);
+          return;
+        }
+        const serverMatch = sourceMatches[existingIndex];
+        sourceMatches[existingIndex] = {
+          ...match,
+          ...serverMatch,
+          participant_a_id: serverMatch.participant_a_id ?? match.participant_a_id,
+          participant_a_name: serverMatch.participant_a_name ?? match.participant_a_name,
+          participant_a_division: serverMatch.participant_a_division ?? match.participant_a_division,
+          participant_b_id: serverMatch.participant_b_id ?? match.participant_b_id,
+          participant_b_name: serverMatch.participant_b_name ?? match.participant_b_name,
+          participant_b_division: serverMatch.participant_b_division ?? match.participant_b_division,
+        };
       });
     }
     return sourceMatches;
@@ -743,16 +758,52 @@ export default function LeagueTournamentBracket() {
     [isProgramMode, programMatches, matchesData],
   );
   const programBlock = isProgramMode ? programOption?.blocks?.[programRound - 1] : undefined;
-  const isProgramFinalFromPrelim =
+  const [syncLeagueProgramMatches] = useSyncLeagueProgramMatchesMutation();
+  const programSyncKeyRef = useRef<string | null>(null);
+  const isProgramFinalRound =
     isProgramMode &&
-    programOption?.rounds?.[programRound - 1]?.option === "FINAL" &&
-    programOption?.rounds?.[programRound - 2]?.option === "PRELIM";
+    programOption?.rounds?.[programRound - 1]?.option === "FINAL";
   const manualSeeding = isProgramMode
     ? programBlock?.tournamentSeeding === "manual" ||
-      (isProgramFinalFromPrelim && programMatches.some((match) => match.round_number === 1 && !match.participant_a_name && !match.participant_b_name))
+      (isProgramFinalRound && programMatches.some((match) => match.round_number === 1 && !match.participant_a_name && !match.participant_b_name))
     : league?.tournament_seeding === "manual";
 
-  const isDoubleElim = !isProgramMode && matches.some((m) => m.bracket === "lower");
+  useEffect(() => {
+    if (!isProgramMode || !id || !programBlock || allProgramMatches.length === 0) return;
+    if (
+      programBlock.type === "SINGLES" &&
+      !allProgramMatches.some((match) => match.participant_a_id && match.participant_b_id)
+    ) return;
+
+    const generatedKey = allProgramMatches
+      .map((match) => `${match.id}:${match.participant_a_id ?? ""}:${match.participant_b_id ?? ""}`)
+      .join("|");
+    const serverKey = serverProgramMatches
+      .map((match) => `${match.id}:${match.participant_a_id ?? ""}:${match.participant_b_id ?? ""}`)
+      .join("|");
+    if (serverProgramMatches.length === allProgramMatches.length && generatedKey === serverKey) return;
+    if (programSyncKeyRef.current === generatedKey) return;
+    programSyncKeyRef.current = generatedKey;
+
+    void syncLeagueProgramMatches({
+      leagueId: id,
+      matches: allProgramMatches.map((match) => ({
+        ...match,
+        program_round: programRound,
+        program_block_type: programBlock.type,
+      })),
+    });
+  }, [
+    allProgramMatches,
+    id,
+    isProgramMode,
+    programBlock,
+    programRound,
+    serverProgramMatches,
+    syncLeagueProgramMatches,
+  ]);
+
+  const isDoubleElim = matches.some((match) => match.bracket === "lower");
   const canManage = !isProgramMode && (groupData?.myRole === "owner" || groupData?.myRole === "admin");
   const isCompleted = league?.status === "completed";
 

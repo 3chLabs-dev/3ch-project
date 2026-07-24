@@ -68,7 +68,7 @@ const NEXT_STATUS: Record<string, "pending" | "playing" | "done"> = {
   done: "done",
 };
 
-interface RoundTab { key: string; label: string; roundNumber: number }
+interface RoundTab { key: string; label: string; roundNumber: number; bracket: "upper" | "lower" }
 
 function seededBracket(n: number): number[] {
   let arr = [1, 2];
@@ -494,10 +494,9 @@ export default function LeagueMatchOrder() {
   const currentProgramBlock = isProgramMode ? programOption?.blocks?.[programRound - 1] : undefined;
   const bracketPath = currentProgramBlock?.format === "TOURNAMENT" ? "tournament-bracket" : "bracket";
   const isTournamentProgramRound = isProgramMode && currentProgramBlock?.format === "TOURNAMENT";
-  const isProgramFinalFromPrelim =
+  const isProgramFinalRound =
     isProgramMode &&
-    programOption?.rounds?.[programRound - 1]?.option === "FINAL" &&
-    programOption?.rounds?.[programRound - 2]?.option === "PRELIM";
+    programOption?.rounds?.[programRound - 1]?.option === "FINAL";
   const programSourceMatches = useMemo(() => {
     if (!isProgramMode || !leagueId || !programOption) return matchData?.matches ?? [];
 
@@ -508,9 +507,23 @@ export default function LeagueMatchOrder() {
         leagueId,
         round,
       );
-      const existingIds = new Set(sourceMatches.map((match) => match.id));
       generatedRoundMatches.forEach((match) => {
-        if (!existingIds.has(match.id)) sourceMatches.push(match);
+        const existingIndex = sourceMatches.findIndex((sourceMatch) => sourceMatch.id === match.id);
+        if (existingIndex < 0) {
+          sourceMatches.push(match);
+          return;
+        }
+        const serverMatch = sourceMatches[existingIndex];
+        sourceMatches[existingIndex] = {
+          ...match,
+          ...serverMatch,
+          participant_a_id: serverMatch.participant_a_id ?? match.participant_a_id,
+          participant_a_name: serverMatch.participant_a_name ?? match.participant_a_name,
+          participant_a_division: serverMatch.participant_a_division ?? match.participant_a_division,
+          participant_b_id: serverMatch.participant_b_id ?? match.participant_b_id,
+          participant_b_name: serverMatch.participant_b_name ?? match.participant_b_name,
+          participant_b_division: serverMatch.participant_b_division ?? match.participant_b_division,
+        };
       });
     }
     return sourceMatches;
@@ -535,7 +548,7 @@ export default function LeagueMatchOrder() {
     const isMultipleTournament = (currentProgramBlock?.tournamentBracketCount ?? 1) > 1;
     const isUnitRound = currentProgramBlock?.type === "TEAM" || currentProgramBlock?.type === "DOUBLES";
     const hasClubPolicy = Boolean(currentProgramBlock?.crossClubGrouping || currentProgramBlock?.crossClubOnlyMatches);
-    if (!isProgramFinalFromPrelim && !isMultipleTournament && !isUnitRound && !hasClubPolicy) {
+    if (!isProgramFinalRound && !isMultipleTournament && !isUnitRound && !hasClubPolicy) {
       return serverProgramMatches.length > 0 ? serverProgramMatches : generatedProgramMatches;
     }
 
@@ -554,7 +567,7 @@ export default function LeagueMatchOrder() {
     });
     return applyProgramTournamentAdvancement(hydratedMatches)
       .sort((left, right) => left.match_order - right.match_order);
-  }, [currentProgramBlock?.tournamentBracketCount, currentProgramBlock?.type, generatedProgramMatches, isProgramFinalFromPrelim, serverProgramMatches]);
+  }, [currentProgramBlock?.tournamentBracketCount, currentProgramBlock?.type, generatedProgramMatches, isProgramFinalRound, serverProgramMatches]);
   const tournamentBracketIndexes = useMemo(
     () => [...new Set(programMatches.map((match) => match.tournament_bracket_index ?? 1))].sort((a, b) => a - b),
     [programMatches],
@@ -679,15 +692,22 @@ export default function LeagueMatchOrder() {
 
   const tournamentTabs = useMemo<RoundTab[]>(() => {
     if (!isTournamentProgramRound) return [];
-    const rounds = [...new Set(activeProgramMatches
-      .filter((match) => match.bracket === "upper")
-      .map((match) => match.round_number ?? 0)
-      .filter((round) => round > 0))]
-      .sort((a, b) => a - b);
+    return (["upper", "lower"] as const).flatMap((bracket) => {
+      const rounds = [...new Set(activeProgramMatches
+        .filter((match) => match.bracket === bracket)
+        .map((match) => match.round_number ?? 0)
+        .filter((round) => round > 0))]
+        .sort((a, b) => a - b);
 
-    return rounds.map((roundNumber) => {
-      const sample = activeProgramMatches.find((match) => match.bracket === "upper" && match.round_number === roundNumber);
-      return { key: `upper-${roundNumber}`, label: sample?.match_label ?? `R${roundNumber}`, roundNumber };
+      return rounds.map((roundNumber) => {
+        const sample = activeProgramMatches.find((match) => match.bracket === bracket && match.round_number === roundNumber);
+        return {
+          key: `${bracket}-${roundNumber}`,
+          label: sample?.match_label ?? `${bracket === "upper" ? "상위" : "하위"} R${roundNumber}`,
+          roundNumber,
+          bracket,
+        };
+      });
     });
   }, [activeProgramMatches, isTournamentProgramRound]);
 
@@ -696,7 +716,7 @@ export default function LeagueMatchOrder() {
     if (!isTournamentProgramRound) return matches;
     const currentTab = tournamentTabs.find((tab) => tab.key === activeTournamentTab);
     if (!currentTab) return [];
-    return matches.filter((match) => match.bracket === "upper" && match.round_number === currentTab.roundNumber);
+    return matches.filter((match) => match.bracket === currentTab.bracket && match.round_number === currentTab.roundNumber);
   }, [activeTournamentTab, isTournamentProgramRound, matches, tournamentTabs]);
   const displayedMatches = useMemo(() => {
     let filtered = visibleMatches.filter((match) => !match.is_no_game);
@@ -829,11 +849,14 @@ export default function LeagueMatchOrder() {
 
   useEffect(() => {
     if (!isProgramMode || !programOption) return;
-    if (serverProgramMatches.length > 0 && !isProgramFinalFromPrelim) return;
     const currentBlock = programOption.blocks?.[programRound - 1];
-    if (currentBlock?.type !== "SINGLES" || currentBlock.format !== "TOURNAMENT") return;
-    const matchesToSync = isProgramFinalFromPrelim ? programMatches : generatedProgramMatches;
-    if (!matchesToSync.some((match) => match.bracket && match.round_number === 1 && match.participant_a_id && match.participant_b_id)) return;
+    if (!currentBlock) return;
+    const matchesToSync = isProgramFinalRound ? programMatches : generatedProgramMatches;
+    if (matchesToSync.length === 0) return;
+    if (
+      currentBlock.type === "SINGLES" &&
+      !matchesToSync.some((match) => match.participant_a_id && match.participant_b_id)
+    ) return;
 
     const syncKey = `${leagueId}-${programRound}-${matchesToSync.map((match) => `${match.id}:${match.participant_a_id ?? ""}:${match.participant_b_id ?? ""}`).join("|")}`;
     const serverKey = `${leagueId}-${programRound}-${serverProgramMatches.map((match) => `${match.id}:${match.participant_a_id ?? ""}:${match.participant_b_id ?? ""}`).join("|")}`;
@@ -849,7 +872,7 @@ export default function LeagueMatchOrder() {
         program_block_type: currentBlock.type,
       })),
     });
-  }, [generatedProgramMatches, isProgramFinalFromPrelim, isProgramMode, leagueId, programMatches, programOption, programRound, serverProgramMatches, syncLeagueProgramMatches]);
+  }, [generatedProgramMatches, isProgramFinalRound, isProgramMode, leagueId, programMatches, programOption, programRound, serverProgramMatches, syncLeagueProgramMatches]);
 
 
   if (!isProgramMode && matchLoading) {

@@ -3,7 +3,9 @@ import {
   Alert,
   Box,
   Button,
+  Chip,
   CircularProgress,
+  Divider,
   IconButton,
   Radio,
   Stack,
@@ -33,6 +35,27 @@ const formatLabel = (format: RoundConfig["format"]) =>
 
 const optionLabel = (option: RoundConfig["option"]) =>
   ({ NONE: "", PRELIM: "예선", FINAL: "본선", UPPER: "상위", LOWER: "하위" })[option];
+
+const roundDivisionLabel = (round: RoundConfig) => {
+  if (round.format !== "TOURNAMENT") return optionLabel(round.option);
+  const mode = round.tournamentMode === "upper-lower" ? "상·하위" : "일반";
+  return optionLabel(round.option) ? `${optionLabel(round.option)}(${mode})` : mode;
+};
+
+const legacyTeamCounts = {
+  SSS: { singles: 3, doubles: 0 },
+  SDS: { singles: 2, doubles: 1 },
+  DSD: { singles: 1, doubles: 2 },
+  DDD: { singles: 0, doubles: 3 },
+} as const;
+
+const teamCounts = (round: RoundConfig) => {
+  const legacy = legacyTeamCounts[round.teamMatchType] ?? legacyTeamCounts.SSS;
+  return {
+    singles: round.teamSinglesCount ?? legacy.singles,
+    doubles: round.teamDoublesCount ?? legacy.doubles,
+  };
+};
 
 export default function LeagueRenewalStepSavedPrograms() {
   const dispatch = useAppDispatch();
@@ -95,7 +118,6 @@ export default function LeagueRenewalStepSavedPrograms() {
               sx={{
                 position: "relative",
                 p: 2,
-                pr: 5,
                 cursor: "pointer",
                 border: "1px solid",
                 borderColor: selected ? "#2F80ED" : "#D9DDE6",
@@ -103,19 +125,84 @@ export default function LeagueRenewalStepSavedPrograms() {
                 bgcolor: selected ? "#EFF6FF" : "#fff",
               }}
             >
-              <Stack direction="row" alignItems="center" spacing={1}>
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ pr: 3.5 }}>
                 <Radio checked={selected} size="small" sx={{ p: 0 }} />
-                <Typography sx={{ fontWeight: 900 }}>{template.name}</Typography>
-              </Stack>
-              <Stack spacing={0.5} sx={{ mt: 1.25, pl: 3.5 }}>
-                {template.template_data.rounds.map((round, index) => (
-                  <Typography key={`${template.id}-${round.id}`} sx={{ fontSize: 13, color: "#475569" }}>
-                    {index + 1}라운드{" "}
-                    {[optionLabel(round.option), typeLabel(round.program), formatLabel(round.format)]
-                      .filter(Boolean)
-                      .join(" · ")}
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography sx={{ fontWeight: 900 }}>{template.name}</Typography>
+                  <Typography sx={{ mt: 0.25, fontSize: 12, color: "#64748B" }}>
+                    {template.template_data.rounds.length}라운드 구성
                   </Typography>
-                ))}
+                </Box>
+              </Stack>
+              <Divider sx={{ my: 1.5 }} />
+              <Stack spacing={2}>
+                {template.template_data.rounds.map((round, index) => {
+                  const counts = round.program === "TEAM" ? teamCounts(round) : null;
+                  return (
+                    <Box key={`${template.id}-${round.id}`}>
+                      <Stack direction="row" alignItems="center" flexWrap="wrap" gap={0.75}>
+                        <Typography sx={{ mr: 0.25, fontSize: 14, fontWeight: 900 }}>
+                          {index + 1}라운드
+                        </Typography>
+                        {roundDivisionLabel(round) && (
+                          <Chip label={roundDivisionLabel(round)} size="small" sx={{ height: 22, fontSize: 11, fontWeight: 700 }} />
+                        )}
+                        <Chip label={typeLabel(round.program)} size="small" sx={{ height: 22, fontSize: 11, fontWeight: 700 }} />
+                        <Chip label={formatLabel(round.format)} size="small" sx={{ height: 22, fontSize: 11, fontWeight: 700 }} />
+                      </Stack>
+                      <Stack spacing={0.35} sx={{ mt: 1, pl: 1 }}>
+                        <Typography sx={{ fontSize: 13, color: "#334155" }}>
+                          경기방식: {round.matchRule}
+                        </Typography>
+                        {round.program === "TEAM" && counts && (
+                          <>
+                            <Typography sx={{ fontSize: 13, color: "#334155" }}>
+                              팀 인원: {round.teamPlayerCount}명
+                            </Typography>
+                            <Typography sx={{ fontSize: 13, color: "#334155" }}>
+                              단체전 구성: 단식 {counts.singles}경기, 복식 {counts.doubles}경기
+                            </Typography>
+                          </>
+                        )}
+                        {round.format === "TOURNAMENT" && (
+                          <Typography sx={{ fontSize: 13, color: "#334155" }}>
+                            대진표: {round.tournamentBracketCount ?? 1}개 · 시드(순위)
+                          </Typography>
+                        )}
+                        {round.option === "FINAL" && round.format === "LEAGUE" && (
+                          <Typography sx={{ fontSize: 13, color: "#334155" }}>
+                            본선 진출: 이전 라운드 상위 {round.advanceCount ?? 2}명
+                          </Typography>
+                        )}
+                        {round.option === "FINAL" && round.format === "GROUP" && (
+                          <Typography sx={{ fontSize: 13, color: "#334155" }}>
+                            본선 편성: {round.finalAdvancementMode === "upper-lower-groups"
+                              ? "상·하위부"
+                              : round.finalAdvancementMode === "rank-groups"
+                                ? "순위대로"
+                                : `상위 ${round.advanceCount ?? 2}명`}
+                          </Typography>
+                        )}
+                        {round.unitClubMode && (
+                          <Typography sx={{ fontSize: 13, color: "#334155" }}>
+                            {round.program === "TEAM" ? "팀 구성" : "복식 구성"}:{" "}
+                            {round.unitClubMode === "same" ? "같은 클럽만" : "섞어서"}
+                          </Typography>
+                        )}
+                        {round.crossClubGrouping && (
+                          <Typography sx={{ fontSize: 13, color: "#334155" }}>
+                            타클럽 편성: 예
+                          </Typography>
+                        )}
+                        {round.crossClubOnlyMatches && (
+                          <Typography sx={{ fontSize: 13, color: "#334155" }}>
+                            타클럽만 매칭: 예
+                          </Typography>
+                        )}
+                      </Stack>
+                    </Box>
+                  );
+                })}
               </Stack>
               <IconButton
                 size="small"

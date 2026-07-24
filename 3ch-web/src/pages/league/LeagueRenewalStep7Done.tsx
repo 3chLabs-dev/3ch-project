@@ -4,7 +4,10 @@ import { useNavigate } from "react-router-dom";
 import confetti from "canvas-confetti";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { resetRenewalLeagueCreation } from "../../features/league/leagueRenewalCreationSlice";
-import { useSaveLeagueProgramTemplateMutation } from "../../features/league/leagueApi";
+import {
+  useDeleteLeagueProgramTemplateMutation,
+  useSaveLeagueProgramTemplateMutation,
+} from "../../features/league/leagueApi";
 import type { RoundConfig } from "../../features/league/types/tournament.types";
 import confettiImg from "../../assets/128_축포.png";
 
@@ -15,7 +18,8 @@ export default function LeagueRenewalStep7Done() {
     (state) => state.leagueRenewalCreation,
   );
   const [saveTemplate, { isLoading: isSavingTemplate }] = useSaveLeagueProgramTemplateMutation();
-  const [favoriteSaved, setFavoriteSaved] = useState(false);
+  const [deleteTemplate, { isLoading: isDeletingTemplate }] = useDeleteLeagueProgramTemplateMutation();
+  const [favoriteTemplateId, setFavoriteTemplateId] = useState<string | null>(null);
   const [saveError, setSaveError] = useState(false);
   const animationRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -50,7 +54,16 @@ export default function LeagueRenewalStep7Done() {
   };
 
   const handleAddFavorite = async () => {
-    if (favoriteSaved || isSavingTemplate) return;
+    if (isSavingTemplate || isDeletingTemplate) return;
+    if (favoriteTemplateId) {
+      try {
+        await deleteTemplate(favoriteTemplateId).unwrap();
+        setFavoriteTemplateId(null);
+      } catch {
+        setSaveError(true);
+      }
+      return;
+    }
     const completedRounds = rounds.every(
       (round) =>
         round.program &&
@@ -87,7 +100,7 @@ export default function LeagueRenewalStep7Done() {
         } = round;
         return configuration;
       }) as RoundConfig[];
-      await saveTemplate({
+      const result = await saveTemplate({
         name: selectedProgram?.title ?? `${templateRounds.length}라운드 구성`,
         template_data: {
           sourceMode: compositionMode ?? "custom",
@@ -95,7 +108,7 @@ export default function LeagueRenewalStep7Done() {
           rounds: reusableRounds,
         },
       }).unwrap();
-      setFavoriteSaved(true);
+      setFavoriteTemplateId(result.template.id);
     } catch {
       setSaveError(true);
     }
@@ -132,8 +145,9 @@ export default function LeagueRenewalStep7Done() {
 
       <Box
         role="button"
-        tabIndex={favoriteSaved ? -1 : 0}
-        aria-disabled={favoriteSaved || isSavingTemplate}
+        tabIndex={0}
+        aria-pressed={Boolean(favoriteTemplateId)}
+        aria-disabled={isSavingTemplate || isDeletingTemplate}
         onClick={() => void handleAddFavorite()}
         onKeyDown={(event) => {
           if (event.key === "Enter" || event.key === " ") void handleAddFavorite();
@@ -143,14 +157,20 @@ export default function LeagueRenewalStep7Done() {
           mb: 2,
           py: 1,
           textAlign: "center",
-          color: favoriteSaved ? "#2F80ED" : "#475569",
+          color: "#475569",
           fontSize: 14,
           fontWeight: 800,
-          cursor: favoriteSaved || isSavingTemplate ? "default" : "pointer",
+          cursor: isSavingTemplate || isDeletingTemplate ? "default" : "pointer",
           userSelect: "none",
         }}
       >
-        {favoriteSaved ? "★ 리그 구성 즐겨찾기 추가됨" : "☆ 리그 구성 즐겨찾기 추가"}
+        <Box
+          component="span"
+          sx={{ mr: 0.5, color: favoriteTemplateId ? "#f59e0b" : "#94A3B8" }}
+        >
+          {favoriteTemplateId ? "★" : "☆"}
+        </Box>
+        리그 구성 즐겨찾기 추가
       </Box>
 
       <Snackbar

@@ -631,7 +631,7 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
 
                     {round.type === "TEAM" && (
                       <Typography sx={{ mb: 1, fontSize: 12, fontWeight: 700, color: "#475569" }}>
-                        단식 {round.teamSinglesCount ?? 3}, 복식 {round.teamDoublesCount ?? 0}
+                        단식 {round.teamSinglesCount ?? 3}경기, 복식 {round.teamDoublesCount ?? 0}경기
                       </Typography>
                     )}
 

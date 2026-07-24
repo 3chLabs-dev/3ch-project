@@ -981,6 +981,8 @@ const LeagueAlgorithmDemo = ({
   const [isCustomProgramCompleted, setIsCustomProgramCompleted] = useState(false);
   const [isGeneratingProgram, setIsGeneratingProgram] = useState(false);
   const [isCompletingCustomProgram, setIsCompletingCustomProgram] = useState(false);
+  const recommendationSectionRef = useRef<HTMLDivElement | null>(null);
+  const shouldScrollToRecommendationRef = useRef(false);
   const [selectedProgramOptionIndex, setSelectedProgramOptionIndex] = useState<number | null>(null);
   const [customProgramOptions, setCustomProgramOptions] = useState<Record<number, ProgramOption>>({});
   const [editingOptionIndex, setEditingOptionIndex] = useState<number | null>(null);
@@ -996,6 +998,23 @@ const LeagueAlgorithmDemo = ({
       setIsProgramGenerated(true);
     }
   }, [shouldHideSetupInputs]);
+
+  useEffect(() => {
+    if (
+      !shouldScrollToRecommendationRef.current ||
+      isCompletingCustomProgram ||
+      !isCustomProgramCompleted
+    ) {
+      return;
+    }
+    shouldScrollToRecommendationRef.current = false;
+    window.requestAnimationFrame(() => {
+      recommendationSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }, [isCompletingCustomProgram, isCustomProgramCompleted]);
   const [pendingGroupSizes, setPendingGroupSizes] = useState<number[]>([]);
   const [groupResultDialog, setGroupResultDialog] = useState<{
     optionIndex: number;
@@ -2596,6 +2615,7 @@ const LeagueAlgorithmDemo = ({
           fullWidth
           disabled={isCompletingCustomProgram}
           onClick={() => {
+            shouldScrollToRecommendationRef.current = true;
             setIsCompletingCustomProgram(true);
             setIsCustomProgramCompleted(false);
             // 직접 구성 완료 시 복원된 과거 추천안보다 현재 라운드 설정을 우선한다.
@@ -2629,6 +2649,7 @@ const LeagueAlgorithmDemo = ({
         (programMode === "custom" && isCustomProgramCompleted)
       ) && (
       <>
+<div ref={recommendationSectionRef} style={{ scrollMarginTop: "16px" }} />
 {!hideRecommendationTitle && (
   <h2 style={{ marginTop: '40px' }}>
     프로그램 추천안

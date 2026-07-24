@@ -18,7 +18,8 @@ type Room = {
   id: number;
   status: "open" | "closed";
   user_name: string | null;
-  user_email: string;
+  user_email: string | null;
+  guest_name: string | null;
   last_message: string | null;
   last_sender_type: "user" | "admin" | null;
   last_message_at: string;
@@ -158,7 +159,7 @@ export default function AdminSupportChatPage() {
           >
             <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
               <Typography fontSize={13} fontWeight={800} noWrap sx={{ flex: 1 }}>
-                {room.user_name || room.user_email}
+                {room.user_name || room.user_email || room.guest_name || "비회원"}
               </Typography>
               <Chip
                 size="small"
@@ -189,8 +190,12 @@ export default function AdminSupportChatPage() {
           <>
             <Stack direction="row" alignItems="center" sx={{ px: 2.5, py: 1.6, bgcolor: "#fff", borderBottom: "1px solid #E5E7EB" }}>
               <Box sx={{ flex: 1 }}>
-                <Typography fontSize={15} fontWeight={900}>{selected.user_name || selected.user_email}</Typography>
-                <Typography fontSize={11} color="text.secondary">{selected.user_email}</Typography>
+                <Typography fontSize={15} fontWeight={900}>
+                  {selected.user_name || selected.user_email || selected.guest_name || "비회원"}
+                </Typography>
+                <Typography fontSize={11} color="text.secondary">
+                  {selected.user_email || "비회원 상담"}
+                </Typography>
               </Box>
               <Button size="small" variant="outlined" onClick={changeStatus} sx={{ fontSize: 11, fontWeight: 800 }}>
                 {selected.status === "open" ? "상담 종료" : "상담 다시 열기"}

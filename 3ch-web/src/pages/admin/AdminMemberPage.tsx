@@ -8,6 +8,7 @@ import {
 } from "@mui/material";
 import type { SelectChangeEvent } from "@mui/material";
 import { useAppSelector } from "../../app/hooks";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 
 type Member = {
   id: number;
@@ -102,6 +103,8 @@ export default function AdminMemberPage() {
   const [editSuccess,   setEditSuccess]   = useState(false);
   const [editError,     setEditError]     = useState("");
   const [resetLoading,  setResetLoading]  = useState(false);
+  const [resetPasswordResult, setResetPasswordResult] = useState<string | null>(null);
+  const [passwordCopied, setPasswordCopied] = useState(false);
 
   const fetchMembers = useCallback(async (q: Filters, p: number) => {
     setLoading(true);
@@ -258,13 +261,30 @@ export default function AdminMemberPage() {
         setEditError("비밀번호 초기화에 실패했습니다.");
         return;
       }
-      window.alert(
-        `비밀번호가 초기화되었습니다.\n\n임시 비밀번호: ${data.tempPassword}\n\n회원에게 임시 비밀번호를 전달해 주세요.`,
-      );
+      setPasswordCopied(false);
+      setResetPasswordResult(data.tempPassword);
     } catch {
       setEditError("비밀번호 초기화에 실패했습니다.");
     } finally {
       setResetLoading(false);
+    }
+  };
+
+  const handleCopyTemporaryPassword = async () => {
+    if (!resetPasswordResult) return;
+    try {
+      await navigator.clipboard.writeText(resetPasswordResult);
+      setPasswordCopied(true);
+    } catch {
+      const textarea = document.createElement("textarea");
+      textarea.value = resetPasswordResult;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      textarea.remove();
+      setPasswordCopied(true);
     }
   };
 
@@ -757,6 +777,68 @@ export default function AdminMemberPage() {
             </Button>
           </DialogActions>
         )}
+      </Dialog>
+
+      <Dialog
+        open={Boolean(resetPasswordResult)}
+        onClose={() => setResetPasswordResult(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontSize: 19, fontWeight: 900 }}>
+          비밀번호 초기화 완료
+        </DialogTitle>
+        <DialogContent dividers>
+          <Typography sx={{ fontSize: 14, color: "#374151" }}>
+            임시 비밀번호가 발급되었습니다. 회원에게 아래 비밀번호를 전달해 주세요.
+          </Typography>
+          <Box
+            sx={{
+              mt: 2,
+              px: 2,
+              py: 1.5,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 1,
+              border: "1px solid #D9DDE6",
+              borderRadius: 1,
+              bgcolor: "#F8FAFC",
+            }}
+          >
+            <Typography
+              component="code"
+              sx={{ fontSize: 18, fontWeight: 900, color: "#111827", userSelect: "all" }}
+            >
+              {resetPasswordResult}
+            </Typography>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<ContentCopyIcon fontSize="small" />}
+              onClick={handleCopyTemporaryPassword}
+              sx={{ flexShrink: 0, fontWeight: 800 }}
+            >
+              {passwordCopied ? "복사됨" : "복사"}
+            </Button>
+          </Box>
+          {passwordCopied && (
+            <Alert severity="success" sx={{ mt: 1.5 }}>
+              임시 비밀번호가 복사되었습니다.
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button
+            fullWidth
+            variant="contained"
+            disableElevation
+            onClick={() => setResetPasswordResult(null)}
+            sx={{ height: 42, fontWeight: 800, bgcolor: "#2F80ED" }}
+          >
+            확인
+          </Button>
+        </DialogActions>
       </Dialog>
     </Box>
   );

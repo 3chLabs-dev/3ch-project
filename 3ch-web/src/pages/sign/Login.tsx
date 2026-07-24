@@ -423,7 +423,7 @@ try {
               로그인
             </Button>
 
-            <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+            <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 1 }}>
               <Link
                 component="button"
                 type="button"

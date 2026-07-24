@@ -109,35 +109,23 @@ export default function PasswordHelpPage(props: Record<string, unknown>) {
                             lineHeight: 1.55,
                         }}
                     >
-                        비밀번호는 암호화 저장되어{"\n"}
-                        분실 시 찾을 수 없는 정보 입니다.{"\n"}
-                        채팅 문의를 통해 암호를 재설정해주세요.
-                    </Typography>
-
-                    <Typography
-                        sx={{
-                            mt: 2,
-                            fontSize: 14,
-                            color: "#222",
-                            fontWeight: 700,
-                            whiteSpace: "pre-line",
-                            lineHeight: 1.55,
-                        }}
-                    >
-                        메일: 3chlabs@gmail.com
+                        비밀번호는 암호화 저장되어 분실 시 찾을 수 없는 정보 입니다.{"\n"}
+                        채팅 문의를 통해 임시 비밀번호 발급을 요청해 주세요.
                     </Typography>
 
                     {/* 폼 */}
                     <Box sx={{ mt: 2 }}>
                         <Button
                             fullWidth
-                            variant="text"
+                            variant="contained"
+                            disableElevation
+                            onClick={() => window.dispatchEvent(new Event("open-support-chat"))}
                             sx={{
                                 ...primaryBtnSx,
                                 mt: 2,
                             }}
                         >
-                            인증메일 발송
+                            채팅 문의
                         </Button>
                     </Box>
                 </Box>

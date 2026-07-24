@@ -2,16 +2,20 @@ import { useEffect, useRef } from "react";
 
 const API = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
-function getSocketUrl(token: string) {
+function getSocketUrl(token: string | null, guestToken?: string | null) {
   const apiUrl = new URL(API, window.location.origin);
   const protocol = apiUrl.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${apiUrl.host}/ws/support-chat?token=${encodeURIComponent(token)}`;
+  const params = new URLSearchParams();
+  if (token) params.set("token", token);
+  else if (guestToken) params.set("guestToken", guestToken);
+  return `${protocol}//${apiUrl.host}/ws/support-chat?${params.toString()}`;
 }
 
 export function useSupportChatSocket(
   token: string | null,
   enabled: boolean,
   onUpdate: (event: { roomId: number; type: "message" | "status" }) => void,
+  guestToken?: string | null,
 ) {
   const onUpdateRef = useRef(onUpdate);
 
@@ -20,14 +24,14 @@ export function useSupportChatSocket(
   }, [onUpdate]);
 
   useEffect(() => {
-    if (!token || !enabled) return;
+    if ((!token && !guestToken) || !enabled) return;
 
     let socket: WebSocket | null = null;
     let reconnectTimer: number | null = null;
     let stopped = false;
 
     const connect = () => {
-      socket = new WebSocket(getSocketUrl(token));
+      socket = new WebSocket(getSocketUrl(token, guestToken));
       socket.onmessage = (message) => {
         try {
           const event = JSON.parse(message.data);
@@ -47,5 +51,5 @@ export function useSupportChatSocket(
       if (reconnectTimer) window.clearTimeout(reconnectTimer);
       socket?.close();
     };
-  }, [enabled, token]);
+  }, [enabled, guestToken, token]);
 }

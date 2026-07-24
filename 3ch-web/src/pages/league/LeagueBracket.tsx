@@ -933,16 +933,51 @@ export default function LeagueBracket() {
     () => (isProgramMode && id ? (programData?.program?.program_data as ReturnType<typeof getStoredProgramOption> | undefined) ?? getStoredProgramOption(id) : null),
     [isProgramMode, id, programData],
   );
+  const currentProgramBlock = isProgramMode ? programOption?.blocks?.[programRound - 1] : undefined;
+  const isProgramFinalRound =
+    isProgramMode &&
+    programOption?.rounds?.[programRound - 1]?.option === "FINAL";
   const [programMatchStateVersion, setProgramMatchStateVersion] = useState(0);
+  const programSourceMatches = useMemo(() => {
+    if (!isProgramMode || !id || !programOption) return matchData?.matches ?? [];
+
+    const sourceMatches = [...(matchData?.matches ?? [])];
+    for (let round = 1; round < programRound; round += 1) {
+      const generatedRoundMatches = applyProgramMatchState(
+        generateProgramRoundMatches(id, programOption, rawParticipants, round, sourceMatches),
+        id,
+        round,
+      );
+      generatedRoundMatches.forEach((match) => {
+        const existingIndex = sourceMatches.findIndex((sourceMatch) => sourceMatch.id === match.id);
+        if (existingIndex < 0) {
+          sourceMatches.push(match);
+          return;
+        }
+        const serverMatch = sourceMatches[existingIndex];
+        sourceMatches[existingIndex] = {
+          ...match,
+          ...serverMatch,
+          participant_a_id: serverMatch.participant_a_id ?? match.participant_a_id,
+          participant_a_name: serverMatch.participant_a_name ?? match.participant_a_name,
+          participant_a_division: serverMatch.participant_a_division ?? match.participant_a_division,
+          participant_b_id: serverMatch.participant_b_id ?? match.participant_b_id,
+          participant_b_name: serverMatch.participant_b_name ?? match.participant_b_name,
+          participant_b_division: serverMatch.participant_b_division ?? match.participant_b_division,
+        };
+      });
+    }
+    return sourceMatches;
+  }, [id, isProgramMode, matchData?.matches, programOption, programRound, rawParticipants]);
   const generatedProgramMatchesAll = useMemo(
     () => isProgramMode
       ? applyProgramMatchState(
-        generateProgramRoundMatches(id ?? "", programOption, rawParticipants, programRound),
+        generateProgramRoundMatches(id ?? "", programOption, rawParticipants, programRound, programSourceMatches),
         id ?? "",
         programRound,
       )
       : [],
-    [isProgramMode, id, programOption, rawParticipants, programRound, programMatchStateVersion],
+    [isProgramMode, id, programOption, rawParticipants, programRound, programMatchStateVersion, programSourceMatches],
   );
   const serverProgramMatchesAll = useMemo(
     () => (matchData?.matches ?? []).filter((match) => match.is_program && match.program_round === programRound),
@@ -960,7 +995,7 @@ export default function LeagueBracket() {
   const isProgramUnitRound = programRoundType === "TEAM" || programRoundType === "DOUBLES" || hasGeneratedUnitRoster;
   const hasProgramClubPolicy = Boolean(programOption?.blocks?.[programRound - 1]?.crossClubGrouping || programOption?.blocks?.[programRound - 1]?.crossClubOnlyMatches);
   const programMatchesAll = useMemo(() => {
-    if (!isProgramUnitRound && !hasProgramClubPolicy) {
+    if (!isProgramFinalRound && !isProgramUnitRound && !hasProgramClubPolicy) {
       return serverProgramMatchesAll.length > 0 ? serverProgramMatchesAll : generatedProgramMatchesAll;
     }
     const serverById = new Map(serverProgramMatchesAll.map((match) => [match.id, match]));
@@ -976,7 +1011,7 @@ export default function LeagueBracket() {
           }
         : match;
     });
-  }, [generatedProgramMatchesAll, hasProgramClubPolicy, isProgramUnitRound, serverProgramMatchesAll]);
+  }, [generatedProgramMatchesAll, hasProgramClubPolicy, isProgramFinalRound, isProgramUnitRound, serverProgramMatchesAll]);
   const [updateMatch] = useUpdateLeagueMatchMutation();
   const updateProgramMatch = useCallback((matchId: string, updates: ProgramMatchPatch) => {
     if (!id) return;
@@ -1077,6 +1112,12 @@ export default function LeagueBracket() {
       const selectedMatches = programMatchesAll.filter((match) => match.match_label === selectedGroup);
       const ids = new Set(
         selectedMatches.flatMap((match) => [match.participant_a_id, match.participant_b_id]).filter(Boolean) as string[],
+      );
+      return rawParticipants.filter((participant) => ids.has(participant.id));
+    }
+    if (isProgramMode) {
+      const ids = new Set(
+        programMatchesAll.flatMap((match) => [match.participant_a_id, match.participant_b_id]).filter(Boolean) as string[],
       );
       return rawParticipants.filter((participant) => ids.has(participant.id));
     }
@@ -1360,7 +1401,6 @@ export default function LeagueBracket() {
   const leagueStarted = league.status === "completed"; // 완료 상태면 수정 버튼 숨김
   const date          = formatLeagueDate(league.start_date);
   const winScore      = getWinScore(league.rules);
-  const currentProgramBlock = programOption?.blocks?.[programRound - 1];
   const currentRule = currentProgramBlock?.matchRule ?? league.rules;
   const headerSummary = isProgramMode && currentProgramBlock
     ? `${programRound}라운드 ${getProgramTypeLabel(currentProgramBlock.type)} ${getProgramFormatLabel(currentProgramBlock.format)} │ ${getProgramRuleLabel(currentProgramBlock.matchRule)}`

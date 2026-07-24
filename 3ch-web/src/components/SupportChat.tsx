@@ -12,11 +12,12 @@ import {
 import CloseIcon from "@mui/icons-material/Close";
 import SendRoundedIcon from "@mui/icons-material/SendRounded";
 import SupportAgentRoundedIcon from "@mui/icons-material/SupportAgentRounded";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { useAppSelector } from "../app/hooks";
 import { useSupportChatSocket } from "../hooks/useSupportChatSocket";
 
 const API = import.meta.env.VITE_API_BASE_URL ?? "/api";
+const GUEST_TOKEN_STORAGE_KEY = "support_chat_guest_token";
 
 type ChatRoom = {
   id: number;
@@ -60,9 +61,11 @@ function formatTime(value: string | null) {
 }
 
 export default function SupportChat() {
-  const navigate = useNavigate();
   const location = useLocation();
   const token = useAppSelector((state) => state.auth.token);
+  const [guestToken, setGuestToken] = useState(
+    () => localStorage.getItem(GUEST_TOKEN_STORAGE_KEY) ?? "",
+  );
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [room, setRoom] = useState<ChatRoom | null>(null);
@@ -73,15 +76,22 @@ export default function SupportChat() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const loadMessages = useCallback(async () => {
-    if (!token) return;
     setLoading(true);
     setError("");
     try {
       const response = await fetch(`${API}/support-chat`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: token
+          ? { Authorization: `Bearer ${token}` }
+          : guestToken
+            ? { "X-Support-Guest-Token": guestToken }
+            : {},
       });
       if (!response.ok) throw new Error("채팅 내역을 불러오지 못했습니다.");
       const data = await response.json();
+      if (!token && data.guestToken) {
+        localStorage.setItem(GUEST_TOKEN_STORAGE_KEY, data.guestToken);
+        setGuestToken(data.guestToken);
+      }
       setRoom(data.room);
       setItems(data.messages ?? []);
     } catch (loadError) {
@@ -89,13 +99,19 @@ export default function SupportChat() {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [guestToken, token]);
 
   useEffect(() => {
-    if (open && token) loadMessages();
-  }, [loadMessages, open, token]);
+    if (open) loadMessages();
+  }, [loadMessages, open]);
 
-  useSupportChatSocket(token, open, loadMessages);
+  useSupportChatSocket(token, open, loadMessages, token ? null : guestToken);
+
+  useEffect(() => {
+    const openChat = () => setOpen(true);
+    window.addEventListener("open-support-chat", openChat);
+    return () => window.removeEventListener("open-support-chat", openChat);
+  }, []);
 
   useEffect(() => {
     if (!loading) messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -103,19 +119,28 @@ export default function SupportChat() {
 
   const sendMessage = async () => {
     const content = message.trim();
-    if (!content || !token) return;
+    if (!content) return;
     setSending(true);
     setError("");
     try {
       const response = await fetch(`${API}/support-chat/messages`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
+          ...(token
+            ? { Authorization: `Bearer ${token}` }
+            : guestToken
+              ? { "X-Support-Guest-Token": guestToken }
+              : {}),
         },
         body: JSON.stringify({ content }),
       });
       if (!response.ok) throw new Error("문의 전송에 실패했습니다.");
+      const data = await response.json();
+      if (!token && data.guestToken) {
+        localStorage.setItem(GUEST_TOKEN_STORAGE_KEY, data.guestToken);
+        setGuestToken(data.guestToken);
+      }
       setMessage("");
       await loadMessages();
     } catch (sendError) {
@@ -219,24 +244,7 @@ export default function SupportChat() {
                 </Box>
               </Box>
 
-              {!token ? (
-                <Stack alignItems="center" spacing={1.5} sx={{ py: 5 }}>
-                  <Typography fontSize={14} color="text.secondary" fontWeight={700}>
-                    로그인 후 채팅 문의를 이용할 수 있어요.
-                  </Typography>
-                  <Button
-                    variant="contained"
-                    disableElevation
-                    onClick={() => {
-                      setOpen(false);
-                      navigate("/login");
-                    }}
-                    sx={{ borderRadius: 999, bgcolor: "#EC4899", fontWeight: 800, px: 3 }}
-                  >
-                    로그인하기
-                  </Button>
-                </Stack>
-              ) : loading ? (
+              {loading ? (
                 <Box sx={{ display: "grid", placeItems: "center", py: 5 }}>
                   <CircularProgress size={28} sx={{ color: "#EC4899" }} />
                 </Box>
@@ -280,7 +288,7 @@ export default function SupportChat() {
             </Stack>
           </Box>
 
-          {token && (
+          {!loading && (
             <Stack
               direction="row"
               alignItems="flex-end"

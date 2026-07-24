@@ -98,13 +98,13 @@ function getWinScore(rules?: string | null): number | null {
 // ─── 참가자 행 (번호 + 이름/부 + 점수) ──────────────────────────────────────
 /** 테두리 박스 안 참가자 행: [번호셀] | [배지+이름] [점수] */
 function ParticipantRow({
-  name, division, seedLabel, isMe, score, wins, canEditScore, onMinus, onPlus,
+  name, division, seedLabel, orderLabel, isMe, score, wins, canEditScore, onMinus, onPlus,
 }: {
-  name: string | null; division: string | null; seedLabel?: string; isMe?: boolean;
+  name: string | null; division: string | null; seedLabel?: string; orderLabel?: string; isMe?: boolean;
   score: number; wins: boolean; canEditScore: boolean;
   onMinus: () => void; onPlus: () => void;
 }) {
-  const leftLabel = seedLabel ?? division ?? "";
+  const leftLabel = seedLabel ?? orderLabel ?? division ?? "";
   return (
     <Stack direction="row" alignItems="stretch" sx={{ minHeight: 54 }}>
       {/* 왼쪽 번호 셀 */}
@@ -150,7 +150,7 @@ function ParticipantRow({
 
 // ─── 경기 카드 ────────────────────────────────────────────────────────────────
 function MatchCard({
-  match, index, canManage, canMember, leagueId, rules, myName, seedA, seedB, onMatchStarted, onProgramMatchUpdate,
+  match, index, canManage, canMember, leagueId, rules, myName, seedA, seedB, orderA, orderB, onMatchStarted, onProgramMatchUpdate,
 }: {
   match: LeagueMatch;
   index: number;
@@ -161,6 +161,8 @@ function MatchCard({
   myName?: string;
   seedA?: string;
   seedB?: string;
+  orderA?: string;
+  orderB?: string;
   onMatchStarted?: (matchId: string) => void;
   onProgramMatchUpdate?: (matchId: string, updates: ProgramMatchPatch) => void;
 }) {
@@ -381,6 +383,7 @@ function MatchCard({
             name={match.participant_a_name}
             division={match.participant_a_division}
             seedLabel={seedA}
+            orderLabel={orderA}
             isMe={participantNameIncludes(match.participant_a_name, myName)}
             score={sa} wins={aWins} canEditScore={canEditScore}
             onMinus={() => handleScore("a", -1)}
@@ -394,6 +397,7 @@ function MatchCard({
             name={match.participant_b_name}
             division={match.participant_b_division}
             seedLabel={seedB}
+            orderLabel={orderB}
             isMe={participantNameIncludes(match.participant_b_name, myName)}
             score={sb} wins={bWins} canEditScore={canEditScore}
             onMinus={() => handleScore("b", -1)}
@@ -689,6 +693,50 @@ export default function LeagueMatchOrder() {
 
     return sorted;
   }, [activeProgramMatches, isProgramMode, localOrder, matchData?.matches, groupNames.length, selectedGroup, participantGroupMap, startedMatchIds]);
+
+  const participantNumberMap = useMemo(() => {
+    const map = new Map<string, string>();
+    if (isTournamentProgramRound) return map;
+
+    let sourceMatches = isProgramMode
+      ? activeProgramMatches
+      : (matchData?.matches ?? []).filter((match) => !match.bracket);
+    if (groupNames.length > 0 && selectedGroup) {
+      sourceMatches = isProgramMode
+        ? sourceMatches.filter((match) => match.match_label === selectedGroup)
+        : sourceMatches.filter((match) => {
+            const groupA = match.participant_a_id ? participantGroupMap.get(match.participant_a_id) : null;
+            const groupB = match.participant_b_id ? participantGroupMap.get(match.participant_b_id) : null;
+            return groupA === selectedGroup || groupB === selectedGroup;
+          });
+    }
+
+    const participantIds = new Set(
+      sourceMatches.flatMap((match) => [match.participant_a_id, match.participant_b_id]).filter(Boolean) as string[],
+    );
+    const orderedIds = rawParticipants
+      .filter((participant) => participantIds.has(participant.id))
+      .map((participant) => participant.id);
+
+    sourceMatches.forEach((match) => {
+      [match.participant_a_id, match.participant_b_id].forEach((participantId) => {
+        if (participantId && participantIds.has(participantId) && !orderedIds.includes(participantId)) {
+          orderedIds.push(participantId);
+        }
+      });
+    });
+    orderedIds.forEach((participantId, index) => map.set(participantId, String(index + 1)));
+    return map;
+  }, [
+    activeProgramMatches,
+    groupNames.length,
+    isProgramMode,
+    isTournamentProgramRound,
+    matchData?.matches,
+    participantGroupMap,
+    rawParticipants,
+    selectedGroup,
+  ]);
 
   const tournamentTabs = useMemo<RoundTab[]>(() => {
     if (!isTournamentProgramRound) return [];
@@ -1079,6 +1127,12 @@ export default function LeagueMatchOrder() {
                     myName={myName ?? undefined}
                     seedA={isTournamentProgramRound ? seed?.a : undefined}
                     seedB={isTournamentProgramRound ? seed?.b : undefined}
+                    orderA={!isTournamentProgramRound && match.participant_a_id
+                      ? participantNumberMap.get(match.participant_a_id)
+                      : undefined}
+                    orderB={!isTournamentProgramRound && match.participant_b_id
+                      ? participantNumberMap.get(match.participant_b_id)
+                      : undefined}
                     onMatchStarted={(matchId) => setStartedMatchIds((ids) => [matchId, ...ids.filter((id) => id !== matchId)])}
                     onProgramMatchUpdate={isProgramMode ? updateProgramMatch : undefined}
                   />

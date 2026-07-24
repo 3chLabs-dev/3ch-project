@@ -538,6 +538,15 @@ function splitTournamentUnits(units: MatchUnit[], bracketCount: number): MatchUn
   return brackets.filter((bracket) => bracket.length > 0);
 }
 
+function hasCompletedResult(match: LeagueMatch): boolean {
+  if (match.status === "done") return true;
+  return (
+    match.score_a != null &&
+    match.score_b != null &&
+    Number(match.score_a) !== Number(match.score_b)
+  );
+}
+
 function getRankedPlayersFromPreviousRound(
   players: ProgramPlayer[],
   sourceMatches: LeagueMatch[],
@@ -547,11 +556,12 @@ function getRankedPlayersFromPreviousRound(
     (match) =>
       (match.program_round ?? match.round_number) === previousRound &&
       !match.bracket &&
+      !match.is_no_game &&
       match.participant_a_id &&
       match.participant_b_id,
   );
 
-  if (previousMatches.length === 0 || previousMatches.some((match) => match.status !== "done")) {
+  if (previousMatches.length === 0 || previousMatches.some((match) => !hasCompletedResult(match))) {
     return null;
   }
 
@@ -636,11 +646,12 @@ function getRankedGroupsFromPreviousRound(
     (match) =>
       (match.program_round ?? match.round_number) === previousRound &&
       !match.bracket &&
+      !match.is_no_game &&
       match.match_label &&
       match.participant_a_id &&
       match.participant_b_id,
   );
-  if (previousMatches.length === 0 || previousMatches.some((match) => match.status !== "done")) return null;
+  if (previousMatches.length === 0 || previousMatches.some((match) => !hasCompletedResult(match))) return null;
 
   const labels = [...new Set(previousMatches.map((match) => match.match_label as string))].sort();
   const playerById = new Map(players.map((player) => [player.id, player]));

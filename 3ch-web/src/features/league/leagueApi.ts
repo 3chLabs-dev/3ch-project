@@ -44,6 +44,8 @@ export interface UpdateLeagueRequest {
   court_count?: number | null;
   rules?: string;
   notice?: string;
+  entry_fee?: string;
+  bank_account?: string;
   sort_order?: string;
   recruit_count?: number;
   status?: "draft" | "active" | "completed";
@@ -73,6 +75,8 @@ export interface League {
   court_count?: number | null;
   rules?: string;
   notice?: string;
+  entry_fee?: string;
+  bank_account?: string;
   sort_order?: string;
   recruit_count?: number;
   participant_count?: number;

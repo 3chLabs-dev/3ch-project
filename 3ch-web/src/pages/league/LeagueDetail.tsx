@@ -134,6 +134,8 @@
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const [notice, setNotice] = useState("");
+    const [entryFee, setEntryFee] = useState("");
+    const [bankAccount, setBankAccount] = useState("");
     const [editDate, setEditDate] = useState("");
     const [editTime, setEditTime] = useState("");
     const [editEndTime, setEditEndTime] = useState("");
@@ -205,6 +207,13 @@
       skip: !leagueData?.league?.group_id,
     });
     const league = leagueData?.league;
+
+    useEffect(() => {
+      if (!league) return;
+      setNotice(league.notice ?? "");
+      setEntryFee(league.entry_fee ?? "");
+      setBankAccount(league.bank_account ?? "");
+    }, [league?.id]);
     // groupLoading 중엔 판단 보류 (플리커 방지)
     const canManage = !groupLoading && (groupData?.myRole === "owner" || groupData?.myRole === "admin");
     const invitedMembership = myGroupsData?.groups.find((group) =>
@@ -605,7 +614,9 @@
       const currentRules = editRules || league.rules;
       const currentSortOrder = editSortOrder || league.sort_order;
       const currentRecruitCount = editRecruitCount ?? league.recruit_count ?? 20;
-      const currentNotice = notice || league.notice || "";
+      const currentNotice = notice;
+      const currentEntryFee = entryFee;
+      const currentBankAccount = bankAccount;
 
       return (
         currentDate !== toDateInputValue(league.start_date) ||
@@ -618,7 +629,9 @@
         currentRules !== league.rules ||
         currentSortOrder !== league.sort_order ||
         currentRecruitCount !== league.recruit_count ||
-        currentNotice !== (league.notice || "")
+        currentNotice !== (league.notice || "") ||
+        currentEntryFee !== (league.entry_fee || "") ||
+        currentBankAccount !== (league.bank_account || "")
       );
     }, [
       league,
@@ -633,6 +646,8 @@
       editSortOrder,
       editRecruitCount,
       notice,
+      entryFee,
+      bankAccount,
     ]);
 
     const hasChanges = hasLeagueChanges;
@@ -676,7 +691,9 @@ const handleSaveEdit = async () => {
   const safeType = editType || league.type;
   const safeFormat = editFormat || league.format;
   const safeRules = editRules || league.rules;
-  const safeNotice = notice || league.notice;
+  const safeNotice = notice;
+  const safeEntryFee = entryFee;
+  const safeBankAccount = bankAccount;
   const safeSortOrder = editSortOrder || league.sort_order;
 
   const safeRecruitCount =
@@ -722,7 +739,9 @@ const handleSaveEdit = async () => {
         type: safeType,
         format: safeFormat || undefined,
         rules: safeRules || undefined,
-        notice: safeNotice || undefined,
+        notice: safeNotice,
+        entry_fee: safeEntryFee,
+        bank_account: safeBankAccount,
         sort_order: safeSortOrder,
         recruit_count: safeRecruitCount,
 
@@ -768,7 +787,7 @@ const handleSaveEdit = async () => {
     }).unwrap();
 
     setAlertSeverity("success");
-    setAlertMsg("수정되었습니다.");
+    setAlertMsg("자동 저장되었습니다.");
 
     refetchLeague();
   } catch (err) {
@@ -778,6 +797,20 @@ const handleSaveEdit = async () => {
     setAlertMsg("수정에 실패했습니다.");
   }
 };
+
+    const handleCopyBankAccount = async () => {
+      const value = bankAccount.trim() || league?.bank_account?.trim() || "";
+      if (!value) return;
+
+      try {
+        await navigator.clipboard.writeText(value);
+        setAlertSeverity("success");
+        setAlertMsg("계좌번호를 복사했습니다.");
+      } catch {
+        setAlertSeverity("error");
+        setAlertMsg("계좌번호를 복사하지 못했습니다.");
+      }
+    };
 
     useEffect(() => {
       if (!canManage || !hasChanges || saving) return;
@@ -804,6 +837,8 @@ const handleSaveEdit = async () => {
       editTournamentSeeding,
       editTournamentAdvancement,
       notice,
+      entryFee,
+      bankAccount,
     ]);
 
 
@@ -1876,6 +1911,117 @@ const handleSaveEdit = async () => {
               <Typography fontSize={13} fontWeight={600} color={league.notice ? "#111827" : "#9CA3AF"}>
                 {league.notice || "안내사항이 없습니다."}
               </Typography>
+            </Box>
+          )}
+        </Box>
+
+        {/* 참가비 */}
+        <Box sx={{ mb: 2.5 }}>
+          <Typography fontWeight={900} fontSize={16} sx={{ mb: 1 }}>
+            참가비
+          </Typography>
+          {canManage ? (
+            <TextField
+              fullWidth
+              placeholder="참가비를 입력해주세요"
+              value={entryFee}
+              onChange={(e) => setEntryFee(e.target.value)}
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: 1,
+                  bgcolor: "#fff",
+                  fontSize: 13,
+                },
+              }}
+            />
+          ) : (
+            <Box
+              sx={{
+                bgcolor: "#fff",
+                borderRadius: 1,
+                border: "1px solid #E5E7EB",
+                px: 1.75,
+                py: 1.5,
+                minHeight: 48,
+                display: "flex",
+                alignItems: "center",
+              }}
+            >
+              <Typography
+                fontSize={13}
+                fontWeight={600}
+                color={league.entry_fee ? "#111827" : "#9CA3AF"}
+                sx={{ overflowWrap: "anywhere" }}
+              >
+                {league.entry_fee || "등록된 참가비가 없습니다."}
+              </Typography>
+            </Box>
+          )}
+        </Box>
+
+        {/* 입금 계좌 */}
+        <Box sx={{ mb: 2.5 }}>
+          <Typography fontWeight={900} fontSize={16} sx={{ mb: 1 }}>
+            입금 계좌
+          </Typography>
+          {canManage ? (
+            <TextField
+              fullWidth
+              placeholder="계좌번호를 입력해주세요"
+              value={bankAccount}
+              onChange={(e) => setBankAccount(e.target.value)}
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      aria-label="계좌번호 복사"
+                      onClick={handleCopyBankAccount}
+                      disabled={!bankAccount.trim()}
+                      edge="end"
+                      size="small"
+                    >
+                      <ContentCopyOutlinedIcon sx={{ fontSize: 19 }} />
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: 1,
+                  bgcolor: "#fff",
+                  fontSize: 13,
+                },
+              }}
+            />
+          ) : (
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                minHeight: 48,
+                bgcolor: "#fff",
+                borderRadius: 1,
+                border: "1px solid #E5E7EB",
+                pl: 1.75,
+                pr: 0.75,
+              }}
+            >
+              <Typography
+                fontSize={13}
+                fontWeight={600}
+                color={league.bank_account ? "#111827" : "#9CA3AF"}
+                sx={{ flex: 1, overflowWrap: "anywhere" }}
+              >
+                {league.bank_account || "등록된 입금 계좌가 없습니다."}
+              </Typography>
+              <IconButton
+                aria-label="계좌번호 복사"
+                onClick={handleCopyBankAccount}
+                disabled={!league.bank_account}
+                size="small"
+              >
+                <ContentCopyOutlinedIcon sx={{ fontSize: 19 }} />
+              </IconButton>
             </Box>
           )}
         </Box>

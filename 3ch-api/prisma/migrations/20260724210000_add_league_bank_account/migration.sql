@@ -1,0 +1,3 @@
+ALTER TABLE "leagues"
+  ADD COLUMN IF NOT EXISTS "bank_account" TEXT,
+  ADD COLUMN IF NOT EXISTS "entry_fee" TEXT;

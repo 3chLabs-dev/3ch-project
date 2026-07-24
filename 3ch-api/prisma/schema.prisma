@@ -256,6 +256,8 @@ model League {
   status            String   @default("draft") // e.g., "draft", "active", "completed"
   rules             String?
   notice            String?
+  entry_fee         String?
+  bank_account      String?
   sort_order        String?  @default("부수")
   recruit_count     Int      @default(0)
   participant_count Int      @default(0)

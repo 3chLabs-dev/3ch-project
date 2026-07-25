@@ -985,25 +985,76 @@ export default function LeagueGPTVisionSheet() {
     [isProgramMode, id, programData],
   );
   const [programMatchStateVersion, setProgramMatchStateVersion] = useState(0);
+  const programSourceMatches = useMemo(() => {
+    if (!isProgramMode || programRound <= 1) return [];
+
+    const source: LeagueMatch[] = [];
+    for (let roundIndex = 1; roundIndex < programRound; roundIndex += 1) {
+      const generated = applyProgramMatchState(
+        generateProgramRoundMatches(
+          id ?? "",
+          programOption,
+          rawParticipants,
+          roundIndex,
+          source,
+        ),
+        id ?? "",
+        roundIndex,
+      );
+      const serverMatches = (matchData?.matches ?? []).filter(
+        (match) => match.is_program && match.program_round === roundIndex,
+      );
+      const serverById = new Map(serverMatches.map((match) => [match.id, match]));
+      const merged = generated.map((match) => {
+        const serverMatch = serverById.get(match.id);
+        return serverMatch
+          ? {
+              ...match,
+              score_a: serverMatch.score_a,
+              score_b: serverMatch.score_b,
+              court: serverMatch.court,
+              status: serverMatch.status,
+            }
+          : match;
+      });
+      source.push(...(merged.length > 0 ? merged : serverMatches));
+    }
+    return source;
+  }, [id, isProgramMode, matchData?.matches, programOption, programRound, rawParticipants]);
   const generatedProgramMatchesAll = useMemo(
     () => isProgramMode
       ? applyProgramMatchState(
-        generateProgramRoundMatches(id ?? "", programOption, rawParticipants, programRound),
+        generateProgramRoundMatches(
+          id ?? "",
+          programOption,
+          rawParticipants,
+          programRound,
+          programSourceMatches,
+        ),
         id ?? "",
         programRound,
       )
       : [],
-    [isProgramMode, id, programOption, rawParticipants, programRound, programMatchStateVersion],
+    [isProgramMode, id, programOption, rawParticipants, programRound, programMatchStateVersion, programSourceMatches],
   );
   const serverProgramMatchesAll = useMemo(
     () => (matchData?.matches ?? []).filter((match) => match.is_program && match.program_round === programRound),
     [matchData?.matches, programRound],
   );
   const programRoundType = programOption?.blocks?.[programRound - 1]?.type;
+  const programRoundBlock = programOption?.blocks?.[programRound - 1];
+  const programRoundConfig = programOption?.rounds?.[programRound - 1];
+  const isProgramFinalRound =
+    programRound > 1 &&
+    (
+      programRoundConfig?.option === "FINAL" ||
+      programRoundBlock?.roundOption === "FINAL" ||
+      programRoundBlock?.title?.includes("본선")
+    );
   const isProgramUnitRound = programRoundType === "TEAM" || programRoundType === "DOUBLES";
   const hasProgramClubPolicy = Boolean(programOption?.blocks?.[programRound - 1]?.crossClubGrouping || programOption?.blocks?.[programRound - 1]?.crossClubOnlyMatches);
   const programMatchesAll = useMemo(() => {
-    if (!isProgramUnitRound && !hasProgramClubPolicy) {
+    if (!isProgramFinalRound && !isProgramUnitRound && !hasProgramClubPolicy) {
       return serverProgramMatchesAll.length > 0 ? serverProgramMatchesAll : generatedProgramMatchesAll;
     }
     const serverById = new Map(serverProgramMatchesAll.map((match) => [match.id, match]));
@@ -1019,7 +1070,7 @@ export default function LeagueGPTVisionSheet() {
           }
         : match;
     });
-  }, [generatedProgramMatchesAll, hasProgramClubPolicy, isProgramUnitRound, serverProgramMatchesAll]);
+  }, [generatedProgramMatchesAll, hasProgramClubPolicy, isProgramFinalRound, isProgramUnitRound, serverProgramMatchesAll]);
   const [updateMatch] = useUpdateLeagueMatchMutation();
   const [scanVision, { isLoading: isScanning }] = useScanLeagueOpenAIVisionMutation();
   const [resultDialogOpen, setResultDialogOpen] = useState(false);
@@ -1108,6 +1159,40 @@ export default function LeagueGPTVisionSheet() {
     }));
   }, [generatedProgramMatchesAll, id, isProgramTeamRound, programRoundType]);
 
+  const programDisplayParticipants = useMemo(() => {
+    if (!isProgramMode || isProgramTeamRound) return [];
+    const rawById = new Map(rawParticipants.map((participant) => [participant.id, participant]));
+    const displayById = new Map<string, LeagueParticipantItem>();
+
+    programMatchesAll.forEach((match) => {
+      const addParticipant = (
+        participantId: string | null,
+        participantName: string | null,
+        participantDivision: string | null,
+      ) => {
+        if (!participantId || displayById.has(participantId)) return;
+        const rawParticipant = rawById.get(participantId);
+        displayById.set(participantId, rawParticipant ?? {
+          id: participantId,
+          league_id: id ?? "",
+          division: participantDivision,
+          name: participantName ?? "?",
+          member_id: null,
+          paid: false,
+          arrived: false,
+          after: false,
+          sort_order: displayById.size + 1,
+          created_at: "",
+          group_name: match.match_label ?? null,
+        });
+      };
+      addParticipant(match.participant_a_id, match.participant_a_name, match.participant_a_division);
+      addParticipant(match.participant_b_id, match.participant_b_name, match.participant_b_division);
+    });
+
+    return Array.from(displayById.values());
+  }, [id, isProgramMode, isProgramTeamRound, programMatchesAll, rawParticipants]);
+
   // 1. 조 이름 목록 추출 ("1조", "2조" ...)
   const groupNames = useMemo(() => {
     if (isProgramMode) {
@@ -1145,13 +1230,16 @@ export default function LeagueGPTVisionSheet() {
       const ids = new Set(
         selectedMatches.flatMap((match) => [match.participant_a_id, match.participant_b_id]).filter(Boolean) as string[],
       );
-      return rawParticipants.filter((participant) => ids.has(participant.id));
+      return programDisplayParticipants.filter((participant) => ids.has(participant.id));
+    }
+    if (isProgramMode) {
+      return programDisplayParticipants;
     }
     if (groupNames.length > 0 && selectedGroup) {
       return rawParticipants.filter(p => p.group_name === selectedGroup);
     }
     return rawParticipants;
-  }, [isProgramTeamRound, programTeamParticipants, isProgramMode, programMatchesAll, rawParticipants, groupNames, selectedGroup]);
+  }, [isProgramTeamRound, programTeamParticipants, programDisplayParticipants, isProgramMode, programMatchesAll, rawParticipants, groupNames, selectedGroup]);
 
   // 4. 선택된 조의 경기만 필터링
   const matches = useMemo(() => {
@@ -1220,6 +1308,7 @@ export default function LeagueGPTVisionSheet() {
   const [naturalTw, setNaturalTw]       = useState(0);  // 테이블 원본(비스케일) 너비
   const [naturalTh, setNaturalTh]       = useState(0);  // 테이블 원본(비스케일) 높이
   const [userZoom, setUserZoom]         = useState(1);  // 사용자 줌 배율 (1 = 자동 fit)
+  const [renderedTableBottom, setRenderedTableBottom] = useState(0);
   const dataReady = !!league && rawParticipants.length > 0; // 데이터 로드 완료 여부 (useLayoutEffect deps)
 
   // 기기 실제 회전 감지 → landscape 자동 동기화 + userZoom 리셋
@@ -1252,7 +1341,25 @@ export default function LeagueGPTVisionSheet() {
       const sh = scheduleRef.current
         ? (landscape ? scheduleRef.current.offsetHeight : scheduleRef.current.offsetWidth)
         : 0;
-      setAutoFitScale(landscape ? Math.min(ww / tw, (wh - sh) / th) : (ww - sh) / sth);
+      const mobileScheduleReserve = Math.max(sh, 72);
+      const availableWidth = Math.max(
+        1,
+        ww - (landscape ? 0 : mobileScheduleReserve + 10),
+      );
+      const availableHeight = Math.max(1, wh);
+      const portraitDensity = localOrder.length <= 10
+        ? 1.5
+        : localOrder.length <= 16
+          ? 1.25
+          : 1;
+      setAutoFitScale(
+        landscape
+          ? Math.min(ww / tw, (wh - sh) / th)
+          : Math.min(
+              (availableWidth / sth) * portraitDensity,
+              availableHeight / tw,
+            ),
+      );
       setNaturalTw(tw);
       setNaturalTh(th);
     };
@@ -1265,7 +1372,7 @@ export default function LeagueGPTVisionSheet() {
     if (scheduleRef.current)     ro.observe(scheduleRef.current);
     window.addEventListener("resize", updateScale);
     return () => { ro.disconnect(); window.removeEventListener("resize", updateScale); };
-  }, [landscape, dataReady]);
+  }, [landscape, dataReady, localOrder.length]);
 
   // ── DnD 순서 변경 ─────────────────────────────────────────────────────────
   const [reorderParticipants] = useReorderLeagueParticipantsMutation();
@@ -1676,6 +1783,28 @@ export default function LeagueGPTVisionSheet() {
 
   const { playerStats, rankings, tieSetDiffs } = useMatchStats(localOrder, matches, league?.rules);
 
+  useLayoutEffect(() => {
+    const measureRenderedTable = () => {
+      const wrapper = wrapperRef.current;
+      const table = wrapperTableRef.current;
+      if (!wrapper || !table) return;
+      const wrapperRect = wrapper.getBoundingClientRect();
+      const tableRect = table.getBoundingClientRect();
+      setRenderedTableBottom(Math.max(0, tableRect.bottom - wrapperRect.top));
+    };
+
+    const frame = window.requestAnimationFrame(measureRenderedTable);
+    const observer = new ResizeObserver(measureRenderedTable);
+    if (wrapperRef.current) observer.observe(wrapperRef.current);
+    if (wrapperTableRef.current) observer.observe(wrapperTableRef.current);
+    window.addEventListener("resize", measureRenderedTable);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener("resize", measureRenderedTable);
+    };
+  }, [autoFitScale, userZoom, landscape, localOrder.length, selectedGroup]);
+
   // ── 로딩 / 빈 상태 ───────────────────────────────────────────────────────
   if (leagueLoading || participantsLoading) {
     return (
@@ -1701,6 +1830,8 @@ export default function LeagueGPTVisionSheet() {
   // portrait: 90° 회전이므로 시각 너비=naturalTh, 시각 높이=naturalTw
   const visualW = naturalTw > 0 ? (landscape ? naturalTw : naturalTh) * appliedScale : 0;
   const visualH = naturalTh > 0 ? (landscape ? naturalTh : naturalTw) * appliedScale : 0;
+  const mobileToolsTop = Math.max(8, renderedTableBottom + 12);
+
   const mobileDialogPaperSx = landscape
     ? {}
     : {
@@ -1934,7 +2065,18 @@ export default function LeagueGPTVisionSheet() {
           <MatchSchedulePanel matches={matches} localOrder={localOrder} landscape={landscape} leagueId={id ?? ""} onProgramMatchUpdate={isProgramMode ? updateProgramMatch : undefined} />
         </Box>
 
-        <Box sx={{ position: "absolute", bottom: landscape ? 380 : 220, right: landscape ? 14 : 85, zIndex: 20, display: "flex", flexDirection: "column", alignItems: "center", gap: 0.8, pointerEvents: "auto" }}>
+        <Box sx={{
+          position: "absolute",
+          ...(landscape
+            ? { bottom: 380, right: 14 }
+            : { top: mobileToolsTop, right: 85 }),
+          zIndex: 20,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 0.8,
+          pointerEvents: "auto",
+        }}>
           <Box sx={{ bgcolor: "#fff", p: 0.5, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>
             <QRCode value={`${window.location.origin}/league/${id}/gpt-vision`} size={landscape ? 66 : 72} />
           </Box>
@@ -1953,7 +2095,21 @@ export default function LeagueGPTVisionSheet() {
         {/* 플로팅 버튼들 (position: absolute, wrapperRef 기준 → 스크롤 영역 위에 고정) */}
 
         {/* 이미지 저장 / 인쇄 버튼 */}
-        <Box sx={{ position: "absolute", bottom: landscape ? 300 : 170, right: landscape ? 14 : 85, zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: "#fff", borderRadius: 2, boxShadow: "0 2px 8px rgba(0,0,0,0.15)", display: "flex", flexDirection: "column", alignItems: "center", p: 0.25 }}>
+        <Box sx={{
+          position: "absolute",
+          ...(landscape
+            ? { bottom: 300, right: 14 }
+            : { top: mobileToolsTop, right: 170 }),
+          zIndex: 10,
+          writingMode: landscape ? "horizontal-tb" : "vertical-rl",
+          bgcolor: "#fff",
+          borderRadius: 2,
+          boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          p: 0.25,
+        }}>
           <Tooltip title="이미지 저장">
             <IconButton size="small" onClick={handleSaveImage}>
               <DownloadIcon sx={{ fontSize: 18, ...(landscape ? {} : { transform: "rotate(90deg)" }) }} />
@@ -1967,7 +2123,21 @@ export default function LeagueGPTVisionSheet() {
         </Box>
 
         {/* 줌 컨트롤: portrait=세로(writing-mode 회전), landscape=가로 */}
-        <Box sx={{ position: "absolute", bottom: landscape ? 216 : 126, right: landscape ? 14 : 85, zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: "#fff", borderRadius: 2, boxShadow: "0 2px 8px rgba(0,0,0,0.15)", display: "flex", flexDirection: "column", alignItems: "center", p: 0.25 }}>
+        <Box sx={{
+          position: "absolute",
+          ...(landscape
+            ? { bottom: 216, right: 14 }
+            : { top: mobileToolsTop, right: 250 }),
+          zIndex: 10,
+          writingMode: landscape ? "horizontal-tb" : "vertical-rl",
+          bgcolor: "#fff",
+          borderRadius: 2,
+          boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          p: 0.25,
+        }}>
           <IconButton size="small" onClick={() => setUserZoom((z) => Math.min(2.5, +(z + 0.25).toFixed(2)))}>
             <ZoomInIcon sx={{ fontSize: 18 }} />
           </IconButton>
@@ -1980,12 +2150,12 @@ export default function LeagueGPTVisionSheet() {
         </Box>
 
         <Tooltip title="새로고침">
-          <IconButton onClick={handleRefresh} sx={{ position: "absolute", bottom: landscape? 157 : 67, right: landscape ? 14 : 85, zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: "#fff", color: "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: "#F3F4F6" } }}>
+          <IconButton onClick={handleRefresh} sx={{ position: "absolute", ...(landscape ? { bottom: 157, right: 14 } : { top: mobileToolsTop + 50, right: 170 }), zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: "#fff", color: "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: "#F3F4F6" } }}>
             <RefreshIcon sx={{ fontSize: 18 }} />
           </IconButton>
         </Tooltip>
         <Tooltip title={landscape ? "세로 보기" : "가로 보기"}>
-          <IconButton onClick={() => { setLandscape((v) => !v); setUserZoom(1); }} sx={{ position: "absolute", bottom: landscape ? 104 : 14, right: landscape ? 14 : 85, zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: landscape ? COLOR.primary : "#fff", color: landscape ? "#fff" : "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: landscape ? "#1D4ED8" : "#F3F4F6" } }}>
+          <IconButton onClick={() => { setLandscape((v) => !v); setUserZoom(1); }} sx={{ position: "absolute", ...(landscape ? { bottom: 104, right: 14 } : { top: mobileToolsTop + 50, right: 220 }), zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: landscape ? COLOR.primary : "#fff", color: landscape ? "#fff" : "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: landscape ? "#1D4ED8" : "#F3F4F6" } }}>
             <ScreenRotationIcon sx={{ fontSize: 18 }} />
           </IconButton>
         </Tooltip>

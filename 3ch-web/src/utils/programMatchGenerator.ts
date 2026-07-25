@@ -964,7 +964,15 @@ export function generateProgramRoundMatches(
   const block = option?.blocks?.[round - 1];
   if (!block || participants.length < 2) return [];
   const deletedMatchIds = new Set(block.deletedMatchIds ?? []);
-  const withoutDeleted = (matches: LeagueMatch[]) => matches.filter((match) => !deletedMatchIds.has(match.id));
+  const withoutDeleted = (matches: LeagueMatch[]) =>
+    matches
+      .filter((match) => !deletedMatchIds.has(match.id))
+      .map((match) => ({
+        ...match,
+        is_program: true,
+        program_round: round,
+        program_block_type: block.type,
+      }));
 
   const players = toProgramPlayers(participants);
   const defaultFormationSeed = round * 1000;

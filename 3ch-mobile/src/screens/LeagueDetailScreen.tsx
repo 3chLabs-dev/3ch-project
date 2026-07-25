@@ -1,6 +1,6 @@
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { StyleSheet, Text, View } from "react-native";
-import { useGetLeagueQuery, useGetParticipantsQuery } from "../api/mobileApi";
+import { useGetGroupDetailQuery, useGetLeagueQuery, useGetParticipantsQuery } from "../api/mobileApi";
 import { Screen } from "../components/Screen";
 import { Button, Card, Empty, Loading, PageHeader } from "../components/Ui";
 import { colors } from "../theme";
@@ -11,6 +11,8 @@ export function LeagueDetailScreen() {
   const leagueQuery = useGetLeagueQuery(id);
   const participants = useGetParticipantsQuery(id);
   const league = leagueQuery.data?.league;
+  const groupQuery = useGetGroupDetailQuery(league?.group_id ?? "", { skip: !league?.group_id });
+  const canManage = groupQuery.data?.myRole === "owner" || groupQuery.data?.myRole === "admin";
   return <Screen refreshing={leagueQuery.isFetching || participants.isFetching} onRefresh={() => { leagueQuery.refetch(); participants.refetch(); }}>
     <PageHeader title="리그 상세" />
     {leagueQuery.isLoading ? <Loading /> : null}
@@ -20,10 +22,11 @@ export function LeagueDetailScreen() {
       <Text style={styles.meta}>{league.start_date ? new Date(league.start_date).toLocaleString("ko-KR") : "일정 미정"}</Text>
       <Text style={styles.meta}>참가자 {league.participant_count ?? participants.data?.participants.length ?? 0} / {league.recruit_count ?? 0}명</Text>
     </Card> : null}
-    <View style={styles.actions}>
+    {canManage ? <View style={styles.actions}>
       <View style={styles.grow}><Button title="참가자 관리" onPress={() => navigation.navigate("Participants", { id })} /></View>
       <View style={styles.grow}><Button title="경기 진행" onPress={() => navigation.navigate("Matches", { id })} /></View>
-    </View>
+    </View> : null}
+    {canManage ? <Button title="리그 관리" onPress={() => navigation.navigate("LeagueManage", { id })} /> : null}
     <Text style={styles.section}>참가자</Text>
     {participants.data?.participants.length ? participants.data.participants.slice(0, 10).map((p) => <Card key={p.id}><View style={styles.row}><Text style={styles.person}>{p.name}</Text><Text style={styles.meta}>{p.division ?? "미배정"}</Text></View></Card>) : <Empty message="참가자가 없습니다." />}
   </Screen>;

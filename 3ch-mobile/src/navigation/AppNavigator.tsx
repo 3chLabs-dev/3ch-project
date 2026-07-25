@@ -6,15 +6,18 @@ import { ContentScreen } from "../screens/ContentScreen";
 import { ClubRankingScreen } from "../screens/ClubRankingScreen";
 import { DonateScreen } from "../screens/DonateScreen";
 import { DrawDetailScreen } from "../screens/DrawDetailScreen";
+import { DrawCreateScreen } from "../screens/DrawCreateScreen";
 import { DrawListScreen } from "../screens/DrawListScreen";
 import { DrawScreen } from "../screens/DrawScreen";
 import { GroupCreateScreen } from "../screens/GroupCreateScreen";
 import { GroupDetailScreen } from "../screens/GroupDetailScreen";
+import { GroupManageScreen } from "../screens/GroupManageScreen";
 import { GroupsScreen } from "../screens/GroupsScreen";
 import { GuideScreen } from "../screens/GuideScreen";
 import { HomeScreen } from "../screens/HomeScreen";
 import { LeagueCreateScreen } from "../screens/LeagueCreateScreen";
 import { LeagueDetailScreen } from "../screens/LeagueDetailScreen";
+import { LeagueManageScreen } from "../screens/LeagueManageScreen";
 import { LeaguesScreen } from "../screens/LeaguesScreen";
 import { LoginScreen } from "../screens/LoginScreen";
 import { MatchesScreen } from "../screens/MatchesScreen";
@@ -59,15 +62,15 @@ function MainTabs() {
 }
 
 function GroupNavigator() {
-  return <GroupStack.Navigator screenOptions={{ headerShown: false }}><GroupStack.Screen name="Groups" component={GroupsScreen} /><GroupStack.Screen name="GroupDetail" component={GroupDetailScreen} /><GroupStack.Screen name="GroupCreate" component={GroupCreateScreen} /></GroupStack.Navigator>;
+  return <GroupStack.Navigator screenOptions={{ headerShown: false }}><GroupStack.Screen name="Groups" component={GroupsScreen} /><GroupStack.Screen name="GroupDetail" component={GroupDetailScreen} /><GroupStack.Screen name="GroupManage" component={GroupManageScreen} /><GroupStack.Screen name="GroupCreate" component={GroupCreateScreen} /></GroupStack.Navigator>;
 }
 
 function LeagueNavigator() {
-  return <LeagueStack.Navigator screenOptions={{ headerShown: false }}><LeagueStack.Screen name="Leagues" component={LeaguesScreen} /><LeagueStack.Screen name="LeagueDetail" component={LeagueDetailScreen} /><LeagueStack.Screen name="LeagueCreate" component={LeagueCreateScreen} /><LeagueStack.Screen name="Participants" component={ParticipantsScreen} /><LeagueStack.Screen name="Matches" component={MatchesScreen} /></LeagueStack.Navigator>;
+  return <LeagueStack.Navigator screenOptions={{ headerShown: false }}><LeagueStack.Screen name="Leagues" component={LeaguesScreen} /><LeagueStack.Screen name="LeagueDetail" component={LeagueDetailScreen} /><LeagueStack.Screen name="LeagueManage" component={LeagueManageScreen} /><LeagueStack.Screen name="LeagueCreate" component={LeagueCreateScreen} /><LeagueStack.Screen name="Participants" component={ParticipantsScreen} /><LeagueStack.Screen name="Matches" component={MatchesScreen} /></LeagueStack.Navigator>;
 }
 
 function DrawNavigator() {
-  return <DrawStack.Navigator screenOptions={{ headerShown: false }}><DrawStack.Screen name="DrawHome" component={DrawScreen} /><DrawStack.Screen name="DrawList" component={DrawListScreen} /><DrawStack.Screen name="DrawDetail" component={DrawDetailScreen} /></DrawStack.Navigator>;
+  return <DrawStack.Navigator screenOptions={{ headerShown: false }}><DrawStack.Screen name="DrawHome" component={DrawScreen} /><DrawStack.Screen name="DrawList" component={DrawListScreen} /><DrawStack.Screen name="DrawCreate" component={DrawCreateScreen} /><DrawStack.Screen name="DrawDetail" component={DrawDetailScreen} /></DrawStack.Navigator>;
 }
 
 const contentScreens = [

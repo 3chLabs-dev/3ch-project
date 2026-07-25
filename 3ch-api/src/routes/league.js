@@ -2316,6 +2316,19 @@ router.get('/league/:id', optionalAuth, async (req, res) => {
 router.put('/league/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
+    const userId = Number(req.user.sub);
+
+    const accessCheck = await pool.query(
+      `SELECT 1
+       FROM leagues l
+       INNER JOIN group_members gm ON gm.group_id = l.group_id
+       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+      [id, userId],
+    );
+    if (accessCheck.rowCount === 0) {
+      return res.status(403).json({ message: '리그를 수정할 권한이 없습니다.' });
+    }
+
     const updates = updateLeagueSchema.parse(req.body);
 
     const fields = [];

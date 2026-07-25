@@ -22,7 +22,7 @@ export function DrawScreen() {
       {isLoading ? <Loading /> : null}
       {!data?.leagues.length && !isLoading ? <Empty message="추첨에 사용할 리그가 없습니다." /> : null}
       {data?.leagues.slice(0, 10).map((league) => (
-        <Pressable key={league.id} onPress={() => navigation.navigate("DrawList", { leagueId: league.league_code ?? league.id })}>
+        <Pressable key={league.id} onPress={() => navigation.navigate("DrawList", { leagueId: league.id })}>
         <Card key={league.id}>
           <Text style={styles.title}>{league.name}</Text>
           <Text style={styles.muted}>{league.group_name ?? "개인 리그"} · 참가자 {league.participant_count ?? 0}명</Text>

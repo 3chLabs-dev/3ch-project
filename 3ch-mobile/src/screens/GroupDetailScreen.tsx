@@ -1,4 +1,4 @@
-import { useRoute } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import { Alert, StyleSheet, Text, View } from "react-native";
 import { useGetGroupDetailQuery, useGetGroupRankingQuery, useJoinGroupMutation, useLeaveGroupMutation } from "../api/mobileApi";
 import { Screen } from "../components/Screen";
@@ -6,6 +6,7 @@ import { Button, Card, Empty, Loading, PageHeader } from "../components/Ui";
 import { colors } from "../theme";
 
 export function GroupDetailScreen() {
+  const navigation = useNavigation<any>();
   const id = useRoute<any>().params.id as string;
   const query = useGetGroupDetailQuery(id);
   const ranking = useGetGroupRankingQuery(id, { skip: !query.data });
@@ -13,6 +14,7 @@ export function GroupDetailScreen() {
   const [leave, leaveState] = useLeaveGroupMutation();
   const detail = query.data;
   const isMember = !!detail?.myRole;
+  const canManage = detail?.myRole === "owner" || detail?.myRole === "admin";
 
   return (
     <Screen refreshing={query.isFetching} onRefresh={query.refetch}>
@@ -32,6 +34,7 @@ export function GroupDetailScreen() {
               { text: "탈퇴", style: "destructive", onPress: () => leave(id) },
             ])} />
           ) : <Button loading={joinState.isLoading} title="클럽 가입" onPress={() => join(id)} />}
+          {canManage ? <Button title="동호회 관리" onPress={() => navigation.navigate("GroupManage", { id })} /> : null}
           <Text style={styles.section}>회원</Text>
           {detail.members.map((member) => (
             <Card key={member.id}>

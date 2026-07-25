@@ -14,6 +14,13 @@ export type League = {
   type?: string;
   format?: string;
   recruit_count?: number;
+  description?: string;
+  rules?: string;
+  end_date?: string;
+  notice?: string;
+  court_count?: number;
+  join_permission?: string;
+  group_id?: string;
 };
 
 export type Group = {
@@ -57,8 +64,12 @@ export type UserPreferences = {
 
 export type GroupDetail = {
   group: Group & { description?: string; address?: string; founded_at?: string };
-  members: Array<{ id: string; user_id: number; name?: string; email: string; role: string; division?: string | null }>;
-  myRole: string;
+  members: Array<{ id: string; user_id: number | null; name?: string; email?: string | null; role: string; division?: string | null; is_pre_member?: boolean }>;
+  myRole: "owner" | "admin" | "member" | null;
+};
+
+export type GroupUpdate = Pick<Group, "name" | "sport" | "region_city" | "region_district"> & {
+  description?: string;
 };
 
 export type Participant = {
@@ -86,6 +97,7 @@ export type DrawDetail = {
   draw: { id: string; name: string; created_at: string };
   prizes: Array<{ id: string; prize_name: string; quantity: number; winners: Array<{ id: string; participant_name: string; participant_division?: string | null }> }>;
 };
+export type DrawPrizeInput = { prize_name: string; quantity: number; winners?: Array<{ participant_name: string; participant_division?: string }> };
 export type Notice = { id: number; category?: string; title: string; content_preview?: string; content?: string; created_at: string };
 export type Faq = { id: number; tab: string; section: string; question: string; answer: string };
 export type Guide = { id: number; tab: "leader" | "member"; section: string; content: string };
@@ -183,6 +195,22 @@ export const mobileApi = baseApi.injectEndpoints({
       query: (body) => ({ url: "/group", method: "POST", body }),
       invalidatesTags: ["Group"],
     }),
+    updateGroup: builder.mutation<{ message: string }, { groupId: string; updates: Partial<GroupUpdate> }>({
+      query: ({ groupId, updates }) => ({ url: `/group/${groupId}`, method: "PATCH", body: updates }),
+      invalidatesTags: (_r, _e, { groupId }) => ["Group", { type: "Group", id: groupId }],
+    }),
+    updateGroupMember: builder.mutation<{ message: string }, { groupId: string; userId: number; division: string }>({
+      query: ({ groupId, userId, division }) => ({ url: `/group/${groupId}/member/${userId}`, method: "PATCH", body: { division } }),
+      invalidatesTags: (_r, _e, { groupId }) => [{ type: "Group", id: groupId }],
+    }),
+    updateGroupMemberRole: builder.mutation<{ message: string }, { groupId: string; userId: number; role: "member" | "admin" }>({
+      query: ({ groupId, userId, role }) => ({ url: `/group/${groupId}/member/${userId}/role`, method: "PATCH", body: { role } }),
+      invalidatesTags: (_r, _e, { groupId }) => [{ type: "Group", id: groupId }],
+    }),
+    removeGroupMember: builder.mutation<{ message: string }, { groupId: string; userId: number }>({
+      query: ({ groupId, userId }) => ({ url: `/group/${groupId}/member/${userId}`, method: "DELETE" }),
+      invalidatesTags: (_r, _e, { groupId }) => ["Group", { type: "Group", id: groupId }],
+    }),
     getGroupRanking: builder.query<{ rankings: Array<{ member_id: number; name: string; rank: number; rating: number; wins: number; losses: number; win_rate: number }> }, string>({
       query: (id) => `/group/${id}/ranking`,
     }),
@@ -218,11 +246,25 @@ export const mobileApi = baseApi.injectEndpoints({
       query: (body) => ({ url: "/league", method: "POST", body }),
       invalidatesTags: ["League"],
     }),
+    updateLeague: builder.mutation<{ league: League }, { leagueId: string; updates: Partial<League> }>({
+      query: ({ leagueId, updates }) => ({ url: `/league/${leagueId}`, method: "PUT", body: updates }),
+      invalidatesTags: (_r, _e, { leagueId }) => ["League", { type: "League", id: leagueId }],
+    }),
+    deleteLeague: builder.mutation<{ message: string }, string>({
+      query: (leagueId) => ({ url: `/league/${leagueId}`, method: "DELETE" }),
+      invalidatesTags: ["League"],
+    }),
     getDraws: builder.query<{ draws: DrawListItem[] }, string>({
       query: (leagueId) => `/draw/${leagueId}`,
     }),
     getDrawDetail: builder.query<DrawDetail, { leagueId: string; drawId: string }>({
       query: ({ leagueId, drawId }) => `/draw/${leagueId}/${drawId}`,
+    }),
+    createDraw: builder.mutation<{ draw_id: string; draw_code?: string }, { leagueId: string; name: string; prizes: DrawPrizeInput[] }>({
+      query: ({ leagueId, ...body }) => ({ url: `/draw/${leagueId}`, method: "POST", body }),
+    }),
+    runDraw: builder.mutation<{ message: string }, { leagueId: string; drawId: string; prizes: DrawPrizeInput[] }>({
+      query: ({ leagueId, drawId, prizes }) => ({ url: `/draw/${leagueId}/${drawId}/run`, method: "POST", body: { prizes } }),
     }),
     getNotices: builder.query<{ notices: Notice[] }, void>({ query: () => "/notices?limit=50" }),
     getNotice: builder.query<Notice, number>({ query: (id) => `/notices/${id}` }),
@@ -278,6 +320,10 @@ export const {
   useJoinGroupMutation,
   useLeaveGroupMutation,
   useCreateGroupMutation,
+  useUpdateGroupMutation,
+  useUpdateGroupMemberMutation,
+  useUpdateGroupMemberRoleMutation,
+  useRemoveGroupMemberMutation,
   useGetGroupRankingQuery,
   useGetLeagueQuery,
   useGetParticipantsQuery,
@@ -287,8 +333,12 @@ export const {
   useInitMatchesMutation,
   useUpdateMatchMutation,
   useCreateLeagueMutation,
+  useUpdateLeagueMutation,
+  useDeleteLeagueMutation,
   useGetDrawsQuery,
   useGetDrawDetailQuery,
+  useCreateDrawMutation,
+  useRunDrawMutation,
   useGetNoticesQuery,
   useGetNoticeQuery,
   useGetFaqsQuery,

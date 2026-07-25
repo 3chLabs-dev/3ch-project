@@ -67,7 +67,7 @@ export function GroupsScreen() {
       {myGroupsQuery.isError ? <ErrorMessage message="클럽 목록을 불러오지 못했습니다." /> : null}
       {!myGroups.length && !myGroupsQuery.isLoading ? <Empty message="가입한 클럽이 없습니다." /> : null}
       {myGroups.map((group) => (
-        <GroupCard key={group.id} group={group} onPress={() => navigation.navigate("GroupDetail", { id: group.club_code ?? group.id })} />
+        <GroupCard key={group.id} group={group} onPress={() => navigation.navigate("GroupDetail", { id: group.id })} />
       ))}
       <Button title="새 클럽 만들기" onPress={() => navigation.navigate("GroupCreate")} />
 
@@ -91,7 +91,7 @@ export function GroupsScreen() {
         gpsClubs.length ? (
           <View style={styles.list}>
             {gpsClubs.map((group) => (
-              <GroupCard key={`gps-${group.id}`} group={group} showDistance onPress={() => navigation.navigate("GroupDetail", { id: group.club_code ?? group.id })} />
+              <GroupCard key={`gps-${group.id}`} group={group} showDistance onPress={() => navigation.navigate("GroupDetail", { id: group.id })} />
             ))}
           </View>
         ) : <Empty message="주변에 추천할 클럽이 없습니다." />
@@ -101,7 +101,7 @@ export function GroupsScreen() {
       <Field placeholder="클럽 검색" value={search} onChangeText={setSearch} />
       {recommendedQuery.isLoading ? <Loading /> : null}
       {recommendedGroups.length ? recommendedGroups.map((group) => (
-        <GroupCard key={`recommended-${group.id}`} group={group} onPress={() => navigation.navigate("GroupDetail", { id: group.club_code ?? group.id })} />
+        <GroupCard key={`recommended-${group.id}`} group={group} onPress={() => navigation.navigate("GroupDetail", { id: group.id })} />
       )) : !recommendedQuery.isLoading ? <Empty message={search ? "검색 결과가 없습니다." : "추천할 클럽이 없습니다."} /> : null}
     </Screen>
   );
@@ -109,11 +109,12 @@ export function GroupsScreen() {
 
 function GroupCard({ group, onPress, showDistance = false }: { group: Group; onPress: () => void; showDistance?: boolean }) {
   const region = [group.region_city, group.region_district].filter(Boolean).join(" ");
+  const sportIcon = group.sport === "탁구" ? "🏓" : group.sport === "배드민턴" ? "🏸" : group.sport === "테니스" ? "🎾" : "🏅";
   return (
     <Pressable onPress={onPress}>
       <Card>
         <View style={styles.row}>
-          <View style={styles.iconCircle}><Ionicons name="people" size={23} color={colors.primary} /></View>
+          <View style={styles.iconCircle}><Text style={styles.sportIcon}>{sportIcon}</Text></View>
           <View style={styles.grow}>
             <Text style={styles.title}>{group.name}</Text>
             <View style={styles.metaRow}>
@@ -133,7 +134,8 @@ const styles = StyleSheet.create({
   sectionTitle: { color: colors.text, fontWeight: "900", fontSize: 18, marginTop: 4 },
   list: { gap: 12 },
   row: { flexDirection: "row", alignItems: "center", gap: 12 },
-  iconCircle: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.blueSoft, alignItems: "center", justifyContent: "center" },
+  iconCircle: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.blueSoft, alignItems: "center", justifyContent: "center" },
+  sportIcon: { fontSize: 23 },
   grow: { flex: 1 },
   title: { color: colors.text, fontSize: 15, fontWeight: "800" },
   metaRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4 },
@@ -144,6 +146,6 @@ const styles = StyleSheet.create({
   filterSelected: { backgroundColor: colors.text },
   filterText: { color: "#374151", fontSize: 11, fontWeight: "800" },
   filterTextSelected: { color: "#fff" },
-  locationButton: { minHeight: 48, borderWidth: 1, borderColor: colors.primary, borderRadius: 8, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.surface },
+  locationButton: { minHeight: 48, borderWidth: 1, borderColor: colors.primary, borderRadius: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.surface },
   locationText: { color: colors.primary, fontWeight: "800" },
 });

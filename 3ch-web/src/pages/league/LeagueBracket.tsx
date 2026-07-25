@@ -1256,20 +1256,6 @@ export default function LeagueBracket() {
   const boardToolRailWidth = 104;
   const dataReady = !!league && rawParticipants.length > 0; // 데이터 로드 완료 여부 (useLayoutEffect deps)
 
-  // 기기 실제 회전 감지 → landscape 자동 동기화 + userZoom 리셋
-  useEffect(() => {
-    const syncOrientation = () => {
-      const isLandscape = window.matchMedia("(orientation: landscape)").matches;
-      setLandscape(isLandscape);
-      setUserZoom(1);
-    };
-    const mq = window.matchMedia("(orientation: landscape)");
-    mq.addEventListener("change", syncOrientation);
-    // 최초 진입 시 기기 방향에 맞게 초기화
-    syncOrientation();
-    return () => mq.removeEventListener("change", syncOrientation);
-  }, []);
-
   useLayoutEffect(() => {
     const viewport = boardViewportRef.current;
     if (!viewport) return;
@@ -1478,7 +1464,7 @@ export default function LeagueBracket() {
   const headerSummary = isProgramMode && currentProgramBlock
     ? `${programRound}라운드 ${getProgramTypeLabel(currentProgramBlock.type)} ${getProgramFormatLabel(currentProgramBlock.format)} │ ${getProgramRuleLabel(currentProgramBlock.matchRule)}`
     : `${league.type} ${league.format} │ ${league.rules}`;
-  const densityScale = n <= 4 ? 1.5 : n <= 6 ? 1.35 : n <= 8 ? 1.18 : 1;
+  const densityScale = n <= 10 ? 1.5 : n <= 16 ? 1.25 : 1;
   const appliedScale  = autoFitScale * densityScale * userZoom;
   // 줌 > 1이면 테이블이 화면을 초과 → 스크롤 가능하도록 시각적 크기를 spacer로 잡아줌
   // portrait: 90° 회전이므로 시각 너비=naturalTh, 시각 높이=naturalTw

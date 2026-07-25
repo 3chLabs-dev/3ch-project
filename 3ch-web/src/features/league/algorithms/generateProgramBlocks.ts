@@ -149,6 +149,7 @@ export function generateProgramBlocks(
 
   blocks.push({
     title: `${blocks.length + 1}라운드 ${getOptionLabel(round.option)} 단식`,
+    roundOption: round.option,
     type: "SINGLES",
     matchRule: getMatchRuleLabel(round.matchRule),
     format: round.format,
@@ -199,6 +200,7 @@ export function generateProgramBlocks(
 
     blocks.push({
       title: `${blocks.length + 1}라운드 ${getOptionLabel(round.option)} 복식`,
+      roundOption: round.option,
       type: "DOUBLES",
       matchRule: getMatchRuleLabel(round.matchRule),
       format: round.format,
@@ -269,6 +271,7 @@ export function generateProgramBlocks(
 
     blocks.push({
       title: `${blocks.length + 1}라운드 ${getOptionLabel(round.option)} 단체전`,
+      roundOption: round.option,
       type: "TEAM",
       matchRule: getMatchRuleLabel(round.matchRule),
       format: round.format,

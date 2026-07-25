@@ -985,7 +985,11 @@ export function generateProgramRoundMatches(
   const currentRound = option?.rounds?.[round - 1];
   const isFinalRound =
     round > 1 &&
-    (currentRound?.option === "FINAL" || block.title.includes("본선"));
+    (
+      currentRound?.option === "FINAL" ||
+      block.roundOption === "FINAL" ||
+      block.title.includes("본선")
+    );
   const sourceRound = block.sourceRoundId ?? round - 1;
   const previousBlock = option?.blocks?.[sourceRound - 1];
   const rankedPools = isFinalRound

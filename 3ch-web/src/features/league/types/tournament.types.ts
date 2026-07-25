@@ -88,6 +88,7 @@ export interface ProgramBlock {
   title: string;
   startMinutes?: number;
   endMinutes?: number;
+  roundOption?: RoundOption;
 
   type:
     | "SINGLES"

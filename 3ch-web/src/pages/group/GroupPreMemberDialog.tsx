@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
   Divider, IconButton, List, ListItemButton, Radio, Stack, TextField, Typography,
@@ -27,6 +27,7 @@ export default function GroupPreMemberDialog({ open, onClose, groupId, manager =
   const [division, setDivision] = useState("");
   const [name, setName] = useState("");
   const [selectedId, setSelectedId] = useState("");
+  const divisionInputRef = useRef<HTMLInputElement>(null);
   const members = data?.pre_members ?? [];
 
   const addMember = async () => {
@@ -34,6 +35,7 @@ export default function GroupPreMemberDialog({ open, onClose, groupId, manager =
     try {
       await createMember({ groupId, name: name.trim(), division: division.trim() }).unwrap();
       setName(""); setDivision("");
+      requestAnimationFrame(() => divisionInputRef.current?.focus());
     } catch (error) { window.alert(errorMessage(error)); }
   };
 
@@ -62,7 +64,7 @@ export default function GroupPreMemberDialog({ open, onClose, groupId, manager =
           <Stack spacing={1.25} sx={{ mb: 2.5 }}>
             <Typography fontSize={13} color="text.secondary">회원가입 전인 클럽 회원을 먼저 등록할 수 있습니다.</Typography>
             <Stack direction="row" spacing={1} component="form" onSubmit={(e) => { e.preventDefault(); void addMember(); }}>
-              <TextField size="small" label="부수" value={division} onChange={(e) => setDivision(e.target.value)} sx={{ width: 92 }} />
+              <TextField inputRef={divisionInputRef} size="small" label="부수" value={division} onChange={(e) => setDivision(e.target.value)} sx={{ width: 92 }} />
               <TextField size="small" label="이름" value={name} onChange={(e) => setName(e.target.value)} fullWidth />
               <Button type="submit" variant="contained" disabled={!name.trim() || isCreating} sx={{ minWidth: 64 }}>추가</Button>
             </Stack>

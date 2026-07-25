@@ -915,7 +915,13 @@ export default function LeagueMatchOrder() {
     if (matchesToSync.length === 0) return;
     if (
       currentBlock.type === "SINGLES" &&
-      !matchesToSync.some((match) => match.participant_a_id && match.participant_b_id)
+      !matchesToSync.some(
+        (match) =>
+          match.participant_a_id &&
+          match.participant_b_id &&
+          !match.participant_a_id.startsWith("placeholder-") &&
+          !match.participant_b_id.startsWith("placeholder-"),
+      )
     ) return;
 
     const syncKey = `${leagueId}-${programRound}-${matchesToSync.map((match) => `${match.id}:${match.participant_a_id ?? ""}:${match.participant_b_id ?? ""}`).join("|")}`;

@@ -801,29 +801,12 @@ function balancedSizes(total: number, preferredGroupCount: number) {
   );
 }
 
-function distributeRankedGroupsToBrackets(
-  rankedGroups: ProgramPlayer[][],
-  bracketCount: number,
-): ProgramPlayer[][] {
-  const count = Math.min(Math.max(1, bracketCount), Math.max(1, rankedGroups.flat().length));
-  const brackets = Array.from({ length: count }, () => [] as ProgramPlayer[]);
-  rankedGroups.forEach((group, groupIndex) => {
-    group.forEach((player, rankIndex) => {
-      brackets[(groupIndex + rankIndex) % count].push({
-        ...player,
-        seedLabel: `${groupIndex + 1}-${rankIndex + 1}`,
-      });
-    });
-  });
-  return brackets.filter((bracket) => bracket.length > 0);
-}
-
-function buildRankPlaceholders(
+function buildRankPlaceholderPools(
   groupSizes: number[],
-  bracketCount: number,
+  maxRank?: number,
 ): MatchUnit[][] {
-  const groups: ProgramPlayer[][] = groupSizes.map((size, groupIndex) =>
-    Array.from({ length: size }, (_, rankIndex) => ({
+  return groupSizes.map((size, groupIndex) =>
+    Array.from({ length: Math.min(size, maxRank ?? size) }, (_, rankIndex) => ({
       id: `placeholder-${groupIndex + 1}-${rankIndex + 1}`,
       name: `${groupIndex + 1}조 ${rankIndex + 1}위`,
       division: null,
@@ -831,23 +814,22 @@ function buildRankPlaceholders(
       seedLabel: `${groupIndex + 1}-${rankIndex + 1}`,
     })),
   );
-  return distributeRankedGroupsToBrackets(groups, bracketCount).map((bracket) =>
-    bracket.map((player) => ({ ...player, id: null })),
-  );
 }
 
-function buildSingleLeagueRankPlaceholders(
+function buildSingleLeagueRankPlaceholderPool(
   participantCount: number,
-  bracketCount: number,
+  maxRank?: number,
 ): MatchUnit[][] {
-  const placeholders: MatchUnit[] = Array.from({ length: participantCount }, (_, index) => ({
-    id: null,
+  const placeholders: MatchUnit[] = Array.from(
+    { length: Math.min(participantCount, maxRank ?? participantCount) },
+    (_, index) => ({
+    id: `placeholder-rank-${index + 1}`,
     name: `${index + 1}위`,
     division: null,
     level: index + 1,
     seedLabel: String(index + 1),
   }));
-  return splitTournamentUnits(placeholders, bracketCount);
+  return [placeholders];
 }
 
 export function getStoredProgramOption(leagueId: string): ProgramOption | null {
@@ -1014,23 +996,25 @@ export function generateProgramRoundMatches(
   const tournamentBuilder = block.tournamentMode === "upper-lower"
     ? buildUpperLowerTournamentMatches
     : buildTournamentMatches;
-  const selectedFinalUnits = rankedPools
-    ? rankedPools.flatMap((pool) => pool.slice(0, advanceCount))
+  const previousGroupSizes = previousBlock?.groupSizes ?? option?.groupSizes ?? [];
+  const placeholderPools = isFinalRound && !rankedPools
+    ? previousBlock?.format === "GROUP" && previousGroupSizes.length > 0
+      ? buildRankPlaceholderPools(previousGroupSizes)
+      : previousBlock?.format === "LEAGUE"
+        ? buildSingleLeagueRankPlaceholderPool(matchUnits.length)
+        : null
+    : null;
+  const finalPools = rankedPools ?? placeholderPools;
+  const selectedFinalUnits = finalPools
+    ? finalPools.flatMap((pool) => pool.slice(0, advanceCount))
     : [];
 
   if (block.format === "TOURNAMENT") {
     if (isFinalRound) {
       const bracketCount = block.tournamentBracketCount ?? 1;
-      const previousGroupSizes = previousBlock?.groupSizes ?? option?.groupSizes ?? [];
-      const placeholderBrackets = !rankedPools && previousGroupSizes.length > 1
-        ? buildRankPlaceholders(previousGroupSizes, bracketCount)
-        : !rankedPools && previousBlock?.format === "LEAGUE"
-          ? buildSingleLeagueRankPlaceholders(matchUnits.length, bracketCount)
-        : null;
-      const tournamentBrackets = rankedPools?.length
-        ? distributeRankedUnitPoolsToBrackets(rankedPools, bracketCount)
-        : placeholderBrackets?.length
-          ? placeholderBrackets
+      const qualifiedPools = finalPools?.map((pool) => pool.slice(0, advanceCount));
+      const tournamentBrackets = qualifiedPools?.length
+        ? distributeRankedUnitPoolsToBrackets(qualifiedPools, bracketCount)
           : splitTournamentUnits(matchUnits, bracketCount);
       return withoutDeleted(tournamentBrackets.flatMap((bracketPlayers, bracketIndex) =>
         tournamentBuilder(
@@ -1038,7 +1022,7 @@ export function generateProgramRoundMatches(
           round - 1,
           block,
           bracketPlayers,
-          rankedPools || placeholderBrackets ? "seed" : undefined,
+          finalPools ? "seed" : undefined,
           bracketIndex + 1,
         ),
       ));
@@ -1051,7 +1035,7 @@ export function generateProgramRoundMatches(
 
   if (block.format === "LEAGUE") {
     if (isFinalRound) {
-      if (!rankedPools || selectedFinalUnits.length < 2) return [];
+      if (selectedFinalUnits.length < 2) return [];
       return withoutDeleted(buildUnitRoundRobinMatches(
         leagueId,
         round - 1,
@@ -1064,24 +1048,24 @@ export function generateProgramRoundMatches(
 
   if (block.format === "GROUP") {
     if (isFinalRound) {
-      if (!rankedPools) return [];
+      if (!finalPools) return [];
 
       let finalGroups: Array<{ name: string; players: MatchUnit[] }> = [];
       if (finalMode === "upper-lower-groups") {
-        const upper = rankedPools.flatMap((pool) => pool.slice(0, Math.ceil(pool.length / 2)));
-        const lower = rankedPools.flatMap((pool) => pool.slice(Math.ceil(pool.length / 2)));
+        const upper = finalPools.flatMap((pool) => pool.slice(0, Math.ceil(pool.length / 2)));
+        const lower = finalPools.flatMap((pool) => pool.slice(Math.ceil(pool.length / 2)));
         finalGroups = [
           { name: "상위부", players: upper },
           { name: "하위부", players: lower },
         ].filter((group) => group.players.length > 1);
       } else if (finalMode === "rank-groups") {
-        const maxRank = Math.max(0, ...rankedPools.map((pool) => pool.length));
+        const maxRank = Math.max(0, ...finalPools.map((pool) => pool.length));
         finalGroups = Array.from({ length: maxRank }, (_, rankIndex) => ({
           name: `${rankIndex + 1}위조`,
-          players: rankedPools.flatMap((pool) => pool[rankIndex] ? [pool[rankIndex]] : []),
+          players: finalPools.flatMap((pool) => pool[rankIndex] ? [pool[rankIndex]] : []),
         })).filter((group) => group.players.length > 1);
       } else {
-        const preferredGroupCount = Math.max(1, block.groupSizes?.length ?? rankedPools.length);
+        const preferredGroupCount = Math.max(1, block.groupSizes?.length ?? finalPools.length);
         const sizes = balancedSizes(selectedFinalUnits.length, preferredGroupCount);
         finalGroups = distributeSnake(
           selectedFinalUnits as ProgramPlayer[],

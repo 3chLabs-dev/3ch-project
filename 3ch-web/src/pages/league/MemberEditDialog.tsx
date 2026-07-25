@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import {
   Box,
@@ -94,6 +95,20 @@ export default function MemberEditDialog({
   onReplaceParticipant,
   showGroupName = false,
 }: MemberEditDialogProps) {
+  const divisionInputRef = useRef<HTMLInputElement>(null);
+  const hadParticipantInputRef = useRef(false);
+
+  useEffect(() => {
+    if (inputDivision || inputName) {
+      hadParticipantInputRef.current = true;
+      return;
+    }
+    if (open && hadParticipantInputRef.current) {
+      hadParticipantInputRef.current = false;
+      requestAnimationFrame(() => divisionInputRef.current?.focus());
+    }
+  }, [inputDivision, inputName, open]);
+
   return (
     <Dialog
       open={open}
@@ -203,6 +218,7 @@ export default function MemberEditDialog({
             }}
           >
             <TextField
+              inputRef={divisionInputRef}
               placeholder="부수"
               value={inputDivision}
               onChange={(e) => setInputDivision(e.target.value)}

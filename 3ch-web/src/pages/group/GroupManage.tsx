@@ -336,10 +336,11 @@ export default function GroupManage() {
     };
 
     const handleOpenMemberEdit = (member: typeof members[0]) => {
+        if (member.is_pre_member || member.user_id == null) return;
         setSelectedMember({
             id: String(member.user_id),
-            name: member.name || member.email,
-            email: member.email,
+            name: member.name || member.email || "",
+            email: member.email || "",
             role: member.role as "owner" | "admin" | "member",
             division: member.division || "",
         });
@@ -558,7 +559,7 @@ export default function GroupManage() {
                                     }}
                                     secondaryAction={
                                         <Stack direction="row" spacing={0.5} alignItems="center">
-                                            {canManage && (
+                                            {canManage && !member.is_pre_member && member.user_id != null && (
                                                 <IconButton
                                                     size="small"
                                                     onClick={() => handleOpenMemberEdit(member)}
@@ -604,10 +605,19 @@ export default function GroupManage() {
                                         primary={
                                             <Typography
                                                 fontWeight={700} fontSize={14}
-                                                onClick={() => navigate(`/club/${id}/member/${member.user_id}`)}
-                                                sx={{ cursor: "pointer", display: "inline", textDecoration: "underline", color: Number(member.user_id) === Number(authUser?.id) ? "#2F80ED" : "inherit" }}
+                                                onClick={() => {
+                                                    if (!member.is_pre_member && member.user_id != null) {
+                                                        navigate(`/club/${id}/member/${member.user_id}`);
+                                                    }
+                                                }}
+                                                sx={{
+                                                    cursor: member.is_pre_member ? "default" : "pointer",
+                                                    display: "inline",
+                                                    textDecoration: member.is_pre_member ? "none" : "underline",
+                                                    color: Number(member.user_id) === Number(authUser?.id) ? "#2F80ED" : "inherit",
+                                                }}
                                             >
-                                                {member.name || member.email}
+                                                {member.name || member.email || "-"}
                                             </Typography>
                                         }
                                     />

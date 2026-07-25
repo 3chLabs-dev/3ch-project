@@ -43,6 +43,7 @@ export const getRoleLabel = (role: string): string => {
     owner: "리더",
     admin: "운영진",
     member: "회원",
+    pre_member: "사전등록",
   };
   return labels[role] || "알 수 없음";
 };

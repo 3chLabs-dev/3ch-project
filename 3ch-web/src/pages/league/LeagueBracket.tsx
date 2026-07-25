@@ -1083,6 +1083,39 @@ export default function LeagueBracket() {
     return Array.from(names).sort((a, b) => parseInt(a) - parseInt(b));
   }, [isGroupLeague, isProgramMode, programMatchesAll, rawParticipants]);
 
+  const programSinglesParticipants = useMemo(() => {
+    if (!isProgramMode || isProgramTeamRound) return [];
+    const rawById = new Map(rawParticipants.map((participant) => [participant.id, participant]));
+    const participantById = new Map<string, LeagueParticipantItem>();
+
+    programMatchesAll.forEach((match) => {
+      const addParticipant = (
+        participantId: string | null,
+        name: string | null,
+        division: string | null,
+      ) => {
+        if (!participantId || participantById.has(participantId)) return;
+        const rawParticipant = rawById.get(participantId);
+        participantById.set(participantId, rawParticipant ?? {
+          id: participantId,
+          league_id: id ?? "",
+          name: name ?? "-",
+          division,
+          member_id: null,
+          paid: false,
+          arrived: false,
+          after: false,
+          created_at: "",
+        });
+      };
+
+      addParticipant(match.participant_a_id, match.participant_a_name, match.participant_a_division);
+      addParticipant(match.participant_b_id, match.participant_b_name, match.participant_b_division);
+    });
+
+    return Array.from(participantById.values());
+  }, [id, isProgramMode, isProgramTeamRound, programMatchesAll, rawParticipants]);
+
   // 2. 현재 선택된 조 상태 관리
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
 
@@ -1126,16 +1159,13 @@ export default function LeagueBracket() {
         selectedMatches.flatMap((match) => [match.participant_a_id, match.participant_b_id]).filter(Boolean) as string[],
       );
       return sortByProgramSeed(
-        rawParticipants.filter((participant) => ids.has(participant.id)),
+        programSinglesParticipants.filter((participant) => ids.has(participant.id)),
         selectedMatches,
       );
     }
     if (isProgramMode) {
-      const ids = new Set(
-        programMatchesAll.flatMap((match) => [match.participant_a_id, match.participant_b_id]).filter(Boolean) as string[],
-      );
       return sortByProgramSeed(
-        rawParticipants.filter((participant) => ids.has(participant.id)),
+        programSinglesParticipants,
         programMatchesAll,
       );
     }
@@ -1143,7 +1173,7 @@ export default function LeagueBracket() {
       return rawParticipants.filter(p => p.group_name === selectedGroup);
     }
     return rawParticipants;
-  }, [isProgramTeamRound, programTeamParticipants, isProgramMode, programMatchesAll, rawParticipants, groupNames, selectedGroup]);
+  }, [isProgramTeamRound, programTeamParticipants, programSinglesParticipants, isProgramMode, programMatchesAll, rawParticipants, groupNames, selectedGroup]);
 
   // 4. 선택된 조의 경기만 필터링
   const matches = useMemo(() => {
@@ -1214,6 +1244,7 @@ export default function LeagueBracket() {
   // 참가자 수에 따라 테이블이 화면보다 클 수 있으므로 CSS scale로 축소 fit
   // portrait 모드는 writingMode로 90° 회전되어 있어 물리적 tw/th가 시각 기준과 반전됨
   const wrapperRef      = useRef<HTMLDivElement>(null);  // 화면 영역 ref
+  const boardViewportRef = useRef<HTMLDivElement>(null);
   const wrapperTableRef = useRef<HTMLDivElement>(null);  // 전체 transform 컨테이너 ref
   const tableOnlyRef    = useRef<HTMLDivElement>(null);  // portrait 스케일 계산용 (writingMode 왜곡 우회)
   const scheduleRef     = useRef<HTMLDivElement>(null);  // schedule 오버레이 높이 측정용
@@ -1221,6 +1252,8 @@ export default function LeagueBracket() {
   const [naturalTw, setNaturalTw]       = useState(0);  // 테이블 원본(비스케일) 너비
   const [naturalTh, setNaturalTh]       = useState(0);  // 테이블 원본(비스케일) 높이
   const [userZoom, setUserZoom]         = useState(1);  // 사용자 줌 배율 (1 = 자동 fit)
+  const [boardViewportSize, setBoardViewportSize] = useState({ width: 0, height: 0 });
+  const boardToolRailWidth = 104;
   const dataReady = !!league && rawParticipants.length > 0; // 데이터 로드 완료 여부 (useLayoutEffect deps)
 
   // 기기 실제 회전 감지 → landscape 자동 동기화 + userZoom 리셋
@@ -1238,22 +1271,34 @@ export default function LeagueBracket() {
   }, []);
 
   useLayoutEffect(() => {
+    const viewport = boardViewportRef.current;
+    if (!viewport) return;
+    const updateSize = () => {
+      setBoardViewportSize({
+        width: viewport.clientWidth,
+        height: viewport.clientHeight,
+      });
+    };
+    updateSize();
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, []);
+
+  useLayoutEffect(() => {
     const updateScale = () => {
       if (!wrapperRef.current || !wrapperTableRef.current) return;
-      const ww = wrapperRef.current.clientWidth;
+      const ww = Math.max(0, wrapperRef.current.clientWidth - boardToolRailWidth);
       const wh = wrapperRef.current.clientHeight;
       const tw = wrapperTableRef.current.scrollWidth;
       const th = wrapperTableRef.current.scrollHeight;
       if (!tw || !th) return;
       // schedule 패널은 오버레이로 분리 → wrapperTableRef는 테이블만 포함
       // portrait: writingMode가 scrollHeight를 왜곡하므로 tableOnlyRef로 보정
-      const sth = (!landscape && tableOnlyRef.current) ? tableOnlyRef.current.scrollHeight : th;
       // schedule 오버레이 높이만큼 빼야 마지막 행이 가려지지 않음
       // landscape: 하단 오버레이 높이 / portrait: 우측 오버레이 너비
-      const sh = scheduleRef.current
-        ? (landscape ? scheduleRef.current.offsetHeight : scheduleRef.current.offsetWidth)
-        : 0;
-      setAutoFitScale(landscape ? Math.min(ww / tw, (wh - sh) / th) : (ww - sh) / sth);
+      const sh = scheduleRef.current ? scheduleRef.current.offsetHeight : 0;
+      setAutoFitScale(Math.min(ww / tw, (wh - sh) / th));
       setNaturalTw(tw);
       setNaturalTh(th);
     };
@@ -1266,7 +1311,7 @@ export default function LeagueBracket() {
     if (scheduleRef.current)     ro.observe(scheduleRef.current);
     window.addEventListener("resize", updateScale);
     return () => { ro.disconnect(); window.removeEventListener("resize", updateScale); };
-  }, [landscape, dataReady]);
+  }, [landscape, dataReady, boardToolRailWidth]);
 
   // ── DnD 순서 변경 ─────────────────────────────────────────────────────────
   const [reorderParticipants] = useReorderLeagueParticipantsMutation();
@@ -1433,11 +1478,12 @@ export default function LeagueBracket() {
   const headerSummary = isProgramMode && currentProgramBlock
     ? `${programRound}라운드 ${getProgramTypeLabel(currentProgramBlock.type)} ${getProgramFormatLabel(currentProgramBlock.format)} │ ${getProgramRuleLabel(currentProgramBlock.matchRule)}`
     : `${league.type} ${league.format} │ ${league.rules}`;
-  const appliedScale  = autoFitScale * userZoom;
+  const densityScale = n <= 4 ? 1.5 : n <= 6 ? 1.35 : n <= 8 ? 1.18 : 1;
+  const appliedScale  = autoFitScale * densityScale * userZoom;
   // 줌 > 1이면 테이블이 화면을 초과 → 스크롤 가능하도록 시각적 크기를 spacer로 잡아줌
   // portrait: 90° 회전이므로 시각 너비=naturalTh, 시각 높이=naturalTw
-  const visualW = naturalTw > 0 ? (landscape ? naturalTw : naturalTh) * appliedScale : 0;
-  const visualH = naturalTh > 0 ? (landscape ? naturalTh : naturalTw) * appliedScale : 0;
+  const visualW = naturalTw > 0 ? naturalTw * appliedScale : 0;
+  const visualH = naturalTh > 0 ? naturalTh * appliedScale : 0;
 
   // ── JSX ───────────────────────────────────────────────────────────────────
   return createPortal(
@@ -1517,6 +1563,29 @@ export default function LeagueBracket() {
         </Box>
       </Popover>
 
+      <Box
+        ref={boardViewportRef}
+        sx={{ flex: 1, minHeight: 0, position: "relative", overflow: "hidden", bgcolor: "#F0F2F5" }}
+      >
+        <Box
+          sx={{
+            position: "absolute",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            bgcolor: "#F0F2F5",
+            ...(landscape
+              ? { inset: 0 }
+              : {
+                  top: 0,
+                  left: 0,
+                  width: boardViewportSize.height,
+                  height: boardViewportSize.width,
+                  transformOrigin: "top left",
+                  transform: "rotate(90deg) translateY(-100%)",
+                }),
+          }}
+        >
       {groupNames.length > 0 && (
         <Box sx={{ px: 1, pt: 1, pb: 0.5, bgcolor: "#F0F2F5", borderBottom: "1px solid #E5E7EB" }}>
           <Stack direction="row" spacing={1} sx={{ overflowX: "auto", '&::-webkit-scrollbar': { display: 'none' } }}>
@@ -1542,7 +1611,7 @@ export default function LeagueBracket() {
       <Box ref={wrapperRef} sx={{ flex: 1, overflow: "hidden", position: "relative", minHeight: 0, bgcolor: "#F0F2F5" }}>
 
         {/* 스크롤 가능한 내부 컨테이너: spacer가 실제로 넘칠 때만 scrollbar 등장 (overflow:auto는 항상 켜두기) */}
-        <Box sx={{ position: "absolute", inset: 0, overflow: "auto" }}>
+        <Box sx={{ position: "absolute", inset: 0, right: `${boardToolRailWidth}px`, overflow: "auto" }}>
           {/* spacer: CSS transform은 레이아웃 크기에 영향을 안 주므로
               시각적 크기만큼 spacer를 두어 스크롤 범위를 확보 */}
           <Box sx={{
@@ -1550,8 +1619,8 @@ export default function LeagueBracket() {
             minWidth: "100%", minHeight: "100%",
             position: "relative", flexShrink: 0,
             // landscape: 하단 패널 높이만큼 하단 여백 / portrait: 우측 패널 너비만큼 우측 여백
-            pb: landscape ? `${scheduleRef.current?.offsetHeight ?? 0}px` : 0,
-            pr: landscape ? 0 : `${scheduleRef.current?.offsetWidth ?? 0}px`,
+            pb: `${scheduleRef.current?.offsetHeight ?? 0}px`,
+            pr: 0,
           }}>
             {/* 대진표 + 경기 순서 (scale 변환 컨테이너) */}
             <Box
@@ -1559,7 +1628,6 @@ export default function LeagueBracket() {
               sx={{
                 // portrait 모드: writingMode로 콘텐츠 전체를 90° 회전 → 세로 화면에서도 가로 테이블을 표시
                 // landscape 모드: 일반 layout, scale만 적용
-                ...(!landscape && { writingMode: "vertical-rl", textOrientation: "sideways" }),
                 transformOrigin: "top left",
                 transform: `scale(${appliedScale})`,
                 display: "inline-block",
@@ -1593,7 +1661,7 @@ export default function LeagueBracket() {
                     </>
                     )}
                     <NumberHeaderCell rowSpan={2}>순위</NumberHeaderCell>
-                    <NumberHeaderCell rowSpan={2} sx={{ fontSize: landscape ? "13px" : "14px" }}>동점자{<br />}세트 득실</NumberHeaderCell>
+                    <NumberHeaderCell rowSpan={2} sx={{ fontSize: "13px" }}>동점자{<br />}세트 득실</NumberHeaderCell>
                   </TableRow>
                   {/* 2행: 참가자 이름 (열 헤더, portrait에서 세로로 표시) */}
                   <TableRow>
@@ -1604,7 +1672,7 @@ export default function LeagueBracket() {
                           <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0.4, flexWrap: "wrap" }}>
                             <DivBadge division={p.division} aggregate={isProgramTeamRound} />
                             {/* portrait: minHeight로 세로 공간 확보 */}
-                            <Box component="span" sx={{ minHeight: landscape ? "" : "70px", color: isMe ? COLOR.myText : "inherit", fontWeight: isMe ? 700 : "inherit" }}>
+                            <Box component="span" sx={{ color: isMe ? COLOR.myText : "inherit", fontWeight: isMe ? 700 : "inherit" }}>
                               {isProgramTeamRound ? p.name.split("\n")[0] : p.name}
                             </Box>
                           </Box>
@@ -1629,7 +1697,7 @@ export default function LeagueBracket() {
                         canManage={canManage}
                         canScore={canScore}
                         onMove={handleMove}
-                        landscape={landscape}
+                        landscape
                         matchLookup={matchLookup}
                         wins={playerStats[rowIdx]?.wins ?? 0}
                         losses={playerStats[rowIdx]?.losses ?? 0}
@@ -1658,17 +1726,37 @@ export default function LeagueBracket() {
             landscape: 하단 가로 바 / portrait: 우측 세로 바 */}
         <Box ref={scheduleRef} sx={{
           position: "absolute", zIndex: 5, cursor: "pointer",
-          ...(landscape ? { bottom: 0, left: 0, right: 0 } : { top: 0, bottom: 0, right: 0 }),
+          bottom: 0, left: 0, right: 0,
         }}>
-          <MatchSchedulePanel matches={matches} localOrder={localOrder} landscape={landscape} leagueId={id ?? ""} onProgramMatchUpdate={isProgramMode ? updateProgramMatch : undefined} />
+          <MatchSchedulePanel matches={matches} localOrder={localOrder} landscape leagueId={id ?? ""} onProgramMatchUpdate={isProgramMode ? updateProgramMatch : undefined} />
         </Box>
 
+        <Box
+          sx={{
+            position: "absolute",
+            top: 0,
+            right: 0,
+            bottom: `${scheduleRef.current?.offsetHeight ?? 0}px`,
+            zIndex: 20,
+            width: `${boardToolRailWidth}px`,
+            borderLeft: "1px solid #D8DEE8",
+            bgcolor: "#E9EDF3",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 1,
+            py: 1,
+            overflowY: "auto",
+            overflowX: "hidden",
+            pointerEvents: "auto",
+          }}
+        >
         {canScore && (
-          <Box sx={{ position: "absolute", bottom: landscape ? 380 : 220, right: landscape ? 14 : 85, zIndex: 20, display: "flex", flexDirection: "column", alignItems: "center", gap: 0.8, pointerEvents: "auto" }}>
+          <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.8 }}>
             <Box sx={{ bgcolor: "#fff", p: 0.5, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>
               <QRCode
                 value={`${window.location.origin}/league/${id}/gpt-vision${searchParams.toString() ? `?${searchParams.toString()}` : ""}`}
-                size={landscape ? 66 : 72}
+                size={66}
               />
             </Box>
             <Box
@@ -1676,13 +1764,13 @@ export default function LeagueBracket() {
                 const query = searchParams.toString();
                 navigate(`/league/${id}/gpt-vision${query ? `?${query}` : ""}`);
               }}
-              sx={{ width: landscape ? "auto" : 36, height: landscape ? "auto" : 76, display: "flex", alignItems: "center", justifyContent: "center", alignSelf: landscape ? "center" : "flex-end", cursor: "pointer" }}
+              sx={{ width: "auto", height: "auto", display: "flex", alignItems: "center", justifyContent: "center", alignSelf: "center", cursor: "pointer" }}
             >
               <Box
                 component="button"
                 type="button"
                 onPointerDown={(event) => event.stopPropagation()}
-                sx={{ appearance: "none", border: 0, borderRadius: 2, color: "#fff", fontSize: 13, fontWeight: 900, bgcolor: "#16A34A", minWidth: 76, height: 32, whiteSpace: "nowrap", cursor: "pointer", ...(landscape ? {} : { transform: "rotate(90deg)" }), "&:hover": { bgcolor: "#15803D" } }}
+                sx={{ appearance: "none", border: 0, borderRadius: 2, color: "#fff", fontSize: 13, fontWeight: 900, bgcolor: "#16A34A", minWidth: 76, height: 32, whiteSpace: "nowrap", cursor: "pointer", "&:hover": { bgcolor: "#15803D" } }}
               >
                 결과 등록
               </Box>
@@ -1693,21 +1781,21 @@ export default function LeagueBracket() {
         {/* 플로팅 버튼들 (position: absolute, wrapperRef 기준 → 스크롤 영역 위에 고정) */}
 
         {/* 이미지 저장 / 인쇄 버튼 */}
-        <Box sx={{ position: "absolute", bottom: landscape ? 300 : 170, right: landscape ? 14 : 85, zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: "#fff", borderRadius: 2, boxShadow: "0 2px 8px rgba(0,0,0,0.15)", display: "flex", flexDirection: "column", alignItems: "center", p: 0.25 }}>
+        <Box sx={{ bgcolor: "#fff", borderRadius: 2, boxShadow: "0 2px 8px rgba(0,0,0,0.15)", display: "flex", alignItems: "center", p: 0.25 }}>
           <Tooltip title="이미지 저장">
             <IconButton size="small" onClick={handleSaveImage}>
-              <DownloadIcon sx={{ fontSize: 18, ...(landscape ? {} : { transform: "rotate(90deg)" }) }} />
+              <DownloadIcon sx={{ fontSize: 18 }} />
             </IconButton>
           </Tooltip>
           <Tooltip title="인쇄">
             <IconButton size="small" onClick={handlePrint}>
-              <PrintIcon sx={{ fontSize: 18, ...(landscape ? {} : { transform: "rotate(90deg)" }) }} />
+              <PrintIcon sx={{ fontSize: 18 }} />
             </IconButton>
           </Tooltip>
         </Box>
 
         {/* 줌 컨트롤: portrait=세로(writing-mode 회전), landscape=가로 */}
-        <Box sx={{ position: "absolute", bottom: landscape ? 216 : 126, right: landscape ? 14 : 85, zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: "#fff", borderRadius: 2, boxShadow: "0 2px 8px rgba(0,0,0,0.15)", display: "flex", flexDirection: "column", alignItems: "center", p: 0.25 }}>
+        <Box sx={{ bgcolor: "#fff", borderRadius: 2, boxShadow: "0 2px 8px rgba(0,0,0,0.15)", display: "flex", alignItems: "center", p: 0.25 }}>
           <IconButton size="small" onClick={() => setUserZoom((z) => Math.min(2.5, +(z + 0.25).toFixed(2)))}>
             <ZoomInIcon sx={{ fontSize: 18 }} />
           </IconButton>
@@ -1720,17 +1808,20 @@ export default function LeagueBracket() {
         </Box>
 
         <Tooltip title="새로고침">
-          <IconButton onClick={handleRefresh} sx={{ position: "absolute", bottom: landscape? 157 : 67, right: landscape ? 14 : 85, zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: "#fff", color: "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: "#F3F4F6" } }}>
+          <IconButton onClick={handleRefresh} sx={{ bgcolor: "#fff", color: "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: "#F3F4F6" } }}>
             <RefreshIcon sx={{ fontSize: 18 }} />
           </IconButton>
         </Tooltip>
         <Tooltip title={landscape ? "세로 보기" : "가로 보기"}>
-          <IconButton onClick={() => { setLandscape((v) => !v); setUserZoom(1); }} sx={{ position: "absolute", bottom: landscape ? 104 : 14, right: landscape ? 14 : 85, zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: landscape ? COLOR.primary : "#fff", color: landscape ? "#fff" : "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: landscape ? "#1D4ED8" : "#F3F4F6" } }}>
+          <IconButton onClick={() => { setLandscape((v) => !v); setUserZoom(1); }} sx={{ bgcolor: landscape ? COLOR.primary : "#fff", color: landscape ? "#fff" : "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: landscape ? "#1D4ED8" : "#F3F4F6" } }}>
             <ScreenRotationIcon sx={{ fontSize: 18 }} />
           </IconButton>
         </Tooltip>
+        </Box>
 
       </Box>{/* /wrapperRef */}
+        </Box>
+      </Box>
     </Box>,
     document.body
   );

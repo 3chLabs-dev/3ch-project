@@ -22,20 +22,22 @@ import { useAppSelector } from "../../app/hooks";
 import axios from "axios";
 
 export type MemberRow = {
-    id: string;         // user_id (string)
-    member_id: number;  // user_id (number) — 불러오기 참가자 식별용
+    id: string;
+    member_id: number | null;
     division: string;
     name: string;
+    is_pre_member?: boolean;
 };
 
 type GroupMember = {
     id: string;
-    user_id: number;
+    user_id: number | null;
     name?: string | null;
-    email: string;
+    email?: string | null;
     role: string;
     division?: string | null;
     joined_at: string;
+    is_pre_member?: boolean;
 };
 
 type Props = {
@@ -102,10 +104,11 @@ export default function LoadMembersDialog({
                 setGroupName(group?.name || "클럽 회원");
 
                 const memberRows: MemberRow[] = members.map((m) => ({
-                    id: String(m.user_id),
+                    id: m.is_pre_member ? `pre:${m.id}` : `member:${m.user_id}`,
                     member_id: m.user_id,
                     division: (m.division ?? "").trim(),
                     name: (m.name ?? m.email ?? "").trim(),
+                    is_pre_member: m.is_pre_member,
                 }));
 
                 setRows(memberRows);

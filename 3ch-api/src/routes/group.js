@@ -887,18 +887,30 @@ router.get('/group/:id', requireAuth, async (req, res) => {
       return res.status(404).json({ message: '클럽을 찾을 수 없습니다' });
     }
 
-    // 멤버 목록 조회 (비가입자는 이메일 제외)
-    const membersQuery = myRole
-      ? `SELECT gm.id, gm.role, gm.division, gm.joined_at, u.id AS user_id, u.name, u.email
-         FROM group_members gm
-         INNER JOIN users u ON gm.user_id = u.id
-         WHERE gm.group_id = $1
-         ORDER BY CASE gm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, gm.joined_at ASC`
-      : `SELECT gm.id, gm.role, gm.division, gm.joined_at, u.id AS user_id, u.name
-         FROM group_members gm
-         INNER JOIN users u ON gm.user_id = u.id
-         WHERE gm.group_id = $1
-         ORDER BY CASE gm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, gm.joined_at ASC`;
+    // 계정 연결 전인 사전등록 회원도 클럽 명단과 리그 참가자 불러오기에 포함한다.
+    const membersQuery = `
+      SELECT member_rows.id, member_rows.role, member_rows.division,
+             member_rows.joined_at, member_rows.user_id, member_rows.name,
+             member_rows.email, member_rows.is_pre_member
+      FROM (
+        SELECT gm.id, gm.role, gm.division, gm.joined_at,
+               u.id AS user_id, u.name,
+               ${myRole ? 'u.email' : 'NULL::text'} AS email,
+               false AS is_pre_member,
+               CASE gm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END AS role_order
+        FROM group_members gm
+        INNER JOIN users u ON gm.user_id = u.id
+        WHERE gm.group_id = $1
+
+        UNION ALL
+
+        SELECT pm.id, 'pre_member'::text AS role, pm.division,
+               pm.created_at AS joined_at, NULL::integer AS user_id, pm.name,
+               NULL::text AS email, true AS is_pre_member, 3 AS role_order
+        FROM group_pre_members pm
+        WHERE pm.group_id = $1 AND pm.status = 'active'
+      ) AS member_rows
+      ORDER BY member_rows.role_order, member_rows.joined_at ASC`;
     const membersResult = await pool.query(membersQuery, [id]);
     const members = membersResult.rows;
 
@@ -1107,7 +1119,8 @@ router.patch('/group/:id/pre-members/:preMemberId/claim-request', requireAuth, r
       `UPDATE league_participants lp
        SET member_id = $1, division = COALESCE(NULLIF($2, ''), lp.division)
        FROM leagues l
-       WHERE lp.league_id = l.id AND l.group_id = $3
+       WHERE lp.league_id = l.id
+         AND (l.group_id = $3 OR lp.source_group_id = $3)
          AND lp.member_id IS NULL AND lp.name = $4`,
       [claim.requested_by_id, claim.division, req.params.id, claim.name]
     );

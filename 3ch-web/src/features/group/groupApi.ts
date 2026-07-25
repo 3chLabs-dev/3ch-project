@@ -57,9 +57,10 @@ export interface GroupMember {
   role: string;
   division?: string | null;
   joined_at: string;
-  user_id: number;
+  user_id: number | null;
   name?: string;
-  email: string;
+  email?: string | null;
+  is_pre_member?: boolean;
 }
 
 export interface GroupPreMember {
@@ -427,12 +428,18 @@ export const groupApi = baseApi.injectEndpoints({
       { groupId: string; name: string; division?: string }
     >({
       query: ({ groupId, ...body }) => ({ url: `/group/${groupId}/pre-members`, method: "POST", body }),
-      invalidatesTags: (_r, _e, { groupId }) => [{ type: "Group", id: `pre-members-${groupId}` }],
+      invalidatesTags: (_r, _e, { groupId }) => [
+        { type: "Group", id: `pre-members-${groupId}` },
+        { type: "Group", id: groupId },
+      ],
     }),
 
     deleteGroupPreMember: builder.mutation<{ message: string }, { groupId: string; preMemberId: string }>({
       query: ({ groupId, preMemberId }) => ({ url: `/group/${groupId}/pre-members/${preMemberId}`, method: "DELETE" }),
-      invalidatesTags: (_r, _e, { groupId }) => [{ type: "Group", id: `pre-members-${groupId}` }],
+      invalidatesTags: (_r, _e, { groupId }) => [
+        { type: "Group", id: `pre-members-${groupId}` },
+        { type: "Group", id: groupId },
+      ],
     }),
 
     requestGroupMemberClaim: builder.mutation<{ message: string }, { groupId: string; preMemberId: string }>({

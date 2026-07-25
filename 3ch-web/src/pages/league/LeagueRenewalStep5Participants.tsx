@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Alert, Box, Button, Dialog, DialogActions, DialogContent, Divider, MenuItem, Snackbar, Stack, TextField, Typography } from "@mui/material";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { setRenewalParticipants, setRenewalStep } from "../../features/league/leagueRenewalCreationSlice";
@@ -27,6 +27,7 @@ export default function LeagueRenewalStep5Participants() {
   const [openLoad, setOpenLoad] = useState(false);
   const [alertMsg, setAlertMsg] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<{ idx: number; division: string; name: string } | null>(null);
+  const divisionInputRef = useRef<HTMLInputElement>(null);
   const targetCount = basicInfo?.participantCount ?? null;
   const isFull = targetCount !== null && participants.length >= targetCount;
   const canAdd = useMemo(() => Boolean(division.trim() && name.trim()), [division, name]);
@@ -42,6 +43,7 @@ export default function LeagueRenewalStep5Participants() {
     setParticipants((current) => [...current, next]);
     setDivision("");
     setName("");
+    requestAnimationFrame(() => divisionInputRef.current?.focus());
   };
 
   const handleConfirmLoad = (selected: MemberRow[]) => {
@@ -79,7 +81,7 @@ export default function LeagueRenewalStep5Participants() {
       <Typography sx={headCellSx}>부수</Typography><Typography sx={headCellSx}>이름</Typography><Typography sx={headCellSx}>관리</Typography>
     </Box>
     <Box component="form" onSubmit={(event) => { event.preventDefault(); handleAdd(); }} sx={{ display: "grid", gridTemplateColumns: "56px minmax(0,1fr) 56px", gap: 1, alignItems: "center", px: 0.5, mb: 1.2 }}>
-      <TextField placeholder="부수" value={division} onChange={(event) => setDivision(event.target.value)} slotProps={{ htmlInput: { enterKeyHint: "done" } }} sx={inputSx} />
+      <TextField inputRef={divisionInputRef} placeholder="부수" value={division} onChange={(event) => setDivision(event.target.value)} slotProps={{ htmlInput: { enterKeyHint: "done" } }} sx={inputSx} />
       <Box sx={{ position: "relative", minWidth: 0 }}>
         <TextField placeholder="이름" value={name} onChange={(event) => setName(event.target.value)} slotProps={{ htmlInput: { enterKeyHint: "done" } }} sx={inputSx} fullWidth />
         {canAdd && <Box sx={{ position: "absolute", right: -2, top: -34, bgcolor: "#111827", color: "#fff", px: 1.2, py: 0.6, borderRadius: 1, fontSize: 11, fontWeight: 700, whiteSpace: "nowrap", boxShadow: "0 4px 10px rgba(15,23,42,0.18)", zIndex: 2, "&::after": { content: '\"\"', position: "absolute", right: 14, bottom: -5, width: 10, height: 10, bgcolor: "#111827", transform: "rotate(45deg)" } }}>Enter 키를 누르면 추가됩니다.</Box>}

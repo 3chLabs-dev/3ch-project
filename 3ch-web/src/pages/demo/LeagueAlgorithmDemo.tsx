@@ -156,6 +156,8 @@ function RoundDivisionEditor({
     fontSize: "13px",
     lineHeight: 1.55,
   } as const;
+  const previousFormat = roundIndex > 0 ? rounds[roundIndex - 1]?.format : null;
+  const advancementPrefix = previousFormat === "GROUP" ? "각 조 상위" : "전체 상위";
 
   let choices: Array<{ value: string; label: string }> = [];
   let value: string = round.option;
@@ -226,7 +228,7 @@ function RoundDivisionEditor({
       {roundIndex > 0 && round.option === "FINAL" && round.format === "LEAGUE" && (
         <>
           <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "16px" }}>
-            <strong>상위</strong>
+            <strong>{advancementPrefix}</strong>
             <AdvancementStepper
               value={round.advanceCount ?? 2}
               onChange={(advanceCount) => update({ advanceCount, finalAdvancementMode: "top-n" })}
@@ -253,7 +255,7 @@ function RoundDivisionEditor({
           </select>
           {(round.finalAdvancementMode ?? "top-n") === "top-n" && (
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "12px" }}>
-              <strong>상위</strong>
+              <strong>{advancementPrefix}</strong>
               <AdvancementStepper
                 value={round.advanceCount ?? 2}
                 onChange={(advanceCount) => update({ advanceCount })}
@@ -269,6 +271,28 @@ function RoundDivisionEditor({
                 : "예선 순위 결과에 따라 상위 순위권 참가자만 본선 라운드를 진행합니다."}
           </p>
         </div>
+      )}
+
+      {roundIndex > 0 && round.option === "FINAL" && round.format === "TOURNAMENT" && (
+        <>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "16px" }}>
+            <strong>{advancementPrefix}</strong>
+            <AdvancementStepper
+              value={round.advanceCount ?? 2}
+              onChange={(advanceCount) => update({
+                advanceCount,
+                finalAdvancementMode: "top-n",
+                sourceRoundId: rounds[roundIndex - 1].id,
+              })}
+            />
+            <strong>명</strong>
+          </div>
+          <p style={helperStyle}>
+            {previousFormat === "GROUP"
+              ? "각 조의 상위 순위 참가자가 진출하며, 총 진출 인원에 맞춰 토너먼트 시작 단계와 BYE를 자동으로 구성합니다."
+              : "전체 순위의 상위 참가자가 진출하며, 진출 인원에 맞춰 토너먼트 시작 단계와 BYE를 자동으로 구성합니다."}
+          </p>
+        </>
       )}
 
       {round.format === "TOURNAMENT" && round.option === "FINAL" && roundIndex > 0 &&
@@ -925,6 +949,7 @@ const LeagueAlgorithmDemo = ({
   });
   const [saveLeagueProgram] = useSaveLeagueProgramMutation();
   const [syncLeagueProgramMatches] = useSyncLeagueProgramMatchesMutation();
+  const [pendingProgramSave, setPendingProgramSave] = useState<StoredProgramWithEditState | null>(null);
   const [playerCount, setPlayerCount] = useState(initialPlayerCount);
   const [courtCount, setCourtCount] = useState(initialCourtCount);
   const [startHour, setStartHour] = useState(Number(initialStartTime.split(":" )[0]) || 9);
@@ -1425,6 +1450,40 @@ const LeagueAlgorithmDemo = ({
     closeProgramEditDialog();
   };
 
+  const persistSelectedProgram = async (
+    selectedOption: StoredProgramWithEditState,
+    syncMatches: boolean,
+    resetResults = false,
+  ) => {
+    if (!leagueId) return;
+    localStorage.setItem(`league-program-${leagueId}`, JSON.stringify(selectedOption));
+    localStorage.setItem(`league-program-active-round-${leagueId}`, "1");
+    await saveLeagueProgram({ leagueId, program: selectedOption }).unwrap();
+
+    if (syncMatches) {
+      const programMatches = selectedOption.blocks.flatMap((block, blockIndex) =>
+        generateProgramRoundMatches(
+          leagueId,
+          selectedOption,
+          participantData?.participants ?? [],
+          blockIndex + 1,
+        ).map((match) => ({
+          ...match,
+          program_round: blockIndex + 1,
+          program_block_type: block.type,
+        }))
+      );
+      await syncLeagueProgramMatches({
+        leagueId,
+        matches: programMatches,
+        resetResults,
+      }).unwrap();
+    }
+
+    setPendingProgramSave(null);
+    navigate(isEditMode ? `/league/${leagueId}` : `/league/${leagueId}/program`);
+  };
+
   const completeProgramCreation = async () => {
     if (selectedProgramOptionIndex === null) {
       return;
@@ -1457,6 +1516,10 @@ const LeagueAlgorithmDemo = ({
 
     if (leagueId) {
       const previousProgram = savedProgramData?.program?.program_data as ProgramOption | undefined;
+      if (isEditMode && previousProgram) {
+        setPendingProgramSave(selectedOption);
+        return;
+      }
       if (isEditMode && previousProgram) {
         selectedOption.blocks.forEach((block, blockIndex) => {
           const previousBlock = previousProgram.blocks?.[blockIndex];
@@ -1491,25 +1554,11 @@ const LeagueAlgorithmDemo = ({
           }
         });
       }
-      localStorage.setItem(
-        `league-program-${leagueId}`,
-        JSON.stringify(selectedOption)
-      );
-      localStorage.setItem(`league-program-active-round-${leagueId}`, "1");
-      await saveLeagueProgram({ leagueId, program: selectedOption }).unwrap();
-      const programMatches = selectedOption.blocks.flatMap((block, blockIndex) =>
-        generateProgramRoundMatches(leagueId, selectedOption, participantData?.participants ?? [], blockIndex + 1).map((match) => ({
-          ...match,
-          program_round: blockIndex + 1,
-          program_block_type: block.type,
-        }))
-      );
       try {
-        await syncLeagueProgramMatches({ leagueId, matches: programMatches }).unwrap();
+        await persistSelectedProgram(selectedOption, true);
       } catch (error) {
         console.error("Failed to sync program matches", error);
       }
-      navigate(isEditMode ? `/league/${leagueId}` : `/league/${leagueId}/program`);
       return;
     }
 
@@ -3295,6 +3344,36 @@ const LeagueAlgorithmDemo = ({
           {!isFormationEditing && <Button onClick={() => setGroupResultDialog(null)}>
             닫기
           </Button>}
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={pendingProgramSave !== null}
+        onClose={() => setPendingProgramSave(null)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle sx={{ fontWeight: 900, fontSize: 18 }}>
+          대진표 초기화
+        </DialogTitle>
+        <DialogContent dividers>
+          <Typography sx={{ fontSize: 15 }}>
+            원활한 리그 진행을 위해 대진표를 초기화하겠습니까?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => pendingProgramSave && persistSelectedProgram(pendingProgramSave, false)}
+          >
+            계속 진행
+          </Button>
+          <Button
+            color="error"
+            variant="contained"
+            onClick={() => pendingProgramSave && persistSelectedProgram(pendingProgramSave, true, true)}
+          >
+            초기화
+          </Button>
         </DialogActions>
       </Dialog>
 

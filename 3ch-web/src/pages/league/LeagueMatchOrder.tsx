@@ -559,7 +559,10 @@ export default function LeagueMatchOrder() {
       const hasSameParticipants =
         serverMatch.participant_a_id === match.participant_a_id
         && serverMatch.participant_b_id === match.participant_b_id;
-      if (!hasSameParticipants) return match;
+      const isUnitRound =
+        currentProgramBlock?.type === "TEAM" ||
+        currentProgramBlock?.type === "DOUBLES";
+      if (!isUnitRound && !hasSameParticipants) return match;
       return {
         ...match,
         match_order: serverMatch.match_order,
@@ -571,7 +574,7 @@ export default function LeagueMatchOrder() {
     });
     return applyProgramTournamentAdvancement(hydratedMatches)
       .sort((left, right) => left.match_order - right.match_order);
-  }, [generatedProgramMatches, serverProgramMatches]);
+  }, [currentProgramBlock?.type, generatedProgramMatches, serverProgramMatches]);
   const tournamentBracketIndexes = useMemo(
     () => [...new Set(programMatches.map((match) => match.tournament_bracket_index ?? 1))].sort((a, b) => a - b),
     [programMatches],

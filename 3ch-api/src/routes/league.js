@@ -2961,6 +2961,7 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
   const userId = Number(req.user.sub);
   const leagueId = req.params.id;
   const matches = Array.isArray(req.body?.matches) ? req.body.matches : [];
+  const resetResults = req.body?.reset_results === true;
 
   try {
     const access = await pool.query(
@@ -3036,7 +3037,7 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
       const placeholders = validMatches.map((match, index) => {
         const base = index * 18;
         const previous = existingState.get(match.id);
-        const canPreserveState = previous && (
+        const canPreserveState = !resetResults && previous && (
           match.program_block_type !== 'SINGLES' ||
           (
             previous.program_block_type === match.program_block_type &&

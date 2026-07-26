@@ -77,13 +77,15 @@ const parseTournamentChoice = (
 function AdvancementCount({
   value,
   onChange,
+  prefix = "상위",
 }: {
   value: number;
   onChange: (value: number) => void;
+  prefix?: string;
 }) {
   return (
     <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 2 }}>
-      <Typography sx={{ fontWeight: 900 }}>상위</Typography>
+      <Typography sx={{ fontWeight: 900 }}>{prefix}</Typography>
       <Stack direction="row" alignItems="center" spacing={0.5}>
         <IconButton
           aria-label="본선 진출 인원 감소"
@@ -302,12 +304,15 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
 
   const renderFinalOptions = (round: RenewalRoundConfig, index: number) => {
     if (index === 0 || round.option !== "FINAL") return null;
+    const previousFormat = rounds[index - 1]?.format;
+    const advancementPrefix = previousFormat === "GROUP" ? "각 조 상위" : "전체 상위";
 
     if (round.format === "LEAGUE") {
       return (
         <>
           <AdvancementCount
             value={round.advanceCount ?? 2}
+            prefix={advancementPrefix}
             onChange={(advanceCount) =>
               updateRound(index, {
                 advanceCount,
@@ -348,6 +353,7 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
           {mode === "top-n" && (
             <AdvancementCount
               value={round.advanceCount ?? 2}
+              prefix={advancementPrefix}
               onChange={(advanceCount) => updateRound(index, { advanceCount })}
             />
           )}
@@ -359,6 +365,29 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
                 : "예선 순위 결과에 따라 상위 순위권 참가자만 본선 라운드를 진행합니다."}
           </Typography>
         </Box>
+      );
+    }
+
+    if (round.format === "TOURNAMENT") {
+      return (
+        <>
+          <AdvancementCount
+            value={round.advanceCount ?? 2}
+            prefix={advancementPrefix}
+            onChange={(advanceCount) =>
+              updateRound(index, {
+                advanceCount,
+                finalAdvancementMode: "top-n",
+                sourceRoundId: rounds[index - 1].id,
+              })
+            }
+          />
+          <Typography sx={descriptionSx}>
+            {previousFormat === "GROUP"
+              ? "각 조의 상위 순위 참가자가 진출하며, 총 진출 인원에 맞춰 토너먼트 시작 단계와 BYE를 자동으로 구성합니다."
+              : "전체 순위의 상위 참가자가 진출하며, 진출 인원에 맞춰 토너먼트 시작 단계와 BYE를 자동으로 구성합니다."}
+          </Typography>
+        </>
       );
     }
 

@@ -207,6 +207,10 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
   const [formationDraft, setFormationDraft] = useState<FormationPlayer[][]>([]);
   const [isFormationEditing, setIsFormationEditing] = useState(false);
   const [reshuffleConfirmOpen, setReshuffleConfirmOpen] = useState(false);
+  const [pendingFormationSave, setPendingFormationSave] = useState<{
+    program: StoredProgramOption;
+    roundIndex: number;
+  } | null>(null);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
@@ -353,15 +357,19 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
     setReshuffleConfirmOpen(false);
   };
 
-  const persistFormation = async (nextProgram: StoredProgramOption, roundIndex: number) => {
+  const persistFormation = async (
+    nextProgram: StoredProgramOption,
+    roundIndex: number,
+    resetMatches: boolean,
+  ) => {
     if (!id || !canManage) return;
     setStoredProgram(nextProgram);
     localStorage.setItem(`league-program-${id}`, JSON.stringify(nextProgram));
-    clearProgramMatchState(id, roundIndex + 1);
     await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
 
     const block = nextProgram.blocks?.[roundIndex];
-    if (block) {
+    if (resetMatches && block) {
+      clearProgramMatchState(id, roundIndex + 1);
       const roundMatches = generateProgramRoundMatches(
         id,
         nextProgram as ProgramOption,
@@ -373,8 +381,26 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
         program_round: roundIndex + 1,
         program_block_type: block.type,
       }));
-      await syncLeagueProgramMatches({ leagueId: id, matches: roundMatches }).unwrap();
+      await syncLeagueProgramMatches({
+        leagueId: id,
+        matches: roundMatches,
+        resetResults: true,
+      }).unwrap();
     }
+  };
+
+  const requestFormationSave = (program: StoredProgramOption, roundIndex: number) => {
+    setPendingFormationSave({ program, roundIndex });
+    setIsFormationEditing(false);
+    setFormationDraft([]);
+  };
+
+  const finishFormationSave = async (resetMatches: boolean) => {
+    if (!pendingFormationSave) return;
+    const pending = pendingFormationSave;
+    setPendingFormationSave(null);
+    await persistFormation(pending.program, pending.roundIndex, resetMatches);
+    closeFormationDialog();
   };
 
   const beginFormationEditing = () => {
@@ -468,9 +494,10 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
           : { groupSizes: formationDraft.map((group) => group.length) }),
       };
     });
-    await persistFormation({ ...storedProgram, blocks: nextBlocks, ...(nextRounds ? { rounds: nextRounds } : {}) }, roundIndex);
-    setIsFormationEditing(false);
-    setFormationDraft([]);
+    requestFormationSave(
+      { ...storedProgram, blocks: nextBlocks, ...(nextRounds ? { rounds: nextRounds } : {}) },
+      roundIndex,
+    );
   };
 
   const reshuffleFormation = async () => {
@@ -523,7 +550,10 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
       };
     });
     setReshuffleConfirmOpen(false);
-    await persistFormation({ ...storedProgram, blocks: nextBlocks, ...(nextRounds ? { rounds: nextRounds } : {}) }, roundIndex);
+    requestFormationSave(
+      { ...storedProgram, blocks: nextBlocks, ...(nextRounds ? { rounds: nextRounds } : {}) },
+      roundIndex,
+    );
   };
 
   const handleDelete = async () => {
@@ -902,6 +932,45 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
         <DialogActions sx={{ px: 2, pb: 2 }}>
           <Button onClick={() => setReshuffleConfirmOpen(false)} disabled={isSavingFormation}>취소</Button>
           <Button variant="contained" onClick={() => void reshuffleFormation()} disabled={isSavingFormation}>확인</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={pendingFormationSave !== null}
+        onClose={() => setPendingFormationSave(null)}
+        maxWidth="xs"
+        fullWidth
+        slotProps={{ paper: { sx: { borderRadius: 2, mx: 2 } } }}
+      >
+        <DialogTitle sx={{ fontWeight: 900, fontSize: 16 }}>
+          대진표 초기화
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ fontSize: 14, color: "text.primary" }}>
+            원활한 리그 진행을 위해 대진표를 초기화하겠습니까?
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 2, pb: 2 }}>
+          <Button
+            onClick={() => void finishFormationSave(false)}
+            disabled={isSavingFormation}
+            sx={{ fontWeight: 700 }}
+          >
+            계속 진행
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => void finishFormationSave(true)}
+            disabled={isSavingFormation}
+            disableElevation
+            sx={{
+              bgcolor: "#EF4444",
+              "&:hover": { bgcolor: "#DC2626" },
+              fontWeight: 700,
+            }}
+          >
+            초기화
+          </Button>
         </DialogActions>
       </Dialog>
 

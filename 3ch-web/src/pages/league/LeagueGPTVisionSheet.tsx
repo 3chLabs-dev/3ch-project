@@ -55,6 +55,8 @@ import {
   useGetLeagueParticipantsQuery,
   useGetLeagueMatchesQuery,
   useGetLeagueProgramQuery,
+  useSaveLeagueProgramMutation,
+  useSyncLeagueProgramMatchesMutation,
   useUpdateLeagueMatchMutation,
   useScanLeagueOpenAIVisionMutation,
   useReorderLeagueParticipantsMutation,
@@ -1112,12 +1114,14 @@ export default function LeagueGPTVisionSheet() {
 
     const map = new Map<string, LeagueParticipantItem>();
     const rosterMap = new Map<string, Array<{ name: string; division: string | null }>>();
+    const seedMap = new Map<string, number>();
     const addTeam = (
       teamId: string | null,
       teamName: string | null,
       roster?: string[],
       rosterDetails?: Array<{ name: string; division: string | null }>,
       division?: string | null,
+      seedLabel?: string | null,
     ) => {
       if (!teamId || !teamName || map.has(teamId)) return;
       map.set(teamId, {
@@ -1137,6 +1141,7 @@ export default function LeagueGPTVisionSheet() {
         created_at: "",
         group_name: null,
       });
+      seedMap.set(teamId, Number.parseInt(seedLabel ?? "", 10) || map.size);
       if (rosterDetails?.length && programRoundType !== "DOUBLES") {
         rosterMap.set(teamId, rosterDetails);
       }
@@ -1149,14 +1154,16 @@ export default function LeagueGPTVisionSheet() {
         participant_a_roster_details?: Array<{ name: string; division: string | null }>;
         participant_b_roster_details?: Array<{ name: string; division: string | null }>;
       };
-      addTeam(match.participant_a_id, match.participant_a_name, withRoster.participant_a_roster, withRoster.participant_a_roster_details, match.participant_a_division);
-      addTeam(match.participant_b_id, match.participant_b_name, withRoster.participant_b_roster, withRoster.participant_b_roster_details, match.participant_b_division);
+      addTeam(match.participant_a_id, match.participant_a_name, withRoster.participant_a_roster, withRoster.participant_a_roster_details, match.participant_a_division, match.participant_a_seed_label);
+      addTeam(match.participant_b_id, match.participant_b_name, withRoster.participant_b_roster, withRoster.participant_b_roster_details, match.participant_b_division, match.participant_b_seed_label);
     });
 
-    return Array.from(map.values()).map((participant) => ({
-      ...participant,
-      teamRoster: rosterMap.get(participant.id),
-    }));
+    return Array.from(map.values())
+      .sort((left, right) => (seedMap.get(left.id) ?? 999) - (seedMap.get(right.id) ?? 999))
+      .map((participant) => ({
+        ...participant,
+        teamRoster: rosterMap.get(participant.id),
+      }));
   }, [generatedProgramMatchesAll, id, isProgramTeamRound, programRoundType]);
 
   const programDisplayParticipants = useMemo(() => {
@@ -1376,6 +1383,8 @@ export default function LeagueGPTVisionSheet() {
 
   // ── DnD 순서 변경 ─────────────────────────────────────────────────────────
   const [reorderParticipants] = useReorderLeagueParticipantsMutation();
+  const [saveLeagueProgram] = useSaveLeagueProgramMutation();
+  const [syncProgramMatches] = useSyncLeagueProgramMatchesMutation();
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),   // 마우스: 8px 이상 이동 시 드래그 시작
     useSensor(TouchSensor,   { activationConstraint: { delay: 200, tolerance: 5 } }), // 터치: 200ms 롱프레스 후 드래그
@@ -1406,6 +1415,47 @@ export default function LeagueGPTVisionSheet() {
       return next;
     });
   }, [setLocalOrder, reorderParticipants, id]);
+
+  const finishEditing = useCallback(async () => {
+    if (!editMode) {
+      setEditMode(true);
+      return;
+    }
+
+    if (isProgramMode && id && programOption) {
+      const participantOrder = localOrder.map((participant) => participant.id);
+      const nextProgram = {
+        ...programOption,
+        blocks: programOption.blocks.map((block, index) =>
+          index === programRound - 1 ? { ...block, participantOrder } : block
+        ),
+        rounds: programOption.rounds?.map((round, index) =>
+          index === programRound - 1 ? { ...round, participantOrder } : round
+        ),
+      };
+      await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
+      const nextMatches = generateProgramRoundMatches(
+        id,
+        nextProgram,
+        rawParticipants,
+        programRound,
+        programSourceMatches,
+      );
+      await syncProgramMatches({ leagueId: id, matches: nextMatches }).unwrap();
+      await refetchMatches();
+    } else {
+      await reorderParticipants({
+        leagueId: id ?? "",
+        order: localOrder.map((participant) => participant.id),
+      }).unwrap();
+    }
+
+    setEditMode(false);
+  }, [
+    editMode, id, isProgramMode, localOrder, programOption, programRound,
+    programSourceMatches, rawParticipants, refetchMatches, reorderParticipants,
+    saveLeagueProgram, syncProgramMatches,
+  ]);
 
   // 수동 새로고침: 리그·참가자·경기 3개 쿼리 동시 refetch
   const handleRefresh = useCallback(() => {
@@ -1882,7 +1932,7 @@ export default function LeagueGPTVisionSheet() {
             size="small"
             variant="contained"
             startIcon={editMode ? <CheckIcon sx={{ fontSize: 14 }} /> : <EditIcon sx={{ fontSize: 14 }} />}
-            onClick={() => setEditMode((v) => !v)}
+            onClick={finishEditing}
             sx={{
               borderRadius: "20px", fontSize: 11, fontWeight: 700, px: 1.5, py: 0.4,
               textTransform: "none", flexShrink: 0, minWidth: "auto", boxShadow: "none",

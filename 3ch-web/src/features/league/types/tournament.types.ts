@@ -116,6 +116,7 @@ export interface ProgramBlock {
   crossClubGrouping?: boolean;
   crossClubOnlyMatches?: boolean;
   unitClubMode?: UnitClubMode;
+  participantOrder?: string[];
   deletedMatchIds?: string[];
   teamSinglesCount?: number;
   teamDoublesCount?: number;
@@ -203,6 +204,7 @@ export interface RoundConfig {
   crossClubGrouping?: boolean;
   crossClubOnlyMatches?: boolean;
   unitClubMode?: UnitClubMode;
+  participantOrder?: string[];
 }
 
 export interface ProgramPreferences {

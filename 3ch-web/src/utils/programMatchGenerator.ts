@@ -978,13 +978,21 @@ export function generateProgramRoundMatches(
   const defaultFormationSeed = round * 1000;
   const teamFormationPlayers = shuffleWithinLevel(players, block.teamShuffleSeed ?? defaultFormationSeed + 101);
   const groupSizes = block.groupSizes?.length ? block.groupSizes : option?.groupSizes ?? [players.length];
-  const matchUnits: MatchUnit[] = block.type === "TEAM"
+  let matchUnits: MatchUnit[] = block.type === "TEAM"
     ? block.teamAssignments?.length
       ? teamUnitsFromAssignments(block.teamAssignments, players)
       : toTeamUnitsFromGroupSizes(teamFormationPlayers, groupSizes, block.unitClubMode ?? "mixed")
     : block.type === "DOUBLES"
       ? toDoublesUnits(players, block.doublesAssignments, block.unitClubMode ?? "mixed")
       : players;
+
+  if (block.participantOrder?.length) {
+    const order = new Map(block.participantOrder.map((id, index) => [id, index]));
+    matchUnits = [...matchUnits].sort((left, right) =>
+      ((left.id ? order.get(left.id) : undefined) ?? Number.MAX_SAFE_INTEGER)
+      - ((right.id ? order.get(right.id) : undefined) ?? Number.MAX_SAFE_INTEGER)
+    );
+  }
 
   if (matchUnits.length < 2) {
     return [];

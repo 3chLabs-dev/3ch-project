@@ -208,7 +208,7 @@ function DiagonalScoreCell({ landscape, isVisionStart = false }: { landscape: bo
     >
       {isVisionStart ? (
         <Box component="span" aria-label="GPT Vision 점수 영역 시작" sx={{ position: "absolute", top: 2, ...(landscape ? { left: 3 } : { right: 3 }), color: "#111", fontSize: 22, fontWeight: 900, lineHeight: 1, zIndex: 1 }}>
-          ★
+          ☆
         </Box>
       ) : null}
     </DiagonalBase>
@@ -252,6 +252,7 @@ function ScoreButton({ icon, disabled, rotate, variant = "order", onClick }: {
     : (icon === "up" ? ArrowUpwardIcon : ArrowDownwardIcon);
   return (
     <IconButton
+      className={variant === "score" ? "score-control-button" : undefined}
       size="small"
       disabled={disabled}
       onPointerDown={(e) => e.stopPropagation()}
@@ -359,7 +360,7 @@ function BracketScoreCell({ match, isA, leagueId, winScore, canManage, landscape
 
   // landscape / portrait 공통: [↓] 점수 [↑] 가로 배치, 좌우 여백 있게
   const inner = (
-    <Box sx={{
+    <Box className="score-control-container" sx={{
       display: "flex", flexDirection: "row", alignItems: "center",
       justifyContent: "space-between",
       ...(landscape ? {} : { writingMode: "horizontal-tb" }),
@@ -1473,6 +1474,14 @@ export default function LeagueGPTVisionSheet() {
     const clone = el.cloneNode(true) as HTMLElement;
     clone.style.transform = "none";
     clone.style.writingMode = "horizontal-tb";
+    clone.querySelectorAll<HTMLElement>(".score-control-button").forEach((button) => button.remove());
+    clone.querySelectorAll<HTMLElement>(".score-control-container").forEach((container) => {
+      container.style.justifyContent = "center";
+      container.style.writingMode = "horizontal-tb";
+    });
+    clone.querySelectorAll<HTMLElement>(".score-text").forEach((score) => {
+      score.style.transform = "none";
+    });
     clone.style.position = "fixed";
     clone.style.top = "-99999px";
     clone.style.left = "0";
@@ -1480,14 +1489,55 @@ export default function LeagueGPTVisionSheet() {
     try {
       const html2canvas = (await import("html2canvas")).default;
       const canvas = await html2canvas(clone, { scale: 2, useCORS: true });
+      const leagueName = league?.name ?? "대진표";
+      const leagueUrl = id ? `${window.location.origin}/league/${id}` : window.location.href;
+      const sheet = document.createElement("div");
+      sheet.style.cssText = [
+        "position:fixed",
+        "top:-99999px",
+        "left:0",
+        `width:${Math.max(960, canvas.width / 2 + 96)}px`,
+        "padding:40px 48px 52px",
+        "box-sizing:border-box",
+        "background:#fff",
+        "color:#111",
+        "font-family:Arial,sans-serif",
+      ].join(";");
+      const header = document.createElement("div");
+      header.style.cssText = "display:flex;align-items:flex-start;justify-content:space-between;gap:32px;margin-bottom:28px";
+      const titleArea = document.createElement("div");
+      const title = document.createElement("div");
+      title.textContent = `${leagueName} 대진표`;
+      title.style.cssText = "font-size:26px;font-weight:800;line-height:1.3";
+      const subtitle = document.createElement("div");
+      subtitle.textContent = leagueUrl;
+      subtitle.style.cssText = "margin-top:8px;font-size:12px;color:#555";
+      titleArea.append(title, subtitle);
+      const qrArea = document.createElement("div");
+      qrArea.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:6px;min-width:120px";
+      qrArea.innerHTML = renderToStaticMarkup(<QRCode value={leagueUrl} size={104} bgColor="#FFFFFF" fgColor="#111111" />);
+      const qrLabel = document.createElement("div");
+      qrLabel.textContent = "QR로 리그 바로가기";
+      qrLabel.style.cssText = "font-size:11px;color:#555";
+      qrArea.appendChild(qrLabel);
+      header.append(titleArea, qrArea);
+      const bracketImage = document.createElement("img");
+      bracketImage.src = canvas.toDataURL("image/png");
+      bracketImage.alt = `${leagueName} 대진표`;
+      bracketImage.style.cssText = "display:block;width:100%;height:auto";
+      sheet.append(header, bracketImage);
+      document.body.appendChild(sheet);
+      await bracketImage.decode().catch(() => undefined);
+      const downloadCanvas = await html2canvas(sheet, { scale: 2, useCORS: true, backgroundColor: "#FFFFFF" });
       const a = document.createElement("a");
-      a.href = canvas.toDataURL("image/png");
+      a.href = downloadCanvas.toDataURL("image/png");
       a.download = `대진표_${league?.name ?? "bracket"}.png`;
       a.click();
+      document.body.removeChild(sheet);
     } finally {
       document.body.removeChild(clone);
     }
-  }, [league?.name]);
+  }, [id, league?.name]);
 
   // 인쇄: 이미지로 캡처 후 새 창 인쇄
   const handlePrint = useCallback(async () => {
@@ -1496,6 +1546,14 @@ export default function LeagueGPTVisionSheet() {
     const clone = el.cloneNode(true) as HTMLElement;
     clone.style.transform = "none";
     clone.style.writingMode = "horizontal-tb";
+    clone.querySelectorAll<HTMLElement>(".score-control-button").forEach((button) => button.remove());
+    clone.querySelectorAll<HTMLElement>(".score-control-container").forEach((container) => {
+      container.style.justifyContent = "center";
+      container.style.writingMode = "horizontal-tb";
+    });
+    clone.querySelectorAll<HTMLElement>(".score-text").forEach((score) => {
+      score.style.transform = "none";
+    });
     clone.style.position = "fixed";
     clone.style.top = "-99999px";
     clone.style.left = "0";

@@ -956,7 +956,7 @@ export default function LeagueMatchOrder() {
     <Stack spacing={2}>
       {/* 상단 헤더 */}
       <Stack direction="row" alignItems="center" spacing={1}>
-        <IconButton size="small" onClick={() => navigate(-1)} sx={{ p: 0.5, color: "#374151" }}>
+        <IconButton size="small" onClick={() => navigate(`/league/${leagueId}`)} sx={{ p: 0.5, color: "#374151" }}>
           <ChevronLeftIcon />
         </IconButton>
         <Typography variant="subtitle1" fontWeight={900} flex={1}>

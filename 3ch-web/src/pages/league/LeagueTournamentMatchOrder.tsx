@@ -454,7 +454,7 @@ export default function LeagueTournamentMatchOrder() {
 
       {/* ── 헤더 ── */}
       <Box sx={{ bgcolor: "#fff", borderBottom: "1px solid #E5E7EB", display: "flex", alignItems: "center", px: 0.5, py: 0.75, gap: 0.25, position: "sticky", top: 0, zIndex: 10 }}>
-        <IconButton size="small" onClick={() => navigate(-1)}>
+        <IconButton size="small" onClick={() => navigate(`/league/${id}`)}>
           <ChevronLeftIcon />
         </IconButton>
         <Typography sx={{ fontWeight: 700, fontSize: 15, flex: 1 }}>경기 순서</Typography>

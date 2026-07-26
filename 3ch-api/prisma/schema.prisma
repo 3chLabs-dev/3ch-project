@@ -480,6 +480,8 @@ model LeagueMatch {
 
   participant_b_id String?
   participant_b    LeagueParticipant? @relation("MatchParticipantB", fields: [participant_b_id], references: [id], onDelete: SetNull)
+  participant_a_roster_ids String[] @default([])
+  participant_b_roster_ids String[] @default([])
   group_name       String?
 
   @@index([league_id])

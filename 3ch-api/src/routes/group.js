@@ -928,7 +928,11 @@ router.get('/group/:id', requireAuth, async (req, res) => {
 
 const defaultRankingPointRules = {
   attendance: { league: 1, tournament: 2 },
-  matchPoints: { mode: "sets", winPoints: 3 },
+  matchPoints: {
+    mode: "sets",
+    winPoints: 3,
+    eventTypes: { singles: true, doubles: false, team: false },
+  },
   rankings: {
     league: { first: 30, second: 20, thirdFourth: 10 },
     group: { first: 30, second: 15, thirdFourth: 10 },
@@ -949,6 +953,11 @@ const rankingSeasonSchema = z.object({
     matchPoints: z.object({
       mode: z.enum(['sets', 'win']),
       winPoints: z.number().int().min(0).max(1000),
+      eventTypes: z.object({
+        singles: z.boolean().optional().default(true),
+        doubles: z.boolean().optional().default(false),
+        team: z.boolean().optional().default(false),
+      }).optional().default(defaultRankingPointRules.matchPoints.eventTypes),
     }).optional().default(defaultRankingPointRules.matchPoints),
     rankings: z.object({
       league: z.object({

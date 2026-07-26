@@ -230,6 +230,10 @@ export interface LeagueMatch {
   tournament_bracket_index?: number | null;
   participant_a_seed_label?: string | null;
   participant_b_seed_label?: string | null;
+  participant_a_roster?: string[];
+  participant_b_roster?: string[];
+  participant_a_roster_details?: Array<{ name: string; division: string | null }>;
+  participant_b_roster_details?: Array<{ name: string; division: string | null }>;
   is_no_game?: boolean;
 }
 

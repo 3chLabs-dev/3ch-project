@@ -37,7 +37,11 @@ type Props = {
 
 const DEFAULT_POINT_RULES: GroupRankingPointRules = {
   attendance: { league: 1, tournament: 2 },
-  matchPoints: { mode: "sets", winPoints: 3 },
+  matchPoints: {
+    mode: "sets",
+    winPoints: 3,
+    eventTypes: { singles: true, doubles: false, team: false },
+  },
   rankings: {
     league: { first: 30, second: 20, thirdFourth: 10 },
     group: { first: 30, second: 15, thirdFourth: 10 },
@@ -78,7 +82,14 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
             ...DEFAULT_POINT_RULES,
             ...savedRules,
             attendance: { ...DEFAULT_POINT_RULES.attendance, ...savedRules.attendance },
-            matchPoints: { ...DEFAULT_POINT_RULES.matchPoints, ...savedRules.matchPoints },
+            matchPoints: {
+              ...DEFAULT_POINT_RULES.matchPoints,
+              ...savedRules.matchPoints,
+              eventTypes: {
+                ...DEFAULT_POINT_RULES.matchPoints.eventTypes,
+                ...savedRules.matchPoints?.eventTypes,
+              },
+            },
             rankings: { ...DEFAULT_POINT_RULES.rankings, ...savedRules.rankings },
           }
         : DEFAULT_POINT_RULES);
@@ -174,6 +185,31 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
           </Stack>
           <Box>
             <Typography sx={{ fontSize: 13, fontWeight: 800, mb: 0.5 }}>경기당 승점</Typography>
+            <Stack direction="row" spacing={0.5} sx={{ mb: 0.5 }}>
+              {([
+                ["singles", "단식"],
+                ["doubles", "복식"],
+                ["team", "단체전"],
+              ] as const).map(([key, label]) => (
+                <FormControlLabel
+                  key={key}
+                  control={(
+                    <Checkbox
+                      size="small"
+                      checked={pointRules.matchPoints.eventTypes[key]}
+                      onChange={(event) => updateMatchPoints({
+                        eventTypes: {
+                          ...pointRules.matchPoints.eventTypes,
+                          [key]: event.target.checked,
+                        },
+                      })}
+                    />
+                  )}
+                  label={<Typography sx={{ fontSize: 13 }}>{label}</Typography>}
+                  sx={{ m: 0, mr: 1 }}
+                />
+              ))}
+            </Stack>
             <RadioGroup
               value={pointRules.matchPoints.mode}
               onChange={(event) => updateMatchPoints({ mode: event.target.value as "sets" | "win" })}

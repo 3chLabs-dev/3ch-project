@@ -2,7 +2,11 @@ const pool = require("../db/pool");
 
 const DEFAULT_POINT_RULES = Object.freeze({
   attendance: { league: 1, tournament: 2 },
-  matchPoints: { mode: "sets", winPoints: 3 },
+  matchPoints: {
+    mode: "sets",
+    winPoints: 3,
+    eventTypes: { singles: true, doubles: false, team: false },
+  },
   rankings: {
     league: { first: 30, second: 20, thirdFourth: 10 },
     group: { first: 30, second: 15, thirdFourth: 10 },
@@ -33,6 +37,11 @@ function normalizePointRules(value) {
     matchPoints: {
       mode: matchPoints.mode === "win" ? "win" : "sets",
       winPoints: numberOr(matchPoints.winPoints, DEFAULT_POINT_RULES.matchPoints.winPoints),
+      eventTypes: {
+        singles: matchPoints.eventTypes?.singles !== false,
+        doubles: matchPoints.eventTypes?.doubles === true,
+        team: matchPoints.eventTypes?.team === true,
+      },
     },
     rankings: {
       league: normalizeRankRule(rankings.league, DEFAULT_POINT_RULES.rankings.league),
@@ -119,7 +128,8 @@ function finalizeRows(sectionMap, pointRules) {
   const rows = Array.from(sectionMap.values());
   rows.forEach((row) => {
     row.attendance_points = row.attendance_count * pointRules.attendance[row.section];
-    row.total_points = row.attendance_points + row.score_points + row.bonus_points;
+    row.score_points = roundPoint(row.score_points);
+    row.total_points = roundPoint(row.attendance_points + row.score_points + row.bonus_points);
     row.win_rate = row.matches_played > 0
       ? Number((row.wins / row.matches_played).toFixed(3))
       : 0;
@@ -169,6 +179,20 @@ function isSinglesEntry(row) {
       || getProgramRoundMeta(row.program_data, row.program_round).type === "SINGLES";
   }
   return String(row.league_type ?? "").trim() === "단식";
+}
+
+function getProgramEntryType(row) {
+  if (!row.is_program) return isSinglesEntry(row) ? "singles" : null;
+  const type = row.program_block_type
+    ?? getProgramRoundMeta(row.program_data, row.program_round).type;
+  if (type === "SINGLES") return "singles";
+  if (type === "DOUBLES") return "doubles";
+  if (type === "TEAM") return "team";
+  return null;
+}
+
+function roundPoint(value) {
+  return Math.round((Number(value) + Number.EPSILON) * 10) / 10;
 }
 
 async function ensureAutoRenewedSeasons(groupId) {
@@ -358,6 +382,8 @@ async function getPointRanking(groupId, year, scope, seasonId) {
        m.is_program,
        m.program_round,
        m.program_block_type,
+       m.participant_a_roster_ids,
+       m.participant_b_roster_ids,
        m.bracket,
        m.round_number,
        m.match_label,
@@ -377,8 +403,8 @@ async function getPointRanking(groupId, year, scope, seasonId) {
      FROM leagues l
      JOIN league_matches m ON m.league_id = l.id
      LEFT JOIN league_programs prog ON prog.league_id = l.id
-     JOIN league_participants pa ON pa.id = m.participant_a_id
-     JOIN league_participants pb ON pb.id = m.participant_b_id
+     LEFT JOIN league_participants pa ON pa.id = m.participant_a_id
+     LEFT JOIN league_participants pb ON pb.id = m.participant_b_id
      LEFT JOIN users ua ON ua.id = pa.member_id
      LEFT JOIN users ub ON ub.id = pb.member_id
      LEFT JOIN LATERAL (
@@ -405,10 +431,6 @@ async function getPointRanking(groupId, year, scope, seasonId) {
      ) matched_b ON pb.member_id IS NULL
      WHERE ${leagueFilterSql}
        AND ${scopedDateSql}
-       AND COALESCE(pa.member_id, CASE WHEN matched_a.matched_count = 1 THEN matched_a.user_id ELSE NULL END) IS NOT NULL
-       AND COALESCE(pb.member_id, CASE WHEN matched_b.matched_count = 1 THEN matched_b.user_id ELSE NULL END) IS NOT NULL
-       AND COALESCE(pa.member_id, CASE WHEN matched_a.matched_count = 1 THEN matched_a.user_id ELSE NULL END)
-           <> COALESCE(pb.member_id, CASE WHEN matched_b.matched_count = 1 THEN matched_b.user_id ELSE NULL END)
      ORDER BY l.start_date ASC, m.created_at ASC, m.match_order ASC`,
     [scopeValue, rangeStart, rangeEnd],
   );
@@ -458,9 +480,13 @@ async function getPointRanking(groupId, year, scope, seasonId) {
   const leagueGroups = new Map();
   const tournamentGroups = new Map();
   const leagueHasRegularPhase = new Set();
+  const participantMembers = new Map(
+    participantResult.rows.map((row) => [String(row.participant_id), Number(row.member_id)]),
+  );
 
   matchResult.rows.forEach((match) => {
-    if (!isSinglesEntry(match)) return;
+    const entryType = getProgramEntryType(match);
+    if (!entryType || pointRules.matchPoints.eventTypes[entryType] !== true) return;
     const roundMeta = getProgramRoundMeta(match.program_data, match.program_round);
     const section = roundMeta.format === "TOURNAMENT" || match.bracket ? "tournament" : "league";
     match._rankingFormat = roundMeta.format
@@ -474,43 +500,49 @@ async function getPointRanking(groupId, year, scope, seasonId) {
       leagueHasRegularPhase.add(match.league_id);
     }
 
-    const memberAId = Number(match.member_a_id);
-    const memberBId = Number(match.member_b_id);
+    const memberAIds = entryType === "singles"
+      ? [Number(match.member_a_id)].filter(Number.isFinite)
+      : (match.participant_a_roster_ids ?? []).map((id) => participantMembers.get(String(id))).filter(Number.isFinite);
+    const memberBIds = entryType === "singles"
+      ? [Number(match.member_b_id)].filter(Number.isFinite)
+      : (match.participant_b_roster_ids ?? []).map((id) => participantMembers.get(String(id))).filter(Number.isFinite);
+    if (memberAIds.length === 0 || memberBIds.length === 0) return;
 
     const attendanceSets = section === "tournament" ? tournamentParticipantSets : leagueParticipantSets;
-    if (!attendanceSets.has(memberAId)) attendanceSets.set(memberAId, new Set());
-    if (!attendanceSets.has(memberBId)) attendanceSets.set(memberBId, new Set());
     const attendanceKey = match.league_id;
-    attendanceSets.get(memberAId).add(attendanceKey);
-    attendanceSets.get(memberBId).add(attendanceKey);
+    [...memberAIds, ...memberBIds].forEach((memberId) => {
+      if (!attendanceSets.has(memberId)) attendanceSets.set(memberId, new Set());
+      attendanceSets.get(memberId).add(attendanceKey);
+    });
 
-    if (match.status !== "done" || Number(match.score_a) === Number(match.score_b)) {
-      return;
-    }
+    if (match.status !== "done") return;
 
     const scoreA = Number(match.score_a);
     const scoreB = Number(match.score_b);
-    const rowA = ensureRow(section === "league" ? leagueRows : tournamentRows, memberAId, baseMembers.get(memberAId), section);
-    const rowB = ensureRow(section === "league" ? leagueRows : tournamentRows, memberBId, baseMembers.get(memberBId), section);
-
-    rowA.matches_played += 1;
-    rowB.matches_played += 1;
+    const targetRows = section === "league" ? leagueRows : tournamentRows;
+    const rowsA = memberAIds.map((memberId) => ensureRow(targetRows, memberId, baseMembers.get(memberId), section));
+    const rowsB = memberBIds.map((memberId) => ensureRow(targetRows, memberId, baseMembers.get(memberId), section));
+    [...rowsA, ...rowsB].forEach((row) => { row.matches_played += 1; });
     if (pointRules.matchPoints.mode === "win") {
-      if (scoreA > scoreB) rowA.score_points += pointRules.matchPoints.winPoints;
-      else rowB.score_points += pointRules.matchPoints.winPoints;
+      if (scoreA > scoreB) {
+        rowsA.forEach((row) => { row.score_points = roundPoint(row.score_points + pointRules.matchPoints.winPoints / rowsA.length); });
+      } else if (scoreB > scoreA) {
+        rowsB.forEach((row) => { row.score_points = roundPoint(row.score_points + pointRules.matchPoints.winPoints / rowsB.length); });
+      }
     } else {
-      rowA.score_points += scoreA;
-      rowB.score_points += scoreB;
+      rowsA.forEach((row) => { row.score_points = roundPoint(row.score_points + scoreA / rowsA.length); });
+      rowsB.forEach((row) => { row.score_points = roundPoint(row.score_points + scoreB / rowsB.length); });
     }
 
     if (scoreA > scoreB) {
-      rowA.wins += 1;
-      rowB.losses += 1;
-    } else {
-      rowB.wins += 1;
-      rowA.losses += 1;
+      rowsA.forEach((row) => { row.wins += 1; });
+      rowsB.forEach((row) => { row.losses += 1; });
+    } else if (scoreB > scoreA) {
+      rowsB.forEach((row) => { row.wins += 1; });
+      rowsA.forEach((row) => { row.losses += 1; });
     }
 
+    if (entryType !== "singles" || scoreA === scoreB) return;
     const leagueKey = match.league_id;
     if (section === "league") {
       const roundKey = `${leagueKey}:${match.program_round ?? 0}`;

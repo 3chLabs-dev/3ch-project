@@ -288,6 +288,11 @@ export interface GroupRankingPointRules {
   matchPoints: {
     mode: "sets" | "win";
     winPoints: number;
+    eventTypes: {
+      singles: boolean;
+      doubles: boolean;
+      team: boolean;
+    };
   };
   rankings: {
     league: { first: number; second: number; thirdFourth: number };

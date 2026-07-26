@@ -1,6 +1,10 @@
 import { baseApi } from "../api/baseApi";
 import type { RootState } from "../../app/store";
-import { LOCAL_DEV_GROUP, LOCAL_DEV_USER, isLocalDevToken } from "../../utils/localDevAuth";
+import {
+  LOCAL_DEV_GROUPS,
+  getLocalDevProfileByToken,
+  isLocalDevToken,
+} from "../../utils/localDevAuth";
 
 export interface Group {
   id: string;
@@ -343,7 +347,13 @@ export interface GroupMemberLeagueHistoryResponse {
 export const groupApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     getMyGroups: builder.query<GetGroupsResponse, void>({
-      query: () => "/group",
+      async queryFn(_arg, api, _extraOptions, fetchWithBQ) {
+        const token = (api.getState() as RootState).auth?.token;
+        const profile = getLocalDevProfileByToken(token);
+        if (profile) return { data: { groups: [profile.group] } };
+        const result = await fetchWithBQ("/group");
+        return result.error ? { error: result.error } : { data: result.data as GetGroupsResponse };
+      },
       providesTags: ["Group"],
     }),
 
@@ -359,29 +369,36 @@ export const groupApi = baseApi.injectEndpoints({
     getGroupDetail: builder.query<GetGroupDetailResponse, string>({
       async queryFn(id, api, _extraOptions, fetchWithBQ) {
         const token = (api.getState() as RootState).auth?.token;
-        if (isLocalDevToken(token) && id === LOCAL_DEV_GROUP.id) {
+        const profile = getLocalDevProfileByToken(token);
+        const localGroup = LOCAL_DEV_GROUPS.find((group) => group.id === id);
+        if (profile && localGroup) {
+          const isOwner = profile.group.id === localGroup.id;
+          const leaderProfile = LOCAL_DEV_GROUPS.findIndex((group) => group.id === localGroup.id);
+          const leader = leaderProfile === 0
+            ? getLocalDevProfileByToken("local-dev-token")
+            : getLocalDevProfileByToken("local-dev-token-2");
           return {
             data: {
               group: {
-                id: LOCAL_DEV_GROUP.id,
-                name: LOCAL_DEV_GROUP.name,
-                club_code: LOCAL_DEV_GROUP.club_code,
-                sport: LOCAL_DEV_GROUP.sport,
-                region_city: LOCAL_DEV_GROUP.region_city,
-                region_district: LOCAL_DEV_GROUP.region_district,
-                created_at: LOCAL_DEV_GROUP.created_at,
-                creator_name: LOCAL_DEV_GROUP.creator_name,
+                id: localGroup.id,
+                name: localGroup.name,
+                club_code: localGroup.club_code,
+                sport: localGroup.sport,
+                region_city: localGroup.region_city,
+                region_district: localGroup.region_district,
+                created_at: localGroup.created_at,
+                creator_name: localGroup.creator_name,
               },
               members: [{
-                id: "local-dev-member",
+                id: `local-dev-member-${localGroup.id}`,
                 role: "owner",
                 division: null,
-                joined_at: LOCAL_DEV_GROUP.created_at,
-                user_id: LOCAL_DEV_USER.id,
-                name: LOCAL_DEV_USER.name ?? "",
-                email: LOCAL_DEV_USER.email,
+                joined_at: localGroup.created_at,
+                user_id: leader?.user.id ?? null,
+                name: leader?.user.name ?? localGroup.creator_name ?? "",
+                email: leader?.user.email ?? null,
               }],
-              myRole: "owner",
+              myRole: isOwner ? "owner" : "",
               links: [],
             },
           };
@@ -393,7 +410,18 @@ export const groupApi = baseApi.injectEndpoints({
     }),
 
     searchGroups: builder.query<SearchGroupsResponse, SearchGroupsParams>({
-      query: (params) => {
+      async queryFn(params, api, _extraOptions, fetchWithBQ) {
+        const token = (api.getState() as RootState).auth?.token;
+        if (isLocalDevToken(token)) {
+          const query = params.q?.trim().toLocaleLowerCase() ?? "";
+          const groups = LOCAL_DEV_GROUPS
+            .filter((group) => !query || group.name.toLocaleLowerCase().includes(query))
+            .filter((group) => !params.region_city || group.region_city === params.region_city)
+            .filter((group) => !params.region_district || group.region_district === params.region_district)
+            .slice(0, params.limit ?? LOCAL_DEV_GROUPS.length)
+            .map(({ role: _role, division: _division, ...group }) => group);
+          return { data: { groups } };
+        }
         const sp = new URLSearchParams();
         if (params.q) sp.set("q", params.q);
         if (params.region_city) sp.set("region_city", params.region_city);
@@ -401,7 +429,8 @@ export const groupApi = baseApi.injectEndpoints({
         if (params.limit) sp.set("limit", String(params.limit));
         if (params.sort_by_region !== undefined) sp.set("sort_by_region", String(params.sort_by_region));
         if (params.include_joined !== undefined) sp.set("include_joined", String(params.include_joined));
-        return `/group/search?${sp.toString()}`;
+        const result = await fetchWithBQ(`/group/search?${sp.toString()}`);
+        return result.error ? { error: result.error } : { data: result.data as SearchGroupsResponse };
       },
       providesTags: ["Group"],
     }),

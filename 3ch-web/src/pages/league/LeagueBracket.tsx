@@ -936,6 +936,7 @@ export default function LeagueBracket() {
     [isProgramMode, id, programData],
   );
   const currentProgramBlock = isProgramMode ? programOption?.blocks?.[programRound - 1] : undefined;
+  const currentRule = currentProgramBlock?.matchRule ?? league?.rules;
   const [programMatchStateVersion, setProgramMatchStateVersion] = useState(0);
   const programSourceMatches = useMemo(() => {
     if (!isProgramMode || !id || !programOption) return matchData?.matches ?? [];
@@ -1493,7 +1494,7 @@ export default function LeagueBracket() {
     return map;
   }, [matches]);
 
-  const { playerStats, rankings, tieSetDiffs } = useMatchStats(localOrder, matches, league?.rules);
+  const { playerStats, rankings, tieSetDiffs } = useMatchStats(localOrder, matches, currentRule);
 
   // ── 로딩 / 빈 상태 ───────────────────────────────────────────────────────
   if (leagueLoading || participantsLoading) {
@@ -1508,8 +1509,7 @@ export default function LeagueBracket() {
   const n             = localOrder.length;
   const leagueStarted = league.status === "completed"; // 완료 상태면 수정 버튼 숨김
   const date          = formatLeagueDate(league.start_date);
-  const winScore      = getWinScore(league.rules);
-  const currentRule = currentProgramBlock?.matchRule ?? league.rules;
+  const winScore      = getWinScore(currentRule);
   const headerSummary = isProgramMode && currentProgramBlock
     ? `${programRound}라운드 ${getProgramTypeLabel(currentProgramBlock.type)} ${getProgramFormatLabel(currentProgramBlock.format)} │ ${getProgramRuleLabel(currentProgramBlock.matchRule)}`
     : `${league.type} ${league.format} │ ${league.rules}`;
@@ -1686,7 +1686,7 @@ export default function LeagueBracket() {
                         </Box>
                       </NumberHeaderCell>
                     ))}
-                    {league.rules === "3세트제" ? (
+                    {getProgramRuleLabel(currentRule ?? "") === "3세트제" ? (
                       <NumberHeaderCell rowSpan={2} sx={{ bgcolor: "#F0FDF4"}}>세트<br/>합계</NumberHeaderCell>
                     ) :
                     (
@@ -1743,7 +1743,7 @@ export default function LeagueBracket() {
                         leagueId={id ?? ""}
                         winScore={winScore}
                         isMe={!!myName && rowPlayer.name === myName}
-                        rules={league.rules}
+                        rules={getProgramRuleLabel(currentRule ?? "")}
                         onProgramMatchUpdate={isProgramMode ? updateProgramMatch : undefined}
                       />
                     ))}

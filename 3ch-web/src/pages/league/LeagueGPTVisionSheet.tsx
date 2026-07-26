@@ -986,6 +986,8 @@ export default function LeagueGPTVisionSheet() {
     () => (isProgramMode && id ? (programData?.program?.program_data as ReturnType<typeof getStoredProgramOption> | undefined) ?? getStoredProgramOption(id) : null),
     [isProgramMode, id, programData],
   );
+  const currentProgramBlock = programOption?.blocks?.[programRound - 1];
+  const currentRule = currentProgramBlock?.matchRule ?? league?.rules;
   const [programMatchStateVersion, setProgramMatchStateVersion] = useState(0);
   const programSourceMatches = useMemo(() => {
     if (!isProgramMode || programRound <= 1) return [];
@@ -1831,7 +1833,7 @@ export default function LeagueGPTVisionSheet() {
     }
   };
 
-  const { playerStats, rankings, tieSetDiffs } = useMatchStats(localOrder, matches, league?.rules);
+  const { playerStats, rankings, tieSetDiffs } = useMatchStats(localOrder, matches, currentRule);
 
   useLayoutEffect(() => {
     const measureRenderedTable = () => {
@@ -1868,9 +1870,7 @@ export default function LeagueGPTVisionSheet() {
   const n             = localOrder.length;
   const leagueStarted = league.status === "completed"; // 완료 상태면 수정 버튼 숨김
   const date          = formatLeagueDate(league.start_date);
-  const winScore      = getWinScore(league.rules);
-  const currentProgramBlock = programOption?.blocks?.[programRound - 1];
-  const currentRule = currentProgramBlock?.matchRule ?? league.rules;
+  const winScore      = getWinScore(currentRule);
   const headerSummary = isProgramMode && currentProgramBlock
     ? `${programRound}라운드 ${getProgramTypeLabel(currentProgramBlock.type)} ${getProgramFormatLabel(currentProgramBlock.format)} │ ${getProgramRuleLabel(currentRule)}`
     : `${league.type} ${league.format} │ ${league.rules}`;
@@ -2035,7 +2035,7 @@ export default function LeagueGPTVisionSheet() {
                         </Box>
                       </NumberHeaderCell>
                     ))}
-                    {league.rules === "3세트제" ? (
+                    {getProgramRuleLabel(currentRule ?? "") === "3세트제" ? (
                       <NumberHeaderCell rowSpan={2} sx={{ bgcolor: "#F0FDF4"}}>세트<br/>합계</NumberHeaderCell>
                     ) :
                     (
@@ -2092,7 +2092,7 @@ export default function LeagueGPTVisionSheet() {
                         leagueId={id ?? ""}
                         winScore={winScore}
                         isMe={!!myName && rowPlayer.name === myName}
-                        rules={league.rules}
+                        rules={getProgramRuleLabel(currentRule ?? "")}
                         onProgramMatchUpdate={isProgramMode ? updateProgramMatch : undefined}
                       />
                     ))}

@@ -1169,9 +1169,21 @@ export default function LeagueTournamentBracket() {
         </Tabs>
       )}
       <Box sx={{ flex: 1, overflow: "hidden", position: "relative", minHeight: 0, bgcolor: "#F0F2F5" }}>
-        <Box sx={{ position: "absolute", top: 0, bottom: 0, left: 0, right: registerTarget ? 260 : 0, overflow: "auto", display: "flex", alignItems: "flex-start", justifyContent: "flex-start", transition: "right 0.2s ease" }}>
-          <Box sx={{ minWidth: "100%", minHeight: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Box sx={{ width: canvasW * zoom, height: canvasH * zoom, position: "relative", flexShrink: 0 }}>
+        <Box sx={{ position: "absolute", top: 0, bottom: 0, left: 0, right: registerTarget ? 260 : 0, overflow: "auto", transition: "right 0.2s ease" }}>
+          <Box sx={{
+            position: "relative",
+            width: `max(100%, ${canvasW * zoom}px)`,
+            height: `max(100%, ${canvasH * zoom}px)`,
+            minWidth: canvasW * zoom,
+            minHeight: canvasH * zoom,
+          }}>
+            <Box sx={{
+              width: canvasW * zoom,
+              height: canvasH * zoom,
+              position: "absolute",
+              left: `max(0px, calc((100% - ${canvasW * zoom}px) / 2))`,
+              top: `max(0px, calc((100% - ${canvasH * zoom}px) / 2))`,
+            }}>
             <Box ref={exportRef} sx={{
               position: "absolute", top: 0, left: 0,
               width: canvasW, height: canvasH,

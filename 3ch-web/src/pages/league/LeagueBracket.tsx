@@ -1137,35 +1137,41 @@ export default function LeagueBracket() {
 
   // 3. 선택된 조의 팀원만 필터링 (조가 없으면 전체)
   const targetParticipants = useMemo(() => {
-    const sortBySavedGroupOrder = <T extends { name: string; division?: string | null }>(
-      participants: T[],
-    ) => {
+    const getSavedGroupAssignments = () => {
       const savedGroupAssignments =
         currentProgramRound?.groupAssignments ?? currentProgramBlock?.groupAssignments;
-      if (!selectedGroup || !savedGroupAssignments?.length) return participants;
+      if (!selectedGroup || !savedGroupAssignments?.length) return null;
 
       const groupNumber = Number.parseInt(selectedGroup, 10);
-      const assignments = savedGroupAssignments[groupNumber - 1];
+      return savedGroupAssignments[groupNumber - 1] ?? null;
+    };
+    const normalizeDivision = (division?: string | null) => {
+      const parsed = Number.parseInt(String(division ?? "").replace(/[^0-9]/g, ""), 10);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+    const buildSavedGroupParticipantList = <T extends { id: string; name: string; division?: string | null }>(
+      participants: T[],
+    ) => {
+      const assignments = getSavedGroupAssignments();
       if (!assignments?.length) return participants;
 
-      const normalizeDivision = (division?: string | null) => {
-        const parsed = Number.parseInt(String(division ?? "").replace(/[^0-9]/g, ""), 10);
-        return Number.isFinite(parsed) ? parsed : null;
-      };
-      const exactOrder = new Map(
-        assignments.map((assignment, index) => [`${assignment.name}\u0000${assignment.level}`, index]),
-      );
-      const nameOrder = new Map(assignments.map((assignment, index) => [assignment.name, index]));
-
-      return [...participants].sort((left, right) => {
-        const leftOrder = exactOrder.get(`${left.name}\u0000${normalizeDivision(left.division)}`)
-          ?? nameOrder.get(left.name)
-          ?? Number.MAX_SAFE_INTEGER;
-        const rightOrder = exactOrder.get(`${right.name}\u0000${normalizeDivision(right.division)}`)
-          ?? nameOrder.get(right.name)
-          ?? Number.MAX_SAFE_INTEGER;
-        return leftOrder - rightOrder;
+      const remaining = [...participants];
+      const ordered = assignments.flatMap((assignment) => {
+        let participantIndex = remaining.findIndex(
+          (participant) =>
+            participant.name === assignment.name
+            && normalizeDivision(participant.division) === assignment.level,
+        );
+        if (participantIndex < 0) {
+          participantIndex = remaining.findIndex(
+            (participant) => participant.name === assignment.name,
+          );
+        }
+        if (participantIndex < 0) return [];
+        const [participant] = remaining.splice(participantIndex, 1);
+        return [participant];
       });
+      return [...ordered, ...remaining];
     };
 
     const sortByProgramSeed = <T extends { id: string }>(participants: T[], selectedMatches: LeagueMatch[]) => {
@@ -1199,7 +1205,7 @@ export default function LeagueBracket() {
       const ids = new Set(
         selectedMatches.flatMap((match) => [match.participant_a_id, match.participant_b_id]).filter(Boolean) as string[],
       );
-      return sortBySavedGroupOrder(
+      return buildSavedGroupParticipantList(
         programSinglesParticipants.filter((participant) => ids.has(participant.id)),
       );
     }
@@ -1210,7 +1216,9 @@ export default function LeagueBracket() {
       );
     }
     if (groupNames.length > 0 && selectedGroup) {
-      return rawParticipants.filter(p => p.group_name === selectedGroup);
+      return buildSavedGroupParticipantList(
+        rawParticipants.filter(p => p.group_name === selectedGroup),
+      );
     }
     return rawParticipants;
   }, [currentProgramBlock, currentProgramRound, isProgramTeamRound, programTeamParticipants, programSinglesParticipants, isProgramMode, programMatchesAll, rawParticipants, groupNames, selectedGroup]);

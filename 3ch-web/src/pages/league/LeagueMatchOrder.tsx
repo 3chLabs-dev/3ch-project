@@ -39,6 +39,7 @@ import {
   useExtendLeagueMatchesMutation,
   useGetLeagueParticipantsQuery,
   useGetLeagueProgramQuery,
+  useSaveLeagueProgramMutation,
   useSyncLeagueProgramMatchesMutation,
   type LeagueMatch,
 } from "../../features/league/leagueApi";
@@ -52,6 +53,8 @@ import {
   generateProgramRoundMatches,
   getStoredProgramOption,
   saveProgramMatchPatch,
+  storeProgramOption,
+  withProgramRoundStandingsSnapshot,
   type ProgramMatchPatch,
 } from "../../utils/programMatchGenerator";
 
@@ -481,6 +484,7 @@ export default function LeagueMatchOrder() {
   const { data: participantData } = useGetLeagueParticipantsQuery(leagueId, { skip: !leagueId, refetchOnMountOrArgChange: true, });
   const { data: programData } = useGetLeagueProgramQuery(leagueId, { skip: !isProgramMode || !leagueId });
   const [updateMatch] = useUpdateLeagueMatchMutation();
+  const [saveLeagueProgram] = useSaveLeagueProgramMutation();
   const [search, setSearch] = useState("");
   const [mineOnly, setMineOnly] = useState(false);
   const [finishRoundConfirmOpen, setFinishRoundConfirmOpen] = useState(false);
@@ -575,6 +579,32 @@ export default function LeagueMatchOrder() {
     return applyProgramTournamentAdvancement(hydratedMatches)
       .sort((left, right) => left.match_order - right.match_order);
   }, [currentProgramBlock?.type, generatedProgramMatches, serverProgramMatches]);
+
+  useEffect(() => {
+    if (!isProgramMode || !leagueId || !programOption || programMatches.length === 0) return;
+
+    const timeoutId = window.setTimeout(() => {
+      const nextProgram = withProgramRoundStandingsSnapshot(
+        programOption,
+        programRound,
+        programMatches,
+      );
+      if (nextProgram === programOption) return;
+
+      storeProgramOption(leagueId, nextProgram);
+      saveLeagueProgram({ leagueId, program: nextProgram });
+    }, 250);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    isProgramMode,
+    leagueId,
+    programMatches,
+    programOption,
+    programRound,
+    saveLeagueProgram,
+  ]);
+
   const tournamentBracketIndexes = useMemo(
     () => [...new Set(programMatches.map((match) => match.tournament_bracket_index ?? 1))].sort((a, b) => a - b),
     [programMatches],

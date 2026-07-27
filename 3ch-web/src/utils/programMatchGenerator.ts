@@ -1,6 +1,11 @@
 import type { LeagueMatch, LeagueParticipantItem } from "../features/league/leagueApi";
 import { distributeSnake } from "../features/league/algorithms/distributeSnake";
-import type { FormationAssignmentPlayer, ProgramBlock, ProgramOption } from "../features/league/types/tournament.types";
+import type {
+  FormationAssignmentPlayer,
+  ProgramBlock,
+  ProgramOption,
+  ProgramRoundStandingsSnapshot,
+} from "../features/league/types/tournament.types";
 import { generateRoundRobin } from "./leagueUtils";
 
 export type ProgramMatchPatch = Partial<Pick<
@@ -562,6 +567,7 @@ function getRankedPlayersFromPreviousRound(
   players: ProgramPlayer[],
   sourceMatches: LeagueMatch[],
   previousRound: number,
+  matchRule?: string | null,
 ): ProgramPlayer[] | null {
   const previousMatches = sourceMatches.filter(
     (match) =>
@@ -609,6 +615,14 @@ function getRankedPlayersFromPreviousRound(
     const wins = stats.get(player.id)?.wins ?? 0;
     byWins.set(wins, [...(byWins.get(wins) ?? []), player]);
   });
+  const isThreeSetRule = matchRule === "3세트제" || matchRule === "THREE_SET";
+  const tieGroups = isThreeSetRule
+    ? players.reduce((groups, player) => {
+        const setTotal = stats.get(player.id)?.setTotal ?? 0;
+        groups.set(setTotal, [...(groups.get(setTotal) ?? []), player]);
+        return groups;
+      }, new Map<number, ProgramPlayer[]>())
+    : byWins;
 
   const tieWon = new Map<string, number>();
   const tieLost = new Map<string, number>();
@@ -617,7 +631,7 @@ function getRankedPlayersFromPreviousRound(
     tieLost.set(player.id, 0);
   });
 
-  for (const group of byWins.values()) {
+  for (const group of tieGroups.values()) {
     if (group.length < 2) continue;
     const groupIds = new Set(group.map((player) => player.id));
     previousMatches.forEach((match) => {
@@ -636,10 +650,20 @@ function getRankedPlayersFromPreviousRound(
   return [...players].sort((left, right) => {
     const leftStats = stats.get(left.id)!;
     const rightStats = stats.get(right.id)!;
-    if (leftStats.wins !== rightStats.wins) return rightStats.wins - leftStats.wins;
-
     const leftTieLost = tieLost.get(left.id) ?? 0;
     const rightTieLost = tieLost.get(right.id) ?? 0;
+    if (isThreeSetRule) {
+      if (leftStats.setTotal !== rightStats.setTotal) {
+        return rightStats.setTotal - leftStats.setTotal;
+      }
+      const leftTieWon = tieWon.get(left.id) ?? 0;
+      const rightTieWon = tieWon.get(right.id) ?? 0;
+      if (leftTieWon !== rightTieWon) return rightTieWon - leftTieWon;
+      if (leftTieLost !== rightTieLost) return leftTieLost - rightTieLost;
+      return (playerIndex.get(left.id) ?? 0) - (playerIndex.get(right.id) ?? 0);
+    }
+
+    if (leftStats.wins !== rightStats.wins) return rightStats.wins - leftStats.wins;
     const leftRatio = leftTieLost === 0 ? Infinity : (tieWon.get(left.id) ?? 0) / leftTieLost;
     const rightRatio = rightTieLost === 0 ? Infinity : (tieWon.get(right.id) ?? 0) / rightTieLost;
     if (leftRatio !== rightRatio) return rightRatio - leftRatio;
@@ -652,6 +676,7 @@ function getRankedGroupsFromPreviousRound(
   players: ProgramPlayer[],
   sourceMatches: LeagueMatch[],
   previousRound: number,
+  matchRule?: string | null,
 ): ProgramPlayer[][] | null {
   const previousMatches = sourceMatches.filter(
     (match) =>
@@ -673,7 +698,12 @@ function getRankedGroupsFromPreviousRound(
       const player = playerById.get(id);
       return player ? [player] : [];
     });
-    return getRankedPlayersFromPreviousRound(groupPlayers, labelMatches, previousRound) ?? groupPlayers;
+    return getRankedPlayersFromPreviousRound(
+      groupPlayers,
+      labelMatches,
+      previousRound,
+      matchRule,
+    ) ?? groupPlayers;
   }).filter((group) => group.length > 0);
 }
 
@@ -754,6 +784,7 @@ function getRankedUnitPools(
       rankingPlayers,
       sourceMatches,
       sourceRound,
+      previousBlock?.matchRule,
     );
     return rankedGroups?.map((group) =>
       group.flatMap((player) => {
@@ -767,6 +798,7 @@ function getRankedUnitPools(
     rankingPlayers,
     sourceMatches,
     sourceRound,
+    previousBlock?.matchRule,
   );
   return ranked
     ? [ranked.flatMap((player) => {
@@ -774,6 +806,169 @@ function getRankedUnitPools(
         return unit ? [unit] : [];
       })]
     : null;
+}
+
+function getSavedRankedUnitPools(
+  option: ProgramOption | null,
+  sourceRound: number,
+  units: MatchUnit[],
+): MatchUnit[][] | null {
+  const snapshot = option?.roundStandings?.find(
+    (item) => item.round === sourceRound,
+  );
+  if (!snapshot) return null;
+
+  const unitById = new Map(
+    units.flatMap((unit) => unit.id ? [[unit.id, unit] as const] : []),
+  );
+  const placeholderPools = buildRankPlaceholderPools(
+    snapshot.pools.map((pool) => pool.participantIds.length),
+  );
+  const pools = snapshot.pools.map((pool, poolIndex) => {
+    if (!pool.complete) return placeholderPools[poolIndex] ?? [];
+    return pool.participantIds.flatMap((id) => {
+      const unit = unitById.get(id);
+      return unit ? [unit] : [];
+    });
+  });
+
+  return pools.length > 0 && pools.every((pool) => pool.length > 0)
+    ? pools
+    : null;
+}
+
+export function buildProgramRoundStandingsSnapshot(
+  option: ProgramOption | null,
+  round: number,
+  sourceMatches: LeagueMatch[],
+): ProgramRoundStandingsSnapshot | null {
+  const block = option?.blocks?.[round - 1];
+  if (!block) return null;
+
+  const roundMatches = sourceMatches.filter(
+    (match) =>
+      (match.program_round ?? match.round_number) === round &&
+      !match.is_no_game,
+  );
+  if (roundMatches.length === 0) return null;
+
+  const unitById = new Map<string, MatchUnit>();
+  roundMatches.forEach((match) => {
+    if (match.participant_a_id && !match.participant_a_id.startsWith("placeholder-")) {
+      unitById.set(match.participant_a_id, {
+        id: match.participant_a_id,
+        name: match.participant_a_name,
+        division: match.participant_a_division,
+      });
+    }
+    if (match.participant_b_id && !match.participant_b_id.startsWith("placeholder-")) {
+      unitById.set(match.participant_b_id, {
+        id: match.participant_b_id,
+        name: match.participant_b_name,
+        division: match.participant_b_division,
+      });
+    }
+  });
+
+  if (block.format === "GROUP") {
+    const labels = [...new Set(
+      roundMatches.map((match) => match.match_label).filter(Boolean) as string[],
+    )].sort((left, right) =>
+      (Number.parseInt(left, 10) || 0) - (Number.parseInt(right, 10) || 0)
+    );
+    if (labels.length === 0) return null;
+
+    const rankingPlayers = asRankingPlayers([...unitById.values()]);
+    const playerById = new Map(rankingPlayers.map((player) => [player.id, player]));
+    const pools = labels.map((label) => {
+      const labelMatches = roundMatches.filter((match) => match.match_label === label);
+      const participantIds = [...new Set(
+        labelMatches.flatMap((match) =>
+          [match.participant_a_id, match.participant_b_id].filter(Boolean) as string[]
+        ),
+      )];
+      const groupPlayers = participantIds.flatMap((id) => {
+        const player = playerById.get(id);
+        return player ? [player] : [];
+      });
+      const rankedPlayers = getRankedPlayersFromPreviousRound(
+        groupPlayers,
+        labelMatches,
+        round,
+        block.matchRule,
+      );
+
+      return {
+        label,
+        complete: rankedPlayers !== null,
+        participantIds: (rankedPlayers ?? groupPlayers).map((player) => player.id),
+      };
+    });
+
+    return {
+      round,
+      complete: pools.every((pool) => pool.complete),
+      pools,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  const rankedPools = getRankedUnitPools(
+    [...unitById.values()],
+    roundMatches,
+    round,
+    block,
+  );
+  if (!rankedPools) return null;
+
+  return {
+    round,
+    complete: true,
+    pools: rankedPools.map((pool, index) => ({
+      label: `${index + 1}`,
+      complete: true,
+      participantIds: pool.flatMap((unit) => unit.id ? [unit.id] : []),
+    })),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+export function withProgramRoundStandingsSnapshot(
+  option: ProgramOption,
+  round: number,
+  sourceMatches: LeagueMatch[],
+): ProgramOption {
+  const snapshot = buildProgramRoundStandingsSnapshot(option, round, sourceMatches);
+  const existing = option.roundStandings?.find((item) => item.round === round);
+  const remaining = (option.roundStandings ?? []).filter((item) => item.round !== round);
+
+  if (!snapshot) {
+    return existing
+      ? { ...option, roundStandings: remaining }
+      : option;
+  }
+
+  const existingPools = existing?.pools.map((pool) => ({
+    label: pool.label,
+    complete: pool.complete,
+    participantIds: pool.participantIds,
+  }));
+  const nextPools = snapshot.pools.map((pool) => ({
+    label: pool.label,
+    complete: pool.complete,
+    participantIds: pool.participantIds,
+  }));
+  if (
+    existing?.complete === snapshot.complete &&
+    JSON.stringify(existingPools) === JSON.stringify(nextPools)
+  ) {
+    return option;
+  }
+
+  return {
+    ...option,
+    roundStandings: [...remaining, snapshot].sort((left, right) => left.round - right.round),
+  };
 }
 
 function distributeRankedUnitPoolsToBrackets(
@@ -1038,6 +1233,10 @@ export function saveProgramMatchPatch(leagueId: string, round: number, matchId: 
   return state;
 }
 
+export function storeProgramOption(leagueId: string, option: ProgramOption) {
+  localStorage.setItem(`league-program-${leagueId}`, JSON.stringify(option));
+}
+
 export function clearProgramMatchState(leagueId: string, round: number) {
   localStorage.removeItem(getProgramMatchStateKey(leagueId, round));
 }
@@ -1134,6 +1333,9 @@ export function generateProgramRoundMatches(
   round: number,
   sourceMatches: LeagueMatch[] = [],
 ): LeagueMatch[] {
+  // Kept in the public signature for callers that assemble prior-round matches.
+  // Final-round qualification now comes exclusively from persisted standings.
+  void sourceMatches;
   const storedBlock = option?.blocks?.[round - 1];
   const currentRound = option?.rounds?.[round - 1];
   if (!storedBlock || participants.length < 2) return [];
@@ -1191,8 +1393,10 @@ export function generateProgramRoundMatches(
     );
   const sourceRound = block.sourceRoundId ?? round - 1;
   const previousBlock = option?.blocks?.[sourceRound - 1];
+  // A later round never recalculates standings from its own generation path.
+  // It only consumes the snapshot finalized and saved by the source round.
   const rankedPools = isFinalRound
-    ? getRankedUnitPools(matchUnits, sourceMatches, sourceRound, previousBlock)
+    ? getSavedRankedUnitPools(option, sourceRound, matchUnits)
     : null;
   const finalMode = block.finalAdvancementMode ?? "top-n";
   const advanceCount = Math.max(1, block.advanceCount ?? 2);

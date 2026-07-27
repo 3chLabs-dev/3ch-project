@@ -82,6 +82,20 @@ export interface ProgramOption {
   totalProgramMinutes: number;
   isOverTime: boolean;
   rounds?: RoundConfig[];
+  roundStandings?: ProgramRoundStandingsSnapshot[];
+}
+
+export interface ProgramRoundStandingPool {
+  label: string;
+  complete: boolean;
+  participantIds: string[];
+}
+
+export interface ProgramRoundStandingsSnapshot {
+  round: number;
+  complete: boolean;
+  pools: ProgramRoundStandingPool[];
+  updatedAt: string;
 }
 
 export interface ProgramBlock {

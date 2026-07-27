@@ -48,6 +48,8 @@ import {
   generateProgramRoundMatches,
   getStoredProgramOption,
   saveProgramMatchPatch,
+  storeProgramOption,
+  withProgramRoundStandingsSnapshot,
   type ProgramMatchPatch,
 } from "../../utils/programMatchGenerator";
 import {
@@ -1439,6 +1441,32 @@ export default function LeagueGPTVisionSheet() {
   const [reorderParticipants] = useReorderLeagueParticipantsMutation();
   const [saveLeagueProgram] = useSaveLeagueProgramMutation();
   const [syncProgramMatches] = useSyncLeagueProgramMatchesMutation();
+
+  useEffect(() => {
+    if (!isProgramMode || !id || !programOption || programMatchesAll.length === 0) return;
+
+    const timeoutId = window.setTimeout(() => {
+      const nextProgram = withProgramRoundStandingsSnapshot(
+        programOption,
+        programRound,
+        programMatchesAll,
+      );
+      if (nextProgram === programOption) return;
+
+      storeProgramOption(id, nextProgram);
+      saveLeagueProgram({ leagueId: id, program: nextProgram });
+    }, 250);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    id,
+    isProgramMode,
+    programMatchesAll,
+    programOption,
+    programRound,
+    saveLeagueProgram,
+  ]);
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),   // 마우스: 8px 이상 이동 시 드래그 시작
     useSensor(TouchSensor,   { activationConstraint: { delay: 200, tolerance: 5 } }), // 터치: 200ms 롱프레스 후 드래그

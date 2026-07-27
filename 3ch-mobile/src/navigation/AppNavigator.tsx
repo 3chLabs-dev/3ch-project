@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useWindowDimensions } from "react-native";
 import { ContentScreen } from "../screens/ContentScreen";
 import { ClubRankingScreen } from "../screens/ClubRankingScreen";
 import { DonateScreen } from "../screens/DonateScreen";
@@ -50,9 +51,11 @@ const icons: Record<string, keyof typeof Ionicons.glyphMap> = {
 
 function MainTabs() {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const isTablet = width >= 768;
   const bottomInset = Math.max(insets.bottom, 6);
 
-  return <Tab.Navigator screenOptions={({ route }) => ({ headerShown: false, tabBarActiveTintColor: colors.primary, tabBarInactiveTintColor: colors.muted, tabBarLabelStyle: { fontSize: 11, fontWeight: "700" }, tabBarStyle: { height: 56 + bottomInset, paddingTop: 5, paddingBottom: bottomInset, borderTopColor: colors.border, backgroundColor: colors.surface }, tabBarIcon: ({ color, size }) => <Ionicons name={icons[route.name]} color={color} size={size} /> })}>
+  return <Tab.Navigator screenOptions={({ route }) => ({ headerShown: false, tabBarActiveTintColor: colors.primary, tabBarInactiveTintColor: colors.muted, tabBarLabelStyle: { fontSize: isTablet ? 12 : 11, fontWeight: "700" }, tabBarStyle: { height: (isTablet ? 64 : 56) + bottomInset, paddingTop: isTablet ? 8 : 5, paddingBottom: bottomInset, borderTopColor: colors.border, backgroundColor: colors.surface }, tabBarIcon: ({ color, size }) => <Ionicons name={icons[route.name]} color={color} size={isTablet ? Math.max(size, 24) : size} /> })}>
     <Tab.Screen name="홈" component={HomeScreen} />
     <Tab.Screen name="리그·대회" component={LeagueNavigator} />
     <Tab.Screen name="클럽" component={GroupNavigator} />

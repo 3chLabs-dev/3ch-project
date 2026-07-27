@@ -6,6 +6,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
 import {
@@ -26,6 +27,8 @@ const banner = require("../../assets/home-banner.png");
 
 export function HomeScreen() {
   const navigation = useNavigation<any>();
+  const { width } = useWindowDimensions();
+  const isTablet = width >= 768;
   const dispatch = useAppDispatch();
   const user = useAppSelector((state) => state.auth.user);
   const preferredGroupId = useAppSelector((state) => state.app.preferredGroupId);
@@ -54,7 +57,7 @@ export function HomeScreen() {
 
   return (
     <Screen contentStyle={styles.screen} refreshing={refreshing} onRefresh={refresh}>
-      <ImageBackground source={banner} resizeMode="cover" style={styles.hero}>
+      <ImageBackground source={banner} resizeMode="cover" style={[styles.hero, isTablet && styles.heroTablet]}>
         <Pressable style={styles.heroButton} onPress={() => navigation.navigate("리그·대회")}>
           <Text style={styles.heroButtonText}>지금 시작하기</Text>
         </Pressable>
@@ -192,6 +195,7 @@ function formatDate(value?: string) {
 const styles = StyleSheet.create({
   screen: { padding: 0, gap: 0 },
   hero: { width: "100%", aspectRatio: 3 / 2, justifyContent: "flex-end", alignItems: "center", paddingBottom: 24 },
+  heroTablet: { aspectRatio: 16 / 7, paddingBottom: 32 },
   heroButton: {
     paddingHorizontal: 42,
     paddingVertical: 12,

@@ -439,6 +439,41 @@ function buildTournamentMatches(
     previousRoundIds = currentRoundIds;
   }
 
+  const shouldCreateThirdPlaceMatch =
+    block.thirdPlaceMatch ?? (block.tournamentBracketCount ?? 1) === 1;
+  if (bracketSize >= 4 && shouldCreateThirdPlaceMatch) {
+    const finalMatch = matches[matches.length - 1];
+    const finalRound = finalMatch.round_number ?? Math.log2(bracketSize);
+    const semifinalMatches = matches.filter(
+      (match) => match.bracket === "upper" && match.round_number === finalRound - 1,
+    );
+
+    if (semifinalMatches.length === 2) {
+      const thirdPlaceId = `program-${leagueId}-r${roundIndex + 1}-t${bracketIndex}-r${finalRound}-m0`;
+      const thirdPlaceMatch = makeMatch(
+        thirdPlaceId,
+        finalMatch.match_order,
+        { id: null, name: null, division: null },
+        { id: null, name: null, division: null },
+        finalRound,
+        "upper",
+        "3·4위전",
+      );
+
+      semifinalMatches.forEach((semifinal, index) => {
+        semifinal.loser_next_match_id = thirdPlaceId;
+        semifinal.loser_next_slot = index === 0 ? "a" : "b";
+      });
+
+      finalMatch.match_order += 1;
+      finalMatch.match_label = "결승";
+      matches.splice(matches.length - 1, 0, {
+        ...thirdPlaceMatch,
+        tournament_bracket_index: bracketIndex,
+      });
+    }
+  }
+
   return matches;
 }
 

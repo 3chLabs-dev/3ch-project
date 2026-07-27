@@ -136,7 +136,10 @@ interface SlotActions {
  */
 function calcPositions(matches: LeagueMatch[]): MatchPos[] {
   const upper = matches.filter(
-    (m) => m.round_number != null && (!m.bracket || m.bracket === "upper"),
+    (m) =>
+      m.round_number != null &&
+      (!m.bracket || m.bracket === "upper") &&
+      m.match_label !== "3·4위전",
   );
   if (!upper.length) return [];
 
@@ -164,6 +167,30 @@ function calcPositions(matches: LeagueMatch[]): MatchPos[] {
   for (const [r, arr] of byRound) {
     const x = PX + (r - 1) * (MW + RGAP);
     for (const m of arr) result.push({ id: m.id, x, y: PT + (yMap.get(m.id) ?? 0), match: m });
+  }
+
+  const thirdPlaceMatch = matches.find(
+    (m) =>
+      m.round_number != null &&
+      (!m.bracket || m.bracket === "upper") &&
+      m.match_label === "3·4위전",
+  );
+  if (thirdPlaceMatch) {
+    const finalMatch = upper.find((m) => m.match_label === "결승")
+      ?? upper.reduce<LeagueMatch | null>(
+        (latest, match) =>
+          !latest || (match.round_number ?? 0) > (latest.round_number ?? 0)
+            ? match
+            : latest,
+        null,
+      );
+    const finalPos = finalMatch ? result.find((pos) => pos.id === finalMatch.id) : null;
+    const x = finalPos?.x ?? PX + ((thirdPlaceMatch.round_number ?? maxRound) - 1) * (MW + RGAP);
+    const y = Math.max(
+      (finalPos?.y ?? PT) + MH + 56,
+      result.reduce((max, pos) => Math.max(max, pos.y + MH), PT) + 36,
+    );
+    result.push({ id: thirdPlaceMatch.id, x, y, match: thirdPlaceMatch });
   }
   return result;
 }
@@ -543,6 +570,26 @@ function Connectors({ positions }: { positions: MatchPos[] }) {
         const ty = tgt.y + (m.next_slot === "a" ? MH / 4 : (3 * MH) / 4);
         const mx = sx + RGAP / 2;
         return <path key={`c-${id}`} d={`M ${sx} ${sy} H ${mx} V ${ty} H ${tx}`} stroke="#CBD5E1" strokeWidth={1.5} fill="none" />;
+      })}
+      {positions.map(({ id, x, y, match: m }) => {
+        if (!m.loser_next_match_id) return null;
+        const tgt = posById.get(m.loser_next_match_id);
+        if (!tgt) return null;
+        const sx = x + MW / 2;
+        const sy = y + MH;
+        const tx = tgt.x + (m.loser_next_slot === "a" ? MW / 4 : (3 * MW) / 4);
+        const ty = tgt.y;
+        const my = sy + Math.max(18, (ty - sy) / 2);
+        return (
+          <path
+            key={`lc-${id}`}
+            d={`M ${sx} ${sy} V ${my} H ${tx} V ${ty}`}
+            stroke="#CBD5E1"
+            strokeWidth={1.5}
+            strokeDasharray="4 3"
+            fill="none"
+          />
+        );
       })}
     </>
   );
@@ -1004,7 +1051,12 @@ export default function LeagueTournamentBracket() {
     if (isDoubleElim) return new Map<number, string>();
     const map = new Map<number, string>();
     for (const m of matches) {
-      if (m.round_number && m.match_label && (!m.bracket || m.bracket === "upper"))
+      if (
+        m.round_number &&
+        m.match_label &&
+        m.match_label !== "3·4위전" &&
+        (!m.bracket || m.bracket === "upper")
+      )
         map.set(m.round_number, m.match_label);
     }
     return map;
@@ -1148,7 +1200,27 @@ export default function LeagueTournamentBracket() {
                 const visibleSlotActions = (canManage && !isCompleted) || (isProgramMode && manualSeeding)
                   ? slotActions
                   : undefined;
-                if (!isDoubleElim) return <MatchBox key={pos.id} pos={pos} actions={visibleSlotActions} manualSeeding={manualSeeding} />;
+                if (!isDoubleElim) {
+                  return (
+                    <React.Fragment key={pos.id}>
+                      {pos.match.match_label === "3·4위전" && (
+                        <Typography sx={{
+                          position: "absolute",
+                          left: pos.x,
+                          top: pos.y - 24,
+                          width: MW,
+                          textAlign: "center",
+                          fontSize: 12,
+                          fontWeight: 800,
+                          color: "#64748B",
+                        }}>
+                          3·4위전
+                        </Typography>
+                      )}
+                      <MatchBox pos={pos} actions={visibleSlotActions} manualSeeding={manualSeeding} />
+                    </React.Fragment>
+                  );
+                }
                 return (
                   <React.Fragment key={pos.id}>
                     <SingleSlotBox pos={pos} slot="a" actions={visibleSlotActions} manualSeeding={manualSeeding} />

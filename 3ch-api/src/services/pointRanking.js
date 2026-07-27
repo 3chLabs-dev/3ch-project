@@ -401,8 +401,13 @@ async function getPointRanking(groupId, year, scope, seasonId) {
        m.program_block_type,
        ${rosterSelectSql}
        m.bracket,
+       m.tournament_bracket_index,
        m.round_number,
        m.match_label,
+       m.next_match_id,
+       m.next_slot,
+       m.loser_next_match_id,
+       m.loser_next_slot,
        m.status,
        COALESCE(m.score_a, 0) AS score_a,
        COALESCE(m.score_b, 0) AS score_b,
@@ -583,7 +588,7 @@ async function getPointRanking(groupId, year, scope, seasonId) {
         leagueGroups.set(otherKey, otherExisting);
       }
     } else {
-      const tournamentKey = `${leagueKey}:${match.program_round ?? 0}:${match._rankingOption}:${match.bracket ?? "main"}`;
+      const tournamentKey = `${leagueKey}:${match.program_round ?? 0}:${match._rankingOption}:${match.bracket ?? "main"}:${match.tournament_bracket_index ?? 1}`;
       const existing = tournamentGroups.get(tournamentKey) ?? [];
       existing.push(match);
       tournamentGroups.set(tournamentKey, existing);
@@ -706,11 +711,52 @@ async function getPointRanking(groupId, year, scope, seasonId) {
       }
     });
 
+    const completedOutcome = (match) => {
+      if (!match || match.status !== "done" || Number(match.score_a) === Number(match.score_b)) return null;
+      const aId = Number(match.member_a_id);
+      const bId = Number(match.member_b_id);
+      return Number(match.score_a) > Number(match.score_b)
+        ? { winnerId: aId, loserId: bId }
+        : { winnerId: bId, loserId: aId };
+    };
+    const awardMemberRank = (memberId, rank, rule) => {
+      const row = tournamentRows.get(Number(memberId));
+      if (row) awardBonus(row, rank, rule);
+    };
+    const bonusRule = getBonusRule(pointRules, "tournament", sample._rankingFormat, sample._rankingOption);
+    const finalMatch = matches.find((match) => match.match_label === "결승")
+      ?? [...matches]
+        .filter((match) => match.match_label !== "3·4위전")
+        .sort((a, b) => (Number(b.round_number) || 0) - (Number(a.round_number) || 0))[0];
+    const finalOutcome = completedOutcome(finalMatch);
+
+    if (finalMatch && finalOutcome) {
+      awardMemberRank(finalOutcome.winnerId, 1, bonusRule);
+      awardMemberRank(finalOutcome.loserId, 2, bonusRule);
+
+      const thirdPlaceMatch = matches.find((match) => match.match_label === "3·4위전");
+      const thirdPlaceOutcome = completedOutcome(thirdPlaceMatch);
+      if (thirdPlaceOutcome) {
+        awardMemberRank(thirdPlaceOutcome.winnerId, 3, bonusRule);
+        awardMemberRank(thirdPlaceOutcome.loserId, 4, bonusRule);
+      } else if (!thirdPlaceMatch) {
+        matches
+          .filter(
+            (match) =>
+              match.next_match_id === finalMatch.match_id
+              && Number(match.round_number) === Number(finalMatch.round_number) - 1,
+          )
+          .map(completedOutcome)
+          .filter(Boolean)
+          .forEach((outcome) => awardMemberRank(outcome.loserId, 3, bonusRule));
+      }
+      return;
+    }
+
     const standings = Array.from(statMap.values()).sort((a, b) => {
       if ((b.max_round ?? 0) !== (a.max_round ?? 0)) return (b.max_round ?? 0) - (a.max_round ?? 0);
       return compareStanding(a, b);
     });
-    const bonusRule = getBonusRule(pointRules, "tournament", sample._rankingFormat, sample._rankingOption);
     standings.slice(0, 4).forEach((standing, index) => {
       const row = tournamentRows.get(Number(standing.member_id));
       if (row) awardBonus(row, index + 1, bonusRule);

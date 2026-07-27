@@ -53,8 +53,15 @@ function splitIntoTwoGroups(count: number) {
   return [Math.ceil(count / 2), Math.floor(count / 2)];
 }
 
-function calculateMultipleTournamentMatchCount(count: number, bracketCount = 1) {
-  return Math.max(0, count - Math.min(Math.max(1, bracketCount), count));
+function calculateMultipleTournamentMatchCount(count: number, bracketCount = 1, thirdPlaceMatch = false) {
+  const effectiveBracketCount = Math.min(Math.max(1, bracketCount), count);
+  const baseMatchCount = Math.max(0, count - effectiveBracketCount);
+  if (!thirdPlaceMatch) return baseMatchCount;
+  const bracketsWithSemifinals = Array.from(
+    { length: effectiveBracketCount },
+    (_, index) => Math.floor(count / effectiveBracketCount) + (index < count % effectiveBracketCount ? 1 : 0),
+  ).filter((size) => size >= 4).length;
+  return baseMatchCount + bracketsWithSemifinals;
 }
 
 export function generateProgramBlocks(
@@ -137,7 +144,7 @@ export function generateProgramBlocks(
     }
 
     if (round.format === "TOURNAMENT") {
-      matchCount = calculateMultipleTournamentMatchCount(playerCount, round.tournamentBracketCount);
+      matchCount = calculateMultipleTournamentMatchCount(playerCount, round.tournamentBracketCount, round.thirdPlaceMatch);
     }
 
   const duration =
@@ -163,6 +170,7 @@ export function generateProgramBlocks(
       groupAssignments: round.groupAssignments,
       teamAssignments: round.teamAssignments,
       tournamentBracketCount: round.tournamentBracketCount ?? 1,
+      thirdPlaceMatch: round.thirdPlaceMatch ?? (round.tournamentBracketCount ?? 1) === 1,
       tournamentSeeding: round.tournamentSeeding,
       tournamentMode: round.tournamentMode,
       finalAdvancementMode: round.finalAdvancementMode,
@@ -189,7 +197,7 @@ export function generateProgramBlocks(
     }
 
     if (round.format === "TOURNAMENT") {
-      matchCount = calculateMultipleTournamentMatchCount(Math.floor(playerCount / 2), round.tournamentBracketCount);
+      matchCount = calculateMultipleTournamentMatchCount(Math.floor(playerCount / 2), round.tournamentBracketCount, round.thirdPlaceMatch);
     }
     const duration =
       calculateDuration(
@@ -215,6 +223,7 @@ export function generateProgramBlocks(
         teamAssignments: round.teamAssignments,
         doublesAssignments: round.doublesAssignments,
         tournamentBracketCount: round.tournamentBracketCount ?? 1,
+        thirdPlaceMatch: round.thirdPlaceMatch ?? (round.tournamentBracketCount ?? 1) === 1,
         tournamentSeeding: round.tournamentSeeding,
         tournamentMode: round.tournamentMode,
         finalAdvancementMode: round.finalAdvancementMode,
@@ -259,7 +268,7 @@ export function generateProgramBlocks(
       }
 
       if (round.format === "TOURNAMENT") {
-        matchCount = calculateMultipleTournamentMatchCount(teamCount, round.tournamentBracketCount);
+        matchCount = calculateMultipleTournamentMatchCount(teamCount, round.tournamentBracketCount, round.thirdPlaceMatch);
       }
 
     const duration =
@@ -289,6 +298,7 @@ export function generateProgramBlocks(
         groupAssignments: round.groupAssignments,
         teamAssignments: round.teamAssignments,
         tournamentBracketCount: round.tournamentBracketCount ?? 1,
+        thirdPlaceMatch: round.thirdPlaceMatch ?? (round.tournamentBracketCount ?? 1) === 1,
         tournamentSeeding: round.tournamentSeeding,
         tournamentMode: round.tournamentMode,
         finalAdvancementMode: round.finalAdvancementMode,

@@ -58,6 +58,7 @@ const newRound = (id: number): RenewalRoundConfig => ({
   teamMatchType: null,
   tournamentSeeding: "seed",
   tournamentBracketCount: 1,
+  thirdPlaceMatch: true,
   tournamentMode: "single",
   finalAdvancementMode: "top-n",
   advanceCount: 2,
@@ -188,6 +189,7 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
       tournamentSeeding: "seed",
       tournamentBracketCount:
         format === "TOURNAMENT" ? rounds[index].tournamentBracketCount ?? 1 : 1,
+      thirdPlaceMatch: format === "TOURNAMENT" ? rounds[index].thirdPlaceMatch ?? true : undefined,
       finalAdvancementMode: "top-n",
       advanceCount: rounds[index].advanceCount ?? 2,
       sourceRoundId: index > 0 ? rounds[index - 1].id : undefined,
@@ -494,9 +496,13 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
                   select
                   fullWidth
                   value={round.tournamentBracketCount ?? 1}
-                  onChange={(event) =>
-                    updateRound(index, { tournamentBracketCount: Number(event.target.value) })
-                  }
+                  onChange={(event) => {
+                    const tournamentBracketCount = Number(event.target.value);
+                    updateRound(index, {
+                      tournamentBracketCount,
+                      thirdPlaceMatch: tournamentBracketCount === 1,
+                    });
+                  }}
                   size="small"
                 >
                   {Array.from({ length: 8 }, (_, optionIndex) => optionIndex + 1).map((count) => (
@@ -505,6 +511,25 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
                 </TextField>
               </Box>
             )}
+
+          {round.format === "TOURNAMENT" && (
+            <Box sx={{ mt: 2 }}>
+              <Typography sx={{ fontWeight: 900, mb: 0.5 }}>3·4위전</Typography>
+              <RadioGroup
+                row
+                value={(round.thirdPlaceMatch ?? (round.tournamentBracketCount ?? 1) === 1) ? "yes" : "no"}
+                onChange={(event) =>
+                  updateRound(index, { thirdPlaceMatch: event.target.value === "yes" })
+                }
+              >
+                <FormControlLabel value="yes" control={<Radio />} label="진행" />
+                <FormControlLabel value="no" control={<Radio />} label="진행 안 함" />
+              </RadioGroup>
+              <Typography sx={descriptionSx}>
+                진행하지 않으면 4강 탈락자 두 명이 공동 3위가 됩니다.
+              </Typography>
+            </Box>
+          )}
 
           {hasParticipatingClubs && round.format !== "LEAGUE" && (
             <Box sx={{ mt: 2 }}>

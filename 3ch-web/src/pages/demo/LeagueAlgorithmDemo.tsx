@@ -311,7 +311,13 @@ function RoundDivisionEditor({
             <div style={{ fontWeight: 700, marginBottom: "8px" }}>대진표 개수</div>
             <select
               value={round.tournamentBracketCount ?? 1}
-              onChange={(event) => update({ tournamentBracketCount: Number(event.target.value) })}
+              onChange={(event) => {
+                const tournamentBracketCount = Number(event.target.value);
+                update({
+                  tournamentBracketCount,
+                  thirdPlaceMatch: tournamentBracketCount === 1,
+                });
+              }}
               style={controlStyle}
             >
               {Array.from({ length: 8 }, (_, index) => index + 1).map((count) => (
@@ -320,6 +326,26 @@ function RoundDivisionEditor({
             </select>
           </div>
         )}
+
+      {round.format === "TOURNAMENT" && (
+        <div style={{ marginTop: "16px" }}>
+          <div style={{ fontWeight: 700, marginBottom: "8px" }}>3·4위전</div>
+          <ToggleButtonGroup
+            exclusive
+            fullWidth
+            value={(round.thirdPlaceMatch ?? (round.tournamentBracketCount ?? 1) === 1) ? "yes" : "no"}
+            onChange={(_, value) => {
+              if (value) update({ thirdPlaceMatch: value === "yes" });
+            }}
+          >
+            <ToggleButton value="yes">진행</ToggleButton>
+            <ToggleButton value="no">진행 안 함</ToggleButton>
+          </ToggleButtonGroup>
+          <p style={helperStyle}>
+            진행하지 않으면 4강 탈락자 두 명이 공동 3위가 됩니다.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

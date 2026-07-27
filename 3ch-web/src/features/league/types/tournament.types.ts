@@ -122,6 +122,7 @@ export interface ProgramBlock {
   teamAssignments?: FormationAssignmentPlayer[][];
   doublesAssignments?: FormationAssignmentPlayer[][];
   tournamentBracketCount?: number;
+  thirdPlaceMatch?: boolean;
   tournamentSeeding?: TournamentSeedingType;
   tournamentMode?: TournamentMode;
   finalAdvancementMode?: FinalAdvancementMode;
@@ -210,6 +211,7 @@ export interface RoundConfig {
   teamAssignments?: FormationAssignmentPlayer[][];
   doublesAssignments?: FormationAssignmentPlayer[][];
   tournamentBracketCount?: number;
+  thirdPlaceMatch?: boolean;
   tournamentSeeding?: TournamentSeedingType;
   tournamentMode?: TournamentMode;
   finalAdvancementMode?: FinalAdvancementMode;

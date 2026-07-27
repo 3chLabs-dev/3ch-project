@@ -1,5 +1,3 @@
--- This migration was partially reflected in the production schema before Prisma
--- recorded it as failed.  Keep the DDL safe to retry after `migrate resolve`.
 ALTER TABLE league_participants
 ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'active',
 ADD COLUMN IF NOT EXISTS withdrawn_at TIMESTAMP(3);

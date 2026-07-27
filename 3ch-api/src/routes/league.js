@@ -349,32 +349,6 @@ router.post('/match/:match_id/result', async (req, res) => {
   }
 });
 
-// 컬럼 자동 추가
-pool.query(`
-  ALTER TABLE leagues
-    ADD COLUMN IF NOT EXISTS tournament_seeding TEXT,
-    ADD COLUMN IF NOT EXISTS tournament_advancement TEXT,
-    ADD COLUMN IF NOT EXISTS tournament_rules TEXT,
-    ADD COLUMN IF NOT EXISTS advance_count INT,
-    ADD COLUMN IF NOT EXISTS advance_method TEXT,
-    ADD COLUMN IF NOT EXISTS finals_advance INT
-`).catch((e) => console.error('leagues 컬럼 추가 실패:', e.message));
-
-// 토너먼트 경기 컬럼 자동 추가
-pool.query(`
-  ALTER TABLE league_matches
-    ADD COLUMN IF NOT EXISTS bracket TEXT,
-    ADD COLUMN IF NOT EXISTS round_number INT,
-    ADD COLUMN IF NOT EXISTS match_label TEXT,
-    ADD COLUMN IF NOT EXISTS next_match_id TEXT,
-    ADD COLUMN IF NOT EXISTS next_slot TEXT,
-    ADD COLUMN IF NOT EXISTS loser_next_match_id TEXT,
-    ADD COLUMN IF NOT EXISTS loser_next_slot TEXT,
-    ADD COLUMN IF NOT EXISTS is_program BOOLEAN NOT NULL DEFAULT FALSE,
-    ADD COLUMN IF NOT EXISTS program_round INT,
-    ADD COLUMN IF NOT EXISTS program_block_type TEXT
-`).catch((e) => console.error('league_matches 컬럼 추가 실패:', e.message));
-
 // ─── 토너먼트 브래킷 생성 유틸 ───────────────────────────────────────────────
 
 /**

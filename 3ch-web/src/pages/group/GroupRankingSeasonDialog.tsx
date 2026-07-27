@@ -19,6 +19,8 @@ import {
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import AddIcon from "@mui/icons-material/Add";
+import RemoveIcon from "@mui/icons-material/Remove";
 import {
   useCreateGroupRankingSeasonMutation,
   useDeleteGroupRankingSeasonMutation,
@@ -40,14 +42,34 @@ const DEFAULT_POINT_RULES: GroupRankingPointRules = {
   matchPoints: {
     mode: "sets",
     winPoints: 3,
-    eventTypes: { singles: true, doubles: false, team: false },
+    eventTypes: { singles: true, doubles: true, team: true },
   },
   rankings: {
-    league: { first: 30, second: 20, thirdFourth: 10 },
-    group: { first: 30, second: 15, thirdFourth: 10 },
-    tournamentUpper: { first: 50, second: 30, thirdFourth: 20 },
-    tournamentLower: { first: 20, second: 10, thirdFourth: 7 },
+    league: { first: 30, second: 20, third: 10, fourth: 10 },
+    group: { first: 30, second: 15, third: 10, fourth: 10 },
+    tournamentUpper: { first: 50, second: 30, third: 20, fourth: 20 },
+    tournamentLower: { first: 20, second: 10, third: 7, fourth: 7 },
   },
+};
+
+type RankingRuleKey = keyof GroupRankingPointRules["rankings"];
+
+const normalizeRankingRules = (
+  saved: Partial<GroupRankingPointRules["rankings"]> | undefined,
+): GroupRankingPointRules["rankings"] => {
+  const keys: RankingRuleKey[] = ["league", "group", "tournamentUpper", "tournamentLower"];
+  return keys.reduce((result, key) => {
+    const fallback = DEFAULT_POINT_RULES.rankings[key];
+    const rule = saved?.[key];
+    const legacyThirdFourth = rule?.thirdFourth;
+    result[key] = {
+      first: rule?.first ?? fallback.first,
+      second: rule?.second ?? fallback.second,
+      third: rule?.third ?? legacyThirdFourth ?? fallback.third,
+      fourth: rule?.fourth ?? legacyThirdFourth ?? fallback.fourth,
+    };
+    return result;
+  }, {} as GroupRankingPointRules["rankings"]);
 };
 
 const dateOnly = (date: Date) => {
@@ -90,7 +112,7 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
                 ...savedRules.matchPoints?.eventTypes,
               },
             },
-            rankings: { ...DEFAULT_POINT_RULES.rankings, ...savedRules.rankings },
+            rankings: normalizeRankingRules(savedRules.rankings),
           }
         : DEFAULT_POINT_RULES);
     } else {
@@ -125,7 +147,7 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
 
   const updateRanking = (
     key: keyof GroupRankingPointRules["rankings"],
-    rank: "first" | "second" | "thirdFourth",
+    rank: "first" | "second" | "third" | "fourth",
     value: number,
   ) => {
     setPointRules((previous) => ({
@@ -185,7 +207,42 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
           </Stack>
           <Box>
             <Typography sx={{ fontSize: 13, fontWeight: 800, mb: 0.5 }}>경기당 승점</Typography>
-            <Stack direction="row" spacing={0.5} sx={{ mb: 0.5 }}>
+            <Typography sx={{ fontSize: 12, fontWeight: 800, color: "text.secondary", mb: 0.25 }}>
+              점수 계산 방식
+            </Typography>
+            <RadioGroup
+              value={pointRules.matchPoints.mode}
+              onChange={(event) => updateMatchPoints({ mode: event.target.value as "sets" | "win" })}
+              sx={{ alignItems: "flex-start" }}
+            >
+              <FormControlLabel
+                value="sets"
+                control={<Radio size="small" />}
+                label={<Typography sx={{ fontSize: 13 }}>획득한 세트스코어</Typography>}
+                sx={{ m: 0 }}
+              />
+              <FormControlLabel
+                value="win"
+                control={<Radio size="small" />}
+                label={(
+                  <Stack direction="row" spacing={0.75} alignItems="center">
+                    <Typography sx={{ fontSize: 13 }}>승점</Typography>
+                    <StepPointInput
+                      value={pointRules.matchPoints.winPoints}
+                      onChange={(value) => updateMatchPoints({ winPoints: value })}
+                      ariaLabel="경기당 승점"
+                    />
+                    <Typography sx={{ fontSize: 13 }}>점</Typography>
+                  </Stack>
+                )}
+                sx={{ m: 0 }}
+              />
+            </RadioGroup>
+            <Divider sx={{ my: 1.25 }} />
+            <Typography sx={{ fontSize: 12, fontWeight: 800, color: "text.secondary", mb: 0.25 }}>
+              반영 종목
+            </Typography>
+            <Stack direction="row" spacing={0.5} sx={{ mb: 0.5, pl: 0 }}>
               {([
                 ["singles", "단식"],
                 ["doubles", "복식"],
@@ -206,35 +263,43 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
                     />
                   )}
                   label={<Typography sx={{ fontSize: 13 }}>{label}</Typography>}
-                  sx={{ m: 0, mr: 1 }}
+                  sx={{
+                    m: 0,
+                    mr: 1,
+                    "& .MuiCheckbox-root": { p: "9px" },
+                  }}
                 />
               ))}
             </Stack>
-            <RadioGroup
-              value={pointRules.matchPoints.mode}
-              onChange={(event) => updateMatchPoints({ mode: event.target.value as "sets" | "win" })}
-            >
-              <FormControlLabel
-                value="sets"
-                control={<Radio size="small" />}
-                label={<Typography sx={{ fontSize: 13 }}>획득한 세트스코어</Typography>}
-              />
-              <FormControlLabel
-                value="win"
-                control={<Radio size="small" />}
-                label={(
-                  <Stack direction="row" spacing={0.75} alignItems="center">
-                    <Typography sx={{ fontSize: 13 }}>승점</Typography>
-                    <PointInput
-                      value={pointRules.matchPoints.winPoints}
-                      onChange={(value) => updateMatchPoints({ winPoints: value })}
-                      ariaLabel="경기당 승점"
-                    />
-                    <Typography sx={{ fontSize: 13 }}>점</Typography>
-                  </Stack>
+            {(pointRules.matchPoints.eventTypes.doubles || pointRules.matchPoints.eventTypes.team) && (
+              <Box
+                sx={{
+                  mt: 1,
+                  px: 1.5,
+                  py: 1.25,
+                  border: "1px solid #D9E5F5",
+                  borderRadius: 1,
+                  bgcolor: "#F6F9FD",
+                }}
+              >
+                <Typography sx={{ fontSize: 12.5, fontWeight: 800, color: "#1F2937", mb: 0.5 }}>
+                  복식·단체전 개인 포인트 계산
+                </Typography>
+                {pointRules.matchPoints.eventTypes.doubles && (
+                  <Typography sx={{ fontSize: 12, color: "text.secondary", lineHeight: 1.6 }}>
+                    복식: {pointRules.matchPoints.mode === "sets" ? "획득한 세트스코어" : `승점 ${pointRules.matchPoints.winPoints}점`} ÷ 2명
+                  </Typography>
                 )}
-              />
-            </RadioGroup>
+                {pointRules.matchPoints.eventTypes.team && (
+                  <Typography sx={{ fontSize: 12, color: "text.secondary", lineHeight: 1.6 }}>
+                    단체전: {pointRules.matchPoints.mode === "sets" ? "획득한 세트스코어" : `승점 ${pointRules.matchPoints.winPoints}점`} ÷ 실제 팀원 수
+                  </Typography>
+                )}
+                <Typography sx={{ mt: 0.4, fontSize: 11.5, color: "#1976D2", fontWeight: 700 }}>
+                  계산된 개인 포인트는 소수점 첫째 자리까지 반올림합니다.
+                </Typography>
+              </Box>
+            )}
           </Box>
           <Stack spacing={1.5}>
             <RankingPointRow label="단일리그" values={pointRules.rankings.league} onChange={(rank, value) => updateRanking("league", rank, value)} />
@@ -280,11 +345,50 @@ function PointInput({ value, onChange, ariaLabel }: { value: number; onChange: (
   );
 }
 
+function StepPointInput({ value, onChange, ariaLabel }: { value: number; onChange: (value: number) => void; ariaLabel: string }) {
+  return (
+    <Stack direction="row" alignItems="center" spacing={0.25}>
+      <IconButton
+        size="small"
+        aria-label={`${ariaLabel} 감소`}
+        disabled={value <= 0}
+        onClick={() => onChange(Math.max(0, value - 1))}
+        sx={{ width: 32, height: 32 }}
+      >
+        <RemoveIcon fontSize="small" />
+      </IconButton>
+      <TextField
+        size="small"
+        type="number"
+        value={value}
+        onChange={(event) => onChange(Math.max(0, Number(event.target.value) || 0))}
+        inputProps={{ min: 0, max: 10000, inputMode: "numeric", "aria-label": ariaLabel }}
+        sx={{
+          width: 58,
+          "& input": { textAlign: "center", px: 0.5, py: 0.7, fontWeight: 700 },
+          "& input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button": {
+            WebkitAppearance: "none",
+            m: 0,
+          },
+        }}
+      />
+      <IconButton
+        size="small"
+        aria-label={`${ariaLabel} 증가`}
+        onClick={() => onChange(value + 1)}
+        sx={{ width: 32, height: 32 }}
+      >
+        <AddIcon fontSize="small" />
+      </IconButton>
+    </Stack>
+  );
+}
+
 function PointRow({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
   return (
     <Stack direction="row" alignItems="center">
       <Typography sx={{ flex: 1, fontSize: 13, fontWeight: 700 }}>{label}</Typography>
-      <PointInput value={value} onChange={onChange} ariaLabel={`${label} 포인트`} />
+      <StepPointInput value={value} onChange={onChange} ariaLabel={`${label} 포인트`} />
       <Typography sx={{ ml: 0.75, fontSize: 13 }}>점</Typography>
     </Stack>
   );
@@ -299,19 +403,28 @@ function RankingPointRow({
 }: {
   label: string;
   values: RankRule;
-  onChange: (rank: "first" | "second" | "thirdFourth", value: number) => void;
+  onChange: (rank: "first" | "second" | "third" | "fourth", value: number) => void;
 }) {
   return (
     <Box>
       <Typography sx={{ fontSize: 13, fontWeight: 800, mb: 0.75 }}>{label}</Typography>
-      <Stack direction="row" spacing={0.75} alignItems="center">
-        <Typography sx={{ fontSize: 12 }}>1위</Typography>
-        <PointInput value={values.first} onChange={(value) => onChange("first", value)} ariaLabel={`${label} 1위 포인트`} />
-        <Typography sx={{ fontSize: 12 }}>2위</Typography>
-        <PointInput value={values.second} onChange={(value) => onChange("second", value)} ariaLabel={`${label} 2위 포인트`} />
-        <Typography sx={{ fontSize: 12 }}>3·4위</Typography>
-        <PointInput value={values.thirdFourth} onChange={(value) => onChange("thirdFourth", value)} ariaLabel={`${label} 3·4위 포인트`} />
-      </Stack>
+      <Box sx={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 0.75 }}>
+        {([
+          ["first", "1위"],
+          ["second", "2위"],
+          ["third", "3위"],
+          ["fourth", "4위"],
+        ] as const).map(([key, rankLabel]) => (
+          <Stack key={key} spacing={0.35} alignItems="flex-start">
+            <Typography sx={{ fontSize: 12 }}>{rankLabel}</Typography>
+            <PointInput
+              value={values[key]}
+              onChange={(value) => onChange(key, value)}
+              ariaLabel={`${label} ${rankLabel} 포인트`}
+            />
+          </Stack>
+        ))}
+      </Box>
     </Box>
   );
 }

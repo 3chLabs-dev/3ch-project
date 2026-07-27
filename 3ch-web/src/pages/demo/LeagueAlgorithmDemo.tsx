@@ -32,6 +32,16 @@ const FORMATION_COLORS = [
   "#6D4C41", // 갈색
 ];
 
+const buildBalancedGroupSizes = (memberCount: number, groupCount: number) => {
+  const safeGroupCount = Math.max(1, Math.min(groupCount, Math.max(1, memberCount)));
+  const baseSize = Math.floor(memberCount / safeGroupCount);
+  const remainder = memberCount % safeGroupCount;
+  return Array.from(
+    { length: safeGroupCount },
+    (_, index) => baseSize + (index < remainder ? 1 : 0),
+  );
+};
+
 const LEGACY_TEAM_MATCH_COUNTS = {
   SSS: { singles: 3, doubles: 0 },
   SDS: { singles: 2, doubles: 1 },
@@ -1041,6 +1051,8 @@ const LeagueAlgorithmDemo = ({
     });
   }, [isCompletingCustomProgram, isCustomProgramCompleted]);
   const [pendingGroupSizes, setPendingGroupSizes] = useState<number[]>([]);
+  const [customGroupCount, setCustomGroupCount] = useState(1);
+  const [groupStructureSelectionSource, setGroupStructureSelectionSource] = useState<"preset" | "custom">("preset");
   const [groupResultDialog, setGroupResultDialog] = useState<{
     optionIndex: number;
     blockIndex: number;
@@ -1658,15 +1670,17 @@ const LeagueAlgorithmDemo = ({
     groupSizes: number[],
     mode: "team" | "group"
   ) => {
-    const baseOption = displayedProgramOptions[optionIndex];
+    const baseOption = customProgramOptions[optionIndex] ?? displayedProgramOptions[optionIndex];
+    const isTeamGroupStructure =
+      mode === "group" && baseOption.blocks[blockIndex]?.type === "TEAM";
     const nextRounds = (baseOption.rounds ?? rounds).map(
       (round, roundIndex) => ({
         ...round,
         id: roundIndex + 1,
-        groupSizes: mode === "team" && roundIndex === blockIndex
+        groupSizes: roundIndex === blockIndex && !isTeamGroupStructure
           ? groupSizes
           : round.groupSizes ?? baseOption.groupSizes,
-        teamGroupSizes: mode === "group" && roundIndex === blockIndex
+        teamGroupSizes: roundIndex === blockIndex && isTeamGroupStructure
           ? groupSizes
           : round.teamGroupSizes,
         teamAssignments: mode === "team" && roundIndex === blockIndex
@@ -1682,10 +1696,10 @@ const LeagueAlgorithmDemo = ({
       nextRounds
     );
 
-    setCustomProgramOptions({
-      ...customProgramOptions,
+    setCustomProgramOptions((previous) => ({
+      ...previous,
       [optionIndex]: updatedOption,
-    });
+    }));
   };
 
   const updateProgramRoundShuffleSeed = (
@@ -1796,9 +1810,13 @@ const LeagueAlgorithmDemo = ({
   ) => {
     const option = displayedProgramOptions[optionIndex];
 
-    setPendingGroupSizes(
-      getStructureSizes(option, blockIndex, mode)
-    );
+    const currentSizes = getStructureSizes(option, blockIndex, mode);
+    setPendingGroupSizes(currentSizes);
+    setCustomGroupCount(Math.max(1, currentSizes.length));
+    const currentMemberCount = currentSizes.reduce((sum, size) => sum + size, 0);
+    const matchesPreset = generateGroupOptions(currentMemberCount)
+      .some((groupOption) => sameGroupSizes(currentSizes, groupOption.groups));
+    setGroupStructureSelectionSource(matchesPreset ? "preset" : "custom");
     setGroupStructureDialog({
       optionIndex,
       blockIndex,
@@ -1809,6 +1827,8 @@ const LeagueAlgorithmDemo = ({
   const closeGroupStructureDialog = () => {
     setGroupStructureDialog(null);
     setPendingGroupSizes([]);
+    setCustomGroupCount(1);
+    setGroupStructureSelectionSource("preset");
   };
 
   const completeGroupStructureDialog = () => {
@@ -1859,6 +1879,11 @@ const LeagueAlgorithmDemo = ({
   const groupStructureOptions = useMemo(
     () => generateGroupOptions(groupStructureOptionCount),
     [groupStructureOptionCount],
+  );
+  const maxCustomGroupCount = Math.max(1, Math.floor(groupStructureOptionCount / 2));
+  const customGroupSizes = useMemo(
+    () => buildBalancedGroupSizes(groupStructureOptionCount, customGroupCount),
+    [groupStructureOptionCount, customGroupCount],
   );
   const isGroupStructureTeam = groupStructureDialog?.mode === "team";
   const groupResultOption =
@@ -3146,7 +3171,7 @@ const LeagueAlgorithmDemo = ({
 
         <DialogContent dividers>
           {groupStructureOptions.map((option) => {
-            const selected = sameGroupSizes(
+            const selected = groupStructureSelectionSource === "preset" && sameGroupSizes(
               groupStructureSizes,
               option.groups
             );
@@ -3156,6 +3181,7 @@ const LeagueAlgorithmDemo = ({
                 key={`${option.tierSize}-${option.groupCount}`}
                 onClick={() => {
                   setPendingGroupSizes(option.groups);
+                  setGroupStructureSelectionSource("preset");
                 }}
                 style={{
                   border: selected
@@ -3212,6 +3238,94 @@ const LeagueAlgorithmDemo = ({
               </div>
             );
           })}
+          <Divider sx={{ my: 2 }} />
+          <Typography sx={{ fontSize: 16, fontWeight: 800, mb: 0.5 }}>
+            직접 설정
+          </Typography>
+          <Typography sx={{ fontSize: 13, color: "text.secondary", mb: 1.5 }}>
+            원하는 {isGroupStructureTeam ? "팀" : "조"} 개수를 선택하면 인원을 최대한 균등하게 배분합니다.
+          </Typography>
+          <Box
+            onClick={() => {
+              setPendingGroupSizes(customGroupSizes);
+              setGroupStructureSelectionSource("custom");
+            }}
+            sx={{
+              border: groupStructureSelectionSource === "custom"
+                ? "2px solid #3B82F6"
+                : "1px solid #D1D5DB",
+              borderRadius: 1,
+              p: 2,
+              bgcolor: groupStructureSelectionSource === "custom" ? "#EFF6FF" : "#FFF",
+              cursor: "pointer",
+            }}
+          >
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <Typography sx={{ flex: 1, fontSize: 14, fontWeight: 800 }}>
+                {isGroupStructureTeam ? "팀" : "조"} 개수
+              </Typography>
+              <IconButton
+                aria-label={`${isGroupStructureTeam ? "팀" : "조"} 개수 감소`}
+                disabled={customGroupCount <= 1}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  const nextCount = Math.max(1, customGroupCount - 1);
+                  setCustomGroupCount(nextCount);
+                  setPendingGroupSizes(buildBalancedGroupSizes(groupStructureOptionCount, nextCount));
+                  setGroupStructureSelectionSource("custom");
+                }}
+                sx={{ width: 36, height: 36, border: "1px solid #D1D5DB" }}
+              >
+                −
+              </IconButton>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                aria-label={`${isGroupStructureTeam ? "팀" : "조"} 개수`}
+                value={customGroupCount}
+                onFocus={(event) => event.currentTarget.select()}
+                onClick={(event) => event.stopPropagation()}
+                onChange={(event) => {
+                  if (event.target.value === "") return;
+                  const nextCount = Math.min(
+                    maxCustomGroupCount,
+                    Math.max(1, Number(event.target.value) || 1),
+                  );
+                  setCustomGroupCount(nextCount);
+                  setPendingGroupSizes(buildBalancedGroupSizes(groupStructureOptionCount, nextCount));
+                  setGroupStructureSelectionSource("custom");
+                }}
+                style={{
+                  width: "52px",
+                  height: "36px",
+                  boxSizing: "border-box",
+                  border: "1px solid #D1D5DB",
+                  borderRadius: "8px",
+                  background: "#FFF",
+                  fontWeight: 800,
+                  textAlign: "center",
+                }}
+              />
+              <IconButton
+                aria-label={`${isGroupStructureTeam ? "팀" : "조"} 개수 증가`}
+                disabled={customGroupCount >= maxCustomGroupCount}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  const nextCount = Math.min(maxCustomGroupCount, customGroupCount + 1);
+                  setCustomGroupCount(nextCount);
+                  setPendingGroupSizes(buildBalancedGroupSizes(groupStructureOptionCount, nextCount));
+                  setGroupStructureSelectionSource("custom");
+                }}
+                sx={{ width: 36, height: 36, border: "1px solid #D1D5DB" }}
+              >
+                +
+              </IconButton>
+            </Stack>
+            <Typography sx={{ mt: 1.25, fontSize: 14, color: "#4B5563" }}>
+              {customGroupCount}개 {isGroupStructureTeam ? "팀" : "조"} · {customGroupSizes.map((size) => `${size}인`).join(" / ")}
+            </Typography>
+          </Box>
         </DialogContent>
 
         <DialogActions>

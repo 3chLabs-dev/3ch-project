@@ -931,13 +931,13 @@ const defaultRankingPointRules = {
   matchPoints: {
     mode: "sets",
     winPoints: 3,
-    eventTypes: { singles: true, doubles: false, team: false },
+    eventTypes: { singles: true, doubles: true, team: true },
   },
   rankings: {
-    league: { first: 30, second: 20, thirdFourth: 10 },
-    group: { first: 30, second: 15, thirdFourth: 10 },
-    tournamentUpper: { first: 50, second: 30, thirdFourth: 20 },
-    tournamentLower: { first: 20, second: 10, thirdFourth: 7 },
+    league: { first: 30, second: 20, third: 10, fourth: 10 },
+    group: { first: 30, second: 15, third: 10, fourth: 10 },
+    tournamentUpper: { first: 50, second: 30, third: 20, fourth: 20 },
+    tournamentLower: { first: 20, second: 10, third: 7, fourth: 7 },
   },
 };
 
@@ -955,30 +955,34 @@ const rankingSeasonSchema = z.object({
       winPoints: z.number().int().min(0).max(1000),
       eventTypes: z.object({
         singles: z.boolean().optional().default(true),
-        doubles: z.boolean().optional().default(false),
-        team: z.boolean().optional().default(false),
+        doubles: z.boolean().optional().default(true),
+        team: z.boolean().optional().default(true),
       }).optional().default(defaultRankingPointRules.matchPoints.eventTypes),
     }).optional().default(defaultRankingPointRules.matchPoints),
     rankings: z.object({
       league: z.object({
         first: z.number().int().min(0).max(10000),
         second: z.number().int().min(0).max(10000),
-        thirdFourth: z.number().int().min(0).max(10000),
+        third: z.number().int().min(0).max(10000),
+        fourth: z.number().int().min(0).max(10000),
       }),
       group: z.object({
         first: z.number().int().min(0).max(10000),
         second: z.number().int().min(0).max(10000),
-        thirdFourth: z.number().int().min(0).max(10000),
+        third: z.number().int().min(0).max(10000),
+        fourth: z.number().int().min(0).max(10000),
       }),
       tournamentUpper: z.object({
         first: z.number().int().min(0).max(10000),
         second: z.number().int().min(0).max(10000),
-        thirdFourth: z.number().int().min(0).max(10000),
+        third: z.number().int().min(0).max(10000),
+        fourth: z.number().int().min(0).max(10000),
       }),
       tournamentLower: z.object({
         first: z.number().int().min(0).max(10000),
         second: z.number().int().min(0).max(10000),
-        thirdFourth: z.number().int().min(0).max(10000),
+        third: z.number().int().min(0).max(10000),
+        fourth: z.number().int().min(0).max(10000),
       }),
     }),
   }).optional().default(defaultRankingPointRules),

@@ -519,13 +519,28 @@ export default function GroupManage() {
                             회원 사전등록
                         </Button>
                     )}
-                    <IconButton
+                    <Button
                         size="small"
+                        variant="outlined"
+                        startIcon={<EmojiEventsOutlinedIcon fontSize="small" />}
                         onClick={() => navigate(`/club/${id}/ranking`)}
-                        sx={{ color: "#D97706" }}
+                        sx={{
+                            borderRadius: 1,
+                            fontWeight: 700,
+                            whiteSpace: "nowrap",
+                            color: "#9A4D00",
+                            borderColor: "#F59E0B",
+                            bgcolor: "#FFF7D6",
+                            "&:hover": {
+                                borderColor: "#D97706",
+                                bgcolor: "#FFEDAD",
+                            },
+                            "& .MuiSvgIcon-root": { color: "#F59E0B" },
+                            "& .MuiButton-startIcon": { mr: 0.5 },
+                        }}
                     >
-                        <EmojiEventsOutlinedIcon />
-                    </IconButton>
+                        순위
+                    </Button>
                 </Stack>
 
                 <Card elevation={2} sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>

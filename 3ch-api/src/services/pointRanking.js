@@ -5,13 +5,13 @@ const DEFAULT_POINT_RULES = Object.freeze({
   matchPoints: {
     mode: "sets",
     winPoints: 3,
-    eventTypes: { singles: true, doubles: false, team: false },
+    eventTypes: { singles: true, doubles: true, team: true },
   },
   rankings: {
-    league: { first: 30, second: 20, thirdFourth: 10 },
-    group: { first: 30, second: 15, thirdFourth: 10 },
-    tournamentUpper: { first: 50, second: 30, thirdFourth: 20 },
-    tournamentLower: { first: 20, second: 10, thirdFourth: 7 },
+    league: { first: 30, second: 20, third: 10, fourth: 10 },
+    group: { first: 30, second: 15, third: 10, fourth: 10 },
+    tournamentUpper: { first: 50, second: 30, third: 20, fourth: 20 },
+    tournamentLower: { first: 20, second: 10, third: 7, fourth: 7 },
   },
 });
 
@@ -27,7 +27,8 @@ function normalizePointRules(value) {
   const normalizeRankRule = (rule, fallback) => ({
     first: numberOr(rule?.first, fallback.first),
     second: numberOr(rule?.second, fallback.second),
-    thirdFourth: numberOr(rule?.thirdFourth, fallback.thirdFourth),
+    third: numberOr(rule?.third, numberOr(rule?.thirdFourth, fallback.third)),
+    fourth: numberOr(rule?.fourth, numberOr(rule?.thirdFourth, fallback.fourth)),
   });
   return {
     attendance: {
@@ -39,8 +40,8 @@ function normalizePointRules(value) {
       winPoints: numberOr(matchPoints.winPoints, DEFAULT_POINT_RULES.matchPoints.winPoints),
       eventTypes: {
         singles: matchPoints.eventTypes?.singles !== false,
-        doubles: matchPoints.eventTypes?.doubles === true,
-        team: matchPoints.eventTypes?.team === true,
+        doubles: matchPoints.eventTypes?.doubles !== false,
+        team: matchPoints.eventTypes?.team !== false,
       },
     },
     rankings: {
@@ -118,7 +119,8 @@ function awardBonus(row, rank, rule) {
   let points = 0;
   if (rank === 1) points = rule.first;
   else if (rank === 2) points = rule.second;
-  else if (rank === 3 || rank === 4) points = rule.thirdFourth;
+  else if (rank === 3) points = rule.third;
+  else if (rank === 4) points = rule.fourth;
 
   row.bonus_points += points;
   if (rank === 1) row.championships += 1;
@@ -370,6 +372,20 @@ async function getPointRanking(groupId, year, scope, seasonId) {
     [scopeValue, rangeStart, rangeEnd],
   );
 
+  const rosterColumnResult = await pool.query(
+    `SELECT column_name
+     FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND table_name = 'league_matches'
+       AND column_name IN ('participant_a_roster_ids', 'participant_b_roster_ids')`,
+  );
+  const rosterColumns = new Set(rosterColumnResult.rows.map((row) => row.column_name));
+  const rosterSelectSql = rosterColumns.size === 2
+    ? `m.participant_a_roster_ids,
+       m.participant_b_roster_ids,`
+    : `ARRAY[]::text[] AS participant_a_roster_ids,
+       ARRAY[]::text[] AS participant_b_roster_ids,`;
+
   const matchResult = await pool.query(
     `SELECT
        l.id AS league_id,
@@ -382,8 +398,7 @@ async function getPointRanking(groupId, year, scope, seasonId) {
        m.is_program,
        m.program_round,
        m.program_block_type,
-       m.participant_a_roster_ids,
-       m.participant_b_roster_ids,
+       ${rosterSelectSql}
        m.bracket,
        m.round_number,
        m.match_label,

@@ -66,6 +66,7 @@ type StoredProgramBlock = {
   groupAssignments?: FormationPlayer[][];
   teamAssignments?: FormationPlayer[][];
   doublesAssignments?: FormationPlayer[][];
+  participantOrder?: string[];
   description?: string;
   teamSinglesCount?: number;
   teamDoublesCount?: number;
@@ -452,6 +453,23 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
     if (!formationDialog || !storedProgram?.blocks) return;
     const { roundIndex, mode } = formationDialog;
     if (mode === "doubles" && formationDraft.some((group) => group.length !== 2)) return;
+    const remainingParticipants = [...participants];
+    const participantOrder = formationDraft.flatMap((group) =>
+      group.flatMap((player) => {
+        let participantIndex = remainingParticipants.findIndex((participant) => {
+          const division = Number.parseInt(String(participant.division ?? "").replace(/[^0-9]/g, ""), 10);
+          return participant.name === player.name && division === player.level;
+        });
+        if (participantIndex < 0) {
+          participantIndex = remainingParticipants.findIndex(
+            (participant) => participant.name === player.name,
+          );
+        }
+        if (participantIndex < 0) return [];
+        const [participant] = remainingParticipants.splice(participantIndex, 1);
+        return [participant.id];
+      }),
+    );
     const nextBlocks = storedProgram.blocks.map((block, index) => {
       if (index !== roundIndex) return block;
       if (mode === "team") {
@@ -468,6 +486,7 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
       return {
         ...block,
         groupAssignments: formationDraft,
+        participantOrder,
         ...(block.type === "TEAM"
           ? { teamGroupSizes: formationDraft.map((group) => group.length) }
           : { groupSizes: formationDraft.map((group) => group.length) }),
@@ -489,6 +508,7 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
       return {
         ...round,
         groupAssignments: formationDraft,
+        participantOrder,
         ...(activeFormationBlock?.type === "TEAM"
           ? { teamGroupSizes: formationDraft.map((group) => group.length) }
           : { groupSizes: formationDraft.map((group) => group.length) }),

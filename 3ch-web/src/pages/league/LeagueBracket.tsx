@@ -1152,6 +1152,17 @@ export default function LeagueBracket() {
     const buildSavedGroupParticipantList = <T extends { id: string; name: string; division?: string | null }>(
       participants: T[],
     ) => {
+      const savedParticipantOrder =
+        currentProgramRound?.participantOrder ?? currentProgramBlock?.participantOrder;
+      if (savedParticipantOrder?.length) {
+        const orderById = new Map(savedParticipantOrder.map((participantId, index) => [participantId, index]));
+        return [...participants].sort(
+          (left, right) =>
+            (orderById.get(left.id) ?? Number.MAX_SAFE_INTEGER)
+            - (orderById.get(right.id) ?? Number.MAX_SAFE_INTEGER),
+        );
+      }
+
       const assignments = getSavedGroupAssignments();
       if (!assignments?.length) return participants;
 

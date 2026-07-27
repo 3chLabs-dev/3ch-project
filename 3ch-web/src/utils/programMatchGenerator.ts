@@ -961,8 +961,19 @@ export function generateProgramRoundMatches(
   round: number,
   sourceMatches: LeagueMatch[] = [],
 ): LeagueMatch[] {
-  const block = option?.blocks?.[round - 1];
-  if (!block || participants.length < 2) return [];
+  const storedBlock = option?.blocks?.[round - 1];
+  const currentRound = option?.rounds?.[round - 1];
+  if (!storedBlock || participants.length < 2) return [];
+  const block: ProgramBlock = {
+    ...storedBlock,
+    groupSizes: currentRound?.groupSizes ?? storedBlock.groupSizes,
+    teamGroupSizes: currentRound?.teamGroupSizes ?? storedBlock.teamGroupSizes,
+    groupShuffleSeed: currentRound?.groupShuffleSeed ?? storedBlock.groupShuffleSeed,
+    teamShuffleSeed: currentRound?.teamShuffleSeed ?? storedBlock.teamShuffleSeed,
+    groupAssignments: currentRound?.groupAssignments ?? storedBlock.groupAssignments,
+    teamAssignments: currentRound?.teamAssignments ?? storedBlock.teamAssignments,
+    doublesAssignments: currentRound?.doublesAssignments ?? storedBlock.doublesAssignments,
+  };
   const deletedMatchIds = new Set(block.deletedMatchIds ?? []);
   const withoutDeleted = (matches: LeagueMatch[]) =>
     matches
@@ -998,7 +1009,6 @@ export function generateProgramRoundMatches(
     return [];
   }
 
-  const currentRound = option?.rounds?.[round - 1];
   const isFinalRound =
     round > 1 &&
     (

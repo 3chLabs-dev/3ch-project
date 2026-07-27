@@ -565,13 +565,6 @@ export default function LeagueMatchOrder() {
     const hydratedMatches = generatedProgramMatches.map((match) => {
       const serverMatch = serverById.get(match.id);
       if (!serverMatch) return match;
-      const hasSameParticipants =
-        serverMatch.participant_a_id === match.participant_a_id
-        && serverMatch.participant_b_id === match.participant_b_id;
-      const isUnitRound =
-        currentProgramBlock?.type === "TEAM" ||
-        currentProgramBlock?.type === "DOUBLES";
-      if (!isUnitRound && !hasSameParticipants) return match;
       return {
         ...match,
         match_order: serverMatch.match_order,
@@ -583,7 +576,7 @@ export default function LeagueMatchOrder() {
     });
     return applyProgramTournamentAdvancement(hydratedMatches)
       .sort((left, right) => left.match_order - right.match_order);
-  }, [currentProgramBlock?.type, generatedProgramMatches, serverProgramMatches]);
+  }, [generatedProgramMatches, serverProgramMatches]);
 
   useEffect(() => {
     if (!isProgramMode || !leagueId || !programOption || programMatches.length === 0) return;
@@ -623,12 +616,13 @@ export default function LeagueMatchOrder() {
 
   const updateProgramMatch = useCallback((matchId: string, updates: ProgramMatchPatch) => {
     if (!leagueId) return;
-    if (serverProgramMatches.some((match) => match.id === matchId)) {
-      updateMatch({ leagueId, matchId, updates });
-      return;
-    }
+    // Keep generated upper-round matches responsive while their promoted
+    // participants are being synchronized to the server.
     saveProgramMatchPatch(leagueId, programRound, matchId, updates);
     setProgramMatchStateVersion((version) => version + 1);
+    if (serverProgramMatches.some((match) => match.id === matchId)) {
+      updateMatch({ leagueId, matchId, updates });
+    }
   }, [leagueId, programRound, serverProgramMatches, updateMatch]);
 
   // 1. 조 이름 목록 추출 ("1조", "2조" ...)

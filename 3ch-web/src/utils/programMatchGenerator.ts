@@ -809,6 +809,163 @@ function distributeRankedUnitPoolsToBrackets(
     );
 }
 
+function buildFourGroupSixteenSeedOrder(rankedPools: MatchUnit[][]): MatchUnit[] | null {
+  if (rankedPools.length !== 4 || rankedPools.some((pool) => pool.length !== 4)) {
+    return null;
+  }
+
+  const [group1, group2, group3, group4] = rankedPools;
+  const bracketSlots = [
+    group1[0], group2[3],
+    group3[2], group4[1],
+    group1[1], group2[2],
+    group3[3], group4[0],
+    group3[0], group4[3],
+    group1[2], group2[1],
+    group3[1], group4[2],
+    group1[3], group2[0],
+  ];
+  const seedAtSlot = seededBracket(16);
+  const seedOrder = Array<MatchUnit>(16);
+
+  bracketSlots.forEach((unit, slotIndex) => {
+    seedOrder[seedAtSlot[slotIndex] - 1] = unit;
+  });
+
+  return seedOrder;
+}
+
+type RankedSeedUnit = {
+  unit: MatchUnit;
+  poolIndex: number;
+  rankIndex: number;
+};
+
+function rotateItems<T>(items: T[], offset: number): T[] {
+  if (items.length < 2) return [...items];
+  const normalized = ((offset % items.length) + items.length) % items.length;
+  return [...items.slice(normalized), ...items.slice(0, normalized)];
+}
+
+function buildRankOrderVariants(items: RankedSeedUnit[]): RankedSeedUnit[][] {
+  if (items.length < 2) return [[...items]];
+  const variants: RankedSeedUnit[][] = [];
+  const seen = new Set<string>();
+  const bases = [[...items], [...items].reverse()];
+
+  bases.forEach((base) => {
+    for (let offset = 0; offset < base.length; offset += 1) {
+      const variant = rotateItems(base, offset);
+      const key = variant.map((entry) => entry.poolIndex).join("|");
+      if (!seen.has(key)) {
+        seen.add(key);
+        variants.push(variant);
+      }
+    }
+  });
+  if (variants.length <= 24) return variants;
+  const step = variants.length / 24;
+  return Array.from({ length: 24 }, (_, index) => variants[Math.floor(index * step)]);
+}
+
+function tournamentMeetingRound(leftSlot: number, rightSlot: number, bracketSize: number): number {
+  const rounds = Math.log2(bracketSize);
+  for (let round = 1; round <= rounds; round += 1) {
+    const sectionSize = 2 ** round;
+    if (Math.floor(leftSlot / sectionSize) === Math.floor(rightSlot / sectionSize)) {
+      return round;
+    }
+  }
+  return rounds;
+}
+
+function scoreCrossGroupSeedOrder(
+  seedOrder: RankedSeedUnit[],
+  totalEntrants: number,
+  bracketSize: number,
+  maxRank: number,
+): number {
+  const slotBySeed = new Map(
+    seededBracket(bracketSize).map((seed, slotIndex) => [seed, slotIndex]),
+  );
+  const placed = seedOrder.map((entry, index) => ({
+    ...entry,
+    seed: index + 1,
+    slot: slotBySeed.get(index + 1) ?? index,
+  }));
+  let score = 0;
+
+  for (let leftIndex = 0; leftIndex < placed.length; leftIndex += 1) {
+    const left = placed[leftIndex];
+    for (let rightIndex = leftIndex + 1; rightIndex < placed.length; rightIndex += 1) {
+      const right = placed[rightIndex];
+      if (left.poolIndex !== right.poolIndex) continue;
+      const meetingRound = tournamentMeetingRound(left.slot, right.slot, bracketSize);
+      if (meetingRound === 1) score += 1_000_000;
+      score += (Math.log2(bracketSize) - meetingRound + 1) * 5_000;
+      if (left.rankIndex === 0 || right.rankIndex === 0) {
+        score += (Math.log2(bracketSize) - meetingRound + 1) * 10_000;
+      }
+    }
+  }
+
+  for (let slotIndex = 0; slotIndex < bracketSize; slotIndex += 2) {
+    const left = placed.find((entry) => entry.slot === slotIndex);
+    const right = placed.find((entry) => entry.slot === slotIndex + 1);
+    if (!left || !right) continue;
+    if (left.rankIndex === 0 && right.rankIndex === 0) score += 500_000;
+    score += Math.abs((left.rankIndex + 1) + (right.rankIndex + 1) - (maxRank + 1)) * 100;
+  }
+
+  const byeCount = bracketSize - totalEntrants;
+  if (byeCount > 0) {
+    placed.forEach((entry) => {
+      const pairedSlot = entry.slot % 2 === 0 ? entry.slot + 1 : entry.slot - 1;
+      const hasOpponent = placed.some((candidate) => candidate.slot === pairedSlot);
+      if (!hasOpponent) {
+        score += entry.rankIndex * 20_000;
+      }
+    });
+  }
+
+  return score;
+}
+
+function buildCrossGroupTournamentSeedOrder(rankedPools: MatchUnit[][]): MatchUnit[] {
+  const exactFourGroupOrder = buildFourGroupSixteenSeedOrder(rankedPools);
+  if (exactFourGroupOrder) return exactFourGroupOrder;
+
+  const rankedTiers = Array.from(
+    { length: Math.max(...rankedPools.map((pool) => pool.length)) },
+    (_, rankIndex) =>
+      rankedPools.flatMap((pool, poolIndex) => {
+        const unit = pool[rankIndex];
+        return unit ? [{ unit, poolIndex, rankIndex }] : [];
+      }),
+  ).filter((tier) => tier.length > 0);
+  const totalEntrants = rankedTiers.reduce((sum, tier) => sum + tier.length, 0);
+  const bracketSize = 2 ** Math.ceil(Math.log2(Math.max(2, totalEntrants)));
+  const maxRank = rankedTiers.length;
+  let candidates: Array<{ order: RankedSeedUnit[]; score: number }> = [{ order: [], score: 0 }];
+
+  rankedTiers.forEach((tier) => {
+    const variants = buildRankOrderVariants(tier);
+    const nextCandidates = candidates.flatMap((candidate) =>
+      variants.map((variant) => {
+        const order = [...candidate.order, ...variant];
+        return {
+          order,
+          score: scoreCrossGroupSeedOrder(order, totalEntrants, bracketSize, maxRank),
+        };
+      }),
+    );
+    nextCandidates.sort((left, right) => left.score - right.score);
+    candidates = nextCandidates.slice(0, 32);
+  });
+
+  return (candidates[0]?.order ?? rankedTiers.flat()).map(({ unit }) => unit);
+}
+
 function balancedSizes(total: number, preferredGroupCount: number) {
   const groupCount = Math.max(1, Math.min(preferredGroupCount, total));
   return Array.from(
@@ -1059,8 +1216,14 @@ export function generateProgramRoundMatches(
     if (isFinalRound) {
       const bracketCount = block.tournamentBracketCount ?? 1;
       const qualifiedPools = finalPools?.map((pool) => pool.slice(0, advanceCount));
-      const tournamentBrackets = qualifiedPools?.length
-        ? distributeRankedUnitPoolsToBrackets(qualifiedPools, bracketCount)
+      const crossGroupSeedOrder =
+        bracketCount === 1 && qualifiedPools
+          ? buildCrossGroupTournamentSeedOrder(qualifiedPools)
+          : null;
+      const tournamentBrackets = crossGroupSeedOrder?.length
+        ? [crossGroupSeedOrder]
+        : qualifiedPools?.length
+          ? distributeRankedUnitPoolsToBrackets(qualifiedPools, bracketCount)
           : splitTournamentUnits(matchUnits, bracketCount);
       return withoutDeleted(tournamentBrackets.flatMap((bracketPlayers, bracketIndex) =>
         tournamentBuilder(

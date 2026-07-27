@@ -45,6 +45,8 @@ import {
   useGetLeagueParticipantsQuery,
   useGetLeagueMatchesQuery,
   useGetLeagueProgramQuery,
+  useSaveLeagueProgramMutation,
+  useSyncLeagueProgramMatchesMutation,
   useUpdateLeagueMatchMutation,
   useReorderLeagueParticipantsMutation,
   type LeagueParticipantItem,
@@ -233,6 +235,7 @@ function ScoreButton({ icon, disabled, rotate, variant = "order", onClick }: {
     : (icon === "up" ? ArrowUpwardIcon : ArrowDownwardIcon);
   return (
     <IconButton
+      className={variant === "score" ? "score-control-button" : undefined}
       size="small"
       disabled={disabled}
       onPointerDown={(e) => e.stopPropagation()}
@@ -340,7 +343,7 @@ function BracketScoreCell({ match, isA, leagueId, winScore, canManage, landscape
 
   // landscape / portrait 공통: [↓] 점수 [↑] 가로 배치, 좌우 여백 있게
   const inner = (
-    <Box sx={{
+    <Box className="score-control-container" sx={{
       display: "flex", flexDirection: "row", alignItems: "center",
       justifyContent: "space-between",
       ...(landscape ? {} : { writingMode: "horizontal-tb" }),
@@ -933,7 +936,9 @@ export default function LeagueBracket() {
     () => (isProgramMode && id ? (programData?.program?.program_data as ReturnType<typeof getStoredProgramOption> | undefined) ?? getStoredProgramOption(id) : null),
     [isProgramMode, id, programData],
   );
+  const currentProgramRound = isProgramMode ? programOption?.rounds?.[programRound - 1] : undefined;
   const currentProgramBlock = isProgramMode ? programOption?.blocks?.[programRound - 1] : undefined;
+  const currentRule = currentProgramBlock?.matchRule ?? league?.rules;
   const [programMatchStateVersion, setProgramMatchStateVersion] = useState(0);
   const programSourceMatches = useMemo(() => {
     if (!isProgramMode || !id || !programOption) return matchData?.matches ?? [];
@@ -997,7 +1002,7 @@ export default function LeagueBracket() {
       const hasSameParticipants =
         serverMatch?.participant_a_id === match.participant_a_id
         && serverMatch?.participant_b_id === match.participant_b_id;
-      return serverMatch && hasSameParticipants
+      return serverMatch && (isProgramUnitRound || hasSameParticipants)
         ? {
             ...match,
             score_a: serverMatch.score_a,
@@ -1007,7 +1012,7 @@ export default function LeagueBracket() {
           }
         : match;
     });
-  }, [generatedProgramMatchesAll, serverProgramMatchesAll]);
+  }, [generatedProgramMatchesAll, isProgramUnitRound, serverProgramMatchesAll]);
   const [updateMatch] = useUpdateLeagueMatchMutation();
   const updateProgramMatch = useCallback((matchId: string, updates: ProgramMatchPatch) => {
     if (!id) return;
@@ -1024,12 +1029,14 @@ export default function LeagueBracket() {
 
     const map = new Map<string, LeagueParticipantItem>();
     const rosterMap = new Map<string, Array<{ name: string; division: string | null }>>();
+    const seedMap = new Map<string, number>();
     const addTeam = (
       teamId: string | null,
       teamName: string | null,
       roster?: string[],
       rosterDetails?: Array<{ name: string; division: string | null }>,
       division?: string | null,
+      seedLabel?: string | null,
     ) => {
       if (!teamId || !teamName || map.has(teamId)) return;
       map.set(teamId, {
@@ -1049,6 +1056,7 @@ export default function LeagueBracket() {
         created_at: "",
         group_name: null,
       });
+      seedMap.set(teamId, Number.parseInt(seedLabel ?? "", 10) || map.size);
       if (rosterDetails?.length && programRoundType !== "DOUBLES") {
         rosterMap.set(teamId, rosterDetails);
       }
@@ -1062,14 +1070,16 @@ export default function LeagueBracket() {
         participant_a_roster_details?: Array<{ name: string; division: string | null }>;
         participant_b_roster_details?: Array<{ name: string; division: string | null }>;
       };
-      addTeam(match.participant_a_id, match.participant_a_name, withRoster.participant_a_roster, withRoster.participant_a_roster_details, match.participant_a_division);
-      addTeam(match.participant_b_id, match.participant_b_name, withRoster.participant_b_roster, withRoster.participant_b_roster_details, match.participant_b_division);
+      addTeam(match.participant_a_id, match.participant_a_name, withRoster.participant_a_roster, withRoster.participant_a_roster_details, match.participant_a_division, match.participant_a_seed_label);
+      addTeam(match.participant_b_id, match.participant_b_name, withRoster.participant_b_roster, withRoster.participant_b_roster_details, match.participant_b_division, match.participant_b_seed_label);
     });
 
-    return Array.from(map.values()).map((participant) => ({
-      ...participant,
-      teamRoster: rosterMap.get(participant.id),
-    }));
+    return Array.from(map.values())
+      .sort((left, right) => (seedMap.get(left.id) ?? 999) - (seedMap.get(right.id) ?? 999))
+      .map((participant) => ({
+        ...participant,
+        teamRoster: rosterMap.get(participant.id),
+      }));
   }, [generatedProgramMatchesAll, hasGeneratedUnitRoster, id, isProgramTeamRound, programMatchesAll, programRoundType]);
 
   // 1. 조 이름 목록 추출 ("1조", "2조" ...)
@@ -1127,6 +1137,54 @@ export default function LeagueBracket() {
 
   // 3. 선택된 조의 팀원만 필터링 (조가 없으면 전체)
   const targetParticipants = useMemo(() => {
+    const getSavedGroupAssignments = () => {
+      const savedGroupAssignments =
+        currentProgramRound?.groupAssignments ?? currentProgramBlock?.groupAssignments;
+      if (!selectedGroup || !savedGroupAssignments?.length) return null;
+
+      const groupNumber = Number.parseInt(selectedGroup, 10);
+      return savedGroupAssignments[groupNumber - 1] ?? null;
+    };
+    const normalizeDivision = (division?: string | null) => {
+      const parsed = Number.parseInt(String(division ?? "").replace(/[^0-9]/g, ""), 10);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+    const buildSavedGroupParticipantList = <T extends { id: string; name: string; division?: string | null }>(
+      participants: T[],
+    ) => {
+      const savedParticipantOrder =
+        currentProgramRound?.participantOrder ?? currentProgramBlock?.participantOrder;
+      if (savedParticipantOrder?.length) {
+        const orderById = new Map(savedParticipantOrder.map((participantId, index) => [participantId, index]));
+        return [...participants].sort(
+          (left, right) =>
+            (orderById.get(left.id) ?? Number.MAX_SAFE_INTEGER)
+            - (orderById.get(right.id) ?? Number.MAX_SAFE_INTEGER),
+        );
+      }
+
+      const assignments = getSavedGroupAssignments();
+      if (!assignments?.length) return participants;
+
+      const remaining = [...participants];
+      const ordered = assignments.flatMap((assignment) => {
+        let participantIndex = remaining.findIndex(
+          (participant) =>
+            participant.name === assignment.name
+            && normalizeDivision(participant.division) === assignment.level,
+        );
+        if (participantIndex < 0) {
+          participantIndex = remaining.findIndex(
+            (participant) => participant.name === assignment.name,
+          );
+        }
+        if (participantIndex < 0) return [];
+        const [participant] = remaining.splice(participantIndex, 1);
+        return [participant];
+      });
+      return [...ordered, ...remaining];
+    };
+
     const sortByProgramSeed = <T extends { id: string }>(participants: T[], selectedMatches: LeagueMatch[]) => {
       const seedById = new Map<string, number>();
       selectedMatches.forEach((match) => {
@@ -1158,9 +1216,8 @@ export default function LeagueBracket() {
       const ids = new Set(
         selectedMatches.flatMap((match) => [match.participant_a_id, match.participant_b_id]).filter(Boolean) as string[],
       );
-      return sortByProgramSeed(
+      return buildSavedGroupParticipantList(
         programSinglesParticipants.filter((participant) => ids.has(participant.id)),
-        selectedMatches,
       );
     }
     if (isProgramMode) {
@@ -1170,10 +1227,12 @@ export default function LeagueBracket() {
       );
     }
     if (groupNames.length > 0 && selectedGroup) {
-      return rawParticipants.filter(p => p.group_name === selectedGroup);
+      return buildSavedGroupParticipantList(
+        rawParticipants.filter(p => p.group_name === selectedGroup),
+      );
     }
     return rawParticipants;
-  }, [isProgramTeamRound, programTeamParticipants, programSinglesParticipants, isProgramMode, programMatchesAll, rawParticipants, groupNames, selectedGroup]);
+  }, [currentProgramBlock, currentProgramRound, isProgramTeamRound, programTeamParticipants, programSinglesParticipants, isProgramMode, programMatchesAll, rawParticipants, groupNames, selectedGroup]);
 
   // 4. 선택된 조의 경기만 필터링
   const matches = useMemo(() => {
@@ -1301,6 +1360,8 @@ export default function LeagueBracket() {
 
   // ── DnD 순서 변경 ─────────────────────────────────────────────────────────
   const [reorderParticipants] = useReorderLeagueParticipantsMutation();
+  const [saveLeagueProgram] = useSaveLeagueProgramMutation();
+  const [syncProgramMatches] = useSyncLeagueProgramMatchesMutation();
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),   // 마우스: 8px 이상 이동 시 드래그 시작
     useSensor(TouchSensor,   { activationConstraint: { delay: 200, tolerance: 5 } }), // 터치: 200ms 롱프레스 후 드래그
@@ -1332,6 +1393,46 @@ export default function LeagueBracket() {
     });
   }, [setLocalOrder, reorderParticipants, id]);
 
+  const finishEditing = useCallback(async () => {
+    if (!editMode) {
+      setEditMode(true);
+      return;
+    }
+
+    if (isProgramMode && id && programOption) {
+      const participantOrder = localOrder.map((participant) => participant.id);
+      const nextProgram = {
+        ...programOption,
+        blocks: programOption.blocks.map((block, index) =>
+          index === programRound - 1 ? { ...block, participantOrder } : block
+        ),
+        rounds: programOption.rounds?.map((round, index) =>
+          index === programRound - 1 ? { ...round, participantOrder } : round
+        ),
+      };
+      await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
+      const nextMatches = generateProgramRoundMatches(
+        id,
+        nextProgram,
+        rawParticipants,
+        programRound,
+        programSourceMatches,
+      );
+      await syncProgramMatches({ leagueId: id, matches: nextMatches }).unwrap();
+    } else {
+      await reorderParticipants({
+        leagueId: id ?? "",
+        order: localOrder.map((participant) => participant.id),
+      }).unwrap();
+    }
+
+    setEditMode(false);
+  }, [
+    editMode, id, isProgramMode, localOrder, programOption, programRound,
+    programSourceMatches, rawParticipants, reorderParticipants,
+    saveLeagueProgram, syncProgramMatches,
+  ]);
+
   // 수동 새로고침: 리그·참가자·경기 3개 쿼리 동시 refetch
   const handleRefresh = useCallback(() => {
     refetchLeague();
@@ -1346,6 +1447,14 @@ export default function LeagueBracket() {
     const clone = el.cloneNode(true) as HTMLElement;
     clone.style.transform = "none";
     clone.style.writingMode = "horizontal-tb";
+    clone.querySelectorAll<HTMLElement>(".score-control-button").forEach((button) => button.remove());
+    clone.querySelectorAll<HTMLElement>(".score-control-container").forEach((container) => {
+      container.style.justifyContent = "center";
+      container.style.writingMode = "horizontal-tb";
+    });
+    clone.querySelectorAll<HTMLElement>(".score-text").forEach((score) => {
+      score.style.transform = "none";
+    });
     clone.style.position = "fixed";
     clone.style.top = "-99999px";
     clone.style.left = "0";
@@ -1353,14 +1462,55 @@ export default function LeagueBracket() {
     try {
       const html2canvas = (await import("html2canvas")).default;
       const canvas = await html2canvas(clone, { scale: 2, useCORS: true });
+      const leagueName = league?.name ?? "대진표";
+      const leagueUrl = id ? `${window.location.origin}/league/${id}` : window.location.href;
+      const sheet = document.createElement("div");
+      sheet.style.cssText = [
+        "position:fixed",
+        "top:-99999px",
+        "left:0",
+        `width:${Math.max(960, canvas.width / 2 + 96)}px`,
+        "padding:40px 48px 52px",
+        "box-sizing:border-box",
+        "background:#fff",
+        "color:#111",
+        "font-family:Arial,sans-serif",
+      ].join(";");
+      const header = document.createElement("div");
+      header.style.cssText = "display:flex;align-items:flex-start;justify-content:space-between;gap:32px;margin-bottom:28px";
+      const titleArea = document.createElement("div");
+      const title = document.createElement("div");
+      title.textContent = `${leagueName} 대진표`;
+      title.style.cssText = "font-size:26px;font-weight:800;line-height:1.3";
+      const subtitle = document.createElement("div");
+      subtitle.textContent = leagueUrl;
+      subtitle.style.cssText = "margin-top:8px;font-size:12px;color:#555";
+      titleArea.append(title, subtitle);
+      const qrArea = document.createElement("div");
+      qrArea.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:6px;min-width:120px";
+      qrArea.innerHTML = renderToStaticMarkup(<QRCode value={leagueUrl} size={104} bgColor="#FFFFFF" fgColor="#111111" />);
+      const qrLabel = document.createElement("div");
+      qrLabel.textContent = "QR로 리그 바로가기";
+      qrLabel.style.cssText = "font-size:11px;color:#555";
+      qrArea.appendChild(qrLabel);
+      header.append(titleArea, qrArea);
+      const bracketImage = document.createElement("img");
+      bracketImage.src = canvas.toDataURL("image/png");
+      bracketImage.alt = `${leagueName} 대진표`;
+      bracketImage.style.cssText = "display:block;width:100%;height:auto";
+      sheet.append(header, bracketImage);
+      document.body.appendChild(sheet);
+      await bracketImage.decode().catch(() => undefined);
+      const downloadCanvas = await html2canvas(sheet, { scale: 2, useCORS: true, backgroundColor: "#FFFFFF" });
       const a = document.createElement("a");
-      a.href = canvas.toDataURL("image/png");
+      a.href = downloadCanvas.toDataURL("image/png");
       a.download = `대진표_${league?.name ?? "bracket"}.png`;
       a.click();
+      document.body.removeChild(sheet);
     } finally {
       document.body.removeChild(clone);
     }
-  }, [league?.name]);
+  }, [id, league?.name]);
 
   // 인쇄: 이미지로 캡처 후 새 창 인쇄
   const handlePrint = useCallback(async () => {
@@ -1369,6 +1519,14 @@ export default function LeagueBracket() {
     const clone = el.cloneNode(true) as HTMLElement;
     clone.style.transform = "none";
     clone.style.writingMode = "horizontal-tb";
+    clone.querySelectorAll<HTMLElement>(".score-control-button").forEach((button) => button.remove());
+    clone.querySelectorAll<HTMLElement>(".score-control-container").forEach((container) => {
+      container.style.justifyContent = "center";
+      container.style.writingMode = "horizontal-tb";
+    });
+    clone.querySelectorAll<HTMLElement>(".score-text").forEach((score) => {
+      score.style.transform = "none";
+    });
     clone.style.position = "fixed";
     clone.style.top = "-99999px";
     clone.style.left = "0";
@@ -1444,7 +1602,7 @@ export default function LeagueBracket() {
     return map;
   }, [matches]);
 
-  const { playerStats, rankings, tieSetDiffs } = useMatchStats(localOrder, matches, league?.rules);
+  const { playerStats, rankings, tieSetDiffs } = useMatchStats(localOrder, matches, currentRule);
 
   // ── 로딩 / 빈 상태 ───────────────────────────────────────────────────────
   if (leagueLoading || participantsLoading) {
@@ -1459,8 +1617,7 @@ export default function LeagueBracket() {
   const n             = localOrder.length;
   const leagueStarted = league.status === "completed"; // 완료 상태면 수정 버튼 숨김
   const date          = formatLeagueDate(league.start_date);
-  const winScore      = getWinScore(league.rules);
-  const currentRule = currentProgramBlock?.matchRule ?? league.rules;
+  const winScore      = getWinScore(currentRule);
   const headerSummary = isProgramMode && currentProgramBlock
     ? `${programRound}라운드 ${getProgramTypeLabel(currentProgramBlock.type)} ${getProgramFormatLabel(currentProgramBlock.format)} │ ${getProgramRuleLabel(currentProgramBlock.matchRule)}`
     : `${league.type} ${league.format} │ ${league.rules}`;
@@ -1512,7 +1669,7 @@ export default function LeagueBracket() {
             size="small"
             variant="contained"
             startIcon={editMode ? <CheckIcon sx={{ fontSize: 14 }} /> : <EditIcon sx={{ fontSize: 14 }} />}
-            onClick={() => setEditMode((v) => !v)}
+            onClick={finishEditing}
             sx={{
               borderRadius: "20px", fontSize: 11, fontWeight: 700, px: 1.5, py: 0.4,
               textTransform: "none", flexShrink: 0, minWidth: "auto", boxShadow: "none",
@@ -1637,7 +1794,7 @@ export default function LeagueBracket() {
                         </Box>
                       </NumberHeaderCell>
                     ))}
-                    {league.rules === "3세트제" ? (
+                    {getProgramRuleLabel(currentRule ?? "") === "3세트제" ? (
                       <NumberHeaderCell rowSpan={2} sx={{ bgcolor: "#F0FDF4"}}>세트<br/>합계</NumberHeaderCell>
                     ) :
                     (
@@ -1694,7 +1851,7 @@ export default function LeagueBracket() {
                         leagueId={id ?? ""}
                         winScore={winScore}
                         isMe={!!myName && rowPlayer.name === myName}
-                        rules={league.rules}
+                        rules={getProgramRuleLabel(currentRule ?? "")}
                         onProgramMatchUpdate={isProgramMode ? updateProgramMatch : undefined}
                       />
                     ))}

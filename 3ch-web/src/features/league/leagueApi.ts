@@ -230,6 +230,10 @@ export interface LeagueMatch {
   tournament_bracket_index?: number | null;
   participant_a_seed_label?: string | null;
   participant_b_seed_label?: string | null;
+  participant_a_roster?: string[];
+  participant_b_roster?: string[];
+  participant_a_roster_details?: Array<{ name: string; division: string | null }>;
+  participant_b_roster_details?: Array<{ name: string; division: string | null }>;
   is_no_game?: boolean;
 }
 
@@ -472,6 +476,7 @@ export interface GetLeagueProgramTemplatesResponse {
 
 export interface SyncLeagueProgramMatchesRequest {
   leagueId: string;
+  resetResults?: boolean;
   matches: Array<Partial<LeagueMatch> & {
     program_round?: number | null;
     program_block_type?: string | null;
@@ -924,7 +929,7 @@ export const leagueApi = baseApi.injectEndpoints({
     }),
 
     syncLeagueProgramMatches: builder.mutation<{ ok: boolean; inserted: number }, SyncLeagueProgramMatchesRequest>({
-      async queryFn({ leagueId, matches }, api, _extraOptions, fetchWithBQ) {
+      async queryFn({ leagueId, matches, resetResults }, api, _extraOptions, fetchWithBQ) {
         const token = (api.getState() as RootState).auth?.token;
         if (isLocalDevToken(token)) {
           return { data: { ok: true, inserted: matches.length } };
@@ -932,7 +937,7 @@ export const leagueApi = baseApi.injectEndpoints({
         const result = await fetchWithBQ({
           url: `/league/${leagueId}/program/matches/sync`,
           method: "POST",
-          body: { matches },
+          body: { matches, reset_results: Boolean(resetResults) },
         });
         return result.error ? { error: result.error } : { data: result.data as { ok: boolean; inserted: number } };
       },

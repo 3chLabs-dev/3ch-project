@@ -19,24 +19,13 @@ import {
 import CloseIcon from "@mui/icons-material/Close";
 import SearchIcon from "@mui/icons-material/Search";
 import { useAppSelector } from "../../app/hooks";
-import axios from "axios";
+import { useLazyGetGroupDetailQuery } from "../../features/group/groupApi";
 
 export type MemberRow = {
     id: string;
     member_id: number | null;
     division: string;
     name: string;
-    is_pre_member?: boolean;
-};
-
-type GroupMember = {
-    id: string;
-    user_id: number | null;
-    name?: string | null;
-    email?: string | null;
-    role: string;
-    division?: string | null;
-    joined_at: string;
     is_pre_member?: boolean;
 };
 
@@ -58,6 +47,7 @@ export default function LoadMembersDialog({
     const preferredGroupId = useAppSelector((s) => s.leagueCreation.preferredGroupId);
     const effectiveGroupId = propGroupId || reduxGroupId || preferredGroupId;
     const token = useAppSelector((s) => s.auth.token);
+    const [getGroupDetail] = useLazyGetGroupDetailQuery();
 
     const [rows, setRows] = useState<MemberRow[]>([]);
     const [loading, setLoading] = useState(false);
@@ -88,19 +78,7 @@ export default function LoadMembersDialog({
             setLoading(true);
             setError(null);
             try {
-                const response = await axios.get(
-                    `${import.meta.env.VITE_API_BASE_URL}/group/${effectiveGroupId}`,
-                    {
-                        headers: {
-                            Authorization: `Bearer ${token}`,
-                        },
-                    }
-                );
-
-                const { group, members } = response.data as {
-                    group: { name?: string };
-                    members: GroupMember[];
-                };
+                const { group, members } = await getGroupDetail(effectiveGroupId, true).unwrap();
                 setGroupName(group?.name || "클럽 회원");
 
                 const memberRows: MemberRow[] = members.map((m) => ({
@@ -121,7 +99,7 @@ export default function LoadMembersDialog({
         };
 
         fetchMembers();
-    }, [open, effectiveGroupId, token]);
+    }, [open, effectiveGroupId, getGroupDetail]);
 
     const filtered = useMemo(() => {
         const keyword = q.trim().toLowerCase();

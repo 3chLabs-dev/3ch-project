@@ -8,7 +8,12 @@ import type {
   UpdateMatchRequest,
   UpdateParticipantRequest,
 } from "../features/league/leagueApi";
-import { LOCAL_DEV_GROUP, LOCAL_DEV_USER } from "./localDevAuth";
+import {
+  LOCAL_DEV_GROUP,
+  LOCAL_DEV_GROUPS,
+  LOCAL_DEV_USER,
+  getLocalDevProfileByToken,
+} from "./localDevAuth";
 
 const LOCAL_DEV_LEAGUES_KEY = "local-dev-leagues";
 const LOCAL_DEV_PARTICIPANTS_KEY = "local-dev-participants";
@@ -126,6 +131,11 @@ export function createLocalDevLeague(
 ) {
   const now = new Date().toISOString();
   const id = `LOCAL${Date.now()}`;
+  const profile = getLocalDevProfileByToken(localStorage.getItem("token"));
+  const group = LOCAL_DEV_GROUPS.find((item) => item.id === body.group_id)
+    ?? profile?.group
+    ?? LOCAL_DEV_GROUP;
+  const user = profile?.user ?? LOCAL_DEV_USER;
   const league: LeagueListItem = {
     id,
     league_code: id,
@@ -142,8 +152,8 @@ export function createLocalDevLeague(
     sort_order: body.sort_order,
     recruit_count: body.recruit_count ?? body.participants?.length ?? 0,
     participant_count: body.participants?.length ?? body.participant_count ?? 0,
-    group_id: body.group_id ?? LOCAL_DEV_GROUP.id,
-    group_name: LOCAL_DEV_GROUP.name,
+    group_id: body.group_id ?? group.id,
+    group_name: group.name,
     status: "draft",
     tournament_seeding: body.tournament_seeding,
     tournament_advancement: body.tournament_advancement,
@@ -151,8 +161,8 @@ export function createLocalDevLeague(
     advance_count: body.advance_count,
     advance_method: body.advance_method,
     finals_advance: body.finals_advance,
-    created_by_id: LOCAL_DEV_USER.id,
-    creator_name: LOCAL_DEV_USER.name ?? "",
+    created_by_id: user.id,
+    creator_name: user.name ?? "",
     created_at: now,
     updated_at: now,
   };
@@ -170,7 +180,7 @@ export function createLocalDevLeague(
     after: participant.after ?? false,
     sort_order: index + 1,
     created_at: now,
-    group_name: LOCAL_DEV_GROUP.name,
+    group_name: group.name,
   }));
   saveLocalDevParticipants(id, participants);
 
@@ -180,6 +190,7 @@ export function createLocalDevLeague(
 export function addLocalDevParticipants({ leagueId, participants }: AddParticipantsRequest) {
   const now = new Date().toISOString();
   const current = getLocalDevParticipants(leagueId);
+  const groupName = getLocalDevLeague(leagueId)?.group_name ?? LOCAL_DEV_GROUP.name;
   const nextParticipants = [
     ...current,
     ...participants.map((participant, index) => ({
@@ -193,7 +204,7 @@ export function addLocalDevParticipants({ leagueId, participants }: AddParticipa
       after: false,
       sort_order: current.length + index + 1,
       created_at: now,
-      group_name: LOCAL_DEV_GROUP.name,
+      group_name: groupName,
     })),
   ];
   saveLocalDevParticipants(leagueId, nextParticipants);

@@ -263,6 +263,12 @@ model League {
   participant_count Int      @default(0)
   league_code       String?  @unique
   join_permission   String   @default("public") // "public" | "club_only"
+  tournament_seeding     String?
+  tournament_advancement String?
+  tournament_rules       String?
+  advance_count          Int?
+  advance_method         String?
+  finals_advance         Int?
   created_at        DateTime @default(now())
   updated_at        DateTime @default(now()) @updatedAt
 
@@ -480,6 +486,18 @@ model LeagueMatch {
 
   participant_b_id String?
   participant_b    LeagueParticipant? @relation("MatchParticipantB", fields: [participant_b_id], references: [id], onDelete: SetNull)
+  participant_a_roster_ids String[] @default([])
+  participant_b_roster_ids String[] @default([])
+  bracket          String?
+  round_number     Int?
+  match_label      String?
+  next_match_id    String?
+  next_slot        String?
+  loser_next_match_id String?
+  loser_next_slot  String?
+  is_program       Boolean @default(false)
+  program_round    Int?
+  program_block_type String?
   group_name       String?
 
   @@index([league_id])

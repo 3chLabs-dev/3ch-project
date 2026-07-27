@@ -13,7 +13,7 @@ import TuneIcon from "@mui/icons-material/Tune";
 import { formatLeagueDateTime } from "../../utils/dateUtils";
 import AdFitBanner from "../../components/AdFitBanner";
 import LeagueFilterDialog from "../../components/LeagueFilterDialog.tsx";
-import { LOCAL_DEV_GROUP, isLocalDevToken } from "../../utils/localDevAuth";
+import { getLocalDevProfileByToken } from "../../utils/localDevAuth";
 
 type LeagueStatus = "scheduled" | "active" | "completed";
 
@@ -40,7 +40,8 @@ export default function LeagueMainBody() {
   const myGroups = useMemo(() => {
     const serverGroups = data?.groups ?? [];
     if (serverGroups.length > 0) return serverGroups;
-    return isLocalDevToken(token) ? [LOCAL_DEV_GROUP] : [];
+    const localProfile = getLocalDevProfileByToken(token);
+    return localProfile ? [localProfile.group] : [];
   }, [data, token]);
 
   const effectiveGroupId = useMemo(() => {

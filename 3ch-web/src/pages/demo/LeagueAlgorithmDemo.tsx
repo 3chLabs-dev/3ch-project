@@ -32,6 +32,16 @@ const FORMATION_COLORS = [
   "#6D4C41", // 갈색
 ];
 
+const buildBalancedGroupSizes = (memberCount: number, groupCount: number) => {
+  const safeGroupCount = Math.max(1, Math.min(groupCount, Math.max(1, memberCount)));
+  const baseSize = Math.floor(memberCount / safeGroupCount);
+  const remainder = memberCount % safeGroupCount;
+  return Array.from(
+    { length: safeGroupCount },
+    (_, index) => baseSize + (index < remainder ? 1 : 0),
+  );
+};
+
 const LEGACY_TEAM_MATCH_COUNTS = {
   SSS: { singles: 3, doubles: 0 },
   SDS: { singles: 2, doubles: 1 },
@@ -156,6 +166,8 @@ function RoundDivisionEditor({
     fontSize: "13px",
     lineHeight: 1.55,
   } as const;
+  const previousFormat = roundIndex > 0 ? rounds[roundIndex - 1]?.format : null;
+  const advancementPrefix = previousFormat === "GROUP" ? "각 조 상위" : "전체 상위";
 
   let choices: Array<{ value: string; label: string }> = [];
   let value: string = round.option;
@@ -226,7 +238,7 @@ function RoundDivisionEditor({
       {roundIndex > 0 && round.option === "FINAL" && round.format === "LEAGUE" && (
         <>
           <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "16px" }}>
-            <strong>상위</strong>
+            <strong>{advancementPrefix}</strong>
             <AdvancementStepper
               value={round.advanceCount ?? 2}
               onChange={(advanceCount) => update({ advanceCount, finalAdvancementMode: "top-n" })}
@@ -253,7 +265,7 @@ function RoundDivisionEditor({
           </select>
           {(round.finalAdvancementMode ?? "top-n") === "top-n" && (
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "12px" }}>
-              <strong>상위</strong>
+              <strong>{advancementPrefix}</strong>
               <AdvancementStepper
                 value={round.advanceCount ?? 2}
                 onChange={(advanceCount) => update({ advanceCount })}
@@ -271,13 +283,41 @@ function RoundDivisionEditor({
         </div>
       )}
 
+      {roundIndex > 0 && round.option === "FINAL" && round.format === "TOURNAMENT" && (
+        <>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "16px" }}>
+            <strong>{advancementPrefix}</strong>
+            <AdvancementStepper
+              value={round.advanceCount ?? 2}
+              onChange={(advanceCount) => update({
+                advanceCount,
+                finalAdvancementMode: "top-n",
+                sourceRoundId: rounds[roundIndex - 1].id,
+              })}
+            />
+            <strong>명</strong>
+          </div>
+          <p style={helperStyle}>
+            {previousFormat === "GROUP"
+              ? "각 조의 상위 순위 참가자가 진출하며, 총 진출 인원에 맞춰 토너먼트 시작 단계와 BYE를 자동으로 구성합니다."
+              : "전체 순위의 상위 참가자가 진출하며, 진출 인원에 맞춰 토너먼트 시작 단계와 BYE를 자동으로 구성합니다."}
+          </p>
+        </>
+      )}
+
       {round.format === "TOURNAMENT" && round.option === "FINAL" && roundIndex > 0 &&
         rounds[roundIndex - 1]?.format === "GROUP" && rounds[roundIndex - 1]?.option === "PRELIM" && (
           <div style={{ marginTop: "16px" }}>
             <div style={{ fontWeight: 700, marginBottom: "8px" }}>대진표 개수</div>
             <select
               value={round.tournamentBracketCount ?? 1}
-              onChange={(event) => update({ tournamentBracketCount: Number(event.target.value) })}
+              onChange={(event) => {
+                const tournamentBracketCount = Number(event.target.value);
+                update({
+                  tournamentBracketCount,
+                  thirdPlaceMatch: tournamentBracketCount === 1,
+                });
+              }}
               style={controlStyle}
             >
               {Array.from({ length: 8 }, (_, index) => index + 1).map((count) => (
@@ -286,6 +326,26 @@ function RoundDivisionEditor({
             </select>
           </div>
         )}
+
+      {round.format === "TOURNAMENT" && (
+        <div style={{ marginTop: "16px" }}>
+          <div style={{ fontWeight: 700, marginBottom: "8px" }}>3·4위전</div>
+          <ToggleButtonGroup
+            exclusive
+            fullWidth
+            value={(round.thirdPlaceMatch ?? (round.tournamentBracketCount ?? 1) === 1) ? "yes" : "no"}
+            onChange={(_, value) => {
+              if (value) update({ thirdPlaceMatch: value === "yes" });
+            }}
+          >
+            <ToggleButton value="yes">진행</ToggleButton>
+            <ToggleButton value="no">진행 안 함</ToggleButton>
+          </ToggleButtonGroup>
+          <p style={helperStyle}>
+            진행하지 않으면 4강 탈락자 두 명이 공동 3위가 됩니다.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -925,6 +985,7 @@ const LeagueAlgorithmDemo = ({
   });
   const [saveLeagueProgram] = useSaveLeagueProgramMutation();
   const [syncLeagueProgramMatches] = useSyncLeagueProgramMatchesMutation();
+  const [pendingProgramSave, setPendingProgramSave] = useState<StoredProgramWithEditState | null>(null);
   const [playerCount, setPlayerCount] = useState(initialPlayerCount);
   const [courtCount, setCourtCount] = useState(initialCourtCount);
   const [startHour, setStartHour] = useState(Number(initialStartTime.split(":" )[0]) || 9);
@@ -1016,6 +1077,8 @@ const LeagueAlgorithmDemo = ({
     });
   }, [isCompletingCustomProgram, isCustomProgramCompleted]);
   const [pendingGroupSizes, setPendingGroupSizes] = useState<number[]>([]);
+  const [customGroupCount, setCustomGroupCount] = useState(1);
+  const [groupStructureSelectionSource, setGroupStructureSelectionSource] = useState<"preset" | "custom">("preset");
   const [groupResultDialog, setGroupResultDialog] = useState<{
     optionIndex: number;
     blockIndex: number;
@@ -1425,6 +1488,40 @@ const LeagueAlgorithmDemo = ({
     closeProgramEditDialog();
   };
 
+  const persistSelectedProgram = async (
+    selectedOption: StoredProgramWithEditState,
+    syncMatches: boolean,
+    resetResults = false,
+  ) => {
+    if (!leagueId) return;
+    localStorage.setItem(`league-program-${leagueId}`, JSON.stringify(selectedOption));
+    localStorage.setItem(`league-program-active-round-${leagueId}`, "1");
+    await saveLeagueProgram({ leagueId, program: selectedOption }).unwrap();
+
+    if (syncMatches) {
+      const programMatches = selectedOption.blocks.flatMap((block, blockIndex) =>
+        generateProgramRoundMatches(
+          leagueId,
+          selectedOption,
+          participantData?.participants ?? [],
+          blockIndex + 1,
+        ).map((match) => ({
+          ...match,
+          program_round: blockIndex + 1,
+          program_block_type: block.type,
+        }))
+      );
+      await syncLeagueProgramMatches({
+        leagueId,
+        matches: programMatches,
+        resetResults,
+      }).unwrap();
+    }
+
+    setPendingProgramSave(null);
+    navigate(isEditMode ? `/league/${leagueId}` : `/league/${leagueId}/program`);
+  };
+
   const completeProgramCreation = async () => {
     if (selectedProgramOptionIndex === null) {
       return;
@@ -1457,6 +1554,10 @@ const LeagueAlgorithmDemo = ({
 
     if (leagueId) {
       const previousProgram = savedProgramData?.program?.program_data as ProgramOption | undefined;
+      if (isEditMode && previousProgram) {
+        setPendingProgramSave(selectedOption);
+        return;
+      }
       if (isEditMode && previousProgram) {
         selectedOption.blocks.forEach((block, blockIndex) => {
           const previousBlock = previousProgram.blocks?.[blockIndex];
@@ -1491,25 +1592,11 @@ const LeagueAlgorithmDemo = ({
           }
         });
       }
-      localStorage.setItem(
-        `league-program-${leagueId}`,
-        JSON.stringify(selectedOption)
-      );
-      localStorage.setItem(`league-program-active-round-${leagueId}`, "1");
-      await saveLeagueProgram({ leagueId, program: selectedOption }).unwrap();
-      const programMatches = selectedOption.blocks.flatMap((block, blockIndex) =>
-        generateProgramRoundMatches(leagueId, selectedOption, participantData?.participants ?? [], blockIndex + 1).map((match) => ({
-          ...match,
-          program_round: blockIndex + 1,
-          program_block_type: block.type,
-        }))
-      );
       try {
-        await syncLeagueProgramMatches({ leagueId, matches: programMatches }).unwrap();
+        await persistSelectedProgram(selectedOption, true);
       } catch (error) {
         console.error("Failed to sync program matches", error);
       }
-      navigate(isEditMode ? `/league/${leagueId}` : `/league/${leagueId}/program`);
       return;
     }
 
@@ -1609,15 +1696,17 @@ const LeagueAlgorithmDemo = ({
     groupSizes: number[],
     mode: "team" | "group"
   ) => {
-    const baseOption = displayedProgramOptions[optionIndex];
+    const baseOption = customProgramOptions[optionIndex] ?? displayedProgramOptions[optionIndex];
+    const isTeamGroupStructure =
+      mode === "group" && baseOption.blocks[blockIndex]?.type === "TEAM";
     const nextRounds = (baseOption.rounds ?? rounds).map(
       (round, roundIndex) => ({
         ...round,
         id: roundIndex + 1,
-        groupSizes: mode === "team" && roundIndex === blockIndex
+        groupSizes: roundIndex === blockIndex && !isTeamGroupStructure
           ? groupSizes
           : round.groupSizes ?? baseOption.groupSizes,
-        teamGroupSizes: mode === "group" && roundIndex === blockIndex
+        teamGroupSizes: roundIndex === blockIndex && isTeamGroupStructure
           ? groupSizes
           : round.teamGroupSizes,
         teamAssignments: mode === "team" && roundIndex === blockIndex
@@ -1633,10 +1722,10 @@ const LeagueAlgorithmDemo = ({
       nextRounds
     );
 
-    setCustomProgramOptions({
-      ...customProgramOptions,
+    setCustomProgramOptions((previous) => ({
+      ...previous,
       [optionIndex]: updatedOption,
-    });
+    }));
   };
 
   const updateProgramRoundShuffleSeed = (
@@ -1747,9 +1836,13 @@ const LeagueAlgorithmDemo = ({
   ) => {
     const option = displayedProgramOptions[optionIndex];
 
-    setPendingGroupSizes(
-      getStructureSizes(option, blockIndex, mode)
-    );
+    const currentSizes = getStructureSizes(option, blockIndex, mode);
+    setPendingGroupSizes(currentSizes);
+    setCustomGroupCount(Math.max(1, currentSizes.length));
+    const currentMemberCount = currentSizes.reduce((sum, size) => sum + size, 0);
+    const matchesPreset = generateGroupOptions(currentMemberCount)
+      .some((groupOption) => sameGroupSizes(currentSizes, groupOption.groups));
+    setGroupStructureSelectionSource(matchesPreset ? "preset" : "custom");
     setGroupStructureDialog({
       optionIndex,
       blockIndex,
@@ -1760,6 +1853,8 @@ const LeagueAlgorithmDemo = ({
   const closeGroupStructureDialog = () => {
     setGroupStructureDialog(null);
     setPendingGroupSizes([]);
+    setCustomGroupCount(1);
+    setGroupStructureSelectionSource("preset");
   };
 
   const completeGroupStructureDialog = () => {
@@ -1810,6 +1905,11 @@ const LeagueAlgorithmDemo = ({
   const groupStructureOptions = useMemo(
     () => generateGroupOptions(groupStructureOptionCount),
     [groupStructureOptionCount],
+  );
+  const maxCustomGroupCount = Math.max(1, Math.floor(groupStructureOptionCount / 2));
+  const customGroupSizes = useMemo(
+    () => buildBalancedGroupSizes(groupStructureOptionCount, customGroupCount),
+    [groupStructureOptionCount, customGroupCount],
   );
   const isGroupStructureTeam = groupStructureDialog?.mode === "team";
   const groupResultOption =
@@ -3097,7 +3197,7 @@ const LeagueAlgorithmDemo = ({
 
         <DialogContent dividers>
           {groupStructureOptions.map((option) => {
-            const selected = sameGroupSizes(
+            const selected = groupStructureSelectionSource === "preset" && sameGroupSizes(
               groupStructureSizes,
               option.groups
             );
@@ -3107,6 +3207,7 @@ const LeagueAlgorithmDemo = ({
                 key={`${option.tierSize}-${option.groupCount}`}
                 onClick={() => {
                   setPendingGroupSizes(option.groups);
+                  setGroupStructureSelectionSource("preset");
                 }}
                 style={{
                   border: selected
@@ -3163,6 +3264,94 @@ const LeagueAlgorithmDemo = ({
               </div>
             );
           })}
+          <Divider sx={{ my: 2 }} />
+          <Typography sx={{ fontSize: 16, fontWeight: 800, mb: 0.5 }}>
+            직접 설정
+          </Typography>
+          <Typography sx={{ fontSize: 13, color: "text.secondary", mb: 1.5 }}>
+            원하는 {isGroupStructureTeam ? "팀" : "조"} 개수를 선택하면 인원을 최대한 균등하게 배분합니다.
+          </Typography>
+          <Box
+            onClick={() => {
+              setPendingGroupSizes(customGroupSizes);
+              setGroupStructureSelectionSource("custom");
+            }}
+            sx={{
+              border: groupStructureSelectionSource === "custom"
+                ? "2px solid #3B82F6"
+                : "1px solid #D1D5DB",
+              borderRadius: 1,
+              p: 2,
+              bgcolor: groupStructureSelectionSource === "custom" ? "#EFF6FF" : "#FFF",
+              cursor: "pointer",
+            }}
+          >
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <Typography sx={{ flex: 1, fontSize: 14, fontWeight: 800 }}>
+                {isGroupStructureTeam ? "팀" : "조"} 개수
+              </Typography>
+              <IconButton
+                aria-label={`${isGroupStructureTeam ? "팀" : "조"} 개수 감소`}
+                disabled={customGroupCount <= 1}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  const nextCount = Math.max(1, customGroupCount - 1);
+                  setCustomGroupCount(nextCount);
+                  setPendingGroupSizes(buildBalancedGroupSizes(groupStructureOptionCount, nextCount));
+                  setGroupStructureSelectionSource("custom");
+                }}
+                sx={{ width: 36, height: 36, border: "1px solid #D1D5DB" }}
+              >
+                −
+              </IconButton>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                aria-label={`${isGroupStructureTeam ? "팀" : "조"} 개수`}
+                value={customGroupCount}
+                onFocus={(event) => event.currentTarget.select()}
+                onClick={(event) => event.stopPropagation()}
+                onChange={(event) => {
+                  if (event.target.value === "") return;
+                  const nextCount = Math.min(
+                    maxCustomGroupCount,
+                    Math.max(1, Number(event.target.value) || 1),
+                  );
+                  setCustomGroupCount(nextCount);
+                  setPendingGroupSizes(buildBalancedGroupSizes(groupStructureOptionCount, nextCount));
+                  setGroupStructureSelectionSource("custom");
+                }}
+                style={{
+                  width: "52px",
+                  height: "36px",
+                  boxSizing: "border-box",
+                  border: "1px solid #D1D5DB",
+                  borderRadius: "8px",
+                  background: "#FFF",
+                  fontWeight: 800,
+                  textAlign: "center",
+                }}
+              />
+              <IconButton
+                aria-label={`${isGroupStructureTeam ? "팀" : "조"} 개수 증가`}
+                disabled={customGroupCount >= maxCustomGroupCount}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  const nextCount = Math.min(maxCustomGroupCount, customGroupCount + 1);
+                  setCustomGroupCount(nextCount);
+                  setPendingGroupSizes(buildBalancedGroupSizes(groupStructureOptionCount, nextCount));
+                  setGroupStructureSelectionSource("custom");
+                }}
+                sx={{ width: 36, height: 36, border: "1px solid #D1D5DB" }}
+              >
+                +
+              </IconButton>
+            </Stack>
+            <Typography sx={{ mt: 1.25, fontSize: 14, color: "#4B5563" }}>
+              {customGroupCount}개 {isGroupStructureTeam ? "팀" : "조"} · {customGroupSizes.map((size) => `${size}인`).join(" / ")}
+            </Typography>
+          </Box>
         </DialogContent>
 
         <DialogActions>
@@ -3295,6 +3484,36 @@ const LeagueAlgorithmDemo = ({
           {!isFormationEditing && <Button onClick={() => setGroupResultDialog(null)}>
             닫기
           </Button>}
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={pendingProgramSave !== null}
+        onClose={() => setPendingProgramSave(null)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle sx={{ fontWeight: 900, fontSize: 18 }}>
+          대진표 초기화
+        </DialogTitle>
+        <DialogContent dividers>
+          <Typography sx={{ fontSize: 15 }}>
+            원활한 리그 진행을 위해 대진표를 초기화하겠습니까?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => pendingProgramSave && persistSelectedProgram(pendingProgramSave, false)}
+          >
+            계속 진행
+          </Button>
+          <Button
+            color="error"
+            variant="contained"
+            onClick={() => pendingProgramSave && persistSelectedProgram(pendingProgramSave, true, true)}
+          >
+            초기화
+          </Button>
         </DialogActions>
       </Dialog>
 

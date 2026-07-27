@@ -58,6 +58,7 @@ const newRound = (id: number): RenewalRoundConfig => ({
   teamMatchType: null,
   tournamentSeeding: "seed",
   tournamentBracketCount: 1,
+  thirdPlaceMatch: true,
   tournamentMode: "single",
   finalAdvancementMode: "top-n",
   advanceCount: 2,
@@ -77,13 +78,15 @@ const parseTournamentChoice = (
 function AdvancementCount({
   value,
   onChange,
+  prefix = "상위",
 }: {
   value: number;
   onChange: (value: number) => void;
+  prefix?: string;
 }) {
   return (
     <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 2 }}>
-      <Typography sx={{ fontWeight: 900 }}>상위</Typography>
+      <Typography sx={{ fontWeight: 900 }}>{prefix}</Typography>
       <Stack direction="row" alignItems="center" spacing={0.5}>
         <IconButton
           aria-label="본선 진출 인원 감소"
@@ -186,6 +189,7 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
       tournamentSeeding: "seed",
       tournamentBracketCount:
         format === "TOURNAMENT" ? rounds[index].tournamentBracketCount ?? 1 : 1,
+      thirdPlaceMatch: format === "TOURNAMENT" ? rounds[index].thirdPlaceMatch ?? true : undefined,
       finalAdvancementMode: "top-n",
       advanceCount: rounds[index].advanceCount ?? 2,
       sourceRoundId: index > 0 ? rounds[index - 1].id : undefined,
@@ -302,12 +306,15 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
 
   const renderFinalOptions = (round: RenewalRoundConfig, index: number) => {
     if (index === 0 || round.option !== "FINAL") return null;
+    const previousFormat = rounds[index - 1]?.format;
+    const advancementPrefix = previousFormat === "GROUP" ? "각 조 상위" : "전체 상위";
 
     if (round.format === "LEAGUE") {
       return (
         <>
           <AdvancementCount
             value={round.advanceCount ?? 2}
+            prefix={advancementPrefix}
             onChange={(advanceCount) =>
               updateRound(index, {
                 advanceCount,
@@ -348,6 +355,7 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
           {mode === "top-n" && (
             <AdvancementCount
               value={round.advanceCount ?? 2}
+              prefix={advancementPrefix}
               onChange={(advanceCount) => updateRound(index, { advanceCount })}
             />
           )}
@@ -359,6 +367,29 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
                 : "예선 순위 결과에 따라 상위 순위권 참가자만 본선 라운드를 진행합니다."}
           </Typography>
         </Box>
+      );
+    }
+
+    if (round.format === "TOURNAMENT") {
+      return (
+        <>
+          <AdvancementCount
+            value={round.advanceCount ?? 2}
+            prefix={advancementPrefix}
+            onChange={(advanceCount) =>
+              updateRound(index, {
+                advanceCount,
+                finalAdvancementMode: "top-n",
+                sourceRoundId: rounds[index - 1].id,
+              })
+            }
+          />
+          <Typography sx={descriptionSx}>
+            {previousFormat === "GROUP"
+              ? "각 조의 상위 순위 참가자가 진출하며, 총 진출 인원에 맞춰 토너먼트 시작 단계와 BYE를 자동으로 구성합니다."
+              : "전체 순위의 상위 참가자가 진출하며, 진출 인원에 맞춰 토너먼트 시작 단계와 BYE를 자동으로 구성합니다."}
+          </Typography>
+        </>
       );
     }
 
@@ -465,9 +496,13 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
                   select
                   fullWidth
                   value={round.tournamentBracketCount ?? 1}
-                  onChange={(event) =>
-                    updateRound(index, { tournamentBracketCount: Number(event.target.value) })
-                  }
+                  onChange={(event) => {
+                    const tournamentBracketCount = Number(event.target.value);
+                    updateRound(index, {
+                      tournamentBracketCount,
+                      thirdPlaceMatch: tournamentBracketCount === 1,
+                    });
+                  }}
                   size="small"
                 >
                   {Array.from({ length: 8 }, (_, optionIndex) => optionIndex + 1).map((count) => (
@@ -476,6 +511,25 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
                 </TextField>
               </Box>
             )}
+
+          {round.format === "TOURNAMENT" && (
+            <Box sx={{ mt: 2 }}>
+              <Typography sx={{ fontWeight: 900, mb: 0.5 }}>3·4위전</Typography>
+              <RadioGroup
+                row
+                value={(round.thirdPlaceMatch ?? (round.tournamentBracketCount ?? 1) === 1) ? "yes" : "no"}
+                onChange={(event) =>
+                  updateRound(index, { thirdPlaceMatch: event.target.value === "yes" })
+                }
+              >
+                <FormControlLabel value="yes" control={<Radio />} label="진행" />
+                <FormControlLabel value="no" control={<Radio />} label="진행 안 함" />
+              </RadioGroup>
+              <Typography sx={descriptionSx}>
+                진행하지 않으면 4강 탈락자 두 명이 공동 3위가 됩니다.
+              </Typography>
+            </Box>
+          )}
 
           {hasParticipatingClubs && round.format !== "LEAGUE" && (
             <Box sx={{ mt: 2 }}>

@@ -82,6 +82,20 @@ export interface ProgramOption {
   totalProgramMinutes: number;
   isOverTime: boolean;
   rounds?: RoundConfig[];
+  roundStandings?: ProgramRoundStandingsSnapshot[];
+}
+
+export interface ProgramRoundStandingPool {
+  label: string;
+  complete: boolean;
+  participantIds: string[];
+}
+
+export interface ProgramRoundStandingsSnapshot {
+  round: number;
+  complete: boolean;
+  pools: ProgramRoundStandingPool[];
+  updatedAt: string;
 }
 
 export interface ProgramBlock {
@@ -108,6 +122,7 @@ export interface ProgramBlock {
   teamAssignments?: FormationAssignmentPlayer[][];
   doublesAssignments?: FormationAssignmentPlayer[][];
   tournamentBracketCount?: number;
+  thirdPlaceMatch?: boolean;
   tournamentSeeding?: TournamentSeedingType;
   tournamentMode?: TournamentMode;
   finalAdvancementMode?: FinalAdvancementMode;
@@ -116,6 +131,7 @@ export interface ProgramBlock {
   crossClubGrouping?: boolean;
   crossClubOnlyMatches?: boolean;
   unitClubMode?: UnitClubMode;
+  participantOrder?: string[];
   deletedMatchIds?: string[];
   teamSinglesCount?: number;
   teamDoublesCount?: number;
@@ -195,6 +211,7 @@ export interface RoundConfig {
   teamAssignments?: FormationAssignmentPlayer[][];
   doublesAssignments?: FormationAssignmentPlayer[][];
   tournamentBracketCount?: number;
+  thirdPlaceMatch?: boolean;
   tournamentSeeding?: TournamentSeedingType;
   tournamentMode?: TournamentMode;
   finalAdvancementMode?: FinalAdvancementMode;
@@ -203,6 +220,7 @@ export interface RoundConfig {
   crossClubGrouping?: boolean;
   crossClubOnlyMatches?: boolean;
   unitClubMode?: UnitClubMode;
+  participantOrder?: string[];
 }
 
 export interface ProgramPreferences {

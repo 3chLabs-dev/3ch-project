@@ -349,32 +349,6 @@ router.post('/match/:match_id/result', async (req, res) => {
   }
 });
 
-// 컬럼 자동 추가
-pool.query(`
-  ALTER TABLE leagues
-    ADD COLUMN IF NOT EXISTS tournament_seeding TEXT,
-    ADD COLUMN IF NOT EXISTS tournament_advancement TEXT,
-    ADD COLUMN IF NOT EXISTS tournament_rules TEXT,
-    ADD COLUMN IF NOT EXISTS advance_count INT,
-    ADD COLUMN IF NOT EXISTS advance_method TEXT,
-    ADD COLUMN IF NOT EXISTS finals_advance INT
-`).catch((e) => console.error('leagues 컬럼 추가 실패:', e.message));
-
-// 토너먼트 경기 컬럼 자동 추가
-pool.query(`
-  ALTER TABLE league_matches
-    ADD COLUMN IF NOT EXISTS bracket TEXT,
-    ADD COLUMN IF NOT EXISTS round_number INT,
-    ADD COLUMN IF NOT EXISTS match_label TEXT,
-    ADD COLUMN IF NOT EXISTS next_match_id TEXT,
-    ADD COLUMN IF NOT EXISTS next_slot TEXT,
-    ADD COLUMN IF NOT EXISTS loser_next_match_id TEXT,
-    ADD COLUMN IF NOT EXISTS loser_next_slot TEXT,
-    ADD COLUMN IF NOT EXISTS is_program BOOLEAN NOT NULL DEFAULT FALSE,
-    ADD COLUMN IF NOT EXISTS program_round INT,
-    ADD COLUMN IF NOT EXISTS program_block_type TEXT
-`).catch((e) => console.error('league_matches 컬럼 추가 실패:', e.message));
-
 // ─── 토너먼트 브래킷 생성 유틸 ───────────────────────────────────────────────
 
 /**
@@ -2974,6 +2948,7 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
   const userId = Number(req.user.sub);
   const leagueId = req.params.id;
   const matches = Array.isArray(req.body?.matches) ? req.body.matches : [];
+  const resetResults = req.body?.reset_results === true;
 
   try {
     const access = await pool.query(
@@ -3006,6 +2981,10 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
       })
       .map((match, index) => {
         const isSingles = match.program_block_type === 'SINGLES';
+        const rosterIds = (value) => String(value ?? '')
+          .split('+')
+          .map((id) => id.trim())
+          .filter((id) => participantIds.has(id));
         return ({
         id: String(match.id),
         match_order: Number.isFinite(Number(match.match_order)) ? Number(match.match_order) : index + 1,
@@ -3020,6 +2999,8 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
         loser_next_slot: match.loser_next_slot ?? null,
         program_round: match.program_round == null ? null : Number(match.program_round),
         program_block_type: match.program_block_type,
+        participant_a_roster_ids: isSingles ? [] : rosterIds(match.participant_a_id),
+        participant_b_roster_ids: isSingles ? [] : rosterIds(match.participant_b_id),
       });
       });
 
@@ -3047,9 +3028,9 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
     if (validMatches.length > 0) {
       const values = [];
       const placeholders = validMatches.map((match, index) => {
-        const base = index * 18;
+        const base = index * 20;
         const previous = existingState.get(match.id);
-        const canPreserveState = previous && (
+        const canPreserveState = !resetResults && previous && (
           match.program_block_type !== 'SINGLES' ||
           (
             previous.program_block_type === match.program_block_type &&
@@ -3076,15 +3057,17 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
           canPreserveState ? previous.status : 'pending',
           match.program_round,
           match.program_block_type,
+          match.participant_a_roster_ids,
+          match.participant_b_roster_ids,
         );
-        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9}, $${base + 10}, $${base + 11}, $${base + 12}, $${base + 13}, $${base + 14}, $${base + 15}, $${base + 16}, TRUE, $${base + 17}, $${base + 18})`;
+        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9}, $${base + 10}, $${base + 11}, $${base + 12}, $${base + 13}, $${base + 14}, $${base + 15}, $${base + 16}, TRUE, $${base + 17}, $${base + 18}, $${base + 19}::text[], $${base + 20}::text[])`;
       });
 
       await pool.query(
         `INSERT INTO league_matches
          (id, league_id, match_order, participant_a_id, participant_b_id, bracket, round_number, match_label,
           next_match_id, next_slot, loser_next_match_id, loser_next_slot, score_a, score_b, court, status,
-          is_program, program_round, program_block_type)
+          is_program, program_round, program_block_type, participant_a_roster_ids, participant_b_roster_ids)
          VALUES ${placeholders.join(', ')}`,
         values,
       );

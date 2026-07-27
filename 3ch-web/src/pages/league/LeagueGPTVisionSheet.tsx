@@ -988,6 +988,7 @@ export default function LeagueGPTVisionSheet() {
     [isProgramMode, id, programData],
   );
   const currentProgramBlock = programOption?.blocks?.[programRound - 1];
+  const currentProgramRound = programOption?.rounds?.[programRound - 1];
   const currentRule = currentProgramBlock?.matchRule ?? league?.rules;
   const [programMatchStateVersion, setProgramMatchStateVersion] = useState(0);
   const programSourceMatches = useMemo(() => {
@@ -1225,6 +1226,50 @@ export default function LeagueGPTVisionSheet() {
 
   // 3. 선택된 조의 팀원만 필터링 (조가 없으면 전체)
   const targetParticipants = useMemo(() => {
+    const normalizeDivision = (division?: string | null) => {
+      const parsed = Number.parseInt(String(division ?? "").replace(/[^0-9]/g, ""), 10);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+    const selectedGroupIndex = selectedGroup
+      ? Number.parseInt(selectedGroup.replace(/[^0-9]/g, ""), 10) - 1
+      : -1;
+    const savedAssignments =
+      currentProgramRound?.groupAssignments ?? currentProgramBlock?.groupAssignments;
+    const savedGroupAssignments =
+      selectedGroupIndex >= 0 ? savedAssignments?.[selectedGroupIndex] : undefined;
+    const orderBySavedFormation = <
+      T extends { id: string; name: string; division?: string | null }
+    >(participants: T[]) => {
+      const savedParticipantOrder =
+        currentProgramRound?.participantOrder ?? currentProgramBlock?.participantOrder;
+      if (savedParticipantOrder?.length) {
+        const orderById = new Map(
+          savedParticipantOrder.map((participantId, index) => [participantId, index]),
+        );
+        return [...participants].sort(
+          (left, right) =>
+            (orderById.get(left.id) ?? Number.MAX_SAFE_INTEGER)
+            - (orderById.get(right.id) ?? Number.MAX_SAFE_INTEGER),
+        );
+      }
+
+      if (!savedGroupAssignments?.length) return participants;
+      const remaining = [...participants];
+      const ordered = savedGroupAssignments.flatMap((assignment) => {
+        let index = remaining.findIndex(
+          (participant) =>
+            participant.name === assignment.name
+            && normalizeDivision(participant.division) === assignment.level,
+        );
+        if (index < 0) {
+          index = remaining.findIndex((participant) => participant.name === assignment.name);
+        }
+        if (index < 0) return [];
+        return remaining.splice(index, 1);
+      });
+      return [...ordered, ...remaining];
+    };
+
     if (isProgramTeamRound) {
       if (groupNames.length > 0 && selectedGroup) {
         const selectedMatches = programMatchesAll.filter((match) => match.match_label === selectedGroup);
@@ -1240,7 +1285,9 @@ export default function LeagueGPTVisionSheet() {
       const ids = new Set(
         selectedMatches.flatMap((match) => [match.participant_a_id, match.participant_b_id]).filter(Boolean) as string[],
       );
-      return programDisplayParticipants.filter((participant) => ids.has(participant.id));
+      return orderBySavedFormation(
+        programDisplayParticipants.filter((participant) => ids.has(participant.id)),
+      );
     }
     if (isProgramMode) {
       return programDisplayParticipants;
@@ -1249,7 +1296,7 @@ export default function LeagueGPTVisionSheet() {
       return rawParticipants.filter(p => p.group_name === selectedGroup);
     }
     return rawParticipants;
-  }, [isProgramTeamRound, programTeamParticipants, programDisplayParticipants, isProgramMode, programMatchesAll, rawParticipants, groupNames, selectedGroup]);
+  }, [currentProgramBlock, currentProgramRound, isProgramTeamRound, programTeamParticipants, programDisplayParticipants, isProgramMode, programMatchesAll, rawParticipants, groupNames, selectedGroup]);
 
   // 4. 선택된 조의 경기만 필터링
   const matches = useMemo(() => {
@@ -1293,6 +1340,10 @@ export default function LeagueGPTVisionSheet() {
   // editOrder≠null: 사용자가 순서를 변경한 로컬 상태 (서버에도 즉시 반영)
   const [editOrder, setEditOrder] = useState<LeagueParticipantItem[] | null>(null);
   const localOrder = editOrder ?? targetParticipants;
+  const targetParticipantKey = targetParticipants.map((participant) => participant.id).join("|");
+  useEffect(() => {
+    setEditOrder(null);
+  }, [targetParticipantKey]);
   const setLocalOrder = useCallback(
     (fn: (prev: LeagueParticipantItem[]) => LeagueParticipantItem[]) =>
       setEditOrder((prev) => fn(prev ?? targetParticipants)),

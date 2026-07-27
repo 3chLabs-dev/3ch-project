@@ -82,6 +82,11 @@ function seededBracket(n: number): number[] {
   return arr;
 }
 
+function tournamentMatchSlot(match: LeagueMatch) {
+  const matched = match.id.match(/(?:open-)?m(\d+)$/);
+  return matched ? Number.parseInt(matched[1], 10) : match.match_order;
+}
+
 const AUTO_COMPLETE_DELAY_MS = 4000;
 
 function participantNameIncludes(name: string | null | undefined, targetName: string | null | undefined) {
@@ -805,12 +810,63 @@ export default function LeagueMatchOrder() {
   }, [activeProgramMatches, isTournamentProgramRound]);
 
   const activeTournamentTab = tournamentTabKey ?? tournamentTabs[0]?.key ?? "";
+  const tournamentMatchNumberMap = useMemo(() => {
+    const map = new Map<string, number>();
+    let nextNumber = 1;
+    tournamentTabs.forEach((tab) => {
+      activeProgramMatches
+        .filter(
+          (match) =>
+            match.bracket === tab.bracket &&
+            match.round_number === tab.roundNumber,
+        )
+        .sort((left, right) =>
+          tournamentMatchSlot(left) - tournamentMatchSlot(right)
+          || left.id.localeCompare(right.id)
+        )
+        .forEach((match) => {
+          map.set(match.id, nextNumber);
+          nextNumber += 1;
+        });
+    });
+    return map;
+  }, [activeProgramMatches, tournamentTabs]);
+
   const visibleMatches = useMemo(() => {
     if (!isTournamentProgramRound) return matches;
     const currentTab = tournamentTabs.find((tab) => tab.key === activeTournamentTab);
     if (!currentTab) return [];
-    return matches.filter((match) => match.bracket === currentTab.bracket && match.round_number === currentTab.roundNumber);
-  }, [activeTournamentTab, isTournamentProgramRound, matches, tournamentTabs]);
+    return matches
+      .filter(
+        (match) =>
+          match.bracket === currentTab.bracket &&
+          match.round_number === currentTab.roundNumber,
+      )
+      .sort((left, right) =>
+        {
+          const leftStarted = startedMatchIds.indexOf(left.id);
+          const rightStarted = startedMatchIds.indexOf(right.id);
+          if (leftStarted !== -1 || rightStarted !== -1) {
+            if (leftStarted === -1) return 1;
+            if (rightStarted === -1) return -1;
+            return leftStarted - rightStarted;
+          }
+          if (left.status === "playing" && right.status !== "playing") return -1;
+          if (left.status !== "playing" && right.status === "playing") return 1;
+          return (
+            (tournamentMatchNumberMap.get(left.id) ?? Number.MAX_SAFE_INTEGER)
+            - (tournamentMatchNumberMap.get(right.id) ?? Number.MAX_SAFE_INTEGER)
+          );
+        }
+      );
+  }, [
+    activeTournamentTab,
+    isTournamentProgramRound,
+    matches,
+    startedMatchIds,
+    tournamentMatchNumberMap,
+    tournamentTabs,
+  ]);
   const displayedMatches = useMemo(() => {
     let filtered = visibleMatches.filter((match) => !match.is_no_game);
     if (mineOnly && myName) {
@@ -1160,7 +1216,9 @@ export default function LeagueMatchOrder() {
             <Stack spacing={1}>
               {displayedMatches.map((match, displayIndex) => {
                 const originalIndex = isProgramMode
-                  ? programMatches.findIndex((m) => m.id === match.id)
+                  ? isTournamentProgramRound
+                    ? (tournamentMatchNumberMap.get(match.id) ?? displayIndex + 1) - 1
+                    : programMatches.findIndex((m) => m.id === match.id)
                   : (matchData?.matches ?? [])
                   .filter((m) => !m.bracket)
                   .findIndex((m) => m.id === match.id);

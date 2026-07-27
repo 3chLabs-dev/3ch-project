@@ -418,7 +418,7 @@ function buildTournamentMatches(
         : { id: null, name: null, division: null };
       const match = makeMatch(
         matchId,
-        matchIndex + 1,
+        matches.length + 1,
         a,
         b,
         bracketRound,

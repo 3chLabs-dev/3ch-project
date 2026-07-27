@@ -186,10 +186,7 @@ function calcPositions(matches: LeagueMatch[]): MatchPos[] {
       );
     const finalPos = finalMatch ? result.find((pos) => pos.id === finalMatch.id) : null;
     const x = finalPos?.x ?? PX + ((thirdPlaceMatch.round_number ?? maxRound) - 1) * (MW + RGAP);
-    const y = Math.max(
-      (finalPos?.y ?? PT) + MH + 56,
-      result.reduce((max, pos) => Math.max(max, pos.y + MH), PT) + 36,
-    );
+    const y = (finalPos?.y ?? PT) + MH + 28;
     result.push({ id: thirdPlaceMatch.id, x, y, match: thirdPlaceMatch });
   }
   return result;

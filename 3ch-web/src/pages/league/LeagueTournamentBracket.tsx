@@ -183,10 +183,17 @@ function calcPositions(matches: LeagueMatch[]): MatchPos[] {
             ? match
             : latest,
         null,
-      );
+    );
     const finalPos = finalMatch ? result.find((pos) => pos.id === finalMatch.id) : null;
     const x = finalPos?.x ?? PX + ((thirdPlaceMatch.round_number ?? maxRound) - 1) * (MW + RGAP);
-    const y = (finalPos?.y ?? PT) + MH + 28;
+    const semifinalPositions = finalMatch
+      ? result.filter((pos) => pos.match.next_match_id === finalMatch.id)
+      : [];
+    const lowerSemifinalY = semifinalPositions.reduce<number | null>(
+      (lowest, pos) => lowest == null || pos.y > lowest ? pos.y : lowest,
+      null,
+    );
+    const y = lowerSemifinalY ?? (finalPos?.y ?? PT) + MH + 56;
     result.push({ id: thirdPlaceMatch.id, x, y, match: thirdPlaceMatch });
   }
   return result;

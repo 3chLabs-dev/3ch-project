@@ -781,16 +781,32 @@ function distributeRankedUnitPoolsToBrackets(
   bracketCount: number,
 ): MatchUnit[][] {
   const count = Math.min(Math.max(1, bracketCount), Math.max(1, rankedPools.flat().length));
-  const brackets = Array.from({ length: count }, () => [] as MatchUnit[]);
+  const brackets = Array.from(
+    { length: count },
+    () => [] as Array<{ unit: MatchUnit; poolIndex: number; rankIndex: number }>,
+  );
   rankedPools.forEach((pool, poolIndex) => {
     pool.forEach((unit, rankIndex) => {
       brackets[(poolIndex + rankIndex) % count].push({
-        ...unit,
-        seedLabel: `${poolIndex + 1}-${rankIndex + 1}`,
+        unit: {
+          ...unit,
+          seedLabel: `${poolIndex + 1}-${rankIndex + 1}`,
+        },
+        poolIndex,
+        rankIndex,
       });
     });
   });
-  return brackets.filter((bracket) => bracket.length > 0);
+  return brackets
+    .filter((bracket) => bracket.length > 0)
+    .map((bracket) =>
+      bracket
+        .sort(
+          (left, right) =>
+            left.rankIndex - right.rankIndex || left.poolIndex - right.poolIndex,
+        )
+        .map(({ unit }) => unit),
+    );
 }
 
 function balancedSizes(total: number, preferredGroupCount: number) {

@@ -936,6 +936,7 @@ export default function LeagueBracket() {
     () => (isProgramMode && id ? (programData?.program?.program_data as ReturnType<typeof getStoredProgramOption> | undefined) ?? getStoredProgramOption(id) : null),
     [isProgramMode, id, programData],
   );
+  const currentProgramRound = isProgramMode ? programOption?.rounds?.[programRound - 1] : undefined;
   const currentProgramBlock = isProgramMode ? programOption?.blocks?.[programRound - 1] : undefined;
   const currentRule = currentProgramBlock?.matchRule ?? league?.rules;
   const [programMatchStateVersion, setProgramMatchStateVersion] = useState(0);
@@ -1139,10 +1140,12 @@ export default function LeagueBracket() {
     const sortBySavedGroupOrder = <T extends { name: string; division?: string | null }>(
       participants: T[],
     ) => {
-      if (!selectedGroup || !currentProgramBlock?.groupAssignments?.length) return participants;
+      const savedGroupAssignments =
+        currentProgramRound?.groupAssignments ?? currentProgramBlock?.groupAssignments;
+      if (!selectedGroup || !savedGroupAssignments?.length) return participants;
 
       const groupNumber = Number.parseInt(selectedGroup, 10);
-      const assignments = currentProgramBlock.groupAssignments[groupNumber - 1];
+      const assignments = savedGroupAssignments[groupNumber - 1];
       if (!assignments?.length) return participants;
 
       const normalizeDivision = (division?: string | null) => {
@@ -1210,7 +1213,7 @@ export default function LeagueBracket() {
       return rawParticipants.filter(p => p.group_name === selectedGroup);
     }
     return rawParticipants;
-  }, [currentProgramBlock, isProgramTeamRound, programTeamParticipants, programSinglesParticipants, isProgramMode, programMatchesAll, rawParticipants, groupNames, selectedGroup]);
+  }, [currentProgramBlock, currentProgramRound, isProgramTeamRound, programTeamParticipants, programSinglesParticipants, isProgramMode, programMatchesAll, rawParticipants, groupNames, selectedGroup]);
 
   // 4. 선택된 조의 경기만 필터링
   const matches = useMemo(() => {

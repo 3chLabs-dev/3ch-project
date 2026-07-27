@@ -1136,6 +1136,35 @@ export default function LeagueBracket() {
 
   // 3. 선택된 조의 팀원만 필터링 (조가 없으면 전체)
   const targetParticipants = useMemo(() => {
+    const sortBySavedGroupOrder = <T extends { name: string; division?: string | null }>(
+      participants: T[],
+    ) => {
+      if (!selectedGroup || !currentProgramBlock?.groupAssignments?.length) return participants;
+
+      const groupNumber = Number.parseInt(selectedGroup, 10);
+      const assignments = currentProgramBlock.groupAssignments[groupNumber - 1];
+      if (!assignments?.length) return participants;
+
+      const normalizeDivision = (division?: string | null) => {
+        const parsed = Number.parseInt(String(division ?? "").replace(/[^0-9]/g, ""), 10);
+        return Number.isFinite(parsed) ? parsed : null;
+      };
+      const exactOrder = new Map(
+        assignments.map((assignment, index) => [`${assignment.name}\u0000${assignment.level}`, index]),
+      );
+      const nameOrder = new Map(assignments.map((assignment, index) => [assignment.name, index]));
+
+      return [...participants].sort((left, right) => {
+        const leftOrder = exactOrder.get(`${left.name}\u0000${normalizeDivision(left.division)}`)
+          ?? nameOrder.get(left.name)
+          ?? Number.MAX_SAFE_INTEGER;
+        const rightOrder = exactOrder.get(`${right.name}\u0000${normalizeDivision(right.division)}`)
+          ?? nameOrder.get(right.name)
+          ?? Number.MAX_SAFE_INTEGER;
+        return leftOrder - rightOrder;
+      });
+    };
+
     const sortByProgramSeed = <T extends { id: string }>(participants: T[], selectedMatches: LeagueMatch[]) => {
       const seedById = new Map<string, number>();
       selectedMatches.forEach((match) => {
@@ -1167,9 +1196,8 @@ export default function LeagueBracket() {
       const ids = new Set(
         selectedMatches.flatMap((match) => [match.participant_a_id, match.participant_b_id]).filter(Boolean) as string[],
       );
-      return sortByProgramSeed(
+      return sortBySavedGroupOrder(
         programSinglesParticipants.filter((participant) => ids.has(participant.id)),
-        selectedMatches,
       );
     }
     if (isProgramMode) {
@@ -1182,7 +1210,7 @@ export default function LeagueBracket() {
       return rawParticipants.filter(p => p.group_name === selectedGroup);
     }
     return rawParticipants;
-  }, [isProgramTeamRound, programTeamParticipants, programSinglesParticipants, isProgramMode, programMatchesAll, rawParticipants, groupNames, selectedGroup]);
+  }, [currentProgramBlock, isProgramTeamRound, programTeamParticipants, programSinglesParticipants, isProgramMode, programMatchesAll, rawParticipants, groupNames, selectedGroup]);
 
   // 4. 선택된 조의 경기만 필터링
   const matches = useMemo(() => {

@@ -89,6 +89,7 @@ function createSectionRow(base) {
 }
 
 function ensureRow(sectionMap, memberId, baseInfo, section) {
+  if (!baseInfo) return null;
   const key = Number(memberId);
   if (!sectionMap.has(key)) {
     const row = createSectionRow(baseInfo);
@@ -522,10 +523,13 @@ async function getPointRanking(groupId, year, scope, seasonId) {
       ? [Number(match.member_b_id)].filter(Number.isFinite)
       : (match.participant_b_roster_ids ?? []).map((id) => participantMembers.get(String(id))).filter(Number.isFinite);
     if (memberAIds.length === 0 || memberBIds.length === 0) return;
+    const rankingMemberAIds = memberAIds.filter((memberId) => baseMembers.has(memberId));
+    const rankingMemberBIds = memberBIds.filter((memberId) => baseMembers.has(memberId));
+    if (rankingMemberAIds.length === 0 && rankingMemberBIds.length === 0) return;
 
     const attendanceSets = section === "tournament" ? tournamentParticipantSets : leagueParticipantSets;
     const attendanceKey = match.league_id;
-    [...memberAIds, ...memberBIds].forEach((memberId) => {
+    [...rankingMemberAIds, ...rankingMemberBIds].forEach((memberId) => {
       if (!attendanceSets.has(memberId)) attendanceSets.set(memberId, new Set());
       attendanceSets.get(memberId).add(attendanceKey);
     });
@@ -535,18 +539,22 @@ async function getPointRanking(groupId, year, scope, seasonId) {
     const scoreA = Number(match.score_a);
     const scoreB = Number(match.score_b);
     const targetRows = section === "league" ? leagueRows : tournamentRows;
-    const rowsA = memberAIds.map((memberId) => ensureRow(targetRows, memberId, baseMembers.get(memberId), section));
-    const rowsB = memberBIds.map((memberId) => ensureRow(targetRows, memberId, baseMembers.get(memberId), section));
+    const rowsA = rankingMemberAIds
+      .map((memberId) => ensureRow(targetRows, memberId, baseMembers.get(memberId), section))
+      .filter(Boolean);
+    const rowsB = rankingMemberBIds
+      .map((memberId) => ensureRow(targetRows, memberId, baseMembers.get(memberId), section))
+      .filter(Boolean);
     [...rowsA, ...rowsB].forEach((row) => { row.matches_played += 1; });
     if (pointRules.matchPoints.mode === "win") {
       if (scoreA > scoreB) {
-        rowsA.forEach((row) => { row.score_points = roundPoint(row.score_points + pointRules.matchPoints.winPoints / rowsA.length); });
+        rowsA.forEach((row) => { row.score_points = roundPoint(row.score_points + pointRules.matchPoints.winPoints / memberAIds.length); });
       } else if (scoreB > scoreA) {
-        rowsB.forEach((row) => { row.score_points = roundPoint(row.score_points + pointRules.matchPoints.winPoints / rowsB.length); });
+        rowsB.forEach((row) => { row.score_points = roundPoint(row.score_points + pointRules.matchPoints.winPoints / memberBIds.length); });
       }
     } else {
-      rowsA.forEach((row) => { row.score_points = roundPoint(row.score_points + scoreA / rowsA.length); });
-      rowsB.forEach((row) => { row.score_points = roundPoint(row.score_points + scoreB / rowsB.length); });
+      rowsA.forEach((row) => { row.score_points = roundPoint(row.score_points + scoreA / memberAIds.length); });
+      rowsB.forEach((row) => { row.score_points = roundPoint(row.score_points + scoreB / memberBIds.length); });
     }
 
     if (scoreA > scoreB) {

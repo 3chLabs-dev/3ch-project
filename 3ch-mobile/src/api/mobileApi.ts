@@ -82,6 +82,8 @@ export type Participant = {
   paid: boolean;
   arrived: boolean;
   after: boolean;
+  group_name?: string | null;
+  is_leader?: boolean;
 };
 
 export type LeagueMatch = {
@@ -250,6 +252,10 @@ export const mobileApi = baseApi.injectEndpoints({
       query: ({ leagueId, matchId, updates }) => ({ url: `/league/${leagueId}/matches/${matchId}`, method: "PATCH", body: updates }),
       invalidatesTags: (_r, _e, { leagueId }) => [{ type: "League", id: `matches-${leagueId}` }],
     }),
+    saveGrouping: builder.mutation<{ message: string }, { leagueId: string; groupings: Array<{ participant_id: string; group_name: string; is_leader: boolean }> }>({
+      query: ({ leagueId, groupings }) => ({ url: `/league/${leagueId}/grouping`, method: "POST", body: { groupings } }),
+      invalidatesTags: (_r, _e, { leagueId }) => [{ type: "League", id: `participants-${leagueId}` }],
+    }),
     reorderMatches: builder.mutation<{ ok: boolean }, { leagueId: string; order: string[] }>({
       query: ({ leagueId, order }) => ({ url: `/league/${leagueId}/matches/reorder`, method: "PATCH", body: { order } }),
       invalidatesTags: (_r, _e, { leagueId }) => [{ type: "League", id: `matches-${leagueId}` }],
@@ -345,6 +351,7 @@ export const {
   useGetParticipantsQuery,
   useAddParticipantsMutation,
   useUpdateParticipantMutation,
+  useSaveGroupingMutation,
   useGetMatchesQuery,
   useInitMatchesMutation,
   useInitTournamentMutation,

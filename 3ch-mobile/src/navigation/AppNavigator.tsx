@@ -19,8 +19,10 @@ import { HomeScreen } from "../screens/HomeScreen";
 import { LeagueCreateScreen } from "../screens/LeagueCreateScreen";
 import { LeagueDetailScreen } from "../screens/LeagueDetailScreen";
 import { LeagueManageScreen } from "../screens/LeagueManageScreen";
+import { LeagueGroupingScreen } from "../screens/LeagueGroupingScreen";
 import { TournamentBracketScreen } from "../screens/TournamentBracketScreen";
 import { TournamentMatchOrderScreen } from "../screens/TournamentMatchOrderScreen";
+import { TournamentListScreen } from "../screens/TournamentListScreen";
 import { TournamentSetupScreen } from "../screens/TournamentSetupScreen";
 import { LeaguesScreen } from "../screens/LeaguesScreen";
 import { LoginScreen } from "../screens/LoginScreen";
@@ -72,7 +74,7 @@ function GroupNavigator() {
 }
 
 function LeagueNavigator() {
-  return <LeagueStack.Navigator screenOptions={{ headerShown: false }}><LeagueStack.Screen name="Leagues" component={LeaguesScreen} /><LeagueStack.Screen name="LeagueDetail" component={LeagueDetailScreen} /><LeagueStack.Screen name="LeagueManage" component={LeagueManageScreen} /><LeagueStack.Screen name="LeagueCreate" component={LeagueCreateScreen} /><LeagueStack.Screen name="TournamentSetup" component={TournamentSetupScreen} /><LeagueStack.Screen name="TournamentBracket" component={TournamentBracketScreen} /><LeagueStack.Screen name="TournamentMatchOrder" component={TournamentMatchOrderScreen} /><LeagueStack.Screen name="Participants" component={ParticipantsScreen} /><LeagueStack.Screen name="Matches" component={MatchesScreen} /></LeagueStack.Navigator>;
+  return <LeagueStack.Navigator screenOptions={{ headerShown: false }}><LeagueStack.Screen name="Leagues" component={LeaguesScreen} /><LeagueStack.Screen name="LeagueDetail" component={LeagueDetailScreen} /><LeagueStack.Screen name="LeagueManage" component={LeagueManageScreen} /><LeagueStack.Screen name="LeagueGrouping" component={LeagueGroupingScreen} /><LeagueStack.Screen name="LeagueCreate" component={LeagueCreateScreen} /><LeagueStack.Screen name="TournamentList" component={TournamentListScreen} /><LeagueStack.Screen name="TournamentSetup" component={TournamentSetupScreen} /><LeagueStack.Screen name="TournamentBracket" component={TournamentBracketScreen} /><LeagueStack.Screen name="TournamentMatchOrder" component={TournamentMatchOrderScreen} /><LeagueStack.Screen name="Participants" component={ParticipantsScreen} /><LeagueStack.Screen name="Matches" component={MatchesScreen} /></LeagueStack.Navigator>;
 }
 
 function DrawNavigator() {

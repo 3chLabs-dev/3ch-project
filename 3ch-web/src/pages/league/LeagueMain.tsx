@@ -307,7 +307,9 @@ function LeagueCard({ league }: { league: LeagueListItem }) {
             </Typography>
           </Box>
           <Typography variant="body2" color="text.secondary" fontWeight={600}>
-            {league.participant_count} / {league.recruit_count}명
+            {league.recruit_count > 0
+              ? `${league.participant_count} / ${league.recruit_count}명`
+              : `${league.participant_count}명`}
           </Typography>
         </Stack>
       </CardContent>

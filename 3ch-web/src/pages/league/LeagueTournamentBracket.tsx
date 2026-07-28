@@ -193,7 +193,11 @@ function calcPositions(matches: LeagueMatch[]): MatchPos[] {
       (lowest, pos) => lowest == null || pos.y > lowest ? pos.y : lowest,
       null,
     );
-    const y = lowerSemifinalY ?? (finalPos?.y ?? PT) + MH + 56;
+    const minimumYBelowFinal = finalPos ? finalPos.y + MH + 32 : PT;
+    const y = Math.max(
+      lowerSemifinalY ?? minimumYBelowFinal,
+      minimumYBelowFinal,
+    );
     result.push({ id: thirdPlaceMatch.id, x, y, match: thirdPlaceMatch });
   }
   return result;
@@ -581,6 +585,38 @@ function Connectors({ positions }: { positions: MatchPos[] }) {
         if (!tgt) return null;
         const sx = x + MW / 2;
         const sy = y + MH;
+
+        if (tgt.match.match_label === "3·4위전") {
+          const targetCenterX = tgt.x + MW / 2;
+
+          if (m.loser_next_slot === "a") {
+            const approachY = tgt.y - 18;
+            return (
+              <path
+                key={`lc-${id}`}
+                d={`M ${sx} ${sy} V ${approachY} H ${targetCenterX} V ${tgt.y}`}
+                stroke="#CBD5E1"
+                strokeWidth={1.5}
+                strokeDasharray="4 3"
+                fill="none"
+              />
+            );
+          }
+
+          const targetBottomY = tgt.y + MH;
+          const approachY = Math.max(sy, targetBottomY) + 18;
+          return (
+            <path
+              key={`lc-${id}`}
+              d={`M ${sx} ${sy} V ${approachY} H ${targetCenterX} V ${targetBottomY}`}
+              stroke="#CBD5E1"
+              strokeWidth={1.5}
+              strokeDasharray="4 3"
+              fill="none"
+            />
+          );
+        }
+
         const tx = tgt.x + (m.loser_next_slot === "a" ? MW / 4 : (3 * MW) / 4);
         const ty = tgt.y;
         const my = sy + Math.max(18, (ty - sy) / 2);

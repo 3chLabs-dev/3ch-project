@@ -21,6 +21,9 @@ export type League = {
   court_count?: number;
   join_permission?: string;
   group_id?: string;
+  tournament_seeding?: string;
+  tournament_advancement?: string;
+  tournament_rules?: string;
 };
 
 export type Group = {
@@ -86,10 +89,15 @@ export type LeagueMatch = {
   match_order: number;
   participant_a_name?: string | null;
   participant_b_name?: string | null;
+  participant_a_id?: string | null;
+  participant_b_id?: string | null;
   score_a?: number | null;
   score_b?: number | null;
   status: "pending" | "playing" | "done";
   court?: string | null;
+  bracket?: "upper" | "lower" | null;
+  round_number?: number | null;
+  match_label?: string | null;
 };
 
 export type DrawListItem = { id: string; name: string; draw_code?: string; prize_count: number; winner_count: number; total_quantity: number };
@@ -242,9 +250,17 @@ export const mobileApi = baseApi.injectEndpoints({
       query: ({ leagueId, matchId, updates }) => ({ url: `/league/${leagueId}/matches/${matchId}`, method: "PATCH", body: updates }),
       invalidatesTags: (_r, _e, { leagueId }) => [{ type: "League", id: `matches-${leagueId}` }],
     }),
+    reorderMatches: builder.mutation<{ ok: boolean }, { leagueId: string; order: string[] }>({
+      query: ({ leagueId, order }) => ({ url: `/league/${leagueId}/matches/reorder`, method: "PATCH", body: { order } }),
+      invalidatesTags: (_r, _e, { leagueId }) => [{ type: "League", id: `matches-${leagueId}` }],
+    }),
     createLeague: builder.mutation<{ league: League }, { name: string; title: string; type: string; sport: string; start_date: string; group_id?: string }>({
       query: (body) => ({ url: "/league", method: "POST", body }),
       invalidatesTags: ["League"],
+    }),
+    initTournament: builder.mutation<{ matches: LeagueMatch[] }, { leagueId: string; bracket_size: number; seeding: "seed" | "random" | "manual" | "group" | "standings"; advancement: "upper-only" | "upper-lower"; force?: boolean }>({
+      query: ({ leagueId, ...body }) => ({ url: `/league/${leagueId}/matches/init-tournament`, method: "POST", body }),
+      invalidatesTags: (_r, _e, { leagueId }) => [{ type: "League", id: `matches-${leagueId}` }, { type: "League", id: leagueId }],
     }),
     updateLeague: builder.mutation<{ league: League }, { leagueId: string; updates: Partial<League> }>({
       query: ({ leagueId, updates }) => ({ url: `/league/${leagueId}`, method: "PUT", body: updates }),
@@ -331,7 +347,9 @@ export const {
   useUpdateParticipantMutation,
   useGetMatchesQuery,
   useInitMatchesMutation,
+  useInitTournamentMutation,
   useUpdateMatchMutation,
+  useReorderMatchesMutation,
   useCreateLeagueMutation,
   useUpdateLeagueMutation,
   useDeleteLeagueMutation,

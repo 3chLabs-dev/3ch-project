@@ -26,6 +26,7 @@ export function LeagueDetailScreen() {
       <View style={styles.grow}><Button title="참가자 관리" onPress={() => navigation.navigate("Participants", { id })} /></View>
       <View style={styles.grow}><Button title="경기 진행" onPress={() => navigation.navigate("Matches", { id })} /></View>
     </View> : null}
+    {canManage ? <View style={styles.actions}><View style={styles.grow}><Button title="대진표 생성" onPress={() => navigation.navigate("TournamentSetup", { id })} /></View><View style={styles.grow}><Button title="대진표 보기" onPress={() => navigation.navigate("TournamentBracket", { id })} /></View></View> : null}
     {canManage ? <Button title="리그 관리" onPress={() => navigation.navigate("LeagueManage", { id })} /> : null}
     <Text style={styles.section}>참가자</Text>
     {participants.data?.participants.length ? participants.data.participants.slice(0, 10).map((p) => <Card key={p.id}><View style={styles.row}><Text style={styles.person}>{p.name}</Text><Text style={styles.meta}>{p.division ?? "미배정"}</Text></View></Card>) : <Empty message="참가자가 없습니다." />}

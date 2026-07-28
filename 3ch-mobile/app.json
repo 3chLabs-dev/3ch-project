@@ -5,7 +5,7 @@
     "scheme": "woorileague",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/woori-league-app-icon.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
@@ -22,10 +22,8 @@
         "android.permission.ACCESS_FINE_LOCATION"
       ],
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#FFFFFF",
+        "foregroundImage": "./assets/woori-league-app-icon.png"
       },
       "predictiveBackGestureEnabled": false
     },
@@ -39,7 +37,8 @@
         {
           "locationWhenInUsePermission": "현재 위치 주변의 스포츠 클럽을 추천하기 위해 위치를 사용합니다."
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "extra": {
       "eas": {

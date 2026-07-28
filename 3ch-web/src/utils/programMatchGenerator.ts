@@ -1374,15 +1374,28 @@ export function generateProgramRoundMatches(
   const storedBlock = option?.blocks?.[round - 1];
   const currentRound = option?.rounds?.[round - 1];
   if (!storedBlock || participants.length < 2) return [];
+  const previousRound = round > 1 ? option?.rounds?.[round - 2] : undefined;
+  const previousTeamBlock = round > 1 ? option?.blocks?.[round - 2] : undefined;
+  const inheritsPreviousTeamFormation =
+    storedBlock.type === "TEAM" &&
+    (currentRound?.inheritPreviousTeamFormation ?? storedBlock.inheritPreviousTeamFormation) &&
+    previousTeamBlock?.type === "TEAM";
   const block: ProgramBlock = {
     ...storedBlock,
     groupSizes: currentRound?.groupSizes ?? storedBlock.groupSizes,
     teamGroupSizes: currentRound?.teamGroupSizes ?? storedBlock.teamGroupSizes,
     groupShuffleSeed: currentRound?.groupShuffleSeed ?? storedBlock.groupShuffleSeed,
-    teamShuffleSeed: currentRound?.teamShuffleSeed ?? storedBlock.teamShuffleSeed,
     groupAssignments: currentRound?.groupAssignments ?? storedBlock.groupAssignments,
-    teamAssignments: currentRound?.teamAssignments ?? storedBlock.teamAssignments,
+    teamAssignments: inheritsPreviousTeamFormation
+      ? previousRound?.teamAssignments ?? previousTeamBlock?.teamAssignments
+      : currentRound?.teamAssignments ?? storedBlock.teamAssignments,
     doublesAssignments: currentRound?.doublesAssignments ?? storedBlock.doublesAssignments,
+    teamShuffleSeed: inheritsPreviousTeamFormation
+      ? previousRound?.teamShuffleSeed ?? previousTeamBlock?.teamShuffleSeed
+      : currentRound?.teamShuffleSeed ?? storedBlock.teamShuffleSeed,
+    unitClubMode: inheritsPreviousTeamFormation
+      ? previousRound?.unitClubMode ?? previousTeamBlock?.unitClubMode
+      : currentRound?.unitClubMode ?? storedBlock.unitClubMode,
   };
   const deletedMatchIds = new Set(block.deletedMatchIds ?? []);
   const withoutDeleted = (matches: LeagueMatch[]) =>

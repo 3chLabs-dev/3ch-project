@@ -57,24 +57,122 @@ const getTeamMatchCounts = (round: RoundConfig) => {
   };
 };
 
+const getTeamRoundValidationError = (
+  rounds: RoundConfig[],
+  participantCount: number,
+) => {
+  for (const round of rounds) {
+    if (round.program !== "TEAM") continue;
+    const teamPlayerCount = round.teamPlayerCount ?? 3;
+    const { singles, doubles } = getTeamMatchCounts(round);
+    if (teamPlayerCount < 2 || teamPlayerCount > 10) {
+      return "팀 인원 수는 2명부터 10명까지 설정할 수 있습니다.";
+    }
+    if (participantCount > 0 && teamPlayerCount > participantCount) {
+      return `팀 인원 수는 참가자 수(${participantCount}명)보다 많을 수 없습니다.`;
+    }
+    if (singles + doubles < 1 || singles + doubles > 20) {
+      return "단체전 구성은 최소 1경기, 합계 최대 20경기까지 설정할 수 있습니다.";
+    }
+  }
+  return null;
+};
+
 function MatchCountStepper({
   label,
   value,
+  max = 20,
   onChange,
 }: {
   label: string;
   value: number;
+  max?: number;
   onChange: (value: number) => void;
 }) {
   return (
     <Stack direction="row" alignItems="center" spacing={1}>
       <Typography sx={{ flex: 1, fontSize: 14, fontWeight: 700 }}>{label}</Typography>
       <Button variant="outlined" onClick={() => onChange(Math.max(0, value - 1))} sx={{ minWidth: 36, width: 36, height: 36, p: 0 }}>-</Button>
-      <Box sx={{ width: 42, height: 36, border: "1px solid #D1D5DB", borderRadius: 1, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800 }}>
-        {value}
-      </Box>
-      <Button variant="outlined" onClick={() => onChange(value + 1)} sx={{ minWidth: 36, width: 36, height: 36, p: 0 }}>+</Button>
+      <input
+        type="text"
+        inputMode="numeric"
+        aria-label={`${label} 경기 수`}
+        value={value}
+        onFocus={(event) => event.currentTarget.select()}
+        onChange={(event) => {
+          if (event.target.value === "") return;
+          onChange(Math.min(max, Math.max(0, Number(event.target.value.replace(/\D/g, "")) || 0)));
+        }}
+        style={{
+          width: "42px",
+          height: "36px",
+          boxSizing: "border-box",
+          border: "1px solid #D1D5DB",
+          borderRadius: "8px",
+          background: "#fff",
+          fontWeight: 800,
+          textAlign: "center",
+          fontSize: "14px",
+        }}
+      />
+      <Button variant="outlined" disabled={value >= max} onClick={() => onChange(Math.min(max, value + 1))} sx={{ minWidth: 36, width: 36, height: 36, p: 0 }}>+</Button>
       <Typography sx={{ width: 28, fontSize: 13 }}>경기</Typography>
+    </Stack>
+  );
+}
+
+function TeamPlayerCountStepper({
+  value,
+  max = 10,
+  onChange,
+}: {
+  value: number;
+  max?: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <Stack direction="row" alignItems="center" spacing={1}>
+      <Button
+        variant="outlined"
+        disabled={value <= 2}
+        onClick={() => onChange(Math.max(2, value - 1))}
+        sx={{ minWidth: 40, width: 40, height: 40, p: 0, fontSize: 20 }}
+      >
+        −
+      </Button>
+      <input
+        type="text"
+        inputMode="numeric"
+        aria-label="팀 인원 수"
+        value={value}
+        onFocus={(event) => event.currentTarget.select()}
+        onChange={(event) => {
+          if (event.target.value === "") return;
+          onChange(Math.min(max, Math.max(2, Number(event.target.value.replace(/\D/g, "")) || 2)));
+        }}
+        style={{
+          width: "52px",
+          height: "40px",
+          boxSizing: "border-box",
+          border: "1px solid #D1D5DB",
+          borderRadius: "8px",
+          background: "#fff",
+          fontWeight: 800,
+          textAlign: "center",
+          fontSize: "15px",
+        }}
+      />
+      <Button
+        variant="outlined"
+        disabled={value >= max}
+        onClick={() => onChange(Math.min(max, value + 1))}
+        sx={{ minWidth: 40, width: 40, height: 40, p: 0, fontSize: 20 }}
+      >
+        +
+      </Button>
+      <Typography sx={{ width: 28, flexShrink: 0, fontSize: 14, fontWeight: 700 }}>
+        명
+      </Typography>
     </Stack>
   );
 }
@@ -103,16 +201,14 @@ function AdvancementStepper({
         −
       </IconButton>
       <input
-        type="number"
-        min={1}
-        max={99}
+        type="text"
         inputMode="numeric"
         aria-label="본선 진출 인원"
         value={value}
         onFocus={(event) => event.currentTarget.select()}
         onChange={(event) => {
           if (event.target.value === "") return;
-          onChange(Math.min(99, Math.max(1, Number(event.target.value) || 1)));
+          onChange(Math.min(99, Math.max(1, Number(event.target.value.replace(/\D/g, "")) || 1)));
         }}
         style={{
           width: "48px",
@@ -133,6 +229,63 @@ function AdvancementStepper({
       >
         +
       </IconButton>
+    </div>
+  );
+}
+
+function PreviousTeamFormationControl({
+  round,
+  roundIndex,
+  rounds,
+  setRounds,
+}: {
+  round: RoundConfig;
+  roundIndex: number;
+  rounds: RoundConfig[];
+  setRounds: (rounds: RoundConfig[]) => void;
+}) {
+  if (
+    round.program !== "TEAM" ||
+    roundIndex === 0 ||
+    rounds[roundIndex - 1]?.program !== "TEAM"
+  ) {
+    return null;
+  }
+
+  const previousRound = rounds[roundIndex - 1];
+  const inherited = round.inheritPreviousTeamFormation === true;
+  const updateInheritance = (nextInherited: boolean) => {
+    setRounds(
+      rounds.map((item, index) => {
+        if (index !== roundIndex) return item;
+        return {
+          ...item,
+          inheritPreviousTeamFormation: nextInherited,
+          teamPlayerCount: previousRound.teamPlayerCount,
+          teamAssignments: previousRound.teamAssignments,
+          teamShuffleSeed: previousRound.teamShuffleSeed,
+          unitClubMode: previousRound.unitClubMode,
+        };
+      }),
+    );
+  };
+
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{ fontWeight: 700, marginBottom: 8 }}>
+        이전 라운드와 동일한 팀 편성
+      </div>
+      <ToggleButtonGroup
+        exclusive
+        fullWidth
+        value={inherited ? "yes" : "no"}
+        onChange={(_, value) => {
+          if (value) updateInheritance(value === "yes");
+        }}
+      >
+        <ToggleButton value="yes">예</ToggleButton>
+        <ToggleButton value="no">아니오</ToggleButton>
+      </ToggleButtonGroup>
     </div>
   );
 }
@@ -518,12 +671,14 @@ interface RoundConfigEditorProps {
   rounds: RoundConfig[];
   setRounds: (rounds: RoundConfig[]) => void;
   clubPoliciesEnabled: boolean;
+  participantCount: number;
 }
 
 function RoundConfigEditor({
   rounds,
   setRounds,
   clubPoliciesEnabled,
+  participantCount,
 }: RoundConfigEditorProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -655,6 +810,15 @@ function RoundConfigEditor({
                         ? {
                             ...x,
                             program: value,
+                            inheritPreviousTeamFormation:
+                              value === "TEAM" ? x.inheritPreviousTeamFormation : false,
+                            ...(value === "TEAM"
+                              ? {
+                                  teamPlayerCount: x.teamPlayerCount ?? 3,
+                                  teamSinglesCount: x.teamSinglesCount ?? 3,
+                                  teamDoublesCount: x.teamDoublesCount ?? 0,
+                                }
+                              : {}),
                           }
                         : x
                     )
@@ -785,50 +949,32 @@ function RoundConfigEditor({
 
               {round.program === "TEAM" && (
                 <div style={{ marginTop: "16px" }}>
-                  <div
-                    style={{
-                      fontWeight: 700,
-                      marginBottom: "8px",
-                    }}
-                  >
-                    팀 인원
-                  </div>
-
-                  <ToggleButtonGroup
-                    exclusive
-                    value={round.teamPlayerCount}
-                    fullWidth
-                    onChange={(_, value) => {
-                      if (!value) return;
-
+                  <PreviousTeamFormationControl
+                    round={round}
+                    roundIndex={roundIndex}
+                    rounds={rounds}
+                    setRounds={setRounds}
+                  />
+                  {!round.inheritPreviousTeamFormation && (
+                    <>
+                  <Stack direction="row" alignItems="center" spacing={1}>
+                    <Typography sx={{ flex: 1, fontSize: 14, fontWeight: 700 }}>
+                      팀 인원
+                    </Typography>
+                    <TeamPlayerCountStepper
+                    value={round.teamPlayerCount ?? 3}
+                    max={Math.max(2, Math.min(10, participantCount))}
+                    onChange={(value) =>
                       setRounds(
                         rounds.map((x) =>
-                          x.id === round.id
-                            ? {
-                                ...x,
-                                teamPlayerCount: value,
-                              }
-                            : x
+                          x.id === round.id ? { ...x, teamPlayerCount: value } : x
                         )
-                      );
-                    }}
-                  >
-                    <ToggleButton value={2}>
-                      2명
-                    </ToggleButton>
-
-                    <ToggleButton value={3}>
-                      3명
-                    </ToggleButton>
-
-                    <ToggleButton value={4}>
-                      4명
-                    </ToggleButton>
-
-                    <ToggleButton value={5}>
-                      5명
-                    </ToggleButton>
-                  </ToggleButtonGroup>
+                      )
+                    }
+                  />
+                  </Stack>
+                    </>
+                  )}
 
                   <div style={{ marginTop: "16px" }}>
                     <div
@@ -843,12 +989,20 @@ function RoundConfigEditor({
                       <MatchCountStepper
                         label="단식"
                         value={getTeamMatchCounts(round).singles}
-                        onChange={(value) => setRounds(rounds.map((x) => x.id === round.id ? { ...x, teamSinglesCount: value } : x))}
+                        max={20 - getTeamMatchCounts(round).doubles}
+                        onChange={(value) => setRounds(rounds.map((x) => x.id === round.id ? {
+                          ...x,
+                          teamSinglesCount: value === 0 && getTeamMatchCounts(round).doubles === 0 ? 1 : value,
+                        } : x))}
                       />
                       <MatchCountStepper
                         label="복식"
                         value={getTeamMatchCounts(round).doubles}
-                        onChange={(value) => setRounds(rounds.map((x) => x.id === round.id ? { ...x, teamDoublesCount: value } : x))}
+                        max={20 - getTeamMatchCounts(round).singles}
+                        onChange={(value) => setRounds(rounds.map((x) => x.id === round.id ? {
+                          ...x,
+                          teamDoublesCount: value === 0 && getTeamMatchCounts(round).singles === 0 ? 1 : value,
+                        } : x))}
                       />
                     </Stack>
                   </div>
@@ -919,7 +1073,7 @@ function RoundConfigEditor({
               format: "GROUP",
               option: "PRELIM",
               matchRule: "BEST_OF_3",
-              teamPlayerCount: 4,
+              teamPlayerCount: 3,
               teamMatchType: "SSS",
               tournamentMode: "single",
               finalAdvancementMode: "top-n",
@@ -1016,7 +1170,7 @@ const LeagueAlgorithmDemo = ({
       format: "GROUP",
       option: "NONE",
       matchRule: "BEST_OF_5",
-      teamPlayerCount: 4,
+      teamPlayerCount: 3,
       teamMatchType: "SSS",
       tournamentSeeding: "seed",
       tournamentBracketCount: 1,
@@ -1028,7 +1182,7 @@ const LeagueAlgorithmDemo = ({
       format: "GROUP",
       option: "NONE",
       matchRule: "BEST_OF_5",
-      teamPlayerCount: 4,
+      teamPlayerCount: 3,
       teamMatchType: "SSS",
       tournamentSeeding: "seed",
       tournamentBracketCount: 1,
@@ -1474,6 +1628,9 @@ const LeagueAlgorithmDemo = ({
     if (editingOptionIndex === null) {
       return;
     }
+    if (getTeamRoundValidationError(editingRounds, playerCount)) {
+      return;
+    }
 
     const baseOption = displayedProgramOptions[editingOptionIndex];
     const updatedOption = buildProgramOptionFromRounds(
@@ -1717,9 +1874,31 @@ const LeagueAlgorithmDemo = ({
           : round.groupAssignments,
       })
     );
+    let propagateTeamStructure = false;
+    const effectiveRounds = mode === "team"
+      ? nextRounds.map((round, roundIndex) => {
+          if (roundIndex === blockIndex) {
+            propagateTeamStructure = true;
+          } else if (
+            roundIndex > blockIndex &&
+            propagateTeamStructure &&
+            !(round.program === "TEAM" && round.inheritPreviousTeamFormation)
+          ) {
+            propagateTeamStructure = false;
+          }
+          return propagateTeamStructure
+            ? {
+                ...round,
+                groupSizes,
+                teamPlayerCount: groupSizes[0] ?? round.teamPlayerCount,
+                teamAssignments: undefined,
+              }
+            : round;
+        })
+      : nextRounds;
     const updatedOption = buildProgramOptionFromRounds(
       baseOption,
-      nextRounds
+      effectiveRounds
     );
 
     setCustomProgramOptions((previous) => ({
@@ -1765,7 +1944,28 @@ const LeagueAlgorithmDemo = ({
         ? undefined
         : round.doublesAssignments,
     }));
-    const updatedOption = buildProgramOptionFromRounds(baseOption, nextRounds);
+    let propagateTeamShuffle = false;
+    const effectiveRounds = mode === "team"
+      ? nextRounds.map((round, roundIndex) => {
+          if (roundIndex === blockIndex) {
+            propagateTeamShuffle = true;
+          } else if (
+            roundIndex > blockIndex &&
+            propagateTeamShuffle &&
+            !(round.program === "TEAM" && round.inheritPreviousTeamFormation)
+          ) {
+            propagateTeamShuffle = false;
+          }
+          return propagateTeamShuffle
+            ? {
+                ...round,
+                teamShuffleSeed: nextTeamShuffleSeed,
+                teamAssignments: undefined,
+              }
+            : round;
+        })
+      : nextRounds;
+    const updatedOption = buildProgramOptionFromRounds(baseOption, effectiveRounds);
     const nextBlocks = updatedOption.blocks.map((block, roundIndex) => {
       if (roundIndex !== blockIndex) {
         return block;
@@ -1801,7 +2001,29 @@ const LeagueAlgorithmDemo = ({
     const { optionIndex, blockIndex, mode } = groupResultDialog;
     if (mode === "doubles" && formationDraft.some((group) => group.length !== 2)) return;
     const baseOption = customProgramOptions[optionIndex] ?? displayedProgramOptions[optionIndex];
+    let propagateTeamFormation = false;
     const nextRounds = (baseOption.rounds ?? rounds).map((round, roundIndex) => {
+      if (mode === "team") {
+        if (roundIndex === blockIndex) {
+          propagateTeamFormation = true;
+        } else if (
+          roundIndex > blockIndex &&
+          propagateTeamFormation &&
+          !(round.program === "TEAM" && round.inheritPreviousTeamFormation)
+        ) {
+          propagateTeamFormation = false;
+        }
+        if (propagateTeamFormation) {
+          return {
+            ...round,
+            id: roundIndex + 1,
+            teamPlayerCount: formationDraft[0]?.length ?? round.teamPlayerCount,
+            groupSizes: formationDraft.map((group) => group.length),
+            teamAssignments: formationDraft,
+            groupAssignments: undefined,
+          };
+        }
+      }
       if (roundIndex !== blockIndex) return { ...round, id: roundIndex + 1 };
       if (mode === "team") {
         return {
@@ -2432,6 +2654,15 @@ const LeagueAlgorithmDemo = ({
                       ? {
                           ...x,
                           program: value,
+                          inheritPreviousTeamFormation:
+                            value === "TEAM" ? x.inheritPreviousTeamFormation : false,
+                          ...(value === "TEAM"
+                            ? {
+                                teamPlayerCount: x.teamPlayerCount ?? 3,
+                                teamSinglesCount: x.teamSinglesCount ?? 3,
+                                teamDoublesCount: x.teamDoublesCount ?? 0,
+                              }
+                            : {}),
                         }
                       : x
                   )
@@ -2605,50 +2836,32 @@ const LeagueAlgorithmDemo = ({
 
             {round.program === "TEAM" && (
               <div style={{ marginTop: "16px" }}>
-                <div
-                  style={{
-                    fontWeight: 700,
-                    marginBottom: "8px",
-                  }}
-                >
-                  팀 인원
-                </div>
-
-                <ToggleButtonGroup
-                  exclusive
-                  value={round.teamPlayerCount}
-                  fullWidth
-                  onChange={(_, value) => {
-                    if (!value) return;
-
+                <PreviousTeamFormationControl
+                  round={round}
+                  roundIndex={roundIndex}
+                  rounds={rounds}
+                  setRounds={setRounds}
+                />
+                {!round.inheritPreviousTeamFormation && (
+                  <>
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <Typography sx={{ flex: 1, fontSize: 14, fontWeight: 700 }}>
+                    팀 인원
+                  </Typography>
+                  <TeamPlayerCountStepper
+                  value={round.teamPlayerCount ?? 3}
+                  max={Math.max(2, Math.min(10, playerCount))}
+                  onChange={(value) =>
                     setRounds(
                       rounds.map((x) =>
-                        x.id === round.id
-                          ? {
-                              ...x,
-                              teamPlayerCount: value,
-                            }
-                          : x
+                        x.id === round.id ? { ...x, teamPlayerCount: value } : x
                       )
-                    );
-                  }}
-                >
-                  <ToggleButton value={2}>
-                    2명
-                  </ToggleButton>
-
-                  <ToggleButton value={3}>
-                    3명
-                  </ToggleButton>
-
-                  <ToggleButton value={4}>
-                    4명
-                  </ToggleButton>
-
-                  <ToggleButton value={5}>
-                    5명
-                  </ToggleButton>
-                </ToggleButtonGroup>
+                    )
+                  }
+                />
+                </Stack>
+                  </>
+                )}
 
                 <div style={{ marginTop: "16px" }}>
                   <div
@@ -2663,12 +2876,20 @@ const LeagueAlgorithmDemo = ({
                       <MatchCountStepper
                         label="단식"
                         value={getTeamMatchCounts(round).singles}
-                        onChange={(value) => setRounds(rounds.map((x) => x.id === round.id ? { ...x, teamSinglesCount: value } : x))}
+                        max={20 - getTeamMatchCounts(round).doubles}
+                        onChange={(value) => setRounds(rounds.map((x) => x.id === round.id ? {
+                          ...x,
+                          teamSinglesCount: value === 0 && getTeamMatchCounts(round).doubles === 0 ? 1 : value,
+                        } : x))}
                       />
                       <MatchCountStepper
                         label="복식"
                         value={getTeamMatchCounts(round).doubles}
-                        onChange={(value) => setRounds(rounds.map((x) => x.id === round.id ? { ...x, teamDoublesCount: value } : x))}
+                        max={20 - getTeamMatchCounts(round).singles}
+                        onChange={(value) => setRounds(rounds.map((x) => x.id === round.id ? {
+                          ...x,
+                          teamDoublesCount: value === 0 && getTeamMatchCounts(round).singles === 0 ? 1 : value,
+                        } : x))}
                       />
                     </Stack>
                   </div>
@@ -2695,7 +2916,7 @@ const LeagueAlgorithmDemo = ({
                 format: "GROUP",
                 option: "PRELIM",
                 matchRule: "BEST_OF_3",
-                teamPlayerCount: 4,
+                teamPlayerCount: 3,
                 teamMatchType: "SSS",
                 tournamentSeeding: "seed",
                 tournamentBracketCount: 1,
@@ -2713,7 +2934,10 @@ const LeagueAlgorithmDemo = ({
         <Button
           variant="contained"
           fullWidth
-          disabled={isCompletingCustomProgram}
+          disabled={
+            isCompletingCustomProgram ||
+            Boolean(getTeamRoundValidationError(rounds, playerCount))
+          }
           onClick={() => {
             shouldScrollToRecommendationRef.current = true;
             setIsCompletingCustomProgram(true);
@@ -2729,6 +2953,11 @@ const LeagueAlgorithmDemo = ({
         >
           완료
         </Button>
+        {getTeamRoundValidationError(rounds, playerCount) && (
+          <Typography sx={{ mt: 1, color: "#D32F2F", fontSize: 13 }}>
+            {getTeamRoundValidationError(rounds, playerCount)}
+          </Typography>
+        )}
         {isCompletingCustomProgram && (
           <div
             style={{
@@ -3168,7 +3397,13 @@ const LeagueAlgorithmDemo = ({
             rounds={editingRounds}
             setRounds={setEditingRounds}
             clubPoliciesEnabled={clubPoliciesEnabled}
+            participantCount={playerCount}
           />
+          {getTeamRoundValidationError(editingRounds, playerCount) && (
+            <Typography sx={{ mt: 1, color: "#D32F2F", fontSize: 13 }}>
+              {getTeamRoundValidationError(editingRounds, playerCount)}
+            </Typography>
+          )}
         </DialogContent>
 
         <DialogActions>
@@ -3179,6 +3414,7 @@ const LeagueAlgorithmDemo = ({
           <Button
             variant="contained"
             onClick={completeProgramEdit}
+            disabled={Boolean(getTeamRoundValidationError(editingRounds, playerCount))}
           >
             완료
           </Button>

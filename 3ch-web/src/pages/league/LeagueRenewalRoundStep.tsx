@@ -97,16 +97,14 @@ function AdvancementCount({
           −
         </IconButton>
         <TextField
-          type="number"
+          type="text"
           value={value}
           onFocus={(event) => event.currentTarget.select()}
           onChange={(event) => {
             if (event.target.value === "") return;
-            onChange(Math.min(99, Math.max(1, Number(event.target.value) || 1)));
+            onChange(Math.min(99, Math.max(1, Number(event.target.value.replace(/\D/g, "")) || 1)));
           }}
           inputProps={{
-            min: 1,
-            max: 99,
             inputMode: "numeric",
             "aria-label": "본선 진출 인원",
           }}
@@ -139,11 +137,83 @@ function AdvancementCount({
   );
 }
 
+function CompactNumberStepper({
+  label,
+  value,
+  min,
+  max,
+  suffix,
+  onChange,
+}: {
+  label?: string;
+  value: number;
+  min: number;
+  max: number;
+  suffix: string;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <Stack direction="row" alignItems="center" spacing={1}>
+      {label && <Typography sx={{ flex: 1, fontSize: 14, fontWeight: 700 }}>{label}</Typography>}
+      <IconButton
+        aria-label={`${label ?? suffix} 감소`}
+        disabled={value <= min}
+        onClick={() => onChange(Math.max(min, value - 1))}
+        sx={{ width: 40, height: 40, border: "1px solid #90CAF9", color: "#1976D2", fontSize: 22 }}
+      >
+        −
+      </IconButton>
+      <TextField
+        type="text"
+        value={value}
+        onFocus={(event) => event.currentTarget.select()}
+        onChange={(event) => {
+          if (event.target.value === "") return;
+          onChange(Math.min(max, Math.max(min, Number(event.target.value.replace(/\D/g, "")) || min)));
+        }}
+        inputProps={{
+          inputMode: "numeric",
+          "aria-label": label ?? suffix,
+        }}
+        size="small"
+        sx={{
+          width: 52,
+          "& .MuiInputBase-root": { height: 40, borderRadius: 1 },
+          "& input": {
+            p: 0,
+            textAlign: "center",
+            fontWeight: 900,
+            MozAppearance: "textfield",
+          },
+          "& input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button": {
+            m: 0,
+            WebkitAppearance: "none",
+          },
+        }}
+      />
+      <IconButton
+        aria-label={`${label ?? suffix} 증가`}
+        disabled={value >= max}
+        onClick={() => onChange(Math.min(max, value + 1))}
+        sx={{ width: 40, height: 40, border: "1px solid #90CAF9", color: "#1976D2", fontSize: 22 }}
+      >
+        +
+      </IconButton>
+      <Typography sx={{ width: 28, flexShrink: 0, fontSize: 14, fontWeight: 700 }}>
+        {suffix}
+      </Typography>
+    </Stack>
+  );
+}
+
 export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
   const dispatch = useAppDispatch();
   const rounds = useAppSelector((state) => state.leagueRenewalCreation.rounds);
   const hasParticipatingClubs = useAppSelector(
     (state) => state.leagueRenewalCreation.invitedGroupIds.length > 0,
+  );
+  const participantCount = useAppSelector(
+    (state) => state.leagueRenewalCreation.basicInfo?.participantCount ?? null,
   );
 
   const setRounds = (nextRounds: RenewalRoundConfig[]) =>
@@ -198,7 +268,18 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
 
   const canNext = rounds.every((round) => {
     if (kind === "type") {
-      return Boolean(round.program) && (round.program !== "TEAM" || Boolean(round.teamPlayerCount));
+      if (!round.program) return false;
+      if (round.program !== "TEAM") return true;
+      const teamPlayerCount = round.teamPlayerCount ?? 3;
+      const teamMatchCount = (round.teamSinglesCount ?? 3) + (round.teamDoublesCount ?? 0);
+      return (
+        (round.inheritPreviousTeamFormation || Boolean(round.teamPlayerCount)) &&
+        teamPlayerCount >= 2 &&
+        teamPlayerCount <= 10 &&
+        (!participantCount || teamPlayerCount <= participantCount) &&
+        teamMatchCount >= 1 &&
+        teamMatchCount <= 20
+      );
     }
     if (kind === "format") return Boolean(round.format);
     return Boolean(round.matchRule);
@@ -403,11 +484,24 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
           <FormControl fullWidth>
             <RadioGroup
               value={round.program ?? ""}
-              onChange={(event) =>
+              onChange={(event) => {
+                const program = event.target.value as NonNullable<RenewalRoundConfig["program"]>;
                 updateRound(index, {
-                  program: event.target.value as NonNullable<RenewalRoundConfig["program"]>,
-                })
-              }
+                  program,
+                  inheritPreviousTeamFormation:
+                    program === "TEAM"
+                      ? round.inheritPreviousTeamFormation
+                      : false,
+                  ...(program === "TEAM"
+                    ? {
+                        teamPlayerCount: round.teamPlayerCount ?? 3,
+                        teamSinglesCount: round.teamSinglesCount ?? 3,
+                        teamDoublesCount: round.teamDoublesCount ?? 0,
+                        teamMatchType: round.teamMatchType ?? "SSS",
+                      }
+                    : {}),
+                });
+              }}
             >
               <Stack spacing={1.5}>
                 <FormControlLabel value="SINGLES" control={<Radio />} label="단식" sx={optionCardSx} />
@@ -418,26 +512,81 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
           </FormControl>
           {round.program === "TEAM" && (
             <Box sx={{ mt: 2 }}>
-              <Typography sx={{ fontWeight: 900, mb: 1 }}>팀 인원 수</Typography>
-              <TextField
-                select
-                fullWidth
-                value={round.teamPlayerCount ?? ""}
-                onChange={(event) => updateRound(index, { teamPlayerCount: Number(event.target.value) })}
-                size="small"
-                SelectProps={{
-                  displayEmpty: true,
-                  renderValue: (value) =>
-                    value === "" ? (
-                      <Box component="span" sx={{ color: "#B0B7C3" }}>선택</Box>
-                    ) : `${value}명`,
-                }}
-              >
-                <MenuItem value="" disabled>선택</MenuItem>
-                {[2, 3, 4, 5].map((count) => (
-                  <MenuItem key={count} value={count}>{count}명</MenuItem>
-                ))}
-              </TextField>
+              {index > 0 && rounds[index - 1]?.program === "TEAM" && (
+                <Box sx={{ mb: 2 }}>
+                  <Typography sx={{ fontWeight: 900, mb: 1 }}>
+                    이전 라운드와 동일한 팀 편성
+                  </Typography>
+                  <RadioGroup
+                    row
+                    value={round.inheritPreviousTeamFormation ? "yes" : "no"}
+                    onChange={(event) => {
+                      const inherited = event.target.value === "yes";
+                      const previousRound = rounds[index - 1];
+                      updateRound(index, {
+                        inheritPreviousTeamFormation: inherited,
+                        teamPlayerCount: previousRound.teamPlayerCount,
+                        teamAssignments: previousRound.teamAssignments,
+                        teamShuffleSeed: previousRound.teamShuffleSeed,
+                        unitClubMode: previousRound.unitClubMode,
+                      });
+                    }}
+                  >
+                    <FormControlLabel value="yes" control={<Radio />} label="예" />
+                    <FormControlLabel value="no" control={<Radio />} label="아니오" />
+                  </RadioGroup>
+                </Box>
+              )}
+              {!round.inheritPreviousTeamFormation && (
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <Typography sx={{ flex: 1, fontWeight: 900 }}>팀 인원 수</Typography>
+                  <CompactNumberStepper
+                    value={round.teamPlayerCount ?? 3}
+                    min={2}
+                    max={10}
+                    suffix="명"
+                    onChange={(value) => updateRound(index, { teamPlayerCount: value })}
+                  />
+                </Stack>
+              )}
+              {!round.inheritPreviousTeamFormation &&
+                participantCount &&
+                (round.teamPlayerCount ?? 3) > participantCount && (
+                  <Typography sx={{ mt: 1, color: "#D32F2F", fontSize: 13 }}>
+                    팀 인원 수는 참가자 수({participantCount}명)보다 많을 수 없습니다.
+                  </Typography>
+                )}
+              <Box sx={{ mt: 2 }}>
+                <Typography sx={{ fontWeight: 900, mb: 1 }}>단체전 구성</Typography>
+                <Stack spacing={1}>
+                  <CompactNumberStepper
+                    label="단식"
+                    value={round.teamSinglesCount ?? 3}
+                    min={0}
+                    max={20 - (round.teamDoublesCount ?? 0)}
+                    suffix="경기"
+                    onChange={(value) =>
+                      updateRound(index, {
+                        teamSinglesCount:
+                          value === 0 && (round.teamDoublesCount ?? 0) === 0 ? 1 : value,
+                      })
+                    }
+                  />
+                  <CompactNumberStepper
+                    label="복식"
+                    value={round.teamDoublesCount ?? 0}
+                    min={0}
+                    max={20 - (round.teamSinglesCount ?? 3)}
+                    suffix="경기"
+                    onChange={(value) =>
+                      updateRound(index, {
+                        teamDoublesCount:
+                          value === 0 && (round.teamSinglesCount ?? 3) === 0 ? 1 : value,
+                      })
+                    }
+                  />
+                </Stack>
+              </Box>
             </Box>
           )}
           {hasParticipatingClubs && (round.program === "DOUBLES" || round.program === "TEAM") && (

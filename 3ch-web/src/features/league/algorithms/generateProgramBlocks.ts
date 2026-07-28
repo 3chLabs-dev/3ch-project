@@ -122,7 +122,20 @@ export function generateProgramBlocks(
 
   const blocks: UnscheduledProgramBlock[] = [];
   const rounds = preferences.rounds ?? [];
-  for (const round of rounds) {
+  for (const [roundIndex, configuredRound] of rounds.entries()) {
+  const previousRound = roundIndex > 0 ? rounds[roundIndex - 1] : undefined;
+  const round =
+    configuredRound.program === "TEAM" &&
+    configuredRound.inheritPreviousTeamFormation &&
+    previousRound?.program === "TEAM"
+      ? {
+          ...configuredRound,
+          teamPlayerCount: previousRound.teamPlayerCount,
+          teamAssignments: previousRound.teamAssignments,
+          teamShuffleSeed: previousRound.teamShuffleSeed,
+          unitClubMode: previousRound.unitClubMode,
+        }
+      : configuredRound;
   const roundGroupSizes =
     round.groupSizes ?? groupSizes;
 
@@ -309,6 +322,7 @@ export function generateProgramBlocks(
         unitClubMode: round.unitClubMode,
         teamSinglesCount: teamInfo.singles,
         teamDoublesCount: teamInfo.doubles,
+        inheritPreviousTeamFormation: round.inheritPreviousTeamFormation,
 	    });
   }
 }

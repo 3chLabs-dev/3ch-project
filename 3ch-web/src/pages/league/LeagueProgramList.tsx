@@ -58,6 +58,7 @@ const SEEDING_LABEL: Record<string, string> = {
 type StoredProgramBlock = {
   title?: string;
   type?: "SINGLES" | "DOUBLES" | "TEAM";
+  program?: "SINGLES" | "DOUBLES" | "TEAM";
   format?: "LEAGUE" | "GROUP" | "TOURNAMENT";
   groupSizes?: number[];
   teamGroupSizes?: number[];
@@ -70,6 +71,8 @@ type StoredProgramBlock = {
   description?: string;
   teamSinglesCount?: number;
   teamDoublesCount?: number;
+  teamPlayerCount?: number;
+  inheritPreviousTeamFormation?: boolean;
 };
 
 type FormationPlayer = {
@@ -294,8 +297,24 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
     return [Math.ceil(count / 2), Math.floor(count / 2)];
   };
 
-  const activeFormationBlock = formationDialog && storedProgram?.blocks
-    ? storedProgram.blocks[formationDialog.roundIndex]
+  const resolveFormationBlock = (roundIndex: number): StoredProgramBlock | undefined => {
+    const block = storedProgram?.blocks?.[roundIndex];
+    if (!block) return undefined;
+    const inheritsPrevious =
+      storedProgram?.rounds?.[roundIndex]?.inheritPreviousTeamFormation ??
+      block.inheritPreviousTeamFormation;
+    if (!inheritsPrevious || block.type !== "TEAM" || roundIndex === 0) return block;
+    const previousBlock = resolveFormationBlock(roundIndex - 1);
+    if (!previousBlock || previousBlock.type !== "TEAM") return block;
+    return {
+      ...block,
+      groupSizes: previousBlock.groupSizes,
+      teamShuffleSeed: previousBlock.teamShuffleSeed,
+      teamAssignments: previousBlock.teamAssignments,
+    };
+  };
+  const activeFormationBlock = formationDialog
+    ? resolveFormationBlock(formationDialog.roundIndex)
     : undefined;
   const teamGroupSizes = activeFormationBlock?.groupSizes ?? storedProgram?.groupSizes ?? [programPlayers.length];
   const defaultFormationSeed = formationDialog ? (formationDialog.roundIndex + 1) * 1000 : 0;
@@ -368,25 +387,36 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
     localStorage.setItem(`league-program-${id}`, JSON.stringify(nextProgram));
     await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
 
-    const block = nextProgram.blocks?.[roundIndex];
-    if (resetMatches && block) {
-      clearProgramMatchState(id, roundIndex + 1);
-      const roundMatches = generateProgramRoundMatches(
-        id,
-        nextProgram as ProgramOption,
-        participants,
-        roundIndex + 1,
-        matches,
-      ).map((match) => ({
-        ...match,
-        program_round: roundIndex + 1,
-        program_block_type: block.type,
-      }));
-      await syncLeagueProgramMatches({
-        leagueId: id,
-        matches: roundMatches,
-        resetResults: true,
-      }).unwrap();
+    if (resetMatches) {
+      const affectedRoundIndexes = [roundIndex];
+      for (let index = roundIndex + 1; index < (nextProgram.blocks?.length ?? 0); index += 1) {
+        const linked =
+          nextProgram.rounds?.[index]?.inheritPreviousTeamFormation ??
+          nextProgram.blocks?.[index]?.inheritPreviousTeamFormation;
+        if (!linked || nextProgram.blocks?.[index]?.type !== "TEAM") break;
+        affectedRoundIndexes.push(index);
+      }
+      for (const affectedRoundIndex of affectedRoundIndexes) {
+        const block = nextProgram.blocks?.[affectedRoundIndex];
+        if (!block) continue;
+        clearProgramMatchState(id, affectedRoundIndex + 1);
+        const roundMatches = generateProgramRoundMatches(
+          id,
+          nextProgram as ProgramOption,
+          participants,
+          affectedRoundIndex + 1,
+          matches,
+        ).map((match) => ({
+          ...match,
+          program_round: affectedRoundIndex + 1,
+          program_block_type: block.type,
+        }));
+        await syncLeagueProgramMatches({
+          leagueId: id,
+          matches: roundMatches,
+          resetResults: true,
+        }).unwrap();
+      }
     }
   };
 
@@ -470,7 +500,27 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
         return [participant.id];
       }),
     );
+    let propagateTeamFormation = false;
     const nextBlocks = storedProgram.blocks.map((block, index) => {
+      if (mode === "team") {
+        if (index === roundIndex) {
+          propagateTeamFormation = true;
+        } else if (
+          index > roundIndex &&
+          propagateTeamFormation &&
+          !(storedProgram.rounds?.[index]?.inheritPreviousTeamFormation ?? block.inheritPreviousTeamFormation)
+        ) {
+          propagateTeamFormation = false;
+        }
+        if (propagateTeamFormation) {
+          return {
+            ...block,
+            groupSizes: formationDraft.map((group) => group.length),
+            teamAssignments: formationDraft,
+            groupAssignments: undefined,
+          };
+        }
+      }
       if (index !== roundIndex) return block;
       if (mode === "team") {
         return {
@@ -492,7 +542,28 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
           : { groupSizes: formationDraft.map((group) => group.length) }),
       };
     });
+    propagateTeamFormation = false;
     const nextRounds = storedProgram.rounds?.map((round, index) => {
+      if (mode === "team") {
+        if (index === roundIndex) {
+          propagateTeamFormation = true;
+        } else if (
+          index > roundIndex &&
+          propagateTeamFormation &&
+          !(round.program === "TEAM" && round.inheritPreviousTeamFormation)
+        ) {
+          propagateTeamFormation = false;
+        }
+        if (propagateTeamFormation) {
+          return {
+            ...round,
+            teamPlayerCount: formationDraft[0]?.length ?? round.teamPlayerCount,
+            groupSizes: formationDraft.map((group) => group.length),
+            teamAssignments: formationDraft,
+            groupAssignments: undefined,
+          };
+        }
+      }
       if (index !== roundIndex) return round;
       if (mode === "team") {
         return {
@@ -523,12 +594,34 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
   const reshuffleFormation = async () => {
     if (!formationDialog || !storedProgram?.blocks) return;
     const { roundIndex, mode } = formationDialog;
+    const nextTeamShuffleSeed =
+      ((storedProgram.blocks[roundIndex]?.teamShuffleSeed ?? (roundIndex + 1) * 1000 + 101) + 1);
+    let propagateTeamFormation = false;
     const nextBlocks = storedProgram.blocks.map((block, index) => {
+      if (mode === "team") {
+        if (index === roundIndex) {
+          propagateTeamFormation = true;
+        } else if (
+          index > roundIndex &&
+          propagateTeamFormation &&
+          !(storedProgram.rounds?.[index]?.inheritPreviousTeamFormation ?? block.inheritPreviousTeamFormation)
+        ) {
+          propagateTeamFormation = false;
+        }
+        if (propagateTeamFormation) {
+          return {
+            ...block,
+            teamShuffleSeed: nextTeamShuffleSeed,
+            teamAssignments: undefined,
+            groupAssignments: undefined,
+          };
+        }
+      }
       if (index !== roundIndex) return block;
       if (mode === "team") {
         return {
           ...block,
-          teamShuffleSeed: (block.teamShuffleSeed ?? (roundIndex + 1) * 1000 + 101) + 1,
+          teamShuffleSeed: nextTeamShuffleSeed,
           teamAssignments: undefined,
           groupAssignments: undefined,
         };
@@ -546,12 +639,32 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
         groupAssignments: undefined,
       };
     });
+    propagateTeamFormation = false;
     const nextRounds = storedProgram.rounds?.map((round, index) => {
+      if (mode === "team") {
+        if (index === roundIndex) {
+          propagateTeamFormation = true;
+        } else if (
+          index > roundIndex &&
+          propagateTeamFormation &&
+          !(round.program === "TEAM" && round.inheritPreviousTeamFormation)
+        ) {
+          propagateTeamFormation = false;
+        }
+        if (propagateTeamFormation) {
+          return {
+            ...round,
+            teamShuffleSeed: nextTeamShuffleSeed,
+            teamAssignments: undefined,
+            groupAssignments: undefined,
+          };
+        }
+      }
       if (index !== roundIndex) return round;
       if (mode === "team") {
         return {
           ...round,
-          teamShuffleSeed: (round.teamShuffleSeed ?? (roundIndex + 1) * 1000 + 101) + 1,
+          teamShuffleSeed: nextTeamShuffleSeed,
           teamAssignments: undefined,
           groupAssignments: undefined,
         };

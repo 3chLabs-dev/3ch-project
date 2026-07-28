@@ -5,8 +5,8 @@ import { Button, Card, PageHeader } from "../components/Ui";
 import { colors } from "../theme";
 
 const BANK = "우리은행";
-const ACCOUNT = "1002-123-123456";
-const HOLDER = "조하지";
+const ACCOUNT = "1005-404-946356";
+const HOLDER = "조하진(쓰리씨에이치)";
 
 export function DonateScreen() {
   const copy = async () => {

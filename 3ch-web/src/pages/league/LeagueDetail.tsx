@@ -128,7 +128,7 @@
   const SORT_OPTIONS = ["부수", "이름", "랜덤"];
   const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, "0"));
   const MINUTE_OPTIONS = ["00", "10", "20", "30", "40", "50"];
-  const RECRUIT_OPTIONS = [4, 6, 8, 10, 12, 16, 20, 24, 32];
+    const RECRUIT_OPTIONS = [0, 4, 6, 8, 10, 12, 16, 20, 24, 32];
 
   export default function LeagueDetail() {
     const { id } = useParams<{ id: string }>();
@@ -334,7 +334,8 @@
 
     const handleJoin = async (name?: string, division?: string) => {
       if (!id) return;
-      const isFull = league?.recruit_count != null && rawParticipants.length >= league.recruit_count;
+      const recruitLimit = league?.recruit_count ?? 0;
+      const isFull = recruitLimit > 0 && rawParticipants.length >= recruitLimit;
       if (isFull) {
         setAlertSeverity("warning");
         setAlertMsg(`모집 인원(${league!.recruit_count}명)이 마감되었습니다.`);
@@ -442,8 +443,9 @@
         setOpenLoadDialog(false);
         return;
       }
-      const remaining = league?.recruit_count != null
-        ? league.recruit_count - rawParticipants.length
+      const recruitLimit = league?.recruit_count ?? 0;
+      const remaining = recruitLimit > 0
+        ? recruitLimit - rawParticipants.length
         : Infinity;
       if (selected.length > remaining) {
         setAlertSeverity("warning");
@@ -1226,10 +1228,12 @@ const handleSaveEdit = async () => {
           <Stack direction="row" alignItems="center" sx={{ mb: 1 }}>
             <Stack direction="row" alignItems="center" spacing={0.3} sx={{ flex: 1 }}>
               <Typography fontWeight={900} fontSize={16}>참가자</Typography>
-              <Typography fontSize={13} fontWeight={700} color="text.secondary">
-                ( {participants.length} /
-              </Typography>
-              {canManage  ? (
+              {(league.recruit_count ?? 0) > 0 ? (
+                <>
+                  <Typography fontSize={13} fontWeight={700} color="text.secondary">
+                    ( {participants.length} /
+                  </Typography>
+                  {canManage ? (
                 <Select
                   value={editRecruitCount ?? league.recruit_count ?? 20}
                   onChange={(e) => setEditRecruitCount(Number(e.target.value))}
@@ -1242,15 +1246,23 @@ const handleSaveEdit = async () => {
                   }}
                 >
                   {RECRUIT_OPTIONS.map((n) => (
-                    <MenuItem key={n} value={n} sx={{ fontSize: 13 }}>{n}명</MenuItem>
+                    <MenuItem key={n} value={n} sx={{ fontSize: 13 }}>
+                      {n === 0 ? "미설정" : `${n}명`}
+                    </MenuItem>
                   ))}
                 </Select>
+                  ) : (
+                    <Typography fontSize={13} fontWeight={700} color="text.secondary">
+                      {league.recruit_count}명
+                    </Typography>
+                  )}
+                  <Typography fontSize={13} fontWeight={700} color="text.secondary">)</Typography>
+                </>
               ) : (
                 <Typography fontSize={13} fontWeight={700} color="text.secondary">
-                  {league.recruit_count ?? "-"}명
+                  ( {participants.length}명 )
                 </Typography>
               )}
-              <Typography fontSize={13} fontWeight={700} color="text.secondary">)</Typography>
             </Stack>
             <Stack direction="row" spacing={0.8}>
             <Button
@@ -2126,7 +2138,8 @@ const handleSaveEdit = async () => {
               </Box>
             );
           }
-          const isFull = league?.recruit_count != null && rawParticipants.length >= league.recruit_count;
+          const recruitLimit = league?.recruit_count ?? 0;
+          const isFull = recruitLimit > 0 && rawParticipants.length >= recruitLimit;
           return (
             <Box sx={floatingBoxSx}>
               <Button fullWidth variant="contained" disableElevation disabled={isFull}
@@ -2177,7 +2190,8 @@ const handleSaveEdit = async () => {
               </Stack>
             );
           }
-          const isFull = league?.recruit_count != null && rawParticipants.length >= league.recruit_count;
+          const recruitLimit = league?.recruit_count ?? 0;
+          const isFull = recruitLimit > 0 && rawParticipants.length >= recruitLimit;
           return (
             <Box sx={floatingBoxSx}>
               <Button

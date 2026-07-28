@@ -363,9 +363,9 @@ function BracketScoreCell({ match, isA, leagueId, winScore, canManage, landscape
   // landscape / portrait 공통: [↓] 점수 [↑] 가로 배치, 좌우 여백 있게
   const inner = (
     <Box className="score-control-container" sx={{
-      display: "flex", flexDirection: "row", alignItems: "center",
+      display: "flex", flexDirection: landscape ? "row" : "column", alignItems: "center",
       justifyContent: "space-between",
-      ...(landscape ? {} : { writingMode: "horizontal-tb" }),
+      writingMode: "horizontal-tb",
       px: 0.25, height: "100%", gap: 0.25,
     }}>
       <ScoreButton icon="down" variant="score" disabled={(score ?? 0) <= 0} rotate={!landscape} onClick={() => handleChange(-1)} />

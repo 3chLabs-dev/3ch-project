@@ -193,7 +193,11 @@ function calcPositions(matches: LeagueMatch[]): MatchPos[] {
       (lowest, pos) => lowest == null || pos.y > lowest ? pos.y : lowest,
       null,
     );
-    const y = lowerSemifinalY ?? (finalPos?.y ?? PT) + MH + 56;
+    const minimumYBelowFinal = finalPos ? finalPos.y + MH + 32 : PT;
+    const y = Math.max(
+      lowerSemifinalY != null ? lowerSemifinalY + 28 : minimumYBelowFinal,
+      minimumYBelowFinal,
+    );
     result.push({ id: thirdPlaceMatch.id, x, y, match: thirdPlaceMatch });
   }
   return result;
@@ -581,6 +585,33 @@ function Connectors({ positions }: { positions: MatchPos[] }) {
         if (!tgt) return null;
         const sx = x + MW / 2;
         const sy = y + MH;
+
+        if (tgt.match.match_label === "3·4위전") {
+          const targetX = tgt.x;
+          const isFirstSlot = m.loser_next_slot === "a";
+          const sourceX = x + MW / 2;
+          const sourceY = y + MH;
+          const targetY = tgt.y + (isFirstSlot ? MH / 4 : (3 * MH) / 4);
+          const loserSources = positions
+            .filter((p) => p.match.loser_next_match_id === m.loser_next_match_id)
+            .sort((a, b) => a.y - b.y);
+          const lowerSource = loserSources[loserSources.length - 1];
+          const laneY = isFirstSlot
+            ? Math.max(sourceY + 14, (lowerSource?.y ?? targetY) - 12)
+            : sourceY + 14;
+          const approachX = targetX - (isFirstSlot ? 16 : 32);
+          return (
+            <path
+              key={`lc-${id}`}
+              d={`M ${sourceX} ${sourceY} V ${laneY} H ${approachX} V ${targetY} H ${targetX}`}
+              stroke="#CBD5E1"
+              strokeWidth={1.5}
+              strokeDasharray="4 3"
+              fill="none"
+            />
+          );
+        }
+
         const tx = tgt.x + (m.loser_next_slot === "a" ? MW / 4 : (3 * MW) / 4);
         const ty = tgt.y;
         const my = sy + Math.max(18, (ty - sy) / 2);

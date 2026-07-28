@@ -195,7 +195,7 @@ function calcPositions(matches: LeagueMatch[]): MatchPos[] {
     );
     const minimumYBelowFinal = finalPos ? finalPos.y + MH + 32 : PT;
     const y = Math.max(
-      lowerSemifinalY ?? minimumYBelowFinal,
+      lowerSemifinalY != null ? lowerSemifinalY + 28 : minimumYBelowFinal,
       minimumYBelowFinal,
     );
     result.push({ id: thirdPlaceMatch.id, x, y, match: thirdPlaceMatch });
@@ -587,28 +587,23 @@ function Connectors({ positions }: { positions: MatchPos[] }) {
         const sy = y + MH;
 
         if (tgt.match.match_label === "3·4위전") {
-          const targetCenterX = tgt.x + MW / 2;
-
-          if (m.loser_next_slot === "a") {
-            const approachY = tgt.y - 18;
-            return (
-              <path
-                key={`lc-${id}`}
-                d={`M ${sx} ${sy} V ${approachY} H ${targetCenterX} V ${tgt.y}`}
-                stroke="#CBD5E1"
-                strokeWidth={1.5}
-                strokeDasharray="4 3"
-                fill="none"
-              />
-            );
-          }
-
-          const targetBottomY = tgt.y + MH;
-          const approachY = Math.max(sy, targetBottomY) + 18;
+          const targetX = tgt.x;
+          const isFirstSlot = m.loser_next_slot === "a";
+          const sourceX = x + MW / 2;
+          const sourceY = y + MH;
+          const targetY = tgt.y + (isFirstSlot ? MH / 4 : (3 * MH) / 4);
+          const loserSources = positions
+            .filter((p) => p.match.loser_next_match_id === m.loser_next_match_id)
+            .sort((a, b) => a.y - b.y);
+          const lowerSource = loserSources[loserSources.length - 1];
+          const laneY = isFirstSlot
+            ? Math.max(sourceY + 14, (lowerSource?.y ?? targetY) - 12)
+            : sourceY + 14;
+          const approachX = targetX - (isFirstSlot ? 16 : 32);
           return (
             <path
               key={`lc-${id}`}
-              d={`M ${sx} ${sy} V ${approachY} H ${targetCenterX} V ${targetBottomY}`}
+              d={`M ${sourceX} ${sourceY} V ${laneY} H ${approachX} V ${targetY} H ${targetX}`}
               stroke="#CBD5E1"
               strokeWidth={1.5}
               strokeDasharray="4 3"

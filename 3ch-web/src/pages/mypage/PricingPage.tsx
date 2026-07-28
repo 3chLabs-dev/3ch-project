@@ -23,7 +23,7 @@ const PLANS = [
     price: null,
     originalPrice: null,
     features: [
-      "클럽 생성 무제한",
+      "클럽 생성 1회",
       "클럽 가입 무제한",
       "리그 생성 1회",
       "리그·대회 참가 무제한",
@@ -49,6 +49,7 @@ const PLANS = [
     price: "4,900",
     originalPrice: "9,900",
     features: [
+      "클럽 생성 무제한",
       "리그 생성 5회",
       "대진표 사진 인식 5회",
       "추첨 생성 5회",
@@ -96,6 +97,7 @@ const PLANS = [
     originalPrice: "24,900",
     features: [
       "대회 생성 무제한",
+      "대진표 사진 인식 500회",
       "AI 추천 클럽 상단 배치",
     ],
     inheritFrom: "PRO 혜택",

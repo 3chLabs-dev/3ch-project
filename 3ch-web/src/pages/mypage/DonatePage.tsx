@@ -6,8 +6,8 @@ import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
 import { useNavigate } from "react-router-dom";
 
 const BANK = "우리은행";
-const ACCOUNT = "1002-123-123456";
-const HOLDER = "조하진";
+const ACCOUNT = "1005-404-946356";
+const HOLDER = "조하진(쓰리씨에이치)";
 
 export default function DonatePage() {
     const navigate = useNavigate();

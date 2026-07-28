@@ -153,6 +153,7 @@ export default function SupportChat() {
   if (location.pathname === "/mypage/inquiry") return null;
   const isProgramMatchOrder = location.pathname.endsWith("/program/matches");
   const isLeagueDetail = /^\/league\/[^/]+\/?$/.test(location.pathname);
+  const isClubFloatingActionPage = /^\/club\/[^/]+(?:\/manage)?\/?$/.test(location.pathname);
 
   return (
     <>
@@ -165,7 +166,7 @@ export default function SupportChat() {
           right: 14,
           bottom: isProgramMatchOrder
             ? "calc(132px + env(safe-area-inset-bottom))"
-            : isLeagueDetail
+            : isLeagueDetail || isClubFloatingActionPage
               ? "calc(124px + env(safe-area-inset-bottom))"
               : "calc(68px + env(safe-area-inset-bottom))",
           minWidth: 0,

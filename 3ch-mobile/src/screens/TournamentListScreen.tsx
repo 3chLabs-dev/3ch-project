@@ -6,7 +6,7 @@ import { Button, Card, Empty, Loading, PageHeader } from "../components/Ui";
 import { Screen } from "../components/Screen";
 import { colors } from "../theme";
 
-const seedLabel: Record<string, string> = { manual: "\uc218\ub3d9", seed: "\uc2dc\ub4dc", random: "\ubb34\uc791\uc704", group: "\uc870 \ubd84\ub9ac", standings: "\uc21c\uc704" };
+const seedLabel: Record<string, string> = { manual: "수동", seed: "시드", random: "무작위", group: "조 분리", standings: "순위" };
 
 export function TournamentListScreen() {
   const navigation = useNavigation<any>();
@@ -18,17 +18,17 @@ export function TournamentListScreen() {
   const hasTournament = matches.some((match) => match.bracket);
   const firstRound = matches.find((match) => match.bracket === "upper" && match.round_number === 1);
   return <Screen refreshing={leagueQuery.isFetching || matchesQuery.isFetching} onRefresh={() => { leagueQuery.refetch(); matchesQuery.refetch(); }}>
-    <PageHeader title="\ud1a0\ub108\uba3c\ud2b8 \ub300\uc9c4\ud45c" />
+    <PageHeader title="토너먼트 대진표" />
     {leagueQuery.isLoading || matchesQuery.isLoading ? <Loading /> : null}
-    {league ? <View style={styles.leagueMeta}><Tag label={league.start_date?.slice(0, 10) ?? "\uc77c\uc815 \ubbf8\uc815"} /><Tag label={league.type ?? "\ub9ac\uadf8"} />{league.rules ? <Tag label={league.rules} /> : null}</View> : null}
+    {league ? <View style={styles.leagueMeta}><Tag label={league.start_date?.slice(0, 10) ?? "일정 미정"} /><Tag label={league.type ?? "리그"} />{league.rules ? <Tag label={league.rules} /> : null}</View> : null}
     {hasTournament && league ? <Card style={styles.tournamentCard}>
       <View style={styles.blueLine} />
-      <View style={styles.body}><View style={styles.titleRow}><View style={styles.iconBox}><Ionicons name="git-network-outline" size={22} color={colors.primary} /></View><View><Text style={styles.title}>{league.type ?? "\ub9ac\uadf8"} \ud1a0\ub108\uba3c\ud2b8</Text><Text style={styles.date}>{league.start_date?.slice(0, 10) ?? "\uc77c\uc815 \ubbf8\uc815"}</Text></View></View>
-        <View style={styles.tags}>{firstRound?.match_label ? <Tag label={firstRound.match_label} tone="blue" /> : null}{league.tournament_advancement ? <Tag label={league.tournament_advancement === "upper-lower" ? "\uc0c1\uc704\ubd80 / \ud558\uc704\ubd80" : "\uc0c1\uc704 \uc9c4\ucd9c"} tone="purple" /> : null}{league.tournament_seeding ? <Tag label={`\ubc30\uce58: ${seedLabel[league.tournament_seeding] ?? league.tournament_seeding}`} tone="green" /> : null}</View>
-        <View style={styles.actions}><Action title="\uacbd\uae30 \uc21c\uc11c" outline onPress={() => navigation.navigate("TournamentMatchOrder", { id })} /><Action title="\ub300\uc9c4\ud45c \ubcf4\uae30" onPress={() => navigation.navigate("TournamentBracket", { id })} /></View>
-        <View style={styles.actions}><Action title="\ub300\uc9c4\ud45c \uc218\uc815" muted onPress={() => navigation.navigate("TournamentSetup", { id })} /></View>
+      <View style={styles.body}><View style={styles.titleRow}><View style={styles.iconBox}><Ionicons name="git-network-outline" size={22} color={colors.primary} /></View><View><Text style={styles.title}>{league.type ?? "리그"} 토너먼트</Text><Text style={styles.date}>{league.start_date?.slice(0, 10) ?? "일정 미정"}</Text></View></View>
+        <View style={styles.tags}>{firstRound?.match_label ? <Tag label={firstRound.match_label} tone="blue" /> : null}{league.tournament_advancement ? <Tag label={league.tournament_advancement === "upper-lower" ? "상위부 / 하위부" : "상위 진출"} tone="purple" /> : null}{league.tournament_seeding ? <Tag label={`배치: ${seedLabel[league.tournament_seeding] ?? league.tournament_seeding}`} tone="green" /> : null}</View>
+        <View style={styles.actions}><Action title="경기 순서" outline onPress={() => navigation.navigate("TournamentMatchOrder", { id })} /><Action title="대진표 보기" onPress={() => navigation.navigate("TournamentBracket", { id })} /></View>
+        <View style={styles.actions}><Action title="대진표 수정" muted onPress={() => navigation.navigate("TournamentSetup", { id })} /></View>
       </View>
-    </Card> : <Card style={styles.emptyCard}><View style={styles.emptyIcon}><Ionicons name="git-network-outline" size={27} color="#94A3B8" /></View><Text style={styles.emptyTitle}>\ub300\uc9c4\ud45c\uac00 \uc5c6\uc2b5\ub2c8\ub2e4.</Text><Text style={styles.emptyText}>\ud1a0\ub108\uba3c\ud2b8 \ub300\uc9c4\ud45c\ub97c \uc0dd\uc131\ud574 \uc8fc\uc138\uc694.</Text><Button title="\ud1a0\ub108\uba3c\ud2b8 \uc0dd\uc131" onPress={() => navigation.navigate("TournamentSetup", { id })} /></Card>}
+    </Card> : <Card style={styles.emptyCard}><View style={styles.emptyIcon}><Ionicons name="git-network-outline" size={27} color="#94A3B8" /></View><Text style={styles.emptyTitle}>대진표가 없습니다.</Text><Text style={styles.emptyText}>토너먼트 대진표를 생성해 주세요.</Text><Button title="토너먼트 생성" onPress={() => navigation.navigate("TournamentSetup", { id })} /></Card>}
   </Screen>;
 }
 function Action({ title, onPress, outline, muted }: { title: string; onPress: () => void; outline?: boolean; muted?: boolean }) { return <Pressable onPress={onPress} style={[styles.action, outline && styles.outlineAction, muted && styles.mutedAction]}><Text style={[styles.actionText, outline && styles.outlineText, muted && styles.mutedText]}>{title}</Text><Ionicons name="chevron-forward" size={16} color={outline ? colors.primary : muted ? colors.muted : "#FFFFFF"} /></Pressable>; }

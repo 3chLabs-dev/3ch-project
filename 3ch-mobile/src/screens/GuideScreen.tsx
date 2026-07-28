@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useGetGuidesQuery, type Guide } from "../api/mobileApi";
 import { Screen } from "../components/Screen";
 import { Empty, Loading, PageHeader } from "../components/Ui";
@@ -85,13 +85,24 @@ function RoleTab({ active, icon, label, onPress }: { active: boolean; icon: keyo
 }
 
 function GuideContent({ guide }: { guide: Guide }) {
+  const images = extractImageSources(guide.content);
+  const text = stripHtml(guide.content);
   return (
     <View style={styles.content}>
       <Text style={styles.contentTitle}>{guide.section}</Text>
-      <Text style={styles.contentBody}>{stripHtml(guide.content)}</Text>
+      {text ? <Text style={styles.contentBody}>{text}</Text> : null}
+      {images.map((uri, index) => <GuideImage key={`${guide.id}-${index}`} uri={uri} />)}
     </View>
   );
 }
+
+function GuideImage({ uri }: { uri: string }) {
+  const [aspectRatio, setAspectRatio] = useState(0.55);
+  useEffect(() => { Image.getSize(uri, (width, height) => { if (width && height) setAspectRatio(width / height); }); }, [uri]);
+  return <Image source={{ uri }} resizeMode="contain" style={[styles.guideImage, { aspectRatio }]} />;
+}
+
+const extractImageSources = (value: string) => [...value.matchAll(/<img[^>]+src=["']([^"']+)["'][^>]*>/gi)].map((match) => match[1]);
 
 const stripHtml = (value: string) =>
   value
@@ -124,6 +135,7 @@ const styles = StyleSheet.create({
   content: { borderRadius: 8, padding: 18, backgroundColor: colors.surface, gap: 14 },
   contentTitle: { color: colors.text, fontSize: 18, fontWeight: "900" },
   contentBody: { color: colors.text, fontSize: 14, lineHeight: 24 },
+  guideImage: { width: "100%", backgroundColor: "#F8FAFC" },
   retry: { paddingVertical: 30, alignItems: "center" },
   retryText: { color: colors.primary, fontWeight: "800" },
 });

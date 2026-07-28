@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { Box, Button, MenuItem, Select, Stack, TextField, Typography } from "@mui/material";
+import { Box, Button, IconButton, MenuItem, Select, Stack, TextField, Typography } from "@mui/material";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { setRenewalBasicInfo, setRenewalStep } from "../../features/league/leagueRenewalCreationSlice";
 import LeagueInvitedGroupsPicker from "./LeagueInvitedGroupsPicker";
@@ -9,9 +9,85 @@ const fieldSx = { "& .MuiOutlinedInput-root": { borderRadius: 0.6, bgcolor: "#ff
 const selectSx = { height: 32, flex: 1, borderRadius: 0.6, bgcolor: "#fff", fontSize: "0.95rem" };
 const hours = Array.from({ length: 24 }, (_, value) => String(value).padStart(2, "0"));
 const minutes = ["00", "10", "20", "30", "40", "50"];
-const participantCounts = [4, 6, 8, 10, 12, 16, 20, 24, 32, 40, 48, 64];
 
 function RequiredMark() { return <Box component="span" sx={{ color: "#EF4444", fontSize: 18 }}>*</Box>; }
+
+function OptionalNumberStepper({
+  value,
+  min,
+  max,
+  suffix,
+  onChange,
+}: {
+  value: number | "";
+  min: number;
+  max: number;
+  suffix: string;
+  onChange: (value: number | "") => void;
+}) {
+  const numericValue = value === "" ? min : value;
+
+  return (
+    <Stack
+      direction="row"
+      alignItems="center"
+      justifyContent="flex-end"
+      spacing={0.7}
+      sx={{ width: "100%" }}
+    >
+      <IconButton
+        aria-label={`${suffix} 수 감소`}
+        disabled={value === "" || numericValue <= min}
+        onClick={() => onChange(Math.max(min, numericValue - 1))}
+        sx={{ width: 36, height: 36, border: "1px solid #90CAF9", color: "#1976D2", fontSize: 21 }}
+      >
+        −
+      </IconButton>
+      <TextField
+        type="text"
+        value={value}
+        placeholder="선택"
+        onFocus={(event) => event.currentTarget.select()}
+        onChange={(event) => {
+          const digits = event.target.value.replace(/\D/g, "");
+          if (!digits) {
+            onChange("");
+            return;
+          }
+          onChange(Math.min(max, Math.max(min, Number(digits))));
+        }}
+        inputProps={{ inputMode: "numeric", "aria-label": `${suffix} 수` }}
+        size="small"
+        sx={{
+          width: suffix === "명" ? 66 : 56,
+          "& .MuiInputBase-root": { height: 36, borderRadius: 1 },
+          "& input": {
+            p: 0,
+            textAlign: "center",
+            fontWeight: 800,
+            MozAppearance: "textfield",
+          },
+          "& input::placeholder": { color: "#B0B5BD", opacity: 1, fontWeight: 500 },
+          "& input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button": {
+            m: 0,
+            WebkitAppearance: "none",
+          },
+        }}
+      />
+      <IconButton
+        aria-label={`${suffix} 수 증가`}
+        disabled={value !== "" && numericValue >= max}
+        onClick={() => onChange(value === "" ? min : Math.min(max, numericValue + 1))}
+        sx={{ width: 36, height: 36, border: "1px solid #90CAF9", color: "#1976D2", fontSize: 21 }}
+      >
+        +
+      </IconButton>
+      <Typography sx={{ width: 28, flexShrink: 0, fontSize: 14, fontWeight: 700 }}>
+        {suffix}
+      </Typography>
+    </Stack>
+  );
+}
 
 export default function LeagueRenewalStep1BasicInfo() {
   const dispatch = useAppDispatch();
@@ -54,8 +130,14 @@ export default function LeagueRenewalStep1BasicInfo() {
         </Stack>
       </Box>
       <Box sx={rowSx}><Typography sx={{ fontWeight: 900 }}>장소</Typography><TextField value={location} onChange={(event) => setLocation(event.target.value)} sx={fieldSx} /></Box>
-      <Box sx={rowSx}><Typography sx={{ fontWeight: 900 }}>탁구대 수</Typography><TextField select value={courtCount} onChange={(event) => setCourtCount(event.target.value === "" ? "" : Number(event.target.value))} SelectProps={{ displayEmpty: true }} sx={{ ...fieldSx, "& .MuiSelect-select": { color: courtCount === "" ? "#B0B5BD" : "inherit" } }}><MenuItem value="" sx={{ color: "#B0B5BD" }}>선택</MenuItem>{[1, 2, 3, 4, 5, 6, 8, 10, 12].map((count) => <MenuItem key={count} value={count}>{count}대</MenuItem>)}</TextField></Box>
-      <Box sx={rowSx}><Typography sx={{ fontWeight: 900 }}>참가자 수</Typography><TextField select value={participantCount} onChange={(event) => setParticipantCount(event.target.value === "" ? "" : Number(event.target.value))} SelectProps={{ displayEmpty: true }} sx={{ ...fieldSx, "& .MuiSelect-select": { color: participantCount === "" ? "#B0B5BD" : "inherit" } }}><MenuItem value="" sx={{ color: "#B0B5BD" }}>선택</MenuItem>{participantCounts.map((count) => <MenuItem key={count} value={count}>{count}명</MenuItem>)}</TextField></Box>
+      <Box sx={rowSx}>
+        <Typography sx={{ fontWeight: 900 }}>탁구대 수</Typography>
+        <OptionalNumberStepper value={courtCount} min={1} max={99} suffix="대" onChange={setCourtCount} />
+      </Box>
+      <Box sx={rowSx}>
+        <Typography sx={{ fontWeight: 900 }}>참가자 수</Typography>
+        <OptionalNumberStepper value={participantCount} min={2} max={999} suffix="명" onChange={setParticipantCount} />
+      </Box>
     </Box>
     <LeagueInvitedGroupsPicker />
     <Stack direction="row" spacing={2} sx={{ mt: 4 }}><Button fullWidth variant="contained" disableElevation onClick={() => dispatch(setRenewalStep(0))} sx={{ height: 44, borderRadius: 1, fontWeight: 900, bgcolor: "#777", "&:hover": { bgcolor: "#777" } }}>이전</Button><Button fullWidth variant="contained" disableElevation disabled={!canNext} onClick={saveAndNext} sx={{ height: 44, borderRadius: 1, fontWeight: 900, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" }, "&.Mui-disabled": { bgcolor: "#CFE1FB", color: "#fff" } }}>다음</Button></Stack>

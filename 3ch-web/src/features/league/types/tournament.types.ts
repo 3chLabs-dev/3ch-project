@@ -135,6 +135,7 @@ export interface ProgramBlock {
   deletedMatchIds?: string[];
   teamSinglesCount?: number;
   teamDoublesCount?: number;
+  inheritPreviousTeamFormation?: boolean;
 }
 
 export interface FormationAssignmentPlayer {
@@ -203,6 +204,7 @@ export interface RoundConfig {
   teamMatchType: TeamLineupType;
   teamSinglesCount?: number;
   teamDoublesCount?: number;
+  inheritPreviousTeamFormation?: boolean;
   groupSizes?: number[];
   teamGroupSizes?: number[];
   groupShuffleSeed?: number;

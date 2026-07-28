@@ -63,7 +63,7 @@ const initialState: RenewalLeagueCreationState = {
     type: null,
     format: null,
     rule: null,
-    teamPlayerCount: 4,
+    teamPlayerCount: 3,
   },
   compositionMode: null,
   selectedProgram: null,
@@ -108,10 +108,21 @@ export const createRenewalLeague = createAsyncThunk.withTypes<{ state: RootState
 
     let programData = state.selectedProgram;
     if (state.compositionMode === "custom") {
-      const hasIncompleteRound = state.rounds.some(
-        (round) => !round.program || !round.format || !round.matchRule ||
-          (round.program === "TEAM" && !round.teamPlayerCount),
-      );
+      const hasIncompleteRound = state.rounds.some((round) => {
+        if (!round.program || !round.format || !round.matchRule) return true;
+        if (round.program !== "TEAM") return false;
+        const teamPlayerCount = round.teamPlayerCount ?? 3;
+        const teamMatchCount = (round.teamSinglesCount ?? 3) + (round.teamDoublesCount ?? 0);
+        return (
+          !round.inheritPreviousTeamFormation && !round.teamPlayerCount ||
+          teamPlayerCount < 2 ||
+          teamPlayerCount > 10 ||
+          (state.basicInfo?.participantCount != null &&
+            teamPlayerCount > state.basicInfo.participantCount) ||
+          teamMatchCount < 1 ||
+          teamMatchCount > 20
+        );
+      });
       if (hasIncompleteRound) throw new Error("모든 라운드의 유형, 방식, 규칙을 선택해주세요.");
 
       const configuredPlayerCount = state.basicInfo.participantCount ?? state.participants.length;
@@ -124,7 +135,7 @@ export const createRenewalLeague = createAsyncThunk.withTypes<{ state: RootState
         format: round.format!,
         option: round.option ?? "NONE",
         matchRule: round.matchRule!,
-        teamPlayerCount: round.teamPlayerCount ?? 4,
+        teamPlayerCount: round.teamPlayerCount ?? 3,
         teamMatchType: round.teamMatchType ?? "SSS",
         groupSizes: round.groupSizes ?? groupSizes,
         tournamentSeeding: round.tournamentSeeding ?? "seed",
@@ -143,7 +154,7 @@ export const createRenewalLeague = createAsyncThunk.withTypes<{ state: RootState
           teamEnabled: rounds.some((round) => round.program === "TEAM"),
           teamMatchRounds: [],
           programOrder: rounds.map((round) => round.program),
-          teamPlayerCount: rounds.find((round) => round.program === "TEAM")?.teamPlayerCount ?? 4,
+          teamPlayerCount: rounds.find((round) => round.program === "TEAM")?.teamPlayerCount ?? 3,
           rounds,
         },
         playerCount,

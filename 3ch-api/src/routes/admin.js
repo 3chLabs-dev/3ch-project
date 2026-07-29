@@ -1625,6 +1625,7 @@ router.get('/pricing-plans', requireAdmin, async (_req, res) => {
     const result = await pool.query(
       `SELECT * FROM pricing_plans ORDER BY display_order ASC, id ASC`,
     );
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     return res.json({ ok: true, plans: result.rows });
   } catch (error) {
     console.error('admin pricing plans lookup error:', error);

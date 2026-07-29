@@ -56,7 +56,10 @@ export default function AdminPricingPlanPage() {
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
-    const response = await fetch(`${API}/admin/pricing-plans`, { headers });
+    const response = await fetch(`${API}/admin/pricing-plans`, {
+      headers,
+      cache: "no-store",
+    });
     const data = await response.json();
     if (response.ok) setPlans(data.plans ?? []);
     else setError("요금제 목록을 불러오지 못했습니다.");
@@ -110,7 +113,18 @@ export default function AdminPricingPlanPage() {
       setError(data.error === "MASTER_REQUIRED" ? "마스터만 요금제를 변경할 수 있습니다." : "저장하지 못했습니다.");
       return;
     }
-    setOpen(false); await load();
+    if (data.plan) {
+      setPlans((previous) => {
+        const savedPlan = data.plan as Plan;
+        const exists = previous.some((plan) => plan.id === savedPlan.id);
+        const next = exists
+          ? previous.map((plan) => plan.id === savedPlan.id ? savedPlan : plan)
+          : [...previous, savedPlan];
+        return next.sort((a, b) => a.display_order - b.display_order || a.id - b.id);
+      });
+    }
+    setOpen(false);
+    await load();
   };
   const remove = async (plan: Plan) => {
     if (!window.confirm(`${plan.name} 요금제를 삭제하시겠습니까?`)) return;

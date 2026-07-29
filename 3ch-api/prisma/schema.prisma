@@ -309,6 +309,7 @@ model PricingPlan {
   sale_start_at  DateTime? @db.Timestamptz(6)
   sale_end_at    DateTime? @db.Timestamptz(6)
   features       Json      @default("[]")
+  feature_limits Json      @default("{}")
   display_order  Int       @default(0)
   is_visible     Boolean   @default(true)
   created_at     DateTime  @default(now()) @db.Timestamptz(6)

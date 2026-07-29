@@ -1,20 +1,70 @@
 const pool = require("../db/pool");
 
 const FEATURES = Object.freeze({
-  EVENT_CREATE: "EVENT_CREATE",
+  CLUB_CREATE: "CLUB_CREATE",
+  CLUB_JOIN: "CLUB_JOIN",
+  LEAGUE_CREATE: "LEAGUE_CREATE",
+  EVENT_CREATE: "LEAGUE_CREATE",
+  TOURNAMENT_CREATE: "TOURNAMENT_CREATE",
+  EVENT_JOIN: "EVENT_JOIN",
   VISION_SCAN: "VISION_SCAN",
   DRAW_CREATE: "DRAW_CREATE",
 });
 
 const PLAN_LIMITS = Object.freeze({
-  starter: { [FEATURES.EVENT_CREATE]: 1, [FEATURES.VISION_SCAN]: 0, [FEATURES.DRAW_CREATE]: 1 },
-  basic: { [FEATURES.EVENT_CREATE]: 3, [FEATURES.VISION_SCAN]: 3, [FEATURES.DRAW_CREATE]: 3 },
-  pro: { [FEATURES.EVENT_CREATE]: null, [FEATURES.VISION_SCAN]: 20, [FEATURES.DRAW_CREATE]: null },
-  premium: { [FEATURES.EVENT_CREATE]: null, [FEATURES.VISION_SCAN]: 500, [FEATURES.DRAW_CREATE]: null },
+  starter: {
+    [FEATURES.CLUB_CREATE]: null, [FEATURES.CLUB_JOIN]: null,
+    [FEATURES.LEAGUE_CREATE]: 1, [FEATURES.TOURNAMENT_CREATE]: 0,
+    [FEATURES.EVENT_JOIN]: null, [FEATURES.VISION_SCAN]: 0, [FEATURES.DRAW_CREATE]: 1,
+  },
+  basic: {
+    [FEATURES.CLUB_CREATE]: null, [FEATURES.CLUB_JOIN]: null,
+    [FEATURES.LEAGUE_CREATE]: 3, [FEATURES.TOURNAMENT_CREATE]: 0,
+    [FEATURES.EVENT_JOIN]: null, [FEATURES.VISION_SCAN]: 3, [FEATURES.DRAW_CREATE]: 3,
+  },
+  pro: {
+    [FEATURES.CLUB_CREATE]: null, [FEATURES.CLUB_JOIN]: null,
+    [FEATURES.LEAGUE_CREATE]: null, [FEATURES.TOURNAMENT_CREATE]: 0,
+    [FEATURES.EVENT_JOIN]: null, [FEATURES.VISION_SCAN]: 20, [FEATURES.DRAW_CREATE]: null,
+  },
+  premium: {
+    [FEATURES.CLUB_CREATE]: null, [FEATURES.CLUB_JOIN]: null,
+    [FEATURES.LEAGUE_CREATE]: null, [FEATURES.TOURNAMENT_CREATE]: null,
+    [FEATURES.EVENT_JOIN]: null, [FEATURES.VISION_SCAN]: null, [FEATURES.DRAW_CREATE]: null,
+  },
+});
+
+const FEATURE_LIMIT_KEYS = Object.freeze({
+  [FEATURES.CLUB_CREATE]: "club_create",
+  [FEATURES.CLUB_JOIN]: "club_join",
+  [FEATURES.LEAGUE_CREATE]: "league_create",
+  [FEATURES.TOURNAMENT_CREATE]: "tournament_create",
+  [FEATURES.EVENT_JOIN]: "event_join",
+  [FEATURES.VISION_SCAN]: "vision_scan",
+  [FEATURES.DRAW_CREATE]: "draw_create",
 });
 
 function normalizePlan(plan) {
   return String(plan || "starter").trim().toLowerCase();
+}
+
+async function getPlanLimits(plan, client = pool) {
+  const normalizedPlan = normalizePlan(plan);
+  const fallback = PLAN_LIMITS[normalizedPlan] || PLAN_LIMITS.starter;
+  const result = await client.query(
+    `SELECT feature_limits FROM pricing_plans WHERE code = $1 LIMIT 1`,
+    [normalizedPlan],
+  );
+  const configured = result.rows[0]?.feature_limits;
+  if (!configured || typeof configured !== "object" || Array.isArray(configured)) return fallback;
+
+  return Object.fromEntries(
+    Object.entries(FEATURE_LIMIT_KEYS).map(([feature, key]) => {
+      if (!Object.prototype.hasOwnProperty.call(configured, key)) return [feature, fallback[feature]];
+      const value = configured[key];
+      return [feature, value === null ? null : Math.max(0, Number.parseInt(String(value), 10) || 0)];
+    }),
+  );
 }
 
 async function ensureStarterCredits(userId, client = pool) {
@@ -26,7 +76,8 @@ async function ensureStarterCredits(userId, client = pool) {
   );
   if (activeSubscription.rowCount > 0) return;
 
-  for (const [feature, amount] of Object.entries(PLAN_LIMITS.starter)) {
+  const starterLimits = await getPlanLimits("starter", client);
+  for (const [feature, amount] of Object.entries(starterLimits)) {
     await client.query(
       `INSERT INTO feature_credit_buckets (
          user_id, feature, source, initial_amount, remaining_amount,
@@ -44,7 +95,7 @@ async function ensureStarterCredits(userId, client = pool) {
 }
 
 async function provisionSubscriptionCredits(client, { subscriptionId, userId, plan, startsAt, expiresAt }) {
-  const limits = PLAN_LIMITS[normalizePlan(plan)] || PLAN_LIMITS.starter;
+  const limits = await getPlanLimits(plan, client);
   for (const [feature, amount] of Object.entries(limits)) {
     await client.query(
       `INSERT INTO feature_credit_buckets (

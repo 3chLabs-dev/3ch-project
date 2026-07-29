@@ -13,7 +13,24 @@ const { getSportRanking } = require('../services/sportRanking');
 
 const router = express.Router();
 
-const QUOTA_FEATURES = new Set(["EVENT_CREATE", "VISION_SCAN", "DRAW_CREATE"]);
+const QUOTA_FEATURES = new Set([
+  "CLUB_CREATE",
+  "CLUB_JOIN",
+  "LEAGUE_CREATE",
+  "TOURNAMENT_CREATE",
+  "EVENT_JOIN",
+  "VISION_SCAN",
+  "DRAW_CREATE",
+]);
+const PRICING_FEATURE_KEYS = [
+  "club_create",
+  "club_join",
+  "league_create",
+  "tournament_create",
+  "event_join",
+  "vision_scan",
+  "draw_create",
+];
 
 async function assertMaster(req, res) {
   const result = await pool.query(
@@ -1596,6 +1613,9 @@ const pricingPlanSchema = z.object({
   sale_start_at: z.string().datetime().nullable().optional(),
   sale_end_at: z.string().datetime().nullable().optional(),
   features: z.array(z.string().trim().min(1).max(200)).max(50),
+  feature_limits: z.object(Object.fromEntries(
+    PRICING_FEATURE_KEYS.map((key) => [key, z.number().int().min(0).max(100000).nullable()]),
+  )),
   display_order: z.coerce.number().int().min(0).max(9999),
   is_visible: z.boolean(),
 });
@@ -1623,12 +1643,12 @@ router.post('/pricing-plans', requireAdmin, async (req, res) => {
   try {
     const result = await pool.query(
       `INSERT INTO pricing_plans
-        (code, name, badge_text, price, original_price, billing_cycle, sale_start_at, sale_end_at, features, display_order, is_visible)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11)
+        (code, name, badge_text, price, original_price, billing_cycle, sale_start_at, sale_end_at, features, feature_limits, display_order, is_visible)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb,$11,$12)
        RETURNING *`,
       [value.code, value.name, value.badge_text || null, value.price, value.original_price ?? null,
        value.billing_cycle, value.sale_start_at ?? null, value.sale_end_at ?? null,
-       JSON.stringify(value.features), value.display_order, value.is_visible],
+       JSON.stringify(value.features), JSON.stringify(value.feature_limits), value.display_order, value.is_visible],
     );
     return res.status(201).json({ ok: true, plan: result.rows[0] });
   } catch (error) {
@@ -1650,12 +1670,13 @@ router.put('/pricing-plans/:id', requireAdmin, async (req, res) => {
     const result = await pool.query(
       `UPDATE pricing_plans SET
         code=$1, name=$2, badge_text=$3, price=$4, original_price=$5, billing_cycle=$6,
-        sale_start_at=$7, sale_end_at=$8, features=$9::jsonb, display_order=$10,
-        is_visible=$11, updated_at=NOW()
-       WHERE id=$12 RETURNING *`,
+        sale_start_at=$7, sale_end_at=$8, features=$9::jsonb, feature_limits=$10::jsonb,
+        display_order=$11, is_visible=$12, updated_at=NOW()
+       WHERE id=$13 RETURNING *`,
       [value.code, value.name, value.badge_text || null, value.price, value.original_price ?? null,
        value.billing_cycle, value.sale_start_at ?? null, value.sale_end_at ?? null,
-       JSON.stringify(value.features), value.display_order, value.is_visible, Number(req.params.id)],
+       JSON.stringify(value.features), JSON.stringify(value.feature_limits),
+       value.display_order, value.is_visible, Number(req.params.id)],
     );
     if (!result.rowCount) return res.status(404).json({ ok: false, error: 'PLAN_NOT_FOUND' });
     return res.json({ ok: true, plan: result.rows[0] });
@@ -1674,6 +1695,54 @@ router.delete('/pricing-plans/:id', requireAdmin, async (req, res) => {
     return res.json({ ok: true });
   } catch (error) {
     console.error('admin pricing plan delete error:', error);
+    return res.status(500).json({ ok: false, error: 'DB_ERROR' });
+  }
+});
+
+// GET /admin/payments - subscription payment history
+router.get('/payments', requireAdmin, async (req, res) => {
+  const page = Math.max(1, Number.parseInt(String(req.query.page || '1'), 10) || 1);
+  const limit = Math.min(100, Math.max(1, Number.parseInt(String(req.query.limit || '20'), 10) || 20));
+  const offset = (page - 1) * limit;
+  const search = String(req.query.search || '').trim();
+  const status = String(req.query.status || '').trim().toUpperCase();
+  const conditions = [];
+  const params = [];
+  if (search) {
+    params.push(`%${search}%`);
+    conditions.push(`(u.name ILIKE $${params.length} OR u.email ILIKE $${params.length} OR s.order_id ILIKE $${params.length})`);
+  }
+  if (status) {
+    params.push(status);
+    conditions.push(`s.status = $${params.length}`);
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  try {
+    const countResult = await pool.query(
+      `SELECT COUNT(*)::int AS total
+       FROM subscriptions s
+       JOIN users u ON u.id = s.user_id
+       ${where}`,
+      params,
+    );
+    const rowsResult = await pool.query(
+      `SELECT s.id, s.plan, s.order_id, s.amount, s.status, s.started_at AS starts_at,
+              s.expires_at, s.created_at, u.id AS user_id, u.name, u.email
+       FROM subscriptions s
+       JOIN users u ON u.id = s.user_id
+       ${where}
+       ORDER BY s.created_at DESC
+       LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      [...params, limit, offset],
+    );
+    return res.json({
+      ok: true,
+      payments: rowsResult.rows,
+      total: countResult.rows[0]?.total ?? 0,
+      pagination: { page, limit, total: countResult.rows[0]?.total ?? 0 },
+    });
+  } catch (error) {
+    console.error('admin payment history lookup error:', error);
     return res.status(500).json({ ok: false, error: 'DB_ERROR' });
   }
 });

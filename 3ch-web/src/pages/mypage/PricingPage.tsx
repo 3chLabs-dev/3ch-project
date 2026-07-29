@@ -249,9 +249,27 @@ function PlanCard({ plan, onBuy }: { plan: PlanCardData; onBuy?: () => void }) {
 type PublicPricingPlan = {
   code: string; name: string; badge_text: string | null; price: number;
   original_price: number | null; features: string[];
+  feature_limits?: Record<string, number | null>;
 };
 const API = import.meta.env.VITE_API_BASE_URL ?? "/api";
 const PLAN_AMOUNT: Record<string, number> = { basic: 4900, pro: 9900, premium: 19900 };
+const FEATURE_LABELS: Array<[string, string]> = [
+  ["club_create", "클럽 생성"],
+  ["club_join", "클럽 가입"],
+  ["league_create", "리그 생성"],
+  ["tournament_create", "대회 생성"],
+  ["event_join", "리그·대회 참가"],
+  ["vision_scan", "대진표 사진 인식"],
+  ["draw_create", "추첨 생성"],
+];
+const featureLimitLabels = (limits?: Record<string, number | null>) =>
+  limits && Object.keys(limits).length > 0
+    ? FEATURE_LABELS.map(([key, label]) => {
+        const limit = limits[key];
+        if (limit === null) return `${label} 무제한`;
+        return Number(limit ?? 0) === 0 ? `${label} 이용 불가` : `${label} 월 ${limit}회`;
+      })
+    : [];
 
 // ─── 메인 페이지 ─────────────────────────────────────────────────────────────
 export default function PricingPage() {
@@ -267,13 +285,16 @@ export default function PricingPage() {
   }, []);
   const displayPlans = PLANS.map((plan) => {
     const managed = managedPlans.find((item) => item.code === plan.id);
+    const managedFeatureLabels = featureLimitLabels(managed?.feature_limits);
     return managed ? {
       ...plan,
       name: managed.name,
       badge: managed.badge_text,
       price: managed.price > 0 ? managed.price.toLocaleString("ko-KR") : null,
       originalPrice: managed.original_price == null ? null : managed.original_price.toLocaleString("ko-KR"),
-      features: managed.features?.length ? managed.features : plan.features,
+      features: [...managedFeatureLabels, ...(managed.features ?? [])].length
+        ? [...managedFeatureLabels, ...(managed.features ?? [])]
+        : plan.features,
     } : plan;
   }).filter((plan) => managedPlans.length === 0 || managedPlans.some((item) => item.code === plan.id));
   const managedAmounts = Object.fromEntries(managedPlans.map((plan) => [plan.code, plan.price]));

@@ -22,8 +22,12 @@ import CloseIcon from "@mui/icons-material/Close";
 
 const API = import.meta.env.VITE_API_BASE_URL ?? "/api";
 const FEATURES = [
-  { value: "EVENT_CREATE", label: "리그·대회 생성" },
-  { value: "VISION_SCAN", label: "사진 인식" },
+  { value: "CLUB_CREATE", label: "클럽 생성" },
+  { value: "CLUB_JOIN", label: "클럽 가입" },
+  { value: "LEAGUE_CREATE", label: "리그 생성" },
+  { value: "TOURNAMENT_CREATE", label: "대회 생성" },
+  { value: "EVENT_JOIN", label: "리그·대회 참가" },
+  { value: "VISION_SCAN", label: "대진표 사진 인식" },
   { value: "DRAW_CREATE", label: "추첨 생성" },
 ];
 const ACTION_LABEL: Record<string, string> = {

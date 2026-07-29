@@ -1,22 +1,44 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel,
-  IconButton, MenuItem, Stack, Switch, Table, TableBody, TableCell, TableHead,
-  TableRow, TextField, Typography,
+  Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Divider,
+  FormControl, FormControlLabel, IconButton, MenuItem, Radio, RadioGroup, Stack,
+  Switch, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 
 const API = import.meta.env.VITE_API_BASE_URL ?? "/api";
+const FEATURE_OPTIONS = [
+  { key: "club_create", label: "클럽 생성" },
+  { key: "club_join", label: "클럽 가입" },
+  { key: "league_create", label: "리그 생성" },
+  { key: "tournament_create", label: "대회 생성" },
+  { key: "event_join", label: "리그·대회 참가" },
+  { key: "vision_scan", label: "대진표 사진 인식" },
+  { key: "draw_create", label: "추첨 생성" },
+] as const;
+type FeatureKey = typeof FEATURE_OPTIONS[number]["key"];
+type FeatureLimits = Record<FeatureKey, number | null>;
+const DEFAULT_FEATURE_LIMITS: FeatureLimits = {
+  club_create: null,
+  club_join: null,
+  league_create: 1,
+  tournament_create: 0,
+  event_join: null,
+  vision_scan: 0,
+  draw_create: 1,
+};
 type Plan = {
   id: number; code: string; name: string; badge_text: string | null; price: number;
   original_price: number | null; billing_cycle: "MONTHLY" | "YEARLY";
   sale_start_at: string | null; sale_end_at: string | null; features: string[];
+  feature_limits: FeatureLimits;
   display_order: number; is_visible: boolean; created_at: string;
 };
 type Form = Omit<Plan, "id" | "created_at" | "features"> & { featuresText: string };
 const EMPTY: Form = {
   code: "", name: "", badge_text: "", price: 0, original_price: null,
   billing_cycle: "MONTHLY", sale_start_at: null, sale_end_at: null,
+  feature_limits: { ...DEFAULT_FEATURE_LIMITS },
   featuresText: "", display_order: 0, is_visible: true,
 };
 const dateValue = (value: string | null) => value ? value.slice(0, 10) : "";
@@ -49,22 +71,35 @@ export default function AdminPricingPlanPage() {
       price: plan.price, original_price: plan.original_price,
       billing_cycle: plan.billing_cycle, sale_start_at: plan.sale_start_at,
       sale_end_at: plan.sale_end_at, featuresText: (plan.features ?? []).join("\n"),
+      feature_limits: { ...DEFAULT_FEATURE_LIMITS, ...(plan.feature_limits ?? {}) },
       display_order: plan.display_order, is_visible: plan.is_visible,
     });
     setError(""); setOpen(true);
   };
   const set = <K extends keyof Form>(key: K, value: Form[K]) => setForm((prev) => ({ ...prev, [key]: value }));
+  const setFeatureLimit = (key: FeatureKey, value: number | null) => {
+    setForm((prev) => ({
+      ...prev,
+      feature_limits: { ...prev.feature_limits, [key]: value },
+    }));
+  };
 
   const save = async () => {
     if (!form.code.trim() || !form.name.trim()) { setError("요금제 코드와 상품명을 입력해 주세요."); return; }
     setSaving(true); setError("");
     const body = {
-      ...form,
+      code: form.code,
+      name: form.name,
       badge_text: form.badge_text?.trim() || null,
+      price: Number(form.price),
       original_price: form.original_price === null || Number.isNaN(form.original_price) ? null : Number(form.original_price),
+      billing_cycle: form.billing_cycle,
       sale_start_at: datePayload(dateValue(form.sale_start_at)),
       sale_end_at: datePayload(dateValue(form.sale_end_at)),
       features: form.featuresText.split("\n").map((v) => v.trim()).filter(Boolean),
+      feature_limits: form.feature_limits,
+      display_order: form.display_order,
+      is_visible: form.is_visible,
     };
     const response = await fetch(`${API}/admin/pricing-plans${editId ? "/" + editId : ""}`, {
       method: editId ? "PUT" : "POST", headers, body: JSON.stringify(body),
@@ -141,7 +176,85 @@ export default function AdminPricingPlanPage() {
             <TextField label="적용 종료일" type="date" value={dateValue(form.sale_end_at)} onChange={(e) => set("sale_end_at", e.target.value || null)} InputLabelProps={{ shrink: true }} fullWidth />
             <TextField label="노출 순서" type="number" value={form.display_order} onChange={(e) => set("display_order", Number(e.target.value))} fullWidth inputProps={{ min: 0, max: 9999 }} />
           </Stack>
-          <TextField label="기능" value={form.featuresText} onChange={(e) => set("featuresText", e.target.value)} multiline minRows={7} fullWidth helperText="한 줄에 기능 하나씩 입력해 주세요." />
+          <Divider />
+          <Box>
+            <Typography fontWeight={900} sx={{ mb: 0.5 }}>기능</Typography>
+            <Typography fontSize={12} color="text.secondary" sx={{ mb: 1.5 }}>
+              기능별 월 제공 횟수 또는 무제한 여부를 설정합니다.
+            </Typography>
+            <Stack spacing={0.8}>
+              {FEATURE_OPTIONS.map(({ key, label }) => {
+                const limit = form.feature_limits[key];
+                return (
+                  <Box
+                    key={key}
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: { xs: "1fr", sm: "180px 1fr" },
+                      alignItems: "center",
+                      minHeight: 48,
+                      px: 1.5,
+                      py: 0.5,
+                      border: "1px solid #E5E7EB",
+                      borderRadius: 1,
+                    }}
+                  >
+                    <Typography fontSize={14} fontWeight={800}>{label}</Typography>
+                    <FormControl>
+                      <RadioGroup
+                        row
+                        value={limit === null ? "unlimited" : "monthly"}
+                        onChange={(event) => {
+                          setFeatureLimit(key, event.target.value === "unlimited" ? null : (limit ?? 0));
+                        }}
+                        sx={{ flexWrap: "nowrap", alignItems: "center", gap: 1 }}
+                      >
+                        <FormControlLabel
+                          value="monthly"
+                          control={<Radio size="small" />}
+                          label={(
+                            <Stack direction="row" alignItems="center" spacing={0.8}>
+                              <Typography fontSize={13}>월</Typography>
+                              <TextField
+                                value={limit ?? 0}
+                                type="number"
+                                size="small"
+                                disabled={limit === null}
+                                onClick={(event) => event.stopPropagation()}
+                                onChange={(event) => {
+                                  const value = Math.min(100000, Math.max(0, Number.parseInt(event.target.value || "0", 10) || 0));
+                                  setFeatureLimit(key, value);
+                                }}
+                                inputProps={{ min: 0, max: 100000, style: { textAlign: "center" } }}
+                                sx={{ width: 82 }}
+                              />
+                              <Typography fontSize={13}>회</Typography>
+                            </Stack>
+                          )}
+                          sx={{ mr: 1 }}
+                        />
+                        <FormControlLabel
+                          value="unlimited"
+                          control={<Radio size="small" />}
+                          label={<Typography fontSize={13}>무제한</Typography>}
+                        />
+                      </RadioGroup>
+                    </FormControl>
+                  </Box>
+                );
+              })}
+            </Stack>
+          </Box>
+          <TextField
+            label="기타"
+            value={form.featuresText}
+            onChange={(e) => set("featuresText", e.target.value)}
+            multiline
+            minRows={4}
+            fullWidth
+            placeholder="기타 안내할 혜택을 입력해 주세요."
+            helperText="한 줄에 한 항목씩 입력하면 요금제 페이지에 표시됩니다."
+          />
           <FormControlLabel control={<Switch checked={form.is_visible} onChange={(e) => set("is_visible", e.target.checked)} />} label="요금제 페이지에 공개" />
         </Stack>
       </DialogContent>

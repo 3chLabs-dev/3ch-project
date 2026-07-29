@@ -78,7 +78,7 @@ router.get("/payment/plans", async (_req, res) => {
   try {
     const result = await pool.query(
       `SELECT id, code, name, badge_text, price, original_price, billing_cycle,
-              sale_start_at, sale_end_at, features, display_order
+              sale_start_at, sale_end_at, features, feature_limits, display_order
          FROM pricing_plans
         WHERE is_visible = true
           AND (sale_start_at IS NULL OR sale_start_at <= NOW())
@@ -259,18 +259,23 @@ router.get("/payment/subscriptions/me", requireAuth, async (req, res) => {
 router.get("/payment/usage/me", requireAuth, async (req, res) => {
   const userId = Number(req.user.sub);
   try {
-    const [eventCreate, visionScan, drawCreate] = await Promise.all([
-      getFeatureBalance(userId, FEATURES.EVENT_CREATE),
-      getFeatureBalance(userId, FEATURES.VISION_SCAN),
-      getFeatureBalance(userId, FEATURES.DRAW_CREATE),
-    ]);
+    const featureEntries = [
+      ["club_create", FEATURES.CLUB_CREATE],
+      ["club_join", FEATURES.CLUB_JOIN],
+      ["league_create", FEATURES.LEAGUE_CREATE],
+      ["tournament_create", FEATURES.TOURNAMENT_CREATE],
+      ["event_join", FEATURES.EVENT_JOIN],
+      ["vision_scan", FEATURES.VISION_SCAN],
+      ["draw_create", FEATURES.DRAW_CREATE],
+    ];
+    const balances = await Promise.all(
+      featureEntries.map(([, feature]) => getFeatureBalance(userId, feature)),
+    );
     return res.json({
       ok: true,
-      usage: {
-        event_create: eventCreate,
-        vision_scan: visionScan,
-        draw_create: drawCreate,
-      },
+      usage: Object.fromEntries(
+        featureEntries.map(([key], index) => [key, balances[index]]),
+      ),
     });
   } catch (error) {
     console.error("feature balance lookup error:", error);

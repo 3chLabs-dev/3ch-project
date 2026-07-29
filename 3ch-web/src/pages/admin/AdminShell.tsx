@@ -23,8 +23,11 @@ const BOARD_MENU = [
   { label: "이용방법",         path: "/admin/board/guide"   },
   { label: "이용약관",         path: "/admin/board/terms"   },
   { label: "개인정보 처리방침", path: "/admin/board/privacy" },
-  { label: "요금제 관리", path: "/admin/pricing-plans" },
-  { label: "사용량 관리", path: "/admin/feature-usage" },
+];
+
+const PAYMENT_MENU = [
+  { label: "결제내역", path: "/admin/payments" },
+  { label: "요금제", path: "/admin/pricing-plans" },
 ];
 
 function SideMenuItem({ label, active, depth = 0, onClick }: {
@@ -67,7 +70,9 @@ export default function AdminShell() {
   const user       = useAppSelector((s) => s.admin.user);
 
   const isBoardActive = BOARD_MENU.some((item) => location.pathname === item.path);
+  const isPaymentActive = PAYMENT_MENU.some((item) => location.pathname === item.path);
   const [boardOpen, setBoardOpen] = useState(isBoardActive);
+  const [paymentOpen, setPaymentOpen] = useState(isPaymentActive);
 
   const handleLogout = () => {
     dispatch(adminLogout());
@@ -140,6 +145,47 @@ export default function AdminShell() {
               />
             ))}
           </Collapse>
+
+          <Divider sx={{ my: 1.5, mx: 2 }} />
+
+          <Box
+            onClick={() => setPaymentOpen((value) => !value)}
+            sx={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              px: 2, py: 1.2, cursor: "pointer",
+              bgcolor: isPaymentActive ? "#EEF2FF" : "transparent",
+              borderRight: isPaymentActive ? "3px solid #2F80ED" : "3px solid transparent",
+              "&:hover": { bgcolor: "#F9FAFB" },
+            }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1.2 }}>
+              <Box sx={{ width: 7, height: 7, borderRadius: "50%", bgcolor: isPaymentActive ? "#2F80ED" : "#D1D5DB", flexShrink: 0 }} />
+              <Typography sx={{ fontSize: 13, fontWeight: isPaymentActive ? 800 : 600, color: isPaymentActive ? "#2F80ED" : "#374151" }}>
+                결제 관리
+              </Typography>
+            </Box>
+            {paymentOpen
+              ? <ExpandLessIcon sx={{ fontSize: 16, color: "#9CA3AF" }} />
+              : <ExpandMoreIcon sx={{ fontSize: 16, color: "#9CA3AF" }} />}
+          </Box>
+
+          <Collapse in={paymentOpen} timeout="auto">
+            {PAYMENT_MENU.map((item) => (
+              <SideMenuItem
+                key={item.path}
+                label={item.label}
+                active={location.pathname === item.path}
+                depth={1}
+                onClick={() => navigate(item.path)}
+              />
+            ))}
+          </Collapse>
+
+          <SideMenuItem
+            label="사용량 관리"
+            active={location.pathname === "/admin/feature-usage"}
+            onClick={() => navigate("/admin/feature-usage")}
+          />
         </Box>
 
         {/* 콘텐츠 */}

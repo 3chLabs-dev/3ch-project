@@ -7,7 +7,6 @@ import ScienceOutlinedIcon from "@mui/icons-material/ScienceOutlined";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import CheckIcon from "@mui/icons-material/Check";
-import AddIcon from "@mui/icons-material/Add";
 import { useNavigate } from "react-router-dom";
 
 // ─── 플랜 데이터 ─────────────────────────────────────────────────────────────
@@ -59,8 +58,8 @@ const PLANS = [
     buttonDisabled: false,
     buttonColor: "#10B981",
     buttonTextColor: "#fff",
-    cardBg: "#fff",
-    borderColor: "#E5E7EB",
+    cardBg: "#ECFDF5",
+    borderColor: "#A7F3D0",
   },
   {
     id: "pro",
@@ -197,27 +196,15 @@ function PlanCard({ plan, onBuy }: { plan: PlanCardData; onBuy?: () => void }) {
       )}
 
       {/* 기능 목록 */}
-      <Typography fontSize={12} fontWeight={700} color="#6B7280" sx={{ mb: 1 }}>
+      <Typography fontSize={13} fontWeight={700} color="#6B7280" sx={{ mb: 1.2 }}>
         이용 가능한 기능
       </Typography>
 
-      {plan.inheritFrom && (
-        <>
-          <Stack direction="row" alignItems="center" spacing={0.8} sx={{ mb: 0.5 }}>
-            <CheckIcon sx={{ fontSize: 14, color: "#10B981" }} />
-            <Typography fontSize={13} fontWeight={700} color="#374151">{plan.inheritFrom}</Typography>
-          </Stack>
-          <Stack alignItems="center" sx={{ my: 0.8 }}>
-            <AddIcon sx={{ fontSize: 16, color: "#9CA3AF" }} />
-          </Stack>
-        </>
-      )}
-
-      <Stack spacing={0.5} sx={{ mb: 2.5 }}>
+      <Stack spacing={0.75} sx={{ mb: 2.5 }}>
         {plan.features.map((f) => (
           <Stack key={f} direction="row" alignItems="center" spacing={0.8}>
-            <CheckIcon sx={{ fontSize: 14, color: "#10B981" }} />
-            <Typography fontSize={13} fontWeight={700} color="#374151">{f}</Typography>
+            <CheckIcon sx={{ fontSize: 15, color: "#10B981" }} />
+            <Typography fontSize={14} fontWeight={700} color="#374151">{f}</Typography>
           </Stack>
         ))}
       </Stack>
@@ -376,7 +363,7 @@ export default function PricingPage() {
             <PlanCard key={plan.id} plan={plan} onBuy={plan.buttonDisabled ? undefined : () => handleBuy(plan.id, plan.name)} />
           ))}
 
-          {/* 안내사항 */}
+          {/* 유의사항 */}
           <Box
             sx={{
               bgcolor: "#F9FAFB",
@@ -387,7 +374,7 @@ export default function PricingPage() {
               mb: 3,
             }}
           >
-            <Typography fontWeight={900} fontSize={14} sx={{ mb: 1.5 }}>안내사항</Typography>
+            <Typography fontWeight={900} fontSize={14} sx={{ mb: 1.5 }}>유의사항</Typography>
             <Divider sx={{ mb: 1.5, borderColor: "#E5E7EB" }} />
             <Stack spacing={1}>
               {NOTICES.map((n, i) => (

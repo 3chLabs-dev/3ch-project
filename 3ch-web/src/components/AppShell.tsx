@@ -1,6 +1,9 @@
 // AppShell.tsx
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { AppBar, Box, Toolbar, Paper, Select, MenuItem, IconButton, Stack, Button } from "@mui/material";
+import {
+    AppBar, Box, Toolbar, Paper, Select, MenuItem, IconButton, Stack, Button,
+    Dialog, DialogTitle, DialogContent, DialogActions, Divider, Typography,
+} from "@mui/material";
 import type { SelectChangeEvent } from "@mui/material";
 import BottomTab from "./BottomTab";
 import AppFooter from "./AppFooter";
@@ -12,6 +15,7 @@ import type { RootState } from "../app/store";
 import { setToken, setUser } from "../features/auth/authSlice";
 import { setPreferredGroupId } from "../features/league/leagueCreationSlice";
 import { useGetMyGroupsQuery } from "../features/group/groupApi";
+import { useGetMyFeatureUsageQuery } from "../features/payment/usageApi";
 import { getLocalDevProfileByToken } from "../utils/localDevAuth";
 import logo from "../assets/512_우리리그 로고.svg";
 import SettingsIcon from "@mui/icons-material/Settings";
@@ -34,6 +38,7 @@ export default function AppShell() {
     const contentRef = useRef<HTMLDivElement>(null);
     const bannerRef = useRef<HTMLDivElement>(null);
     const [showHomeBar, setShowHomeBar] = useState(false);
+    const [usageOpen, setUsageOpen] = useState(false);
 
     useEffect(() => {
         const stored = localStorage.getItem("token");
@@ -46,6 +51,18 @@ export default function AppShell() {
         skip: !token,
         refetchOnMountOrArgChange: true,
     });
+    const { data: usageData } = useGetMyFeatureUsageQuery(undefined, {
+        skip: !token || !isMyPage,
+    });
+    const usageItems = [
+        { label: "리그 생성", balance: usageData?.usage.event_create },
+        { label: "사진 인식", balance: usageData?.usage.vision_scan },
+        { label: "추첨 생성", balance: usageData?.usage.draw_create },
+    ];
+    const nearestUsageExpiry = usageItems
+        .map(({ balance }) => balance?.expiresAt)
+        .filter((value): value is string => Boolean(value))
+        .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())[0];
     const groups = useMemo(() => {
         const serverGroups = groupData?.groups ?? [];
         if (serverGroups.length > 0) return serverGroups;
@@ -153,7 +170,22 @@ export default function AppShell() {
                             </Select>
                         )}
                         {isMyPage && token && (
-                            <Stack direction="row" sx={{ ml: "auto" }}>
+                            <Stack direction="row" alignItems="center" spacing={0.5} sx={{ ml: "auto" }}>
+                                <Button
+                                    size="small"
+                                    variant="outlined"
+                                    onClick={() => setUsageOpen(true)}
+                                    sx={{
+                                        minWidth: 0,
+                                        borderRadius: 1.5,
+                                        px: 1.2,
+                                        fontSize: 12,
+                                        fontWeight: 800,
+                                        whiteSpace: "nowrap",
+                                    }}
+                                >
+                                    남은 사용량
+                                </Button>
                                 {/* 앱 출시후 구현 임시주석 */}
                                 {/* <IconButton aria-label="notifications" size="small">
                                     <NotificationsNoneIcon sx={{ fontSize: 28 }} />
@@ -282,6 +314,59 @@ export default function AppShell() {
 
                 {!isLeagueSheet && <SupportChat />}
                 {!isLeagueSheet && <BottomTab />}
+
+                <Dialog
+                    open={usageOpen}
+                    onClose={() => setUsageOpen(false)}
+                    fullWidth
+                    maxWidth="xs"
+                    PaperProps={{ sx: { borderRadius: 2 } }}
+                >
+                    <DialogTitle sx={{ fontWeight: 900, fontSize: 20 }}>남은 사용량</DialogTitle>
+                    <Divider />
+                    <DialogContent sx={{ pt: 2.5 }}>
+                        <Stack spacing={1.25}>
+                            {usageItems.map(({ label, balance }) => (
+                                <Stack
+                                    key={label}
+                                    direction="row"
+                                    alignItems="center"
+                                    justifyContent="space-between"
+                                    sx={{ px: 1.5, py: 1.4, bgcolor: "#F8FAFC", borderRadius: 1.5 }}
+                                >
+                                    <Typography fontSize={14} fontWeight={700}>{label}</Typography>
+                                    <Typography fontSize={17} fontWeight={900} color="primary.main">
+                                        {balance?.unlimited ? "무제한" : `${balance?.remaining ?? 0}회`}
+                                    </Typography>
+                                </Stack>
+                            ))}
+                        </Stack>
+                        {nearestUsageExpiry && (
+                            <Typography fontSize={12} color="text.secondary" sx={{ mt: 1.5 }}>
+                                이용기한: {new Date(nearestUsageExpiry).toLocaleDateString("ko-KR")}까지
+                            </Typography>
+                        )}
+                    </DialogContent>
+                    <DialogActions sx={{ px: 2.5, pb: 2 }}>
+                        <Button
+                            onClick={() => {
+                                setUsageOpen(false);
+                                navigate("/mypage/pricing");
+                            }}
+                            sx={{ fontWeight: 800 }}
+                        >
+                            요금제 보기
+                        </Button>
+                        <Button
+                            variant="contained"
+                            disableElevation
+                            onClick={() => setUsageOpen(false)}
+                            sx={{ fontWeight: 800 }}
+                        >
+                            닫기
+                        </Button>
+                    </DialogActions>
+                </Dialog>
             </Paper>
         </Box>
     );

@@ -19,7 +19,6 @@ import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { baseApi } from "../../features/api/baseApi";
 import { resetLeagueCreation } from "../../features/league/leagueCreationSlice";
 import { useGetMyGroupsQuery } from "../../features/group/groupApi";
-import { useGetMyFeatureUsageQuery } from "../../features/payment/usageApi";
 
 const ROLE_LABEL: Record<string, string> = {
     owner: "리더",
@@ -54,18 +53,8 @@ export default function MyPage() {
     const displayName = user?.name ?? user?.email ?? "사용자";
 
     const { data: groupData } = useGetMyGroupsQuery(undefined, { skip: !token });
-    const { data: usageData } = useGetMyFeatureUsageQuery(undefined, { skip: !token });
     const myFirstGroup = groupData?.groups?.[0];
     const roleLabel = myFirstGroup ? (ROLE_LABEL[myFirstGroup.role] ?? "회원") : null;
-    const usageItems = [
-        { label: "리그·대회 생성", balance: usageData?.usage.event_create },
-        { label: "사진 인식", balance: usageData?.usage.vision_scan },
-        { label: "추첨 생성", balance: usageData?.usage.draw_create },
-    ];
-    const nearestUsageExpiry = usageItems
-        .map(({ balance }) => balance?.expiresAt)
-        .filter((value): value is string => Boolean(value))
-        .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())[0];
 
     const handleEditClick = () => {
         if (user?.auth_provider === "local") {
@@ -136,32 +125,6 @@ export default function MyPage() {
                             로그인
                         </Button>
                     </Stack>
-                </Card>
-            )}
-
-            {token && usageData && (
-                <Card elevation={0} sx={{ borderRadius: 1.5, mb: 2, p: 2, border: "1px solid #E5E7EB" }}>
-                    <Stack direction="row" alignItems="center" sx={{ mb: 1.5 }}>
-                        <Typography fontWeight={900} fontSize={15} flex={1}>이번 달 이용 현황</Typography>
-                        <Button size="small" onClick={() => navigate("/mypage/pricing")} sx={{ minWidth: 0, fontWeight: 700 }}>
-                            요금제
-                        </Button>
-                    </Stack>
-                    <Stack direction="row" divider={<Divider orientation="vertical" flexItem />}>
-                        {usageItems.map(({ label, balance }) => (
-                            <Box key={label} sx={{ flex: 1, textAlign: "center", minWidth: 0 }}>
-                                <Typography fontSize={11} color="text.secondary" sx={{ mb: 0.5 }}>{label}</Typography>
-                                <Typography fontSize={17} fontWeight={900} color="primary.main">
-                                    {balance?.unlimited ? "무제한" : `${balance?.remaining ?? 0}회`}
-                                </Typography>
-                            </Box>
-                        ))}
-                    </Stack>
-                    {nearestUsageExpiry && (
-                        <Typography fontSize={11} color="text.secondary" textAlign="right" sx={{ mt: 1.25 }}>
-                            이용 기간: {new Date(nearestUsageExpiry).toLocaleDateString("ko-KR")}까지
-                        </Typography>
-                    )}
                 </Card>
             )}
 

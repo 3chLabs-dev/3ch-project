@@ -217,10 +217,26 @@ export const createRenewalLeague = createAsyncThunk.withTypes<{ state: RootState
       return { leagueId: league.id };
     }
 
-    const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/league`, requestBody, {
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    });
-    return { leagueId: response.data.league.id as string };
+    try {
+      const idempotencyKey = crypto.randomUUID();
+      const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/league`, requestBody, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "Idempotency-Key": idempotencyKey,
+        },
+      });
+      return { leagueId: response.data.league.id as string };
+    } catch (error) {
+      if (
+        axios.isAxiosError(error) &&
+        error.response?.status === 402 &&
+        error.response.data?.code === "EVENT_CREATE_QUOTA_EXHAUSTED"
+      ) {
+        throw new Error("EVENT_CREATE_QUOTA_EXHAUSTED");
+      }
+      throw error;
+    }
   },
 );
 

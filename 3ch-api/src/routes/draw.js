@@ -4,6 +4,8 @@ const pool = require('../db/pool');
 const { requireAuth } = require('../middlewares/auth');
 const { z } = require('zod');
 const { buildDrawCode } = require('../utils/clubCodeUtils');
+const { randomUUID } = require('crypto');
+const { FEATURES, consumeFeatureCredit, refundFeatureCredit } = require('../services/featureUsageService');
 
 // ─────────────────────────────────────────────────────────
 // 추첨 (draws) 독립 라우터  /api/draw/...
@@ -234,12 +236,16 @@ router.get('/draw/:leagueId', requireAuth, async (req, res) => {
  */
 router.post('/draw/:leagueId', requireAuth, async (req, res) => {
   const client = await pool.connect();
+  let quotaRequestKey = null;
+  let quotaUserId = null;
+  let quotaConsumed = false;
   try {
     const { leagueId } = req.params;
     const userId = Number(req.user.sub);
 
     const accessCheck = await pool.query(
-      `SELECT gm.role FROM leagues l
+      `SELECT gm.role, COALESCE(l.billing_owner_id, l.created_by_id) AS billing_owner_id
+       FROM leagues l
        INNER JOIN group_members gm ON gm.group_id = l.group_id
        WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
       [leagueId, userId],
@@ -261,6 +267,38 @@ router.post('/draw/:leagueId', requireAuth, async (req, res) => {
     });
 
     const { name, prizes } = drawSchema.parse(req.body);
+
+    quotaUserId = Number(accessCheck.rows[0].billing_owner_id);
+    if (!Number.isFinite(quotaUserId) || quotaUserId <= 0) {
+      return res.status(409).json({ message: '사용량을 차감할 계정을 확인할 수 없습니다.', code: 'BILLING_OWNER_NOT_FOUND' });
+    }
+    const clientRequestKey = String(req.get('Idempotency-Key') || req.body?.idempotency_key || randomUUID())
+      .trim()
+      .slice(0, 48);
+    quotaRequestKey = `draw-create:${quotaUserId}:${leagueId}:${clientRequestKey}`;
+    const quota = await consumeFeatureCredit({
+      userId: quotaUserId,
+      feature: FEATURES.DRAW_CREATE,
+      requestKey: quotaRequestKey,
+      referenceType: 'LEAGUE',
+      referenceId: leagueId,
+      metadata: { createdById: userId },
+    });
+    if (!quota.allowed) {
+      return res.status(402).json({
+        message: '추첨 생성 가능 횟수가 부족합니다.',
+        code: 'DRAW_CREATE_QUOTA_EXHAUSTED',
+        remaining: 0,
+        pricingPath: '/mypage/pricing',
+      });
+    }
+    if (quota.duplicate) {
+      return res.status(409).json({
+        message: '이미 처리된 추첨 생성 요청입니다.',
+        code: 'DUPLICATE_REQUEST',
+      });
+    }
+    quotaConsumed = true;
 
     await client.query('BEGIN');
 
@@ -307,6 +345,14 @@ router.post('/draw/:leagueId', requireAuth, async (req, res) => {
     await client.query('ROLLBACK');
     if (error instanceof z.ZodError) {
       return res.status(400).json({ errors: error.errors });
+    }
+    if (quotaConsumed && quotaRequestKey && quotaUserId) {
+      await refundFeatureCredit({
+        userId: quotaUserId,
+        feature: FEATURES.DRAW_CREATE,
+        requestKey: quotaRequestKey,
+        reason: 'DRAW_CREATE_FAILED',
+      }).catch((refundError) => console.error('Draw creation quota refund failed:', refundError));
     }
     console.error('Error creating draw:', error);
     return res.status(500).json({ message: '추첨 생성 중 서버 오류' });

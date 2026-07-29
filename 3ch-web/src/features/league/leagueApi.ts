@@ -323,6 +323,7 @@ export interface OpenAIVisionCell {
 export interface ScanLeagueOpenAIVisionRequest {
   leagueId: string;
   file: File;
+  idempotencyKey?: string;
   mode?: "sheet" | "star-grid";
 }
 
@@ -330,6 +331,11 @@ export interface ScanLeagueOpenAIVisionResponse {
   engine: string;
   cells: OpenAIVisionCell[];
   rawCellCount: number;
+  usage?: {
+    unlimited: boolean;
+    remaining: number | null;
+    expiresAt?: string | null;
+  };
 }
 
 export interface ScanOcrRequest {
@@ -1037,7 +1043,7 @@ export const leagueApi = baseApi.injectEndpoints({
     }),
 
     scanLeagueOpenAIVision: builder.mutation<ScanLeagueOpenAIVisionResponse, ScanLeagueOpenAIVisionRequest>({
-      query: ({ leagueId, file, mode = "sheet" }) => {
+      query: ({ leagueId, file, mode = "sheet", idempotencyKey }) => {
         const formData = new FormData();
         formData.append("image", file);
         formData.append("mode", mode);
@@ -1045,6 +1051,7 @@ export const leagueApi = baseApi.injectEndpoints({
           url: `/league/${leagueId}/openai-vision/scan`,
           method: "POST",
           body: formData,
+          headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
         };
       },
     }),

@@ -16,6 +16,8 @@ import AdminInquiryPage from "../pages/admin/board/AdminInquiryPage";
 import AdminTermsPage from "../pages/admin/board/AdminTermsPage";
 import AdminPrivacyPage from "../pages/admin/board/AdminPrivacyPage";
 import AdminGuidePage from "../pages/admin/board/AdminGuidePage";
+import AdminPricingPlanPage from "../pages/admin/AdminPricingPlanPage";
+import AdminFeatureUsagePage from "../pages/admin/AdminFeatureUsagePage";
 import Home from "../pages/Home";
 import Login from "../pages/sign/Login";
 import SignUp from "../pages/sign/SignUp";
@@ -173,6 +175,8 @@ export const router = createBrowserRouter([
           { path: "/admin/board/guide",   element: <AdminGuidePage /> },
           { path: "/admin/board/terms",   element: <AdminTermsPage /> },
           { path: "/admin/board/privacy", element: <AdminPrivacyPage /> },
+          { path: "/admin/pricing-plans", element: <AdminPricingPlanPage /> },
+          { path: "/admin/feature-usage", element: <AdminFeatureUsagePage /> },
         ],
       },
     ],

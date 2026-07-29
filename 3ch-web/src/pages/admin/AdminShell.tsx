@@ -23,6 +23,8 @@ const BOARD_MENU = [
   { label: "이용방법",         path: "/admin/board/guide"   },
   { label: "이용약관",         path: "/admin/board/terms"   },
   { label: "개인정보 처리방침", path: "/admin/board/privacy" },
+  { label: "요금제 관리", path: "/admin/pricing-plans" },
+  { label: "사용량 관리", path: "/admin/feature-usage" },
 ];
 
 function SideMenuItem({ label, active, depth = 0, onClick }: {

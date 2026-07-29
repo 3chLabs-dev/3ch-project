@@ -45,6 +45,7 @@ import {
 } from "../../features/draw/drawApi";
 import type { DrawListItem } from "../../features/draw/drawApi";
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
+import { useGetMyFeatureUsageQuery } from "../../features/payment/usageApi";
 
 // Animation delay steps (ms): fast → slow
 const ANIM_STEPS = [50,50,50,50,50,50,50,50,50,50,50,50,50,50,50,80,110,150,200,280,400,600];
@@ -73,6 +74,11 @@ type ParticipantRow = {
   division: string;
   weight: number;
 };
+
+function isDrawQuotaError(error: unknown) {
+  const candidate = error as { status?: number; data?: { code?: string } };
+  return candidate?.status === 402 && candidate.data?.code === "DRAW_CREATE_QUOTA_EXHAUSTED";
+}
 
 function weightedRandomPick(pool: ParticipantRow[], count: number): DrawWinner[] {
   const result: DrawWinner[] = [];
@@ -228,7 +234,12 @@ export default function DrawList() {
   const [pendingQuantity, setPendingQuantity] = useState(1);
   const [participantWeights, setParticipantWeights] = useState<Record<string, number>>({});
   const [alertMsg, setAlertMsg] = useState("");
+  const [quotaDialogOpen, setQuotaDialogOpen] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const {
+    data: featureUsageData,
+    refetch: refetchFeatureUsage,
+  } = useGetMyFeatureUsageQuery();
 
   const { data: leagueData } = useGetLeagueQuery(leagueId ?? "", { skip: !leagueId });
   const league = leagueData?.league;
@@ -460,11 +471,19 @@ export default function DrawList() {
       return;
     }
     setIsSavingDraft(true);
+    const usageResult = await refetchFeatureUsage();
+    const available = usageResult.data?.usage.draw_create;
+    if (available && !available.unlimited && (available.remaining ?? 0) <= 0) {
+      setQuotaDialogOpen(true);
+      setIsSavingDraft(false);
+      return;
+    }
     const now = new Date();
     const drawName = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} 추첨`;
     try {
       await createDraw({
         leagueId,
+        idempotencyKey: crypto.randomUUID(),
         name: drawName,
         prizes: prizes.map((p) => ({
           prize_name: p.prize_name,
@@ -472,9 +491,11 @@ export default function DrawList() {
           winners: [],
         })),
       }).unwrap();
+      await refetchFeatureUsage();
       refetchDraws();
-    } catch {
-      setAlertMsg("저장에 실패했습니다.");
+    } catch (error) {
+      if (isDrawQuotaError(error)) setQuotaDialogOpen(true);
+      else setAlertMsg("저장에 실패했습니다.");
       setIsSavingDraft(false);
       return;
     }
@@ -498,6 +519,14 @@ export default function DrawList() {
     let newDrawId: string | undefined;
 
     try {
+      if (!draftId) {
+        const usageResult = await refetchFeatureUsage();
+        const available = usageResult.data?.usage.draw_create;
+        if (available && !available.unlimited && (available.remaining ?? 0) <= 0) {
+          setQuotaDialogOpen(true);
+          return;
+        }
+      }
       if (draftId) {
         await runDraw({
           leagueId,
@@ -514,6 +543,7 @@ export default function DrawList() {
       } else {
         const res = await createDraw({
           leagueId,
+          idempotencyKey: crypto.randomUUID(),
           name: drawName,
           prizes: prizeResults.map((p) => ({
             prize_name: p.prize_name,
@@ -526,9 +556,11 @@ export default function DrawList() {
         }).unwrap();
         newDrawId = res.draw_code ?? res.draw_id;
       }
+      await refetchFeatureUsage();
       refetchDraws();
-    } catch {
-      setAlertMsg("추첨 저장에 실패했습니다.");
+    } catch (error) {
+      if (isDrawQuotaError(error)) setQuotaDialogOpen(true);
+      else setAlertMsg("추첨 저장에 실패했습니다.");
       return;
     }
 
@@ -747,6 +779,25 @@ export default function DrawList() {
 
         <Divider sx={{ my: 0.5 }} />
 
+        {!draftId && (
+          <Stack alignItems="flex-end" spacing={0.25}>
+            <Typography sx={{ color: "#6B7280", fontSize: 12 }}>
+              추첨 생성 잔여 횟수:{" "}
+              <Box component="span" sx={{ color: "#1976D2", fontWeight: 900 }}>
+                {featureUsageData?.usage.draw_create.unlimited
+                  ? "무제한"
+                  : `${featureUsageData?.usage.draw_create.remaining ?? 0}회`}
+              </Box>
+            </Typography>
+            {!featureUsageData?.usage.draw_create.unlimited
+              && featureUsageData?.usage.draw_create.expiresAt && (
+              <Typography sx={{ color: "#9CA3AF", fontSize: 11 }}>
+                {new Date(featureUsageData.usage.draw_create.expiresAt).toLocaleDateString("ko-KR")}까지
+              </Typography>
+            )}
+          </Stack>
+        )}
+
         <Stack direction="row" spacing={1}>
           {!draftId ? (
             <Button
@@ -806,6 +857,19 @@ export default function DrawList() {
             </Alert>
           </Snackbar>
       </Stack>
+      <Dialog open={quotaDialogOpen} onClose={() => setQuotaDialogOpen(false)} fullWidth maxWidth="xs">
+        <DialogTitle sx={{ fontWeight: 900 }}>추첨 생성 횟수 안내</DialogTitle>
+        <DialogContent>
+          <Typography fontSize={14}>
+            사용할 수 있는 추첨 생성 횟수가 없습니다. 요금제를 변경하거나 다음 이용 기간을 기다려 주세요.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <Button onClick={() => setQuotaDialogOpen(false)}>닫기</Button>
+          <Button variant="contained" onClick={() => navigate("/mypage/pricing")}>요금제 보기</Button>
+        </DialogActions>
+      </Dialog>
+
       {/* 슬롯머신 추첨 다이얼로그 */}
       <Dialog
         open={!!drawingPrize}

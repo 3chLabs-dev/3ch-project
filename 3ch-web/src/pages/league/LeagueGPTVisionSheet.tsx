@@ -67,6 +67,7 @@ import {
   type OpenAIVisionCell,
 } from "../../features/league/leagueApi";
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
+import { useGetMyFeatureUsageQuery } from "../../features/payment/usageApi";
 import { useAppSelector } from "../../app/hooks";
 import { isLocalDevToken } from "../../utils/localDevAuth";
 
@@ -1086,6 +1087,13 @@ export default function LeagueGPTVisionSheet() {
   const [previewCells, setPreviewCells] = useState<VisionPreviewCell[]>([]);
   const [visionError, setVisionError] = useState<string | null>(null);
   const [visionNotice, setVisionNotice] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
+  const [visionUsage, setVisionUsage] = useState<{
+    unlimited: boolean;
+    remaining: number | null;
+    expiresAt?: string | null;
+  } | null>(null);
+  const [usageDialogOpen, setUsageDialogOpen] = useState(false);
+  const [quotaDialogOpen, setQuotaDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!visionNotice || visionNotice.type === "error") return;
@@ -1323,6 +1331,9 @@ export default function LeagueGPTVisionSheet() {
   const { data: groupData } = useGetGroupDetailQuery(league?.group_id ?? "", { skip: !league?.group_id });
   const authUser  = useAppSelector((s) => s.auth.user);
   const authToken = useAppSelector((s) => s.auth.token);
+  const { refetch: refetchFeatureUsage } = useGetMyFeatureUsageQuery(undefined, {
+    skip: !authToken || isLocalDevToken(authToken),
+  });
   const isCreator = !!authUser && league?.created_by_id === authUser.id;
   const canManage = groupData?.myRole === "owner" || groupData?.myRole === "admin" || isCreator;
   const canScore = canManage || league?.join_permission === "public";
@@ -1868,8 +1879,20 @@ export default function LeagueGPTVisionSheet() {
     }
 
     try {
+      const usageResult = await refetchFeatureUsage();
+      const available = usageResult.data?.usage.vision_scan;
+      if (available && !available.unlimited && (available.remaining ?? 0) <= 0) {
+        setQuotaDialogOpen(true);
+        return;
+      }
       setVisionNotice({ type: "info", message: "별표 기준 점수 영역을 인식하는 중입니다." });
-      const result = await scanVision({ leagueId: id, file, mode: "star-grid" }).unwrap();
+      const result = await scanVision({
+        leagueId: id,
+        file,
+        mode: "star-grid",
+        idempotencyKey: crypto.randomUUID(),
+      }).unwrap();
+      setVisionUsage(result.usage ?? null);
       const byPosition = new Map(result.cells.map((cell) => [`${cell.rowIndex}__${cell.columnIndex}`, cell]));
       const completeCells: VisionPreviewCell[] = [];
       localOrder.forEach((rowPlayer, rowIndex) => {
@@ -1897,6 +1920,13 @@ export default function LeagueGPTVisionSheet() {
       setPreviewOpen(true);
       setVisionNotice({ type: "success", message: "GPT Vision 인식 결과를 확인해 주세요." });
     } catch (error) {
+      const quotaError = error as { status?: number; data?: { code?: string } };
+      if (quotaError.status === 402 || quotaError.data?.code === "VISION_QUOTA_EXHAUSTED") {
+        setQuotaDialogOpen(true);
+        setVisionNotice(null);
+        setVisionError(null);
+        return;
+      }
       const message = getErrorMessage(error, "GPT Vision 인식에 실패했습니다.");
       setVisionNotice({ type: "error", message });
       setVisionError(message);
@@ -1965,6 +1995,7 @@ export default function LeagueGPTVisionSheet() {
       }
       setPreviewOpen(false);
       setVisionNotice({ type: "success", message: `${saved}개 경기 결과를 저장했습니다.` });
+      if (visionUsage) setUsageDialogOpen(true);
     } catch (error) {
       setVisionNotice({ type: "error", message: getErrorMessage(error, "인식 결과 저장에 실패했습니다.") });
     }
@@ -2469,6 +2500,37 @@ export default function LeagueGPTVisionSheet() {
           <CircularProgress size={34} />
           <Typography sx={{ mt: 2, fontWeight: 900 }}>AI가 사진 속 점수를 인식하는 중입니다.</Typography>
         </DialogContent>
+      </Dialog>
+
+      <Dialog open={quotaDialogOpen} onClose={() => setQuotaDialogOpen(false)} maxWidth="xs" fullWidth sx={{ zIndex: 10002 }} slotProps={{ paper: { sx: mobileDialogPaperSx } }}>
+        <DialogTitle sx={{ fontWeight: 900 }}>사진 인식 횟수 부족</DialogTitle>
+        <DialogContent dividers>
+          <Typography sx={{ lineHeight: 1.7 }}>
+            사용할 수 있는 사진 인식 횟수가 없습니다. 요금제를 변경하거나 추가 이용권을 구매해 주세요.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setQuotaDialogOpen(false)}>닫기</Button>
+          <Button variant="contained" onClick={() => navigate("/mypage/pricing")}>요금제 보기</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={usageDialogOpen} onClose={() => setUsageDialogOpen(false)} maxWidth="xs" fullWidth sx={{ zIndex: 10002 }} slotProps={{ paper: { sx: mobileDialogPaperSx } }}>
+        <DialogTitle sx={{ fontWeight: 900 }}>사진 인식 완료</DialogTitle>
+        <DialogContent dividers>
+          <Typography sx={{ color: "#6B7280", fontSize: 13 }}>남은 사진 인식 횟수</Typography>
+          <Typography sx={{ mt: 0.75, color: "#1976D2", fontSize: 24, fontWeight: 900 }}>
+            {visionUsage?.unlimited ? "무제한" : `${visionUsage?.remaining ?? 0}회`}
+          </Typography>
+          {!visionUsage?.unlimited && visionUsage?.expiresAt && (
+            <Typography sx={{ mt: 1, color: "#6B7280", fontSize: 13 }}>
+              {new Date(visionUsage.expiresAt).toLocaleDateString("ko-KR")}까지 사용할 수 있습니다.
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button variant="contained" onClick={() => setUsageDialogOpen(false)}>확인</Button>
+        </DialogActions>
       </Dialog>
 
       <Dialog open={Boolean(visionError)} onClose={() => setVisionError(null)} maxWidth="xs" fullWidth sx={{ zIndex: 10002 }} slotProps={{ paper: { sx: mobileDialogPaperSx } }}>

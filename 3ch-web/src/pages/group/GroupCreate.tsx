@@ -214,8 +214,14 @@ export default function GroupCreate() {
                         })),
             }).unwrap();
             setDone(true);
-        } catch {
-            alert("클럽 생성에 실패했습니다.");
+        } catch (error: any) {
+            const code = error?.data?.code;
+            const message = error?.data?.message;
+            alert(
+                code === "GROUP_OWNER_LIMIT"
+                    ? "한 계정으로 하나의 클럽만 생성할 수 있습니다."
+                    : message || "클럽 생성에 실패했습니다."
+            );
         }
     };
 

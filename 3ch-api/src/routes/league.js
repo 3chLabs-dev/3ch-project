@@ -10,6 +10,7 @@ const { rebuildGroupRanking, getGroupIdByLeagueId } = require('../services/group
 const { rebuildSportRankingByLeagueId } = require('../services/sportRanking');
 const { scanOmrImageWithPython } = require('../services/omrScanner');
 const { scanLeagueSheetWithOpenAIVision } = require('../services/openaiVisionScanner');
+const { FEATURES, consumeFeatureCredit, refundFeatureCredit } = require('../services/featureUsageService');
 
 const isWebPushConfigured = Boolean(
   process.env.VAPID_MAILTO && process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY,
@@ -1169,6 +1170,9 @@ router.get('/league', async (req, res) => {
  */
 router.post('/league', requireAuth, async (req, res) => {
   const client = await pool.connect();
+  let quotaRequestKey = null;
+  let quotaUserId = null;
+  let quotaConsumed = false;
   try {
     const {
       name,
@@ -1208,12 +1212,41 @@ router.post('/league', requireAuth, async (req, res) => {
     }
 
     const leagueId = randomUUID();
+    quotaUserId = Number(userId);
+    const clientRequestKey = String(req.get('Idempotency-Key') || req.body?.idempotency_key || leagueId)
+      .trim()
+      .slice(0, 64);
+    quotaRequestKey = `event-create:${quotaUserId}:${clientRequestKey}`;
+    const quota = await consumeFeatureCredit({
+      userId: quotaUserId,
+      feature: FEATURES.EVENT_CREATE,
+      requestKey: quotaRequestKey,
+      referenceType: 'LEAGUE',
+      referenceId: leagueId,
+      metadata: { groupId: group_id },
+    });
+    if (!quota.allowed) {
+      return res.status(402).json({
+        message: '리그·대회 생성 가능 횟수가 부족합니다.',
+        code: 'EVENT_CREATE_QUOTA_EXHAUSTED',
+        remaining: 0,
+        pricingPath: '/mypage/pricing',
+      });
+    }
+    if (quota.duplicate) {
+      return res.status(409).json({
+        message: '이미 처리된 리그 생성 요청입니다.',
+        code: 'DUPLICATE_REQUEST',
+        referenceId: quota.usageEvent?.reference_id ?? null,
+      });
+    }
+    quotaConsumed = true;
 
     await client.query('BEGIN');
 
     const result = await client.query(
-      `INSERT INTO leagues (id, name, description, title, type, format, sport, start_date, end_date, court_count, rules, sort_order, recruit_count, participant_count, group_id, created_by_id, tournament_seeding, tournament_advancement, tournament_rules, advance_count, advance_method, finals_advance)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+      `INSERT INTO leagues (id, name, description, title, type, format, sport, start_date, end_date, court_count, rules, sort_order, recruit_count, participant_count, group_id, created_by_id, billing_owner_id, tournament_seeding, tournament_advancement, tournament_rules, advance_count, advance_method, finals_advance)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $16, $17, $18, $19, $20, $21, $22)
        RETURNING id, name, description, title, type, format, sport, start_date, end_date, court_count, status, rules, notice, entry_fee, bank_account, sort_order, recruit_count, participant_count, group_id, tournament_seeding, tournament_advancement, tournament_rules, advance_count, advance_method, finals_advance, created_at, updated_at;`,
       [leagueId, name, description, title, type, format, sport, start_date, end_date ?? null, court_count ?? null, rules, sort_order ?? null, recruit_count, participant_count, group_id, userId, tournament_seeding ?? null, tournament_advancement ?? null, tournament_rules ?? null, advance_count ?? null, advance_method ?? null, finals_advance ?? null],
     );
@@ -1275,6 +1308,15 @@ router.post('/league', requireAuth, async (req, res) => {
 
     if (error instanceof z.ZodError) {
       return res.status(400).json({ errors: error.errors });
+    }
+
+    if (quotaConsumed && quotaRequestKey && quotaUserId) {
+      await refundFeatureCredit({
+        userId: quotaUserId,
+        feature: FEATURES.EVENT_CREATE,
+        requestKey: quotaRequestKey,
+        reason: 'LEAGUE_CREATE_FAILED',
+      }).catch((refundError) => console.error('League creation quota refund failed:', refundError));
     }
 
     console.error('Error creating league:', error);
@@ -4235,10 +4277,16 @@ router.post('/league/:id/omr/scan', optionalAuth, omrUpload.single('image'), asy
 router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('image'), async (req, res) => {
   const leagueId = req.params.id;
   const userId = Number(req.user.sub);
+  const clientRequestKey = String(req.get('Idempotency-Key') || req.body?.idempotency_key || randomUUID())
+    .trim()
+    .slice(0, 64);
+  const usageRequestKey = `vision:${leagueId}:${clientRequestKey}`;
+  let usageOwnerId = null;
+  let creditConsumed = false;
 
   try {
     const leagueRow = await pool.query(
-      `SELECT l.join_permission, l.group_id
+      `SELECT l.join_permission, l.group_id, COALESCE(l.billing_owner_id, l.created_by_id) AS billing_owner_id
          FROM leagues l
          LEFT JOIN group_members gm
            ON gm.group_id = l.group_id
@@ -4250,6 +4298,10 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
     );
     if (leagueRow.rowCount === 0) {
       return res.status(403).json({ message: 'Vision 인식은 리그 생성자 또는 클럽 운영진만 사용할 수 있습니다.' });
+    }
+    usageOwnerId = Number(leagueRow.rows[0].billing_owner_id);
+    if (!Number.isInteger(usageOwnerId) || usageOwnerId <= 0) {
+      return res.status(500).json({ message: '사진 인식 사용량 소유자를 확인할 수 없습니다.' });
     }
 
     const joinPermission = leagueRow.rows[0].join_permission;
@@ -4298,6 +4350,30 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
     }
 
     const visionMode = req.body?.mode === 'star-grid' ? 'star-grid' : 'sheet';
+    const usage = await consumeFeatureCredit({
+      userId: usageOwnerId,
+      feature: FEATURES.VISION_SCAN,
+      requestKey: usageRequestKey,
+      referenceType: 'LEAGUE',
+      referenceId: leagueId,
+      metadata: { requestedBy: userId, mode: visionMode },
+    });
+    if (!usage.allowed) {
+      return res.status(402).json({
+        message: '사진 인식 잔여 횟수가 없습니다.',
+        code: 'VISION_QUOTA_EXHAUSTED',
+        remaining: 0,
+        pricingPath: '/mypage/pricing',
+      });
+    }
+    if (usage.duplicate) {
+      return res.status(409).json({
+        message: '이미 처리된 사진 인식 요청입니다.',
+        code: 'DUPLICATE_REQUEST',
+      });
+    }
+    creditConsumed = true;
+
     const vision = await scanLeagueSheetWithOpenAIVision({
       imageBuffer: req.file.buffer,
       mimeType: req.file.mimetype,
@@ -4375,8 +4451,23 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
       engine: vision.engine,
       cells,
       rawCellCount: parsed.cells.length,
+      usage: {
+        unlimited: usage.unlimited,
+        remaining: usage.remaining,
+        expiresAt: usage.expiresAt,
+      },
     });
   } catch (error) {
+    if (creditConsumed && usageOwnerId) {
+      await refundFeatureCredit({
+        userId: usageOwnerId,
+        feature: FEATURES.VISION_SCAN,
+        requestKey: usageRequestKey,
+        reason: error?.code || error?.message || 'VISION_FAILED',
+      }).catch((refundError) => {
+        console.error('Vision quota refund failed:', refundError);
+      });
+    }
     if (error instanceof z.ZodError) {
       return res.status(400).json({ message: 'OpenAI Vision 응답 형식이 올바르지 않습니다.', issues: error.issues });
     }

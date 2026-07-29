@@ -27,7 +27,17 @@ type Member = {
 
 type ClubOption    = { id: string; name: string; sport: string | null };
 type ClubDetail    = { group_id: string; club_name: string; sport: string | null; role: string | null; grade: string | null; joined_at: string | null };
-type DetailMember  = Member & { clubs: ClubDetail[] };
+type FeatureCredit = {
+  feature: "EVENT_CREATE" | "VISION_SCAN" | "DRAW_CREATE";
+  unlimited: boolean;
+  remaining: number;
+  expires_at: string | null;
+};
+type DetailMember  = Member & {
+  clubs: ClubDetail[];
+  system_role: "USER" | "MANAGER" | "MASTER";
+  feature_credits: FeatureCredit[];
+};
 
 type Filters = {
   code: string; sport: string; club: string; role: string;
@@ -71,6 +81,8 @@ const AUTH_PROVIDER_LABELS: Record<string, string> = {
 
 export default function AdminMemberPage() {
   const token = useAppSelector((s) => s.admin.token) ?? "";
+  const adminUser = useAppSelector((s) => s.admin.user);
+  const isMaster = adminUser?.system_role === "MASTER";
 
   const [filters,   setFilters]   = useState<Filters>(EMPTY_FILTERS);
   const [query,     setQuery]     = useState<Filters>(EMPTY_FILTERS);
@@ -105,6 +117,16 @@ export default function AdminMemberPage() {
   const [resetLoading,  setResetLoading]  = useState(false);
   const [resetPasswordResult, setResetPasswordResult] = useState<string | null>(null);
   const [passwordCopied, setPasswordCopied] = useState(false);
+  const [editSystemRole, setEditSystemRole] = useState<"USER" | "MANAGER" | "MASTER">("USER");
+  const [grantEvent, setGrantEvent] = useState("0");
+  const [grantVision, setGrantVision] = useState("0");
+  const [grantDraw, setGrantDraw] = useState("0");
+  const [grantExpiresAt, setGrantExpiresAt] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() + 30);
+    return date.toISOString().slice(0, 10);
+  });
+  const [grantLoading, setGrantLoading] = useState(false);
 
   const fetchMembers = useCallback(async (q: Filters, p: number) => {
     setLoading(true);
@@ -160,6 +182,10 @@ export default function AdminMemberPage() {
       const m = data.member as DetailMember;
       setEditMember(m);
       setEditName(m.name ?? "");
+      setEditSystemRole(m.system_role ?? "USER");
+      setGrantEvent("0");
+      setGrantVision("0");
+      setGrantDraw("0");
       if (m.clubs.length > 0) {
         setSelectedClub(m.clubs[0]);
         setEditRole(m.clubs[0].role ?? "");
@@ -192,6 +218,19 @@ export default function AdminMemberPage() {
       });
       const data = await res.json();
       if (!data.ok) { setEditError("수정 실패"); return; }
+      if (isMaster && editMember.system_role !== "MASTER" && editSystemRole !== editMember.system_role) {
+        const roleRes = await fetch(`${import.meta.env.VITE_API_BASE_URL}/admin/members/${editMember.id}/system-role`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ system_role: editSystemRole }),
+        });
+        const roleData = await roleRes.json();
+        if (!roleRes.ok || !roleData.ok) {
+          setEditError("시스템 권한 변경에 실패했습니다.");
+          return;
+        }
+        setEditMember((prev) => prev ? { ...prev, system_role: editSystemRole } : null);
+      }
       // 로컬 clubs 배열도 업데이트
       if (selectedClub) {
         setEditMember((prev) => prev ? {
@@ -205,6 +244,39 @@ export default function AdminMemberPage() {
       fetchMembers(query, page);
     } catch { setEditError("서버 오류"); }
     finally { setEditLoading(false); }
+  };
+
+  const handleFeatureGrant = async () => {
+    if (!editMember || grantLoading || editSystemRole !== "MANAGER") return;
+    const grants = {
+      EVENT_CREATE: Number(grantEvent),
+      VISION_SCAN: Number(grantVision),
+      DRAW_CREATE: Number(grantDraw),
+    };
+    if (!Object.values(grants).some((value) => Number.isInteger(value) && value > 0)) {
+      setEditError("지급할 기능 횟수를 입력해 주세요.");
+      return;
+    }
+    setGrantLoading(true);
+    setEditError("");
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/admin/members/${editMember.id}/feature-grants`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ grants, expires_at: `${grantExpiresAt}T23:59:59+09:00` }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setEditError(data.error === "MANAGER_REQUIRED" ? "먼저 매니저 권한을 저장해 주세요." : "기능 횟수 지급에 실패했습니다.");
+        return;
+      }
+      await openEditDialog(editMember.id);
+      setEditSuccess(true);
+    } catch {
+      setEditError("기능 횟수 지급에 실패했습니다.");
+    } finally {
+      setGrantLoading(false);
+    }
   };
 
   const handleKickClub = async (club: ClubDetail) => {
@@ -659,7 +731,54 @@ export default function AdminMemberPage() {
                 </Typography>
               </FormRow>
 
-              {/* 가입 클럽 목록 */}
+              {isMaster && (
+                <>
+                  <FormRow label="시스템 권한">
+                    <Select
+                      size="small"
+                      fullWidth
+                      value={editSystemRole}
+                      disabled={editMember.system_role === "MASTER"}
+                      onChange={(event) => setEditSystemRole(event.target.value as "USER" | "MANAGER")}
+                      sx={{ fontSize: 13 }}
+                    >
+                      <MenuItem value="USER">일반</MenuItem>
+                      <MenuItem value="MANAGER">매니저</MenuItem>
+                      {editMember.system_role === "MASTER" && <MenuItem value="MASTER">마스터</MenuItem>}
+                    </Select>
+                  </FormRow>
+
+                  {editSystemRole === "MANAGER" && (
+                    <Box sx={{ p: 1.5, border: "1px solid #D9DDE6", borderRadius: 1, bgcolor: "#F8FAFC" }}>
+                      <Typography sx={{ mb: 1.25, fontSize: 13, fontWeight: 900 }}>기능 횟수 지급</Typography>
+                      <Stack spacing={1}>
+                        <TextField label="리그·대회 생성" type="number" size="small" value={grantEvent} onChange={(e) => setGrantEvent(e.target.value)} inputProps={{ min: 0 }} />
+                        <TextField label="사진 인식" type="number" size="small" value={grantVision} onChange={(e) => setGrantVision(e.target.value)} inputProps={{ min: 0 }} />
+                        <TextField label="추첨 생성" type="number" size="small" value={grantDraw} onChange={(e) => setGrantDraw(e.target.value)} inputProps={{ min: 0 }} />
+                        <TextField label="만료일" type="date" size="small" value={grantExpiresAt} onChange={(e) => setGrantExpiresAt(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
+                        <Button variant="outlined" onClick={handleFeatureGrant} disabled={grantLoading} sx={{ fontWeight: 800 }}>
+                          {grantLoading ? "지급 중..." : "횟수 지급"}
+                        </Button>
+                      </Stack>
+                      <Divider sx={{ my: 1.5 }} />
+                      <Stack spacing={0.5}>
+                        {(["EVENT_CREATE", "VISION_SCAN", "DRAW_CREATE"] as const).map((feature) => {
+                          const credit = editMember.feature_credits?.find((item) => item.feature === feature);
+                          const label = feature === "EVENT_CREATE" ? "리그·대회 생성" : feature === "VISION_SCAN" ? "사진 인식" : "추첨 생성";
+                          return (
+                            <Stack key={feature} direction="row" justifyContent="space-between">
+                              <Typography sx={{ fontSize: 12, color: "#6B7280" }}>{label}</Typography>
+                              <Typography sx={{ fontSize: 12, fontWeight: 800 }}>{credit?.unlimited ? "무제한" : `${credit?.remaining ?? 0}회`}</Typography>
+                            </Stack>
+                          );
+                        })}
+                      </Stack>
+                    </Box>
+                  )}
+                </>
+              )}
+
+                            {/* 가입 클럽 목록 */}
               <FormRow label="가입 클럽">
                 <Box>
                   {editMember.clubs.length === 0 ? (

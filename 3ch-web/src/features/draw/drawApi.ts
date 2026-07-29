@@ -48,6 +48,7 @@ export interface GetDrawDetailResponse {
 
 export interface CreateDrawRequest {
   leagueId: string;
+  idempotencyKey?: string;
   name: string;
   prizes: {
     prize_name: string;
@@ -113,10 +114,11 @@ export const drawApi = baseApi.injectEndpoints({
     }),
 
     createDraw: builder.mutation<CreateDrawResponse, CreateDrawRequest>({
-      query: ({ leagueId, ...body }) => ({
+      query: ({ leagueId, idempotencyKey, ...body }) => ({
         url: `/draw/${leagueId}`,
         method: "POST",
         body,
+        headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
       }),
       invalidatesTags: (_result, _error, { leagueId }) => [{ type: "Draw" as const, id: leagueId }],
     }),

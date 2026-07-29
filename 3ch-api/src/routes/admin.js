@@ -13,6 +13,20 @@ const { getSportRanking } = require('../services/sportRanking');
 
 const router = express.Router();
 
+const QUOTA_FEATURES = new Set(["EVENT_CREATE", "VISION_SCAN", "DRAW_CREATE"]);
+
+async function assertMaster(req, res) {
+  const result = await pool.query(
+    "SELECT system_role FROM users WHERE id = $1 AND deleted_at IS NULL",
+    [Number(req.user.sub)],
+  );
+  if (result.rows[0]?.system_role !== "MASTER") {
+    res.status(403).json({ ok: false, error: "MASTER_REQUIRED" });
+    return false;
+  }
+  return true;
+}
+
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
@@ -58,7 +72,7 @@ router.post('/login', async (req, res) => {
 
   try {
     const result = await pool.query(
-      'SELECT id, email, password_hash, name, is_admin FROM users WHERE email = $1',
+      'SELECT id, email, password_hash, name, is_admin, system_role FROM users WHERE email = $1',
       [email],
     );
 
@@ -83,7 +97,7 @@ router.post('/login', async (req, res) => {
 
     const token = signToken({ id: user.id, email: user.email });
 
-    return res.json({ ok: true, token, user: { id: user.id, email: user.email, name: user.name } });
+    return res.json({ ok: true, token, user: { id: user.id, email: user.email, name: user.name, system_role: user.system_role } });
   } catch (e) {
     return res.status(500).json({ ok: false, error: String(e.message || e) });
   }
@@ -236,7 +250,7 @@ router.get('/members', requireAdmin, async (req, res) => {
 
     const [dataResult, countResult] = await Promise.all([
       pool.query(
-        `SELECT u.id, u.member_code, u.email, u.name, u.auth_provider,
+        `SELECT u.id, u.member_code, u.email, u.name, u.auth_provider, u.system_role,
                 u.created_at::text, u.deleted_at::text,
                 gm.role, gm.division AS grade,
                 g.name AS club_name, g.sport,
@@ -362,7 +376,22 @@ router.get('/members/:id', requireAdmin, async (req, res) => {
     if (userResult.rowCount === 0) {
       return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
     }
-    return res.json({ ok: true, member: { ...userResult.rows[0], clubs: clubsResult.rows } });
+    const creditResult = await pool.query(
+      `SELECT feature,
+              BOOL_OR(remaining_amount IS NULL) AS unlimited,
+              COALESCE(SUM(remaining_amount) FILTER (WHERE remaining_amount IS NOT NULL), 0)::int AS remaining,
+              MAX(expires_at)::text AS expires_at
+         FROM feature_credit_buckets
+        WHERE user_id = $1
+          AND starts_at <= NOW()
+          AND (expires_at IS NULL OR expires_at > NOW())
+        GROUP BY feature`,
+      [id],
+    );
+    return res.json({
+      ok: true,
+      member: { ...userResult.rows[0], clubs: clubsResult.rows, feature_credits: creditResult.rows },
+    });
   } catch (e) {
     return res.status(500).json({ ok: false, error: String(e.message || e) });
   }
@@ -430,6 +459,84 @@ router.put('/members/:id', requireAdmin, async (req, res) => {
     return res.json({ ok: true });
   } catch (e) {
     return res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
+});
+
+// PUT /admin/members/:id/system-role - 마스터 전용 시스템 역할 변경
+router.put('/members/:id/system-role', requireAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  const systemRole = String(req.body?.system_role || "").toUpperCase();
+  if (!Number.isFinite(id) || !["USER", "MANAGER"].includes(systemRole)) {
+    return res.status(400).json({ ok: false, error: "INVALID_SYSTEM_ROLE" });
+  }
+  try {
+    if (!(await assertMaster(req, res))) return;
+    const result = await pool.query(
+      `UPDATE users
+          SET system_role = $1
+        WHERE id = $2
+          AND deleted_at IS NULL
+          AND system_role <> 'MASTER'
+        RETURNING id, system_role`,
+      [systemRole, id],
+    );
+    if (result.rowCount === 0) return res.status(404).json({ ok: false, error: "NOT_FOUND" });
+    return res.json({ ok: true, member: result.rows[0] });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
+});
+
+// POST /admin/members/:id/feature-grants - 마스터 전용 기능 횟수 지급
+router.post('/members/:id/feature-grants', requireAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  const expiresAt = new Date(req.body?.expires_at);
+  const grants = req.body?.grants;
+  if (!Number.isFinite(id) || Number.isNaN(expiresAt.getTime()) || expiresAt <= new Date() || !grants || typeof grants !== "object") {
+    return res.status(400).json({ ok: false, error: "INVALID_GRANT" });
+  }
+
+  const normalized = Object.entries(grants)
+    .filter(([feature]) => QUOTA_FEATURES.has(feature))
+    .map(([feature, amount]) => [feature, Number(amount)])
+    .filter(([, amount]) => Number.isInteger(amount) && amount > 0 && amount <= 100000);
+  if (normalized.length === 0) {
+    return res.status(400).json({ ok: false, error: "EMPTY_GRANT" });
+  }
+
+  const client = await pool.connect();
+  try {
+    if (!(await assertMaster(req, res))) return;
+    await client.query("BEGIN");
+    const target = await client.query(
+      "SELECT system_role FROM users WHERE id = $1 AND deleted_at IS NULL FOR UPDATE",
+      [id],
+    );
+    if (target.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ ok: false, error: "NOT_FOUND" });
+    }
+    if (target.rows[0].system_role !== "MANAGER") {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ ok: false, error: "MANAGER_REQUIRED" });
+    }
+
+    const batchRef = `manager-grant:${id}:${Date.now()}:${randomUUID()}`;
+    for (const [feature, amount] of normalized) {
+      await client.query(
+        `INSERT INTO feature_credit_buckets
+           (user_id, feature, source, initial_amount, remaining_amount, starts_at, expires_at, source_ref, granted_by_id)
+         VALUES ($1, $2, 'MANAGER_GRANT', $3, $3, NOW(), $4, $5, $6)`,
+        [id, feature, amount, expiresAt, `${batchRef}:${feature}`, Number(req.user.sub)],
+      );
+    }
+    await client.query("COMMIT");
+    return res.json({ ok: true });
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    return res.status(500).json({ ok: false, error: String(e.message || e) });
+  } finally {
+    client.release();
   }
 });
 
@@ -1466,7 +1573,7 @@ router.get('/tournaments', requireAdmin, async (_req, res) => {
 router.get('/me', requireAdmin, async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT id, email, name, is_admin FROM users WHERE id = $1',
+      'SELECT id, email, name, is_admin, system_role FROM users WHERE id = $1',
       [Number(req.user.sub)],
     );
     if (result.rowCount === 0) {
@@ -1475,6 +1582,328 @@ router.get('/me', requireAdmin, async (req, res) => {
     return res.json({ ok: true, user: result.rows[0] });
   } catch (e) {
     return res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
+});
+
+
+const pricingPlanSchema = z.object({
+  code: z.string().trim().min(1).max(30).transform((value) => value.toLowerCase()),
+  name: z.string().trim().min(1).max(50),
+  badge_text: z.string().trim().max(50).nullable().optional(),
+  price: z.coerce.number().int().min(0).max(100000000),
+  original_price: z.coerce.number().int().min(0).max(100000000).nullable().optional(),
+  billing_cycle: z.enum(["MONTHLY", "YEARLY"]),
+  sale_start_at: z.string().datetime().nullable().optional(),
+  sale_end_at: z.string().datetime().nullable().optional(),
+  features: z.array(z.string().trim().min(1).max(200)).max(50),
+  display_order: z.coerce.number().int().min(0).max(9999),
+  is_visible: z.boolean(),
+});
+
+router.get('/pricing-plans', requireAdmin, async (_req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM pricing_plans ORDER BY display_order ASC, id ASC`,
+    );
+    return res.json({ ok: true, plans: result.rows });
+  } catch (error) {
+    console.error('admin pricing plans lookup error:', error);
+    return res.status(500).json({ ok: false, error: 'DB_ERROR' });
+  }
+});
+
+router.post('/pricing-plans', requireAdmin, async (req, res) => {
+  if (!(await assertMaster(req, res))) return;
+  const parsed = pricingPlanSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ ok: false, error: 'VALIDATION_ERROR', details: parsed.error.flatten() });
+  const value = parsed.data;
+  if (value.sale_start_at && value.sale_end_at && new Date(value.sale_start_at) > new Date(value.sale_end_at)) {
+    return res.status(400).json({ ok: false, error: 'INVALID_SALE_PERIOD' });
+  }
+  try {
+    const result = await pool.query(
+      `INSERT INTO pricing_plans
+        (code, name, badge_text, price, original_price, billing_cycle, sale_start_at, sale_end_at, features, display_order, is_visible)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11)
+       RETURNING *`,
+      [value.code, value.name, value.badge_text || null, value.price, value.original_price ?? null,
+       value.billing_cycle, value.sale_start_at ?? null, value.sale_end_at ?? null,
+       JSON.stringify(value.features), value.display_order, value.is_visible],
+    );
+    return res.status(201).json({ ok: true, plan: result.rows[0] });
+  } catch (error) {
+    if (error.code === '23505') return res.status(409).json({ ok: false, error: 'DUPLICATE_PLAN_CODE' });
+    console.error('admin pricing plan insert error:', error);
+    return res.status(500).json({ ok: false, error: 'DB_ERROR' });
+  }
+});
+
+router.put('/pricing-plans/:id', requireAdmin, async (req, res) => {
+  if (!(await assertMaster(req, res))) return;
+  const parsed = pricingPlanSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ ok: false, error: 'VALIDATION_ERROR', details: parsed.error.flatten() });
+  const value = parsed.data;
+  if (value.sale_start_at && value.sale_end_at && new Date(value.sale_start_at) > new Date(value.sale_end_at)) {
+    return res.status(400).json({ ok: false, error: 'INVALID_SALE_PERIOD' });
+  }
+  try {
+    const result = await pool.query(
+      `UPDATE pricing_plans SET
+        code=$1, name=$2, badge_text=$3, price=$4, original_price=$5, billing_cycle=$6,
+        sale_start_at=$7, sale_end_at=$8, features=$9::jsonb, display_order=$10,
+        is_visible=$11, updated_at=NOW()
+       WHERE id=$12 RETURNING *`,
+      [value.code, value.name, value.badge_text || null, value.price, value.original_price ?? null,
+       value.billing_cycle, value.sale_start_at ?? null, value.sale_end_at ?? null,
+       JSON.stringify(value.features), value.display_order, value.is_visible, Number(req.params.id)],
+    );
+    if (!result.rowCount) return res.status(404).json({ ok: false, error: 'PLAN_NOT_FOUND' });
+    return res.json({ ok: true, plan: result.rows[0] });
+  } catch (error) {
+    if (error.code === '23505') return res.status(409).json({ ok: false, error: 'DUPLICATE_PLAN_CODE' });
+    console.error('admin pricing plan update error:', error);
+    return res.status(500).json({ ok: false, error: 'DB_ERROR' });
+  }
+});
+
+router.delete('/pricing-plans/:id', requireAdmin, async (req, res) => {
+  if (!(await assertMaster(req, res))) return;
+  try {
+    const result = await pool.query('DELETE FROM pricing_plans WHERE id = $1 RETURNING id', [Number(req.params.id)]);
+    if (!result.rowCount) return res.status(404).json({ ok: false, error: 'PLAN_NOT_FOUND' });
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error('admin pricing plan delete error:', error);
+    return res.status(500).json({ ok: false, error: 'DB_ERROR' });
+  }
+});
+
+// GET /admin/feature-usage - master-only quota balances and audit history
+router.get('/feature-usage', requireAdmin, async (req, res) => {
+  if (!(await assertMaster(req, res))) return;
+
+  const page = Math.max(1, Number.parseInt(String(req.query.page || '1'), 10) || 1);
+  const limit = Math.min(100, Math.max(1, Number.parseInt(String(req.query.limit || '20'), 10) || 20));
+  const offset = (page - 1) * limit;
+  const search = String(req.query.search || '').trim();
+  const feature = String(req.query.feature || '').trim().toUpperCase();
+  const action = String(req.query.action || '').trim().toUpperCase();
+
+  if (feature && !QUOTA_FEATURES.has(feature)) {
+    return res.status(400).json({ ok: false, error: 'INVALID_FEATURE' });
+  }
+
+  const conditions = [];
+  const params = [];
+  if (search) {
+    params.push(`%${search}%`);
+    conditions.push(`(u.name ILIKE $${params.length} OR u.email ILIKE $${params.length})`);
+  }
+  if (feature) {
+    params.push(feature);
+    conditions.push(`e.feature = $${params.length}`);
+  }
+  if (action) {
+    params.push(action);
+    conditions.push(`e.action = $${params.length}`);
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  try {
+    const countParams = [...params];
+    const limitIndex = params.push(limit);
+    const offsetIndex = params.push(offset);
+    const [eventsResult, countResult, bucketsResult, monthlySummaryResult] = await Promise.all([
+      pool.query(
+        `SELECT e.id, e.user_id, e.feature, e.action, e.amount,
+                e.reference_type, e.reference_id, e.metadata, e.created_at::text,
+                u.name, u.email, u.system_role,
+                b.source AS bucket_source
+           FROM feature_usage_events e
+           JOIN users u ON u.id = e.user_id
+           LEFT JOIN feature_credit_buckets b ON b.id = e.credit_bucket_id
+           ${where}
+          ORDER BY e.created_at DESC
+          LIMIT $${limitIndex} OFFSET $${offsetIndex}`,
+        params,
+      ),
+      pool.query(
+        `SELECT COUNT(*)::int AS total
+           FROM feature_usage_events e
+           JOIN users u ON u.id = e.user_id
+           ${where}`,
+        countParams,
+      ),
+      pool.query(
+        `SELECT b.id, b.user_id, b.feature, b.source, b.initial_amount,
+                b.remaining_amount, b.starts_at::text, b.expires_at::text,
+                b.created_at::text, u.name, u.email, u.system_role,
+                granter.name AS granted_by_name
+           FROM feature_credit_buckets b
+           JOIN users u ON u.id = b.user_id
+           LEFT JOIN users granter ON granter.id = b.granted_by_id
+          WHERE b.starts_at <= NOW()
+            AND (b.expires_at IS NULL OR b.expires_at > NOW())
+            AND (b.remaining_amount IS NULL OR b.remaining_amount > 0)
+            AND ($1::text = '' OR u.name ILIKE ('%' || $1 || '%') OR u.email ILIKE ('%' || $1 || '%'))
+            AND ($2::text = '' OR b.feature = $2)
+          ORDER BY b.expires_at ASC NULLS LAST, b.created_at DESC
+          LIMIT 500`,
+        [search, feature],
+      ),
+      pool.query(
+        `SELECT feature,
+                COALESCE(SUM(amount) FILTER (WHERE action = 'CONSUME'), 0)::int AS consumed,
+                COALESCE(SUM(amount) FILTER (WHERE action = 'REFUND'), 0)::int AS refunded,
+                (
+                  COALESCE(SUM(amount) FILTER (WHERE action = 'CONSUME'), 0)
+                  - COALESCE(SUM(amount) FILTER (WHERE action = 'REFUND'), 0)
+                )::int AS net_used
+           FROM feature_usage_events
+          WHERE created_at >= DATE_TRUNC('month', NOW())
+            AND created_at < DATE_TRUNC('month', NOW()) + INTERVAL '1 month'
+          GROUP BY feature`,
+      ),
+    ]);
+
+    return res.json({
+      ok: true,
+      events: eventsResult.rows,
+      buckets: bucketsResult.rows,
+      monthly_summary: monthlySummaryResult.rows,
+      total: countResult.rows[0]?.total || 0,
+      page,
+      limit,
+    });
+  } catch (error) {
+    console.error('admin feature usage list error:', error);
+    return res.status(500).json({ ok: false, error: 'DB_ERROR' });
+  }
+});
+
+// POST /admin/members/:id/feature-adjustments - master-only manual credit grant
+router.post('/members/:id/feature-adjustments', requireAdmin, async (req, res) => {
+  if (!(await assertMaster(req, res))) return;
+
+  const userId = Number(req.params.id);
+  const feature = String(req.body?.feature || '').toUpperCase();
+  const amount = Number(req.body?.amount);
+  const expiresAt = new Date(req.body?.expires_at);
+  const reason = String(req.body?.reason || '').trim().slice(0, 200);
+  if (
+    !Number.isInteger(userId) ||
+    !QUOTA_FEATURES.has(feature) ||
+    !Number.isInteger(amount) ||
+    amount < 1 ||
+    amount > 100000 ||
+    Number.isNaN(expiresAt.getTime()) ||
+    expiresAt <= new Date()
+  ) {
+    return res.status(400).json({ ok: false, error: 'INVALID_ADJUSTMENT' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const target = await client.query(
+      `SELECT id, system_role
+         FROM users
+        WHERE id = $1 AND deleted_at IS NULL
+        FOR UPDATE`,
+      [userId],
+    );
+    if (!target.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
+    }
+    if (target.rows[0].system_role === 'MASTER') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ ok: false, error: 'MASTER_UNLIMITED' });
+    }
+
+    const sourceRef = `manual-grant:${userId}:${Date.now()}:${randomUUID()}`;
+    const bucketResult = await client.query(
+      `INSERT INTO feature_credit_buckets
+         (user_id, feature, source, initial_amount, remaining_amount,
+          starts_at, expires_at, source_ref, granted_by_id)
+       VALUES ($1, $2, 'MANUAL', $3, $3, NOW(), $4, $5, $6)
+       RETURNING id`,
+      [userId, feature, amount, expiresAt, sourceRef, Number(req.user.sub)],
+    );
+    await client.query(
+      `INSERT INTO feature_usage_events
+         (user_id, feature, action, amount, credit_bucket_id, reference_type, reference_id, metadata)
+       VALUES ($1, $2, 'GRANT', $3, $4, 'ADMIN_ADJUSTMENT', $5, $6::jsonb)`,
+      [userId, feature, amount, bucketResult.rows[0].id, sourceRef, JSON.stringify({ reason: reason || null })],
+    );
+    await client.query('COMMIT');
+    return res.json({ ok: true, bucket_id: bucketResult.rows[0].id });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('admin feature credit grant error:', error);
+    return res.status(500).json({ ok: false, error: 'DB_ERROR' });
+  } finally {
+    client.release();
+  }
+});
+
+// POST /admin/feature-credit-buckets/:id/revoke - revoke only unused balance
+router.post('/feature-credit-buckets/:id/revoke', requireAdmin, async (req, res) => {
+  if (!(await assertMaster(req, res))) return;
+
+  const bucketId = String(req.params.id || '');
+  const reason = String(req.body?.reason || '').trim().slice(0, 200);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const current = await client.query(
+      `SELECT id, user_id, feature, remaining_amount
+         FROM feature_credit_buckets
+        WHERE id = $1
+        FOR UPDATE`,
+      [bucketId],
+    );
+    if (!current.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ ok: false, error: 'BUCKET_NOT_FOUND' });
+    }
+    const bucket = current.rows[0];
+    if (bucket.remaining_amount === null) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ ok: false, error: 'UNLIMITED_BUCKET' });
+    }
+    const revokedAmount = Number(bucket.remaining_amount);
+    if (revokedAmount <= 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ ok: false, error: 'NO_REMAINING_CREDIT' });
+    }
+
+    await client.query(
+      `UPDATE feature_credit_buckets
+          SET remaining_amount = 0, updated_at = NOW()
+        WHERE id = $1`,
+      [bucketId],
+    );
+    await client.query(
+      `INSERT INTO feature_usage_events
+         (user_id, feature, action, amount, credit_bucket_id, reference_type, reference_id, metadata)
+       VALUES ($1, $2, 'REVOKE', $3, $4, 'ADMIN_ADJUSTMENT', $4, $5::jsonb)`,
+      [
+        bucket.user_id,
+        bucket.feature,
+        revokedAmount,
+        bucketId,
+        JSON.stringify({ reason: reason || null, revoked_by: Number(req.user.sub) }),
+      ],
+    );
+    await client.query('COMMIT');
+    return res.json({ ok: true, revoked_amount: revokedAmount });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('admin feature credit revoke error:', error);
+    return res.status(500).json({ ok: false, error: 'DB_ERROR' });
+  } finally {
+    client.release();
   }
 });
 

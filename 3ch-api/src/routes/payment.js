@@ -2,28 +2,7 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../db/pool");
 const { requireAuth } = require("../middlewares/auth");
-
-// ── DB 마이그레이션 (subscriptions 테이블) ────────────────────────────────────
-;(async () => {
-  try {
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS subscriptions (
-        id          SERIAL PRIMARY KEY,
-        user_id     INT          NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        plan        VARCHAR(20)  NOT NULL,
-        order_id    VARCHAR(100) NOT NULL UNIQUE,
-        payment_key VARCHAR(200) NOT NULL,
-        amount      INT          NOT NULL,
-        status      VARCHAR(20)  NOT NULL DEFAULT 'ACTIVE',
-        started_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-        expires_at  TIMESTAMPTZ  NOT NULL,
-        created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
-      )
-    `);
-  } catch (e) {
-    console.error("subscriptions migration error:", e.message);
-  }
-})();
+const { FEATURES, getFeatureBalance, provisionSubscriptionCredits } = require("../services/featureUsageService");
 
 // orderId 예) ORDER_basic_42_abc123def456 → plan 추출
 function extractPlan(orderId = "") {
@@ -95,12 +74,49 @@ function extractPlan(orderId = "") {
  *       500:
  *         description: Toss 요청 실패 또는 DB 오류
  */
+router.get("/payment/plans", async (_req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, code, name, badge_text, price, original_price, billing_cycle,
+              sale_start_at, sale_end_at, features, display_order
+         FROM pricing_plans
+        WHERE is_visible = true
+          AND (sale_start_at IS NULL OR sale_start_at <= NOW())
+          AND (sale_end_at IS NULL OR sale_end_at >= NOW())
+        ORDER BY display_order ASC, id ASC`,
+    );
+    return res.json({ ok: true, plans: result.rows });
+  } catch (error) {
+    console.error("public pricing plans lookup error:", error);
+    return res.status(500).json({ ok: false, error: "DB_ERROR" });
+  }
+});
+
 router.post("/payment/confirm", requireAuth, async (req, res) => {
   const { paymentKey, orderId, amount } = req.body;
   const userId = Number(req.user.sub);
 
   if (!paymentKey || !orderId || !amount) {
     return res.status(400).json({ ok: false, error: "MISSING_PARAMS" });
+  }
+
+  const plan = extractPlan(orderId).toLowerCase();
+  try {
+    const pricingResult = await pool.query(
+      `SELECT price FROM pricing_plans
+        WHERE code = $1 AND is_visible = true
+          AND (sale_start_at IS NULL OR sale_start_at <= NOW())
+          AND (sale_end_at IS NULL OR sale_end_at >= NOW())
+        LIMIT 1`,
+      [plan],
+    );
+    if (!pricingResult.rowCount) return res.status(400).json({ ok: false, error: "INVALID_PLAN" });
+    if (Number(amount) !== Number(pricingResult.rows[0].price)) {
+      return res.status(400).json({ ok: false, error: "AMOUNT_MISMATCH" });
+    }
+  } catch (error) {
+    console.error("pricing validation error:", error);
+    return res.status(500).json({ ok: false, error: "DB_ERROR" });
   }
 
   // 1. Toss 결제 승인
@@ -126,20 +142,53 @@ router.post("/payment/confirm", requireAuth, async (req, res) => {
   }
 
   // 2. 구독 저장 (1개월 후 만료)
-  const plan      = extractPlan(orderId);
   const expiresAt = new Date();
   expiresAt.setMonth(expiresAt.getMonth() + 1);
 
+  const client = await pool.connect();
   try {
-    await pool.query(
-      `INSERT INTO subscriptions (user_id, plan, order_id, payment_key, amount, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (order_id) DO NOTHING`,
-      [userId, plan, orderId, paymentKey, amount, expiresAt],
+    await client.query("BEGIN");
+    const existingOrder = await client.query(
+      `SELECT id, plan, expires_at FROM subscriptions WHERE order_id = $1 AND user_id = $2`,
+      [orderId, userId],
     );
+    if (existingOrder.rowCount === 0) {
+      await client.query(
+        `UPDATE subscriptions
+            SET status = 'EXPIRED'
+          WHERE user_id = $1 AND status = 'ACTIVE'`,
+        [userId],
+      );
+      await client.query(
+        `UPDATE feature_credit_buckets
+            SET expires_at = NOW(), updated_at = NOW()
+          WHERE user_id = $1
+            AND source = 'PLAN'
+            AND (expires_at IS NULL OR expires_at > NOW())`,
+        [userId],
+      );
+      const subscriptionResult = await client.query(
+        `INSERT INTO subscriptions (user_id, plan, order_id, payment_key, amount, expires_at)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING id, started_at, expires_at`,
+        [userId, plan, orderId, paymentKey, amount, expiresAt],
+      );
+      const subscription = subscriptionResult.rows[0];
+      await provisionSubscriptionCredits(client, {
+        subscriptionId: subscription.id,
+        userId,
+        plan,
+        startsAt: subscription.started_at,
+        expiresAt: subscription.expires_at,
+      });
+    }
+    await client.query("COMMIT");
   } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
     console.error("subscription insert error:", e.message);
     return res.status(500).json({ ok: false, error: "DB_ERROR" });
+  } finally {
+    client.release();
   }
 
   return res.json({ ok: true, plan, expiresAt });
@@ -203,6 +252,28 @@ router.get("/payment/subscriptions/me", requireAuth, async (req, res) => {
     );
     return res.json({ ok: true, subscription: result.rows[0] ?? null });
   } catch (e) {
+    return res.status(500).json({ ok: false, error: "DB_ERROR" });
+  }
+});
+
+router.get("/payment/usage/me", requireAuth, async (req, res) => {
+  const userId = Number(req.user.sub);
+  try {
+    const [eventCreate, visionScan, drawCreate] = await Promise.all([
+      getFeatureBalance(userId, FEATURES.EVENT_CREATE),
+      getFeatureBalance(userId, FEATURES.VISION_SCAN),
+      getFeatureBalance(userId, FEATURES.DRAW_CREATE),
+    ]);
+    return res.json({
+      ok: true,
+      usage: {
+        event_create: eventCreate,
+        vision_scan: visionScan,
+        draw_create: drawCreate,
+      },
+    });
+  } catch (error) {
+    console.error("feature balance lookup error:", error);
     return res.status(500).json({ ok: false, error: "DB_ERROR" });
   }
 });

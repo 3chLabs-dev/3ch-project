@@ -8,57 +8,63 @@ datasource db {
 }
 
 model User {
-  id            Int       @id @default(autoincrement())
-  email         String    @unique
-  password_hash String?
-  password_reset_required Boolean @default(false)
-  name          String?
-  nickname      String?
-  phone         String?
-  auth_provider String
-  provider_id   String?
-  is_admin      Boolean   @default(false)
-  member_code   String?   @unique
-  created_at    DateTime  @default(now())
-  updated_at    DateTime  @default(now()) @updatedAt
-  deleted_at    DateTime?
+  id                      Int       @id @default(autoincrement())
+  email                   String    @unique
+  password_hash           String?
+  password_reset_required Boolean   @default(false)
+  name                    String?
+  nickname                String?
+  phone                   String?
+  auth_provider           String
+  provider_id             String?
+  is_admin                Boolean   @default(false)
+  system_role             String    @default("USER") @db.VarChar(20)
+  member_code             String?   @unique
+  created_at              DateTime  @default(now())
+  updated_at              DateTime  @default(now()) @updatedAt
+  deleted_at              DateTime?
 
-  leagues               League[]             @relation("LeagueCreator")
-  teams                 Team[]               @relation("TeamCreator")
-  created_groups        Group[]              @relation("GroupCreator")
-  group_memberships     GroupMember[]
-  draws                 Draw[]               @relation("DrawCreator")
-  league_programs       LeagueProgram[]      @relation("LeagueProgramCreator")
-  league_program_templates LeagueProgramTemplate[]
-  group_rankings        GroupRanking[]
-  group_ranking_events  GroupRankingEvent[]  @relation("GroupRankingEventMember")
-  sport_rankings        SportRanking[]
-  sport_ranking_events  SportRankingEvent[]  @relation("SportRankingEventMember")
-  support_chat_room     SupportChatRoom?
-  support_chat_messages SupportChatMessage[]
-  sent_league_invitations LeagueInvitedGroup[] @relation("LeagueInvitationSender")
-  accepted_league_invitations LeagueInvitedGroup[] @relation("LeagueInvitationAccepter")
-  participant_claims LeagueParticipantClaim[] @relation("ParticipantClaimApprovedUser")
-  requested_participant_claims LeagueParticipantClaim[] @relation("ParticipantClaimRequester")
-  reviewed_participant_claims LeagueParticipantClaim[] @relation("ParticipantClaimReviewer")
-  created_group_pre_members GroupPreMember[] @relation("GroupPreMemberCreator")
-  linked_group_pre_members GroupPreMember[] @relation("GroupPreMemberLinkedUser")
-  requested_group_member_claims GroupMemberClaim[] @relation("GroupMemberClaimRequester")
-  reviewed_group_member_claims GroupMemberClaim[] @relation("GroupMemberClaimReviewer")
-  created_ranking_seasons GroupRankingSeason[] @relation("GroupRankingSeasonCreator")
+  leagues                       League[]                 @relation("LeagueCreator")
+  teams                         Team[]                   @relation("TeamCreator")
+  created_groups                Group[]                  @relation("GroupCreator")
+  group_memberships             GroupMember[]
+  draws                         Draw[]                   @relation("DrawCreator")
+  league_programs               LeagueProgram[]          @relation("LeagueProgramCreator")
+  league_program_templates      LeagueProgramTemplate[]
+  group_rankings                GroupRanking[]
+  group_ranking_events          GroupRankingEvent[]      @relation("GroupRankingEventMember")
+  sport_rankings                SportRanking[]
+  sport_ranking_events          SportRankingEvent[]      @relation("SportRankingEventMember")
+  support_chat_room             SupportChatRoom?
+  support_chat_messages         SupportChatMessage[]
+  sent_league_invitations       LeagueInvitedGroup[]     @relation("LeagueInvitationSender")
+  accepted_league_invitations   LeagueInvitedGroup[]     @relation("LeagueInvitationAccepter")
+  participant_claims            LeagueParticipantClaim[] @relation("ParticipantClaimApprovedUser")
+  requested_participant_claims  LeagueParticipantClaim[] @relation("ParticipantClaimRequester")
+  reviewed_participant_claims   LeagueParticipantClaim[] @relation("ParticipantClaimReviewer")
+  created_group_pre_members     GroupPreMember[]         @relation("GroupPreMemberCreator")
+  linked_group_pre_members      GroupPreMember[]         @relation("GroupPreMemberLinkedUser")
+  requested_group_member_claims GroupMemberClaim[]       @relation("GroupMemberClaimRequester")
+  reviewed_group_member_claims  GroupMemberClaim[]       @relation("GroupMemberClaimReviewer")
+  created_ranking_seasons       GroupRankingSeason[]     @relation("GroupRankingSeasonCreator")
+  billed_leagues                League[]                 @relation("LeagueBillingOwner")
+  subscriptions                 Subscription[]
+  feature_credit_buckets        FeatureCreditBucket[]    @relation("FeatureCreditOwner")
+  granted_feature_credits       FeatureCreditBucket[]    @relation("FeatureCreditGranter")
+  feature_usage_events          FeatureUsageEvent[]      @relation("FeatureUsageOwner")
 
   @@map("users")
 }
 
 model SupportChatRoom {
-  id              Int      @id @default(autoincrement())
-  user_id         Int?     @unique
-  guest_name      String?  @db.VarChar(40)
-  guest_token_hash String? @unique
-  status          String   @default("open") @db.VarChar(20)
-  last_message_at DateTime @default(now()) @db.Timestamptz(6)
-  created_at      DateTime @default(now()) @db.Timestamptz(6)
-  updated_at      DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  id               Int      @id @default(autoincrement())
+  user_id          Int?     @unique
+  guest_name       String?  @db.VarChar(40)
+  guest_token_hash String?  @unique
+  status           String   @default("open") @db.VarChar(20)
+  last_message_at  DateTime @default(now()) @db.Timestamptz(6)
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 
   user     User?                @relation(fields: [user_id], references: [id], onDelete: Cascade)
   messages SupportChatMessage[]
@@ -109,7 +115,7 @@ model Group {
   ranking_events       GroupRankingEvent[]
   sport_ranking_events SportRankingEvent[]
   invited_leagues      LeagueInvitedGroup[]
-  league_participants  LeagueParticipant[] @relation("ParticipantSourceGroup")
+  league_participants  LeagueParticipant[]  @relation("ParticipantSourceGroup")
   pre_members          GroupPreMember[]
   ranking_seasons      GroupRankingSeason[]
 
@@ -244,50 +250,137 @@ model SportRankingEvent {
 }
 
 model League {
-  id                String   @id @default(uuid())
-  name              String
-  description       String?
-  type              String
-  format            String?
-  sport             String
-  start_date        DateTime
-  end_date          DateTime?
-  court_count       Int?
-  status            String   @default("draft") // e.g., "draft", "active", "completed"
-  rules             String?
-  notice            String?
-  entry_fee         String?
-  bank_account      String?
-  sort_order        String?  @default("부수")
-  recruit_count     Int      @default(0)
-  participant_count Int      @default(0)
-  league_code       String?  @unique
-  join_permission   String   @default("public") // "public" | "club_only"
+  id                     String    @id @default(uuid())
+  name                   String
+  description            String?
+  type                   String
+  format                 String?
+  sport                  String
+  start_date             DateTime
+  end_date               DateTime?
+  court_count            Int?
+  status                 String    @default("draft") // e.g., "draft", "active", "completed"
+  rules                  String?
+  notice                 String?
+  entry_fee              String?
+  bank_account           String?
+  sort_order             String?   @default("부수")
+  recruit_count          Int       @default(0)
+  participant_count      Int       @default(0)
+  league_code            String?   @unique
+  join_permission        String    @default("public") // "public" | "club_only"
   tournament_seeding     String?
   tournament_advancement String?
   tournament_rules       String?
   advance_count          Int?
   advance_method         String?
   finals_advance         Int?
-  created_at        DateTime @default(now())
-  updated_at        DateTime @default(now()) @updatedAt
+  created_at             DateTime  @default(now())
+  updated_at             DateTime  @default(now()) @updatedAt
 
-  created_by_id Int
-  creator       User @relation("LeagueCreator", fields: [created_by_id], references: [id])
+  created_by_id    Int
+  creator          User  @relation("LeagueCreator", fields: [created_by_id], references: [id])
+  billing_owner_id Int?
+  billing_owner    User? @relation("LeagueBillingOwner", fields: [billing_owner_id], references: [id], onDelete: SetNull)
 
   group_id String?
   group    Group?  @relation(fields: [group_id], references: [id], onDelete: Cascade)
 
-  teams          Team[]
-  matches        Match[]
-  participants   LeagueParticipant[]
-  league_matches LeagueMatch[]
+  teams                    Team[]
+  matches                  Match[]
+  participants             LeagueParticipant[]
+  league_matches           LeagueMatch[]
   participant_replacements LeagueParticipantReplacement[]
-  program        LeagueProgram?
-  draws          Draw[]
-  invited_groups LeagueInvitedGroup[]
+  program                  LeagueProgram?
+  draws                    Draw[]
+  invited_groups           LeagueInvitedGroup[]
 
   @@map("leagues")
+}
+
+model PricingPlan {
+  id             Int       @id @default(autoincrement())
+  code           String    @unique @db.VarChar(30)
+  name           String    @db.VarChar(50)
+  badge_text     String?   @db.VarChar(50)
+  price          Int       @default(0)
+  original_price Int?
+  billing_cycle  String    @default("MONTHLY") @db.VarChar(20)
+  sale_start_at  DateTime? @db.Timestamptz(6)
+  sale_end_at    DateTime? @db.Timestamptz(6)
+  features       Json      @default("[]")
+  display_order  Int       @default(0)
+  is_visible     Boolean   @default(true)
+  created_at     DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@index([is_visible, display_order])
+  @@map("pricing_plans")
+}
+
+model Subscription {
+  id          Int      @id @default(autoincrement())
+  user_id     Int
+  plan        String   @db.VarChar(20)
+  order_id    String   @unique @db.VarChar(100)
+  payment_key String   @db.VarChar(200)
+  amount      Int
+  status      String   @default("ACTIVE") @db.VarChar(20)
+  started_at  DateTime @default(now()) @db.Timestamptz(6)
+  expires_at  DateTime @db.Timestamptz(6)
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  user           User                  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  credit_buckets FeatureCreditBucket[]
+
+  @@index([user_id, status, expires_at])
+  @@map("subscriptions")
+}
+
+model FeatureCreditBucket {
+  id               String    @id @default(uuid())
+  user_id          Int
+  feature          String    @db.VarChar(40)
+  source           String    @db.VarChar(20)
+  initial_amount   Int?
+  remaining_amount Int?
+  starts_at        DateTime  @default(now()) @db.Timestamptz(6)
+  expires_at       DateTime? @db.Timestamptz(6)
+  subscription_id  Int?
+  source_ref       String?   @db.VarChar(120)
+  granted_by_id    Int?
+  created_at       DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+
+  user         User                @relation("FeatureCreditOwner", fields: [user_id], references: [id], onDelete: Cascade)
+  granted_by   User?               @relation("FeatureCreditGranter", fields: [granted_by_id], references: [id], onDelete: SetNull)
+  subscription Subscription?       @relation(fields: [subscription_id], references: [id], onDelete: Cascade)
+  usage_events FeatureUsageEvent[]
+
+  @@index([user_id, feature, starts_at, expires_at])
+  @@index([subscription_id])
+  @@map("feature_credit_buckets")
+}
+
+model FeatureUsageEvent {
+  id               String   @id @default(uuid())
+  user_id          Int
+  feature          String   @db.VarChar(40)
+  action           String   @db.VarChar(20)
+  amount           Int      @default(1)
+  request_key      String?  @unique @db.VarChar(120)
+  credit_bucket_id String?
+  reference_type   String?  @db.VarChar(40)
+  reference_id     String?  @db.VarChar(120)
+  metadata         Json?
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
+
+  user          User                 @relation("FeatureUsageOwner", fields: [user_id], references: [id], onDelete: Cascade)
+  credit_bucket FeatureCreditBucket? @relation(fields: [credit_bucket_id], references: [id], onDelete: SetNull)
+
+  @@index([user_id, feature, created_at])
+  @@index([reference_type, reference_id])
+  @@map("feature_usage_events")
 }
 
 model LeagueProgram {
@@ -305,29 +398,29 @@ model LeagueProgram {
 }
 
 model LeagueParticipant {
-  id         String   @id @default(uuid())
-  division   String?
-  name       String
-  member_id  Int?
-  paid       Boolean  @default(false)
-  arrived    Boolean  @default(false)
-  after      Boolean  @default(false)
-  sort_order Int?
-  group_name String?
-  is_leader  Boolean  @default(false)
-  status     String   @default("active")
+  id           String    @id @default(uuid())
+  division     String?
+  name         String
+  member_id    Int?
+  paid         Boolean   @default(false)
+  arrived      Boolean   @default(false)
+  after        Boolean   @default(false)
+  sort_order   Int?
+  group_name   String?
+  is_leader    Boolean   @default(false)
+  status       String    @default("active")
   withdrawn_at DateTime?
-  created_at DateTime @default(now())
+  created_at   DateTime  @default(now())
 
-  league_id String
-  league    League @relation(fields: [league_id], references: [id], onDelete: Cascade)
+  league_id       String
+  league          League  @relation(fields: [league_id], references: [id], onDelete: Cascade)
   source_group_id String?
-  source_group Group? @relation("ParticipantSourceGroup", fields: [source_group_id], references: [id], onDelete: SetNull)
+  source_group    Group?  @relation("ParticipantSourceGroup", fields: [source_group_id], references: [id], onDelete: SetNull)
 
-  matches_as_a LeagueMatch[] @relation("MatchParticipantA")
-  matches_as_b LeagueMatch[] @relation("MatchParticipantB")
+  matches_as_a LeagueMatch[]                  @relation("MatchParticipantA")
+  matches_as_b LeagueMatch[]                  @relation("MatchParticipantB")
   replacements LeagueParticipantReplacement[]
-  claim LeagueParticipantClaim?
+  claim        LeagueParticipantClaim?
 
   @@index([league_id])
   @@index([source_group_id])
@@ -378,9 +471,9 @@ model GroupPreMember {
   created_at     DateTime @default(now())
   updated_at     DateTime @default(now()) @updatedAt
 
-  group       Group @relation(fields: [group_id], references: [id], onDelete: Cascade)
-  creator     User  @relation("GroupPreMemberCreator", fields: [created_by_id], references: [id])
-  linked_user User? @relation("GroupPreMemberLinkedUser", fields: [linked_user_id], references: [id], onDelete: SetNull)
+  group       Group             @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  creator     User              @relation("GroupPreMemberCreator", fields: [created_by_id], references: [id])
+  linked_user User?             @relation("GroupPreMemberLinkedUser", fields: [linked_user_id], references: [id], onDelete: SetNull)
   claim       GroupMemberClaim?
 
   @@index([group_id, status])
@@ -397,21 +490,21 @@ model GroupMemberClaim {
   reviewed_at     DateTime?
 
   pre_member GroupPreMember @relation(fields: [pre_member_id], references: [id], onDelete: Cascade)
-  requester  User @relation("GroupMemberClaimRequester", fields: [requested_by_id], references: [id], onDelete: Cascade)
-  reviewer   User? @relation("GroupMemberClaimReviewer", fields: [reviewed_by_id], references: [id], onDelete: SetNull)
+  requester  User           @relation("GroupMemberClaimRequester", fields: [requested_by_id], references: [id], onDelete: Cascade)
+  reviewer   User?          @relation("GroupMemberClaimReviewer", fields: [reviewed_by_id], references: [id], onDelete: SetNull)
 
   @@index([requested_by_id, status])
   @@map("group_member_claims")
 }
 
 model LeagueInvitedGroup {
-  id             String   @id @default(uuid())
+  id             String    @id @default(uuid())
   league_id      String
   group_id       String
-  status         String   @default("pending")
+  status         String    @default("pending")
   invited_by_id  Int
   accepted_by_id Int?
-  created_at     DateTime @default(now())
+  created_at     DateTime  @default(now())
   responded_at   DateTime?
 
   league      League @relation(fields: [league_id], references: [id], onDelete: Cascade)
@@ -425,7 +518,7 @@ model LeagueInvitedGroup {
 }
 
 model LeagueParticipantClaim {
-  participant_id   String   @id
+  participant_id   String    @id
   code_hash        String?
   guest_token_hash String?
   claimed_by_id    Int?
@@ -436,13 +529,13 @@ model LeagueParticipantClaim {
   reviewed_at      DateTime?
   claimed_at       DateTime?
   expires_at       DateTime?
-  created_at       DateTime @default(now())
-  updated_at       DateTime @default(now()) @updatedAt
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @default(now()) @updatedAt
 
-  participant LeagueParticipant @relation(fields: [participant_id], references: [id], onDelete: Cascade)
-  claimed_by  User? @relation("ParticipantClaimApprovedUser", fields: [claimed_by_id], references: [id], onDelete: SetNull)
-  requested_by User? @relation("ParticipantClaimRequester", fields: [requested_by_id], references: [id], onDelete: SetNull)
-  reviewed_by User? @relation("ParticipantClaimReviewer", fields: [reviewed_by_id], references: [id], onDelete: SetNull)
+  participant  LeagueParticipant @relation(fields: [participant_id], references: [id], onDelete: Cascade)
+  claimed_by   User?             @relation("ParticipantClaimApprovedUser", fields: [claimed_by_id], references: [id], onDelete: SetNull)
+  requested_by User?             @relation("ParticipantClaimRequester", fields: [requested_by_id], references: [id], onDelete: SetNull)
+  reviewed_by  User?             @relation("ParticipantClaimReviewer", fields: [reviewed_by_id], references: [id], onDelete: SetNull)
 
   @@index([guest_token_hash])
   @@index([requested_by_id, status])
@@ -450,17 +543,17 @@ model LeagueParticipantClaim {
 }
 
 model LeagueParticipantReplacement {
-  id                   String   @id @default(uuid())
-  league_id            String
-  participant_id       String
-  previous_member_id   Int?
-  previous_name        String
-  previous_division    String?
+  id                    String   @id @default(uuid())
+  league_id             String
+  participant_id        String
+  previous_member_id    Int?
+  previous_name         String
+  previous_division     String?
   replacement_member_id Int?
-  replacement_name     String
-  replacement_division String?
-  replaced_by_id       Int
-  created_at           DateTime @default(now())
+  replacement_name      String
+  replacement_division  String?
+  replaced_by_id        Int
+  created_at            DateTime @default(now())
 
   league      League            @relation(fields: [league_id], references: [id], onDelete: Cascade)
   participant LeagueParticipant @relation(fields: [participant_id], references: [id], onDelete: Cascade)
@@ -484,21 +577,21 @@ model LeagueMatch {
   participant_a_id String?
   participant_a    LeagueParticipant? @relation("MatchParticipantA", fields: [participant_a_id], references: [id], onDelete: SetNull)
 
-  participant_b_id String?
-  participant_b    LeagueParticipant? @relation("MatchParticipantB", fields: [participant_b_id], references: [id], onDelete: SetNull)
-  participant_a_roster_ids String[] @default([])
-  participant_b_roster_ids String[] @default([])
-  bracket          String?
-  round_number     Int?
-  match_label      String?
-  next_match_id    String?
-  next_slot        String?
-  loser_next_match_id String?
-  loser_next_slot  String?
-  is_program       Boolean @default(false)
-  program_round    Int?
-  program_block_type String?
-  group_name       String?
+  participant_b_id         String?
+  participant_b            LeagueParticipant? @relation("MatchParticipantB", fields: [participant_b_id], references: [id], onDelete: SetNull)
+  participant_a_roster_ids String[]           @default([])
+  participant_b_roster_ids String[]           @default([])
+  bracket                  String?
+  round_number             Int?
+  match_label              String?
+  next_match_id            String?
+  next_slot                String?
+  loser_next_match_id      String?
+  loser_next_slot          String?
+  is_program               Boolean            @default(false)
+  program_round            Int?
+  program_block_type       String?
+  group_name               String?
 
   @@index([league_id])
   @@map("league_matches")

@@ -5,6 +5,7 @@ type AdminUser = {
   id: number;
   email: string;
   name: string | null;
+  system_role?: "USER" | "MANAGER" | "MASTER";
 };
 
 type AdminState = {

@@ -280,6 +280,26 @@ router.post('/group', requireAuth, async (req, res) => {
     await client.query('BEGIN');
 
     await client.query(
+      `SELECT id FROM users WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
+      [userId]
+    );
+    const ownedGroup = await client.query(
+      `SELECT gm.group_id
+         FROM group_members gm
+        WHERE gm.user_id = $1
+          AND gm.role = 'owner'
+        LIMIT 1`,
+      [userId]
+    );
+    if (ownedGroup.rowCount > 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        code: 'GROUP_OWNER_LIMIT',
+        message: '한 계정으로 하나의 클럽만 생성할 수 있습니다.',
+      });
+    }
+
+    await client.query(
       `INSERT INTO groups (id, name, description, sport, region_city, region_district, founded_at, address, address_detail, lat, lng, created_by_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
       [groupId, name, description || null, sport || null, region_city || null, region_district || null, founded_at || null, address || null, address_detail || null, lat ?? null, lng ?? null, userId]

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Box, Typography, IconButton, Stack, Button, Tabs, Tab, Divider,
   Dialog, DialogContent,
@@ -50,9 +50,9 @@ const PLANS = [
     originalPrice: "9,900",
     features: [
       "클럽 생성 무제한",
-      "리그 생성 5회",
-      "대진표 사진 인식 5회",
-      "추첨 생성 5회",
+      "리그 생성 월 3회",
+      "대진표 사진 인식 월 3회",
+      "추첨 생성 월 3회",
     ],
     inheritFrom: "STARTER 혜택",
     buttonLabel: "요금제 구매하기",
@@ -74,7 +74,7 @@ const PLANS = [
     originalPrice: "14,900",
     features: [
       "리그 생성 무제한",
-      "대진표 사진 인식 20회",
+      "대진표 사진 인식 월 20회",
       "추첨 생성 무제한",
     ],
     inheritFrom: "BASIC 혜택",
@@ -97,7 +97,7 @@ const PLANS = [
     originalPrice: "24,900",
     features: [
       "대회 생성 무제한",
-      "대진표 사진 인식 500회",
+      "대진표 사진 인식 월 500회",
       "AI 추천 클럽 상단 배치",
     ],
     inheritFrom: "PRO 혜택",
@@ -119,7 +119,27 @@ const NOTICES = [
 ];
 
 // ─── 플랜 카드 ────────────────────────────────────────────────────────────────
-function PlanCard({ plan, onBuy }: { plan: typeof PLANS[0]; onBuy?: () => void }) {
+type PlanCardData = {
+  id: string;
+  name: string;
+  icon: string;
+  iconBg: string;
+  iconColor: string;
+  badge: string | null;
+  badgeColor: string | null;
+  price: string | null;
+  originalPrice: string | null;
+  features: string[];
+  inheritFrom: string | null;
+  buttonLabel: string;
+  buttonDisabled: boolean;
+  buttonColor: string;
+  buttonTextColor: string;
+  cardBg: string;
+  borderColor: string;
+};
+
+function PlanCard({ plan, onBuy }: { plan: PlanCardData; onBuy?: () => void }) {
   return (
     <Box
       sx={{
@@ -226,6 +246,11 @@ function PlanCard({ plan, onBuy }: { plan: typeof PLANS[0]; onBuy?: () => void }
   );
 }
 
+type PublicPricingPlan = {
+  code: string; name: string; badge_text: string | null; price: number;
+  original_price: number | null; features: string[];
+};
+const API = import.meta.env.VITE_API_BASE_URL ?? "/api";
 const PLAN_AMOUNT: Record<string, number> = { basic: 4900, pro: 9900, premium: 19900 };
 
 // ─── 메인 페이지 ─────────────────────────────────────────────────────────────
@@ -233,9 +258,28 @@ export default function PricingPage() {
   const navigate = useNavigate();
   const [tab, setTab] = useState(0);
   const [testNoticeOpen, setTestNoticeOpen] = useState(true);
+  const [managedPlans, setManagedPlans] = useState<PublicPricingPlan[]>([]);
+  useEffect(() => {
+    fetch(`${API}/payment/plans`)
+      .then((response) => response.ok ? response.json() : Promise.reject())
+      .then((data) => setManagedPlans(data.plans ?? []))
+      .catch(() => setManagedPlans([]));
+  }, []);
+  const displayPlans = PLANS.map((plan) => {
+    const managed = managedPlans.find((item) => item.code === plan.id);
+    return managed ? {
+      ...plan,
+      name: managed.name,
+      badge: managed.badge_text,
+      price: managed.price > 0 ? managed.price.toLocaleString("ko-KR") : null,
+      originalPrice: managed.original_price == null ? null : managed.original_price.toLocaleString("ko-KR"),
+      features: managed.features?.length ? managed.features : plan.features,
+    } : plan;
+  }).filter((plan) => managedPlans.length === 0 || managedPlans.some((item) => item.code === plan.id));
+  const managedAmounts = Object.fromEntries(managedPlans.map((plan) => [plan.code, plan.price]));
 
   const handleBuy = (planId: string, planName: string) => {
-    navigate(`/payment/checkout?plan=${planId}&amount=${PLAN_AMOUNT[planId]}&name=${encodeURIComponent(planName)}`);
+    navigate(`/payment/checkout?plan=${planId}&amount=${managedAmounts[planId] ?? PLAN_AMOUNT[planId]}&name=${encodeURIComponent(planName)}`);
   };
 
   return (
@@ -307,7 +351,7 @@ export default function PricingPage() {
           </Button>
 
           {/* 플랜 카드 목록 */}
-          {PLANS.map((plan) => (
+          {displayPlans.map((plan) => (
             <PlanCard key={plan.id} plan={plan} onBuy={plan.buttonDisabled ? undefined : () => handleBuy(plan.id, plan.name)} />
           ))}
 

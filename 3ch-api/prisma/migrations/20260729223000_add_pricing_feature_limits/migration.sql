@@ -1,5 +1,5 @@
 ALTER TABLE "pricing_plans"
-ADD COLUMN "feature_limits" JSONB NOT NULL DEFAULT '{}'::jsonb;
+ADD COLUMN IF NOT EXISTS "feature_limits" JSONB NOT NULL DEFAULT '{}'::jsonb;
 
 UPDATE "pricing_plans"
 SET "feature_limits" = CASE LOWER("code")
@@ -22,7 +22,7 @@ INSERT INTO "feature_credit_buckets"
   ("id", "user_id", "feature", "source", "source_ref", "initial_amount",
    "remaining_amount", "starts_at", "expires_at", "created_at", "updated_at")
 SELECT
-  gen_random_uuid()::text,
+  gen_random_uuid(),
   s."user_id",
   feature_row.feature,
   'PLAN',

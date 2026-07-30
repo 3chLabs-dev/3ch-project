@@ -66,7 +66,12 @@ export default function RequiredPasswordResetPage() {
 
   const passwordAdornment = (visible: boolean, toggle: () => void) => (
     <InputAdornment position="end">
-      <IconButton onClick={toggle} edge="end" aria-label="비밀번호 표시 전환">
+      <IconButton
+        onClick={toggle}
+        edge="end"
+        tabIndex={-1}
+        aria-label="비밀번호 표시 전환"
+      >
         {visible ? <VisibilityOff /> : <Visibility />}
       </IconButton>
     </InputAdornment>

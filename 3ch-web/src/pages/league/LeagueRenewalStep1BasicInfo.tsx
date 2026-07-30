@@ -1,5 +1,18 @@
 import { useMemo, useRef, useState } from "react";
-import { Box, Button, IconButton, MenuItem, Select, Stack, TextField, Typography } from "@mui/material";
+import {
+  Box,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+  MenuItem,
+  Select,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { setRenewalBasicInfo, setRenewalStep } from "../../features/league/leagueRenewalCreationSlice";
 import LeagueInvitedGroupsPicker from "./LeagueInvitedGroupsPicker";
@@ -100,12 +113,17 @@ export default function LeagueRenewalStep1BasicInfo() {
   const [location, setLocation] = useState(existing?.location ?? "");
   const [participantCount, setParticipantCount] = useState<number | "">(existing?.participantCount ?? "");
   const [courtCount, setCourtCount] = useState<number | "">(existing?.courtCount ?? "");
+  const [participantCountDialogOpen, setParticipantCountDialogOpen] = useState(false);
   const [startHour, startMinute] = startTime ? startTime.split(":") : ["", ""];
   const [endHour, endMinute] = endTime ? endTime.split(":") : ["", ""];
   const canNext = useMemo(() => Boolean(title && date && startTime), [date, startTime, title]);
 
   const saveAndNext = () => {
     if (!canNext) return;
+    if (participantCount === 1) {
+      setParticipantCountDialogOpen(true);
+      return;
+    }
     dispatch(setRenewalBasicInfo({ title, date, startTime, endTime, location, participantCount: participantCount === "" ? null : participantCount, courtCount: courtCount === "" ? null : courtCount }));
     dispatch(setRenewalStep(2));
   };
@@ -136,10 +154,26 @@ export default function LeagueRenewalStep1BasicInfo() {
       </Box>
       <Box sx={rowSx}>
         <Typography sx={{ fontWeight: 900 }}>참가자 수</Typography>
-        <OptionalNumberStepper value={participantCount} min={2} max={999} suffix="명" onChange={setParticipantCount} />
+        <OptionalNumberStepper value={participantCount} min={1} max={999} suffix="명" onChange={setParticipantCount} />
       </Box>
     </Box>
     <LeagueInvitedGroupsPicker />
     <Stack direction="row" spacing={2} sx={{ mt: 4 }}><Button fullWidth variant="contained" disableElevation onClick={() => dispatch(setRenewalStep(0))} sx={{ height: 44, borderRadius: 1, fontWeight: 900, bgcolor: "#777", "&:hover": { bgcolor: "#777" } }}>이전</Button><Button fullWidth variant="contained" disableElevation disabled={!canNext} onClick={saveAndNext} sx={{ height: 44, borderRadius: 1, fontWeight: 900, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" }, "&.Mui-disabled": { bgcolor: "#CFE1FB", color: "#fff" } }}>다음</Button></Stack>
+    <Dialog
+      open={participantCountDialogOpen}
+      onClose={() => setParticipantCountDialogOpen(false)}
+      fullWidth
+      maxWidth="xs"
+    >
+      <DialogTitle sx={{ fontWeight: 800 }}>참가자 수 확인</DialogTitle>
+      <DialogContent>
+        <Typography>참가자 수는 2명 이상 입력해 주세요.</Typography>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setParticipantCountDialogOpen(false)} sx={{ fontWeight: 700 }}>
+          확인
+        </Button>
+      </DialogActions>
+    </Dialog>
   </Box>;
 }

@@ -23,6 +23,7 @@ import CheckIcon from "@mui/icons-material/Check";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
+import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import AddIcon from "@mui/icons-material/Add";
 import RemoveIcon from "@mui/icons-material/Remove";
 import ScreenRotationIcon from "@mui/icons-material/ScreenRotation";
@@ -424,7 +425,6 @@ interface BracketRowProps {
   editMode: boolean;    // 시드 순서 편집 모드 여부
   canManage: boolean;   // 관리 권한 (오너/어드민/생성자) - 드래그 전용
   canScore: boolean;    // 점수 편집 권한 (canManage || public 리그)
-  onMove: (idx: number, dir: "up" | "down") => void; // 버튼 클릭 이동 핸들러
   landscape: boolean;
   matchLookup: Map<string, LeagueMatch>; // "aId__bId" 키로 경기 빠르게 조회
   wins: number;
@@ -451,7 +451,7 @@ interface BracketRowProps {
  * - 시드 번호 셀 자체가 드래그 핸들 역할을 겸함
  */
 const SortableBracketRow = memo(function SortableBracketRow({
-  participant, teamRoster, rowIdx, n, localOrder, editMode, canManage, canScore, onMove, landscape,
+  participant, teamRoster, rowIdx, n, localOrder, editMode, canManage, canScore, landscape,
   matchLookup, wins, losses, setTotal, rank, tieSetDiff, hasPlayed, leagueId, winScore, isMe, rules, onProgramMatchUpdate,
 }: BracketRowProps) {
   const canDrag = editMode && canManage;
@@ -475,24 +475,38 @@ const SortableBracketRow = memo(function SortableBracketRow({
         {...(canDrag ? { ...attributes, ...listeners } : {})}
       >
         {editMode && canManage ? (
-          landscape ? (
-            // 가로(landscape): 위·아래 화살표 세로 배치
-            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-              <ScoreButton icon="up"   disabled={rowIdx === 0}     onClick={() => onMove(rowIdx, "up")} />
-              <Typography sx={{ fontSize: 11, lineHeight: 1 }}>{rowIdx + 1}</Typography>
-              <ScoreButton icon="down" disabled={rowIdx === n - 1} onClick={() => onMove(rowIdx, "down")} />
+          <Tooltip title="드래그해서 순서 변경" placement="right">
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: landscape ? "column" : "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 0.25,
+                width: "100%",
+                height: "100%",
+                writingMode: "horizontal-tb",
+              }}
+            >
+              <DragIndicatorIcon
+                sx={{
+                  color: "#9CA3AF",
+                  fontSize: 18,
+                  ...(landscape ? {} : { transform: "rotate(90deg)" }),
+                }}
+              />
+              <Typography
+                sx={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  lineHeight: 1,
+                  ...(landscape ? {} : { transform: "rotate(90deg)" }),
+                }}
+              >
+                {rowIdx + 1}
+              </Typography>
             </Box>
-          ) : (
-            // 세로(portrait): writingMode 상속으로 인한 90° 회전 보정
-            // BracketScoreCell portrait 처리와 동일한 방식
-            // portrait에서 부모 vertical-rl이 90° 회전 → 물리적 좌=시각적 상, 물리적 우=시각적 하
-            // 따라서 시각적으로 ↑(위)가 먼저 보이려면 물리적으로 down을 먼저 배치
-            <Box sx={{ display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "center", writingMode: "horizontal-tb", px: 0.25, height: "100%" }}>
-              <ScoreButton icon="down" rotate disabled={rowIdx === n - 1} onClick={() => onMove(rowIdx, "down")} />
-              <Typography sx={{ fontSize: 11, lineHeight: 1, transform: "rotate(90deg)" }}>{rowIdx + 1}</Typography>
-              <ScoreButton icon="up"   rotate disabled={rowIdx === 0}     onClick={() => onMove(rowIdx, "up")} />
-            </Box>
-          )
+          </Tooltip>
         ) : (
           rowIdx + 1
         )}
@@ -1128,12 +1142,24 @@ export default function LeagueBracket() {
 
   // 2. 현재 선택된 조 상태 관리
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
+  const groupTabsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (groupNames.length > 0 && (!selectedGroup || !groupNames.includes(selectedGroup))) {
       setTimeout(() => setSelectedGroup(groupNames[0]), 0);
     }
   }, [groupNames, selectedGroup]);
+
+  useEffect(() => {
+    const container = groupTabsRef.current;
+    const activeTab = container?.querySelector<HTMLElement>('[data-selected="true"]');
+    if (!container || !activeTab) return;
+
+    container.scrollTo({
+      left: Math.max(0, activeTab.offsetLeft - (container.clientWidth - activeTab.offsetWidth) / 2),
+      behavior: "smooth",
+    });
+  }, [selectedGroup]);
 
   // 3. 선택된 조의 팀원만 필터링 (조가 없으면 전체)
   const targetParticipants = useMemo(() => {
@@ -1366,18 +1392,6 @@ export default function LeagueBracket() {
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),   // 마우스: 8px 이상 이동 시 드래그 시작
     useSensor(TouchSensor,   { activationConstraint: { delay: 200, tolerance: 5 } }), // 터치: 200ms 롱프레스 후 드래그
   );
-
-  // 버튼 ↑↓ 클릭으로 한 칸 이동 (인접 요소와 swap 후 서버에 전체 순서 저장)
-  const handleMove = useCallback((idx: number, dir: "up" | "down") => {
-    setLocalOrder((prev) => {
-      const next = idx + (dir === "up" ? -1 : 1);
-      if (next < 0 || next >= prev.length) return prev;
-      const arr = [...prev];
-      [arr[idx], arr[next]] = [arr[next], arr[idx]];
-      reorderParticipants({ leagueId: id ?? "", order: arr.map((p) => p.id) });
-      return arr;
-    });
-  }, [setLocalOrder, reorderParticipants, id]);
 
   // 드래그 앤 드롭으로 임의 위치 이동 (arrayMove 후 서버에 전체 순서 저장)
   const handleDragEnd = useCallback((event: DragEndEvent) => {
@@ -1731,10 +1745,11 @@ export default function LeagueBracket() {
         >
       {groupNames.length > 0 && (
         <Box sx={{ px: 1, pt: 1, pb: 0.5, bgcolor: "#F0F2F5", borderBottom: "1px solid #E5E7EB" }}>
-          <Stack direction="row" spacing={1} sx={{ overflowX: "auto", '&::-webkit-scrollbar': { display: 'none' } }}>
+          <Stack ref={groupTabsRef} direction="row" spacing={1} sx={{ overflowX: "auto", '&::-webkit-scrollbar': { display: 'none' } }}>
             {groupNames.map(gName => (
               <Button
                 key={gName}
+                data-selected={selectedGroup === gName}
                 variant={selectedGroup === gName ? "contained" : "outlined"}
                 onClick={() => setSelectedGroup(gName)}
                 size="small"
@@ -1839,7 +1854,6 @@ export default function LeagueBracket() {
                         editMode={editMode}
                         canManage={canManage}
                         canScore={canScore}
-                        onMove={handleMove}
                         landscape
                         matchLookup={matchLookup}
                         wins={playerStats[rowIdx]?.wins ?? 0}

@@ -771,6 +771,8 @@ export default function LeagueTournamentBracket() {
     () => (isProgramMode && id ? (programData?.program?.program_data as ReturnType<typeof getStoredProgramOption> | undefined) ?? getStoredProgramOption(id) : null),
     [isProgramMode, id, programData],
   );
+  const programBlock = isProgramMode ? programOption?.blocks?.[programRound - 1] : undefined;
+  const isManualProgramSeeding = programBlock?.tournamentSeeding === "manual";
   const programSourceMatches = useMemo(() => {
     if (!isProgramMode || !id || !programOption) return matchesData?.matches ?? [];
 
@@ -817,8 +819,20 @@ export default function LeagueTournamentBracket() {
     const hydratedMatches = generatedMatches.map((match) => {
       const serverMatch = serverById.get(match.id);
       if (!serverMatch) return match;
+      const manualRoundOneParticipants =
+        isManualProgramSeeding && match.round_number === 1
+          ? {
+              participant_a_id: serverMatch.participant_a_id,
+              participant_a_name: serverMatch.participant_a_name,
+              participant_a_division: serverMatch.participant_a_division,
+              participant_b_id: serverMatch.participant_b_id,
+              participant_b_name: serverMatch.participant_b_name,
+              participant_b_division: serverMatch.participant_b_division,
+            }
+          : {};
       return {
         ...match,
+        ...manualRoundOneParticipants,
         score_a: match.score_a ?? serverMatch.score_a,
         score_b: match.score_b ?? serverMatch.score_b,
         court: match.court ?? serverMatch.court,
@@ -826,7 +840,16 @@ export default function LeagueTournamentBracket() {
       };
     });
     return applyProgramTournamentAdvancement(hydratedMatches).filter((match) => match.bracket);
-  }, [isProgramMode, id, programOption, participants, programRound, programSourceMatches, serverProgramMatches]);
+  }, [
+    isProgramMode,
+    id,
+    programOption,
+    participants,
+    programRound,
+    programSourceMatches,
+    serverProgramMatches,
+    isManualProgramSeeding,
+  ]);
   const tournamentBracketIndexes = useMemo(
     () => [...new Set(allProgramMatches.map((match) => match.tournament_bracket_index ?? 1))].sort((a, b) => a - b),
     [allProgramMatches],
@@ -839,7 +862,6 @@ export default function LeagueTournamentBracket() {
     () => isProgramMode ? programMatches : matchesData?.matches ?? [],
     [isProgramMode, programMatches, matchesData],
   );
-  const programBlock = isProgramMode ? programOption?.blocks?.[programRound - 1] : undefined;
   const [syncLeagueProgramMatches] = useSyncLeagueProgramMatchesMutation();
   const programSyncKeyRef = useRef<string | null>(null);
   const isProgramFinalRound =
@@ -886,7 +908,7 @@ export default function LeagueTournamentBracket() {
   ]);
 
   const isDoubleElim = matches.some((match) => match.bracket === "lower");
-  const canManage = !isProgramMode && (groupData?.myRole === "owner" || groupData?.myRole === "admin");
+  const canManage = groupData?.myRole === "owner" || groupData?.myRole === "admin";
   const isCompleted = league?.status === "completed";
 
   const [assignParticipant, { isLoading: isAssigning }] = useAssignMatchParticipantMutation();
@@ -1168,7 +1190,7 @@ export default function LeagueTournamentBracket() {
           </Box>
         )}
 
-        {!isCompleted && canManage && (
+        {!isCompleted && canManage && (!isProgramMode || manualSeeding) && (
           <Button
             size="small"
             variant="contained"

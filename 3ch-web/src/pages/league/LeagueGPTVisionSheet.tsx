@@ -1254,10 +1254,17 @@ export default function LeagueGPTVisionSheet() {
     const activeTab = container?.querySelector<HTMLElement>('[data-selected="true"]');
     if (!container || !activeTab) return;
 
-    container.scrollTo({
-      left: Math.max(0, activeTab.offsetLeft - (container.clientWidth - activeTab.offsetWidth) / 2),
-      behavior: "smooth",
-    });
+    if (container.dataset.scrollAxis === "vertical") {
+      container.scrollTo({
+        top: Math.max(0, activeTab.offsetTop - (container.clientHeight - activeTab.offsetHeight) / 2),
+        behavior: "smooth",
+      });
+    } else {
+      container.scrollTo({
+        left: Math.max(0, activeTab.offsetLeft - (container.clientWidth - activeTab.offsetWidth) / 2),
+        behavior: "smooth",
+      });
+    }
   }, [selectedGroup]);
 
   // 3. 선택된 조의 팀원만 필터링 (조가 없으면 전체)
@@ -1430,12 +1437,15 @@ export default function LeagueGPTVisionSheet() {
       if (!wrapperRef.current || !wrapperTableRef.current) return;
       const ww = wrapperRef.current.clientWidth;
       const wh = wrapperRef.current.clientHeight;
-      const tw = wrapperTableRef.current.scrollWidth;
-      const th = wrapperTableRef.current.scrollHeight;
+      // The group-tab strip lives in the same rotated container on mobile,
+      // but it must never participate in the bracket scale calculation.
+      const measuredTable = tableOnlyRef.current ?? wrapperTableRef.current;
+      const tw = measuredTable.scrollWidth;
+      const th = measuredTable.scrollHeight;
       if (!tw || !th) return;
       // schedule 패널은 오버레이로 분리 → wrapperTableRef는 테이블만 포함
       // portrait: writingMode가 scrollHeight를 왜곡하므로 tableOnlyRef로 보정
-      const sth = (!landscape && tableOnlyRef.current) ? tableOnlyRef.current.scrollHeight : th;
+      const sth = th;
       // schedule 오버레이 높이만큼 빼야 마지막 행이 가려지지 않음
       // landscape: 하단 오버레이 높이 / portrait: 우측 오버레이 너비
       const sh = scheduleRef.current
@@ -2175,6 +2185,64 @@ export default function LeagueGPTVisionSheet() {
 
       {/* ===== 대진표 영역 ===== */}
       <Box ref={wrapperRef} sx={{ flex: 1, overflow: "hidden", position: "relative", minHeight: 0, bgcolor: "#F0F2F5" }}>
+        {!landscape && groupNames.length > 0 && (
+          <Box
+            sx={{
+              position: "absolute",
+              zIndex: 8,
+              top: 4,
+              bottom: 8,
+              right: 76,
+              width: 42,
+              overflow: "hidden",
+              bgcolor: "#F0F2F5",
+            }}
+          >
+            <Stack
+              ref={groupTabsRef}
+              data-scroll-axis="vertical"
+              direction="column"
+              spacing={0.75}
+              sx={{
+                height: "100%",
+                alignItems: "center",
+                overflowX: "hidden",
+                overflowY: "auto",
+                scrollbarWidth: "none",
+                "&::-webkit-scrollbar": { display: "none" },
+              }}
+            >
+              {groupNames.map((gName) => (
+                <Button
+                  key={gName}
+                  data-selected={selectedGroup === gName}
+                  variant={selectedGroup === gName ? "contained" : "outlined"}
+                  onClick={() => setSelectedGroup(gName)}
+                  size="small"
+                  sx={{
+                    minWidth: 36,
+                    width: 36,
+                    minHeight: 58,
+                    flexShrink: 0,
+                    p: 0.5,
+                    borderRadius: 1.5,
+                    fontWeight: 800,
+                    fontSize: 13,
+                    lineHeight: 1,
+                    boxShadow: "none",
+                    writingMode: "vertical-rl",
+                    textOrientation: "sideways",
+                    ...(selectedGroup === gName
+                      ? { bgcolor: "#2563EB" }
+                      : { color: "#6B7280", borderColor: "#D1D5DB", bgcolor: "#fff" }),
+                  }}
+                >
+                  {gName}
+                </Button>
+              ))}
+            </Stack>
+          </Box>
+        )}
 
         {/* 스크롤 가능한 내부 컨테이너: spacer가 실제로 넘칠 때만 scrollbar 등장 (overflow:auto는 항상 켜두기) */}
         <Box sx={{ position: "absolute", inset: 0, overflow: "auto" }}>
@@ -2203,55 +2271,6 @@ export default function LeagueGPTVisionSheet() {
                 left: 0,
               }}
             >
-              {!landscape && groupNames.length > 0 && (
-                <Box
-                  sx={{
-                    width: naturalTw || "100%",
-                    maxWidth: naturalTw || "100%",
-                    px: 1,
-                    py: 0.75,
-                    boxSizing: "border-box",
-                    bgcolor: "#F0F2F5",
-                    borderBottom: "1px solid #E5E7EB",
-                    writingMode: "horizontal-tb",
-                  }}
-                >
-                  <Stack
-                    ref={groupTabsRef}
-                    direction="row"
-                    spacing={1}
-                    sx={{
-                      overflowX: "auto",
-                      overflowY: "hidden",
-                      scrollbarWidth: "none",
-                      "&::-webkit-scrollbar": { display: "none" },
-                    }}
-                  >
-                    {groupNames.map((gName) => (
-                      <Button
-                        key={gName}
-                        data-selected={selectedGroup === gName}
-                        variant={selectedGroup === gName ? "contained" : "outlined"}
-                        onClick={() => setSelectedGroup(gName)}
-                        size="small"
-                        sx={{
-                          minWidth: 60,
-                          flexShrink: 0,
-                          borderRadius: 1.5,
-                          fontWeight: 800,
-                          fontSize: 13,
-                          boxShadow: "none",
-                          ...(selectedGroup === gName
-                            ? { bgcolor: "#2563EB" }
-                            : { color: "#6B7280", borderColor: "#D1D5DB", bgcolor: "#fff" }),
-                        }}
-                      >
-                        {gName}
-                      </Button>
-                    ))}
-                  </Stack>
-                </Box>
-              )}
           {/* 대진표 테이블 (DnD 컨텍스트 내부) */}
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <TableContainer ref={tableOnlyRef} component={Paper} elevation={3} sx={{ borderRadius: "10px", overflow: "hidden" }}>

@@ -9,6 +9,8 @@ import {
   RadioGroup,
   Stack,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from "@mui/material";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
@@ -302,21 +304,21 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
       return (
         <Box sx={{ mt: 2 }}>
           <Typography sx={{ fontWeight: 900, mb: 1 }}>라운드 구분</Typography>
-          <TextField
-            select
+          <ToggleButtonGroup
+            exclusive
             fullWidth
-            size="small"
             value={round.tournamentMode ?? "single"}
-            onChange={(event) =>
+            onChange={(_, value: TournamentMode | null) => {
+              if (!value) return;
               updateRound(index, {
                 option: "NONE",
-                tournamentMode: event.target.value as TournamentMode,
-              })
-            }
+                tournamentMode: value,
+              });
+            }}
           >
-            <MenuItem value="single">일반</MenuItem>
-            <MenuItem value="upper-lower">상·하위</MenuItem>
-          </TextField>
+            <ToggleButton value="single">일반</ToggleButton>
+            <ToggleButton value="upper-lower">상·하위</ToggleButton>
+          </ToggleButtonGroup>
           <Typography sx={descriptionSx}>
             {round.tournamentMode === "upper-lower"
               ? "첫 경기에서 이기면 상위부로, 지면 하위부로 진출하는 토너먼트입니다."
@@ -340,18 +342,49 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
       return (
         <Box sx={{ mt: 2 }}>
           <Typography sx={{ fontWeight: 900, mb: 1 }}>라운드 구분</Typography>
-          <TextField
-            select
+          <ToggleButtonGroup
+            exclusive
             fullWidth
             value={value}
-            onChange={(event) => updateRound(index, parseTournamentChoice(event.target.value))}
-            size="small"
+            onChange={(_, selectedValue: string | null) => {
+              if (!selectedValue) return;
+              const choice = parseTournamentChoice(selectedValue);
+              updateRound(index, {
+                ...choice,
+                tournamentSeeding:
+                  choice.option === "FINAL"
+                    ? "seed"
+                    : round.tournamentSeeding ?? "seed",
+              });
+            }}
+            sx={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+              "& .MuiToggleButton-root": {
+                width: "100%",
+                margin: 0,
+                border: "1px solid rgba(0, 0, 0, 0.12)",
+                borderRadius: 0,
+              },
+              "& .MuiToggleButton-root:nth-of-type(1)": {
+                borderTopLeftRadius: 8,
+              },
+              "& .MuiToggleButton-root:nth-of-type(2)": {
+                borderTopRightRadius: 8,
+              },
+              "& .MuiToggleButton-root:nth-last-of-type(2)": {
+                borderBottomLeftRadius: 8,
+              },
+              "& .MuiToggleButton-root:last-of-type": {
+                borderBottomRightRadius: 8,
+              },
+            }}
           >
-            <MenuItem value="PRELIM:single">예선(일반)</MenuItem>
-            {index > 0 && <MenuItem value="FINAL:single">본선(일반)</MenuItem>}
-            <MenuItem value="PRELIM:upper-lower">예선(상·하위)</MenuItem>
-            {index > 0 && <MenuItem value="FINAL:upper-lower">본선(상·하위)</MenuItem>}
-          </TextField>
+            <ToggleButton value="PRELIM:single">예선(일반)</ToggleButton>
+            <ToggleButton value="PRELIM:upper-lower">예선(상·하위)</ToggleButton>
+            {index > 0 && <ToggleButton value="FINAL:single">본선(일반)</ToggleButton>}
+            {index > 0 && <ToggleButton value="FINAL:upper-lower">본선(상·하위)</ToggleButton>}
+          </ToggleButtonGroup>
           <Typography sx={descriptionSx}>
             {round.tournamentMode === "upper-lower"
               ? "첫 경기에서 이기면 상위부로, 지면 하위부로 진출하는 토너먼트입니다."
@@ -364,23 +397,23 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
     return (
       <Box sx={{ mt: 2 }}>
         <Typography sx={{ fontWeight: 900, mb: 1 }}>라운드 구분</Typography>
-        <TextField
-          select
+        <ToggleButtonGroup
+          exclusive
           fullWidth
           value={round.option ?? "PRELIM"}
-          onChange={(event) =>
+          onChange={(_, value: RoundOption | null) => {
+            if (!value) return;
             updateRound(index, {
-              option: event.target.value as RoundOption,
+              option: value,
               sourceRoundId: index > 0 ? rounds[index - 1].id : undefined,
               finalAdvancementMode: round.finalAdvancementMode ?? "top-n",
               advanceCount: round.advanceCount ?? 2,
-            })
-          }
-          size="small"
+            });
+          }}
         >
-          <MenuItem value="PRELIM">예선</MenuItem>
-          <MenuItem value="FINAL">본선</MenuItem>
-        </TextField>
+          <ToggleButton value="PRELIM">예선</ToggleButton>
+          <ToggleButton value="FINAL">본선</ToggleButton>
+        </ToggleButtonGroup>
       </Box>
     );
   };
@@ -416,23 +449,24 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
       return (
         <Box sx={{ mt: 2 }}>
           <Typography sx={{ fontWeight: 900, mb: 1 }}>본선 편성</Typography>
-          <TextField
-            select
+          <ToggleButtonGroup
+            exclusive
             fullWidth
-            size="small"
             value={mode}
-            onChange={(event) =>
+            onChange={(_, value: FinalAdvancementMode | null) => {
+              if (!value) return;
               updateRound(index, {
-                finalAdvancementMode: event.target.value as FinalAdvancementMode,
+                finalAdvancementMode: value,
                 advanceCount: round.advanceCount ?? 2,
                 sourceRoundId: rounds[index - 1].id,
-              })
-            }
+              });
+            }}
+            sx={{ "& .MuiToggleButton-root": { flex: 1 } }}
           >
-            <MenuItem value="top-n">상위 인원</MenuItem>
-            <MenuItem value="upper-lower-groups">상·하위부</MenuItem>
-            <MenuItem value="rank-groups">순위대로</MenuItem>
-          </TextField>
+            <ToggleButton value="top-n">상위 인원</ToggleButton>
+            <ToggleButton value="upper-lower-groups">상·하위부</ToggleButton>
+            <ToggleButton value="rank-groups">순위대로</ToggleButton>
+          </ToggleButtonGroup>
           {mode === "top-n" && (
             <AdvancementCount
               value={round.advanceCount ?? 2}
@@ -632,6 +666,26 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
           </FormControl>
 
           {renderRoundDivision(round, index)}
+
+          {round.format === "TOURNAMENT" && round.option !== "FINAL" && (
+            <Box sx={{ mt: 2 }}>
+              <Typography sx={{ fontWeight: 900, mb: 1 }}>배치 방식</Typography>
+              <ToggleButtonGroup
+                exclusive
+                fullWidth
+                value={round.tournamentSeeding ?? "seed"}
+                onChange={(_, value: RenewalRoundConfig["tournamentSeeding"] | null) => {
+                  if (!value) return;
+                  updateRound(index, { tournamentSeeding: value });
+                }}
+              >
+                <ToggleButton value="seed">시드(순위)</ToggleButton>
+                <ToggleButton value="random">랜덤</ToggleButton>
+                <ToggleButton value="manual">수동</ToggleButton>
+              </ToggleButtonGroup>
+            </Box>
+          )}
+
           {renderFinalOptions(round, index)}
 
           {round.format === "TOURNAMENT" &&

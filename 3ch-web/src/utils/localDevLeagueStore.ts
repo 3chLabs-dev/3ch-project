@@ -57,6 +57,18 @@ function saveLocalDevMatches(leagueId: string, matches: LeagueMatch[]) {
   writeJson(LOCAL_DEV_MATCHES_KEY, all);
 }
 
+export function syncLocalDevProgramMatches(
+  leagueId: string,
+  matches: LeagueMatch[],
+  programRounds: number[],
+) {
+  const targetRounds = new Set(programRounds);
+  const existing = getLocalDevMatches(leagueId).filter(
+    (match) => !match.is_program || !targetRounds.has(Number(match.program_round)),
+  );
+  saveLocalDevMatches(leagueId, [...existing, ...matches]);
+}
+
 export function initLocalDevMatches(leagueId: string, force = false) {
   const existing = getLocalDevMatches(leagueId);
   if (existing.length > 0 && !force) return existing;

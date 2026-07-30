@@ -13,6 +13,7 @@ import {
   getLocalDevProgram,
   initLocalDevMatches,
   saveLocalDevProgram,
+  syncLocalDevProgramMatches,
   updateLocalDevMatch,
   updateLocalDevParticipant,
 } from "../../utils/localDevLeagueStore";
@@ -938,6 +939,19 @@ export const leagueApi = baseApi.injectEndpoints({
       async queryFn({ leagueId, matches, resetResults }, api, _extraOptions, fetchWithBQ) {
         const token = (api.getState() as RootState).auth?.token;
         if (isLocalDevToken(token)) {
+          const programRounds = [...new Set(
+            matches
+              .map((match) => Number(match.program_round))
+              .filter((round) => Number.isFinite(round)),
+          )];
+          syncLocalDevProgramMatches(
+            leagueId,
+            matches.map((match) => ({
+              ...match,
+              is_program: true,
+            })) as LeagueMatch[],
+            programRounds,
+          );
           return { data: { ok: true, inserted: matches.length } };
         }
         const result = await fetchWithBQ({

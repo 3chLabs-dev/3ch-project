@@ -573,6 +573,12 @@ export default function LeagueMatchOrder() {
       return {
         ...match,
         match_order: serverMatch.match_order,
+        participant_a_id: serverMatch.participant_a_id ?? match.participant_a_id,
+        participant_a_name: serverMatch.participant_a_name ?? match.participant_a_name,
+        participant_a_division: serverMatch.participant_a_division ?? match.participant_a_division,
+        participant_b_id: serverMatch.participant_b_id ?? match.participant_b_id,
+        participant_b_name: serverMatch.participant_b_name ?? match.participant_b_name,
+        participant_b_division: serverMatch.participant_b_division ?? match.participant_b_division,
         score_a: match.score_a ?? serverMatch.score_a,
         score_b: match.score_b ?? serverMatch.score_b,
         court: match.court ?? serverMatch.court,

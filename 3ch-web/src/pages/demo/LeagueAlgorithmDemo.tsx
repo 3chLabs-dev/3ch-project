@@ -339,8 +339,8 @@ function RoundDivisionEditor({
   } else if (round.format === "TOURNAMENT") {
     choices = [
       { value: "PRELIM:single", label: "예선(일반)" },
-      ...(roundIndex > 0 ? [{ value: "FINAL:single", label: "본선(일반)" }] : []),
       { value: "PRELIM:upper-lower", label: "예선(상·하위)" },
+      ...(roundIndex > 0 ? [{ value: "FINAL:single", label: "본선(일반)" }] : []),
       ...(roundIndex > 0 ? [{ value: "FINAL:upper-lower", label: "본선(상·하위)" }] : []),
     ];
     value = `${round.option}:${round.tournamentMode ?? "single"}`;
@@ -357,6 +357,10 @@ function RoundDivisionEditor({
       update({
         option: option as RoundOption,
         tournamentMode: tournamentMode as TournamentMode,
+        tournamentSeeding:
+          option === "FINAL"
+            ? "seed"
+            : round.tournamentSeeding ?? "seed",
         sourceRoundId: roundIndex > 0 ? rounds[roundIndex - 1].id : undefined,
       });
       return;
@@ -375,9 +379,49 @@ function RoundDivisionEditor({
       {disabledLabel ? (
         <input disabled value={disabledLabel} style={{ ...controlStyle, color: "#9ca3af" }} />
       ) : (
-        <select value={value} onChange={(event) => handleChoice(event.target.value)} style={controlStyle}>
-          {choices.map((choice) => <option key={choice.value} value={choice.value}>{choice.label}</option>)}
-        </select>
+        <ToggleButtonGroup
+          exclusive
+          fullWidth
+          value={value}
+          onChange={(_, selectedValue) => {
+            if (selectedValue) handleChoice(selectedValue);
+          }}
+          sx={{
+            display: choices.length > 3 ? "grid" : "flex",
+            gridTemplateColumns: choices.length > 3
+              ? "repeat(2, minmax(0, 1fr))"
+              : undefined,
+            "& .MuiToggleButton-root": {
+              flex: choices.length > 3 ? undefined : 1,
+              width: choices.length > 3 ? "100%" : undefined,
+              margin: 0,
+              border: "1px solid rgba(0, 0, 0, 0.12)",
+              borderRadius: choices.length > 3 ? 0 : undefined,
+            },
+            ...(choices.length > 3
+              ? {
+                  "& .MuiToggleButton-root:nth-of-type(1)": {
+                    borderTopLeftRadius: 8,
+                  },
+                  "& .MuiToggleButton-root:nth-of-type(2)": {
+                    borderTopRightRadius: 8,
+                  },
+                  "& .MuiToggleButton-root:nth-last-of-type(2)": {
+                    borderBottomLeftRadius: 8,
+                  },
+                  "& .MuiToggleButton-root:last-of-type": {
+                    borderBottomRightRadius: 8,
+                  },
+                }
+              : {}),
+          }}
+        >
+          {choices.map((choice) => (
+            <ToggleButton key={choice.value} value={choice.value}>
+              {choice.label}
+            </ToggleButton>
+          ))}
+        </ToggleButtonGroup>
       )}
 
       {round.format === "TOURNAMENT" && !disabledLabel && (
@@ -407,15 +451,18 @@ function RoundDivisionEditor({
       {roundIndex > 0 && round.option === "FINAL" && round.format === "GROUP" && (
         <div style={{ marginTop: "16px" }}>
           <div style={{ fontWeight: 700, marginBottom: "8px" }}>본선 편성</div>
-          <select
+          <ToggleButtonGroup
+            exclusive
+            fullWidth
             value={round.finalAdvancementMode ?? "top-n"}
-            onChange={(event) => update({ finalAdvancementMode: event.target.value as FinalAdvancementMode })}
-            style={controlStyle}
+            onChange={(_, selectedValue: FinalAdvancementMode | null) => {
+              if (selectedValue) update({ finalAdvancementMode: selectedValue });
+            }}
           >
-            <option value="top-n">상위 인원</option>
-            <option value="upper-lower-groups">상·하위부</option>
-            <option value="rank-groups">순위대로</option>
-          </select>
+            <ToggleButton value="top-n">상위 인원</ToggleButton>
+            <ToggleButton value="upper-lower-groups">상·하위부</ToggleButton>
+            <ToggleButton value="rank-groups">순위대로</ToggleButton>
+          </ToggleButtonGroup>
           {(round.finalAdvancementMode ?? "top-n") === "top-n" && (
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "12px" }}>
               <strong>{advancementPrefix}</strong>
@@ -894,7 +941,7 @@ function RoundConfigEditor({
                     </ToggleButton>
 	                  </ToggleButtonGroup>
 
-                    {round.format === "TOURNAMENT" && (
+                    {round.format === "TOURNAMENT" && round.option !== "FINAL" && (
                       <div style={{ marginTop: "16px" }}>
                         <div
                           style={{
@@ -2738,7 +2785,7 @@ const LeagueAlgorithmDemo = ({
                   </ToggleButton>
 	                </ToggleButtonGroup>
 
-                  {round.format === "TOURNAMENT" && (
+                  {round.format === "TOURNAMENT" && round.option !== "FINAL" && (
                     <div style={{ marginTop: "16px" }}>
                       <div
                         style={{

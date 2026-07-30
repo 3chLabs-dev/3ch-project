@@ -577,7 +577,7 @@ function Connectors({ positions }: { positions: MatchPos[] }) {
         const tx = tgt.x;
         const ty = tgt.y + (m.next_slot === "a" ? MH / 4 : (3 * MH) / 4);
         const mx = sx + RGAP / 2;
-        return <path key={`c-${id}`} d={`M ${sx} ${sy} H ${mx} V ${ty} H ${tx}`} stroke="#CBD5E1" strokeWidth={1.5} fill="none" />;
+        return <path key={`c-${id}`} d={`M ${sx} ${sy} H ${mx} V ${ty} H ${tx}`} stroke="#22C55E" strokeWidth={2} fill="none" />;
       })}
       {positions.map(({ id, x, y, match: m }) => {
         if (!m.loser_next_match_id) return null;
@@ -717,8 +717,8 @@ function CenterOutConnectors({ positions }: { positions: MatchPos[] }) {
     if (!map.has(pid)) map.set(pid, []);
     map.get(pid)!.push(pos);
   }
-  drawBracket(byWinnerUpper, (id) => posById.get(id), "#94A3B8", "wn");
-  drawBracket(byWinnerLower, (id) => posById.get(id), "#94A3B8", "wl");
+  drawBracket(byWinnerUpper, (id) => posById.get(id), "#22C55E", "wn");
+  drawBracket(byWinnerLower, (id) => posById.get(id), "#22C55E", "wl");
 
   // ── 패자 연결: 소스들을 하위 대상별로 묶어서 ⊔ 브래킷 ──
   const byLoserTarget = new Map<string, MatchPos[]>();
@@ -728,7 +728,7 @@ function CenterOutConnectors({ positions }: { positions: MatchPos[] }) {
     if (!byLoserTarget.has(tid)) byLoserTarget.set(tid, []);
     byLoserTarget.get(tid)!.push(pos);
   }
-  drawBracket(byLoserTarget, (id) => posById.get(id), "#94A3B8", "lo");
+  drawBracket(byLoserTarget, (id) => posById.get(id), "#22C55E", "lo");
 
   return <>{paths}</>;
 }
@@ -862,7 +862,8 @@ export default function LeagueTournamentBracket() {
     () => isProgramMode ? programMatches : matchesData?.matches ?? [],
     [isProgramMode, programMatches, matchesData],
   );
-  const [syncLeagueProgramMatches] = useSyncLeagueProgramMatchesMutation();
+  const [syncLeagueProgramMatches, { isLoading: isSyncingProgramMatches }] =
+    useSyncLeagueProgramMatchesMutation();
   const programSyncKeyRef = useRef<string | null>(null);
   const isProgramFinalRound =
     isProgramMode &&
@@ -989,11 +990,61 @@ export default function LeagueTournamentBracket() {
 
   // 팝업에서 참가자 선택 → 슬롯에 배정
   const handleAssign = async (participantId: string) => {
-    if (!registerTarget || isAssigning) return;
+    if (!registerTarget || isAssigning || isSyncingProgramMatches) return;
+
+    if (isProgramMode && programBlock) {
+      const participant = participants.find((item) => item.id === participantId);
+      if (!participant) return;
+
+      const nextMatches = allProgramMatches.map((match) => {
+        const next = { ...match };
+
+        if (match.round_number === 1) {
+          if (next.participant_a_id === participantId) {
+            next.participant_a_id = null;
+            next.participant_a_name = null;
+            next.participant_a_division = null;
+          }
+          if (next.participant_b_id === participantId) {
+            next.participant_b_id = null;
+            next.participant_b_name = null;
+            next.participant_b_division = null;
+          }
+        }
+
+        if (match.id === registerTarget.matchId) {
+          if (registerTarget.slot === "a") {
+            next.participant_a_id = participant.id;
+            next.participant_a_name = participant.name;
+            next.participant_a_division = participant.division ?? null;
+          } else {
+            next.participant_b_id = participant.id;
+            next.participant_b_name = participant.name;
+            next.participant_b_division = participant.division ?? null;
+          }
+        }
+
+        return next;
+      });
+
+      await syncLeagueProgramMatches({
+        leagueId: id!,
+        matches: nextMatches.map((match) => ({
+          ...match,
+          program_round: programRound,
+          program_block_type: programBlock.type,
+        })),
+      }).unwrap();
+      await refetchMatches();
+      setRegisterTarget(null);
+      return;
+    }
+
     const body = registerTarget.slot === "a"
       ? { participant_a_id: participantId }
       : { participant_b_id: participantId };
-    await assignParticipant({ leagueId: id!, matchId: registerTarget.matchId, ...body });
+    await assignParticipant({ leagueId: id!, matchId: registerTarget.matchId, ...body }).unwrap();
+    await refetchMatches();
     setRegisterTarget(null);
   };
 
@@ -1505,7 +1556,7 @@ export default function LeagueTournamentBracket() {
                       variant={isAssigned ? "outlined" : "contained"}
                       disableElevation
                       onClick={() => handleAssign(p.id)}
-                      disabled={isAssigning}
+                      disabled={isAssigning || isSyncingProgramMatches}
                       sx={{
                         minWidth: 44, height: 24, fontSize: 11, fontWeight: 700,
                         borderRadius: "12px", px: 1, flexShrink: 0,

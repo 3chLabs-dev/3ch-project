@@ -23,7 +23,7 @@ import CheckIcon from "@mui/icons-material/Check";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
-import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
+import DragHandleIcon from "@mui/icons-material/DragHandle";
 import AddIcon from "@mui/icons-material/Add";
 import RemoveIcon from "@mui/icons-material/Remove";
 import ScreenRotationIcon from "@mui/icons-material/ScreenRotation";
@@ -508,11 +508,10 @@ const SortableBracketRow = memo(function SortableBracketRow({
                 writingMode: "horizontal-tb",
               }}
             >
-              <DragIndicatorIcon
+              <DragHandleIcon
                 sx={{
                   color: "#9CA3AF",
                   fontSize: 18,
-                  ...(landscape ? {} : { transform: "rotate(90deg)" }),
                 }}
               />
               <Typography

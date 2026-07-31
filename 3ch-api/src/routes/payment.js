@@ -369,6 +369,27 @@ router.get("/payment/subscriptions/me", requireAuth, async (req, res) => {
   }
 });
 
+router.get("/payment/history/me", requireAuth, async (req, res) => {
+  const userId = Number(req.user.sub);
+  try {
+    const result = await pool.query(
+      `SELECT s.id, s.plan, s.order_id, s.amount, s.status, s.started_at,
+              s.expires_at, s.is_recurring, s.cancel_at_period_end, s.canceled_at,
+              bpm.card_company, bpm.card_number
+         FROM subscriptions s
+         LEFT JOIN billing_payment_methods bpm ON bpm.id = s.billing_method_id
+        WHERE s.user_id = $1
+        ORDER BY s.created_at DESC
+        LIMIT 50`,
+      [userId],
+    );
+    return res.json({ ok: true, purchases: result.rows });
+  } catch (error) {
+    console.error("payment history lookup error:", error);
+    return res.status(500).json({ ok: false, error: "DB_ERROR" });
+  }
+});
+
 router.get("/payment/usage/me", requireAuth, async (req, res) => {
   const userId = Number(req.user.sub);
   try {

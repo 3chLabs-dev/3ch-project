@@ -1,13 +1,15 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Box, Typography, IconButton, Stack, Button, Tabs, Tab, Divider,
-  Dialog, DialogContent,
+  Alert, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle,
 } from "@mui/material";
 import ScienceOutlinedIcon from "@mui/icons-material/ScienceOutlined";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import CheckIcon from "@mui/icons-material/Check";
 import { useNavigate } from "react-router-dom";
+import { useSelector } from "react-redux";
+import type { RootState } from "../../app/store";
 
 // ─── 플랜 데이터 ─────────────────────────────────────────────────────────────
 const PLANS = [
@@ -238,7 +240,33 @@ type PublicPricingPlan = {
   original_price: number | null; features: string[];
   feature_limits?: Record<string, number | null>;
 };
+type PurchaseHistory = {
+  id: number;
+  plan: string;
+  order_id: string;
+  amount: number;
+  status: string;
+  started_at: string;
+  expires_at: string;
+  is_recurring: boolean;
+  cancel_at_period_end: boolean;
+  canceled_at: string | null;
+  card_company: string | null;
+  card_number: string | null;
+};
 const API = import.meta.env.VITE_API_BASE_URL ?? "/api";
+const PLAN_NAMES: Record<string, string> = {
+  starter: "STARTER",
+  basic: "BASIC",
+  pro: "PRO",
+  premium: "PREMIUM",
+};
+const formatDate = (value: string) =>
+  new Intl.DateTimeFormat("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(value));
 const FEATURE_LABELS: Array<[string, string]> = [
   ["club_create", "클럽 생성"],
   ["club_join", "클럽 가입"],
@@ -260,19 +288,85 @@ const featureLimitLabels = (limits?: Record<string, number | null>) =>
 // ─── 메인 페이지 ─────────────────────────────────────────────────────────────
 export default function PricingPage() {
   const navigate = useNavigate();
+  const token = useSelector((state: RootState) => state.auth.token);
   const [tab, setTab] = useState(0);
   const [testNoticeOpen, setTestNoticeOpen] = useState(true);
   const [managedPlans, setManagedPlans] = useState<PublicPricingPlan[]>([]);
+  const [currentPlan, setCurrentPlan] = useState<string | null | undefined>(undefined);
+  const [purchases, setPurchases] = useState<PurchaseHistory[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [cancelTarget, setCancelTarget] = useState<PurchaseHistory | null>(null);
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelError, setCancelError] = useState("");
   useEffect(() => {
     fetch(`${API}/payment/plans`)
       .then((response) => response.ok ? response.json() : Promise.reject())
       .then((data) => setManagedPlans(data.plans ?? []))
       .catch(() => setManagedPlans([]));
   }, []);
+  useEffect(() => {
+    const resolvedToken = token ?? localStorage.getItem("token");
+    if (!resolvedToken) {
+      setCurrentPlan(null);
+      return;
+    }
+
+    fetch(`${API}/payment/subscriptions/me`, {
+      headers: { Authorization: `Bearer ${resolvedToken}` },
+    })
+      .then((response) => response.ok ? response.json() : Promise.reject())
+      .then((data) => setCurrentPlan(data.subscription?.plan ?? null))
+      .catch(() => setCurrentPlan(null));
+  }, [token]);
+
+  const loadPurchaseHistory = useCallback(() => {
+    const resolvedToken = token ?? localStorage.getItem("token");
+    if (!resolvedToken) {
+      setPurchases([]);
+      setHistoryLoading(false);
+      return;
+    }
+
+    setHistoryLoading(true);
+    fetch(`${API}/payment/history/me`, {
+      headers: { Authorization: `Bearer ${resolvedToken}` },
+    })
+      .then((response) => response.ok ? response.json() : Promise.reject())
+      .then((data) => setPurchases(data.purchases ?? []))
+      .catch(() => setPurchases([]))
+      .finally(() => setHistoryLoading(false));
+  }, [token]);
+
+  useEffect(() => {
+    loadPurchaseHistory();
+  }, [loadPurchaseHistory]);
+
+  const handleCancelSubscription = async () => {
+    const resolvedToken = token ?? localStorage.getItem("token");
+    if (!resolvedToken || !cancelTarget) return;
+
+    setCancelLoading(true);
+    setCancelError("");
+    try {
+      const response = await fetch(`${API}/payment/billing/cancel`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${resolvedToken}` },
+      });
+      if (!response.ok) throw new Error("구독 취소 신청에 실패했습니다.");
+      setCancelTarget(null);
+      loadPurchaseHistory();
+    } catch (error) {
+      setCancelError(error instanceof Error ? error.message : "구독 취소 신청에 실패했습니다.");
+    } finally {
+      setCancelLoading(false);
+    }
+  };
+
+  const activePlanId = currentPlan === null ? "starter" : currentPlan;
   const displayPlans = PLANS.map((plan) => {
     const managed = managedPlans.find((item) => item.code === plan.id);
     const managedFeatureLabels = featureLimitLabels(managed?.feature_limits);
-    return managed ? {
+    const displayedPlan = managed ? {
       ...plan,
       name: managed.name,
       badge: managed.badge_text,
@@ -282,6 +376,23 @@ export default function PricingPage() {
         ? [...managedFeatureLabels, ...(managed.features ?? [])]
         : plan.features,
     } : plan;
+    const isCurrent = currentPlan !== undefined && plan.id === activePlanId;
+
+    return {
+      ...displayedPlan,
+      buttonLabel: isCurrent
+        ? "사용중인 요금제"
+        : plan.id === "starter"
+          ? "무료 요금제"
+          : "요금제 구매하기",
+      buttonDisabled: isCurrent || plan.id === "starter",
+      buttonColor: isCurrent || plan.id === "starter"
+        ? "#E5E7EB"
+        : displayedPlan.buttonColor,
+      buttonTextColor: isCurrent || plan.id === "starter"
+        ? "#9CA3AF"
+        : displayedPlan.buttonTextColor,
+    };
   }).filter((plan) => managedPlans.length === 0 || managedPlans.some((item) => item.code === plan.id));
   const handleBuy = (planId: string) => {
     navigate(`/payment/billing/checkout?plan=${planId}`);
@@ -307,6 +418,52 @@ export default function PricingPage() {
             확인
           </Button>
         </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(cancelTarget)}
+        onClose={cancelLoading ? undefined : () => {
+          setCancelTarget(null);
+          setCancelError("");
+        }}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle fontWeight={900}>구독 취소</DialogTitle>
+        <DialogContent>
+          <Typography fontSize={14} lineHeight={1.7}>
+            구독을 취소하시겠습니까?
+          </Typography>
+          {cancelTarget && (
+            <Typography fontSize={13} color="text.secondary" sx={{ mt: 1 }}>
+              {formatDate(cancelTarget.expires_at)}까지 현재 요금제를 이용할 수 있으며,
+              종료일 다음날부터 STARTER 요금제로 전환됩니다.
+            </Typography>
+          )}
+          {cancelError && <Alert severity="error" sx={{ mt: 2 }}>{cancelError}</Alert>}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <Button
+            onClick={() => {
+              setCancelTarget(null);
+              setCancelError("");
+            }}
+            disabled={cancelLoading}
+            sx={{ color: "text.secondary", fontWeight: 800 }}
+          >
+            계속 이용
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            disableElevation
+            onClick={handleCancelSubscription}
+            disabled={cancelLoading}
+            sx={{ fontWeight: 800 }}
+          >
+            {cancelLoading ? "처리 중" : "구독 취소"}
+          </Button>
+        </DialogActions>
       </Dialog>
 
       {/* 헤더 */}
@@ -387,9 +544,112 @@ export default function PricingPage() {
 
       {/* 구매내역 탭 */}
       {tab === 1 && (
-        <Box sx={{ py: 6, textAlign: "center" }}>
-          <Typography fontSize={14} fontWeight={700} color="text.secondary">구매내역이 없습니다.</Typography>
-        </Box>
+        <Stack spacing={1.5} sx={{ pb: 3 }}>
+          {historyLoading && (
+            <Box sx={{ py: 6, textAlign: "center" }}>
+              <CircularProgress size={28} />
+            </Box>
+          )}
+          {!historyLoading && purchases.length === 0 && (
+            <Box sx={{ py: 6, textAlign: "center" }}>
+              <Typography fontSize={14} fontWeight={700} color="text.secondary">
+                구매내역이 없습니다.
+              </Typography>
+            </Box>
+          )}
+          {!historyLoading && purchases.map((purchase) => {
+            const isActive = purchase.status === "ACTIVE" &&
+              new Date(purchase.expires_at).getTime() > Date.now();
+            const canCancel = isActive && purchase.is_recurring &&
+              !purchase.cancel_at_period_end;
+
+            return (
+              <Box
+                key={purchase.id}
+                sx={{
+                  border: "1px solid #E5E7EB",
+                  borderRadius: 2,
+                  p: 2,
+                  bgcolor: "#fff",
+                }}
+              >
+                <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                  <Box>
+                    <Typography fontWeight={900} fontSize={16}>
+                      {PLAN_NAMES[purchase.plan] ?? purchase.plan.toUpperCase()}
+                    </Typography>
+                    <Typography fontSize={12} color="text.secondary" sx={{ mt: 0.4 }}>
+                      {formatDate(purchase.started_at)} 결제
+                    </Typography>
+                  </Box>
+                  <Box
+                    sx={{
+                      px: 1,
+                      py: 0.4,
+                      borderRadius: 1,
+                      bgcolor: purchase.cancel_at_period_end
+                        ? "#FEF3C7"
+                        : isActive ? "#ECFDF5" : "#F3F4F6",
+                      color: purchase.cancel_at_period_end
+                        ? "#B45309"
+                        : isActive ? "#059669" : "#6B7280",
+                      fontSize: 11,
+                      fontWeight: 800,
+                    }}
+                  >
+                    {purchase.cancel_at_period_end
+                      ? "구독 종료 예정"
+                      : isActive ? "이용 중" : "종료"}
+                  </Box>
+                </Stack>
+
+                <Divider sx={{ my: 1.5 }} />
+                <Stack spacing={0.7}>
+                  <Stack direction="row" justifyContent="space-between">
+                    <Typography fontSize={13} color="text.secondary">결제 금액</Typography>
+                    <Typography fontSize={13} fontWeight={800}>
+                      {Number(purchase.amount).toLocaleString("ko-KR")}원
+                    </Typography>
+                  </Stack>
+                  <Stack direction="row" justifyContent="space-between">
+                    <Typography fontSize={13} color="text.secondary">이용 기간</Typography>
+                    <Typography fontSize={13} fontWeight={700}>
+                      {formatDate(purchase.started_at)} ~ {formatDate(purchase.expires_at)}
+                    </Typography>
+                  </Stack>
+                  {purchase.card_company && (
+                    <Stack direction="row" justifyContent="space-between">
+                      <Typography fontSize={13} color="text.secondary">결제 수단</Typography>
+                      <Typography fontSize={13} fontWeight={700}>
+                        {purchase.card_company} {purchase.card_number ?? ""}
+                      </Typography>
+                    </Stack>
+                  )}
+                </Stack>
+
+                {purchase.cancel_at_period_end && isActive && (
+                  <Alert severity="info" sx={{ mt: 1.5, fontSize: 12 }}>
+                    {formatDate(purchase.expires_at)}까지 이용 후 자동으로 종료됩니다.
+                  </Alert>
+                )}
+                {canCancel && (
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    color="error"
+                    onClick={() => {
+                      setCancelError("");
+                      setCancelTarget(purchase);
+                    }}
+                    sx={{ mt: 1.5, height: 40, fontWeight: 800 }}
+                  >
+                    구독 취소
+                  </Button>
+                )}
+              </Box>
+            );
+          })}
+        </Stack>
       )}
 
       {/* 쿠폰내역 탭 */}

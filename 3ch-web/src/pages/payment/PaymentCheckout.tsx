@@ -20,7 +20,8 @@ export default function PaymentCheckout() {
   const name   = searchParams.get("name")  ?? "요금제";
 
   const [ready, setReady] = useState(false);
-  const widgetsRef  = useRef<Awaited<ReturnType<Awaited<ReturnType<typeof loadTossPayments>>["widgets"]>> | null>(null);
+  const [checkoutError, setCheckoutError] = useState("");
+  const paymentRef = useRef<ReturnType<Awaited<ReturnType<typeof loadTossPayments>>["payment"]> | null>(null);
   const initializedRef = useRef(false);
 
   useEffect(() => {
@@ -33,33 +34,47 @@ export default function PaymentCheckout() {
       return;
     }
 
-    (async () => {
-      const tossPayments = await loadTossPayments(TOSS_CLIENT_KEY);
-      const widgets = tossPayments.widgets({ customerKey: `user_${user.id}` });
-      widgetsRef.current = widgets;
+    if (!TOSS_CLIENT_KEY) {
+      setCheckoutError("결제 설정을 불러오지 못했습니다.");
+      return;
+    }
 
-      await widgets.setAmount({ currency: "KRW", value: amount });
-      await Promise.all([
-        widgets.renderPaymentMethods({ selector: "#toss-payment-method", variantKey: "DEFAULT" }),
-        widgets.renderAgreement({ selector: "#toss-agreement", variantKey: "AGREEMENT" }),
-      ]);
-      setReady(true);
+    (async () => {
+      try {
+        const tossPayments = await loadTossPayments(TOSS_CLIENT_KEY);
+        paymentRef.current = tossPayments.payment({ customerKey: `user_${user.id}` });
+        setReady(true);
+      } catch {
+        setCheckoutError("결제를 준비하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+      }
     })();
   }, []);
 
   const handlePay = async () => {
-    if (!widgetsRef.current || !user) return;
+    if (!paymentRef.current || !user) return;
     const orderId = paymentType === "token"
       ? `TOKEN_${packageId}_${user.id}_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`
       : `ORDER_${plan}_${user.id}_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
-    await widgetsRef.current.requestPayment({
-      orderId,
-      orderName: paymentType === "token" ? name : `${name} 요금제`,
-      successUrl: `${window.location.origin}/payment/success?type=${paymentType}`,
-      failUrl:    `${window.location.origin}/payment/fail`,
-      customerEmail: user.email,
-      customerName:  user.name ?? undefined,
-    });
+    try {
+      await paymentRef.current.requestPayment({
+        method: "CARD",
+        amount: { currency: "KRW", value: amount },
+        orderId,
+        orderName: paymentType === "token" ? name : `${name} 요금제`,
+        successUrl: `${window.location.origin}/payment/success?type=${paymentType}`,
+        failUrl: `${window.location.origin}/payment/fail`,
+        customerEmail: user.email,
+        customerName: user.name ?? undefined,
+        card: {
+          useEscrow: false,
+          flowMode: "DEFAULT",
+          useCardPoint: false,
+          useAppCardOnly: false,
+        },
+      });
+    } catch {
+      setCheckoutError("결제를 시작하지 못했습니다. 다시 시도해 주세요.");
+    }
   };
 
   return (
@@ -85,13 +100,15 @@ export default function PaymentCheckout() {
       {/* 위젯 로딩 */}
       {!ready && (
         <Stack alignItems="center" sx={{ py: 6 }}>
-          <CircularProgress size={28} />
+          {checkoutError ? (
+            <Typography color="error" fontSize={14} textAlign="center">
+              {checkoutError}
+            </Typography>
+          ) : (
+            <CircularProgress size={28} />
+          )}
         </Stack>
       )}
-
-      {/* Toss 결제 위젯 */}
-      <Box id="toss-payment-method" />
-      <Box id="toss-agreement" sx={{ mt: 1 }} />
 
       {/* 결제 버튼 */}
       <Button

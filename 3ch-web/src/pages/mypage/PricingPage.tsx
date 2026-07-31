@@ -239,7 +239,6 @@ type PublicPricingPlan = {
   feature_limits?: Record<string, number | null>;
 };
 const API = import.meta.env.VITE_API_BASE_URL ?? "/api";
-const PLAN_AMOUNT: Record<string, number> = { basic: 4900, pro: 9900, premium: 19900 };
 const FEATURE_LABELS: Array<[string, string]> = [
   ["club_create", "클럽 생성"],
   ["club_join", "클럽 가입"],
@@ -284,10 +283,8 @@ export default function PricingPage() {
         : plan.features,
     } : plan;
   }).filter((plan) => managedPlans.length === 0 || managedPlans.some((item) => item.code === plan.id));
-  const managedAmounts = Object.fromEntries(managedPlans.map((plan) => [plan.code, plan.price]));
-
-  const handleBuy = (planId: string, planName: string) => {
-    navigate(`/payment/checkout?plan=${planId}&amount=${managedAmounts[planId] ?? PLAN_AMOUNT[planId]}&name=${encodeURIComponent(planName)}`);
+  const handleBuy = (planId: string) => {
+    navigate(`/payment/billing/checkout?plan=${planId}`);
   };
 
   return (
@@ -360,7 +357,7 @@ export default function PricingPage() {
 
           {/* 플랜 카드 목록 */}
           {displayPlans.map((plan) => (
-            <PlanCard key={plan.id} plan={plan} onBuy={plan.buttonDisabled ? undefined : () => handleBuy(plan.id, plan.name)} />
+            <PlanCard key={plan.id} plan={plan} onBuy={plan.buttonDisabled ? undefined : () => handleBuy(plan.id)} />
           ))}
 
           {/* 유의사항 */}

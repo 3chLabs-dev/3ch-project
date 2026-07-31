@@ -49,6 +49,7 @@ model User {
   created_ranking_seasons       GroupRankingSeason[]     @relation("GroupRankingSeasonCreator")
   billed_leagues                League[]                 @relation("LeagueBillingOwner")
   subscriptions                 Subscription[]
+  billing_payment_method        BillingPaymentMethod?
   feature_credit_buckets        FeatureCreditBucket[]    @relation("FeatureCreditOwner")
   granted_feature_credits       FeatureCreditBucket[]    @relation("FeatureCreditGranter")
   feature_usage_events          FeatureUsageEvent[]      @relation("FeatureUsageOwner")
@@ -330,12 +331,37 @@ model Subscription {
   started_at  DateTime @default(now()) @db.Timestamptz(6)
   expires_at  DateTime @db.Timestamptz(6)
   created_at  DateTime @default(now()) @db.Timestamptz(6)
+  billing_method_id    Int?
+  is_recurring         Boolean   @default(false)
+  cancel_at_period_end Boolean   @default(false)
+  canceled_at          DateTime? @db.Timestamptz(6)
 
   user           User                  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  billing_method BillingPaymentMethod? @relation(fields: [billing_method_id], references: [id], onDelete: SetNull)
   credit_buckets FeatureCreditBucket[]
 
   @@index([user_id, status, expires_at])
+  @@index([status, is_recurring, cancel_at_period_end, expires_at], map: "subscriptions_recurring_due_idx")
   @@map("subscriptions")
+}
+
+model BillingPaymentMethod {
+  id                    Int       @id @default(autoincrement())
+  user_id               Int       @unique
+  customer_key          String    @unique @db.VarChar(100)
+  billing_key_encrypted String?   @db.Text
+  card_company          String?   @db.VarChar(50)
+  card_number           String?   @db.VarChar(50)
+  status                String    @default("PENDING") @db.VarChar(20)
+  authenticated_at      DateTime? @db.Timestamptz(6)
+  created_at            DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+
+  user          User           @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  subscriptions Subscription[]
+
+  @@index([status])
+  @@map("billing_payment_methods")
 }
 
 model FeatureCreditBucket {

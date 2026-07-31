@@ -56,6 +56,8 @@ jobs:
 
       - name: Build
         working-directory: 3ch-web
+        env:
+          VITE_TOSS_CLIENT_KEY: ${{ secrets.VITE_TOSS_CLIENT_KEY }}
         run: npm run build
 
       - name: Upload to server

@@ -83,10 +83,10 @@ async function ensureStarterCredits(userId, client = pool) {
          user_id, feature, source, initial_amount, remaining_amount,
          starts_at, expires_at, source_ref
        ) VALUES (
-         $1, $2, 'PLAN', $3, $3,
+         $1::integer, $2, 'PLAN', $3, $3,
          DATE_TRUNC('month', NOW()),
          DATE_TRUNC('month', NOW()) + INTERVAL '1 month',
-         'starter:' || $1::text || ':' || TO_CHAR(NOW(), 'YYYY-MM')
+         'starter:' || ($1::integer)::text || ':' || TO_CHAR(NOW(), 'YYYY-MM')
        )
        ON CONFLICT (source_ref, feature) WHERE source_ref IS NOT NULL DO NOTHING`,
       [userId, feature, amount],

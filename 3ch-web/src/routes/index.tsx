@@ -72,6 +72,9 @@ import PricingPage from "../pages/mypage/PricingPage.tsx";
 import PaymentSuccess from "../pages/payment/PaymentSuccess.tsx";
 import PaymentFail from "../pages/payment/PaymentFail.tsx";
 import PaymentCheckout from "../pages/payment/PaymentCheckout.tsx";
+import BillingCheckout from "../pages/payment/BillingCheckout.tsx";
+import BillingSuccess from "../pages/payment/BillingSuccess.tsx";
+import BillingFail from "../pages/payment/BillingFail.tsx";
 import TermsPage from "../pages/mypage/TermsPage.tsx";
 import PrivacyPolicyPage from "../pages/mypage/PrivacyPolicyPage.tsx";
 import DemoLandingPage from "../pages/demo/DemoLandingPage";
@@ -146,6 +149,9 @@ export const router = createBrowserRouter([
       { path: "/payment/checkout", element: <PaymentCheckout /> },
       { path: "/payment/success", element: <PaymentSuccess /> },
       { path: "/payment/fail",    element: <PaymentFail /> },
+      { path: "/payment/billing/checkout", element: <BillingCheckout /> },
+      { path: "/payment/billing/success", element: <BillingSuccess /> },
+      { path: "/payment/billing/fail", element: <BillingFail /> },
       { path: "/demo/league-algorithm", element: <LeagueAlgorithmDemo />,}
 
 

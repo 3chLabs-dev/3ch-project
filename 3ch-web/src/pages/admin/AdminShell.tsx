@@ -28,6 +28,7 @@ const BOARD_MENU = [
 const PAYMENT_MENU = [
   { label: "결제내역", path: "/admin/payments" },
   { label: "요금제", path: "/admin/pricing-plans" },
+  { label: "토큰 상품", path: "/admin/token-packages" },
 ];
 
 function SideMenuItem({ label, active, depth = 0, onClick }: {

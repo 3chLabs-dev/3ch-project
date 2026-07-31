@@ -1620,6 +1620,93 @@ const pricingPlanSchema = z.object({
   is_visible: z.boolean(),
 });
 
+const tokenPackageSchema = z.object({
+  code: z.string().trim().min(1).max(40).transform((value) => value.toLowerCase()),
+  name: z.string().trim().min(1).max(80),
+  price: z.coerce.number().int().min(1).max(100000000),
+  credits: z.object(Object.fromEntries(
+    PRICING_FEATURE_KEYS.map((key) => [key, z.coerce.number().int().min(0).max(100000).optional()]),
+  )),
+  display_order: z.coerce.number().int().min(0).max(9999),
+  is_visible: z.boolean(),
+});
+
+router.get('/token-packages', requireAdmin, async (_req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM token_packages ORDER BY display_order ASC, id ASC`,
+    );
+    return res.json({ ok: true, packages: result.rows });
+  } catch (error) {
+    console.error('admin token packages lookup error:', error);
+    return res.status(500).json({ ok: false, error: 'DB_ERROR' });
+  }
+});
+
+router.post('/token-packages', requireAdmin, async (req, res) => {
+  if (!(await assertMaster(req, res))) return;
+  const parsed = tokenPackageSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ ok: false, error: 'VALIDATION_ERROR', details: parsed.error.flatten() });
+  }
+  const value = parsed.data;
+  try {
+    const result = await pool.query(
+      `INSERT INTO token_packages (code, name, price, credits, display_order, is_visible)
+       VALUES ($1, $2, $3, $4::jsonb, $5, $6)
+       RETURNING *`,
+      [value.code, value.name, value.price, JSON.stringify(value.credits),
+       value.display_order, value.is_visible],
+    );
+    return res.status(201).json({ ok: true, package: result.rows[0] });
+  } catch (error) {
+    if (error.code === '23505') return res.status(409).json({ ok: false, error: 'DUPLICATE_PACKAGE_CODE' });
+    console.error('admin token package insert error:', error);
+    return res.status(500).json({ ok: false, error: 'DB_ERROR' });
+  }
+});
+
+router.put('/token-packages/:id', requireAdmin, async (req, res) => {
+  if (!(await assertMaster(req, res))) return;
+  const parsed = tokenPackageSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ ok: false, error: 'VALIDATION_ERROR', details: parsed.error.flatten() });
+  }
+  const value = parsed.data;
+  try {
+    const result = await pool.query(
+      `UPDATE token_packages
+          SET code=$1, name=$2, price=$3, credits=$4::jsonb,
+              display_order=$5, is_visible=$6, updated_at=NOW()
+        WHERE id=$7 RETURNING *`,
+      [value.code, value.name, value.price, JSON.stringify(value.credits),
+       value.display_order, value.is_visible, Number(req.params.id)],
+    );
+    if (!result.rowCount) return res.status(404).json({ ok: false, error: 'TOKEN_PACKAGE_NOT_FOUND' });
+    return res.json({ ok: true, package: result.rows[0] });
+  } catch (error) {
+    if (error.code === '23505') return res.status(409).json({ ok: false, error: 'DUPLICATE_PACKAGE_CODE' });
+    console.error('admin token package update error:', error);
+    return res.status(500).json({ ok: false, error: 'DB_ERROR' });
+  }
+});
+
+router.delete('/token-packages/:id', requireAdmin, async (req, res) => {
+  if (!(await assertMaster(req, res))) return;
+  try {
+    const result = await pool.query(
+      `UPDATE token_packages SET is_visible=false, updated_at=NOW()
+        WHERE id=$1 RETURNING id`,
+      [Number(req.params.id)],
+    );
+    if (!result.rowCount) return res.status(404).json({ ok: false, error: 'TOKEN_PACKAGE_NOT_FOUND' });
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error('admin token package delete error:', error);
+    return res.status(500).json({ ok: false, error: 'DB_ERROR' });
+  }
+});
+
 router.get('/pricing-plans', requireAdmin, async (_req, res) => {
   try {
     const result = await pool.query(
@@ -1700,7 +1787,7 @@ router.delete('/pricing-plans/:id', requireAdmin, async (req, res) => {
   }
 });
 
-// GET /admin/payments - subscription payment history
+// GET /admin/payments - subscription and token payment history
 router.get('/payments', requireAdmin, async (req, res) => {
   const page = Math.max(1, Number.parseInt(String(req.query.page || '1'), 10) || 1);
   const limit = Math.min(100, Math.max(1, Number.parseInt(String(req.query.limit || '20'), 10) || 20));
@@ -1711,28 +1798,38 @@ router.get('/payments', requireAdmin, async (req, res) => {
   const params = [];
   if (search) {
     params.push(`%${search}%`);
-    conditions.push(`(u.name ILIKE $${params.length} OR u.email ILIKE $${params.length} OR s.order_id ILIKE $${params.length})`);
+    conditions.push(`(p.name ILIKE $${params.length} OR p.email ILIKE $${params.length} OR p.order_id ILIKE $${params.length})`);
   }
   if (status) {
     params.push(status);
-    conditions.push(`s.status = $${params.length}`);
+    conditions.push(`p.status = $${params.length}`);
   }
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const paymentSource = `
+    SELECT s.id::text AS id, s.plan, s.order_id, s.amount, s.status,
+           s.started_at AS starts_at, s.expires_at, s.created_at,
+           u.id AS user_id, u.name, u.email, 'SUBSCRIPTION'::text AS purchase_type
+      FROM subscriptions s
+      JOIN users u ON u.id = s.user_id
+    UNION ALL
+    SELECT tp.id::text AS id, pkg.name AS plan, tp.order_id, tp.amount, tp.status,
+           tp.created_at AS starts_at, tp.expires_at, tp.created_at,
+           u.id AS user_id, u.name, u.email, 'TOKEN'::text AS purchase_type
+      FROM token_purchases tp
+      JOIN token_packages pkg ON pkg.id = tp.package_id
+      JOIN users u ON u.id = tp.user_id`;
   try {
     const countResult = await pool.query(
       `SELECT COUNT(*)::int AS total
-       FROM subscriptions s
-       JOIN users u ON u.id = s.user_id
+       FROM (${paymentSource}) p
        ${where}`,
       params,
     );
     const rowsResult = await pool.query(
-      `SELECT s.id, s.plan, s.order_id, s.amount, s.status, s.started_at AS starts_at,
-              s.expires_at, s.created_at, u.id AS user_id, u.name, u.email
-       FROM subscriptions s
-       JOIN users u ON u.id = s.user_id
+      `SELECT p.*
+       FROM (${paymentSource}) p
        ${where}
-       ORDER BY s.created_at DESC
+       ORDER BY p.created_at DESC
        LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
       [...params, limit, offset],
     );

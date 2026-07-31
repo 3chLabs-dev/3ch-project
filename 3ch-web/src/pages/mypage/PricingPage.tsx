@@ -7,6 +7,7 @@ import ScienceOutlinedIcon from "@mui/icons-material/ScienceOutlined";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import CheckIcon from "@mui/icons-material/Check";
+import AccountBalanceWalletOutlinedIcon from "@mui/icons-material/AccountBalanceWalletOutlined";
 import { useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 import type { RootState } from "../../app/store";
@@ -241,8 +242,11 @@ type PublicPricingPlan = {
   feature_limits?: Record<string, number | null>;
 };
 type PurchaseHistory = {
-  id: number;
+  id: number | string;
   plan: string;
+  purchase_type?: "SUBSCRIPTION" | "TOKEN";
+  product_name?: string;
+  credits?: Record<string, number>;
   order_id: string;
   amount: number;
   status: string;
@@ -253,6 +257,13 @@ type PurchaseHistory = {
   canceled_at: string | null;
   card_company: string | null;
   card_number: string | null;
+};
+type TokenPackage = {
+  id: number;
+  code: string;
+  name: string;
+  price: number;
+  credits: Record<string, number>;
 };
 const API = import.meta.env.VITE_API_BASE_URL ?? "/api";
 const PLAN_NAMES: Record<string, string> = {
@@ -292,6 +303,7 @@ export default function PricingPage() {
   const [tab, setTab] = useState(0);
   const [testNoticeOpen, setTestNoticeOpen] = useState(true);
   const [managedPlans, setManagedPlans] = useState<PublicPricingPlan[]>([]);
+  const [tokenPackages, setTokenPackages] = useState<TokenPackage[]>([]);
   const [currentPlan, setCurrentPlan] = useState<string | null | undefined>(undefined);
   const [purchases, setPurchases] = useState<PurchaseHistory[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -303,6 +315,12 @@ export default function PricingPage() {
       .then((response) => response.ok ? response.json() : Promise.reject())
       .then((data) => setManagedPlans(data.plans ?? []))
       .catch(() => setManagedPlans([]));
+  }, []);
+  useEffect(() => {
+    fetch(`${API}/payment/token-packages`)
+      .then((response) => response.ok ? response.json() : Promise.reject())
+      .then((data) => setTokenPackages(data.packages ?? []))
+      .catch(() => setTokenPackages([]));
   }, []);
   useEffect(() => {
     const resolvedToken = token ?? localStorage.getItem("token");
@@ -396,6 +414,15 @@ export default function PricingPage() {
   }).filter((plan) => managedPlans.length === 0 || managedPlans.some((item) => item.code === plan.id));
   const handleBuy = (planId: string) => {
     navigate(`/payment/billing/checkout?plan=${planId}`);
+  };
+  const handleBuyTokens = (tokenPackage: TokenPackage) => {
+    const params = new URLSearchParams({
+      type: "token",
+      packageId: String(tokenPackage.id),
+      amount: String(tokenPackage.price),
+      name: tokenPackage.name,
+    });
+    navigate(`/payment/checkout?${params.toString()}`);
   };
 
   return (
@@ -517,6 +544,48 @@ export default function PricingPage() {
             <PlanCard key={plan.id} plan={plan} onBuy={plan.buttonDisabled ? undefined : () => handleBuy(plan.id)} />
           ))}
 
+          {tokenPackages.length > 0 && (
+            <Box sx={{ mt: 3, mb: 3 }}>
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
+                <AccountBalanceWalletOutlinedIcon sx={{ color: "#7C3AED" }} />
+                <Typography fontSize={18} fontWeight={900}>추가 사용량 충전</Typography>
+              </Stack>
+              <Typography fontSize={13} color="text.secondary" sx={{ mb: 1.5 }}>
+                현재 구독 기간 동안 사용할 기능 횟수를 추가로 구매합니다.
+              </Typography>
+              <Stack spacing={1.25}>
+                {tokenPackages.map((item) => (
+                  <Box key={item.id} sx={{ border: "1px solid #DDD6FE", bgcolor: "#FAF5FF", borderRadius: 2, p: 2 }}>
+                    <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={2}>
+                      <Box>
+                        <Typography fontWeight={900}>{item.name}</Typography>
+                        <Stack direction="row" gap={0.75} flexWrap="wrap" sx={{ mt: 0.8 }}>
+                          {FEATURE_LABELS.filter(([key]) => Number(item.credits?.[key] ?? 0) > 0).map(([key, label]) => (
+                            <Typography key={key} fontSize={12} color="#6D28D9">
+                              {label} {item.credits[key]}회
+                            </Typography>
+                          ))}
+                        </Stack>
+                      </Box>
+                      <Typography fontSize={17} fontWeight={900} whiteSpace="nowrap">
+                        {Number(item.price).toLocaleString("ko-KR")}원
+                      </Typography>
+                    </Stack>
+                    <Button
+                      fullWidth
+                      variant="contained"
+                      disableElevation
+                      onClick={() => handleBuyTokens(item)}
+                      sx={{ mt: 1.5, height: 42, bgcolor: "#7C3AED", fontWeight: 800, "&:hover": { bgcolor: "#6D28D9" } }}
+                    >
+                      충전하기
+                    </Button>
+                  </Box>
+                ))}
+              </Stack>
+            </Box>
+          )}
+
           {/* 유의사항 */}
           <Box
             sx={{
@@ -558,9 +627,10 @@ export default function PricingPage() {
             </Box>
           )}
           {!historyLoading && purchases.map((purchase) => {
-            const isActive = purchase.status === "ACTIVE" &&
+            const isTokenPurchase = purchase.purchase_type === "TOKEN";
+            const isActive = (purchase.status === "ACTIVE" || purchase.status === "PAID") &&
               new Date(purchase.expires_at).getTime() > Date.now();
-            const canCancel = isActive && purchase.is_recurring &&
+            const canCancel = !isTokenPurchase && isActive && purchase.is_recurring &&
               !purchase.cancel_at_period_end;
 
             return (
@@ -576,7 +646,9 @@ export default function PricingPage() {
                 <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
                   <Box>
                     <Typography fontWeight={900} fontSize={16}>
-                      {PLAN_NAMES[purchase.plan] ?? purchase.plan.toUpperCase()}
+                      {isTokenPurchase
+                        ? purchase.product_name ?? "추가 사용량 충전"
+                        : PLAN_NAMES[purchase.plan] ?? purchase.plan.toUpperCase()}
                     </Typography>
                     <Typography fontSize={12} color="text.secondary" sx={{ mt: 0.4 }}>
                       {formatDate(purchase.started_at)} 결제
@@ -597,7 +669,9 @@ export default function PricingPage() {
                       fontWeight: 800,
                     }}
                   >
-                    {purchase.cancel_at_period_end
+                    {isTokenPurchase
+                      ? isActive ? "사용 가능" : "만료"
+                      : purchase.cancel_at_period_end
                       ? "구독 종료 예정"
                       : isActive ? "이용 중" : "종료"}
                   </Box>
@@ -612,11 +686,24 @@ export default function PricingPage() {
                     </Typography>
                   </Stack>
                   <Stack direction="row" justifyContent="space-between">
-                    <Typography fontSize={13} color="text.secondary">이용 기간</Typography>
+                    <Typography fontSize={13} color="text.secondary">
+                      {isTokenPurchase ? "사용 기한" : "이용 기간"}
+                    </Typography>
                     <Typography fontSize={13} fontWeight={700}>
                       {formatDate(purchase.started_at)} ~ {formatDate(purchase.expires_at)}
                     </Typography>
                   </Stack>
+                  {isTokenPurchase && Object.keys(purchase.credits ?? {}).length > 0 && (
+                    <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                      <Typography fontSize={13} color="text.secondary">충전 내역</Typography>
+                      <Typography fontSize={13} fontWeight={700} textAlign="right">
+                        {FEATURE_LABELS
+                          .filter(([key]) => Number(purchase.credits?.[key] ?? 0) > 0)
+                          .map(([key, label]) => `${label} ${purchase.credits?.[key]}회`)
+                          .join(", ")}
+                      </Typography>
+                    </Stack>
+                  )}
                   {purchase.card_company && (
                     <Stack direction="row" justifyContent="space-between">
                       <Typography fontSize={13} color="text.secondary">결제 수단</Typography>

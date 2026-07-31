@@ -17,6 +17,7 @@ export default function PaymentSuccess() {
   const paymentKey = searchParams.get("paymentKey");
   const orderId    = searchParams.get("orderId");
   const amount     = searchParams.get("amount");
+  const paymentType = searchParams.get("type") === "token" ? "token" : "subscription";
 
   // URL 파라미터가 없으면 렌더 시점에 바로 error 상태로 초기화
   const hasParams = !!(paymentKey && orderId && amount);
@@ -28,7 +29,7 @@ export default function PaymentSuccess() {
 
     axios
       .post(
-        `${apiBaseUrl}/payment/confirm`,
+        `${apiBaseUrl}${paymentType === "token" ? "/payment/token/confirm" : "/payment/confirm"}`,
         { paymentKey, orderId, amount: Number(amount) },
         { headers: { Authorization: `Bearer ${token}` } },
       )
@@ -37,7 +38,7 @@ export default function PaymentSuccess() {
         setStatus("error");
         setErrorMsg(e.response?.data?.error ?? "결제 확인 중 오류가 발생했습니다.");
       });
-  }, [hasParams, paymentKey, orderId, amount, token]);
+  }, [hasParams, paymentKey, orderId, amount, token, paymentType]);
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", p: 4 }}>
@@ -52,14 +53,18 @@ export default function PaymentSuccess() {
         <Stack spacing={2} alignItems="center">
           <CheckCircleOutlineIcon sx={{ fontSize: 64, color: "#10B981" }} />
           <Typography variant="h6" fontWeight={900}>결제가 완료되었습니다!</Typography>
-          <Typography fontSize={14} color="text.secondary">요금제가 성공적으로 구독되었습니다.</Typography>
+          <Typography fontSize={14} color="text.secondary">
+            {paymentType === "token"
+              ? "추가 사용량이 충전되었습니다."
+              : "요금제가 성공적으로 구독되었습니다."}
+          </Typography>
           <Button
             variant="contained"
             disableElevation
             onClick={() => navigate("/mypage/pricing")}
             sx={{ mt: 2, borderRadius: 1.5, fontWeight: 800, bgcolor: "#111827", "&:hover": { bgcolor: "#374151" } }}
           >
-            요금제 확인하기
+            {paymentType === "token" ? "충전 내역 확인하기" : "요금제 확인하기"}
           </Button>
         </Stack>
       )}

@@ -7,7 +7,7 @@ import {
 const API = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
 type Payment = {
-  id: number;
+  id: number | string;
   name: string;
   email: string;
   plan: string;
@@ -17,6 +17,7 @@ type Payment = {
   created_at: string;
   order_id?: string | null;
   amount?: number | null;
+  purchase_type?: "SUBSCRIPTION" | "TOKEN";
 };
 
 const dateTime = (value: string | null) =>
@@ -26,6 +27,7 @@ const statusLabel = (status: string) => ({
   CANCELED: "취소",
   EXPIRED: "만료",
   PENDING: "결제 대기",
+  PAID: "결제 완료",
 }[status] ?? status);
 
 export default function AdminPaymentHistoryPage() {
@@ -66,7 +68,7 @@ export default function AdminPaymentHistoryPage() {
       <Box sx={{ mb: 2 }}>
         <Typography fontSize={18} fontWeight={900}>결제내역</Typography>
         <Typography fontSize={12} color="text.secondary" sx={{ mt: 0.5 }}>
-          회원별 요금제 결제 및 이용기간을 확인합니다.
+          회원별 요금제 구독과 추가 사용량 충전 내역을 확인합니다.
         </Typography>
       </Box>
       <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ mb: 2 }}>
@@ -94,7 +96,7 @@ export default function AdminPaymentHistoryPage() {
         <Table size="small">
           <TableHead>
             <TableRow sx={{ bgcolor: "#F9FAFB" }}>
-              {["No.", "결제일시", "회원", "요금제", "결제금액", "상태", "이용기간", "주문번호"].map((label) => (
+              {["No.", "결제일시", "회원", "상품", "결제금액", "상태", "이용기간", "주문번호"].map((label) => (
                 <TableCell key={label} sx={{ fontWeight: 800, whiteSpace: "nowrap" }}>{label}</TableCell>
               ))}
             </TableRow>
@@ -108,7 +110,12 @@ export default function AdminPaymentHistoryPage() {
                   <Typography fontSize={13} fontWeight={800}>{payment.name}</Typography>
                   <Typography fontSize={11} color="text.secondary">{payment.email}</Typography>
                 </TableCell>
-                <TableCell>{payment.plan}</TableCell>
+                <TableCell>
+                  <Typography fontSize={13} fontWeight={700}>{payment.plan}</Typography>
+                  {payment.purchase_type === "TOKEN" && (
+                    <Typography fontSize={11} color="#7C3AED">추가 사용량</Typography>
+                  )}
+                </TableCell>
                 <TableCell>{payment.amount == null ? "-" : `${Number(payment.amount).toLocaleString("ko-KR")}원`}</TableCell>
                 <TableCell>{statusLabel(payment.status)}</TableCell>
                 <TableCell sx={{ whiteSpace: "nowrap" }}>

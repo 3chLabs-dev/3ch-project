@@ -14,6 +14,8 @@ export default function PaymentCheckout() {
   const user = useSelector((s: RootState) => s.auth.user);
 
   const plan   = searchParams.get("plan")   ?? "";
+  const packageId = searchParams.get("packageId") ?? "";
+  const paymentType = searchParams.get("type") === "token" ? "token" : "subscription";
   const amount = Number(searchParams.get("amount") ?? "0");
   const name   = searchParams.get("name")  ?? "요금제";
 
@@ -26,7 +28,10 @@ export default function PaymentCheckout() {
     initializedRef.current = true;
 
     if (!user) { navigate("/login"); return; }
-    if (!plan || !amount) { navigate("/mypage/pricing"); return; }
+    if (!(paymentType === "token" ? packageId : plan) || !amount) {
+      navigate("/mypage/pricing");
+      return;
+    }
 
     (async () => {
       const tossPayments = await loadTossPayments(TOSS_CLIENT_KEY);
@@ -44,11 +49,13 @@ export default function PaymentCheckout() {
 
   const handlePay = async () => {
     if (!widgetsRef.current || !user) return;
-    const orderId = `ORDER_${plan}_${user.id}_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
+    const orderId = paymentType === "token"
+      ? `TOKEN_${packageId}_${user.id}_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`
+      : `ORDER_${plan}_${user.id}_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
     await widgetsRef.current.requestPayment({
       orderId,
-      orderName: `${name} 요금제`,
-      successUrl: `${window.location.origin}/payment/success`,
+      orderName: paymentType === "token" ? name : `${name} 요금제`,
+      successUrl: `${window.location.origin}/payment/success?type=${paymentType}`,
       failUrl:    `${window.location.origin}/payment/fail`,
       customerEmail: user.email,
       customerName:  user.name ?? undefined,
@@ -67,9 +74,11 @@ export default function PaymentCheckout() {
 
       {/* 플랜 요약 */}
       <Box sx={{ bgcolor: "#F9FAFB", border: "1px solid #E5E7EB", borderRadius: 2, p: 2, mb: 2 }}>
-        <Typography fontWeight={800} fontSize={15}>{name} 요금제</Typography>
+        <Typography fontWeight={800} fontSize={15}>
+          {paymentType === "token" ? name : `${name} 요금제`}
+        </Typography>
         <Typography fontWeight={900} fontSize={20} sx={{ mt: 0.5 }}>
-          월 {amount.toLocaleString()}원
+          {paymentType === "token" ? "" : "월 "}{amount.toLocaleString()}원
         </Typography>
       </Box>
 

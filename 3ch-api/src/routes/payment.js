@@ -205,6 +205,139 @@ router.get("/payment/plans", async (_req, res) => {
   }
 });
 
+router.get("/payment/token-packages", async (_req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, code, name, price, credits, display_order
+         FROM token_packages
+        WHERE is_visible = true
+        ORDER BY display_order ASC, id ASC`,
+    );
+    return res.json({ ok: true, packages: result.rows });
+  } catch (error) {
+    console.error("token packages lookup error:", error);
+    return res.status(500).json({ ok: false, error: "DB_ERROR" });
+  }
+});
+
+router.post("/payment/token/confirm", requireAuth, async (req, res) => {
+  const { paymentKey, orderId, amount } = req.body;
+  const userId = Number(req.user.sub);
+  const orderParts = String(orderId || "").split("_");
+  const packageId = Number(orderParts[1]);
+  const orderUserId = Number(orderParts[2]);
+
+  if (!paymentKey || !orderId || !Number.isFinite(Number(amount)) ||
+      orderParts[0] !== "TOKEN" || !Number.isInteger(packageId) || orderUserId !== userId) {
+    return res.status(400).json({ ok: false, error: "INVALID_TOKEN_ORDER" });
+  }
+
+  const packageResult = await pool.query(
+    `SELECT id, code, name, price, credits
+       FROM token_packages
+      WHERE id = $1 AND is_visible = true
+      LIMIT 1`,
+    [packageId],
+  );
+  const tokenPackage = packageResult.rows[0];
+  if (!tokenPackage) return res.status(404).json({ ok: false, error: "TOKEN_PACKAGE_NOT_FOUND" });
+  if (Number(amount) !== Number(tokenPackage.price)) {
+    return res.status(400).json({ ok: false, error: "AMOUNT_MISMATCH" });
+  }
+
+  const duplicate = await pool.query(
+    `SELECT id, expires_at FROM token_purchases WHERE order_id = $1 AND user_id = $2`,
+    [orderId, userId],
+  );
+  if (duplicate.rowCount) {
+    return res.json({ ok: true, purchaseId: duplicate.rows[0].id, expiresAt: duplicate.rows[0].expires_at });
+  }
+
+  let tossData;
+  try {
+    tossData = await tossRequest("/v1/payments/confirm", {
+      paymentKey,
+      orderId,
+      amount: Number(amount),
+    });
+  } catch (error) {
+    if (error.code === "DUPLICATED_ORDER_ID") {
+      try {
+        tossData = await tossRequest(`/v1/payments/orders/${encodeURIComponent(orderId)}`, null, "GET");
+      } catch (lookupError) {
+        return res.status(lookupError.status === 400 ? 400 : 502).json({
+          ok: false,
+          error: lookupError.code || "TOSS_REQUEST_FAILED",
+          message: lookupError.message,
+        });
+      }
+    } else {
+    return res.status(error.status === 400 ? 400 : 502).json({
+      ok: false,
+      error: error.code || "TOSS_REQUEST_FAILED",
+      message: error.message,
+    });
+    }
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const expiresResult = await client.query(
+      `SELECT expires_at
+         FROM subscriptions
+        WHERE user_id = $1 AND status = 'ACTIVE' AND expires_at > NOW()
+        ORDER BY expires_at DESC LIMIT 1`,
+      [userId],
+    );
+    const expiresAt = expiresResult.rows[0]?.expires_at ||
+      new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() + 1, 1));
+
+    const inserted = await client.query(
+      `INSERT INTO token_purchases
+        (user_id, package_id, order_id, payment_key, amount, credits, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)
+       ON CONFLICT (order_id) DO NOTHING
+       RETURNING id`,
+      [userId, packageId, orderId, tossData.paymentKey || paymentKey,
+       Number(amount), JSON.stringify(tokenPackage.credits || {}), expiresAt],
+    );
+    const purchaseId = inserted.rows[0]?.id;
+    if (purchaseId) {
+      const creditKeyMap = {
+        club_create: FEATURES.CLUB_CREATE,
+        club_join: FEATURES.CLUB_JOIN,
+        league_create: FEATURES.LEAGUE_CREATE,
+        tournament_create: FEATURES.TOURNAMENT_CREATE,
+        event_join: FEATURES.EVENT_JOIN,
+        vision_scan: FEATURES.VISION_SCAN,
+        draw_create: FEATURES.DRAW_CREATE,
+      };
+      for (const [key, rawAmount] of Object.entries(tokenPackage.credits || {})) {
+        const feature = creditKeyMap[key];
+        const creditAmount = Number.parseInt(String(rawAmount), 10);
+        if (!feature || !Number.isInteger(creditAmount) || creditAmount <= 0) continue;
+        await client.query(
+          `INSERT INTO feature_credit_buckets
+            (user_id, feature, source, initial_amount, remaining_amount,
+             starts_at, expires_at, source_ref)
+           VALUES ($1, $2, 'PURCHASE', $3, $3, NOW(), $4, $5)
+           ON CONFLICT (source_ref, feature) WHERE source_ref IS NOT NULL DO NOTHING`,
+          [userId, feature, creditAmount, expiresAt, `token:${purchaseId}`],
+        );
+      }
+    }
+    await client.query("COMMIT");
+    return res.json({ ok: true, purchaseId, expiresAt });
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    console.error("token purchase insert error:", error);
+    return res.status(500).json({ ok: false, error: "DB_ERROR" });
+  } finally {
+    client.release();
+  }
+});
+
 router.post("/payment/confirm", requireAuth, async (req, res) => {
   const { paymentKey, orderId, amount } = req.body;
   const userId = Number(req.user.sub);
@@ -383,7 +516,28 @@ router.get("/payment/history/me", requireAuth, async (req, res) => {
         LIMIT 50`,
       [userId],
     );
-    return res.json({ ok: true, purchases: result.rows });
+    const tokenResult = await pool.query(
+      `SELECT tp.id, 'TOKEN' AS plan, tp.order_id, tp.amount, tp.status,
+              tp.created_at AS started_at, tp.expires_at, false AS is_recurring,
+              false AS cancel_at_period_end, NULL::timestamptz AS canceled_at,
+              NULL::varchar AS card_company, NULL::varchar AS card_number,
+              pkg.name AS product_name, tp.credits, 'TOKEN' AS purchase_type
+         FROM token_purchases tp
+         JOIN token_packages pkg ON pkg.id = tp.package_id
+        WHERE tp.user_id = $1
+        ORDER BY tp.created_at DESC
+        LIMIT 50`,
+      [userId],
+    );
+    const subscriptions = result.rows.map((row) => ({
+      ...row,
+      purchase_type: "SUBSCRIPTION",
+      product_name: row.plan,
+    }));
+    const purchases = [...subscriptions, ...tokenResult.rows]
+      .sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())
+      .slice(0, 50);
+    return res.json({ ok: true, purchases });
   } catch (error) {
     console.error("payment history lookup error:", error);
     return res.status(500).json({ ok: false, error: "DB_ERROR" });

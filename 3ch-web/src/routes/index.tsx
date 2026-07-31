@@ -19,6 +19,7 @@ import AdminGuidePage from "../pages/admin/board/AdminGuidePage";
 import AdminPricingPlanPage from "../pages/admin/AdminPricingPlanPage";
 import AdminFeatureUsagePage from "../pages/admin/AdminFeatureUsagePage";
 import AdminPaymentHistoryPage from "../pages/admin/AdminPaymentHistoryPage";
+import AdminTokenPackagePage from "../pages/admin/AdminTokenPackagePage";
 import Home from "../pages/Home";
 import Login from "../pages/sign/Login";
 import SignUp from "../pages/sign/SignUp";
@@ -184,6 +185,7 @@ export const router = createBrowserRouter([
           { path: "/admin/board/privacy", element: <AdminPrivacyPage /> },
           { path: "/admin/pricing-plans", element: <AdminPricingPlanPage /> },
           { path: "/admin/payments", element: <AdminPaymentHistoryPage /> },
+          { path: "/admin/token-packages", element: <AdminTokenPackagePage /> },
           { path: "/admin/feature-usage", element: <AdminFeatureUsagePage /> },
         ],
       },

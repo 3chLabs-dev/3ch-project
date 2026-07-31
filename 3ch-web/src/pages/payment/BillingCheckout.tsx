@@ -80,6 +80,7 @@ export default function BillingCheckout() {
       const payment = tossPayments.payment({ customerKey });
       const successUrl = new URL("/payment/billing/success", window.location.origin);
       successUrl.searchParams.set("plan", plan.code);
+      sessionStorage.setItem("billing_plan_code", plan.code);
 
       await payment.requestBillingAuth({
         method: "CARD",

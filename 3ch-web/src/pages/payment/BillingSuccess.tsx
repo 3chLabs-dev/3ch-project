@@ -19,23 +19,32 @@ export default function BillingSuccess() {
 
   useEffect(() => {
     if (requestedRef.current) return;
-    requestedRef.current = true;
 
     const authKey = searchParams.get("authKey");
     const customerKey = searchParams.get("customerKey");
-    const planCode = searchParams.get("plan");
-    if (!authKey || !customerKey || !planCode || !token) {
+    const planCode =
+      searchParams.get("plan") ?? sessionStorage.getItem("billing_plan_code");
+    const resolvedToken = token ?? localStorage.getItem("token");
+
+    if (!authKey || !customerKey || !planCode) {
+      requestedRef.current = true;
       setStatus("error");
       setMessage("자동결제 등록 정보가 올바르지 않습니다.");
       return;
     }
+    if (!resolvedToken) return;
+
+    requestedRef.current = true;
 
     axios.post(
       `${API}/payment/billing/issue`,
       { authKey, customerKey, planCode },
-      { headers: { Authorization: `Bearer ${token}` } },
+      { headers: { Authorization: `Bearer ${resolvedToken}` } },
     )
-      .then(() => setStatus("success"))
+      .then(() => {
+        sessionStorage.removeItem("billing_plan_code");
+        setStatus("success");
+      })
       .catch((error) => {
         setStatus("error");
         setMessage(

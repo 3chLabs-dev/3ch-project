@@ -40,6 +40,7 @@ export default function AppFooter() {
                     <br />사업자등록번호: 467-04-03722
                     <br />주소: 서울특별시 광진구 광나루로 478, 광진경제허브센터 도약관 102-11호
                     <br />이메일: 3chlabs@gmail.com
+                    <br />전화번호: 010-7106-5673
                 </Typography>
             </Collapse>
 

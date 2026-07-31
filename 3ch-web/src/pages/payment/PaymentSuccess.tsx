@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { Box, CircularProgress, Typography, Button, Stack } from "@mui/material";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
@@ -23,9 +23,11 @@ export default function PaymentSuccess() {
   const hasParams = !!(paymentKey && orderId && amount);
   const [status, setStatus] = useState<"loading" | "ok" | "error">(hasParams ? "loading" : "error");
   const [errorMsg, setErrorMsg] = useState(hasParams ? "" : "결제 정보가 올바르지 않습니다.");
+  const confirmingRef = useRef(false);
 
   useEffect(() => {
-    if (!hasParams) return;
+    if (!hasParams || !token || confirmingRef.current) return;
+    confirmingRef.current = true;
 
     axios
       .post(
@@ -35,6 +37,7 @@ export default function PaymentSuccess() {
       )
       .then(() => setStatus("ok"))
       .catch((e) => {
+        confirmingRef.current = false;
         setStatus("error");
         setErrorMsg(e.response?.data?.error ?? "결제 확인 중 오류가 발생했습니다.");
       });

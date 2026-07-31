@@ -51,9 +51,12 @@ export default function AppShell() {
         skip: !token,
         refetchOnMountOrArgChange: true,
     });
-    const { data: usageData } = useGetMyFeatureUsageQuery(undefined, {
+    const { data: usageData, refetch: refetchUsage } = useGetMyFeatureUsageQuery(undefined, {
         skip: !token || !isMyPage,
     });
+    useEffect(() => {
+        if (usageOpen && token && isMyPage) void refetchUsage();
+    }, [isMyPage, refetchUsage, token, usageOpen]);
     const usageItems = [
         { label: "리그 생성", balance: usageData?.usage.league_create },
         { label: "사진 인식", balance: usageData?.usage.vision_scan },

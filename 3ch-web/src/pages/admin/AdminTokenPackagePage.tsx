@@ -45,6 +45,26 @@ const emptyPackage: Omit<TokenPackage, "id"> = {
   is_visible: true,
 };
 
+function getSaveErrorMessage(data: {
+  error?: string;
+  message?: string;
+  details?: { fieldErrors?: Record<string, string[]> };
+}) {
+  if (data.message) return data.message;
+  if (data.error === "MASTER_REQUIRED") return "마스터 계정만 토큰 상품을 저장할 수 있습니다.";
+  if (data.error === "DUPLICATE_PACKAGE_CODE") return "이미 사용 중인 상품 코드입니다.";
+  if (data.error === "VALIDATION_ERROR") {
+    const fieldErrors = data.details?.fieldErrors ?? {};
+    if (fieldErrors.name?.length) return "상품명을 입력해 주세요.";
+    if (fieldErrors.price?.length) return "판매 가격은 1원 이상으로 입력해 주세요.";
+    return "상품 입력값을 확인해 주세요.";
+  }
+  if (data.error === "DB_ERROR") {
+    return "토큰 상품 DB가 준비되지 않았습니다. API 마이그레이션 적용 여부를 확인해 주세요.";
+  }
+  return "토큰 상품을 저장하지 못했습니다.";
+}
+
 export default function AdminTokenPackagePage() {
   const [packages, setPackages] = useState<TokenPackage[]>([]);
   const [editing, setEditing] = useState<TokenPackage | Omit<TokenPackage, "id"> | null>(null);
@@ -86,7 +106,7 @@ export default function AdminTokenPackagePage() {
         { method: hasId ? "PUT" : "POST", headers, body: JSON.stringify(editing) },
       );
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.message || "토큰 상품을 저장하지 못했습니다.");
+      if (!response.ok) throw new Error(getSaveErrorMessage(data));
       setEditing(null);
       await load();
     } catch (caught) {

@@ -20,7 +20,7 @@ export default function LeagueRenewalStep6Creating() {
     isLoading: featureUsageLoading,
     isError: featureUsageError,
   } = useGetMyFeatureUsageQuery(undefined, { skip: !token });
-  const eventBalance = featureUsageData?.usage.event_create;
+  const eventBalance = featureUsageData?.usage.league_create;
   const clientQuotaExhausted = Boolean(
     eventBalance && !eventBalance.unlimited && (eventBalance.remaining ?? 0) <= 0,
   );
@@ -71,7 +71,7 @@ export default function LeagueRenewalStep6Creating() {
       <Typography fontWeight={800} textAlign="center">
         {creationFailed
           ? quotaExhausted
-            ? "사용 가능한 리그·대회 생성 횟수가 없습니다."
+            ? "사용 가능한 리그 생성 횟수가 없습니다."
             : error ?? "리그 생성에 실패했습니다."
           : "리그를 생성하고 있습니다."}
       </Typography>

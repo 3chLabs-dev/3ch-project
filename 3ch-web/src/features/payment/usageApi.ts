@@ -9,7 +9,7 @@ export type FeatureBalance = {
 export type FeatureUsageResponse = {
   ok: boolean;
   usage: {
-    event_create: FeatureBalance;
+    league_create: FeatureBalance;
     vision_scan: FeatureBalance;
     draw_create: FeatureBalance;
   };

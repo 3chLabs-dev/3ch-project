@@ -55,7 +55,7 @@ export default function AppShell() {
         skip: !token || !isMyPage,
     });
     const usageItems = [
-        { label: "리그 생성", balance: usageData?.usage.event_create },
+        { label: "리그 생성", balance: usageData?.usage.league_create },
         { label: "사진 인식", balance: usageData?.usage.vision_scan },
         { label: "추첨 생성", balance: usageData?.usage.draw_create },
     ];

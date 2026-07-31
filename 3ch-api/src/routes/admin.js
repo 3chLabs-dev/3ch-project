@@ -34,10 +34,14 @@ const PRICING_FEATURE_KEYS = [
 
 async function assertMaster(req, res) {
   const result = await pool.query(
-    "SELECT system_role FROM users WHERE id = $1 AND deleted_at IS NULL",
+    "SELECT email, is_admin, system_role FROM users WHERE id = $1 AND deleted_at IS NULL",
     [Number(req.user.sub)],
   );
-  if (result.rows[0]?.system_role !== "MASTER") {
+  const user = result.rows[0];
+  const email = String(user?.email || "").trim().toLowerCase();
+  const isMasterAccount = user?.system_role === "MASTER"
+    || (user?.is_admin && ["admin@3ch.com", "3chlabs@gmail.com"].includes(email));
+  if (!isMasterAccount) {
     res.status(403).json({ ok: false, error: "MASTER_REQUIRED" });
     return false;
   }
@@ -1621,7 +1625,7 @@ const pricingPlanSchema = z.object({
 });
 
 const tokenPackageSchema = z.object({
-  code: z.string().trim().min(1).max(40).transform((value) => value.toLowerCase()),
+  code: z.string().trim().max(40).transform((value) => value.toLowerCase()).optional(),
   name: z.string().trim().min(1).max(80),
   price: z.coerce.number().int().min(1).max(100000000),
   credits: z.object(Object.fromEntries(
@@ -1650,12 +1654,13 @@ router.post('/token-packages', requireAdmin, async (req, res) => {
     return res.status(400).json({ ok: false, error: 'VALIDATION_ERROR', details: parsed.error.flatten() });
   }
   const value = parsed.data;
+  const packageCode = value.code || `token_${Date.now()}_${randomUUID().slice(0, 8)}`;
   try {
     const result = await pool.query(
       `INSERT INTO token_packages (code, name, price, credits, display_order, is_visible)
        VALUES ($1, $2, $3, $4::jsonb, $5, $6)
        RETURNING *`,
-      [value.code, value.name, value.price, JSON.stringify(value.credits),
+      [packageCode, value.name, value.price, JSON.stringify(value.credits),
        value.display_order, value.is_visible],
     );
     return res.status(201).json({ ok: true, package: result.rows[0] });

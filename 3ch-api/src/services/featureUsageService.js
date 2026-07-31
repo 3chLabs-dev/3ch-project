@@ -69,12 +69,24 @@ async function getPlanLimits(plan, client = pool) {
 
 async function ensureStarterCredits(userId, client = pool) {
   const activeSubscription = await client.query(
-    `SELECT 1 FROM subscriptions
+    `SELECT id, plan, started_at, expires_at
+       FROM subscriptions
       WHERE user_id = $1 AND status = 'ACTIVE' AND expires_at > NOW()
+      ORDER BY created_at DESC
       LIMIT 1`,
     [userId],
   );
-  if (activeSubscription.rowCount > 0) return;
+  if (activeSubscription.rowCount > 0) {
+    const subscription = activeSubscription.rows[0];
+    await provisionSubscriptionCredits(client, {
+      subscriptionId: subscription.id,
+      userId,
+      plan: subscription.plan,
+      startsAt: subscription.started_at,
+      expiresAt: subscription.expires_at,
+    });
+    return;
+  }
 
   const starterLimits = await getPlanLimits("starter", client);
   for (const [feature, amount] of Object.entries(starterLimits)) {

@@ -86,6 +86,22 @@ export default function LeagueRenewalStep6Creating() {
             <Button
               fullWidth
               variant="contained"
+              onClick={() => navigate("/mypage/pricing#token-packages")}
+              sx={{
+                height: 44,
+                borderRadius: 1,
+                fontWeight: 900,
+                bgcolor: "#7C3AED",
+                "&:hover": { bgcolor: "#6D28D9" },
+              }}
+            >
+              추가 사용량 구매
+            </Button>
+          )}
+          {quotaExhausted && (
+            <Button
+              fullWidth
+              variant="outlined"
               onClick={() => navigate("/mypage/pricing")}
               sx={{ height: 44, borderRadius: 1, fontWeight: 900 }}
             >

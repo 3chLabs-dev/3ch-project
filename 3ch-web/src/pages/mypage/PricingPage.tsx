@@ -323,6 +323,16 @@ export default function PricingPage() {
       .catch(() => setTokenPackages([]));
   }, []);
   useEffect(() => {
+    if (window.location.hash !== "#token-packages" || tokenPackages.length === 0) return;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById("token-packages")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [tokenPackages.length]);
+  useEffect(() => {
     const resolvedToken = token ?? localStorage.getItem("token");
     if (!resolvedToken) {
       setCurrentPlan(null);
@@ -545,7 +555,7 @@ export default function PricingPage() {
           ))}
 
           {tokenPackages.length > 0 && (
-            <Box sx={{ mt: 3, mb: 3 }}>
+            <Box id="token-packages" sx={{ mt: 3, mb: 3, scrollMarginTop: 72 }}>
               <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
                 <AccountBalanceWalletOutlinedIcon sx={{ color: "#7C3AED" }} />
                 <Typography fontSize={18} fontWeight={900}>추가 사용량 충전</Typography>

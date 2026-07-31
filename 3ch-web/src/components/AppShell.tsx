@@ -349,6 +349,17 @@ export default function AppShell() {
                     </DialogContent>
                     <DialogActions sx={{ px: 2.5, pb: 2 }}>
                         <Button
+                            variant="contained"
+                            disableElevation
+                            onClick={() => {
+                                setUsageOpen(false);
+                                navigate("/mypage/pricing#token-packages");
+                            }}
+                            sx={{ fontWeight: 800, bgcolor: "#7C3AED", "&:hover": { bgcolor: "#6D28D9" } }}
+                        >
+                            추가 사용량 구매
+                        </Button>
+                        <Button
                             onClick={() => {
                                 setUsageOpen(false);
                                 navigate("/mypage/pricing");

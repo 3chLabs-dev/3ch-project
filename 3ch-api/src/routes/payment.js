@@ -43,6 +43,33 @@ async function chargeBilling({ billingKey, orderId, body }) {
   }
 }
 
+const TOKEN_CREDIT_KEY_MAP = {
+  club_create: FEATURES.CLUB_CREATE,
+  club_join: FEATURES.CLUB_JOIN,
+  league_create: FEATURES.LEAGUE_CREATE,
+  tournament_create: FEATURES.TOURNAMENT_CREATE,
+  event_join: FEATURES.EVENT_JOIN,
+  vision_scan: FEATURES.VISION_SCAN,
+  draw_create: FEATURES.DRAW_CREATE,
+};
+
+async function grantTokenPurchaseCredits(client, { purchaseId, userId, credits, expiresAt }) {
+  const normalizedCredits = typeof credits === "string" ? JSON.parse(credits) : (credits || {});
+  for (const [key, rawAmount] of Object.entries(normalizedCredits)) {
+    const feature = TOKEN_CREDIT_KEY_MAP[key];
+    const creditAmount = Number.parseInt(String(rawAmount), 10);
+    if (!feature || !Number.isInteger(creditAmount) || creditAmount <= 0) continue;
+    await client.query(
+      `INSERT INTO feature_credit_buckets
+        (user_id, feature, source, initial_amount, remaining_amount,
+         starts_at, expires_at, source_ref)
+       VALUES ($1, $2, 'PURCHASE', $3, $3, NOW(), $4, $5)
+       ON CONFLICT (source_ref, feature) WHERE source_ref IS NOT NULL DO NOTHING`,
+      [userId, feature, creditAmount, expiresAt, `token:${purchaseId}`],
+    );
+  }
+}
+
 function addOneMonth(date = new Date()) {
   const value = new Date(date);
   value.setUTCMonth(value.getUTCMonth() + 1);
@@ -246,10 +273,16 @@ router.post("/payment/token/confirm", requireAuth, async (req, res) => {
   }
 
   const duplicate = await pool.query(
-    `SELECT id, expires_at FROM token_purchases WHERE order_id = $1 AND user_id = $2`,
+    `SELECT id, credits, expires_at FROM token_purchases WHERE order_id = $1 AND user_id = $2`,
     [orderId, userId],
   );
   if (duplicate.rowCount) {
+    await grantTokenPurchaseCredits(pool, {
+      purchaseId: duplicate.rows[0].id,
+      userId,
+      credits: duplicate.rows[0].credits,
+      expiresAt: duplicate.rows[0].expires_at,
+    });
     return res.json({ ok: true, purchaseId: duplicate.rows[0].id, expiresAt: duplicate.rows[0].expires_at });
   }
 
@@ -304,28 +337,12 @@ router.post("/payment/token/confirm", requireAuth, async (req, res) => {
     );
     const purchaseId = inserted.rows[0]?.id;
     if (purchaseId) {
-      const creditKeyMap = {
-        club_create: FEATURES.CLUB_CREATE,
-        club_join: FEATURES.CLUB_JOIN,
-        league_create: FEATURES.LEAGUE_CREATE,
-        tournament_create: FEATURES.TOURNAMENT_CREATE,
-        event_join: FEATURES.EVENT_JOIN,
-        vision_scan: FEATURES.VISION_SCAN,
-        draw_create: FEATURES.DRAW_CREATE,
-      };
-      for (const [key, rawAmount] of Object.entries(tokenPackage.credits || {})) {
-        const feature = creditKeyMap[key];
-        const creditAmount = Number.parseInt(String(rawAmount), 10);
-        if (!feature || !Number.isInteger(creditAmount) || creditAmount <= 0) continue;
-        await client.query(
-          `INSERT INTO feature_credit_buckets
-            (user_id, feature, source, initial_amount, remaining_amount,
-             starts_at, expires_at, source_ref)
-           VALUES ($1, $2, 'PURCHASE', $3, $3, NOW(), $4, $5)
-           ON CONFLICT (source_ref, feature) WHERE source_ref IS NOT NULL DO NOTHING`,
-          [userId, feature, creditAmount, expiresAt, `token:${purchaseId}`],
-        );
-      }
+      await grantTokenPurchaseCredits(client, {
+        purchaseId,
+        userId,
+        credits: tokenPackage.credits,
+        expiresAt,
+      });
     }
     await client.query("COMMIT");
     return res.json({ ok: true, purchaseId, expiresAt });

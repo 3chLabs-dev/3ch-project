@@ -65,7 +65,26 @@ async function grantTokenPurchaseCredits(client, { purchaseId, userId, credits, 
         (user_id, feature, source, initial_amount, remaining_amount,
          starts_at, expires_at, source_ref)
        VALUES ($1, $2, 'PURCHASE', $3, $3, NOW(), $4, $5)
-       ON CONFLICT (source_ref, feature) WHERE source_ref IS NOT NULL DO NOTHING`,
+       ON CONFLICT (source_ref, feature) WHERE source_ref IS NOT NULL
+       DO UPDATE SET
+         initial_amount = EXCLUDED.initial_amount,
+         remaining_amount = GREATEST(
+           EXCLUDED.initial_amount - COALESCE((
+             SELECT SUM(
+               CASE event.action
+                 WHEN 'CONSUME' THEN event.amount
+                 WHEN 'REFUND' THEN -event.amount
+                 ELSE 0
+               END
+             )
+             FROM feature_usage_events event
+             WHERE event.credit_bucket_id = feature_credit_buckets.id
+           ), 0),
+           0
+         ),
+         expires_at = EXCLUDED.expires_at,
+         updated_at = NOW()
+       WHERE feature_credit_buckets.source = 'PURCHASE'`,
       [userId, feature, creditAmount, expiresAt, `token:${purchaseId}`],
     );
   }

@@ -291,7 +291,11 @@ async function consumeFeatureCredit({ userId, feature, requestKey, referenceType
 
     const balance = await getFeatureBalance(userId, feature, client);
     await client.query("COMMIT");
-    return balance;
+    return {
+      ...balance,
+      allowed: true,
+      consumed: true,
+    };
   } catch (error) {
     await client.query("ROLLBACK").catch(() => {});
     throw error;

@@ -6,6 +6,7 @@ import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 import axios from "axios";
 import { useSelector } from "react-redux";
 import type { RootState } from "../../app/store";
+import { useLazyGetMyFeatureUsageQuery } from "../../features/payment/usageApi";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 
@@ -13,6 +14,7 @@ export default function PaymentSuccess() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const token = useSelector((s: RootState) => s.auth.token);
+  const [refreshFeatureUsage] = useLazyGetMyFeatureUsageQuery();
 
   const paymentKey = searchParams.get("paymentKey");
   const orderId    = searchParams.get("orderId");
@@ -35,13 +37,22 @@ export default function PaymentSuccess() {
         { paymentKey, orderId, amount: Number(amount) },
         { headers: { Authorization: `Bearer ${token}` } },
       )
-      .then(() => setStatus("ok"))
+      .then(async () => {
+        if (paymentType === "token") {
+          try {
+            await refreshFeatureUsage(undefined, false).unwrap();
+          } catch {
+            // The payment is already complete. A later usage view will retry the query.
+          }
+        }
+        setStatus("ok");
+      })
       .catch((e) => {
         confirmingRef.current = false;
         setStatus("error");
         setErrorMsg(e.response?.data?.error ?? "결제 확인 중 오류가 발생했습니다.");
       });
-  }, [hasParams, paymentKey, orderId, amount, token, paymentType]);
+  }, [hasParams, paymentKey, orderId, amount, token, paymentType, refreshFeatureUsage]);
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", p: 4 }}>

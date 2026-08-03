@@ -23,4 +23,7 @@ export const usageApi = baseApi.injectEndpoints({
   }),
 });
 
-export const { useGetMyFeatureUsageQuery } = usageApi;
+export const {
+  useGetMyFeatureUsageQuery,
+  useLazyGetMyFeatureUsageQuery,
+} = usageApi;

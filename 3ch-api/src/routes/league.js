@@ -4341,7 +4341,7 @@ router.post('/league/participants/image-scan', requireAuth, participantImageUplo
         `SELECT gm.group_id, gm.division, u.id AS member_id, COALESCE(NULLIF(u.nickname, ''), u.name) AS display_name, u.name
            FROM group_members gm
            JOIN users u ON u.id = gm.user_id
-          WHERE gm.group_id = ANY($1::uuid[])`,
+          WHERE gm.group_id = ANY($1::text[])`,
         [groupIds],
       );
       memberRows = memberResult.rows;

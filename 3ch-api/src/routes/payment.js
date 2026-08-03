@@ -564,6 +564,25 @@ router.get("/payment/history/me", requireAuth, async (req, res) => {
 router.get("/payment/usage/me", requireAuth, async (req, res) => {
   const userId = Number(req.user.sub);
   try {
+    // Repair paid token purchases whose credit buckets were not created by an
+    // interrupted or older confirmation flow. The insert is idempotent.
+    const purchases = await pool.query(
+      `SELECT id, credits, expires_at
+         FROM token_purchases
+        WHERE user_id = $1
+          AND status = 'PAID'
+          AND expires_at > NOW()`,
+      [userId],
+    );
+    for (const purchase of purchases.rows) {
+      await grantTokenPurchaseCredits(pool, {
+        purchaseId: purchase.id,
+        userId,
+        credits: purchase.credits,
+        expiresAt: purchase.expires_at,
+      });
+    }
+
     const featureEntries = [
       ["club_create", FEATURES.CLUB_CREATE],
       ["club_join", FEATURES.CLUB_JOIN],

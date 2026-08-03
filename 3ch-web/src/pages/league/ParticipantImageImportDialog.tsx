@@ -18,6 +18,7 @@ import {
 import CloseIcon from "@mui/icons-material/Close";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import PhotoLibraryOutlinedIcon from "@mui/icons-material/PhotoLibraryOutlined";
+import { useNavigate } from "react-router-dom";
 import { useScanParticipantImagesMutation, type RecognizedParticipant } from "../../features/league/leagueApi";
 
 export type ImportedParticipant = {
@@ -40,10 +41,12 @@ type Props = {
 const normalizeName = (value: string) => value.normalize("NFKC").replace(/\s+/g, "").toLocaleLowerCase("ko-KR");
 
 export default function ParticipantImageImportDialog({ open, onClose, onConfirm, existingNames = [], groupIds = [] }: Props) {
+  const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [rows, setRows] = useState<ReviewRow[]>([]);
   const [error, setError] = useState("");
+  const [quotaExhausted, setQuotaExhausted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [scan, { isLoading }] = useScanParticipantImagesMutation();
   const existingKeys = useMemo(() => new Set(existingNames.map(normalizeName)), [existingNames]);
@@ -53,6 +56,7 @@ export default function ParticipantImageImportDialog({ open, onClose, onConfirm,
       setFiles([]);
       setRows([]);
       setError("");
+      setQuotaExhausted(false);
       setSaving(false);
     }
   }, [open]);
@@ -62,12 +66,14 @@ export default function ParticipantImageImportDialog({ open, onClose, onConfirm,
     const images = Array.from(selected).filter((file) => file.type.startsWith("image/")).slice(0, 10);
     setFiles(images);
     setRows([]);
+    setQuotaExhausted(false);
     setError(selected.length > 10 ? "이미지는 한 번에 최대 10장까지 등록할 수 있습니다." : "");
   };
 
   const recognize = async () => {
     if (files.length === 0) return;
     setError("");
+    setQuotaExhausted(false);
     try {
       const result = await scan({
         files,
@@ -89,7 +95,9 @@ export default function ParticipantImageImportDialog({ open, onClose, onConfirm,
       }));
       if (result.participants.length === 0) setError("참가자 이름을 찾지 못했습니다. 다른 이미지를 선택해 주세요.");
     } catch (caught) {
-      const message = (caught as { data?: { message?: string } })?.data?.message;
+      const response = (caught as { data?: { message?: string; code?: string } })?.data;
+      const message = response?.message;
+      setQuotaExhausted(response?.code === "VISION_QUOTA_EXHAUSTED");
       setError(message || "이미지에서 참가자 이름을 인식하지 못했습니다.");
     }
   };
@@ -168,6 +176,20 @@ export default function ParticipantImageImportDialog({ open, onClose, onConfirm,
           </Stack>
         )}
         {error && <Alert severity="warning" sx={{ mt: 1.5 }}>{error}</Alert>}
+        {quotaExhausted && (
+          <Button
+            fullWidth
+            variant="contained"
+            disableElevation
+            onClick={() => {
+              onClose();
+              navigate("/mypage/pricing#token-packages");
+            }}
+            sx={{ mt: 1.2, height: 44, fontWeight: 900 }}
+          >
+            사진 인식 충전
+          </Button>
+        )}
       </DialogContent>
       {rows.length > 0 && <DialogActions sx={{ px: 2, py: 1.5 }}>
         <Button onClick={onClose} sx={{ fontWeight: 800 }}>취소</Button>

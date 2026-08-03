@@ -9,7 +9,7 @@ const webpush = require('web-push');
 const { rebuildGroupRanking, getGroupIdByLeagueId } = require('../services/groupRanking');
 const { rebuildSportRankingByLeagueId } = require('../services/sportRanking');
 const { scanOmrImageWithPython } = require('../services/omrScanner');
-const { scanLeagueSheetWithOpenAIVision } = require('../services/openaiVisionScanner');
+const { scanLeagueSheetWithOpenAIVision, scanParticipantNamesWithOpenAIVision } = require('../services/openaiVisionScanner');
 const { FEATURES, consumeFeatureCredit, refundFeatureCredit } = require('../services/featureUsageService');
 
 const isWebPushConfigured = Boolean(
@@ -111,6 +111,11 @@ const router = express.Router();
 const omrUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 15 * 1024 * 1024 },
+});
+
+const participantImageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 12 * 1024 * 1024, files: 10 },
 });
 
 let participantGroupingColumnsPromise;
@@ -4271,6 +4276,108 @@ router.post('/league/:id/omr/scan', optionalAuth, omrUpload.single('image'), asy
 
     console.error('Error scanning OMR image:', error);
     return res.status(500).json({ message: '서버 오류' });
+  }
+});
+
+router.post('/league/participants/image-scan', requireAuth, participantImageUpload.array('images', 10), async (req, res) => {
+  const userId = Number(req.user.sub);
+  const files = Array.isArray(req.files) ? req.files : [];
+  const requestId = String(req.get('Idempotency-Key') || randomUUID()).trim().slice(0, 48);
+  const consumedKeys = [];
+
+  try {
+    if (files.length === 0) return res.status(400).json({ message: '이미지를 1장 이상 선택해 주세요.' });
+    if (files.some((file) => !String(file.mimetype || '').startsWith('image/'))) {
+      return res.status(400).json({ message: '이미지 파일만 업로드할 수 있습니다.' });
+    }
+
+    let groupIds = [];
+    try {
+      const parsed = JSON.parse(String(req.body?.group_ids || '[]'));
+      if (Array.isArray(parsed)) groupIds = [...new Set(parsed.map(String).filter(Boolean))].slice(0, 20);
+    } catch {}
+
+    for (let index = 0; index < files.length; index += 1) {
+      const requestKey = `participant-image:${requestId}:${index}`;
+      const usage = await consumeFeatureCredit({
+        userId,
+        feature: FEATURES.VISION_SCAN,
+        requestKey,
+        referenceType: 'PARTICIPANT_IMPORT',
+        referenceId: requestId,
+        metadata: { imageIndex: index, imageCount: files.length },
+      });
+      if (!usage.allowed || usage.duplicate) {
+        for (const key of consumedKeys) {
+          await refundFeatureCredit({ userId, feature: FEATURES.VISION_SCAN, requestKey: key, reason: 'BATCH_NOT_STARTED' }).catch(() => {});
+        }
+        return res.status(usage.duplicate ? 409 : 402).json({
+          message: usage.duplicate ? '이미 처리된 이미지 인식 요청입니다.' : `사진 인식 잔여 횟수가 부족합니다. 이미지 ${files.length}장에 대해 ${files.length}회가 필요합니다.`,
+          code: usage.duplicate ? 'DUPLICATE_REQUEST' : 'VISION_QUOTA_EXHAUSTED',
+          pricingPath: '/mypage/pricing',
+        });
+      }
+      consumedKeys.push(requestKey);
+    }
+
+    const scans = await Promise.all(files.map((file) => scanParticipantNamesWithOpenAIVision({
+      imageBuffer: file.buffer,
+      mimeType: file.mimetype,
+    })));
+
+    const extracted = [];
+    scans.forEach((scan, imageIndex) => {
+      const names = Array.isArray(scan.result?.names) ? scan.result.names : [];
+      names.forEach((item, rowIndex) => {
+        const name = String(item?.name || '').replace(/\s+/g, ' ').trim();
+        if (!name || name.length > 60) return;
+        extracted.push({ name, confidence: Number(item?.confidence || 0), imageIndex, rowIndex });
+      });
+    });
+
+    let memberRows = [];
+    if (groupIds.length > 0 && extracted.length > 0) {
+      const memberResult = await pool.query(
+        `SELECT gm.group_id, gm.division, u.id AS member_id, COALESCE(NULLIF(u.nickname, ''), u.name) AS display_name, u.name
+           FROM group_members gm
+           JOIN users u ON u.id = gm.user_id
+          WHERE gm.group_id = ANY($1::uuid[])`,
+        [groupIds],
+      );
+      memberRows = memberResult.rows;
+    }
+
+    const normalizeName = (value) => String(value || '').normalize('NFKC').replace(/\s+/g, '').toLocaleLowerCase('ko-KR');
+    const occurrences = new Map();
+    extracted.forEach((item) => occurrences.set(normalizeName(item.name), (occurrences.get(normalizeName(item.name)) || 0) + 1));
+    const participants = extracted.map((item) => {
+      const key = normalizeName(item.name);
+      const matches = memberRows.filter((member) => [member.display_name, member.name].some((value) => normalizeName(value) === key));
+      const uniqueMembers = [...new Map(matches.map((member) => [String(member.member_id), member])).values()];
+      const match = uniqueMembers.length === 1 ? uniqueMembers[0] : null;
+      return {
+        ...item,
+        duplicateCount: occurrences.get(key) || 1,
+        ambiguous: uniqueMembers.length > 1,
+        member_id: match?.member_id ?? null,
+        division: match?.division ?? '',
+        source_group_id: match?.group_id ?? null,
+      };
+    });
+
+    return res.json({
+      engine: scans[0]?.engine || process.env.OPENAI_VISION_MODEL || 'gpt-4.1-mini',
+      participants,
+      imageCount: files.length,
+    });
+  } catch (error) {
+    for (const key of consumedKeys) {
+      await refundFeatureCredit({ userId, feature: FEATURES.VISION_SCAN, requestKey: key, reason: error?.code || 'PARTICIPANT_SCAN_FAILED' }).catch(() => {});
+    }
+    if (error?.code === 'OPENAI_API_KEY_MISSING') return res.status(503).json({ message: error.message, code: error.code });
+    if (error?.code === 'OPENAI_VISION_FAILED') return res.status(502).json({ message: error.message, code: error.code });
+    console.error('Participant image scan failed:', error);
+    return res.status(500).json({ message: '참가자 이미지 인식 중 오류가 발생했습니다.' });
   }
 });
 

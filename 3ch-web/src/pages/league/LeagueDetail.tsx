@@ -465,6 +465,34 @@
       setOpenLoadDialog(false);
     };
 
+    const handleImageParticipants = async (recognized: Array<{ division: string; name: string; member_id?: number | null; source_group_id?: string | null }>) => {
+      if (!id || recognized.length === 0) return;
+      const recruitLimit = league?.recruit_count ?? 0;
+      const remaining = recruitLimit > 0 ? recruitLimit - rawParticipants.length : Infinity;
+      if (recognized.length > remaining) {
+        setAlertSeverity("warning");
+        setAlertMsg(`모집 인원(${league!.recruit_count}명)을 초과합니다. 최대 ${remaining}명 추가 가능합니다.`);
+        throw new Error("participant limit");
+      }
+      if (hasEventProgram && !canAddParticipantToProgram) {
+        setAlertSeverity("warning");
+        setAlertMsg("현재 프로그램 구성에서는 이미지로 참가자를 일괄 추가할 수 없습니다.");
+        throw new Error("program does not support participant batch add");
+      }
+      if (!confirmParticipantChange("add")) throw new Error("cancelled");
+      await addParticipants({
+        leagueId: id,
+        participants: recognized.map((participant) => ({
+          division: participant.division,
+          name: participant.name,
+          member_id: participant.member_id ?? null,
+          source_group_id: participant.source_group_id ?? (showParticipantGroups ? inputSourceGroupId || null : undefined),
+        })),
+      }).unwrap();
+      setAlertSeverity("success");
+      setAlertMsg(`${recognized.length}명의 참가자를 등록했습니다.`);
+    };
+
     const openReplaceParticipantDialog = (participant: { id: string; division?: string | null; name: string }) => {
       setReplaceParticipantTarget(participant);
       setReplacementDivision("");
@@ -1426,6 +1454,7 @@ const handleSaveEdit = async () => {
             handleParticipantFieldBlur={handleParticipantFieldBlur}
             setDeleteParticipantTarget={setDeleteParticipantTarget}
             onOpenLoadMembers={() => { setLoadMemberPurpose("add"); setOpenLoadDialog(true); }}
+            onImageImport={handleImageParticipants}
             onReplaceParticipant={openReplaceParticipantDialog}
             showGroupName={showParticipantGroups}
           />

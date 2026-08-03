@@ -339,6 +339,24 @@ export interface ScanLeagueOpenAIVisionResponse {
   };
 }
 
+export interface RecognizedParticipant {
+  name: string;
+  division: string;
+  confidence: number;
+  imageIndex: number;
+  rowIndex: number;
+  duplicateCount: number;
+  ambiguous: boolean;
+  member_id: number | null;
+  source_group_id: string | null;
+}
+
+export interface ScanParticipantImagesResponse {
+  engine: string;
+  imageCount: number;
+  participants: RecognizedParticipant[];
+}
+
 export interface ScanOcrRequest {
   file: File;
   language?: string;
@@ -1070,6 +1088,20 @@ export const leagueApi = baseApi.injectEndpoints({
       },
     }),
 
+    scanParticipantImages: builder.mutation<ScanParticipantImagesResponse, { files: File[]; groupIds?: string[]; idempotencyKey?: string }>({
+      query: ({ files, groupIds = [], idempotencyKey }) => {
+        const formData = new FormData();
+        files.forEach((file) => formData.append("images", file));
+        formData.append("group_ids", JSON.stringify(groupIds));
+        return {
+          url: "/league/participants/image-scan",
+          method: "POST",
+          body: formData,
+          headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
+        };
+      },
+    }),
+
     scanOcr: builder.mutation<ScanOcrResponse, ScanOcrRequest>({
       query: ({ file, language, psm, maxSide }) => {
         const formData = new FormData();
@@ -1213,6 +1245,7 @@ export const {
   useUpdateLeagueMatchMutation,
   useScanLeagueOmrMutation,
   useScanLeagueOpenAIVisionMutation,
+  useScanParticipantImagesMutation,
   useScanOcrMutation,
   useReorderLeagueMatchesMutation,
   useDeleteLeagueMatchMutation,

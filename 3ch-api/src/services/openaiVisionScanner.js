@@ -184,6 +184,76 @@ ${participantLines}
   };
 }
 
+const PARTICIPANT_NAME_PROMPT = `You extract participant display names from screenshots of attendee lists.
+Return only names rendered as the primary, prominent name text in each attendee row.
+Ignore page titles, dates, counts, buttons, profile greetings, biographies, hashtags, badges, labels such as NEW or Premium Sponsor, and all smaller or gray secondary text.
+Preserve Korean, Latin letters, digits, and meaningful nickname symbols exactly as displayed, but trim surrounding whitespace.
+Read the list from top to bottom. Do not invent names and do not merge two rows.
+If the same visible name appears more than once in this image, return every occurrence; the server will handle duplicates.
+Respond only in the required JSON format.`;
+
+async function scanParticipantNamesWithOpenAIVision({ imageBuffer, mimeType }) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    const error = new Error('OPENAI_API_KEY가 설정되어 있지 않습니다.');
+    error.code = 'OPENAI_API_KEY_MISSING';
+    throw error;
+  }
+
+  const model = process.env.OPENAI_VISION_MODEL || 'gpt-4.1-mini';
+  const response = await fetch(OPENAI_RESPONSES_URL, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      ...(model.startsWith('gpt-4') ? { temperature: 0 } : {}),
+      input: [{
+        role: 'user',
+        content: [
+          { type: 'input_text', text: PARTICIPANT_NAME_PROMPT },
+          { type: 'input_image', image_url: `data:${mimeType};base64,${imageBuffer.toString('base64')}` },
+        ],
+      }],
+      text: {
+        format: {
+          type: 'json_schema',
+          name: 'participant_names',
+          strict: true,
+          schema: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['names'],
+            properties: {
+              names: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  additionalProperties: false,
+                  required: ['name', 'confidence'],
+                  properties: {
+                    name: { type: 'string' },
+                    confidence: { type: 'number', minimum: 0, maximum: 1 },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    }),
+  });
+
+  const responseBody = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(responseBody.error?.message || '참가자 이미지 인식에 실패했습니다.');
+    error.code = 'OPENAI_VISION_FAILED';
+    error.details = responseBody;
+    throw error;
+  }
+  return { engine: model, result: parseJsonObject(extractOutputText(responseBody)) };
+}
+
 module.exports = {
   scanLeagueSheetWithOpenAIVision,
+  scanParticipantNamesWithOpenAIVision,
 };

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import {
   Box,
@@ -14,6 +14,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import ParticipantImageImportDialog, { type ImportedParticipant } from "./ParticipantImageImportDialog";
 
 type Participant = {
   id: string;
@@ -70,6 +71,7 @@ type MemberEditDialogProps = {
   >;
 
   onOpenLoadMembers: () => void;
+  onImageImport: (participants: ImportedParticipant[]) => void | Promise<void>;
   onReplaceParticipant: (participant: Participant) => void;
   showGroupName?: boolean;
 };
@@ -92,11 +94,13 @@ export default function MemberEditDialog({
   handleParticipantFieldBlur,
   setDeleteParticipantTarget,
   onOpenLoadMembers,
+  onImageImport,
   onReplaceParticipant,
   showGroupName = false,
 }: MemberEditDialogProps) {
   const divisionInputRef = useRef<HTMLInputElement>(null);
   const hadParticipantInputRef = useRef(false);
+  const [openImageImport, setOpenImageImport] = useState(false);
 
   useEffect(() => {
     if (inputDivision || inputName) {
@@ -136,23 +140,14 @@ export default function MemberEditDialog({
             참가자 수정
           </Typography>
 
-          <Button
-            variant="contained"
-            disableElevation
-            size="small"
-            onClick={onOpenLoadMembers}
-            sx={{
-              borderRadius: 1,
-              height: 28,
-              px: 1.5,
-              fontWeight: 900,
-              fontSize: 12,
-              bgcolor: "#2F80ED",
-              "&:hover": { bgcolor: "#79AEFF" },
-            }}
-          >
-            클럽회원 불러오기
-          </Button>
+          <Stack direction="row" spacing={0.6}>
+            <Button variant="outlined" disableElevation size="small" onClick={() => setOpenImageImport(true)} sx={{ borderRadius: 1, height: 28, px: 1, fontWeight: 900, fontSize: 11 }}>
+              이미지로 불러오기
+            </Button>
+            <Button variant="contained" disableElevation size="small" onClick={onOpenLoadMembers} sx={{ borderRadius: 1, height: 28, px: 1.2, fontWeight: 900, fontSize: 11, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#79AEFF" } }}>
+              클럽회원 불러오기
+            </Button>
+          </Stack>
         </Stack>
 
         <Box
@@ -458,6 +453,13 @@ export default function MemberEditDialog({
           완료
         </Button>
       </DialogActions>
+      <ParticipantImageImportDialog
+        open={openImageImport}
+        onClose={() => setOpenImageImport(false)}
+        onConfirm={onImageImport}
+        existingNames={participants.map((participant) => participant.name)}
+        groupIds={sourceGroupOptions.map((group) => group.id)}
+      />
     </Dialog>
   );
 }

@@ -5,6 +5,7 @@ import { setRenewalParticipants, setRenewalStep } from "../../features/league/le
 import type { Participant } from "../../features/league/leagueCreationSlice";
 import LoadMembersDialog, { type MemberRow } from "./LoadMembersDialog";
 import { mergeMembers } from "./mergeMember";
+import ParticipantImageImportDialog, { type ImportedParticipant } from "./ParticipantImageImportDialog";
 
 const headCellSx = { fontSize: 12, fontWeight: 900, color: "#6B7280", textAlign: "center" as const };
 const cellCenter = { display: "flex", justifyContent: "center", alignItems: "center" };
@@ -25,6 +26,7 @@ export default function LeagueRenewalStep5Participants() {
   const [name, setName] = useState("");
   const [sourceGroupId, setSourceGroupId] = useState(hostGroupId ?? "");
   const [openLoad, setOpenLoad] = useState(false);
+  const [openImageImport, setOpenImageImport] = useState(false);
   const [alertMsg, setAlertMsg] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<{ idx: number; division: string; name: string } | null>(null);
   const divisionInputRef = useRef<HTMLInputElement>(null);
@@ -57,6 +59,29 @@ export default function LeagueRenewalStep5Participants() {
     setOpenLoad(false);
   };
 
+  const handleImageImport = (recognized: ImportedParticipant[]) => {
+    const keys = new Set(participants.map((item) => `${item.division.trim()}::${item.name.trim()}`));
+    const unique = recognized.flatMap((item) => {
+      const key = `${item.division.trim()}::${item.name.trim()}`;
+      if (keys.has(key)) return [];
+      keys.add(key);
+      return [{
+        division: item.division,
+        name: item.name,
+        member_id: item.member_id ?? null,
+        source_group_id: item.source_group_id || sourceGroupId || hostGroupId,
+        paid: false,
+        arrived: false,
+        after: false,
+      }];
+    });
+    if (targetCount !== null && participants.length + unique.length > targetCount) {
+      setAlertMsg(`모집 인원(${targetCount}명)을 초과하여 등록할 수 없습니다.`);
+      throw new Error("participant limit");
+    }
+    setParticipants((current) => [...current, ...unique]);
+  };
+
   const handleNext = () => {
     dispatch(setRenewalParticipants(participants));
     dispatch(setRenewalStep(8));
@@ -68,7 +93,10 @@ export default function LeagueRenewalStep5Participants() {
         <Typography sx={{ fontSize: 22, fontWeight: 900, mb: 1 }}>참가자 사전 등록</Typography>
         {targetCount !== null && <Typography sx={{ fontSize: 14, fontWeight: 700, color: isFull ? "#E53935" : "#6B7280" }}>{participants.length}/{targetCount}</Typography>}
       </Stack>
-      <Button variant="contained" disableElevation onClick={() => setOpenLoad(true)} sx={{ borderRadius: 1, height: 32, px: 2, fontWeight: 900, bgcolor: "#87B8FF", "&:hover": { bgcolor: "#79AEFF" }, boxShadow: "none" }}>불러오기</Button>
+      <Stack direction="row" spacing={0.7}>
+        <Button variant="outlined" disableElevation onClick={() => setOpenImageImport(true)} sx={{ borderRadius: 1, height: 32, px: 1.1, fontWeight: 900, fontSize: 11 }}>이미지로 불러오기</Button>
+        <Button variant="contained" disableElevation onClick={() => setOpenLoad(true)} sx={{ borderRadius: 1, height: 32, px: 1.4, fontWeight: 900, bgcolor: "#87B8FF", "&:hover": { bgcolor: "#79AEFF" }, boxShadow: "none" }}>불러오기</Button>
+      </Stack>
     </Box>
     <Divider sx={{ mb: 1.2, borderColor: "#D9DDE6" }} />
 
@@ -107,6 +135,13 @@ export default function LeagueRenewalStep5Participants() {
       <DialogActions sx={{ px: 2, pb: 2, gap: 1 }}><Button onClick={() => setDeleteTarget(null)} sx={{ fontWeight: 900, color: "#111827" }}>취소</Button><Button autoFocus onClick={() => { if (deleteTarget) setParticipants((current) => current.filter((_, index) => index !== deleteTarget.idx)); setDeleteTarget(null); }} sx={{ fontWeight: 900, color: "#111827" }}>확인</Button></DialogActions>
     </Dialog>
     <LoadMembersDialog open={openLoad} onClose={() => setOpenLoad(false)} onConfirm={handleConfirmLoad} />
+    <ParticipantImageImportDialog
+      open={openImageImport}
+      onClose={() => setOpenImageImport(false)}
+      onConfirm={handleImageImport}
+      existingNames={participants.map((participant) => participant.name)}
+      groupIds={[hostGroupId, ...invitedGroupOptions.map((group) => group.id)].filter((value): value is string => Boolean(value))}
+    />
     <Snackbar open={Boolean(alertMsg)} autoHideDuration={3000} onClose={() => setAlertMsg("")} anchorOrigin={{ vertical: "bottom", horizontal: "center" }}><Alert severity="warning" onClose={() => setAlertMsg("")} sx={{ fontWeight: 700 }}>{alertMsg}</Alert></Snackbar>
   </Box>;
 }

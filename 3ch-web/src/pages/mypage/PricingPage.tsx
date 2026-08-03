@@ -324,6 +324,7 @@ export default function PricingPage() {
   }, []);
   useEffect(() => {
     if (window.location.hash !== "#token-packages" || tokenPackages.length === 0) return;
+    setTab(1);
     const frame = window.requestAnimationFrame(() => {
       document.getElementById("token-packages")?.scrollIntoView({
         behavior: "smooth",
@@ -522,7 +523,8 @@ export default function PricingPage() {
           "& .Mui-selected": { color: "#111827 !important" },
         }}
       >
-        <Tab label="요금제" />
+        <Tab label="구독" />
+        <Tab label="충전" />
         <Tab label="구매내역" />
         <Tab label="쿠폰내역" />
       </Tabs>
@@ -554,48 +556,6 @@ export default function PricingPage() {
             <PlanCard key={plan.id} plan={plan} onBuy={plan.buttonDisabled ? undefined : () => handleBuy(plan.id)} />
           ))}
 
-          {tokenPackages.length > 0 && (
-            <Box id="token-packages" sx={{ mt: 3, mb: 3, scrollMarginTop: 72 }}>
-              <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
-                <AccountBalanceWalletOutlinedIcon sx={{ color: "#7C3AED" }} />
-                <Typography fontSize={18} fontWeight={900}>추가 사용량 충전</Typography>
-              </Stack>
-              <Typography fontSize={13} color="text.secondary" sx={{ mb: 1.5 }}>
-                현재 구독 기간 동안 사용할 기능 횟수를 추가로 구매합니다.
-              </Typography>
-              <Stack spacing={1.25}>
-                {tokenPackages.map((item) => (
-                  <Box key={item.id} sx={{ border: "1px solid #DDD6FE", bgcolor: "#FAF5FF", borderRadius: 2, p: 2 }}>
-                    <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={2}>
-                      <Box>
-                        <Typography fontWeight={900}>{item.name}</Typography>
-                        <Stack direction="row" gap={0.75} flexWrap="wrap" sx={{ mt: 0.8 }}>
-                          {FEATURE_LABELS.filter(([key]) => Number(item.credits?.[key] ?? 0) > 0).map(([key, label]) => (
-                            <Typography key={key} fontSize={12} color="#6D28D9">
-                              {label} {item.credits[key]}회
-                            </Typography>
-                          ))}
-                        </Stack>
-                      </Box>
-                      <Typography fontSize={17} fontWeight={900} whiteSpace="nowrap">
-                        {Number(item.price).toLocaleString("ko-KR")}원
-                      </Typography>
-                    </Stack>
-                    <Button
-                      fullWidth
-                      variant="contained"
-                      disableElevation
-                      onClick={() => handleBuyTokens(item)}
-                      sx={{ mt: 1.5, height: 42, bgcolor: "#7C3AED", fontWeight: 800, "&:hover": { bgcolor: "#6D28D9" } }}
-                    >
-                      충전하기
-                    </Button>
-                  </Box>
-                ))}
-              </Stack>
-            </Box>
-          )}
-
           {/* 유의사항 */}
           <Box
             sx={{
@@ -621,8 +581,58 @@ export default function PricingPage() {
         </>
       )}
 
-      {/* 구매내역 탭 */}
+      {/* 충전 탭 */}
       {tab === 1 && (
+        <Box id="token-packages" sx={{ mb: 3, scrollMarginTop: 72 }}>
+          <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
+            <AccountBalanceWalletOutlinedIcon sx={{ color: "#7C3AED" }} />
+            <Typography fontSize={18} fontWeight={900}>추가 사용량 충전</Typography>
+          </Stack>
+          <Typography fontSize={13} color="text.secondary" sx={{ mb: 1.5 }}>
+            현재 이용 기간 동안 사용할 기능 횟수를 추가로 구매합니다.
+          </Typography>
+          <Stack spacing={1.25}>
+            {tokenPackages.map((item) => (
+              <Box key={item.id} sx={{ border: "1px solid #DDD6FE", bgcolor: "#FAF5FF", borderRadius: 2, p: 2 }}>
+                <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={2}>
+                  <Box>
+                    <Typography fontWeight={900}>{item.name}</Typography>
+                    <Stack direction="row" gap={0.75} flexWrap="wrap" sx={{ mt: 0.8 }}>
+                      {FEATURE_LABELS.filter(([key]) => Number(item.credits?.[key] ?? 0) > 0).map(([key, label]) => (
+                        <Typography key={key} fontSize={12} color="#6D28D9">
+                          {label} {item.credits[key]}회
+                        </Typography>
+                      ))}
+                    </Stack>
+                  </Box>
+                  <Typography fontSize={17} fontWeight={900} whiteSpace="nowrap">
+                    {Number(item.price).toLocaleString("ko-KR")}원
+                  </Typography>
+                </Stack>
+                <Button
+                  fullWidth
+                  variant="contained"
+                  disableElevation
+                  onClick={() => handleBuyTokens(item)}
+                  sx={{ mt: 1.5, height: 42, bgcolor: "#7C3AED", fontWeight: 800, "&:hover": { bgcolor: "#6D28D9" } }}
+                >
+                  충전하기
+                </Button>
+              </Box>
+            ))}
+            {tokenPackages.length === 0 && (
+              <Box sx={{ py: 6, textAlign: "center" }}>
+                <Typography fontSize={14} fontWeight={700} color="text.secondary">
+                  구매할 수 있는 추가 사용량 상품이 없습니다.
+                </Typography>
+              </Box>
+            )}
+          </Stack>
+        </Box>
+      )}
+
+      {/* 구매내역 탭 */}
+      {tab === 2 && (
         <Stack spacing={1.5} sx={{ pb: 3 }}>
           {historyLoading && (
             <Box sx={{ py: 6, textAlign: "center" }}>
@@ -750,7 +760,7 @@ export default function PricingPage() {
       )}
 
       {/* 쿠폰내역 탭 */}
-      {tab === 2 && (
+      {tab === 3 && (
         <Box sx={{ py: 6, textAlign: "center" }}>
           <Typography fontSize={14} fontWeight={700} color="text.secondary">등록된 쿠폰이 없습니다.</Typography>
         </Box>

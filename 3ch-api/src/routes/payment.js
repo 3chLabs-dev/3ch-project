@@ -275,7 +275,7 @@ router.post("/payment/token/confirm", requireAuth, async (req, res) => {
 
   const duplicate = await pool.query(
     `SELECT tp.id,
-            (COALESCE(pkg.credits, '{}'::jsonb) || COALESCE(tp.credits, '{}'::jsonb)) AS credits,
+            (COALESCE(tp.credits, '{}'::jsonb) || COALESCE(pkg.credits, '{}'::jsonb)) AS credits,
             tp.expires_at
        FROM token_purchases tp
        LEFT JOIN token_packages pkg ON pkg.id = tp.package_id
@@ -574,7 +574,7 @@ router.get("/payment/usage/me", requireAuth, async (req, res) => {
     // interrupted or older confirmation flow. The insert is idempotent.
     const purchases = await pool.query(
       `SELECT tp.id,
-              (COALESCE(pkg.credits, '{}'::jsonb) || COALESCE(tp.credits, '{}'::jsonb)) AS credits,
+              (COALESCE(tp.credits, '{}'::jsonb) || COALESCE(pkg.credits, '{}'::jsonb)) AS credits,
               tp.expires_at
          FROM token_purchases tp
          LEFT JOIN token_packages pkg ON pkg.id = tp.package_id

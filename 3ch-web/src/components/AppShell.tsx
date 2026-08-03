@@ -52,11 +52,12 @@ export default function AppShell() {
         refetchOnMountOrArgChange: true,
     });
     const { data: usageData, refetch: refetchUsage } = useGetMyFeatureUsageQuery(undefined, {
-        skip: !token || !isMyPage,
+        skip: !token,
+        refetchOnMountOrArgChange: true,
     });
     useEffect(() => {
-        if (usageOpen && token && isMyPage) void refetchUsage();
-    }, [isMyPage, refetchUsage, token, usageOpen]);
+        if (usageOpen && token) void refetchUsage();
+    }, [refetchUsage, token, usageOpen]);
     const usageItems = [
         { label: "리그 생성", balance: usageData?.usage.league_create },
         { label: "사진 인식", balance: usageData?.usage.vision_scan },

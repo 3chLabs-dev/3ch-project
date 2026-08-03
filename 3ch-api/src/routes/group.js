@@ -911,12 +911,18 @@ router.get('/group/:id', requireAuth, async (req, res) => {
     const membersQuery = `
       SELECT member_rows.id, member_rows.role, member_rows.division,
              member_rows.joined_at, member_rows.user_id, member_rows.name,
-             member_rows.email, member_rows.is_pre_member
+             member_rows.email, member_rows.is_pre_member, member_rows.external_aliases
       FROM (
         SELECT gm.id, gm.role, gm.division, gm.joined_at,
                u.id AS user_id, u.name,
                ${myRole ? 'u.email' : 'NULL::text'} AS email,
                false AS is_pre_member,
+               COALESCE((
+                 SELECT jsonb_agg(jsonb_build_object('id', ua.id, 'alias', ua.alias, 'source', ua.source)
+                                  ORDER BY ua.created_at ASC)
+                 FROM user_external_aliases ua
+                 WHERE ua.group_id = gm.group_id AND ua.user_id = gm.user_id
+               ), '[]'::jsonb) AS external_aliases,
                CASE gm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END AS role_order
         FROM group_members gm
         INNER JOIN users u ON gm.user_id = u.id
@@ -926,7 +932,7 @@ router.get('/group/:id', requireAuth, async (req, res) => {
 
         SELECT pm.id, 'pre_member'::text AS role, pm.division,
                pm.created_at AS joined_at, NULL::integer AS user_id, pm.name,
-               NULL::text AS email, true AS is_pre_member, 3 AS role_order
+               NULL::text AS email, true AS is_pre_member, '[]'::jsonb AS external_aliases, 3 AS role_order
         FROM group_pre_members pm
         WHERE pm.group_id = $1 AND pm.status = 'active'
       ) AS member_rows
@@ -1495,6 +1501,7 @@ router.patch('/group/:id/member/:userId/role', requireAuth, requireGroupOwner, a
       [id, targetUserId]
     );
     if (targetCheck.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ message: '해당 멤버를 찾을 수 없습니다' });
     }
     if (targetCheck.rows[0].role === 'owner') {
@@ -1563,16 +1570,35 @@ router.patch('/group/:id/member/:userId/role', requireAuth, requireGroupOwner, a
  *         description: 서버 오류
  */
 router.patch('/group/:id/member/:userId', requireAuth, requireGroupAdmin, async (req, res) => {
+  const client = await pool.connect();
   try {
     const { id, userId: targetUserId } = req.params;
-    const { division } = req.body;
+    const { division, external_aliases } = req.body;
+
+    const aliases = external_aliases === undefined
+      ? undefined
+      : [...new Map((Array.isArray(external_aliases) ? external_aliases : [])
+        .map((value) => String(value || '').normalize('NFKC').trim())
+        .filter((value) => value.length > 0 && value.length <= 60)
+        .map((value) => [value.replace(/\s+/g, '').toLocaleLowerCase('ko-KR'), value])).entries()]
+        .map(([normalized, alias]) => ({ alias, normalized }));
+
+    if (external_aliases !== undefined && !Array.isArray(external_aliases)) {
+      return res.status(400).json({ message: '외부 닉네임 형식이 올바르지 않습니다.' });
+    }
+    if (aliases && aliases.length > 20) {
+      return res.status(400).json({ message: '외부 닉네임은 최대 20개까지 등록할 수 있습니다.' });
+    }
+
+    await client.query('BEGIN');
 
     // 대상 멤버 확인
-    const targetCheck = await pool.query(
+    const targetCheck = await client.query(
       `SELECT id FROM group_members WHERE group_id = $1 AND user_id = $2`,
       [id, targetUserId]
     );
     if (targetCheck.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ message: '해당 멤버를 찾을 수 없습니다' });
     }
 
@@ -1585,20 +1611,43 @@ router.patch('/group/:id/member/:userId', requireAuth, requireGroupAdmin, async 
       values.push(division);
     }
 
-    if (updates.length === 0) {
+    if (updates.length === 0 && aliases === undefined) {
+      await client.query('ROLLBACK');
       return res.status(400).json({ message: '수정할 내용이 없습니다' });
     }
 
-    values.push(id, targetUserId);
-    await pool.query(
-      `UPDATE group_members SET ${updates.join(', ')} WHERE group_id = $${paramIdx++} AND user_id = $${paramIdx}`,
-      values
-    );
+    if (updates.length > 0) {
+      values.push(id, targetUserId);
+      await client.query(
+        `UPDATE group_members SET ${updates.join(', ')} WHERE group_id = $${paramIdx++} AND user_id = $${paramIdx}`,
+        values
+      );
+    }
+
+    if (aliases !== undefined) {
+      await client.query(
+        `DELETE FROM user_external_aliases WHERE group_id = $1 AND user_id = $2 AND source = 'external'`,
+        [id, targetUserId],
+      );
+      for (const item of aliases) {
+        await client.query(
+          `INSERT INTO user_external_aliases
+             (id, user_id, group_id, alias, normalized_alias, source)
+           VALUES ($1, $2, $3, $4, $5, 'external')`,
+          [randomUUID(), targetUserId, id, item.alias, item.normalized],
+        );
+      }
+    }
+
+    await client.query('COMMIT');
 
     res.status(200).json({ message: '멤버 정보가 수정되었습니다' });
   } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error('Error updating member:', error);
     res.status(500).json({ message: '내부 서버 오류' });
+  } finally {
+    client.release();
   }
 });
 

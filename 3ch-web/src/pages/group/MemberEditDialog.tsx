@@ -15,6 +15,8 @@ import {
   FormControl,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
+import AddIcon from "@mui/icons-material/Add";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 
 type Props = {
   open: boolean;
@@ -24,9 +26,10 @@ type Props = {
     email: string;
     role: "owner" | "admin" | "member";
     division?: string;
+    externalAliases?: string[];
   };
   onClose: () => void;
-  onSave: (updated: { role: "owner" | "admin" | "member"; division: string }) => void;
+  onSave: (updated: { role: "owner" | "admin" | "member"; division: string; externalAliases: string[] }) => void;
   onRemove?: () => void;
   isOwner: boolean;
 };
@@ -41,11 +44,13 @@ export default function MemberEditDialog({
 }: Props) {
   const [role, setRole] = useState(member.role);
   const [division, setDivision] = useState(member.division || "");
+  const [externalAliases, setExternalAliases] = useState<string[]>(member.externalAliases || []);
 
   const handleSave = () => {
     onSave({
       role,
       division: division.trim(),
+      externalAliases: externalAliases.map((value) => value.trim()).filter(Boolean),
     });
     handleClose();
   };
@@ -129,6 +134,49 @@ export default function MemberEditDialog({
                 "& .MuiOutlinedInput-root": { borderRadius: 1, bgcolor: "#fff" },
               }}
             />
+          </Box>
+
+          <Box>
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.8 }}>
+              <Typography sx={{ fontSize: 14, fontWeight: 700, color: "#6B7280" }}>
+                외부 서비스 닉네임
+              </Typography>
+              <Button
+                size="small"
+                startIcon={<AddIcon />}
+                disabled={externalAliases.length >= 20}
+                onClick={() => setExternalAliases((current) => [...current, ""])}
+                sx={{ minWidth: 0, fontWeight: 800 }}
+              >
+                추가
+              </Button>
+            </Box>
+            <Stack spacing={1}>
+              {externalAliases.length === 0 && (
+                <Typography sx={{ fontSize: 12, color: "#9CA3AF" }}>
+                  소모임 등 외부 서비스에서 사용하는 닉네임을 등록해 주세요.
+                </Typography>
+              )}
+              {externalAliases.map((alias, index) => (
+                <Stack key={index} direction="row" spacing={0.7} alignItems="center">
+                  <TextField
+                    value={alias}
+                    onChange={(event) => setExternalAliases((current) => current.map((value, itemIndex) => itemIndex === index ? event.target.value : value))}
+                    placeholder="닉네임"
+                    inputProps={{ maxLength: 60 }}
+                    fullWidth
+                    size="small"
+                  />
+                  <IconButton
+                    size="small"
+                    aria-label="닉네임 삭제"
+                    onClick={() => setExternalAliases((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                  >
+                    <DeleteOutlineIcon fontSize="small" color="error" />
+                  </IconButton>
+                </Stack>
+              ))}
+            </Stack>
           </Box>
 
           {onRemove && member.role !== "owner" && (

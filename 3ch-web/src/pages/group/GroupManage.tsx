@@ -99,7 +99,7 @@ export default function GroupManage() {
     const [selectedParticipant, setSelectedParticipant] = useState<{ leagueId: string; participant: LeagueParticipantItem } | null>(null);
     const [memberEditOpen, setMemberEditOpen] = useState(false);
     const [preMemberDialogOpen, setPreMemberDialogOpen] = useState(false);
-    const [selectedMember, setSelectedMember] = useState<{ id: string; name: string; email: string; role: "owner" | "admin" | "member"; division?: string } | null>(null);
+    const [selectedMember, setSelectedMember] = useState<{ id: string; name: string; email: string; role: "owner" | "admin" | "member"; division?: string; externalAliases?: string[] } | null>(null);
 
     const leagueManagementRef = useRef<HTMLDivElement>(null);
 
@@ -343,6 +343,7 @@ export default function GroupManage() {
             email: member.email || "",
             role: member.role as "owner" | "admin" | "member",
             division: member.division || "",
+            externalAliases: (member.external_aliases || []).map((item) => item.alias),
         });
         setMemberEditOpen(true);
     };
@@ -352,7 +353,7 @@ export default function GroupManage() {
         setSelectedMember(null);
     };
 
-    const handleSaveMemberEdit = async (updated: { role: "owner" | "admin" | "member"; division: string }) => {
+    const handleSaveMemberEdit = async (updated: { role: "owner" | "admin" | "member"; division: string; externalAliases: string[] }) => {
         if (!selectedMember || !id) return;
         try {
             if (updated.role !== selectedMember.role && updated.role !== "owner" && selectedMember.role !== "owner") {
@@ -367,6 +368,7 @@ export default function GroupManage() {
                 groupId: id,
                 userId: selectedMember.id,
                 division: updated.division.trim(),
+                externalAliases: updated.externalAliases,
             }).unwrap();
 
             handleCloseMemberEdit();

@@ -349,6 +349,8 @@ export interface RecognizedParticipant {
   ambiguous: boolean;
   member_id: number | null;
   source_group_id: string | null;
+  canonical_name: string | null;
+  matched_alias: string | null;
 }
 
 export interface ScanParticipantImagesResponse {

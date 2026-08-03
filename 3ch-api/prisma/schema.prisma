@@ -54,6 +54,7 @@ model User {
   granted_feature_credits       FeatureCreditBucket[]    @relation("FeatureCreditGranter")
   feature_usage_events          FeatureUsageEvent[]      @relation("FeatureUsageOwner")
   token_purchases               TokenPurchase[]
+  external_aliases              UserExternalAlias[]
 
   @@map("users")
 }
@@ -120,8 +121,27 @@ model Group {
   league_participants  LeagueParticipant[]  @relation("ParticipantSourceGroup")
   pre_members          GroupPreMember[]
   ranking_seasons      GroupRankingSeason[]
+  user_external_aliases UserExternalAlias[]
 
   @@map("groups")
+}
+
+model UserExternalAlias {
+  id               String   @id @default(uuid())
+  user_id          Int
+  group_id         String
+  alias            String   @db.VarChar(60)
+  normalized_alias String   @db.VarChar(60)
+  source           String   @default("external") @db.VarChar(30)
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
+  user  User  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  group Group @relation(fields: [group_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, group_id, source, normalized_alias])
+  @@index([group_id, normalized_alias])
+  @@map("user_external_aliases")
 }
 
 model GroupMember {

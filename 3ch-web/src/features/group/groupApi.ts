@@ -72,6 +72,7 @@ export interface GroupMember {
   name?: string;
   email?: string | null;
   is_pre_member?: boolean;
+  external_aliases?: Array<{ id: string; alias: string; source: string }>;
 }
 
 export interface GroupPreMember {
@@ -669,12 +670,12 @@ export const groupApi = baseApi.injectEndpoints({
 
     updateMember: builder.mutation<
       { message: string },
-      { groupId: string; userId: string; division?: string }
+      { groupId: string; userId: string; division?: string; externalAliases?: string[] }
     >({
-      query: ({ groupId, userId, division }) => ({
+      query: ({ groupId, userId, division, externalAliases }) => ({
         url: `/group/${groupId}/member/${userId}`,
         method: "PATCH",
-        body: { division },
+        body: { division, external_aliases: externalAliases },
       }),
       invalidatesTags: (_result, _error, { groupId }) => [
         { type: "Group", id: groupId },

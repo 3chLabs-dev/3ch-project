@@ -4338,9 +4338,14 @@ router.post('/league/participants/image-scan', requireAuth, participantImageUplo
     let memberRows = [];
     if (groupIds.length > 0 && extracted.length > 0) {
       const memberResult = await pool.query(
-        `SELECT gm.group_id, gm.division, u.id AS member_id, COALESCE(NULLIF(u.nickname, ''), u.name) AS display_name, u.name
+        `SELECT gm.group_id, gm.division, u.id AS member_id,
+                COALESCE(NULLIF(u.name, ''), NULLIF(u.nickname, ''), u.email) AS canonical_name,
+                COALESCE(NULLIF(u.nickname, ''), u.name) AS display_name,
+                u.name, ua.alias AS external_alias
            FROM group_members gm
            JOIN users u ON u.id = gm.user_id
+           LEFT JOIN user_external_aliases ua
+             ON ua.group_id = gm.group_id AND ua.user_id = gm.user_id
           WHERE gm.group_id = ANY($1::text[])`,
         [groupIds],
       );
@@ -4352,7 +4357,7 @@ router.post('/league/participants/image-scan', requireAuth, participantImageUplo
     extracted.forEach((item) => occurrences.set(normalizeName(item.name), (occurrences.get(normalizeName(item.name)) || 0) + 1));
     const participants = extracted.map((item) => {
       const key = normalizeName(item.name);
-      const matches = memberRows.filter((member) => [member.display_name, member.name].some((value) => normalizeName(value) === key));
+      const matches = memberRows.filter((member) => [member.display_name, member.name, member.external_alias].some((value) => normalizeName(value) === key));
       const uniqueMembers = [...new Map(matches.map((member) => [String(member.member_id), member])).values()];
       const match = uniqueMembers.length === 1 ? uniqueMembers[0] : null;
       return {
@@ -4362,6 +4367,8 @@ router.post('/league/participants/image-scan', requireAuth, participantImageUplo
         member_id: match?.member_id ?? null,
         division: match?.division ?? '',
         source_group_id: match?.group_id ?? null,
+        canonical_name: match?.canonical_name ?? null,
+        matched_alias: match && normalizeName(match.external_alias) === key ? item.name : null,
       };
     });
 

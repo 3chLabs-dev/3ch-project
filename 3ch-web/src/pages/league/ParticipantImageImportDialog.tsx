@@ -82,12 +82,18 @@ export default function ParticipantImageImportDialog({ open, onClose, onConfirm,
       }).unwrap();
       const seen = new Set<string>();
       setRows(result.participants.map((participant, index) => {
-        const key = normalizeName(participant.name);
+        const recognizedName = participant.name;
+        const resolvedName = participant.ambiguous
+          ? recognizedName
+          : (participant.canonical_name || recognizedName);
+        const key = normalizeName(resolvedName);
         const existingDuplicate = existingKeys.has(key);
         const firstOccurrence = !seen.has(key);
         seen.add(key);
         return {
           ...participant,
+          name: resolvedName,
+          matched_alias: participant.matched_alias || (resolvedName !== recognizedName ? recognizedName : null),
           id: `${participant.imageIndex}-${participant.rowIndex}-${index}`,
           selected: firstOccurrence && !existingDuplicate,
           existingDuplicate,
@@ -164,6 +170,15 @@ export default function ParticipantImageImportDialog({ open, onClose, onConfirm,
                   <TextField value={row.name} onChange={(event) => updateRow(row.id, { name: event.target.value })} size="small" fullWidth inputProps={{ style: { padding: "7px 8px" } }} />
                   <Stack direction="row" spacing={0.5} useFlexGap flexWrap="wrap" sx={{ mt: 0.5 }}>
                     {row.member_id && !row.ambiguous && <Chip label="클럽 회원" size="small" color="primary" variant="outlined" sx={{ height: 20, fontSize: 10 }} />}
+                    {row.matched_alias && !row.ambiguous && (
+                      <Chip
+                        label={`${row.matched_alias} → ${row.name}`}
+                        size="small"
+                        color="success"
+                        variant="outlined"
+                        sx={{ height: 20, fontSize: 10 }}
+                      />
+                    )}
                     {row.ambiguous && <Chip label="동명이인 확인 필요" size="small" color="warning" sx={{ height: 20, fontSize: 10 }} />}
                     {row.existingDuplicate && <Chip label="이미 등록됨" size="small" color="warning" sx={{ height: 20, fontSize: 10 }} />}
                     {row.duplicateCount > 1 && <Chip label={`${row.duplicateCount}회 인식`} size="small" color="warning" variant="outlined" sx={{ height: 20, fontSize: 10 }} />}

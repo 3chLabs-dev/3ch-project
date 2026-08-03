@@ -47,6 +47,7 @@ const TOKEN_CREDIT_KEY_MAP = {
   club_create: FEATURES.CLUB_CREATE,
   club_join: FEATURES.CLUB_JOIN,
   league_create: FEATURES.LEAGUE_CREATE,
+  event_create: FEATURES.LEAGUE_CREATE,
   tournament_create: FEATURES.TOURNAMENT_CREATE,
   event_join: FEATURES.EVENT_JOIN,
   vision_scan: FEATURES.VISION_SCAN,
@@ -56,7 +57,7 @@ const TOKEN_CREDIT_KEY_MAP = {
 async function grantTokenPurchaseCredits(client, { purchaseId, userId, credits, expiresAt }) {
   const normalizedCredits = typeof credits === "string" ? JSON.parse(credits) : (credits || {});
   for (const [key, rawAmount] of Object.entries(normalizedCredits)) {
-    const feature = TOKEN_CREDIT_KEY_MAP[key];
+    const feature = TOKEN_CREDIT_KEY_MAP[String(key).trim().toLowerCase()];
     const creditAmount = Number.parseInt(String(rawAmount), 10);
     if (!feature || !Number.isInteger(creditAmount) || creditAmount <= 0) continue;
     await client.query(
@@ -273,7 +274,12 @@ router.post("/payment/token/confirm", requireAuth, async (req, res) => {
   }
 
   const duplicate = await pool.query(
-    `SELECT id, credits, expires_at FROM token_purchases WHERE order_id = $1 AND user_id = $2`,
+    `SELECT tp.id,
+            (COALESCE(pkg.credits, '{}'::jsonb) || COALESCE(tp.credits, '{}'::jsonb)) AS credits,
+            tp.expires_at
+       FROM token_purchases tp
+       LEFT JOIN token_packages pkg ON pkg.id = tp.package_id
+      WHERE tp.order_id = $1 AND tp.user_id = $2`,
     [orderId, userId],
   );
   if (duplicate.rowCount) {
@@ -567,11 +573,14 @@ router.get("/payment/usage/me", requireAuth, async (req, res) => {
     // Repair paid token purchases whose credit buckets were not created by an
     // interrupted or older confirmation flow. The insert is idempotent.
     const purchases = await pool.query(
-      `SELECT id, credits, expires_at
-         FROM token_purchases
-        WHERE user_id = $1
-          AND status = 'PAID'
-          AND expires_at > NOW()`,
+      `SELECT tp.id,
+              (COALESCE(pkg.credits, '{}'::jsonb) || COALESCE(tp.credits, '{}'::jsonb)) AS credits,
+              tp.expires_at
+         FROM token_purchases tp
+         LEFT JOIN token_packages pkg ON pkg.id = tp.package_id
+        WHERE tp.user_id = $1
+          AND tp.status = 'PAID'
+          AND tp.expires_at > NOW()`,
       [userId],
     );
     for (const purchase of purchases.rows) {

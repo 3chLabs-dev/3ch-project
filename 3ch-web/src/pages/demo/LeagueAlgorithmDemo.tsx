@@ -628,6 +628,29 @@ function ClubPolicyControls({ round, enabled, onChange }: { round: RoundConfig; 
   </>;
 }
 
+function HalfSplitMatchControl({ round, enabled, onChange }: { round: RoundConfig; enabled: boolean; onChange: (patch: Partial<RoundConfig>) => void }) {
+  if (!enabled || round.format === "TOURNAMENT") return null;
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{ fontWeight: 700, marginBottom: 8 }}>대결 모드</div>
+      <ToggleButtonGroup
+        exclusive
+        fullWidth
+        value={round.halfSplitOnlyMatches ? "split" : "all"}
+        onChange={(_, value) => value && onChange({ halfSplitOnlyMatches: value === "split" })}
+      >
+        <ToggleButton value="all">전체 매칭</ToggleButton>
+        <ToggleButton value="split">상단 vs 하단</ToggleButton>
+      </ToggleButtonGroup>
+      {round.halfSplitOnlyMatches && (
+        <Typography sx={{ mt: 1, color: "#6B7280", fontSize: 12, lineHeight: 1.5 }}>
+          참가 단위의 표시 순서를 절반으로 나눠 서로 다른 편끼리만 경기합니다.
+        </Typography>
+      )}
+    </div>
+  );
+}
+
 function SortableFormationPlayer({ player }: { player: FormationAssignmentPlayer }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: formationPlayerId(player),
@@ -719,6 +742,7 @@ interface RoundConfigEditorProps {
   setRounds: (rounds: RoundConfig[]) => void;
   clubPoliciesEnabled: boolean;
   participantCount: number;
+  halfSplitMatchEnabled?: boolean;
 }
 
 function RoundConfigEditor({
@@ -726,6 +750,7 @@ function RoundConfigEditor({
   setRounds,
   clubPoliciesEnabled,
   participantCount,
+  halfSplitMatchEnabled = false,
 }: RoundConfigEditorProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -1099,6 +1124,7 @@ function RoundConfigEditor({
                 </ToggleButtonGroup>
               </div>
               <ClubPolicyControls round={round} enabled={clubPoliciesEnabled} onChange={(patch) => setRounds(rounds.map((item) => item.id === round.id ? { ...item, ...patch } : item))} />
+              <HalfSplitMatchControl round={round} enabled={halfSplitMatchEnabled} onChange={(patch) => setRounds(rounds.map((item) => item.id === round.id ? { ...item, ...patch } : item))} />
             </div>
           ))}
         </SortableContext>
@@ -2879,6 +2905,7 @@ const LeagueAlgorithmDemo = ({
                     </ToggleButtonGroup>
                   </div>
                   <ClubPolicyControls round={round} enabled={clubPoliciesEnabled} onChange={(patch) => setRounds(rounds.map((item) => item.id === round.id ? { ...item, ...patch } : item))} />
+                  <HalfSplitMatchControl round={round} enabled={isEditMode && !clubPoliciesEnabled} onChange={(patch) => setRounds(rounds.map((item) => item.id === round.id ? { ...item, ...patch } : item))} />
                 </div>
 
             {round.program === "TEAM" && (
@@ -3445,6 +3472,7 @@ const LeagueAlgorithmDemo = ({
             setRounds={setEditingRounds}
             clubPoliciesEnabled={clubPoliciesEnabled}
             participantCount={playerCount}
+            halfSplitMatchEnabled={isEditMode && !clubPoliciesEnabled}
           />
           {getTeamRoundValidationError(editingRounds, playerCount) && (
             <Typography sx={{ mt: 1, color: "#D32F2F", fontSize: 13 }}>

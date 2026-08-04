@@ -1074,9 +1074,13 @@ export default function LeagueGPTVisionSheet() {
       programRoundBlock?.title?.includes("본선")
     );
   const isProgramUnitRound = programRoundType === "TEAM" || programRoundType === "DOUBLES";
-  const hasProgramClubPolicy = Boolean(programOption?.blocks?.[programRound - 1]?.crossClubGrouping || programOption?.blocks?.[programRound - 1]?.crossClubOnlyMatches);
+  const hasProgramMatchPolicy = Boolean(
+    programOption?.blocks?.[programRound - 1]?.crossClubGrouping
+    || programOption?.blocks?.[programRound - 1]?.crossClubOnlyMatches
+    || programOption?.blocks?.[programRound - 1]?.halfSplitOnlyMatches
+  );
   const programMatchesAll = useMemo(() => {
-    if (!isProgramFinalRound && !isProgramUnitRound && !hasProgramClubPolicy) {
+    if (!isProgramFinalRound && !isProgramUnitRound && !hasProgramMatchPolicy) {
       return serverProgramMatchesAll.length > 0 ? serverProgramMatchesAll : generatedProgramMatchesAll;
     }
     const serverById = new Map(serverProgramMatchesAll.map((match) => [match.id, match]));
@@ -1092,7 +1096,7 @@ export default function LeagueGPTVisionSheet() {
           }
         : match;
     });
-  }, [generatedProgramMatchesAll, hasProgramClubPolicy, isProgramFinalRound, isProgramUnitRound, serverProgramMatchesAll]);
+  }, [generatedProgramMatchesAll, hasProgramMatchPolicy, isProgramFinalRound, isProgramUnitRound, serverProgramMatchesAll]);
   const [updateMatch] = useUpdateLeagueMatchMutation();
   const [scanVision, { isLoading: isScanning }] = useScanLeagueOpenAIVisionMutation();
   const [resultDialogOpen, setResultDialogOpen] = useState(false);

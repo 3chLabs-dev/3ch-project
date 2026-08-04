@@ -152,7 +152,7 @@ export default function ParticipantImageImportDialog({
         {rows.length === 0 ? (
           <Stack spacing={2}>
             <Typography sx={{ fontSize: 13, color: "#6B7280", lineHeight: 1.6 }}>
-              다른 서비스의 참가자 목록 캡처를 최대 10장까지 선택할 수 있습니다. 이름 아래의 인사말이나 상태 문구는 제외하고 참가자 이름만 인식합니다.
+              외부 서비스의 참가자 목록 캡처를 최대 10장까지 선택할 수 있습니다. 이름 아래의 인사말이나 상태 문구는 제외하고 참가자 이름만 인식합니다.
             </Typography>
             <input ref={inputRef} hidden type="file" accept="image/*" multiple onChange={(event) => chooseFiles(event.target.files)} />
             <Button variant="outlined" startIcon={<PhotoLibraryOutlinedIcon />} onClick={() => inputRef.current?.click()} sx={{ height: 44, fontWeight: 800 }}>

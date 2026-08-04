@@ -324,6 +324,9 @@ function buildUnitRoundRobinMatches(
     ...unit,
     seedLabel: String(index + 1),
   }));
+  const upperHalfSize = Math.ceil(orderedUnits.length / 2);
+  const isSameHalf = (leftIndex: number, rightIndex: number) =>
+    (leftIndex < upperHalfSize) === (rightIndex < upperHalfSize);
 
   return generateRoundRobin(orderedUnits.length).map(([leftIndex, rightIndex], index) => {
     const match = makeMatch(
@@ -338,8 +341,9 @@ function buildUnitRoundRobinMatches(
     return {
       ...match,
       is_no_game: Boolean(
-        block.crossClubOnlyMatches
-        && sameClubMatch(orderedUnits[leftIndex], orderedUnits[rightIndex]),
+        (block.crossClubOnlyMatches
+          && sameClubMatch(orderedUnits[leftIndex], orderedUnits[rightIndex]))
+        || (block.halfSplitOnlyMatches && isSameHalf(leftIndex, rightIndex)),
       ),
     };
   });

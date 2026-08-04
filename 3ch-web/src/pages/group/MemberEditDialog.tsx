@@ -154,7 +154,7 @@ export default function MemberEditDialog({
             <Stack spacing={1}>
               {externalAliases.length === 0 && (
                 <Typography sx={{ fontSize: 12, color: "#9CA3AF" }}>
-                  소모임 등 외부 서비스에서 사용하는 닉네임을 등록해 주세요.
+                  소모임, 네이버 밴드 등 외부 서비스에서 사용하는 닉네임을 등록해 주세요.
                 </Typography>
               )}
               {externalAliases.map((alias, index) => (

@@ -130,6 +130,7 @@ export interface ProgramBlock {
   sourceRoundId?: number;
   crossClubGrouping?: boolean;
   crossClubOnlyMatches?: boolean;
+  halfSplitOnlyMatches?: boolean;
   unitClubMode?: UnitClubMode;
   participantOrder?: string[];
   deletedMatchIds?: string[];
@@ -221,6 +222,7 @@ export interface RoundConfig {
   sourceRoundId?: number;
   crossClubGrouping?: boolean;
   crossClubOnlyMatches?: boolean;
+  halfSplitOnlyMatches?: boolean;
   unitClubMode?: UnitClubMode;
   participantOrder?: string[];
 }

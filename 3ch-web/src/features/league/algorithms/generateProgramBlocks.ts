@@ -191,6 +191,7 @@ export function generateProgramBlocks(
       sourceRoundId: round.sourceRoundId,
       crossClubGrouping: round.crossClubGrouping,
       crossClubOnlyMatches: round.crossClubOnlyMatches,
+      halfSplitOnlyMatches: round.halfSplitOnlyMatches,
       unitClubMode: round.unitClubMode,
 	  });
 }
@@ -244,6 +245,7 @@ export function generateProgramBlocks(
         sourceRoundId: round.sourceRoundId,
         crossClubGrouping: round.crossClubGrouping,
         crossClubOnlyMatches: round.crossClubOnlyMatches,
+        halfSplitOnlyMatches: round.halfSplitOnlyMatches,
         unitClubMode: round.unitClubMode,
 	    });
   }
@@ -319,6 +321,7 @@ export function generateProgramBlocks(
         sourceRoundId: round.sourceRoundId,
         crossClubGrouping: round.crossClubGrouping,
         crossClubOnlyMatches: round.crossClubOnlyMatches,
+        halfSplitOnlyMatches: round.halfSplitOnlyMatches,
         unitClubMode: round.unitClubMode,
         teamSinglesCount: teamInfo.singles,
         teamDoublesCount: teamInfo.doubles,

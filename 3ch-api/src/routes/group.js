@@ -934,7 +934,19 @@ router.get('/group/:id', requireAuth, async (req, res) => {
                pm.created_at AS joined_at, NULL::integer AS user_id, pm.name,
                NULL::text AS email, true AS is_pre_member, '[]'::jsonb AS external_aliases, 3 AS role_order
         FROM group_pre_members pm
-        WHERE pm.group_id = $1 AND pm.status = 'active'
+        WHERE pm.group_id = $1
+          AND (
+            pm.status = 'active'
+            OR (
+              pm.status = 'linked'
+              AND NOT EXISTS (
+                SELECT 1
+                FROM group_members linked_gm
+                WHERE linked_gm.group_id = pm.group_id
+                  AND linked_gm.user_id = pm.linked_user_id
+              )
+            )
+          )
       ) AS member_rows
       ORDER BY member_rows.role_order, member_rows.joined_at ASC`;
     const membersResult = await pool.query(membersQuery, [id]);

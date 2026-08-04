@@ -140,9 +140,11 @@ function getRuleDescription(rule?: string | null) {
 }
 
 const VISION_GUIDE_IMAGES = [
-  "/og-image.png",
-  "/128_첫번째 아이콘.png",
-  "/128_두번째 아이콘.png",
+  "/images/vision-guide/guide-01.png",
+  "/images/vision-guide/guide-02.png",
+  "/images/vision-guide/guide-03.png",
+  "/images/vision-guide/guide-04.png",
+  "/images/vision-guide/guide-05.png",
 ];
 
 function escapeHtml(value: string): string {

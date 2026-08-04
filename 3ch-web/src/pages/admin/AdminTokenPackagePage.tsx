@@ -22,7 +22,7 @@ const FEATURE_FIELDS = [
   ["league_create", "리그 생성"],
   ["tournament_create", "대회 생성"],
   ["event_join", "리그·대회 참가"],
-  ["vision_scan", "대진표 사진 인식"],
+  ["vision_scan", "참가자·대진표 사진 인식"],
   ["draw_create", "추첨 생성"],
 ] as const;
 

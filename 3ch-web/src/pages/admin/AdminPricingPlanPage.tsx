@@ -13,7 +13,7 @@ const FEATURE_OPTIONS = [
   { key: "league_create", label: "리그 생성" },
   { key: "tournament_create", label: "대회 생성" },
   { key: "event_join", label: "리그·대회 참가" },
-  { key: "vision_scan", label: "대진표 사진 인식" },
+  { key: "vision_scan", label: "참가자·대진표 사진 인식" },
   { key: "draw_create", label: "추첨 생성" },
 ] as const;
 type FeatureKey = typeof FEATURE_OPTIONS[number]["key"];

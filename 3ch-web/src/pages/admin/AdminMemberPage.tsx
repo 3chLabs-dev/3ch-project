@@ -753,7 +753,7 @@ export default function AdminMemberPage() {
                       <Typography sx={{ mb: 1.25, fontSize: 13, fontWeight: 900 }}>기능 횟수 지급</Typography>
                       <Stack spacing={1}>
                         <TextField label="리그·대회 생성" type="number" size="small" value={grantEvent} onChange={(e) => setGrantEvent(e.target.value)} inputProps={{ min: 0 }} />
-                        <TextField label="사진 인식" type="number" size="small" value={grantVision} onChange={(e) => setGrantVision(e.target.value)} inputProps={{ min: 0 }} />
+                        <TextField label="참가자·대진표 사진 인식" type="number" size="small" value={grantVision} onChange={(e) => setGrantVision(e.target.value)} inputProps={{ min: 0 }} />
                         <TextField label="추첨 생성" type="number" size="small" value={grantDraw} onChange={(e) => setGrantDraw(e.target.value)} inputProps={{ min: 0 }} />
                         <TextField label="만료일" type="date" size="small" value={grantExpiresAt} onChange={(e) => setGrantExpiresAt(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
                         <Button variant="outlined" onClick={handleFeatureGrant} disabled={grantLoading} sx={{ fontWeight: 800 }}>
@@ -764,7 +764,7 @@ export default function AdminMemberPage() {
                       <Stack spacing={0.5}>
                         {(["EVENT_CREATE", "VISION_SCAN", "DRAW_CREATE"] as const).map((feature) => {
                           const credit = editMember.feature_credits?.find((item) => item.feature === feature);
-                          const label = feature === "EVENT_CREATE" ? "리그·대회 생성" : feature === "VISION_SCAN" ? "사진 인식" : "추첨 생성";
+                          const label = feature === "EVENT_CREATE" ? "리그·대회 생성" : feature === "VISION_SCAN" ? "참가자·대진표 사진 인식" : "추첨 생성";
                           return (
                             <Stack key={feature} direction="row" justifyContent="space-between">
                               <Typography sx={{ fontSize: 12, color: "#6B7280" }}>{label}</Typography>

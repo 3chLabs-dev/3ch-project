@@ -5,11 +5,13 @@ import {
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import PhotoLibraryOutlinedIcon from "@mui/icons-material/PhotoLibraryOutlined";
 import {
   useCreateGroupPreMemberMutation, useDeleteGroupPreMemberMutation,
   useGetGroupPreMembersQuery, useRequestGroupMemberClaimMutation,
   useReviewGroupMemberClaimMutation,
 } from "../../features/group/groupApi";
+import ParticipantImageImportDialog, { type ImportedParticipant } from "../league/ParticipantImageImportDialog";
 
 type Props = { open: boolean; onClose: () => void; groupId: string; manager?: boolean };
 
@@ -27,6 +29,7 @@ export default function GroupPreMemberDialog({ open, onClose, groupId, manager =
   const [division, setDivision] = useState("");
   const [name, setName] = useState("");
   const [selectedId, setSelectedId] = useState("");
+  const [imageImportOpen, setImageImportOpen] = useState(false);
   const divisionInputRef = useRef<HTMLInputElement>(null);
   const members = data?.pre_members ?? [];
 
@@ -37,6 +40,34 @@ export default function GroupPreMemberDialog({ open, onClose, groupId, manager =
       setName(""); setDivision("");
       requestAnimationFrame(() => divisionInputRef.current?.focus());
     } catch (error) { window.alert(errorMessage(error)); }
+  };
+
+  const addImageMembers = async (participants: ImportedParticipant[]) => {
+    const candidates = participants.filter((participant) => !participant.member_id);
+    let added = 0;
+    let skipped = participants.length - candidates.length;
+
+    for (const participant of candidates) {
+      try {
+        await createMember({
+          groupId,
+          name: participant.name.trim(),
+          division: participant.division.trim(),
+        }).unwrap();
+        added += 1;
+      } catch (error) {
+        const status = (error as { status?: number })?.status;
+        if (status === 409) {
+          skipped += 1;
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    const resultMessage = [`${added}명을 사전등록했습니다.`];
+    if (skipped > 0) resultMessage.push(`이미 클럽 회원이거나 등록된 ${skipped}명은 제외했습니다.`);
+    window.alert(resultMessage.join("\n"));
   };
 
   const submitClaim = async () => {
@@ -63,6 +94,14 @@ export default function GroupPreMemberDialog({ open, onClose, groupId, manager =
         {manager && (
           <Stack spacing={1.25} sx={{ mb: 2.5 }}>
             <Typography fontSize={13} color="text.secondary">회원가입 전인 클럽 회원을 먼저 등록할 수 있습니다.</Typography>
+            <Button
+              variant="outlined"
+              startIcon={<PhotoLibraryOutlinedIcon />}
+              onClick={() => setImageImportOpen(true)}
+              sx={{ height: 40, fontWeight: 800 }}
+            >
+              이미지로 불러오기
+            </Button>
             <Stack direction="row" spacing={1} component="form" onSubmit={(e) => { e.preventDefault(); void addMember(); }}>
               <TextField inputRef={divisionInputRef} size="small" label="부수" value={division} onChange={(e) => setDivision(e.target.value)} sx={{ width: 92 }} />
               <TextField size="small" label="이름" value={name} onChange={(e) => setName(e.target.value)} fullWidth />
@@ -117,6 +156,15 @@ export default function GroupPreMemberDialog({ open, onClose, groupId, manager =
         <Button onClick={onClose}>닫기</Button>
         {!manager && <Button variant="contained" onClick={() => void submitClaim()} disabled={!selectedId || isRequesting}>전환 신청</Button>}
       </DialogActions>
+      <ParticipantImageImportDialog
+        open={imageImportOpen}
+        onClose={() => setImageImportOpen(false)}
+        onConfirm={addImageMembers}
+        existingNames={members.map((member) => member.name)}
+        groupIds={[groupId]}
+        title="이미지에서 클럽 회원 불러오기"
+        recognizeLabel="회원 이름 인식"
+      />
     </Dialog>
   );
 }

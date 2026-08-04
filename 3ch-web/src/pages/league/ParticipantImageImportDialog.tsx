@@ -36,11 +36,21 @@ type Props = {
   onConfirm: (participants: ImportedParticipant[]) => void | Promise<void>;
   existingNames?: string[];
   groupIds?: string[];
+  title?: string;
+  recognizeLabel?: string;
 };
 
 const normalizeName = (value: string) => value.normalize("NFKC").replace(/\s+/g, "").toLocaleLowerCase("ko-KR");
 
-export default function ParticipantImageImportDialog({ open, onClose, onConfirm, existingNames = [], groupIds = [] }: Props) {
+export default function ParticipantImageImportDialog({
+  open,
+  onClose,
+  onConfirm,
+  existingNames = [],
+  groupIds = [],
+  title = "이미지에서 참가자 불러오기",
+  recognizeLabel = "참가자 이름 인식",
+}: Props) {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>([]);
@@ -135,7 +145,7 @@ export default function ParticipantImageImportDialog({ open, onClose, onConfirm,
   return (
     <Dialog open={open} onClose={isLoading || saving ? undefined : onClose} fullWidth maxWidth="sm" PaperProps={{ sx: { borderRadius: 2, m: 1.5, maxHeight: "calc(100dvh - 24px)" } }}>
       <DialogTitle sx={{ fontWeight: 900, fontSize: 18, pr: 6 }}>
-        이미지에서 참가자 불러오기
+        {title}
         <IconButton onClick={onClose} disabled={isLoading || saving} sx={{ position: "absolute", right: 10, top: 8 }} aria-label="닫기"><CloseIcon /></IconButton>
       </DialogTitle>
       <DialogContent dividers sx={{ px: 2 }}>
@@ -153,7 +163,7 @@ export default function ParticipantImageImportDialog({ open, onClose, onConfirm,
               <Stack spacing={0.5}>{files.map((file, index) => <Typography key={`${file.name}-${index}`} sx={{ fontSize: 12, color: "#6B7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{index + 1}. {file.name}</Typography>)}</Stack>
             </Box>}
             <Button variant="contained" disableElevation disabled={files.length === 0 || isLoading} onClick={recognize} sx={{ height: 44, fontWeight: 900 }}>
-              {isLoading ? <CircularProgress size={22} color="inherit" /> : `참가자 이름 인식 (${files.length}회 사용)`}
+              {isLoading ? <CircularProgress size={22} color="inherit" /> : `${recognizeLabel} (${files.length}회 사용)`}
             </Button>
           </Stack>
         ) : (

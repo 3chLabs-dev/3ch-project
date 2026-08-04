@@ -53,7 +53,7 @@ const PLANS = [
     features: [
       "클럽 생성 무제한",
       "리그 생성 월 3회",
-      "대진표 사진 인식 월 3회",
+      "참가자·대진표 사진 인식 월 3회",
       "추첨 생성 월 3회",
     ],
     inheritFrom: "STARTER 혜택",
@@ -76,7 +76,7 @@ const PLANS = [
     originalPrice: "14,900",
     features: [
       "리그 생성 무제한",
-      "대진표 사진 인식 월 20회",
+      "참가자·대진표 사진 인식 월 20회",
       "추첨 생성 무제한",
     ],
     inheritFrom: "BASIC 혜택",
@@ -99,7 +99,7 @@ const PLANS = [
     originalPrice: "24,900",
     features: [
       "대회 생성 무제한",
-      "대진표 사진 인식 월 500회",
+      "참가자·대진표 사진 인식 월 500회",
       "AI 추천 클럽 상단 배치",
     ],
     inheritFrom: "PRO 혜택",
@@ -284,7 +284,7 @@ const FEATURE_LABELS: Array<[string, string]> = [
   ["league_create", "리그 생성"],
   ["tournament_create", "대회 생성"],
   ["event_join", "리그·대회 참가"],
-  ["vision_scan", "대진표 사진 인식"],
+  ["vision_scan", "참가자·대진표 사진 인식"],
   ["draw_create", "추첨 생성"],
 ];
 const featureLimitLabels = (limits?: Record<string, number | null>) =>
@@ -295,6 +295,8 @@ const featureLimitLabels = (limits?: Record<string, number | null>) =>
         return Number(limit ?? 0) === 0 ? `${label} 이용 불가` : `${label} 월 ${limit}회`;
       })
     : [];
+const normalizeFeatureLabel = (label: string) =>
+  label.replace("대진표 사진 인식", "참가자·대진표 사진 인식");
 
 // ─── 메인 페이지 ─────────────────────────────────────────────────────────────
 export default function PricingPage() {
@@ -402,7 +404,7 @@ export default function PricingPage() {
       price: managed.price > 0 ? managed.price.toLocaleString("ko-KR") : null,
       originalPrice: managed.original_price == null ? null : managed.original_price.toLocaleString("ko-KR"),
       features: [...managedFeatureLabels, ...(managed.features ?? [])].length
-        ? [...managedFeatureLabels, ...(managed.features ?? [])]
+        ? [...managedFeatureLabels, ...(managed.features ?? [])].map(normalizeFeatureLabel)
         : plan.features,
     } : plan;
     const isCurrent = currentPlan !== undefined && plan.id === activePlanId;

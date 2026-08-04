@@ -2640,19 +2640,48 @@ export default function LeagueGPTVisionSheet() {
         <DialogActions><Button onClick={() => setVisionError(null)}>확인</Button></DialogActions>
       </Dialog>
 
-      <Dialog open={previewOpen} onClose={() => !isScanning && setPreviewOpen(false)} maxWidth="lg" fullWidth sx={{ zIndex: 10002 }} slotProps={{ paper: { sx: mobileDialogPaperSx } }}>
+      <Dialog open={previewOpen} onClose={() => !isScanning && setPreviewOpen(false)} maxWidth="lg" fullWidth sx={{ zIndex: 10002 }} slotProps={{ paper: { sx: { overflow: "hidden", ...mobileDialogPaperSx } } }}>
         <DialogTitle sx={{ fontWeight: 900 }}>AI 인식 결과</DialogTitle>
-        <DialogContent dividers>
+        <DialogContent dividers sx={{ overflow: "hidden" }}>
           <Typography sx={{ mb: 1.5, color: "#6B7280", fontSize: 13, fontWeight: 700 }}>별 표시한 부분부터 점수를 인식했습니다. 잘못 인식된 점수는 직접 수정한 후 저장해 주세요.</Typography>
-          <Box component="table" sx={{ width: "100%", tableLayout: "fixed", borderCollapse: "collapse", "& td, & th": { border: "1px solid #D1D5DB", textAlign: "center", p: 0.5 } }}>
-            <tbody>
-              {localOrder.map((rowPlayer, rowIndex) => (
-                <tr key={rowPlayer.id}>
-                  {localOrder.map((columnPlayer, columnIndex) => {
-                    if (rowIndex === columnIndex) return <td key={columnPlayer.id} style={{ background: "#E5E7EB" }} />;
-                    const cell = previewByPosition.get(`${rowIndex}__${columnIndex}`);
-                    return <td key={columnPlayer.id} style={{ background: "#FFFFFF" }}>
-                      <Stack direction="row" alignItems="center" justifyContent="center" spacing={0.5}>
+          <Box
+            sx={{
+              width: "100%",
+              maxWidth: "100%",
+              height: "100%",
+              maxHeight: "100%",
+              overflow: "auto",
+              WebkitOverflowScrolling: "touch",
+              touchAction: "pan-x pan-y",
+              overscrollBehavior: "contain",
+              pb: 0.75,
+            }}
+          >
+            <Box
+              component="table"
+              sx={{
+                width: "max-content",
+                minWidth: "100%",
+                tableLayout: "fixed",
+                borderCollapse: "collapse",
+                "& td, & th": {
+                  width: 118,
+                  minWidth: 118,
+                  height: 54,
+                  border: "1px solid #D1D5DB",
+                  textAlign: "center",
+                  p: 0.5,
+                },
+              }}
+            >
+              <tbody>
+                {localOrder.map((rowPlayer, rowIndex) => (
+                  <tr key={rowPlayer.id}>
+                    {localOrder.map((columnPlayer, columnIndex) => {
+                      if (rowIndex === columnIndex) return <td key={columnPlayer.id} style={{ background: "#E5E7EB" }} />;
+                      const cell = previewByPosition.get(`${rowIndex}__${columnIndex}`);
+                      return <td key={columnPlayer.id} style={{ background: "#FFFFFF" }}>
+                        <Stack direction="row" alignItems="center" justifyContent="center" spacing={0.5} sx={{ minWidth: 108 }}>
                         <IconButton size="small" onClick={() => updatePreviewCell(rowIndex, columnIndex, (cell?.score ?? 0) - 1)} disabled={(cell?.score ?? 0) <= 0}>-</IconButton>
                         <Box
                           component="input"
@@ -2695,12 +2724,13 @@ export default function LeagueGPTVisionSheet() {
                           }}
                         />
                         <IconButton size="small" onClick={() => updatePreviewCell(rowIndex, columnIndex, (cell?.score ?? 0) + 1)} disabled={(cell?.score ?? 0) >= 99}>+</IconButton>
-                      </Stack>
-                    </td>;
-                  })}
-                </tr>
-              ))}
-            </tbody>
+                        </Stack>
+                      </td>;
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </Box>
           </Box>
         </DialogContent>
         <DialogActions sx={{ px: 2.5, py: 1.5 }}>

@@ -1424,7 +1424,10 @@ export function generateProgramRoundMatches(
       ? toDoublesUnits(players, block.doublesAssignments, block.unitClubMode ?? "mixed")
       : players;
 
-  if (block.participantOrder?.length) {
+  // The internal top-vs-bottom mode must start from the canonical seed order.
+  // Reusing a previously saved bracket edit order can interleave the two sides
+  // (for example 1, 10, 2, 9...) and turns NO-GAME cells into a checkerboard.
+  if (block.participantOrder?.length && !block.halfSplitOnlyMatches) {
     const order = new Map(block.participantOrder.map((id, index) => [id, index]));
     matchUnits = [...matchUnits].sort((left, right) =>
       ((left.id ? order.get(left.id) : undefined) ?? Number.MAX_SAFE_INTEGER)

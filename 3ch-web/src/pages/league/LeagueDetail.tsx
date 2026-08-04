@@ -155,6 +155,7 @@
     const [editFinalsAdvance] = useState<number>(2);
     const [editRecruitCount, setEditRecruitCount] = useState<number | null>(null);
     const [searchQuery, setSearchQuery] = useState("");
+    const [visibleParticipantCount, setVisibleParticipantCount] = useState(10);
     const [inputDivision, setInputDivision] = useState("");
     const [inputName, setInputName] = useState("");
     const [inputSourceGroupId, setInputSourceGroupId] = useState("");
@@ -409,6 +410,12 @@
         p.name.toLowerCase().includes(q) || (p.division ?? "").toLowerCase().includes(q)
       );
     }, [participants, searchQuery]);
+
+    const isParticipantSearchActive = searchQuery.trim().length > 0;
+    const visibleParticipants = isParticipantSearchActive
+      ? filteredParticipants
+      : filteredParticipants.slice(0, visibleParticipantCount);
+    const remainingParticipantCount = Math.max(filteredParticipants.length - visibleParticipantCount, 0);
 
     const submitAddedParticipant = async (placement?: { program_round: number; match_id: string; slot: "a" | "b" }) => {
       if (!id || !inputName.trim()) return;
@@ -1324,7 +1331,10 @@ const handleSaveEdit = async () => {
 
             <TextField
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setVisibleParticipantCount(10);
+              }}
               placeholder="이름 또는 부수 검색"
               size="small"
               fullWidth
@@ -1358,14 +1368,14 @@ const handleSaveEdit = async () => {
               <Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
                 <CircularProgress size={24} />
               </Box>
-            ) : (canManage  ? participants : filteredParticipants).length === 0 ? (
+            ) : filteredParticipants.length === 0 ? (
               <Box sx={{ py: 3, textAlign: "center" }}>
                 <Typography fontSize={13} fontWeight={700} color="text.secondary">
-                  {!canManage  && searchQuery ? "검색 결과가 없습니다." : "참가자가 없습니다."}
+                  {searchQuery ? "검색 결과가 없습니다." : "참가자가 없습니다."}
                 </Typography>
               </Box>
             ) : (
-              (canManage  ? participants : filteredParticipants).map((p, idx) => {
+              visibleParticipants.map((p, idx) => {
                 const isMe = isMyParticipant(p);
                 return (
                   <Box
@@ -1433,6 +1443,30 @@ const handleSaveEdit = async () => {
                   </Box>
                 )
               })
+            )}
+            {!participantsLoading && !isParticipantSearchActive && filteredParticipants.length > 10 && (
+              <Button
+                fullWidth
+                onClick={() => {
+                  if (remainingParticipantCount > 0) {
+                    setVisibleParticipantCount((count) => count + 10);
+                  } else {
+                    setVisibleParticipantCount(10);
+                  }
+                }}
+                sx={{
+                  height: 38,
+                  borderTop: "1px solid #E5E7EB",
+                  borderRadius: 0,
+                  color: "#2F80ED",
+                  fontSize: 13,
+                  fontWeight: 800,
+                }}
+              >
+                {remainingParticipantCount > 0
+                  ? `${Math.min(10, remainingParticipantCount)}명 더보기`
+                  : "접기"}
+              </Button>
             )}
           </Box>
 

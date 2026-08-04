@@ -4445,7 +4445,28 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
         ORDER BY sort_order ASC NULLS LAST, division ASC, created_at ASC`,
       [leagueId],
     );
-    const participants = participantsResult.rows;
+    let participants = participantsResult.rows;
+    let requestedParticipantIds = [];
+    try {
+      const parsedParticipantIds = JSON.parse(String(req.body?.participant_ids || '[]'));
+      if (Array.isArray(parsedParticipantIds)) {
+        requestedParticipantIds = parsedParticipantIds.map((value) => String(value));
+      }
+    } catch {
+      return res.status(400).json({ message: '참가자 순서 정보가 올바르지 않습니다.' });
+    }
+
+    if (requestedParticipantIds.length > 0) {
+      const participantById = new Map(participants.map((participant) => [String(participant.id), participant]));
+      const uniqueIds = new Set(requestedParticipantIds);
+      const requestedOrderIsValid = uniqueIds.size === participants.length
+        && requestedParticipantIds.length === participants.length
+        && requestedParticipantIds.every((participantId) => participantById.has(participantId));
+      if (!requestedOrderIsValid) {
+        return res.status(400).json({ message: '현재 대진표의 참가자 순서가 서버 참가자 명단과 일치하지 않습니다.' });
+      }
+      participants = requestedParticipantIds.map((participantId) => participantById.get(participantId));
+    }
     if (participants.length < 2) {
       return res.status(400).json({ message: '참가자가 2명 이상이어야 Vision 인식을 사용할 수 있습니다.' });
     }

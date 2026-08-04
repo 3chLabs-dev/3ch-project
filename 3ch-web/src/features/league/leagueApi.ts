@@ -326,6 +326,7 @@ export interface ScanLeagueOpenAIVisionRequest {
   file: File;
   idempotencyKey?: string;
   mode?: "sheet" | "star-grid";
+  participantIds?: string[];
 }
 
 export interface ScanLeagueOpenAIVisionResponse {
@@ -1077,10 +1078,11 @@ export const leagueApi = baseApi.injectEndpoints({
     }),
 
     scanLeagueOpenAIVision: builder.mutation<ScanLeagueOpenAIVisionResponse, ScanLeagueOpenAIVisionRequest>({
-      query: ({ leagueId, file, mode = "sheet", idempotencyKey }) => {
+      query: ({ leagueId, file, mode = "sheet", idempotencyKey, participantIds = [] }) => {
         const formData = new FormData();
         formData.append("image", file);
         formData.append("mode", mode);
+        formData.append("participant_ids", JSON.stringify(participantIds));
         return {
           url: `/league/${leagueId}/openai-vision/scan`,
           method: "POST",

@@ -1934,6 +1934,7 @@ export default function LeagueGPTVisionSheet() {
         file,
         mode: "star-grid",
         idempotencyKey: crypto.randomUUID(),
+        participantIds: localOrder.map((participant) => participant.id),
       }).unwrap();
       setVisionUsage(result.usage ?? null);
       const byPosition = new Map(result.cells.map((cell) => [`${cell.rowIndex}__${cell.columnIndex}`, cell]));
@@ -1942,6 +1943,7 @@ export default function LeagueGPTVisionSheet() {
         localOrder.forEach((columnPlayer, columnIndex) => {
           if (rowIndex === columnIndex) return;
           const match = matchLookup.get(`${rowPlayer.id}__${columnPlayer.id}`);
+          if (!match) return;
           const cell = byPosition.get(`${rowIndex}__${columnIndex}`);
           completeCells.push({
             ...(cell ?? {
@@ -1954,7 +1956,7 @@ export default function LeagueGPTVisionSheet() {
               needsReview: true,
               issue: "인식하지 못한 점수 칸입니다.",
             }),
-            matchId: match?.id,
+            matchId: match.id,
             playerId: rowPlayer.id,
           });
         });
@@ -2679,6 +2681,14 @@ export default function LeagueGPTVisionSheet() {
                   <tr key={rowPlayer.id}>
                     {localOrder.map((columnPlayer, columnIndex) => {
                       if (rowIndex === columnIndex) return <td key={columnPlayer.id} style={{ background: "#E5E7EB" }} />;
+                      const match = matchLookup.get(`${rowPlayer.id}__${columnPlayer.id}`);
+                      if (!match) {
+                        return (
+                          <td key={columnPlayer.id} style={{ background: "#F9FAFB", color: "#EF4444", fontWeight: 800 }}>
+                            NO-GAME
+                          </td>
+                        );
+                      }
                       const cell = previewByPosition.get(`${rowIndex}__${columnIndex}`);
                       return <td key={columnPlayer.id} style={{ background: "#FFFFFF" }}>
                         <Stack direction="row" alignItems="center" justifyContent="center" spacing={0.5} sx={{ minWidth: 108 }}>

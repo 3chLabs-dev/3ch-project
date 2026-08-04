@@ -1080,6 +1080,9 @@ export default function LeagueGPTVisionSheet() {
     programOption?.blocks?.[programRound - 1]?.crossClubGrouping
     || programOption?.blocks?.[programRound - 1]?.crossClubOnlyMatches
     || programOption?.blocks?.[programRound - 1]?.halfSplitOnlyMatches
+    || programOption?.rounds?.[programRound - 1]?.crossClubGrouping
+    || programOption?.rounds?.[programRound - 1]?.crossClubOnlyMatches
+    || programOption?.rounds?.[programRound - 1]?.halfSplitOnlyMatches
   );
   const programMatchesAll = useMemo(() => {
     if (!isProgramFinalRound && !isProgramUnitRound && !hasProgramMatchPolicy) {
@@ -1203,12 +1206,14 @@ export default function LeagueGPTVisionSheet() {
     if (!isProgramMode || isProgramTeamRound) return [];
     const rawById = new Map(rawParticipants.map((participant) => [participant.id, participant]));
     const displayById = new Map<string, LeagueParticipantItem>();
+    const seedById = new Map<string, number>();
 
     programMatchesAll.forEach((match) => {
       const addParticipant = (
         participantId: string | null,
         participantName: string | null,
         participantDivision: string | null,
+        seedLabel?: string | null,
       ) => {
         if (!participantId || displayById.has(participantId)) return;
         const rawParticipant = rawById.get(participantId);
@@ -1225,12 +1230,17 @@ export default function LeagueGPTVisionSheet() {
           created_at: "",
           group_name: match.match_label ?? null,
         });
+        const seed = Number.parseInt(seedLabel ?? "", 10);
+        if (Number.isFinite(seed)) seedById.set(participantId, seed);
       };
-      addParticipant(match.participant_a_id, match.participant_a_name, match.participant_a_division);
-      addParticipant(match.participant_b_id, match.participant_b_name, match.participant_b_division);
+      addParticipant(match.participant_a_id, match.participant_a_name, match.participant_a_division, match.participant_a_seed_label);
+      addParticipant(match.participant_b_id, match.participant_b_name, match.participant_b_division, match.participant_b_seed_label);
     });
 
-    return Array.from(displayById.values());
+    return Array.from(displayById.values()).sort((left, right) =>
+      (seedById.get(left.id) ?? left.sort_order ?? Number.MAX_SAFE_INTEGER)
+      - (seedById.get(right.id) ?? right.sort_order ?? Number.MAX_SAFE_INTEGER)
+    );
   }, [id, isProgramMode, isProgramTeamRound, programMatchesAll, rawParticipants]);
 
   // 1. 조 이름 목록 추출 ("1조", "2조" ...)
@@ -1285,12 +1295,16 @@ export default function LeagueGPTVisionSheet() {
       currentProgramRound?.groupAssignments ?? currentProgramBlock?.groupAssignments;
     const savedGroupAssignments =
       selectedGroupIndex >= 0 ? savedAssignments?.[selectedGroupIndex] : undefined;
+    const isHalfSplitRound = Boolean(
+      currentProgramRound?.halfSplitOnlyMatches
+      ?? currentProgramBlock?.halfSplitOnlyMatches,
+    );
     const orderBySavedFormation = <
       T extends { id: string; name: string; division?: string | null }
     >(participants: T[]) => {
       const savedParticipantOrder =
         currentProgramRound?.participantOrder ?? currentProgramBlock?.participantOrder;
-      if (savedParticipantOrder?.length) {
+      if (savedParticipantOrder?.length && !isHalfSplitRound) {
         const orderById = new Map(
           savedParticipantOrder.map((participantId, index) => [participantId, index]),
         );

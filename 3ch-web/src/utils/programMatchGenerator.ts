@@ -1400,6 +1400,10 @@ export function generateProgramRoundMatches(
     unitClubMode: inheritsPreviousTeamFormation
       ? previousRound?.unitClubMode ?? previousTeamBlock?.unitClubMode
       : currentRound?.unitClubMode ?? storedBlock.unitClubMode,
+    halfSplitOnlyMatches:
+      currentRound?.halfSplitOnlyMatches ?? storedBlock.halfSplitOnlyMatches,
+    participantOrder:
+      currentRound?.participantOrder ?? storedBlock.participantOrder,
   };
   const deletedMatchIds = new Set(block.deletedMatchIds ?? []);
   const withoutDeleted = (matches: LeagueMatch[]) =>

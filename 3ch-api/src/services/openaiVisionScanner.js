@@ -22,8 +22,8 @@ Players sometimes draw a circle around a winning score, especially 2 in a best-o
 Focus only on the handwritten integer inside each score cell, even when the paper is photographed at an angle or surrounded by blank space.
 Set needsReview=false only when that exact handwritten integer is clearly visible. If a number is faint, obscured, cropped, outside 0 through 99, or ambiguous, return score=0, confidence at most 0.5, and needsReview=true. Do not report high confidence for a guessed number.`;
 
-const STAR_GRID_READING_RULES = `This image contains an N by N league score grid. A printed outline five-point star (☆), similar to a hand-drawn star, marks the top-left cell of the score grid at rowIndex=0 and columnIndex=0. Do not read participant names, divisions, rankings, or any other labels.
-Starting at the star, identify the complete evenly spaced N by N score grid. Return each non-diagonal handwritten score by its zero-based rowIndex and columnIndex. Each score is one integer from 0 through 99, and two-digit values such as 10, 21, 31, or 99 belong to one cell. The 0 through 99 range is output validation only, not a clue for changing an unclear value into a more plausible table-tennis score. Transcribe exactly what is visible; for example, return 31 when the cell appears to contain 31 rather than changing it to 21 or 30. Players may circle a winning score. Treat that surrounding circle as emphasis only: return a circled 2 or ② as score=2, and a circled 3 or ③ as score=3. Never read the surrounding circle as 0 or append it to the inner number. The diagonal cells have no score. Read each cell independently; do not infer an opposing score or a winner.
+const STAR_GRID_READING_RULES = `This image contains an N by N league score grid. A five-point star marks the top-left score cell at rowIndex=0 and columnIndex=0. The star may be outlined or filled, hand-drawn or printed, and may be white, black, red, blue, or another contrasting color. Locate it by its five-point shape and grid position, not by color. Do not read participant names, divisions, rankings, or any other labels.
+Starting at the star, identify the complete evenly spaced N by N score grid. Some cells may be printed with NO GAME because those players must not play each other. Ignore every NO GAME cell completely and never return it as a score. Return only cells that both belong to the supplied playable coordinate list and visibly contain a handwritten integer. Omit playable cells that are still blank. Each score is one integer from 0 through 99, and two-digit values such as 10, 21, 31, or 99 belong to one cell. Transcribe exactly what is visible. Players may circle a winning score; return only the integer inside the circle. The diagonal cells have no score. Read each cell independently; do not infer an opposing score or a winner.
 The participant names provided below are server data only. Do not try to find them in the image. Copy the supplied name for each returned rowPlayerName and columnPlayerName according to rowIndex and columnIndex.`;
 
 function extractOutputText(response) {
@@ -80,7 +80,7 @@ function buildMockResult(participants) {
   return { cells };
 }
 
-async function scanLeagueSheetWithOpenAIVision({ imageBuffer, mimeType, participants, mode = 'sheet' }) {
+async function scanLeagueSheetWithOpenAIVision({ imageBuffer, mimeType, participants, mode = 'sheet', playableCells = null }) {
   if (isOpenAIVisionMockEnabled()) {
     return {
       engine: 'mock-openai-vision',
@@ -99,6 +99,11 @@ async function scanLeagueSheetWithOpenAIVision({ imageBuffer, mimeType, particip
   const dataUrl = `data:${mimeType};base64,${imageBuffer.toString('base64')}`;
   const participantLines = participants.map((participant, index) => `${index + 1}. ${participant.name}`).join('\n');
   const expectedCellCount = participants.length * Math.max(0, participants.length - 1);
+  const playableCellList = Array.isArray(playableCells) ? playableCells : null;
+  const requestedCellCount = playableCellList?.length ?? expectedCellCount;
+  const playableCoordinates = playableCellList
+    ? playableCellList.map(({ rowIndex, columnIndex }) => `(${rowIndex},${columnIndex})`).join(' ')
+    : '';
 
   const body = {
     model,
@@ -113,7 +118,10 @@ async function scanLeagueSheetWithOpenAIVision({ imageBuffer, mimeType, particip
 
 ${mode === 'star-grid' ? '' : CELL_READING_RULES}
 
-There are exactly ${participants.length} participants, so the completed result must contain exactly ${expectedCellCount} non-diagonal cells. Inspect the grid in row-major order, then perform a second visual pass over every returned cell to verify both digits and cell positions before producing JSON. Do not silently omit a faint cell; return it with score=0 and needsReview=true instead.
+There are exactly ${participants.length} participants. ${mode === 'star-grid'
+  ? `Only these ${requestedCellCount} coordinates are playable: ${playableCoordinates}. Ignore all other coordinates, including every NO GAME cell. Return only playable coordinates that visibly contain handwriting; blank playable cells may be omitted.`
+  : `The completed result must contain exactly ${expectedCellCount} non-diagonal cells.`}
+Inspect the grid in row-major order, then perform a second visual pass over every returned cell to verify both digits and cell positions before producing JSON. If handwriting exists but is faint or ambiguous, return score=0 and needsReview=true instead of guessing.
 
 참가자 목록은 아래 순서와 같습니다.
 ${participantLines}

@@ -4493,6 +4493,16 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
       mimeType: req.file.mimetype,
       participants,
       mode: visionMode,
+      playableCells: visionMode === 'star-grid'
+        ? participants.flatMap((rowParticipant, rowIndex) =>
+            participants.flatMap((columnParticipant, columnIndex) =>
+              rowIndex !== columnIndex
+              && matchLookup.has(`${rowParticipant.id}__${columnParticipant.id}`)
+                ? [{ rowIndex, columnIndex }]
+                : [],
+            ),
+          )
+        : null,
     });
     const parsed = openAIVisionResultSchema.parse(vision.result);
 

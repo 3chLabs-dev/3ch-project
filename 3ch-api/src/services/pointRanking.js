@@ -373,19 +373,27 @@ async function getPointRanking(groupId, year, scope, seasonId) {
     [scopeValue, rangeStart, rangeEnd],
   );
 
-  const rosterColumnResult = await pool.query(
+  const matchColumnResult = await pool.query(
     `SELECT column_name
      FROM information_schema.columns
      WHERE table_schema = 'public'
        AND table_name = 'league_matches'
-       AND column_name IN ('participant_a_roster_ids', 'participant_b_roster_ids')`,
+       AND column_name IN (
+         'participant_a_roster_ids',
+         'participant_b_roster_ids',
+         'tournament_bracket_index'
+       )`,
   );
-  const rosterColumns = new Set(rosterColumnResult.rows.map((row) => row.column_name));
-  const rosterSelectSql = rosterColumns.size === 2
+  const matchColumns = new Set(matchColumnResult.rows.map((row) => row.column_name));
+  const rosterSelectSql = matchColumns.has('participant_a_roster_ids')
+    && matchColumns.has('participant_b_roster_ids')
     ? `m.participant_a_roster_ids,
        m.participant_b_roster_ids,`
     : `ARRAY[]::text[] AS participant_a_roster_ids,
        ARRAY[]::text[] AS participant_b_roster_ids,`;
+  const tournamentBracketIndexSelectSql = matchColumns.has('tournament_bracket_index')
+    ? 'COALESCE(m.tournament_bracket_index, 1) AS tournament_bracket_index,'
+    : '1 AS tournament_bracket_index,';
 
   const matchResult = await pool.query(
     `SELECT
@@ -401,7 +409,7 @@ async function getPointRanking(groupId, year, scope, seasonId) {
        m.program_block_type,
        ${rosterSelectSql}
        m.bracket,
-       m.tournament_bracket_index,
+       ${tournamentBracketIndexSelectSql}
        m.round_number,
        m.match_label,
        m.next_match_id,

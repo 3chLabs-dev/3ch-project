@@ -83,7 +83,7 @@ export default function RankingHubPage() {
 
       <Stack spacing={0.8}>
         <Typography fontWeight={900} fontSize={15}>
-          종목별 개인 통합 순위
+          종목별 통합 개인 순위
         </Typography>
         {sports.length === 0 ? (
           <EmptyCard message="아직 종목별 개인 순위가 없습니다." />

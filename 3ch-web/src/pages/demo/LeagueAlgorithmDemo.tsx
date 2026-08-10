@@ -1271,6 +1271,7 @@ const LeagueAlgorithmDemo = ({
   const [isCompletingCustomProgram, setIsCompletingCustomProgram] = useState(false);
   const recommendationSectionRef = useRef<HTMLDivElement | null>(null);
   const shouldScrollToRecommendationRef = useRef(false);
+  const completedCustomRoundSignatureRef = useRef<string | null>(null);
   const [selectedProgramOptionIndex, setSelectedProgramOptionIndex] = useState<number | null>(null);
   const [customProgramOptions, setCustomProgramOptions] = useState<Record<number, ProgramOption>>({});
   const [editingOptionIndex, setEditingOptionIndex] = useState<number | null>(null);
@@ -1303,6 +1304,27 @@ const LeagueAlgorithmDemo = ({
       });
     });
   }, [isCompletingCustomProgram, isCustomProgramCompleted]);
+
+  useEffect(() => {
+    if (programMode !== "custom") {
+      completedCustomRoundSignatureRef.current = null;
+      return;
+    }
+
+    if (!isCustomProgramCompleted) return;
+
+    const currentSignature = JSON.stringify(rounds);
+    if (completedCustomRoundSignatureRef.current === null) {
+      completedCustomRoundSignatureRef.current = currentSignature;
+      return;
+    }
+
+    if (completedCustomRoundSignatureRef.current !== currentSignature) {
+      completedCustomRoundSignatureRef.current = null;
+      setSelectedProgramOptionIndex(null);
+      setIsCustomProgramCompleted(false);
+    }
+  }, [isCustomProgramCompleted, programMode, rounds]);
   const [pendingGroupSizes, setPendingGroupSizes] = useState<number[]>([]);
   const [customGroupCount, setCustomGroupCount] = useState(1);
   const [groupStructureSelectionSource, setGroupStructureSelectionSource] = useState<"preset" | "custom">("preset");
@@ -1831,6 +1853,22 @@ const LeagueAlgorithmDemo = ({
     }
 
     console.log("selected program option", selectedOption);
+  };
+
+  const completeCustomProgramConfiguration = () => {
+    if (getTeamRoundValidationError(rounds, playerCount)) return;
+
+    const completedRoundSignature = JSON.stringify(rounds);
+    shouldScrollToRecommendationRef.current = true;
+    setIsCompletingCustomProgram(true);
+    setIsCustomProgramCompleted(false);
+    // 직접 구성 값을 기준으로 추천안을 다시 계산한다.
+    setCustomProgramOptions({});
+    window.setTimeout(() => {
+      completedCustomRoundSignatureRef.current = completedRoundSignature;
+      setIsCustomProgramCompleted(true);
+      setIsCompletingCustomProgram(false);
+    }, 600);
   };
 
   const sameGroupSizes = (
@@ -3005,28 +3043,6 @@ const LeagueAlgorithmDemo = ({
           + 라운드 추가
         </Button>
 
-        <Button
-          variant="contained"
-          fullWidth
-          disabled={
-            isCompletingCustomProgram ||
-            Boolean(getTeamRoundValidationError(rounds, playerCount))
-          }
-          onClick={() => {
-            shouldScrollToRecommendationRef.current = true;
-            setIsCompletingCustomProgram(true);
-            setIsCustomProgramCompleted(false);
-            // 직접 구성 완료 시 복원된 과거 추천안보다 현재 라운드 설정을 우선한다.
-            setCustomProgramOptions({});
-            window.setTimeout(() => {
-              setIsCustomProgramCompleted(true);
-              setIsCompletingCustomProgram(false);
-            }, 600);
-          }}
-          style={{ marginTop: "12px" }}
-        >
-          완료
-        </Button>
         {getTeamRoundValidationError(rounds, playerCount) && (
           <Typography sx={{ mt: 1, color: "#D32F2F", fontSize: 13 }}>
             {getTeamRoundValidationError(rounds, playerCount)}
@@ -3828,10 +3844,7 @@ const LeagueAlgorithmDemo = ({
         </DialogActions>
       </Dialog>
 
-      {isProgramGenerated && (
-        programMode === "recommend" ||
-        (programMode === "custom" && isCustomProgramCompleted)
-      ) && (
+      {isProgramGenerated && !isGeneratingProgram && (
         <div
           style={{
             position: "fixed",
@@ -3847,15 +3860,28 @@ const LeagueAlgorithmDemo = ({
           <Button
             variant="contained"
             fullWidth
-            disabled={selectedProgramOptionIndex === null}
-            onClick={completeProgramCreation}
+            disabled={
+              programMode === "custom" && !isCustomProgramCompleted
+                ? isCompletingCustomProgram ||
+                  Boolean(getTeamRoundValidationError(rounds, playerCount))
+                : selectedProgramOptionIndex === null
+            }
+            onClick={
+              programMode === "custom" && !isCustomProgramCompleted
+                ? completeCustomProgramConfiguration
+                : completeProgramCreation
+            }
             style={{
               height: "48px",
               borderRadius: "12px",
               fontWeight: 800,
             }}
           >
-            완료
+            {programMode === "custom" && !isCustomProgramCompleted
+              ? "추천안 확인"
+              : isEditMode
+                ? "수정 완료"
+                : "완료"}
           </Button>
         </div>
       )}

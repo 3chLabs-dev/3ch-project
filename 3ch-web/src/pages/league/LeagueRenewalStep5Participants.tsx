@@ -93,12 +93,27 @@ export default function LeagueRenewalStep5Participants() {
         <Typography sx={{ fontSize: 22, fontWeight: 900, mb: 1 }}>참가자 사전 등록</Typography>
         {targetCount !== null && <Typography sx={{ fontSize: 14, fontWeight: 700, color: isFull ? "#E53935" : "#6B7280" }}>{participants.length}/{targetCount}</Typography>}
       </Stack>
-      <Stack direction="row" spacing={0.7}>
-        <Button variant="outlined" disableElevation onClick={() => setOpenImageImport(true)} sx={{ borderRadius: 1, height: 32, px: 1.1, fontWeight: 900, fontSize: 11 }}>이미지로 불러오기</Button>
-        <Button variant="contained" disableElevation onClick={() => setOpenLoad(true)} sx={{ borderRadius: 1, height: 32, px: 1.4, fontWeight: 900, bgcolor: "#87B8FF", "&:hover": { bgcolor: "#79AEFF" }, boxShadow: "none" }}>불러오기</Button>
-      </Stack>
     </Box>
     <Divider sx={{ mb: 1.2, borderColor: "#D9DDE6" }} />
+
+    <Box sx={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 1, mb: 1.5 }}>
+      <Button
+        variant="outlined"
+        disableElevation
+        onClick={() => setOpenImageImport(true)}
+        sx={{ borderRadius: 1, minWidth: 0, height: 38, px: 0.8, fontWeight: 900, fontSize: 12, whiteSpace: "nowrap" }}
+      >
+        이미지로 불러오기
+      </Button>
+      <Button
+        variant="contained"
+        disableElevation
+        onClick={() => setOpenLoad(true)}
+        sx={{ borderRadius: 1, minWidth: 0, height: 38, px: 0.8, fontWeight: 900, fontSize: 12, whiteSpace: "nowrap", bgcolor: "#87B8FF", "&:hover": { bgcolor: "#79AEFF" }, boxShadow: "none" }}
+      >
+        클럽 회원 불러오기
+      </Button>
+    </Box>
 
     {invitedGroupOptions.length > 0 && <TextField select fullWidth size="small" label="소속 클럽" value={sourceGroupId || hostGroupId || ""} onChange={(event) => setSourceGroupId(String(event.target.value))} sx={{ mb: 1.2 }}>
       {hostGroupId && <MenuItem value={hostGroupId}>주최 클럽</MenuItem>}

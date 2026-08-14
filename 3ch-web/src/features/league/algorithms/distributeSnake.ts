@@ -13,6 +13,7 @@ export function distributeSnake(
   groupSizes: number[]
 ): GroupResult[] {
   const groupCount = groupSizes.length;
+  if (groupCount === 0) return [];
 
   const groups: GroupResult[] = groupSizes.map((_, index) => ({
     name: `${index + 1}조`,

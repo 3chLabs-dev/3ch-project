@@ -120,7 +120,13 @@ export interface ProgramBlock {
   teamShuffleSeed?: number;
   groupAssignments?: FormationAssignmentPlayer[][];
   teamAssignments?: FormationAssignmentPlayer[][];
+  /** How each saved team was formed. Missing values are kept for older programs. */
+  teamAssignmentModes?: Array<"manual" | "auto">;
+  /** Teams preserved when the remaining teams are reshuffled. */
+  teamAssignmentLocks?: boolean[];
   doublesAssignments?: FormationAssignmentPlayer[][];
+  doublesAssignmentModes?: Array<"manual" | "auto">;
+  doublesAssignmentLocks?: boolean[];
   tournamentBracketCount?: number;
   thirdPlaceMatch?: boolean;
   tournamentSeeding?: TournamentSeedingType;
@@ -212,7 +218,11 @@ export interface RoundConfig {
   teamShuffleSeed?: number;
   groupAssignments?: FormationAssignmentPlayer[][];
   teamAssignments?: FormationAssignmentPlayer[][];
+  teamAssignmentModes?: Array<"manual" | "auto">;
+  teamAssignmentLocks?: boolean[];
   doublesAssignments?: FormationAssignmentPlayer[][];
+  doublesAssignmentModes?: Array<"manual" | "auto">;
+  doublesAssignmentLocks?: boolean[];
   tournamentBracketCount?: number;
   thirdPlaceMatch?: boolean;
   tournamentSeeding?: TournamentSeedingType;

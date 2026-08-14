@@ -20,6 +20,8 @@
     DialogContent,
     DialogActions,
     Avatar,
+    Checkbox,
+    Chip,
     ToggleButtonGroup,
     ToggleButton,
   } from "@mui/material";
@@ -47,6 +49,7 @@
     useGetLeagueMatchesQuery,
     useAutoLinkGuestParticipantMutation,
     useGetLeagueInvitedGroupsQuery,
+    useSaveLeagueProgramMutation,
   } from "../../features/league/leagueApi";
   import { toUTCDate, formatLeagueDate, formatLeagueTime } from "../../utils/dateUtils";
   import { useGetGroupDetailQuery, useGetMyGroupsQuery } from "../../features/group/groupApi";
@@ -58,6 +61,7 @@
   import MemberEditDialog from "./MemberEditDialog.tsx";
   import ParticipantClaimDialog from "./ParticipantClaimDialog";
   import LeagueInvitedGroupsDialog from "./LeagueInvitedGroupsDialog";
+  import { distributeSnake } from "../../features/league/algorithms/distributeSnake";
 
   function parseLocation(description?: string) {
     if (!description) return "-";
@@ -180,6 +184,8 @@
     const [selectedTournamentPlacement, setSelectedTournamentPlacement] = useState<{ program_round: number; match_id: string; slot: "a" | "b" } | null>(null);
     const [participantClaimOpen, setParticipantClaimOpen] = useState(false);
     const [invitedGroupsOpen, setInvitedGroupsOpen] = useState(false);
+    const [teamBuilderOpen, setTeamBuilderOpen] = useState(false);
+    const [teamBuilderParticipantIds, setTeamBuilderParticipantIds] = useState<string[]>([]);
     const authUser = useAppSelector((state) => state.auth.user);
 
     const { data: leagueData, isLoading: leagueLoading, refetch: refetchLeague } = useGetLeagueQuery(id ?? "", {
@@ -203,6 +209,7 @@
     const [deleteParticipant] = useDeleteParticipantMutation();
     const [replaceParticipant, { isLoading: replacingParticipant }] = useReplaceParticipantMutation();
     const [autoLinkGuestParticipant] = useAutoLinkGuestParticipantMutation();
+    const [saveLeagueProgram, { isLoading: savingTeam }] = useSaveLeagueProgramMutation();
 
     const { data: groupData, isLoading: groupLoading } = useGetGroupDetailQuery(leagueData?.league?.group_id ?? "", {
       skip: !leagueData?.league?.group_id,
@@ -286,6 +293,25 @@
         .catch(() => undefined);
     }, [id, authUser, autoLinkGuestParticipant, refetchParticipants]);
     const hasEventProgram = isEventProgramFormat && Boolean(programData?.program);
+    const teamProgram = programData?.program?.program_data as {
+      blocks?: Array<{
+        type?: string;
+        groupSizes?: number[];
+        teamPlayerCount?: number;
+        teamAssignments?: Array<Array<{ name: string; level: number }>>;
+        teamAssignmentModes?: Array<"manual" | "auto">;
+        teamAssignmentLocks?: boolean[];
+        doublesAssignments?: Array<Array<{ name: string; level: number }>>;
+        doublesAssignmentModes?: Array<"manual" | "auto">;
+        doublesAssignmentLocks?: boolean[];
+      }>;
+      rounds?: Array<Record<string, unknown>>;
+    } | null;
+    const firstFormationBlockIndex = teamProgram?.blocks?.findIndex((block) => block.type === "TEAM" || block.type === "DOUBLES") ?? -1;
+    const firstFormationBlock = firstFormationBlockIndex >= 0 ? teamProgram?.blocks?.[firstFormationBlockIndex] : undefined;
+    const isDoublesBuilder = firstFormationBlock?.type === "DOUBLES";
+    const teamSize = isDoublesBuilder ? 2 : (firstFormationBlock?.groupSizes?.[0] ?? firstFormationBlock?.teamPlayerCount ?? 0);
+    const canBuildTeam = canManage && firstFormationBlockIndex >= 0 && teamSize >= 2;
 
     const tournamentByeSlots = useMemo(() => {
       const program = programData?.program?.program_data as { blocks?: Array<{ type?: string; format?: string }> } | null;
@@ -401,6 +427,93 @@
         return a.name.localeCompare(b.name, "ko");
       });
     }, [participantData?.participants]);
+    const prebuiltParticipantKeys = useMemo(() => {
+      if (!firstFormationBlock) return new Set<string>();
+      const assignments = isDoublesBuilder
+        ? firstFormationBlock.doublesAssignments ?? []
+        : firstFormationBlock.teamAssignments ?? [];
+      const modes = isDoublesBuilder
+        ? firstFormationBlock.doublesAssignmentModes
+        : firstFormationBlock.teamAssignmentModes;
+      return new Set(assignments.flatMap((members, index) =>
+        (modes?.[index] ?? "manual") === "manual"
+          ? members.map((member) => `${member.name}|${member.level}`)
+          : [],
+      ));
+    }, [firstFormationBlock, isDoublesBuilder]);
+
+    const openTeamBuilder = () => {
+      setTeamBuilderParticipantIds([]);
+      setTeamBuilderOpen(true);
+    };
+
+    const savePrebuiltTeam = async () => {
+      if (!id || !teamProgram?.blocks || firstFormationBlockIndex < 0 || !firstFormationBlock) return;
+      if (teamBuilderParticipantIds.length !== teamSize) {
+        setAlertSeverity("warning");
+        setAlertMsg(`${isDoublesBuilder ? "복식 조원" : "팀원"} ${teamSize}명을 선택해주세요.`);
+        return;
+      }
+
+      const selectedIds = new Set(teamBuilderParticipantIds);
+      const selectedTeam = participants
+        .filter((participant) => selectedIds.has(participant.id))
+        .map((participant) => ({
+          name: participant.name,
+          level: Number.parseInt(participant.division ?? "", 10) || 999,
+        }));
+      const remainingPlayers = participants
+        .filter((participant) => !selectedIds.has(participant.id))
+        .map((participant) => ({
+          name: participant.name,
+          level: Number.parseInt(participant.division ?? "", 10) || 999,
+        }));
+      const groupSizes = isDoublesBuilder
+        ? Array.from({ length: Math.floor(participants.length / 2) }, () => 2)
+        : firstFormationBlock.groupSizes?.length
+        ? firstFormationBlock.groupSizes
+        : Array.from({ length: Math.ceil(participants.length / teamSize) }, (_, index) =>
+            index === Math.ceil(participants.length / teamSize) - 1
+              ? participants.length - teamSize * index
+              : teamSize,
+          );
+      const automaticTeams = groupSizes.length > 1
+        ? distributeSnake(remainingPlayers, groupSizes.slice(1)).map((group) => group.players)
+        : [];
+      const teamAssignments = [selectedTeam, ...automaticTeams];
+      const nextBlocks = teamProgram.blocks.map((block, index) => index === firstFormationBlockIndex
+        ? {
+            ...block,
+            ...(isDoublesBuilder
+              ? {
+                  doublesAssignments: teamAssignments,
+                  doublesAssignmentModes: teamAssignments.map((_, pairIndex) => pairIndex === 0 ? "manual" as const : "auto" as const),
+                  doublesAssignmentLocks: teamAssignments.map((_, pairIndex) => pairIndex === 0),
+                }
+              : {
+                  groupSizes: teamAssignments.map((team) => team.length),
+                  teamAssignments,
+                  teamAssignmentModes: teamAssignments.map((_, teamIndex) => teamIndex === 0 ? "manual" as const : "auto" as const),
+                  teamAssignmentLocks: teamAssignments.map((_, teamIndex) => teamIndex === 0),
+                }),
+          }
+        : block,
+      );
+
+      try {
+        await saveLeagueProgram({
+          leagueId: id,
+          program: { ...teamProgram, blocks: nextBlocks },
+        }).unwrap();
+        setTeamBuilderOpen(false);
+        setTeamBuilderParticipantIds([]);
+        setAlertSeverity("success");
+        setAlertMsg(isDoublesBuilder ? "수동 복식이 구성됐습니다. 나머지 참가자는 자동 편성됩니다." : "수동 팀이 구성됐습니다. 나머지 참가자는 자동 편성됩니다.");
+      } catch {
+        setAlertSeverity("error");
+        setAlertMsg(isDoublesBuilder ? "복식 구성 저장에 실패했습니다." : "팀 구성 저장에 실패했습니다.");
+      }
+    };
 
     // 뷰 모드 검색 필터
     const filteredParticipants = useMemo(() => {
@@ -1300,6 +1413,17 @@ const handleSaveEdit = async () => {
               )}
             </Stack>
             <Stack direction="row" spacing={0.8}>
+            {canBuildTeam && (
+              <Button
+                variant="contained"
+                disableElevation
+                size="small"
+                onClick={openTeamBuilder}
+                sx={{ borderRadius: 1, height: 28, px: 1.2, fontWeight: 800, fontSize: 12, bgcolor: "#2563EB", "&:hover": { bgcolor: "#1D4ED8" } }}
+              >
+                {isDoublesBuilder ? "복식 만들기" : "팀 만들기"}
+              </Button>
+            )}
             <Button
               variant="outlined" disableElevation size="small"
               onClick={() => setParticipantClaimOpen(true)}
@@ -2113,6 +2237,44 @@ const handleSaveEdit = async () => {
             </Button>
           </Box>
         )}
+
+        <Dialog open={teamBuilderOpen} onClose={() => !savingTeam && setTeamBuilderOpen(false)} fullWidth maxWidth="xs">
+          <DialogTitle sx={{ fontWeight: 900 }}>{isDoublesBuilder ? "복식 만들기" : "팀 만들기"}</DialogTitle>
+          <DialogContent dividers>
+            <Typography sx={{ mb: 1.5, fontSize: 13, color: "text.secondary" }}>
+              함께할 참가자 {teamSize}명을 선택하세요. 선택한 {isDoublesBuilder ? "복식" : "팀"}은 수동으로 고정되고, 나머지는 부수에 맞춰 자동 편성됩니다.
+            </Typography>
+            <Stack spacing={0.5}>
+              {participants.map((participant) => {
+                const checked = teamBuilderParticipantIds.includes(participant.id);
+                const alreadyFormed = prebuiltParticipantKeys.has(`${participant.name}|${Number.parseInt(participant.division ?? "", 10) || 999}`);
+                const disabled = alreadyFormed || (!checked && teamBuilderParticipantIds.length >= teamSize);
+                return (
+                  <Box
+                    key={participant.id}
+                    onClick={() => {
+                      if (disabled) return;
+                      setTeamBuilderParticipantIds((current) => checked
+                        ? current.filter((participantId) => participantId !== participant.id)
+                        : [...current, participant.id],
+                      );
+                    }}
+                    sx={{ display: "flex", alignItems: "center", gap: 1, minHeight: 42, px: 0.5, borderRadius: 1, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.45 : 1, "&:hover": { bgcolor: disabled ? "transparent" : "#F8FAFC" } }}
+                  >
+                    <Checkbox checked={checked} disabled={disabled} size="small" />
+                    <Avatar sx={{ width: 25, height: 25, bgcolor: "#FAAA47", color: "#111827", fontSize: 10, fontWeight: 900 }}>{participant.division || "-"}</Avatar>
+                    <Typography sx={{ fontSize: 14, fontWeight: 700, flex: 1 }}>{participant.name}</Typography>
+                    {alreadyFormed && <Chip label="구성됨" size="small" sx={{ height: 20, fontSize: 10, fontWeight: 800, bgcolor: "#FEF3C7", color: "#B45309" }} />}
+                  </Box>
+                );
+              })}
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 2, py: 1.5 }}>
+            <Button onClick={() => setTeamBuilderOpen(false)} disabled={savingTeam}>취소</Button>
+            <Button variant="contained" onClick={() => void savePrebuiltTeam()} disabled={savingTeam || teamBuilderParticipantIds.length !== teamSize}>{isDoublesBuilder ? "복식 구성 완료" : "팀 구성 완료"}</Button>
+          </DialogActions>
+        </Dialog>
 
         {/* 새로고침 플로팅 버튼 */}
         {!canManage  && (

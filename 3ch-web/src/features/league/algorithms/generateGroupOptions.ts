@@ -18,6 +18,13 @@ export function generateGroupOptions(playerCount: number): GroupOption[] {
     const smallGroupCount = groupCount * tierSize - playerCount;
     const largeGroupCount = groupCount - smallGroupCount;
 
+    // A single-size adjustment cannot represent this participant count.
+    // Without this guard (for example 7 people with a tier size of 5), the
+    // negative large-group count produced impossible structures such as 4/4/4.
+    if (largeGroupCount < 0 || smallGroupCount > groupCount) {
+      continue;
+    }
+
     const groups: number[] = [];
 
     // 큰 조 먼저 추가
@@ -31,7 +38,8 @@ export function generateGroupOptions(playerCount: number): GroupOption[] {
     }
 
     // 2인조 이하 방지
-    const hasInvalidGroup = groups.some((size) => size < 3);
+    const hasInvalidGroup = groups.some((size) => size < 3)
+      || groups.reduce((sum, size) => sum + size, 0) !== playerCount;
 
     if (hasInvalidGroup) {
       continue;
@@ -39,9 +47,11 @@ export function generateGroupOptions(playerCount: number): GroupOption[] {
 
     const score = calculateOptionScore(groups, tierSize);
 
-    const option: GroupOption = {
+  const option: GroupOption = {
   tierSize,
-  groupCount,
+  // The rendered structure is the source of truth (and protects callers
+  // from displaying a stale calculated count after the player count changes).
+  groupCount: groups.length,
   groups,
   score,
   recommended: false,

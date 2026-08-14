@@ -17,6 +17,8 @@ import {
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
+import LockOpenOutlinedIcon from "@mui/icons-material/LockOpenOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import AddIcon from "@mui/icons-material/Add";
 import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
@@ -66,7 +68,11 @@ type StoredProgramBlock = {
   teamShuffleSeed?: number;
   groupAssignments?: FormationPlayer[][];
   teamAssignments?: FormationPlayer[][];
+  teamAssignmentModes?: Array<"manual" | "auto">;
+  teamAssignmentLocks?: boolean[];
   doublesAssignments?: FormationPlayer[][];
+  doublesAssignmentModes?: Array<"manual" | "auto">;
+  doublesAssignmentLocks?: boolean[];
   participantOrder?: string[];
   description?: string;
   teamSinglesCount?: number;
@@ -98,9 +104,10 @@ const formationLevelSum = (players: FormationPlayer[]): number =>
 const formationPlayerId = (player: FormationPlayer) =>
   `formation-${player.name}-${player.level}`;
 
-function SortableFormationPlayer({ player }: { player: FormationPlayer }) {
+function SortableFormationPlayer({ player, locked = false }: { player: FormationPlayer; locked?: boolean }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: formationPlayerId(player),
+    disabled: locked,
   });
 
   return (
@@ -108,14 +115,14 @@ function SortableFormationPlayer({ player }: { player: FormationPlayer }) {
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       {...attributes}
-      {...listeners}
+      {...(locked ? {} : listeners)}
       sx={{
         display: "flex", alignItems: "center", gap: 0.75, py: 0.65, px: 0.5,
-        borderRadius: 1, cursor: "grab", touchAction: "none",
+        borderRadius: 1, cursor: locked ? "default" : "grab", touchAction: "none",
         bgcolor: isDragging ? "#EFF6FF" : "transparent", opacity: isDragging ? 0.55 : 1,
       }}
     >
-      <DragHandleIcon sx={{ color: "#9CA3AF", fontSize: 17, flexShrink: 0 }} />
+      {!locked && <DragHandleIcon sx={{ color: "#9CA3AF", fontSize: 17, flexShrink: 0 }} />}
       <Box sx={{ width: 22, height: 22, borderRadius: "50%", bgcolor: "#FAAA47", display: "grid", placeItems: "center", fontSize: 10, fontWeight: 900, flexShrink: 0 }}>
         {player.level}부
       </Box>
@@ -124,19 +131,23 @@ function SortableFormationPlayer({ player }: { player: FormationPlayer }) {
   );
 }
 
-function FormationEditCard({ players, index, label }: { players: FormationPlayer[]; index: number; label: string }) {
-  const { setNodeRef, isOver } = useDroppable({ id: `formation-group-${index}` });
+function FormationEditCard({ players, index, label, locked = false, teamMode }: { players: FormationPlayer[]; index: number; label: string; locked?: boolean; teamMode?: "manual" | "auto" }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `formation-group-${index}`, disabled: locked });
   const accent = FORMATION_COLORS[index % FORMATION_COLORS.length];
 
   return (
     <Box sx={{ border: `1px solid ${isOver ? accent : "#E5E7EB"}`, borderTop: `3px solid ${accent}`, borderRadius: 1.5, bgcolor: isOver ? "#F8FAFF" : "#FFF", overflow: "hidden" }}>
       <Box sx={{ px: 1.25, py: 1, display: "flex", justifyContent: "space-between", alignItems: "center", bgcolor: "#F8FAFC" }}>
         <Typography sx={{ fontSize: 14, fontWeight: 900 }}>{label}</Typography>
-        <Typography sx={{ fontSize: 11, color: "text.secondary", fontWeight: 700 }}>{players.length}명</Typography>
+        <Stack direction="row" spacing={0.5} alignItems="center">
+          {teamMode && <Chip label={teamMode === "manual" ? "수동" : "자동"} size="small" sx={{ height: 20, fontSize: 10, fontWeight: 800, bgcolor: teamMode === "manual" ? "#FEF3C7" : "#DBEAFE", color: teamMode === "manual" ? "#B45309" : "#1D4ED8" }} />}
+          {teamMode && (locked ? <LockOutlinedIcon sx={{ fontSize: 15, color: "#D97706" }} /> : <LockOpenOutlinedIcon sx={{ fontSize: 15, color: "#94A3B8" }} />)}
+          <Typography sx={{ fontSize: 11, color: "text.secondary", fontWeight: 700 }}>{players.length}명</Typography>
+        </Stack>
       </Box>
       <Box ref={setNodeRef} sx={{ px: 0.75, py: 0.5, minHeight: 54 }}>
-        <SortableContext items={players.map(formationPlayerId)} strategy={verticalListSortingStrategy}>
-          {players.map((player) => <SortableFormationPlayer key={formationPlayerId(player)} player={player} />)}
+        <SortableContext items={players.map(formationPlayerId)} strategy={verticalListSortingStrategy} disabled={locked}>
+          {players.map((player) => <SortableFormationPlayer key={formationPlayerId(player)} player={player} locked={locked} />)}
         </SortableContext>
       </Box>
       <Box sx={{ borderTop: "1px solid #E5E7EB", px: 1.25, py: 0.8 }}>
@@ -322,11 +333,19 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
     programPlayers,
     activeFormationBlock?.teamShuffleSeed ?? defaultFormationSeed + 101,
   );
-  const teamResultGroups = activeFormationBlock
-    ? activeFormationBlock.teamAssignments?.length
-      ? activeFormationBlock.teamAssignments.map((players, index) => ({ name: `${String.fromCharCode(65 + index)}팀`, players }))
-      : distributeSnake(teamFormationPlayers, teamGroupSizes)
+  const automaticTeamResultGroups = activeFormationBlock
+    ? distributeSnake(teamFormationPlayers, teamGroupSizes)
     : [];
+  const teamResultGroups = activeFormationBlock?.teamAssignments?.length
+    ? activeFormationBlock.teamAssignments.map((players, index) => ({ name: `${String.fromCharCode(65 + index)}팀`, players }))
+    : automaticTeamResultGroups;
+  const teamFormationMode = (index: number): "manual" | "auto" => {
+    if (!activeFormationBlock?.teamAssignments?.length) return "auto";
+    // Programs saved before the per-team flag existed were entirely hand arranged.
+    return activeFormationBlock.teamAssignmentModes?.[index] ?? "manual";
+  };
+  const isTeamLocked = (index: number) =>
+    activeFormationBlock?.teamAssignmentLocks?.[index] ?? teamFormationMode(index) === "manual";
   const doublesResultGroups = activeFormationBlock?.type === "DOUBLES"
     ? activeFormationBlock.doublesAssignments?.length
       ? activeFormationBlock.doublesAssignments.map((players, index) => ({ name: `${index + 1}복식`, players }))
@@ -335,6 +354,12 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
           Array.from({ length: Math.floor(programPlayers.length / 2) }, () => 2),
         ).filter((group) => group.players.length === 2)
     : [];
+  const doublesFormationMode = (index: number): "manual" | "auto" => {
+    if (!activeFormationBlock?.doublesAssignments?.length) return "auto";
+    return activeFormationBlock.doublesAssignmentModes?.[index] ?? "manual";
+  };
+  const isDoublesLocked = (index: number) =>
+    activeFormationBlock?.doublesAssignmentLocks?.[index] ?? doublesFormationMode(index) === "manual";
   const teamUnits = teamResultGroups.map((team, teamIndex) => {
     const leader = team.players[0];
     return {
@@ -439,6 +464,44 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
     setIsFormationEditing(true);
   };
 
+  const toggleTeamLock = async (teamIndex: number) => {
+    if (!formationDialog || formationDialog.mode !== "team" || !storedProgram?.blocks) return;
+    const { roundIndex } = formationDialog;
+    const nextLocks = teamResultGroups.map((_, index) => index === teamIndex ? !isTeamLocked(index) : isTeamLocked(index));
+    const nextAssignments = teamResultGroups.map((group) => group.players);
+    const nextModes = teamResultGroups.map((_, index) => teamFormationMode(index));
+    let propagate = false;
+    const updateTeamBlock = (block: StoredProgramBlock, index: number) => {
+      if (index === roundIndex) propagate = true;
+      else if (index > roundIndex && propagate && !(storedProgram.rounds?.[index]?.inheritPreviousTeamFormation ?? block.inheritPreviousTeamFormation)) propagate = false;
+      if (!propagate) return block;
+      return { ...block, teamAssignments: nextAssignments, teamAssignmentModes: nextModes, teamAssignmentLocks: nextLocks };
+    };
+    const nextBlocks = storedProgram.blocks.map(updateTeamBlock);
+    propagate = false;
+    const nextRounds = storedProgram.rounds?.map((round, index) => {
+      if (index === roundIndex) propagate = true;
+      else if (index > roundIndex && propagate && !(round.program === "TEAM" && round.inheritPreviousTeamFormation)) propagate = false;
+      return propagate ? { ...round, teamAssignments: nextAssignments, teamAssignmentModes: nextModes, teamAssignmentLocks: nextLocks } : round;
+    });
+    await persistFormation({ ...storedProgram, blocks: nextBlocks, ...(nextRounds ? { rounds: nextRounds } : {}) }, roundIndex, false);
+  };
+
+  const toggleDoublesLock = async (pairIndex: number) => {
+    if (!formationDialog || formationDialog.mode !== "doubles" || !storedProgram?.blocks) return;
+    const { roundIndex } = formationDialog;
+    const nextLocks = doublesResultGroups.map((_, index) => index === pairIndex ? !isDoublesLocked(index) : isDoublesLocked(index));
+    const nextAssignments = doublesResultGroups.map((group) => group.players);
+    const nextModes = doublesResultGroups.map((_, index) => doublesFormationMode(index));
+    const nextBlocks = storedProgram.blocks.map((block, index) => index === roundIndex
+      ? { ...block, doublesAssignments: nextAssignments, doublesAssignmentModes: nextModes, doublesAssignmentLocks: nextLocks }
+      : block);
+    const nextRounds = storedProgram.rounds?.map((round, index) => index === roundIndex
+      ? { ...round, doublesAssignments: nextAssignments, doublesAssignmentModes: nextModes, doublesAssignmentLocks: nextLocks }
+      : round);
+    await persistFormation({ ...storedProgram, blocks: nextBlocks, ...(nextRounds ? { rounds: nextRounds } : {}) }, roundIndex, false);
+  };
+
   const findFormationContainer = (groups: FormationPlayer[][], itemId: string) => {
     if (itemId.startsWith("formation-group-")) return Number(itemId.replace("formation-group-", ""));
     return groups.findIndex((group) => group.some((player) => formationPlayerId(player) === itemId));
@@ -451,6 +514,8 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
     setFormationDraft((previous) => {
       const from = findFormationContainer(previous, activeId);
       const to = findFormationContainer(previous, overId);
+      if (formationDialog?.mode === "team" && (isTeamLocked(from) || isTeamLocked(to))) return previous;
+      if (formationDialog?.mode === "doubles" && (isDoublesLocked(from) || isDoublesLocked(to))) return previous;
       if (from < 0 || to < 0 || from === to) return previous;
       const next = previous.map((group) => [...group]);
       const itemIndex = next[from].findIndex((player) => formationPlayerId(player) === activeId);
@@ -469,6 +534,8 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
     setFormationDraft((previous) => {
       const container = findFormationContainer(previous, activeId);
       const overContainer = findFormationContainer(previous, overId);
+      if (formationDialog?.mode === "team" && (isTeamLocked(container) || isTeamLocked(overContainer))) return previous;
+      if (formationDialog?.mode === "doubles" && (isDoublesLocked(container) || isDoublesLocked(overContainer))) return previous;
       if (container < 0 || container !== overContainer) return previous;
       const oldIndex = previous[container].findIndex((player) => formationPlayerId(player) === activeId);
       const newIndex = previous[container].findIndex((player) => formationPlayerId(player) === overId);
@@ -483,6 +550,21 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
     if (!formationDialog || !storedProgram?.blocks) return;
     const { roundIndex, mode } = formationDialog;
     if (mode === "doubles" && formationDraft.some((group) => group.length !== 2)) return;
+    // Editing changes members only. A team's manual/automatic identity is decided
+    // when it is created, and must not change merely because an operator adjusts it.
+    const mixedTeamAssignments = formationDraft;
+    const teamAssignmentModes = mode === "team"
+      ? formationDraft.map((_, index) => teamFormationMode(index))
+      : undefined;
+    const teamAssignmentLocks = mode === "team"
+      ? formationDraft.map((_, index) => isTeamLocked(index))
+      : undefined;
+    const doublesAssignmentModes = mode === "doubles"
+      ? formationDraft.map((_, index) => doublesFormationMode(index))
+      : undefined;
+    const doublesAssignmentLocks = mode === "doubles"
+      ? formationDraft.map((_, index) => isDoublesLocked(index))
+      : undefined;
     const remainingParticipants = [...participants];
     const participantOrder = formationDraft.flatMap((group) =>
       group.flatMap((player) => {
@@ -515,8 +597,10 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
         if (propagateTeamFormation) {
           return {
             ...block,
-            groupSizes: formationDraft.map((group) => group.length),
-            teamAssignments: formationDraft,
+            groupSizes: mixedTeamAssignments.map((group) => group.length),
+            teamAssignments: mixedTeamAssignments,
+            teamAssignmentModes,
+            teamAssignmentLocks,
             groupAssignments: undefined,
           };
         }
@@ -525,13 +609,15 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
       if (mode === "team") {
         return {
           ...block,
-          groupSizes: formationDraft.map((group) => group.length),
-          teamAssignments: formationDraft,
+          groupSizes: mixedTeamAssignments.map((group) => group.length),
+          teamAssignments: mixedTeamAssignments,
+          teamAssignmentModes,
+          teamAssignmentLocks,
           groupAssignments: undefined,
         };
       }
       if (mode === "doubles") {
-        return { ...block, doublesAssignments: formationDraft };
+        return { ...block, doublesAssignments: formationDraft, doublesAssignmentModes, doublesAssignmentLocks };
       }
       return {
         ...block,
@@ -557,9 +643,11 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
         if (propagateTeamFormation) {
           return {
             ...round,
-            teamPlayerCount: formationDraft[0]?.length ?? round.teamPlayerCount,
-            groupSizes: formationDraft.map((group) => group.length),
-            teamAssignments: formationDraft,
+            teamPlayerCount: mixedTeamAssignments[0]?.length ?? round.teamPlayerCount,
+            groupSizes: mixedTeamAssignments.map((group) => group.length),
+            teamAssignments: mixedTeamAssignments,
+            teamAssignmentModes,
+            teamAssignmentLocks,
             groupAssignments: undefined,
           };
         }
@@ -568,13 +656,15 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
       if (mode === "team") {
         return {
           ...round,
-          groupSizes: formationDraft.map((group) => group.length),
-          teamAssignments: formationDraft,
+          groupSizes: mixedTeamAssignments.map((group) => group.length),
+          teamAssignments: mixedTeamAssignments,
+          teamAssignmentModes,
+          teamAssignmentLocks,
           groupAssignments: undefined,
         };
       }
       if (mode === "doubles") {
-        return { ...round, doublesAssignments: formationDraft };
+        return { ...round, doublesAssignments: formationDraft, doublesAssignmentModes, doublesAssignmentLocks };
       }
       return {
         ...round,
@@ -596,6 +686,45 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
     const { roundIndex, mode } = formationDialog;
     const nextTeamShuffleSeed =
       ((storedProgram.blocks[roundIndex]?.teamShuffleSeed ?? (roundIndex + 1) * 1000 + 101) + 1);
+    const lockedTeamIndexes = mode === "team"
+      ? new Set(teamResultGroups.flatMap((_, index) => isTeamLocked(index) ? [index] : []))
+      : new Set<number>();
+    const lockedPlayerIds = new Set(
+      [...lockedTeamIndexes].flatMap((index) => teamResultGroups[index].players.map(formationPlayerId)),
+    );
+    const unlockedTeamIndexes = teamResultGroups.flatMap((_, index) => lockedTeamIndexes.has(index) ? [] : [index]);
+    const reshuffledUnlockedTeams = mode === "team" && unlockedTeamIndexes.length > 0
+      ? distributeSnake(
+          reshuffleWithinLevel(programPlayers, nextTeamShuffleSeed).filter((player) => !lockedPlayerIds.has(formationPlayerId(player))),
+          unlockedTeamIndexes.map((index) => teamResultGroups[index].players.length),
+        ).map((group) => group.players)
+      : [];
+    const reshuffledTeamAssignments = mode === "team"
+      ? teamResultGroups.map((group, index) => lockedTeamIndexes.has(index)
+        ? group.players
+        : reshuffledUnlockedTeams[unlockedTeamIndexes.indexOf(index)] ?? [])
+      : [];
+    const reshuffledTeamModes = mode === "team"
+      ? teamResultGroups.map((_, index) => lockedTeamIndexes.has(index) ? teamFormationMode(index) : "auto" as const)
+      : [];
+    const reshuffledTeamLocks = mode === "team"
+      ? teamResultGroups.map((_, index) => lockedTeamIndexes.has(index))
+      : [];
+    const lockedDoublesIndexes = mode === "doubles"
+      ? new Set(doublesResultGroups.flatMap((_, index) => isDoublesLocked(index) ? [index] : []))
+      : new Set<number>();
+    const lockedDoublesPlayerIds = new Set([...lockedDoublesIndexes].flatMap((index) => doublesResultGroups[index].players.map(formationPlayerId)));
+    const unlockedDoublesIndexes = doublesResultGroups.flatMap((_, index) => lockedDoublesIndexes.has(index) ? [] : [index]);
+    const reshuffledUnlockedDoubles = mode === "doubles" && unlockedDoublesIndexes.length > 0
+      ? distributeSnake(reshuffleWithinLevel(programPlayers, nextTeamShuffleSeed).filter((player) => !lockedDoublesPlayerIds.has(formationPlayerId(player))), unlockedDoublesIndexes.map((index) => doublesResultGroups[index].players.length)).map((group) => group.players)
+      : [];
+    const reshuffledDoublesAssignments = mode === "doubles"
+      ? doublesResultGroups.map((group, index) => lockedDoublesIndexes.has(index) ? group.players : reshuffledUnlockedDoubles[unlockedDoublesIndexes.indexOf(index)] ?? [])
+      : [];
+    const reshuffledDoublesModes = mode === "doubles"
+      ? doublesResultGroups.map((_, index) => lockedDoublesIndexes.has(index) ? doublesFormationMode(index) : "auto" as const)
+      : [];
+    const reshuffledDoublesLocks = mode === "doubles" ? doublesResultGroups.map((_, index) => lockedDoublesIndexes.has(index)) : [];
     let propagateTeamFormation = false;
     const nextBlocks = storedProgram.blocks.map((block, index) => {
       if (mode === "team") {
@@ -612,7 +741,9 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
           return {
             ...block,
             teamShuffleSeed: nextTeamShuffleSeed,
-            teamAssignments: undefined,
+            teamAssignments: reshuffledTeamAssignments,
+            teamAssignmentModes: reshuffledTeamModes,
+            teamAssignmentLocks: reshuffledTeamLocks,
             groupAssignments: undefined,
           };
         }
@@ -622,7 +753,9 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
         return {
           ...block,
           teamShuffleSeed: nextTeamShuffleSeed,
-          teamAssignments: undefined,
+          teamAssignments: reshuffledTeamAssignments,
+          teamAssignmentModes: reshuffledTeamModes,
+          teamAssignmentLocks: reshuffledTeamLocks,
           groupAssignments: undefined,
         };
       }
@@ -630,7 +763,9 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
         return {
           ...block,
           teamShuffleSeed: (block.teamShuffleSeed ?? (roundIndex + 1) * 1000 + 101) + 1,
-          doublesAssignments: undefined,
+          doublesAssignments: reshuffledDoublesAssignments,
+          doublesAssignmentModes: reshuffledDoublesModes,
+          doublesAssignmentLocks: reshuffledDoublesLocks,
         };
       }
       return {
@@ -655,7 +790,9 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
           return {
             ...round,
             teamShuffleSeed: nextTeamShuffleSeed,
-            teamAssignments: undefined,
+            teamAssignments: reshuffledTeamAssignments,
+            teamAssignmentModes: reshuffledTeamModes,
+            teamAssignmentLocks: reshuffledTeamLocks,
             groupAssignments: undefined,
           };
         }
@@ -665,7 +802,9 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
         return {
           ...round,
           teamShuffleSeed: nextTeamShuffleSeed,
-          teamAssignments: undefined,
+          teamAssignments: reshuffledTeamAssignments,
+          teamAssignmentModes: reshuffledTeamModes,
+          teamAssignmentLocks: reshuffledTeamLocks,
           groupAssignments: undefined,
         };
       }
@@ -673,7 +812,9 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
         return {
           ...round,
           teamShuffleSeed: (round.teamShuffleSeed ?? (roundIndex + 1) * 1000 + 101) + 1,
-          doublesAssignments: undefined,
+          doublesAssignments: reshuffledDoublesAssignments,
+          doublesAssignmentModes: reshuffledDoublesModes,
+          doublesAssignmentLocks: reshuffledDoublesLocks,
         };
       }
       return {
@@ -944,7 +1085,9 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
                     key={index}
                     players={players}
                     index={index}
-                    label={formationDialog?.mode === "team" ? `${String.fromCharCode(65 + index)}팀` : formationDialog?.mode === "doubles" ? `${index + 1}복식` : `${index + 1}조`}
+                    label={formationDialog?.mode === "team" || formationDialog?.mode === "doubles" ? `${String.fromCharCode(65 + index)}팀` : `${index + 1}조`}
+                    locked={formationDialog?.mode === "team" ? isTeamLocked(index) : formationDialog?.mode === "doubles" ? isDoublesLocked(index) : false}
+                    teamMode={formationDialog?.mode === "team" ? teamFormationMode(index) : formationDialog?.mode === "doubles" ? doublesFormationMode(index) : undefined}
                   />
                 ))}
               </Box>
@@ -974,13 +1117,42 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
                 overflow: "hidden",
               }}
             >
-              <Box sx={{ px: 1.5, py: 1.1, bgcolor: "#F8FAFC", display: "flex", justifyContent: "space-between" }}>
+              <Box sx={{ px: 1.5, py: 1.1, bgcolor: "#F8FAFC", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 0.75 }}>
               <Typography sx={{ fontSize: 15, fontWeight: 900 }}>
-                {formationDialog?.mode === "team" ? `${String.fromCharCode(65 + groupIndex)}팀` : formationDialog?.mode === "doubles" ? `${group.players.map((player) => formatFormationName(player.name, player.level)).join(" · ")}` : group.name}
+                {formationDialog?.mode === "team" || formationDialog?.mode === "doubles" ? `${String.fromCharCode(65 + groupIndex)}팀` : group.name}
               </Typography>
-              <Typography sx={{ fontSize: 11, color: "text.secondary", fontWeight: 700 }}>
-                {group.players.length}{isDoublesGroupResult ? "팀" : "명"}
-              </Typography>
+              <Stack direction="row" spacing={0.5} alignItems="center">
+                {(formationDialog?.mode === "team" || formationDialog?.mode === "doubles") && (
+                  <Chip
+                    label={(formationDialog?.mode === "team" ? teamFormationMode(groupIndex) : doublesFormationMode(groupIndex)) === "manual" ? "수동" : "자동"}
+                    size="small"
+                    sx={{ height: 20, fontSize: 10, fontWeight: 800, bgcolor: (formationDialog?.mode === "team" ? teamFormationMode(groupIndex) : doublesFormationMode(groupIndex)) === "manual" ? "#FEF3C7" : "#DBEAFE", color: (formationDialog?.mode === "team" ? teamFormationMode(groupIndex) : doublesFormationMode(groupIndex)) === "manual" ? "#B45309" : "#1D4ED8" }}
+                  />
+                )}
+                {formationDialog?.mode === "team" && canManage && (
+                  <Tooltip title={isTeamLocked(groupIndex) ? "팀 잠금 해제" : "팀 잠금"}>
+                    <IconButton
+                      size="small"
+                      onClick={() => void toggleTeamLock(groupIndex)}
+                      disabled={isSavingFormation}
+                      aria-label={isTeamLocked(groupIndex) ? "팀 잠금 해제" : "팀 잠금"}
+                      sx={{ width: 22, height: 22, color: isTeamLocked(groupIndex) ? "#D97706" : "#94A3B8" }}
+                    >
+                      {isTeamLocked(groupIndex) ? <LockOutlinedIcon sx={{ fontSize: 15 }} /> : <LockOpenOutlinedIcon sx={{ fontSize: 15 }} />}
+                    </IconButton>
+                  </Tooltip>
+                )}
+                {formationDialog?.mode === "doubles" && canManage && (
+                  <Tooltip title={isDoublesLocked(groupIndex) ? "복식 잠금 해제" : "복식 잠금"}>
+                    <IconButton size="small" onClick={() => void toggleDoublesLock(groupIndex)} disabled={isSavingFormation} aria-label={isDoublesLocked(groupIndex) ? "복식 잠금 해제" : "복식 잠금"} sx={{ width: 22, height: 22, color: isDoublesLocked(groupIndex) ? "#D97706" : "#94A3B8" }}>
+                      {isDoublesLocked(groupIndex) ? <LockOutlinedIcon sx={{ fontSize: 15 }} /> : <LockOpenOutlinedIcon sx={{ fontSize: 15 }} />}
+                    </IconButton>
+                  </Tooltip>
+                )}
+                <Typography sx={{ fontSize: 11, color: "text.secondary", fontWeight: 700 }}>
+                  {group.players.length}{isDoublesGroupResult ? "팀" : "명"}
+                </Typography>
+              </Stack>
               </Box>
               <Stack spacing={0.75} sx={{ px: 1.5, py: 1.25 }}>
                 {group.players.map((player) => {

@@ -2954,27 +2954,6 @@ const LeagueAlgorithmDemo = ({
                   rounds={rounds}
                   setRounds={setRounds}
                 />
-                {!round.inheritPreviousTeamFormation && (
-                  <>
-                <Stack direction="row" alignItems="center" spacing={1}>
-                  <Typography sx={{ flex: 1, fontSize: 14, fontWeight: 700 }}>
-                    팀 인원
-                  </Typography>
-                  <TeamPlayerCountStepper
-                  value={round.teamPlayerCount ?? 3}
-                  max={Math.max(2, Math.min(10, playerCount))}
-                  onChange={(value) =>
-                    setRounds(
-                      rounds.map((x) =>
-                        x.id === round.id ? { ...x, teamPlayerCount: value } : x
-                      )
-                    )
-                  }
-                />
-                </Stack>
-                  </>
-                )}
-
                 <div style={{ marginTop: "16px" }}>
                   <div
                     style={{
@@ -3531,7 +3510,7 @@ const LeagueAlgorithmDemo = ({
 
             return (
               <div
-                key={`${option.tierSize}-${option.groupCount}`}
+                key={option.groups.join("-")}
                 onClick={() => {
                   setPendingGroupSizes(option.groups);
                   setGroupStructureSelectionSource("preset");
@@ -3567,7 +3546,7 @@ const LeagueAlgorithmDemo = ({
                     fontWeight: 700,
                   }}
                 >
-                  {option.groupCount}개 {isGroupStructureTeam ? "팀" : "조"}
+                  {option.groups.length}개 {isGroupStructureTeam ? "팀" : "조"}
                 </div>
 
                 <div
@@ -3733,7 +3712,7 @@ const LeagueAlgorithmDemo = ({
                     key={index}
                     players={players}
                     index={index}
-                    label={isGroupResultTeam ? `${String.fromCharCode(65 + index)}팀` : groupResultDialog?.mode === "doubles" ? `${index + 1}복식` : `${index + 1}조`}
+                    label={isGroupResultTeam || groupResultDialog?.mode === "doubles" ? `${String.fromCharCode(65 + index)}팀` : `${index + 1}조`}
                   />
                 ))}
               </Box>
@@ -3748,7 +3727,7 @@ const LeagueAlgorithmDemo = ({
                 return (
                   <Box key={group.name} sx={{ border: "1px solid #E5E7EB", borderTop: `3px solid ${accent}`, borderRadius: 1.5, overflow: "hidden", bgcolor: "#FFF" }}>
                     <Box sx={{ px: 1.5, py: 1.1, bgcolor: "#F8FAFC", display: "flex", justifyContent: "space-between" }}>
-                      <Typography sx={{ fontSize: 15, fontWeight: 900 }}>{isGroupResultTeam ? `${String.fromCharCode(65 + groupIndex)}팀` : groupResultDialog?.mode === "doubles" ? group.players.map((player) => formatFormationName(player.name, player.level)).join(" · ") : group.name}</Typography>
+                      <Typography sx={{ fontSize: 15, fontWeight: 900 }}>{isGroupResultTeam || groupResultDialog?.mode === "doubles" ? `${String.fromCharCode(65 + groupIndex)}팀` : group.name}</Typography>
                       <Typography sx={{ fontSize: 11, color: "text.secondary", fontWeight: 700 }}>
                         {group.players.length}{isDoublesGroupResult ? "팀" : "명"}
                       </Typography>

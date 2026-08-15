@@ -73,6 +73,9 @@ type StoredProgramBlock = {
   doublesAssignments?: FormationPlayer[][];
   doublesAssignmentModes?: Array<"manual" | "auto">;
   doublesAssignmentLocks?: boolean[];
+  teamFormationPublished?: boolean;
+  doublesFormationPublished?: boolean;
+  groupFormationPublished?: boolean;
   participantOrder?: string[];
   description?: string;
   teamSinglesCount?: number;
@@ -252,6 +255,9 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
         type: block.type,
         teamSinglesCount: block.teamSinglesCount ?? legacySinglesCount ?? 3,
         teamDoublesCount: block.teamDoublesCount ?? legacyDoublesCount ?? 0,
+        teamFormationPublished: block.teamFormationPublished,
+        doublesFormationPublished: block.doublesFormationPublished,
+        groupFormationPublished: block.groupFormationPublished,
       };
       })
     : [];
@@ -462,6 +468,15 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
   const beginFormationEditing = () => {
     setFormationDraft(formationGroups.map((group) => group.players.map((player) => ({ ...player }))));
     setIsFormationEditing(true);
+  };
+
+  const publishFormation = async (roundIndex: number, mode: "team" | "doubles" | "group") => {
+    if (!storedProgram?.blocks || !canManage) return;
+    const key = mode === "team" ? "teamFormationPublished" : mode === "doubles" ? "doublesFormationPublished" : "groupFormationPublished";
+    const nextBlocks = storedProgram.blocks.map((block, index) => index === roundIndex ? { ...block, [key]: true } : block);
+    const nextRounds = storedProgram.rounds?.map((round, index) => index === roundIndex ? { ...round, [key]: true } : round);
+    await persistFormation({ ...storedProgram, blocks: nextBlocks, ...(nextRounds ? { rounds: nextRounds } : {}) }, roundIndex, false);
+    setFormationDialog({ roundIndex, mode });
   };
 
   const toggleTeamLock = async (teamIndex: number) => {
@@ -962,34 +977,34 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
 
                     {(round.type === "TEAM" || round.type === "DOUBLES" || round.format === "GROUP") && (
                       <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-                        {round.type === "TEAM" && (
+                        {round.type === "TEAM" && (round.teamFormationPublished || canManage) && (
                           <Button
                             variant="outlined"
                             size="small"
-                            onClick={() => setFormationDialog({ roundIndex: round.round - 1, mode: "team" })}
+                            onClick={() => round.teamFormationPublished ? setFormationDialog({ roundIndex: round.round - 1, mode: "team" }) : void publishFormation(round.round - 1, "team")}
                             sx={{ flex: 1, height: 34, fontWeight: 700, fontSize: 12, borderRadius: 1.5, textTransform: "none", whiteSpace: "nowrap" }}
                           >
-                            팀 편성 결과
+                            {round.teamFormationPublished ? "팀 편성 결과" : "팀 편성하기"}
                           </Button>
                         )}
-                        {round.type === "DOUBLES" && (
+                        {round.type === "DOUBLES" && (round.doublesFormationPublished || canManage) && (
                           <Button
                             variant="outlined"
                             size="small"
-                            onClick={() => setFormationDialog({ roundIndex: round.round - 1, mode: "doubles" })}
+                            onClick={() => round.doublesFormationPublished ? setFormationDialog({ roundIndex: round.round - 1, mode: "doubles" }) : void publishFormation(round.round - 1, "doubles")}
                             sx={{ flex: 1, height: 34, fontWeight: 700, fontSize: 12, borderRadius: 1.5, textTransform: "none", whiteSpace: "nowrap" }}
                           >
-                            복식 편성 결과
+                            {round.doublesFormationPublished ? "복식 편성 결과" : "복식 편성하기"}
                           </Button>
                         )}
-                        {round.format === "GROUP" && (
+                        {round.format === "GROUP" && (round.groupFormationPublished || canManage) && (
                           <Button
                             variant="outlined"
                             size="small"
-                            onClick={() => setFormationDialog({ roundIndex: round.round - 1, mode: "group" })}
+                            onClick={() => round.groupFormationPublished ? setFormationDialog({ roundIndex: round.round - 1, mode: "group" }) : void publishFormation(round.round - 1, "group")}
                             sx={{ flex: 1, height: 34, fontWeight: 700, fontSize: 12, borderRadius: 1.5, textTransform: "none", whiteSpace: "nowrap" }}
                           >
-                            조 편성 결과
+                            {round.groupFormationPublished ? "조 편성 결과" : "조 편성하기"}
                           </Button>
                         )}
                       </Stack>

@@ -3374,7 +3374,7 @@ const LeagueAlgorithmDemo = ({
                     })
                   }}
                 >
-                  팀 편성 결과
+                  팀 편성하기
                 </Button>
               </div>
             )}
@@ -3390,7 +3390,7 @@ const LeagueAlgorithmDemo = ({
                     setGroupResultDialog({ optionIndex: index, blockIndex, mode: "doubles" });
                   }}
                 >
-                  복식 편성 결과
+                  복식 편성하기
                 </Button>
               </div>
             )}
@@ -3436,7 +3436,7 @@ const LeagueAlgorithmDemo = ({
                     })
                   }}
                 >
-                  조 편성 결과
+                  조 편성하기
                 </Button>
               </div>
             )}

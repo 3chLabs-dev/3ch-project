@@ -2005,10 +2005,6 @@ router.post('/league/:leagueId/participants', optionalAuth, async (req, res) => 
     if (!Array.isArray(rawParticipants) || rawParticipants.length === 0) {
       return res.status(400).json({ message: '참가자 목록이 비어있습니다.' });
     }
-    // 관리자가 아니면 1명만 신청 가능
-    if (!isAdmin && rawParticipants.length > 1) {
-      return res.status(403).json({ message: '본인만 참가 신청할 수 있습니다.' });
-    }
     if (!isAdmin && userId) {
       const existingParticipant = await pool.query(
         `SELECT 1 FROM league_participants WHERE league_id = $1 AND member_id = $2 AND status = 'active'`,
@@ -2050,6 +2046,11 @@ router.post('/league/:leagueId/participants', optionalAuth, async (req, res) => 
     );
     const programData = programRow.rows[0]?.program_data ?? null;
     const programBlocks = Array.isArray(programData?.blocks) ? programData.blocks : [];
+    const supportsFormationJoin = programBlocks.some((block) => block?.type === 'DOUBLES' || block?.type === 'TEAM');
+    // 복식/단체전은 대표 참가자가 팀원을 함께 등록할 수 있다. 일반 리그는 본인만 신청한다.
+    if (!isAdmin && rawParticipants.length > 1 && !supportsFormationJoin) {
+      return res.status(403).json({ message: '본인만 참가 신청할 수 있습니다.' });
+    }
     const isLeagueActive = leaguePermRow.rows[0].status === 'active';
     const placementBlock = placement ? programBlocks[placement.program_round - 1] : null;
     const validTournamentPlacement = placement && participants.length === 1 &&

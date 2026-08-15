@@ -179,7 +179,10 @@
     const [replacementDivision, setReplacementDivision] = useState("");
     const [replacementName, setReplacementName] = useState("");
     const [replacementMemberId, setReplacementMemberId] = useState<number | null>(null);
-    const [loadMemberPurpose, setLoadMemberPurpose] = useState<"add" | "replace">("add");
+    const [loadMemberPurpose, setLoadMemberPurpose] = useState<"add" | "replace" | "join_team">("add");
+    const [joinFormationOpen, setJoinFormationOpen] = useState(false);
+    const [joinBase, setJoinBase] = useState<{ name: string; division: string }>({ name: "", division: "" });
+    const [joinFormationMembers, setJoinFormationMembers] = useState<Array<{ name: string; division: string; member_id?: number | null }>>([]);
     const [tournamentPlacementOpen, setTournamentPlacementOpen] = useState(false);
     const [selectedTournamentPlacement, setSelectedTournamentPlacement] = useState<{ program_round: number; match_id: string; slot: "a" | "b" } | null>(null);
     const [participantClaimOpen, setParticipantClaimOpen] = useState(false);
@@ -312,6 +315,7 @@
     const isDoublesBuilder = firstFormationBlock?.type === "DOUBLES";
     const teamSize = isDoublesBuilder ? 2 : (firstFormationBlock?.groupSizes?.[0] ?? firstFormationBlock?.teamPlayerCount ?? 0);
     const canBuildTeam = canManage && firstFormationBlockIndex >= 0 && teamSize >= 2;
+    const joinCompanionCount = isDoublesBuilder ? 1 : Math.max(1, teamSize - 1);
 
     const tournamentByeSlots = useMemo(() => {
       const program = programData?.program?.program_data as { blocks?: Array<{ type?: string; format?: string }> } | null;
@@ -359,7 +363,7 @@
       );
     };
 
-    const handleJoin = async (name?: string, division?: string) => {
+    const handleJoin = async (name?: string, division?: string, companions: Array<{ name: string; division: string; member_id?: number | null }> = []) => {
       if (!id) return;
       const recruitLimit = league?.recruit_count ?? 0;
       const isFull = recruitLimit > 0 && rawParticipants.length >= recruitLimit;
@@ -379,7 +383,7 @@
       try {
         const result = await addParticipants({
           leagueId: id,
-          participants: [{ division: participantDivision, name: participantName }],
+          participants: [{ division: participantDivision, name: participantName }, ...companions],
         }).unwrap();
         setAlertSeverity("success");
         setAlertMsg("참가 신청이 완료되었습니다.");
@@ -445,6 +449,14 @@
     const openTeamBuilder = () => {
       setTeamBuilderParticipantIds([]);
       setTeamBuilderOpen(true);
+    };
+
+    const requestJoin = (name?: string, division?: string) => {
+      const hasTeamProgram = teamProgram?.blocks?.some((block) => block.type === "TEAM" || block.type === "DOUBLES");
+      if (!hasTeamProgram) { void handleJoin(name, division); return; }
+      setJoinBase({ name: name ?? myMember?.name ?? "", division: division ?? myMember?.division ?? "" });
+      setJoinFormationMembers([]);
+      setJoinFormationOpen(true);
     };
 
     const savePrebuiltTeam = async () => {
@@ -560,6 +572,11 @@
         setReplacementDivision(member.division ?? "");
         setReplacementName(member.name);
         setReplacementMemberId(member.member_id);
+        setOpenLoadDialog(false);
+        return;
+      }
+      if (loadMemberPurpose === "join_team") {
+        setJoinFormationMembers(selected.map((member) => ({ division: member.division, name: member.name, member_id: member.member_id })));
         setOpenLoadDialog(false);
         return;
       }
@@ -2013,6 +2030,29 @@ const handleSaveEdit = async () => {
           </DialogActions>
         </Dialog>
 
+        <Dialog open={joinFormationOpen} onClose={() => setJoinFormationOpen(false)} maxWidth="xs" fullWidth>
+          <DialogTitle sx={{ fontWeight: 900 }}>{isDoublesBuilder ? "복식 조원 등록" : "팀원 등록"}</DialogTitle>
+          <DialogContent dividers>
+            <Typography sx={{ mb: 1.5, fontSize: 13, color: "text.secondary" }}>
+              함께 참가할 {isDoublesBuilder ? "복식 조원" : "팀원"}을 등록하세요. 지금 건너뛰어도 나중에 자동 편성됩니다.
+            </Typography>
+            <Button size="small" variant="outlined" onClick={() => { setLoadMemberPurpose("join_team"); setOpenLoadDialog(true); }} sx={{ mb: 1.5 }}>클럽회원 불러오기</Button>
+            <Stack spacing={1}>
+              {Array.from({ length: joinCompanionCount }, (_, index) => {
+                const member = joinFormationMembers[index] ?? { name: "", division: "" };
+                return <Stack key={index} direction="row" spacing={1}>
+                  <TextField label="부수" size="small" value={member.division} sx={{ width: 92 }} onChange={(event) => setJoinFormationMembers((current) => { const next = [...current]; next[index] = { ...member, division: event.target.value }; return next; })} />
+                  <TextField label="이름" size="small" fullWidth value={member.name} onChange={(event) => setJoinFormationMembers((current) => { const next = [...current]; next[index] = { ...member, name: event.target.value }; return next; })} />
+                </Stack>;
+              })}
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 2, py: 1.5 }}>
+            <Button onClick={() => { setJoinFormationOpen(false); void handleJoin(joinBase.name, joinBase.division); }}>나중에</Button>
+            <Button variant="contained" disabled={joinFormationMembers.filter((member) => member.name.trim()).length !== joinCompanionCount} onClick={() => { setJoinFormationOpen(false); void handleJoin(joinBase.name, joinBase.division, joinFormationMembers.filter((member) => member.name.trim())); }}>함께 신청</Button>
+          </DialogActions>
+        </Dialog>
+
         {/* 비회원 참가 신청 다이얼로그 */}
         <Dialog
           open={guestJoinOpen}
@@ -2053,7 +2093,7 @@ const handleSaveEdit = async () => {
               취소
             </Button>
             <Button
-              onClick={() => handleJoin(guestName.trim(), guestDivision.trim())}
+              onClick={() => requestJoin(guestName.trim(), guestDivision.trim())}
               variant="contained"
               disableElevation
               disabled={!guestName.trim()}
@@ -2422,7 +2462,7 @@ const handleSaveEdit = async () => {
               <Button
                 fullWidth variant="contained" disableElevation disabled={isFull}
                 sx={{ borderRadius: 1, height: 44, fontWeight: 900, fontSize: 15, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}
-                onClick={() => handleJoin()}
+                onClick={() => requestJoin()}
               >
                 {isFull ? `마감 (${league!.recruit_count}/${league!.recruit_count}명)` : "참가 신청"}
               </Button>

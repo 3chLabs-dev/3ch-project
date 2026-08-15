@@ -2754,9 +2754,9 @@ export default function LeagueGPTVisionSheet() {
       </Dialog>
 
       <Dialog open={isScanning} maxWidth="xs" fullWidth sx={{ zIndex: 10002 }} slotProps={{ paper: { sx: mobileDialogPaperSx } }}>
-        <DialogContent sx={{ py: 4, textAlign: "center" }}>
-          <CircularProgress size={34} />
-          <Typography sx={{ mt: 2, fontWeight: 900 }}>AI가 사진 속 점수를 인식하는 중입니다.</Typography>
+        <DialogContent sx={{ px: 3.5, py: 4 }}>
+          <Typography sx={{ mb: 1.5, textAlign: "center", color: "#111827", fontSize: 15, fontWeight: 900 }}>AI가 사진 속 점수를 인식하는 중입니다.</Typography>
+          <LinearProgress sx={{ height: 11, borderRadius: 999, bgcolor: "#DBEAFE", "& .MuiLinearProgress-bar": { borderRadius: 999 } }} />
         </DialogContent>
       </Dialog>
 
@@ -2912,9 +2912,9 @@ export default function LeagueGPTVisionSheet() {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              bgcolor: "rgba(255,255,255,0.42)",
-              backdropFilter: "blur(4px)",
-              WebkitBackdropFilter: "blur(4px)",
+              bgcolor: "rgba(255,255,255,0.18)",
+              backdropFilter: "blur(1.5px)",
+              WebkitBackdropFilter: "blur(1.5px)",
               cursor: "wait",
             }}
           >

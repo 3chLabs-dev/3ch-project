@@ -305,7 +305,10 @@ function BracketScoreCell({ match, isA, leagueId, winScore, canManage, landscape
   const [updateMatch] = useUpdateLeagueMatchMutation();
   const autoCompleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isActive = match?.status === "playing" || match?.status === "done";
-  const score    = isActive ? ((isA ? match!.score_a : match!.score_b) ?? 0) : null;
+  const storedScore = match ? (isA ? match.score_a : match.score_b) : null;
+  // 영역 사진을 한 장만 저장한 경우 경기는 아직 pending이지만 한쪽 점수는 이미 존재한다.
+  // 저장된 값은 즉시 보여주고, 실제 경기 시작 전에는 기존처럼 편집 컨트롤만 숨긴다.
+  const score = storedScore ?? (isActive ? 0 : null);
   const [isEditing, setIsEditing] = useState(false);
   const [tempValue, setTempValue] = useState<string>("");
   const canEdit  = canManage && isActive;
@@ -343,7 +346,8 @@ function BracketScoreCell({ match, isA, leagueId, winScore, canManage, landscape
     updateCurrentMatch(isA ? { score_a: next } : { score_b: next });
     scheduleAutoComplete();
   };
-  const oppScore = isActive ? ((isA ? match!.score_b : match!.score_a) ?? 0) : null;
+  const storedOppScore = match ? (isA ? match.score_b : match.score_a) : null;
+  const oppScore = storedOppScore ?? (isActive ? 0 : null);
   // 선승제에서 정확히 winScore 점을 획득한 경우 → 승자 스타일 적용
   const isWinner = winScore !== null && match?.status === "done" && score !== null && oppScore !== null && score === winScore;
 

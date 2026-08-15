@@ -2070,6 +2070,13 @@ export default function LeagueGPTVisionSheet() {
   // portrait: 90° 회전이므로 시각 너비=naturalTh, 시각 높이=naturalTw
   const visualW = naturalTw > 0 ? (landscape ? naturalTw : naturalTh) * appliedScale : 0;
   const visualH = naturalTh > 0 ? (landscape ? naturalTh : naturalTw) * appliedScale : 0;
+  const portraitScheduleWidth = !landscape ? (scheduleRef.current?.offsetWidth ?? 72) : 0;
+  const portraitContentWidth = !landscape
+    ? Math.max(0, (wrapperRef.current?.clientWidth ?? 0) - portraitScheduleWidth)
+    : 0;
+  const portraitTableOffsetX = !landscape
+    ? Math.max(0, (portraitContentWidth - visualW) / 2)
+    : 0;
 
   const mobileDialogPaperSx = landscape
     ? {}
@@ -2266,7 +2273,7 @@ export default function LeagueGPTVisionSheet() {
                 display: "inline-block",
                 position: "absolute",
                 top: 0,
-                left: 0,
+                left: landscape ? 0 : portraitTableOffsetX,
               }}
             >
           {/* 대진표 테이블 (DnD 컨텍스트 내부) */}

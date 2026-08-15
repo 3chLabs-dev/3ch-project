@@ -188,7 +188,7 @@ const DiagonalBase = styled(TableCell)(({ theme }) => ({
  * - ResizeObserver로 셀의 실제 크기를 측정해 빗금 각도(angle)를 동적 계산
  * - portrait에서는 테이블 전체가 90° 회전하므로 셀 내부 각도는 가로모드와 동일하게 유지
  */
-function DiagonalScoreCell({ isVisionStart = false }: { landscape: boolean; isVisionStart?: boolean }) {
+function DiagonalScoreCell({ isVisionStart = false, rowIndex, colIndex }: { landscape: boolean; isVisionStart?: boolean; rowIndex: number; colIndex: number }) {
   const ref = useRef<HTMLTableCellElement>(null);
   const [angle, setAngle] = useState(45);
 
@@ -208,6 +208,8 @@ function DiagonalScoreCell({ isVisionStart = false }: { landscape: boolean; isVi
   return (
     <DiagonalBase
       ref={ref}
+      data-score-row={rowIndex}
+      data-score-col={colIndex}
       sx={(theme) => ({
         backgroundImage: `linear-gradient(${angle}deg,transparent 49.5%,${theme.palette.divider} 50%,${theme.palette.divider} 50.5%,transparent 51%)`,
       })}
@@ -354,14 +356,15 @@ function BracketScoreCell({ match, isA, leagueId, winScore, canManage, landscape
   };
 
   const winnerStyle = { color: isWinner ? COLOR.win : "inherit", fontWeight: isWinner ? 700 : 400 };
+  const cellCoordinates = { "data-score-row": rowIndex, "data-score-col": colIndex };
 
   if (match?.is_no_game) {
-    return <StyledTableCell sx={{ color: "#E53935", fontWeight: 900, fontSize: 11, textAlign: "center" }}>NO-GAME</StyledTableCell>;
+    return <StyledTableCell {...cellCoordinates} sx={{ color: "#E53935", fontWeight: 900, fontSize: 11, textAlign: "center" }}>NO-GAME</StyledTableCell>;
   }
 
   // 편집 불가: 점수 숫자만 표시 (빈 칸 또는 숫자)
   if (!canEdit) {
-    return <StyledTableCell sx={winnerStyle}>{score !== null ? score : ""}</StyledTableCell>;
+    return <StyledTableCell {...cellCoordinates} sx={winnerStyle}>{score !== null ? score : ""}</StyledTableCell>;
   }
 
   // landscape / portrait 공통: [↓] 점수 [↑] 가로 배치, 좌우 여백 있게
@@ -431,7 +434,7 @@ function BracketScoreCell({ match, isA, leagueId, winScore, canManage, landscape
   );
 
   return (
-    <StyledTableCell sx={{ p: 0, verticalAlign: "middle", ...winnerStyle }}>
+    <StyledTableCell {...cellCoordinates} sx={{ p: 0, verticalAlign: "middle", ...winnerStyle }}>
       {inner}
     </StyledTableCell>
   );
@@ -572,7 +575,7 @@ const SortableBracketRow = memo(function SortableBracketRow({
 
       {/* 점수 셀: 같은 인덱스(자기 자신)는 대각선 셀, 나머지는 점수 편집 셀 */}
       {localOrder.map((colPlayer, colIdx) => {
-        if (participant.id === colPlayer.id) return <DiagonalScoreCell key={colPlayer.id} landscape={landscape} isVisionStart={rowIdx === 0} />;
+        if (participant.id === colPlayer.id) return <DiagonalScoreCell key={colPlayer.id} landscape={landscape} isVisionStart={rowIdx === 0} rowIndex={rowIdx} colIndex={colIdx} />;
         const m   = matchLookup.get(`${participant.id}__${colPlayer.id}`);
         const isA = m?.participant_a_id === participant.id;
         return (
@@ -950,6 +953,9 @@ type VisionPreviewCell = OpenAIVisionCell & {
   issue?: string;
 };
 
+type VisionTargetRegion = "all" | "upper-right" | "lower-left";
+type OverlayRect = { left: number; top: number; width: number; height: number };
+
 type FilePickerHandle = { getFile: () => Promise<File> };
 type FilePickerWindow = Window & {
   showOpenFilePicker?: (options: {
@@ -1105,6 +1111,8 @@ export default function LeagueGPTVisionSheet() {
   const [updateMatch] = useUpdateLeagueMatchMutation();
   const [scanVision, { isLoading: isScanning }] = useScanLeagueOpenAIVisionMutation();
   const [resultDialogOpen, setResultDialogOpen] = useState(false);
+  const [visionTargetRegion, setVisionTargetRegion] = useState<VisionTargetRegion>("all");
+  const [inlineOverlayRects, setInlineOverlayRects] = useState<Partial<Record<VisionTargetRegion, OverlayRect>>>({});
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewCells, setPreviewCells] = useState<VisionPreviewCell[]>([]);
   const [visionError, setVisionError] = useState<string | null>(null);
@@ -1761,6 +1769,55 @@ export default function LeagueGPTVisionSheet() {
     return map;
   }, [matches]);
 
+  useLayoutEffect(() => {
+    const container = tableOnlyRef.current;
+    if (!container || localOrder.length < 2) return;
+
+    const measureRegion = (startRow: number, startCol: number, endRow: number, endCol: number): OverlayRect | null => {
+      const first = container.querySelector<HTMLElement>(`[data-score-row="${startRow}"][data-score-col="${startCol}"]`);
+      const last = container.querySelector<HTMLElement>(`[data-score-row="${endRow}"][data-score-col="${endCol}"]`);
+      if (!first || !last) return null;
+      const offsetWithinContainer = (element: HTMLElement) => {
+        let left = 0;
+        let top = 0;
+        let current: HTMLElement | null = element;
+        while (current && current !== container) {
+          left += current.offsetLeft;
+          top += current.offsetTop;
+          current = current.offsetParent as HTMLElement | null;
+        }
+        return { left, top };
+      };
+      const firstOffset = offsetWithinContainer(first);
+      const lastOffset = offsetWithinContainer(last);
+      return {
+        left: firstOffset.left,
+        top: firstOffset.top,
+        width: lastOffset.left + last.offsetWidth - firstOffset.left,
+        height: lastOffset.top + last.offsetHeight - firstOffset.top,
+      };
+    };
+
+    const update = () => {
+      const lastIndex = localOrder.length - 1;
+      const splitIndex = Math.ceil(localOrder.length / 2);
+      setInlineOverlayRects({
+        all: measureRegion(0, 0, lastIndex, lastIndex) ?? undefined,
+        "upper-right": measureRegion(0, splitIndex, splitIndex - 1, lastIndex) ?? undefined,
+        "lower-left": measureRegion(splitIndex, 0, lastIndex, splitIndex - 1) ?? undefined,
+      });
+    };
+
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(container);
+    window.addEventListener("resize", update);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, [landscape, localOrder.length]);
+
   const updatePreviewCell = (rowIndex: number, columnIndex: number, score: number) => {
     setPreviewCells((cells) => cells.map((cell) => (
       cell.rowIndex === rowIndex && cell.columnIndex === columnIndex
@@ -1884,7 +1941,10 @@ export default function LeagueGPTVisionSheet() {
     handleGuideScroll();
   };
 
-  const handleOpenResultDialog = () => setResultDialogOpen(true);
+  const handleOpenResultDialog = (targetRegion: VisionTargetRegion = "all") => {
+    setVisionTargetRegion(targetRegion);
+    setResultDialogOpen(true);
+  };
 
   const handleVisionImage = async (file?: File) => {
     setResultDialogOpen(false);
@@ -1899,7 +1959,11 @@ export default function LeagueGPTVisionSheet() {
       localOrder.forEach((rowPlayer, rowIndex) => {
         localOrder.forEach((columnPlayer, columnIndex) => {
           if (rowIndex === columnIndex) return;
+          const splitIndex = Math.ceil(localOrder.length / 2);
+          if (visionTargetRegion === "upper-right" && !(rowIndex < splitIndex && columnIndex >= splitIndex)) return;
+          if (visionTargetRegion === "lower-left" && !(rowIndex >= splitIndex && columnIndex < splitIndex)) return;
           const match = matchLookup.get(`${rowPlayer.id}__${columnPlayer.id}`);
+          if (!match || match.is_no_game) return;
           localPreview.push({
             rowPlayerName: rowPlayer.name,
             columnPlayerName: columnPlayer.name,
@@ -1928,12 +1992,24 @@ export default function LeagueGPTVisionSheet() {
         return;
       }
       setVisionNotice({ type: "info", message: "별표 기준 점수 영역을 인식하는 중입니다." });
+      const splitIndex = Math.ceil(localOrder.length / 2);
+      const targetCells = localOrder.flatMap((rowPlayer, rowIndex) =>
+        localOrder.flatMap((columnPlayer, columnIndex) => {
+          if (rowIndex === columnIndex) return [];
+          if (visionTargetRegion === "upper-right" && !(rowIndex < splitIndex && columnIndex >= splitIndex)) return [];
+          if (visionTargetRegion === "lower-left" && !(rowIndex >= splitIndex && columnIndex < splitIndex)) return [];
+          const match = matchLookup.get(`${rowPlayer.id}__${columnPlayer.id}`);
+          return match && !match.is_no_game ? [{ rowIndex, columnIndex }] : [];
+        }),
+      );
       const result = await scanVision({
         leagueId: id,
         file,
         mode: "star-grid",
         idempotencyKey: crypto.randomUUID(),
         participantIds: localOrder.map((participant) => participant.id),
+        targetRegion: visionTargetRegion,
+        targetCells,
       }).unwrap();
       setVisionUsage(result.usage ?? null);
       const byPosition = new Map(result.cells.map((cell) => [`${cell.rowIndex}__${cell.columnIndex}`, cell]));
@@ -1942,7 +2018,10 @@ export default function LeagueGPTVisionSheet() {
         localOrder.forEach((columnPlayer, columnIndex) => {
           if (rowIndex === columnIndex) return;
           const match = matchLookup.get(`${rowPlayer.id}__${columnPlayer.id}`);
-          if (!match) return;
+          if (!match || match.is_no_game) return;
+          const splitIndex = Math.ceil(localOrder.length / 2);
+          if (visionTargetRegion === "upper-right" && !(rowIndex < splitIndex && columnIndex >= splitIndex)) return;
+          if (visionTargetRegion === "lower-left" && !(rowIndex >= splitIndex && columnIndex < splitIndex)) return;
           const cell = byPosition.get(`${rowIndex}__${columnIndex}`);
           completeCells.push({
             ...(cell ?? {
@@ -2013,7 +2092,11 @@ export default function LeagueGPTVisionSheet() {
       if (!cell.matchId || !cell.playerId) return;
       const match = matches.find((item) => item.id === cell.matchId);
       if (!match) return;
-      const current = grouped.get(match.id) ?? { match, scoreA: null, scoreB: null };
+      const current = grouped.get(match.id) ?? {
+        match,
+        scoreA: match.score_a ?? null,
+        scoreB: match.score_b ?? null,
+      };
       if (match.participant_a_id === cell.playerId) current.scoreA = cell.score;
       if (match.participant_b_id === cell.playerId) current.scoreB = cell.score;
       grouped.set(match.id, current);
@@ -2058,6 +2141,14 @@ export default function LeagueGPTVisionSheet() {
   if (!league || rawParticipants.length === 0) return null;
 
   const n             = localOrder.length;
+  const isHalfSplitRound = Boolean(
+    currentProgramRound?.halfSplitOnlyMatches
+    ?? currentProgramBlock?.halfSplitOnlyMatches,
+  );
+  const hasStartedMatch = matches.some(
+    (match) => !match.is_no_game && (match.status === "playing" || match.status === "done"),
+  );
+  const showInlineResultButtons = canScore && !hasStartedMatch && n > 1;
   const leagueStarted = league.status === "completed"; // 완료 상태면 수정 버튼 숨김
   const date          = formatLeagueDate(league.start_date);
   const winScore      = getWinScore(currentRule);
@@ -2278,7 +2369,7 @@ export default function LeagueGPTVisionSheet() {
             >
           {/* 대진표 테이블 (DnD 컨텍스트 내부) */}
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <TableContainer ref={tableOnlyRef} component={Paper} elevation={3} sx={{ borderRadius: "10px", overflow: "hidden" }}>
+            <TableContainer ref={tableOnlyRef} component={Paper} elevation={3} sx={{ borderRadius: "10px", overflow: "hidden", position: "relative" }}>
               <Table sx={{ tableLayout: "fixed", borderCollapse: "separate", borderSpacing: "3px" }}>
                 <TableHead>
                   {/* 1행: 시드 번호 원형 배지 (열 헤더) */}
@@ -2354,6 +2445,55 @@ export default function LeagueGPTVisionSheet() {
                   </TableBody>
                 </SortableContext>
               </Table>
+              {showInlineResultButtons && (isHalfSplitRound
+                ? (["upper-right", "lower-left"] as const)
+                : (["all"] as const)
+              ).map((targetRegion) => {
+                const rect = inlineOverlayRects[targetRegion];
+                if (!rect) return null;
+                return (
+                  <Box
+                    key={targetRegion}
+                    sx={{
+                      position: "absolute",
+                      left: rect.left,
+                      top: rect.top,
+                      width: rect.width,
+                      height: rect.height,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      pointerEvents: "none",
+                      zIndex: 4,
+                    }}
+                  >
+                    <Box
+                      component="button"
+                      type="button"
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onClick={() => handleOpenResultDialog(targetRegion)}
+                      sx={{
+                        pointerEvents: "auto",
+                        appearance: "none",
+                        border: "2px solid #fff",
+                        borderRadius: 2,
+                        px: 1.75,
+                        height: 36,
+                        color: "#fff",
+                        bgcolor: "#16A34A",
+                        boxShadow: "0 3px 12px rgba(0,0,0,0.25)",
+                        fontSize: 13,
+                        fontWeight: 900,
+                        whiteSpace: "nowrap",
+                        cursor: "pointer",
+                        "&:hover": { bgcolor: "#15803D" },
+                      }}
+                    >
+                      결과 등록
+                    </Box>
+                  </Box>
+                );
+              })}
             </TableContainer>
           </DndContext>
 
@@ -2385,7 +2525,7 @@ export default function LeagueGPTVisionSheet() {
           <Box sx={{ bgcolor: "#fff", p: 0.5, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>
             <QRCode value={`${window.location.origin}/league/${id}/gpt-vision`} size={landscape ? 66 : 72} />
           </Box>
-          <Box onClick={handleOpenResultDialog} sx={{ width: landscape ? "auto" : 36, height: landscape ? "auto" : 76, display: "flex", alignItems: "center", justifyContent: "center", alignSelf: landscape ? "center" : "flex-end", cursor: "pointer" }}>
+          <Box onClick={() => handleOpenResultDialog("all")} sx={{ width: landscape ? "auto" : 36, height: landscape ? "auto" : 76, display: "flex", alignItems: "center", justifyContent: "center", alignSelf: landscape ? "center" : "flex-end", cursor: "pointer" }}>
             <Box
               component="button"
               type="button"

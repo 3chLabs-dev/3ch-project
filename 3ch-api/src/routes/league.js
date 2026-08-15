@@ -4486,6 +4486,42 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
     }
 
     const visionMode = req.body?.mode === 'star-grid' ? 'star-grid' : 'sheet';
+    const targetRegion = ['upper-right', 'lower-left'].includes(req.body?.target_region)
+      ? req.body.target_region
+      : 'all';
+    const splitIndex = Math.ceil(participants.length / 2);
+    const isInTargetRegion = (rowIndex, columnIndex) => {
+      if (targetRegion === 'upper-right') return rowIndex < splitIndex && columnIndex >= splitIndex;
+      if (targetRegion === 'lower-left') return rowIndex >= splitIndex && columnIndex < splitIndex;
+      return true;
+    };
+    let requestedTargetCells = [];
+    try {
+      const parsedTargetCells = JSON.parse(String(req.body?.target_cells || '[]'));
+      if (!Array.isArray(parsedTargetCells)) throw new Error('invalid target cells');
+      requestedTargetCells = parsedTargetCells.map((cell) => ({
+        rowIndex: Number(cell?.rowIndex),
+        columnIndex: Number(cell?.columnIndex),
+      }));
+      if (requestedTargetCells.some((cell) =>
+        !Number.isInteger(cell.rowIndex)
+        || !Number.isInteger(cell.columnIndex)
+        || cell.rowIndex < 0
+        || cell.columnIndex < 0
+        || cell.rowIndex >= participants.length
+        || cell.columnIndex >= participants.length
+        || cell.rowIndex === cell.columnIndex
+      )) throw new Error('invalid target cells');
+    } catch {
+      return res.status(400).json({ message: '사진 인식 대상 셀 정보가 올바르지 않습니다.' });
+    }
+    const targetCellSet = new Set(
+      requestedTargetCells.map((cell) => `${cell.rowIndex}__${cell.columnIndex}`),
+    );
+    const isRequestedCell = (rowIndex, columnIndex) =>
+      targetCellSet.size > 0
+        ? targetCellSet.has(`${rowIndex}__${columnIndex}`)
+        : isInTargetRegion(rowIndex, columnIndex);
     const usage = await consumeFeatureCredit({
       userId: usageOwnerId,
       feature: FEATURES.VISION_SCAN,
@@ -4519,6 +4555,7 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
         ? participants.flatMap((rowParticipant, rowIndex) =>
             participants.flatMap((columnParticipant, columnIndex) =>
               rowIndex !== columnIndex
+              && isRequestedCell(rowIndex, columnIndex)
               && matchLookup.has(`${rowParticipant.id}__${columnParticipant.id}`)
                 ? [{ rowIndex, columnIndex }]
                 : [],
@@ -4528,7 +4565,15 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
     });
     const parsed = openAIVisionResultSchema.parse(vision.result);
 
-    const cells = parsed.cells.map((cell) => {
+    const cells = parsed.cells.filter((cell) => {
+      if (!isRequestedCell(cell.rowIndex, cell.columnIndex)) return false;
+      const rowParticipant = participants[cell.rowIndex];
+      const columnParticipant = participants[cell.columnIndex];
+      const match = rowParticipant && columnParticipant
+        ? matchLookup.get(`${rowParticipant.id}__${columnParticipant.id}`)
+        : null;
+      return Boolean(match);
+    }).map((cell) => {
       const rowParticipant = participants[cell.rowIndex];
       const columnParticipant = participants[cell.columnIndex];
       const issues = [];

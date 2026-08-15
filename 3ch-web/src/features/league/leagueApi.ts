@@ -327,6 +327,8 @@ export interface ScanLeagueOpenAIVisionRequest {
   idempotencyKey?: string;
   mode?: "sheet" | "star-grid";
   participantIds?: string[];
+  targetRegion?: "all" | "upper-right" | "lower-left";
+  targetCells?: Array<{ rowIndex: number; columnIndex: number }>;
 }
 
 export interface ScanLeagueOpenAIVisionResponse {
@@ -1078,11 +1080,13 @@ export const leagueApi = baseApi.injectEndpoints({
     }),
 
     scanLeagueOpenAIVision: builder.mutation<ScanLeagueOpenAIVisionResponse, ScanLeagueOpenAIVisionRequest>({
-      query: ({ leagueId, file, mode = "sheet", idempotencyKey, participantIds = [] }) => {
+      query: ({ leagueId, file, mode = "sheet", idempotencyKey, participantIds = [], targetRegion = "all", targetCells = [] }) => {
         const formData = new FormData();
         formData.append("image", file);
         formData.append("mode", mode);
         formData.append("participant_ids", JSON.stringify(participantIds));
+        formData.append("target_region", targetRegion);
+        formData.append("target_cells", JSON.stringify(targetCells));
         return {
           url: `/league/${leagueId}/openai-vision/scan`,
           method: "POST",

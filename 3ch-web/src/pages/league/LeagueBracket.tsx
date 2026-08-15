@@ -548,9 +548,9 @@ const SortableBracketRow = memo(function SortableBracketRow({
         )}
       </BodyHeaderCell>
 
-      {/* 점수 셀: 같은 참가자 ID(자기 자신)는 대각선 셀, 나머지는 점수 편집 셀 */}
+      {/* 점수 셀: 같은 인덱스(자기 자신)는 대각선 셀, 나머지는 점수 편집 셀 */}
       {localOrder.map((colPlayer, colIdx) => {
-        if (participant.id === colPlayer.id) return <DiagonalScoreCell key={colPlayer.id} landscape={landscape} />;
+        if (rowIdx === colIdx) return <DiagonalScoreCell key={colIdx} landscape={landscape} />;
         const m   = matchLookup.get(`${participant.id}__${colPlayer.id}`);
         const isA = m?.participant_a_id === participant.id;
         return (
@@ -1358,7 +1358,7 @@ export default function LeagueBracket() {
   useLayoutEffect(() => {
     const updateScale = () => {
       if (!wrapperRef.current || !wrapperTableRef.current) return;
-      const ww = wrapperRef.current.clientWidth;
+      const ww = Math.max(0, wrapperRef.current.clientWidth - boardToolRailWidth);
       const wh = wrapperRef.current.clientHeight;
       const tw = wrapperTableRef.current.scrollWidth;
       const th = wrapperTableRef.current.scrollHeight;
@@ -1731,12 +1731,12 @@ export default function LeagueBracket() {
             overflow: "hidden",
             bgcolor: "#F0F2F5",
             ...(landscape
-              ? { top: 0, bottom: 0, left: 0, right: `${boardToolRailWidth}px` }
+              ? { inset: 0 }
               : {
                   top: 0,
                   left: 0,
                   width: boardViewportSize.height,
-                  height: Math.max(0, boardViewportSize.width - boardToolRailWidth),
+                  height: boardViewportSize.width,
                   transformOrigin: "top left",
                   transform: "rotate(90deg) translateY(-100%)",
                 }),
@@ -1768,7 +1768,7 @@ export default function LeagueBracket() {
       <Box ref={wrapperRef} sx={{ flex: 1, overflow: "hidden", position: "relative", minHeight: 0, bgcolor: "#F0F2F5" }}>
 
         {/* 스크롤 가능한 내부 컨테이너: spacer가 실제로 넘칠 때만 scrollbar 등장 (overflow:auto는 항상 켜두기) */}
-        <Box sx={{ position: "absolute", inset: 0, overflow: "auto" }}>
+        <Box sx={{ position: "absolute", inset: 0, right: `${boardToolRailWidth}px`, overflow: "auto" }}>
           {/* spacer: CSS transform은 레이아웃 크기에 영향을 안 주므로
               시각적 크기만큼 spacer를 두어 스크롤 범위를 확보 */}
           <Box sx={{
@@ -1853,7 +1853,7 @@ export default function LeagueBracket() {
                         editMode={editMode}
                         canManage={canManage}
                         canScore={canScore}
-                        landscape={landscape}
+                        landscape
                         matchLookup={matchLookup}
                         wins={playerStats[rowIdx]?.wins ?? 0}
                         losses={playerStats[rowIdx]?.losses ?? 0}
@@ -1886,9 +1886,6 @@ export default function LeagueBracket() {
         }}>
           <MatchSchedulePanel matches={matches} localOrder={localOrder} landscape leagueId={id ?? ""} onProgramMatchUpdate={isProgramMode ? updateProgramMatch : undefined} />
         </Box>
-
-      </Box>{/* /wrapperRef */}
-        </Box>{/* /rotated board */}
 
         <Box
           sx={{
@@ -1978,6 +1975,8 @@ export default function LeagueBracket() {
         </Tooltip>
         </Box>
 
+      </Box>{/* /wrapperRef */}
+        </Box>
       </Box>
     </Box>,
     document.body

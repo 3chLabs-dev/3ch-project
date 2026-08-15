@@ -572,7 +572,7 @@ const SortableBracketRow = memo(function SortableBracketRow({
 
       {/* 점수 셀: 같은 인덱스(자기 자신)는 대각선 셀, 나머지는 점수 편집 셀 */}
       {localOrder.map((colPlayer, colIdx) => {
-        if (rowIdx === colIdx) return <DiagonalScoreCell key={colIdx} landscape={landscape} isVisionStart={rowIdx === 0} />;
+        if (participant.id === colPlayer.id) return <DiagonalScoreCell key={colPlayer.id} landscape={landscape} isVisionStart={rowIdx === 0} />;
         const m   = matchLookup.get(`${participant.id}__${colPlayer.id}`);
         const isA = m?.participant_a_id === participant.id;
         return (
@@ -1434,7 +1434,6 @@ export default function LeagueGPTVisionSheet() {
   const [naturalTw, setNaturalTw]       = useState(0);  // 테이블 원본(비스케일) 너비
   const [naturalTh, setNaturalTh]       = useState(0);  // 테이블 원본(비스케일) 높이
   const [userZoom, setUserZoom]         = useState(1);  // 사용자 줌 배율 (1 = 자동 fit)
-  const [renderedTableBottom, setRenderedTableBottom] = useState(0);
   const dataReady = !!league && rawParticipants.length > 0; // 데이터 로드 완료 여부 (useLayoutEffect deps)
 
   // 기기 실제 회전 감지 → landscape 자동 동기화 + userZoom 리셋
@@ -2048,28 +2047,6 @@ export default function LeagueGPTVisionSheet() {
 
   const { playerStats, rankings, tieSetDiffs } = useMatchStats(localOrder, matches, currentRule);
 
-  useLayoutEffect(() => {
-    const measureRenderedTable = () => {
-      const wrapper = wrapperRef.current;
-      const table = wrapperTableRef.current;
-      if (!wrapper || !table) return;
-      const wrapperRect = wrapper.getBoundingClientRect();
-      const tableRect = table.getBoundingClientRect();
-      setRenderedTableBottom(Math.max(0, tableRect.bottom - wrapperRect.top));
-    };
-
-    const frame = window.requestAnimationFrame(measureRenderedTable);
-    const observer = new ResizeObserver(measureRenderedTable);
-    if (wrapperRef.current) observer.observe(wrapperRef.current);
-    if (wrapperTableRef.current) observer.observe(wrapperTableRef.current);
-    window.addEventListener("resize", measureRenderedTable);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      observer.disconnect();
-      window.removeEventListener("resize", measureRenderedTable);
-    };
-  }, [autoFitScale, userZoom, landscape, localOrder.length, selectedGroup]);
-
   // ── 로딩 / 빈 상태 ───────────────────────────────────────────────────────
   if (leagueLoading || participantsLoading) {
     return (
@@ -2093,7 +2070,6 @@ export default function LeagueGPTVisionSheet() {
   // portrait: 90° 회전이므로 시각 너비=naturalTh, 시각 높이=naturalTw
   const visualW = naturalTw > 0 ? (landscape ? naturalTw : naturalTh) * appliedScale : 0;
   const visualH = naturalTh > 0 ? (landscape ? naturalTh : naturalTw) * appliedScale : 0;
-  const mobileToolsTop = Math.max(8, renderedTableBottom + 12);
 
   const mobileDialogPaperSx = landscape
     ? {}
@@ -2283,9 +2259,10 @@ export default function LeagueGPTVisionSheet() {
               sx={{
                 // portrait 모드: writingMode로 콘텐츠 전체를 90° 회전 → 세로 화면에서도 가로 테이블을 표시
                 // landscape 모드: 일반 layout, scale만 적용
-                ...(!landscape && { writingMode: "vertical-rl", textOrientation: "sideways" }),
                 transformOrigin: "top left",
-                transform: `scale(${appliedScale})`,
+                transform: landscape
+                  ? `scale(${appliedScale})`
+                  : `rotate(90deg) translateY(-100%) scale(${appliedScale})`,
                 display: "inline-block",
                 position: "absolute",
                 top: 0,
@@ -2328,7 +2305,7 @@ export default function LeagueGPTVisionSheet() {
                           <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0.4, flexWrap: "wrap" }}>
                             <DivBadge division={p.division} aggregate={isProgramTeamRound} />
                             {/* portrait: minHeight로 세로 공간 확보 */}
-                            <Box component="span" sx={{ minHeight: landscape ? "" : "70px", color: isMe ? COLOR.myText : "inherit", fontWeight: isMe ? 700 : "inherit" }}>
+                            <Box component="span" sx={{ color: isMe ? COLOR.myText : "inherit", fontWeight: isMe ? 700 : "inherit" }}>
                               {isProgramTeamRound ? p.name.split("\n")[0] : p.name}
                             </Box>
                           </Box>
@@ -2390,7 +2367,7 @@ export default function LeagueGPTVisionSheet() {
           position: "absolute",
           ...(landscape
             ? { bottom: 380, right: 14 }
-            : { top: mobileToolsTop, right: 85 }),
+            : { bottom: 12, right: 85 }),
           zIndex: 20,
           display: "flex",
           flexDirection: "column",
@@ -2420,7 +2397,7 @@ export default function LeagueGPTVisionSheet() {
           position: "absolute",
           ...(landscape
             ? { bottom: 300, right: 14 }
-            : { top: mobileToolsTop, right: 170 }),
+            : { bottom: 12, right: 170 }),
           zIndex: 10,
           writingMode: landscape ? "horizontal-tb" : "vertical-rl",
           bgcolor: "#fff",
@@ -2448,7 +2425,7 @@ export default function LeagueGPTVisionSheet() {
           position: "absolute",
           ...(landscape
             ? { bottom: 216, right: 14 }
-            : { top: mobileToolsTop, right: 250 }),
+            : { bottom: 12, right: 250 }),
           zIndex: 10,
           writingMode: landscape ? "horizontal-tb" : "vertical-rl",
           bgcolor: "#fff",
@@ -2471,12 +2448,12 @@ export default function LeagueGPTVisionSheet() {
         </Box>
 
         <Tooltip title="새로고침">
-          <IconButton onClick={handleRefresh} sx={{ position: "absolute", ...(landscape ? { bottom: 157, right: 14 } : { top: mobileToolsTop + 50, right: 170 }), zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: "#fff", color: "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: "#F3F4F6" } }}>
+          <IconButton onClick={handleRefresh} sx={{ position: "absolute", ...(landscape ? { bottom: 157, right: 14 } : { bottom: 62, right: 170 }), zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: "#fff", color: "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: "#F3F4F6" } }}>
             <RefreshIcon sx={{ fontSize: 18 }} />
           </IconButton>
         </Tooltip>
         <Tooltip title={landscape ? "세로 보기" : "가로 보기"}>
-          <IconButton onClick={() => { setLandscape((v) => !v); setUserZoom(1); }} sx={{ position: "absolute", ...(landscape ? { bottom: 104, right: 14 } : { top: mobileToolsTop + 50, right: 220 }), zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: landscape ? COLOR.primary : "#fff", color: landscape ? "#fff" : "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: landscape ? "#1D4ED8" : "#F3F4F6" } }}>
+          <IconButton onClick={() => { setLandscape((v) => !v); setUserZoom(1); }} sx={{ position: "absolute", ...(landscape ? { bottom: 104, right: 14 } : { bottom: 62, right: 220 }), zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: landscape ? COLOR.primary : "#fff", color: landscape ? "#fff" : "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: landscape ? "#1D4ED8" : "#F3F4F6" } }}>
             <ScreenRotationIcon sx={{ fontSize: 18 }} />
           </IconButton>
         </Tooltip>

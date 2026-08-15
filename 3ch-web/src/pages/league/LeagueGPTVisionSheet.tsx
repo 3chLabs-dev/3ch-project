@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
-  Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Paper, Popover,
+  Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, LinearProgress, Paper, Popover,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Tooltip, Typography, Stack,
 } from "@mui/material";
@@ -1119,6 +1119,8 @@ export default function LeagueGPTVisionSheet() {
   const [inlineOverlayRects, setInlineOverlayRects] = useState<Partial<Record<VisionTargetRegion, OverlayRect>>>({});
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewCells, setPreviewCells] = useState<VisionPreviewCell[]>([]);
+  const [isSavingVision, setIsSavingVision] = useState(false);
+  const [visionSaveProgress, setVisionSaveProgress] = useState(0);
   const [visionError, setVisionError] = useState<string | null>(null);
   const [visionNotice, setVisionNotice] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
   const [visionUsage, setVisionUsage] = useState<{
@@ -2091,6 +2093,7 @@ export default function LeagueGPTVisionSheet() {
   };
 
   const saveVisionPreview = async () => {
+    if (isSavingVision) return;
     const grouped = new Map<string, { match: LeagueMatch; scoreA: number | null; scoreB: number | null }>();
     previewCells.forEach((cell) => {
       if (!cell.matchId || !cell.playerId) return;
@@ -2106,9 +2109,17 @@ export default function LeagueGPTVisionSheet() {
       grouped.set(match.id, current);
     });
 
+    const pendingMatches = Array.from(grouped.values());
+    if (pendingMatches.length === 0) {
+      setVisionNotice({ type: "error", message: "저장할 경기 결과가 없습니다." });
+      return;
+    }
+
+    setIsSavingVision(true);
+    setVisionSaveProgress(0);
     try {
       let saved = 0;
-      for (const { match, scoreA, scoreB } of grouped.values()) {
+      for (const { match, scoreA, scoreB } of pendingMatches) {
         const updates: ProgramMatchPatch = {};
         if (scoreA != null) updates.score_a = scoreA;
         if (scoreB != null) updates.score_b = scoreB;
@@ -2120,15 +2131,19 @@ export default function LeagueGPTVisionSheet() {
           await updateMatch({ leagueId: id ?? "", matchId: match.id, updates }).unwrap();
         }
         saved += 1;
+        setVisionSaveProgress(Math.round((saved / pendingMatches.length) * 90));
       }
       if (!isProgramMode || serverProgramMatchesAll.length > 0) {
         await refetchMatches();
       }
+      setVisionSaveProgress(100);
       setPreviewOpen(false);
       setVisionNotice({ type: "success", message: `${saved}개 경기 결과를 저장했습니다.` });
       if (visionUsage) setUsageDialogOpen(true);
     } catch (error) {
       setVisionNotice({ type: "error", message: getErrorMessage(error, "인식 결과 저장에 실패했습니다.") });
+    } finally {
+      setIsSavingVision(false);
     }
   };
 
@@ -2782,7 +2797,7 @@ export default function LeagueGPTVisionSheet() {
         <DialogActions><Button onClick={() => setVisionError(null)}>확인</Button></DialogActions>
       </Dialog>
 
-      <Dialog open={previewOpen} onClose={() => !isScanning && setPreviewOpen(false)} maxWidth="lg" fullWidth sx={{ zIndex: 10002 }} slotProps={{ paper: { sx: { overflow: "hidden", ...mobileDialogPaperSx } } }}>
+      <Dialog open={previewOpen} onClose={() => !isScanning && !isSavingVision && setPreviewOpen(false)} maxWidth="lg" fullWidth sx={{ zIndex: 10002 }} slotProps={{ paper: { sx: { overflow: "hidden", position: "relative", ...mobileDialogPaperSx } } }}>
         <DialogTitle sx={{ fontWeight: 900 }}>AI 인식 결과</DialogTitle>
         <DialogContent dividers sx={{ overflow: "hidden" }}>
           <Typography sx={{ mb: 1.5, color: "#6B7280", fontSize: 13, fontWeight: 700 }}>별 표시한 부분부터 점수를 인식했습니다. 잘못 인식된 점수는 직접 수정한 후 저장해 주세요.</Typography>
@@ -2832,13 +2847,14 @@ export default function LeagueGPTVisionSheet() {
                       const cell = previewByPosition.get(`${rowIndex}__${columnIndex}`);
                       return <td key={columnPlayer.id} style={{ background: "#FFFFFF" }}>
                         <Stack direction="row" alignItems="center" justifyContent="center" spacing={0.5} sx={{ minWidth: 108 }}>
-                        <IconButton size="small" onClick={() => updatePreviewCell(rowIndex, columnIndex, (cell?.score ?? 0) - 1)} disabled={(cell?.score ?? 0) <= 0}>-</IconButton>
+                        <IconButton size="small" onClick={() => updatePreviewCell(rowIndex, columnIndex, (cell?.score ?? 0) - 1)} disabled={isSavingVision || (cell?.score ?? 0) <= 0}>-</IconButton>
                         <Box
                           component="input"
                           type="text"
                           inputMode="numeric"
                           pattern="[0-9]*"
                           maxLength={2}
+                          disabled={isSavingVision}
                           aria-label={`${rowPlayer.name} 대 ${columnPlayer.name} 점수`}
                           value={cell?.score ?? 0}
                           onFocus={(event) => event.currentTarget.select()}
@@ -2873,7 +2889,7 @@ export default function LeagueGPTVisionSheet() {
                             "&:focus": { borderColor: "#1976D2", boxShadow: "0 0 0 1px #1976D2" },
                           }}
                         />
-                        <IconButton size="small" onClick={() => updatePreviewCell(rowIndex, columnIndex, (cell?.score ?? 0) + 1)} disabled={(cell?.score ?? 0) >= 99}>+</IconButton>
+                        <IconButton size="small" onClick={() => updatePreviewCell(rowIndex, columnIndex, (cell?.score ?? 0) + 1)} disabled={isSavingVision || (cell?.score ?? 0) >= 99}>+</IconButton>
                         </Stack>
                       </td>;
                     })}
@@ -2884,9 +2900,33 @@ export default function LeagueGPTVisionSheet() {
           </Box>
         </DialogContent>
         <DialogActions sx={{ px: 2.5, py: 1.5 }}>
-          <Button onClick={() => setPreviewOpen(false)}>취소</Button>
-          <Button variant="contained" onClick={saveVisionPreview} disabled={isScanning || leagueStarted}>저장</Button>
+          <Button onClick={() => setPreviewOpen(false)} disabled={isSavingVision}>취소</Button>
+          <Button variant="contained" onClick={saveVisionPreview} disabled={isScanning || isSavingVision || leagueStarted}>저장</Button>
         </DialogActions>
+        {isSavingVision && (
+          <Box
+            sx={{
+              position: "absolute",
+              inset: 0,
+              zIndex: 10,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              bgcolor: "rgba(255,255,255,0.42)",
+              backdropFilter: "blur(4px)",
+              WebkitBackdropFilter: "blur(4px)",
+              cursor: "wait",
+            }}
+          >
+            <Box sx={{ width: "min(420px, calc(100% - 56px))", p: 2.25, borderRadius: 3, bgcolor: "rgba(255,255,255,0.94)", boxShadow: "0 12px 36px rgba(15,23,42,0.22)" }}>
+              <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+                <Typography sx={{ color: "#111827", fontSize: 15, fontWeight: 900 }}>경기 결과 저장 중</Typography>
+                <Typography sx={{ color: "#2563EB", fontSize: 14, fontWeight: 900 }}>{visionSaveProgress}%</Typography>
+              </Stack>
+              <LinearProgress variant="determinate" value={visionSaveProgress} sx={{ height: 11, borderRadius: 999, bgcolor: "#DBEAFE", "& .MuiLinearProgress-bar": { borderRadius: 999 } }} />
+            </Box>
+          </Box>
+        )}
       </Dialog>
     </Box>,
     document.body

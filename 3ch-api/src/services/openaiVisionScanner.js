@@ -26,6 +26,21 @@ const STAR_GRID_READING_RULES = `This image contains an N by N league score grid
 Starting at the star, identify the complete evenly spaced N by N score grid. Some cells may be printed with NO GAME because those players must not play each other. Ignore every NO GAME cell completely and never return it as a score. Return only cells that both belong to the supplied playable coordinate list and visibly contain a handwritten integer. Omit playable cells that are still blank. Each score is one integer from 0 through 99, and two-digit values such as 10, 21, 31, or 99 belong to one cell. Transcribe exactly what is visible. Players may circle a winning score; return only the integer inside the circle. The diagonal cells have no score. Read each cell independently; do not infer an opposing score or a winner.
 The participant names provided below are server data only. Do not try to find them in the image. Copy the supplied name for each returned rowPlayerName and columnPlayerName according to rowIndex and columnIndex.`;
 
+function buildStarGridReadingRules(participantCount, targetRegion) {
+  if (targetRegion === 'all') return STAR_GRID_READING_RULES;
+  const splitIndex = Math.ceil(participantCount / 2);
+  if (targetRegion === 'upper-right') {
+    return `This image is a cropped upper-right score block from a ${participantCount} by ${participantCount} league grid. It contains ${splitIndex} visible rows and ${participantCount - splitIndex} visible columns. Do not search for the missing parts of the full grid.
+A five-point star marks the top-left visible score cell. That visible cell has full-grid coordinates rowIndex=0 and columnIndex=${splitIndex}. For every visible cell at local cropped position (r,c), return the FULL-GRID coordinates rowIndex=r and columnIndex=c+${splitIndex}. Never return local column indices 0 through ${splitIndex - 1} for this crop.
+Read the cropped block in row-major order. Return only supplied playable coordinates that visibly contain a handwritten integer. Blank cells may be omitted. Each score is one integer from 0 through 99. A handwritten slash-like stroke may be the digit 1; inspect it carefully. Circled scores contain one integer. Do not infer scores from another cell, names, ranks, or match rules.
+Participant names are server data only. Copy them according to the full-grid rowIndex and columnIndex.`;
+  }
+  return `This image is a cropped lower-left score block from a ${participantCount} by ${participantCount} league grid. It contains ${participantCount - splitIndex} visible rows and ${splitIndex} visible columns. Do not search for the missing parts of the full grid.
+A five-point star marks the top-left visible score cell. That visible cell has full-grid coordinates rowIndex=${splitIndex} and columnIndex=0. For every visible cell at local cropped position (r,c), return the FULL-GRID coordinates rowIndex=r+${splitIndex} and columnIndex=c. Never return local row indices 0 through ${splitIndex - 1} for this crop.
+Read the cropped block in row-major order. Return only supplied playable coordinates that visibly contain a handwritten integer. Blank cells may be omitted. Each score is one integer from 0 through 99. A handwritten slash-like stroke may be the digit 1; inspect it carefully. Circled scores contain one integer. Do not infer scores from another cell, names, ranks, or match rules.
+Participant names are server data only. Copy them according to the full-grid rowIndex and columnIndex.`;
+}
+
 function extractOutputText(response) {
   if (typeof response.output_text === 'string') return response.output_text;
   const parts = [];
@@ -80,7 +95,7 @@ function buildMockResult(participants) {
   return { cells };
 }
 
-async function scanLeagueSheetWithOpenAIVision({ imageBuffer, mimeType, participants, mode = 'sheet', playableCells = null }) {
+async function scanLeagueSheetWithOpenAIVision({ imageBuffer, mimeType, participants, mode = 'sheet', playableCells = null, targetRegion = 'all' }) {
   if (isOpenAIVisionMockEnabled()) {
     return {
       engine: 'mock-openai-vision',
@@ -114,7 +129,7 @@ async function scanLeagueSheetWithOpenAIVision({ imageBuffer, mimeType, particip
         content: [
           {
             type: 'input_text',
-            text: `${mode === 'star-grid' ? STAR_GRID_READING_RULES : SYSTEM_PROMPT}
+            text: `${mode === 'star-grid' ? buildStarGridReadingRules(participants.length, targetRegion) : SYSTEM_PROMPT}
 
 ${mode === 'star-grid' ? '' : CELL_READING_RULES}
 

@@ -4551,6 +4551,7 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
       mimeType: req.file.mimetype,
       participants,
       mode: visionMode,
+      targetRegion,
       playableCells: visionMode === 'star-grid'
         ? participants.flatMap((rowParticipant, rowIndex) =>
             participants.flatMap((columnParticipant, columnIndex) =>
@@ -4564,8 +4565,17 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
         : null,
     });
     const parsed = openAIVisionResultSchema.parse(vision.result);
+    const normalizedCells = parsed.cells.map((cell) => {
+      if (targetRegion === 'upper-right' && cell.columnIndex < splitIndex) {
+        return { ...cell, columnIndex: cell.columnIndex + splitIndex };
+      }
+      if (targetRegion === 'lower-left' && cell.rowIndex < splitIndex) {
+        return { ...cell, rowIndex: cell.rowIndex + splitIndex };
+      }
+      return cell;
+    });
 
-    const cells = parsed.cells.filter((cell) => {
+    const cells = normalizedCells.filter((cell) => {
       if (!isRequestedCell(cell.rowIndex, cell.columnIndex)) return false;
       const rowParticipant = participants[cell.rowIndex];
       const columnParticipant = participants[cell.columnIndex];

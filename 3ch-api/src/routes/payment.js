@@ -114,6 +114,7 @@ async function activateRecurringSubscription({
   plan,
   methodId,
   payment,
+  chargedAmount,
   startsAt = new Date(),
 }) {
   const expiresAt = addOneMonth(startsAt);
@@ -144,7 +145,7 @@ async function activateRecurringSubscription({
            billing_method_id, is_recurring, cancel_at_period_end)
          VALUES ($1, $2, $3, $4, $5, $6, $7, true, false)
          RETURNING id, started_at, expires_at`,
-        [userId, plan.code, payment.orderId, payment.paymentKey, plan.price, expiresAt, methodId],
+        [userId, plan.code, payment.orderId, payment.paymentKey, chargedAmount ?? plan.price, expiresAt, methodId],
       );
       await provisionSubscriptionCredits(client, {
         subscriptionId: inserted.rows[0].id,
@@ -735,11 +736,21 @@ router.post("/payment/billing/issue", requireAuth, async (req, res) => {
       [userId],
     );
     const user = userResult.rows[0] || {};
+    const discountResult = await pool.query(
+      `SELECT r.id,c.value FROM coupon_redemptions r JOIN coupons c ON c.id=r.coupon_id
+        WHERE r.user_id=$1 AND r.status='AVAILABLE' AND c.type='PERCENT_DISCOUNT'
+          AND c.is_active=true AND c.valid_until>NOW() AND (c.plan_code IS NULL OR c.plan_code=$2)
+        ORDER BY r.redeemed_at ASC LIMIT 1`, [userId,plan.code],
+    );
+    const discount = discountResult.rows[0];
+    const chargedAmount = discount
+      ? Math.max(0, Math.round(Number(plan.price) * (100-Number(discount.value)) / 100))
+      : Number(plan.price);
     const authFingerprint = crypto.createHash("sha256").update(authKey).digest("hex").slice(0, 18);
-    const orderId = `BILL_${plan.code}_${userId}_${authFingerprint}`;
+    const orderId = `BILL_${plan.code}_${userId}_${authFingerprint}${discount?`_${discount.id.slice(0,8)}`:""}`;
     const payment = await chargeBilling({ billingKey, orderId, body: {
       customerKey,
-      amount: Number(plan.price),
+      amount: chargedAmount,
       orderName: `${plan.name} 월 구독`,
       customerEmail: user.email || undefined,
       customerName: user.name || undefined,
@@ -749,7 +760,9 @@ router.post("/payment/billing/issue", requireAuth, async (req, res) => {
       plan,
       methodId: method.id,
       payment,
+      chargedAmount,
     });
+    if (discount) await pool.query(`UPDATE coupon_redemptions SET status='APPLIED',applied_at=NOW() WHERE id=$1 AND status='AVAILABLE'`,[discount.id]);
     return res.json({ ok: true, plan: plan.code, expiresAt: subscription.expiresAt });
   } catch (error) {
     console.error("billing issue error:", error);

@@ -55,6 +55,8 @@ model User {
   feature_usage_events          FeatureUsageEvent[]      @relation("FeatureUsageOwner")
   token_purchases               TokenPurchase[]
   external_aliases              UserExternalAlias[]
+  coupon_redemptions            CouponRedemption[]       @relation("CouponUser")
+  created_coupons               Coupon[]                 @relation("CouponCreator")
 
   @@map("users")
 }
@@ -464,6 +466,43 @@ model FeatureUsageEvent {
   @@index([user_id, feature, created_at])
   @@index([reference_type, reference_id])
   @@map("feature_usage_events")
+}
+
+model Coupon {
+  id            String   @id @default(uuid())
+  code          String   @db.VarChar(50)
+  normalized_code String @unique @db.VarChar(50)
+  distribution_type String @default("SINGLE") @db.VarChar(20)
+  max_redemptions Int?
+  name          String   @db.VarChar(100)
+  type          String   @db.VarChar(30)
+  value         Int
+  plan_code     String?  @db.VarChar(30)
+  valid_from    DateTime @default(now()) @db.Timestamptz(6)
+  valid_until   DateTime @db.Timestamptz(6)
+  is_active     Boolean  @default(true)
+  created_by_id Int?
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  creator       User?    @relation("CouponCreator", fields: [created_by_id], references: [id], onDelete: SetNull)
+  redemptions   CouponRedemption[]
+  @@index([is_active, valid_from, valid_until])
+  @@map("coupons")
+}
+
+model CouponRedemption {
+  id          String    @id @default(uuid())
+  coupon_id   String
+  user_id     Int
+  status      String    @default("REDEEMED") @db.VarChar(20)
+  benefit     Json      @default("{}")
+  redeemed_at DateTime  @default(now()) @db.Timestamptz(6)
+  applied_at  DateTime? @db.Timestamptz(6)
+  coupon      Coupon    @relation(fields: [coupon_id], references: [id], onDelete: Restrict)
+  user        User      @relation("CouponUser", fields: [user_id], references: [id], onDelete: Restrict)
+  @@unique([coupon_id, user_id])
+  @@index([user_id, redeemed_at])
+  @@map("coupon_redemptions")
 }
 
 model LeagueProgram {

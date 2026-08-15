@@ -187,6 +187,12 @@ export default function AdminShell() {
             active={location.pathname === "/admin/feature-usage"}
             onClick={() => navigate("/admin/feature-usage")}
           />
+          <Divider sx={{ my: 1.5, mx: 2 }} />
+          <SideMenuItem
+            label="쿠폰 관리"
+            active={location.pathname === "/admin/coupons"}
+            onClick={() => navigate("/admin/coupons")}
+          />
         </Box>
 
         {/* 콘텐츠 */}

@@ -20,6 +20,7 @@ const paymentRouter  = require("./routes/payment")
 const userRouter = require("./routes/user")
 const supportChatRouter = require("./routes/supportChat")
 const ocrRouter = require("./routes/ocr")
+const couponRouter = require("./routes/coupon")
 const { ensureGroupRankingTables } = require("./services/groupRanking");
 const { ensureSportRankingTables } = require("./services/sportRanking");
 
@@ -141,5 +142,6 @@ app.use("/api", paymentRouter);
 app.use("/api", userRouter);
 app.use("/api", supportChatRouter);
 app.use("/api", ocrRouter);
+app.use("/api", couponRouter);
 
 module.exports = app;

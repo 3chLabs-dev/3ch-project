@@ -20,6 +20,7 @@ import AdminPricingPlanPage from "../pages/admin/AdminPricingPlanPage";
 import AdminFeatureUsagePage from "../pages/admin/AdminFeatureUsagePage";
 import AdminPaymentHistoryPage from "../pages/admin/AdminPaymentHistoryPage";
 import AdminTokenPackagePage from "../pages/admin/AdminTokenPackagePage";
+import AdminCouponPage from "../pages/admin/AdminCouponPage";
 import Home from "../pages/Home";
 import Login from "../pages/sign/Login";
 import SignUp from "../pages/sign/SignUp";
@@ -187,6 +188,7 @@ export const router = createBrowserRouter([
           { path: "/admin/payments", element: <AdminPaymentHistoryPage /> },
           { path: "/admin/token-packages", element: <AdminTokenPackagePage /> },
           { path: "/admin/feature-usage", element: <AdminFeatureUsagePage /> },
+          { path: "/admin/coupons", element: <AdminCouponPage /> },
         ],
       },
     ],

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  Box, Typography, IconButton, Stack, Button, Tabs, Tab, Divider,
+  Box, Typography, IconButton, Stack, Button, Tabs, Tab, Divider, Chip,
   Alert, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle,
+  TextField,
 } from "@mui/material";
 import ScienceOutlinedIcon from "@mui/icons-material/ScienceOutlined";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
@@ -265,6 +266,7 @@ type TokenPackage = {
   price: number;
   credits: Record<string, number>;
 };
+type CouponHistory = { name:string; type:string; value:number; valid_until:string; status:string; benefit:Record<string,unknown>; redeemed_at:string };
 const API = import.meta.env.VITE_API_BASE_URL ?? "/api";
 const PLAN_NAMES: Record<string, string> = {
   starter: "STARTER",
@@ -312,6 +314,24 @@ export default function PricingPage() {
   const [cancelTarget, setCancelTarget] = useState<PurchaseHistory | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [cancelError, setCancelError] = useState("");
+  const [couponOpen, setCouponOpen] = useState(false);
+  const [couponCode, setCouponCode] = useState("");
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponMessage, setCouponMessage] = useState<{type:"success"|"error";text:string}|null>(null);
+  const [coupons, setCoupons] = useState<CouponHistory[]>([]);
+  const loadCoupons = useCallback(async () => {
+    const resolvedToken = token ?? localStorage.getItem("token"); if (!resolvedToken) return setCoupons([]);
+    const response = await fetch(`${API}/coupons/me`, { headers:{Authorization:`Bearer ${resolvedToken}`} });
+    if (response.ok) setCoupons((await response.json()).coupons ?? []);
+  }, [token]);
+  useEffect(() => { void loadCoupons(); }, [loadCoupons]);
+  const redeemCoupon = async () => {
+    const resolvedToken = token ?? localStorage.getItem("token");
+    if (!resolvedToken) { navigate("/login"); return; }
+    setCouponLoading(true); setCouponMessage(null);
+    try { const response=await fetch(`${API}/coupons/redeem`,{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${resolvedToken}`},body:JSON.stringify({code:couponCode})}); const data=await response.json(); if(!response.ok) throw new Error(data.message||"쿠폰을 사용할 수 없습니다."); setCouponMessage({type:"success",text:`${data.coupon.name} 쿠폰이 적용되었습니다.`}); setCouponCode(""); await loadCoupons(); loadPurchaseHistory(); }
+    catch(error){setCouponMessage({type:"error",text:error instanceof Error?error.message:"쿠폰을 사용할 수 없습니다."});} finally{setCouponLoading(false);}
+  };
   useEffect(() => {
     fetch(`${API}/payment/plans`)
       .then((response) => response.ok ? response.json() : Promise.reject())
@@ -460,6 +480,12 @@ export default function PricingPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={couponOpen} onClose={()=>!couponLoading&&setCouponOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle fontWeight={900}>쿠폰 등록</DialogTitle>
+        <DialogContent><Typography fontSize={13} color="text.secondary" sx={{mb:2}}>발급받은 쿠폰번호를 입력해 주세요.</Typography>{couponMessage&&<Alert severity={couponMessage.type} sx={{mb:2}}>{couponMessage.text}</Alert>}<TextField autoFocus fullWidth label="쿠폰번호" value={couponCode} onChange={e=>setCouponCode(e.target.value.toUpperCase())} placeholder="ABCD-EFGH-JKLM-NPQR"/></DialogContent>
+        <DialogActions><Button onClick={()=>setCouponOpen(false)} disabled={couponLoading}>취소</Button><Button variant="contained" onClick={redeemCoupon} disabled={couponLoading||!couponCode.trim()}>{couponLoading?"확인 중":"등록"}</Button></DialogActions>
+      </Dialog>
+
       <Dialog
         open={Boolean(cancelTarget)}
         onClose={cancelLoading ? undefined : () => {
@@ -540,6 +566,7 @@ export default function PricingPage() {
             variant="contained"
             disableElevation
             startIcon={<AutoAwesomeIcon sx={{ fontSize: 16 }} />}
+            onClick={() => { setCouponMessage(null); setCouponOpen(true); }}
             sx={{
               mb: 2.5,
               borderRadius: 1.5,
@@ -763,8 +790,11 @@ export default function PricingPage() {
 
       {/* 쿠폰내역 탭 */}
       {tab === 3 && (
-        <Box sx={{ py: 6, textAlign: "center" }}>
+        <Box>
+          <Stack spacing={1.5}>{coupons.map((coupon,index)=><Box key={`${coupon.redeemed_at}-${index}`} sx={{border:"1px solid #E5E7EB",borderRadius:2,p:2,textAlign:"left"}}><Stack direction="row" justifyContent="space-between"><Box><Typography fontWeight={900}>{coupon.name}</Typography><Typography fontSize={12} color="text.secondary">{new Date(coupon.redeemed_at).toLocaleDateString("ko-KR")} 등록 · {new Date(coupon.valid_until).toLocaleDateString("ko-KR")}까지</Typography></Box><Chip size="small" label={coupon.status==="AVAILABLE"?"다음 결제에 사용 가능":"적용 완료"} color={coupon.status==="AVAILABLE"?"primary":"success"}/></Stack></Box>)}</Stack>
+          <Box sx={{ py: coupons.length ? 0 : 6, textAlign: "center", display: coupons.length ? "none" : "block" }}>
           <Typography fontSize={14} fontWeight={700} color="text.secondary">등록된 쿠폰이 없습니다.</Typography>
+          </Box>
         </Box>
       )}
     </Stack>

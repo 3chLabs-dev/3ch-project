@@ -186,9 +186,9 @@ const DiagonalBase = styled(TableCell)(({ theme }) => ({
 /**
  * 대각선 빗금 셀
  * - ResizeObserver로 셀의 실제 크기를 측정해 빗금 각도(angle)를 동적 계산
- * - landscape=true: 양수 각도 / false: 음수 각도 (writingMode 90° 회전에 대응)
+ * - portrait에서는 테이블 전체가 90° 회전하므로 셀 내부 각도는 가로모드와 동일하게 유지
  */
-function DiagonalScoreCell({ landscape, isVisionStart = false }: { landscape: boolean; isVisionStart?: boolean }) {
+function DiagonalScoreCell({ isVisionStart = false }: { landscape: boolean; isVisionStart?: boolean }) {
   const ref = useRef<HTMLTableCellElement>(null);
   const [angle, setAngle] = useState(45);
 
@@ -209,11 +209,11 @@ function DiagonalScoreCell({ landscape, isVisionStart = false }: { landscape: bo
     <DiagonalBase
       ref={ref}
       sx={(theme) => ({
-        backgroundImage: `linear-gradient(${landscape ? angle : -angle}deg,transparent 49.5%,${theme.palette.divider} 50%,${theme.palette.divider} 50.5%,transparent 51%)`,
+        backgroundImage: `linear-gradient(${angle}deg,transparent 49.5%,${theme.palette.divider} 50%,${theme.palette.divider} 50.5%,transparent 51%)`,
       })}
     >
       {isVisionStart ? (
-        <Box component="span" aria-label="GPT Vision 점수 영역 시작" sx={{ position: "absolute", top: 2, ...(landscape ? { left: 3 } : { right: 3 }), color: "#111", fontSize: 22, fontWeight: 900, lineHeight: 1, zIndex: 1 }}>
+        <Box component="span" aria-label="GPT Vision 점수 영역 시작" sx={{ position: "absolute", top: 2, left: 3, color: "#111", fontSize: 22, fontWeight: 900, lineHeight: 1, zIndex: 1 }}>
           ☆
         </Box>
       ) : null}

@@ -2157,6 +2157,18 @@ export default function LeagueGPTVisionSheet() {
     : `${league.type} ${league.format} │ ${league.rules}`;
   const appliedScale  = autoFitScale * userZoom;
   const previewByPosition = new Map(previewCells.map((cell) => [`${cell.rowIndex}__${cell.columnIndex}`, cell]));
+  const indexedPreviewParticipants = localOrder.map((participant, index) => ({ participant, index }));
+  const previewSplitIndex = Math.ceil(localOrder.length / 2);
+  const previewRows = visionTargetRegion === "upper-right"
+    ? indexedPreviewParticipants.slice(0, previewSplitIndex)
+    : visionTargetRegion === "lower-left"
+      ? indexedPreviewParticipants.slice(previewSplitIndex)
+      : indexedPreviewParticipants;
+  const previewColumns = visionTargetRegion === "upper-right"
+    ? indexedPreviewParticipants.slice(previewSplitIndex)
+    : visionTargetRegion === "lower-left"
+      ? indexedPreviewParticipants.slice(0, previewSplitIndex)
+      : indexedPreviewParticipants;
   // 줌 > 1이면 테이블이 화면을 초과 → 스크롤 가능하도록 시각적 크기를 spacer로 잡아줌
   // portrait: 90° 회전이므로 시각 너비=naturalTh, 시각 높이=naturalTw
   const visualW = naturalTw > 0 ? (landscape ? naturalTw : naturalTh) * appliedScale : 0;
@@ -2801,12 +2813,12 @@ export default function LeagueGPTVisionSheet() {
               }}
             >
               <tbody>
-                {localOrder.map((rowPlayer, rowIndex) => (
+                {previewRows.map(({ participant: rowPlayer, index: rowIndex }) => (
                   <tr key={rowPlayer.id}>
-                    {localOrder.map((columnPlayer, columnIndex) => {
+                    {previewColumns.map(({ participant: columnPlayer, index: columnIndex }) => {
                       if (rowIndex === columnIndex) return <td key={columnPlayer.id} style={{ background: "#E5E7EB" }} />;
                       const match = matchLookup.get(`${rowPlayer.id}__${columnPlayer.id}`);
-                      if (!match) {
+                      if (!match || match.is_no_game) {
                         return (
                           <td key={columnPlayer.id} style={{ background: "#F9FAFB", color: "#EF4444", fontWeight: 800 }}>
                             NO-GAME

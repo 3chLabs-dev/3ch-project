@@ -478,6 +478,7 @@ model Coupon {
   type          String   @db.VarChar(30)
   value         Int
   plan_code     String?  @db.VarChar(30)
+  duration_months Int?
   valid_from    DateTime @default(now()) @db.Timestamptz(6)
   valid_until   DateTime @db.Timestamptz(6)
   is_active     Boolean  @default(true)

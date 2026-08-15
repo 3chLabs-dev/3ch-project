@@ -737,7 +737,7 @@ router.post("/payment/billing/issue", requireAuth, async (req, res) => {
     );
     const user = userResult.rows[0] || {};
     const discountResult = await pool.query(
-      `SELECT r.id,c.value FROM coupon_redemptions r JOIN coupons c ON c.id=r.coupon_id
+      `SELECT r.id,c.value,COALESCE(c.duration_months,1) AS duration_months FROM coupon_redemptions r JOIN coupons c ON c.id=r.coupon_id
         WHERE r.user_id=$1 AND r.status='AVAILABLE' AND c.type='PERCENT_DISCOUNT'
           AND c.is_active=true AND c.valid_until>NOW() AND (c.plan_code IS NULL OR c.plan_code=$2)
         ORDER BY r.redeemed_at ASC LIMIT 1`, [userId,plan.code],
@@ -762,7 +762,7 @@ router.post("/payment/billing/issue", requireAuth, async (req, res) => {
       payment,
       chargedAmount,
     });
-    if (discount) await pool.query(`UPDATE coupon_redemptions SET status='APPLIED',applied_at=NOW() WHERE id=$1 AND status='AVAILABLE'`,[discount.id]);
+    if (discount) await pool.query(`UPDATE coupon_redemptions SET status=CASE WHEN $2>1 THEN 'ACTIVE' ELSE 'APPLIED' END,benefit=jsonb_set(benefit,'{remainingMonths}',to_jsonb(GREATEST($2-1,0))),applied_at=NOW() WHERE id=$1 AND status='AVAILABLE'`,[discount.id,Number(discount.duration_months)]);
     return res.json({ ok: true, plan: plan.code, expiresAt: subscription.expiresAt });
   } catch (error) {
     console.error("billing issue error:", error);
@@ -847,11 +847,20 @@ router.post("/payment/billing/run-renewals", async (req, res) => {
     try {
       const plan = await getPurchasablePlan(row.plan);
       if (!plan) throw new Error("INVALID_PLAN");
+      const discountResult = await pool.query(
+        `SELECT r.id,c.value,COALESCE((r.benefit->>'remainingMonths')::int,0) AS remaining_months
+           FROM coupon_redemptions r JOIN coupons c ON c.id=r.coupon_id
+          WHERE r.user_id=$1 AND r.status='ACTIVE' AND c.type='PERCENT_DISCOUNT'
+            AND (c.plan_code IS NULL OR c.plan_code=$2)
+          ORDER BY r.redeemed_at ASC LIMIT 1`, [row.user_id,plan.code],
+      );
+      const discount=discountResult.rows[0];
+      const chargedAmount=discount?Math.round(Number(plan.price)*(100-Number(discount.value))/100):Number(plan.price);
       const billingKey = decryptBillingKey(row.billing_key_encrypted);
       const orderId = `RENEW_${row.current_subscription_id}`;
       const payment = await chargeBilling({ billingKey, orderId, body: {
         customerKey: row.customer_key,
-        amount: Number(plan.price),
+        amount: chargedAmount,
         orderName: `${plan.name} 월 구독 갱신`,
         customerEmail: row.email || undefined,
         customerName: row.name || undefined,
@@ -861,7 +870,9 @@ router.post("/payment/billing/run-renewals", async (req, res) => {
         plan,
         methodId: row.method_id,
         payment,
+        chargedAmount,
       });
+      if(discount) await pool.query(`UPDATE coupon_redemptions SET status=CASE WHEN $2<=1 THEN 'APPLIED' ELSE 'ACTIVE' END,benefit=jsonb_set(benefit,'{remainingMonths}',to_jsonb(GREATEST($2-1,0))) WHERE id=$1`,[discount.id,Number(discount.remaining_months)]);
       results.push({ userId: row.user_id, ok: true });
     } catch (error) {
       console.error(`billing renewal failed for user ${row.user_id}:`, error);

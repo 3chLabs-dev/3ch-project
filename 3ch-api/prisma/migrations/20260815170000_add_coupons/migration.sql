@@ -3,7 +3,7 @@ CREATE TABLE "coupons" (
   "normalized_code" VARCHAR(50) NOT NULL UNIQUE, "distribution_type" VARCHAR(20) NOT NULL DEFAULT 'SINGLE',
   "max_redemptions" INTEGER,
   "name" VARCHAR(100) NOT NULL, "type" VARCHAR(30) NOT NULL, "value" INTEGER NOT NULL,
-  "plan_code" VARCHAR(30), "valid_from" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  "plan_code" VARCHAR(30), "duration_months" INTEGER, "valid_from" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   "valid_until" TIMESTAMPTZ NOT NULL, "is_active" BOOLEAN NOT NULL DEFAULT TRUE,
   "created_by_id" INTEGER REFERENCES "users"("id") ON DELETE SET NULL,
   "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(), "updated_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -13,6 +13,7 @@ CREATE TABLE "coupons" (
   CONSTRAINT "coupons_dates_check" CHECK ("valid_until" > "valid_from")
   ,CONSTRAINT "coupons_distribution_check" CHECK ("distribution_type" IN ('SINGLE','OPEN'))
   ,CONSTRAINT "coupons_max_redemptions_check" CHECK ("max_redemptions" IS NULL OR "max_redemptions" > 0)
+  ,CONSTRAINT "coupons_duration_check" CHECK ("duration_months" IS NULL OR "duration_months" > 0)
 );
 CREATE TABLE "coupon_redemptions" (
   "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(), "coupon_id" UUID NOT NULL REFERENCES "coupons"("id") ON DELETE RESTRICT,

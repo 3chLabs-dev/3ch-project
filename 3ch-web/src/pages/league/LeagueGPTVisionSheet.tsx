@@ -2262,7 +2262,7 @@ export default function LeagueGPTVisionSheet() {
                 transformOrigin: "top left",
                 transform: landscape
                   ? `scale(${appliedScale})`
-                  : `rotate(90deg) translateY(-100%) scale(${appliedScale})`,
+                  : `scale(${appliedScale}) rotate(90deg) translateY(-100%)`,
                 display: "inline-block",
                 position: "absolute",
                 top: 0,

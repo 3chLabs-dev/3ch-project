@@ -267,7 +267,7 @@ router.get("/user/me/home-summary", requireAuth, async (req, res) => {
       ? await pool.query(
         `SELECT league_id, name, division, source_group_id
          FROM league_participants
-         WHERE league_id = ANY($1::uuid[]) AND status = 'active'`,
+         WHERE league_id = ANY($1::text[]) AND status = 'active'`,
         [leagueIds],
       )
       : { rows: [] };

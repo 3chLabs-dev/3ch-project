@@ -119,7 +119,7 @@ export default function Home() {
     );
 
     const showSummary = isLoggedIn && (preferences?.show_group || preferences?.show_game || preferences?.show_win);
-    const { data: homeSummary } = useGetHomeSummaryQuery(
+    const { data: homeSummary, isError: isHomeSummaryError } = useGetHomeSummaryQuery(
         { groupId: effectiveSelectedGroupId },
         { skip: !showSummary || !effectiveSelectedGroupId, refetchOnMountOrArgChange: true }
     );
@@ -332,7 +332,13 @@ export default function Home() {
                         onFilterClick={() => setSummaryFilterTarget("groups")}
                     />
                     <Box sx={{ mt: 2, mb: 1 }}>
-                        {!homeSummary || filteredGroups.length === 0 ? (
+                        {isHomeSummaryError ? (
+                            <SoftCard>
+                                <Typography textAlign="center" color="error.main" fontWeight={700}>
+                                    편성 정보를 불러오지 못했습니다.
+                                </Typography>
+                            </SoftCard>
+                        ) : !homeSummary || filteredGroups.length === 0 ? (
                             <SoftCard>
                                 <Typography textAlign="center" color="text.secondary" fontWeight={700}>
                                     조건에 맞는 조·팀 편성이 없습니다.
@@ -361,7 +367,13 @@ export default function Home() {
                         onFilterClick={() => setSummaryFilterTarget("matches")}
                     />
                     <Box sx={{ mt: 2, mb: 1 }}>
-                        {!homeSummary || filteredMatches.length === 0 ? (
+                        {isHomeSummaryError ? (
+                            <SoftCard>
+                                <Typography textAlign="center" color="error.main" fontWeight={700}>
+                                    경기 정보를 불러오지 못했습니다.
+                                </Typography>
+                            </SoftCard>
+                        ) : !homeSummary || filteredMatches.length === 0 ? (
                             <SoftCard>
                                 <Typography textAlign="center" color="text.secondary" fontWeight={700}>
                                     조건에 맞는 경기가 없습니다.

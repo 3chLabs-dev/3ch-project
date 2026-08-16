@@ -248,18 +248,12 @@ router.get("/user/me/home-summary", requireAuth, async (req, res) => {
       FROM league_participants lp
       JOIN leagues l ON l.id = lp.league_id
       JOIN league_programs pr ON pr.league_id = l.id
+      JOIN users me ON me.id = $1
       WHERE (
           lp.member_id = $1
           OR (
             lp.member_id IS NULL
-            AND EXISTS (
-              SELECT 1
-              FROM users u
-              JOIN group_members gm ON gm.user_id = u.id
-              WHERE u.id = $1
-                AND gm.group_id = COALESCE(lp.source_group_id, l.group_id)
-                AND BTRIM(u.name) = BTRIM(lp.name)
-            )
+            AND BTRIM(me.name) = BTRIM(lp.name)
           )
         )
         AND lp.status = 'active'
@@ -468,6 +462,7 @@ router.get("/user/me/home-summary", requireAuth, async (req, res) => {
         lp.division AS my_division
       FROM league_participants lp
       JOIN leagues l ON l.id = lp.league_id
+      JOIN users me ON me.id = $1
       JOIN league_matches m ON m.league_id = l.id
         AND (
           m.participant_a_id = lp.id
@@ -481,14 +476,7 @@ router.get("/user/me/home-summary", requireAuth, async (req, res) => {
           lp.member_id = $1
           OR (
             lp.member_id IS NULL
-            AND EXISTS (
-              SELECT 1
-              FROM users u
-              JOIN group_members gm ON gm.user_id = u.id
-              WHERE u.id = $1
-                AND gm.group_id = COALESCE(lp.source_group_id, l.group_id)
-                AND BTRIM(u.name) = BTRIM(lp.name)
-            )
+            AND BTRIM(me.name) = BTRIM(lp.name)
           )
         )
         AND lp.status = 'active'

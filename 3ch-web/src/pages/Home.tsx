@@ -702,11 +702,15 @@ function MyGroupCard({ item, navigate }: { item: MyGroupItem; navigate: (path: s
 function MyMatchCard({ item, navigate }: { item: MyMatchItem; navigate: (path: string) => void }) {
     const statusLabel = item.status === "done" ? "종료" : item.status === "playing" ? "진행중" : "대기";
     const statusColor = item.status === "playing" ? "#16A34A" : "#6B7280";
+    const leagueBase = item.league_code ?? item.league_id;
+    const matchPath = item.program_round
+        ? `/league/${leagueBase}/program/matches?program=1&round=${item.program_round}`
+        : `/league/${leagueBase}/matches`;
 
     return (
         <Card
             elevation={2}
-            onClick={() => navigate(`/league/${item.league_code ?? item.league_id}/matches`)}
+            onClick={() => navigate(matchPath)}
             sx={{ borderRadius: 0.6, boxShadow: "0 4px 12px rgba(0,0,0,0.08)", cursor: "pointer" }}
         >
             <CardContent sx={{ py: 1.6, px: 2.5, "&:last-child": { pb: 1.6 } }}>

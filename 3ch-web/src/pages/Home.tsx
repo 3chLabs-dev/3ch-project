@@ -10,12 +10,14 @@ import {
     Card,
     CardContent,
     Button,
+    IconButton,
     Select,
     MenuItem,
 } from "@mui/material";
 import GridViewOutlinedIcon from "@mui/icons-material/GridViewOutlined";
 import SportsOutlinedIcon from "@mui/icons-material/SportsOutlined";
 import EmojiEventsOutlinedIcon from "@mui/icons-material/EmojiEventsOutlined";
+import TuneIcon from "@mui/icons-material/Tune";
 import type { SelectChangeEvent } from "@mui/material";
 
 import { useAppDispatch, useAppSelector } from "../app/hooks";
@@ -25,7 +27,7 @@ import { useGetLeaguesQuery } from "../features/league/leagueApi";
 import type { LeagueListItem } from "../features/league/leagueApi";
 import { useGetMyGroupsQuery } from "../features/group/groupApi";
 import { setPreferredGroupId } from "../features/league/leagueCreationSlice";
-// import LeagueFilterDialog from "../components/LeagueFilterDialog.tsx";
+import LeagueFilterDialog from "../components/LeagueFilterDialog.tsx";
 import AdFitBanner from "../components/AdFitBanner";
 import GuestHome from "../components/GuestHome.tsx";
 
@@ -35,7 +37,35 @@ const SPORT_EMOJI: Record<string, string> = {
     "테니스": "🎾",
 };
 
-// type LeagueStatus = "scheduled" | "active" | "completed";
+type LeagueStatus = "scheduled" | "active" | "completed";
+type SummaryFilter = { startDate: string; endDate: string; status: LeagueStatus[] };
+
+const DEFAULT_SUMMARY_FILTER: SummaryFilter = {
+    startDate: "",
+    endDate: "",
+    status: ["scheduled", "active"],
+};
+
+function matchesSummaryFilter(
+    item: { league_start_date: string | null; league_status: string },
+    filter: SummaryFilter,
+) {
+    if (!item.league_start_date) return false;
+    const dateOnly = item.league_start_date.slice(0, 10);
+    if (filter.startDate && dateOnly < filter.startDate) return false;
+    if (filter.endDate && dateOnly > filter.endDate) return false;
+    if (filter.status.length === 0) return true;
+
+    const startAt = new Date(item.league_start_date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const status: LeagueStatus = item.league_status === "completed" || startAt < today
+        ? "completed"
+        : item.league_status === "draft"
+            ? "scheduled"
+            : "active";
+    return filter.status.includes(status);
+}
 
 export default function Home() {
     const dispatch = useAppDispatch();
@@ -60,6 +90,11 @@ export default function Home() {
     );
 
     const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+    const [summaryFilterTarget, setSummaryFilterTarget] = useState<"groups" | "matches" | null>(null);
+    const [groupFilter, setGroupFilter] = useState<SummaryFilter>(DEFAULT_SUMMARY_FILTER);
+    const [matchFilter, setMatchFilter] = useState<SummaryFilter>(DEFAULT_SUMMARY_FILTER);
+    const [visibleGroupCount, setVisibleGroupCount] = useState(10);
+    const [visibleMatchCount, setVisibleMatchCount] = useState(10);
     const defaultGroupId = useMemo(() => {
         if (!hasGroups) return null;
         if (preferredGroupId && groups.some((g) => g.id === preferredGroupId)) {
@@ -91,6 +126,20 @@ export default function Home() {
         { groupId: effectiveSelectedGroupId },
         { skip: !showSummary || !effectiveSelectedGroupId, refetchOnMountOrArgChange: true }
     );
+
+    const filteredGroups = useMemo(
+        () => (homeSummary?.my_groups ?? []).filter((item) => matchesSummaryFilter(item, groupFilter)),
+        [groupFilter, homeSummary?.my_groups],
+    );
+    const filteredMatches = useMemo(
+        () => (homeSummary?.my_matches ?? []).filter((item) => matchesSummaryFilter(item, matchFilter)),
+        [homeSummary?.my_matches, matchFilter],
+    );
+
+    useEffect(() => {
+        setVisibleGroupCount(10);
+        setVisibleMatchCount(10);
+    }, [effectiveSelectedGroupId]);
 
     const activeLeagues = useMemo(() => {
         const leagues = leagueData?.leagues ?? [];
@@ -283,19 +332,23 @@ export default function Home() {
                     <SectionHeader
                         title="나의 조 편성·팀 편성"
                         icon={<GridViewOutlinedIcon sx={{ fontSize: 18, color: "#6366F1", mr: 0.5 }} />}
+                        onFilterClick={() => setSummaryFilterTarget("groups")}
                     />
                     <Box sx={{ mt: 2, mb: 1 }}>
-                        {!homeSummary || homeSummary.my_groups.length === 0 ? (
+                        {!homeSummary || filteredGroups.length === 0 ? (
                             <SoftCard>
                                 <Typography textAlign="center" color="text.secondary" fontWeight={700}>
-                                    배정된 조·팀 편성이 없습니다.
+                                    조건에 맞는 조·팀 편성이 없습니다.
                                 </Typography>
                             </SoftCard>
                         ) : (
                             <Stack spacing={1}>
-                                {homeSummary.my_groups.map((item) => (
+                                {filteredGroups.slice(0, visibleGroupCount).map((item) => (
                                     <MyGroupCard key={item.league_id} item={item} navigate={navigate} />
                                 ))}
+                                {filteredGroups.length > visibleGroupCount && (
+                                    <MoreButton onClick={() => setVisibleGroupCount((count) => count + 10)} />
+                                )}
                             </Stack>
                         )}
                     </Box>
@@ -308,19 +361,23 @@ export default function Home() {
                     <SectionHeader
                         title="나의 경기"
                         icon={<SportsOutlinedIcon sx={{ fontSize: 18, color: "#2F80ED", mr: 0.5 }} />}
+                        onFilterClick={() => setSummaryFilterTarget("matches")}
                     />
                     <Box sx={{ mt: 2, mb: 1 }}>
-                        {!homeSummary || homeSummary.my_matches.length === 0 ? (
+                        {!homeSummary || filteredMatches.length === 0 ? (
                             <SoftCard>
                                 <Typography textAlign="center" color="text.secondary" fontWeight={700}>
-                                    예정된 경기가 없습니다.
+                                    조건에 맞는 경기가 없습니다.
                                 </Typography>
                             </SoftCard>
                         ) : (
                             <Stack spacing={1}>
-                                {homeSummary.my_matches.map((item) => (
+                                {filteredMatches.slice(0, visibleMatchCount).map((item) => (
                                     <MyMatchCard key={item.match_id} item={item} navigate={navigate} />
                                 ))}
+                                {filteredMatches.length > visibleMatchCount && (
+                                    <MoreButton onClick={() => setVisibleMatchCount((count) => count + 10)} />
+                                )}
                             </Stack>
                         )}
                     </Box>
@@ -503,14 +560,32 @@ export default function Home() {
                     </Button>
                 </Box>
             </Box>
-        </Stack>
+            </Stack>
         </Box>
+
+        <LeagueFilterDialog
+            key={`${summaryFilterTarget ?? "closed"}-${summaryFilterTarget === "groups" ? JSON.stringify(groupFilter) : JSON.stringify(matchFilter)}`}
+            open={summaryFilterTarget !== null}
+            onClose={() => setSummaryFilterTarget(null)}
+            startDate={(summaryFilterTarget === "groups" ? groupFilter : matchFilter).startDate}
+            endDate={(summaryFilterTarget === "groups" ? groupFilter : matchFilter).endDate}
+            status={(summaryFilterTarget === "groups" ? groupFilter : matchFilter).status}
+            onApply={(filter) => {
+                if (summaryFilterTarget === "groups") {
+                    setGroupFilter(filter);
+                    setVisibleGroupCount(10);
+                } else if (summaryFilterTarget === "matches") {
+                    setMatchFilter(filter);
+                    setVisibleMatchCount(10);
+                }
+            }}
+        />
 
         </Box>
     );
 }
 
-function SectionHeader({ title, icon }: { title: string; icon?: React.ReactNode }) {
+function SectionHeader({ title, icon, onFilterClick }: { title: string; icon?: React.ReactNode; onFilterClick?: () => void }) {
     return (
         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 0.5 }}>
             <Stack direction="row" alignItems="center">
@@ -519,7 +594,25 @@ function SectionHeader({ title, icon }: { title: string; icon?: React.ReactNode 
                     {title}
                 </Typography>
             </Stack>
+            {onFilterClick && (
+                <IconButton size="small" onClick={onFilterClick} aria-label={`${title} 필터`}>
+                    <TuneIcon fontSize="small" />
+                </IconButton>
+            )}
         </Stack>
+    );
+}
+
+function MoreButton({ onClick }: { onClick: () => void }) {
+    return (
+        <Button
+            fullWidth
+            variant="text"
+            onClick={onClick}
+            sx={{ mt: 0.5, color: "text.secondary", fontWeight: 800 }}
+        >
+            더보기
+        </Button>
     );
 }
 
@@ -570,7 +663,7 @@ function MyGroupCard({ item, navigate }: { item: MyGroupItem; navigate: (path: s
 }
 
 function MyMatchCard({ item, navigate }: { item: MyMatchItem; navigate: (path: string) => void }) {
-    const statusLabel = item.status === "playing" ? "진행중" : "대기";
+    const statusLabel = item.status === "done" ? "종료" : item.status === "playing" ? "진행중" : "대기";
     const statusColor = item.status === "playing" ? "#16A34A" : "#6B7280";
 
     return (

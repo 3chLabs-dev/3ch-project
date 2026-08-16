@@ -10,6 +10,8 @@ export interface MyGroupItem {
   league_id: string;
   league_name: string;
   league_code: string | null;
+  league_start_date: string | null;
+  league_status: string;
   format: string | null;
   division: string | null;
   participant_name: string;
@@ -21,6 +23,8 @@ export interface MyMatchItem {
   league_id: string;
   league_name: string;
   league_code: string | null;
+  league_start_date: string | null;
+  league_status: string;
   match_id: string;
   match_order: number;
   status: string;

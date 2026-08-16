@@ -242,13 +242,14 @@ router.get("/user/me/home-summary", requireAuth, async (req, res) => {
     // 1. 공개된 프로그램 편성에서 나의 조/팀 찾기
     const groupsQuery = `
       SELECT l.id AS league_id, l.name AS league_name, l.league_code,
-             l.format, lp.division, lp.name AS participant_name,
+             l.format, l.start_date AS league_start_date, l.status AS league_status,
+             lp.division, lp.name AS participant_name,
              lp.source_group_id, pr.program_data
       FROM league_participants lp
       JOIN leagues l ON l.id = lp.league_id
       JOIN league_programs pr ON pr.league_id = l.id
       WHERE lp.member_id = $1
-        AND l.status = 'active'
+        AND lp.status = 'active'
         ${groupId ? "AND l.group_id = $2" : ""}
       ORDER BY l.start_date DESC
     `;
@@ -397,6 +398,7 @@ router.get("/user/me/home-summary", requireAuth, async (req, res) => {
     const matchesQuery = `
       SELECT
         l.id AS league_id, l.name AS league_name, l.league_code,
+        l.start_date AS league_start_date, l.status AS league_status,
         m.id AS match_id, m.match_order, m.status,
         CASE WHEN m.participant_a_id = lp.id THEN m.score_a ELSE m.score_b END AS my_score,
         CASE WHEN m.participant_a_id = lp.id THEN m.score_b ELSE m.score_a END AS opponent_score,
@@ -410,11 +412,9 @@ router.get("/user/me/home-summary", requireAuth, async (req, res) => {
       LEFT JOIN league_participants pa ON pa.id = m.participant_a_id
       LEFT JOIN league_participants pb ON pb.id = m.participant_b_id
       WHERE lp.member_id = $1
-        AND l.status = 'active'
-        AND m.status != 'done'
+        AND lp.status = 'active'
         ${groupId ? "AND l.group_id = $2" : ""}
-      ORDER BY l.start_date ASC, m.match_order ASC
-      LIMIT 10
+      ORDER BY l.start_date DESC, m.match_order ASC
     `;
     const matchesResult = await pool.query(matchesQuery, groupId ? [userId, groupId] : [userId]);
 

@@ -537,6 +537,7 @@ router.get("/user/me/home-summary", requireAuth, async (req, res) => {
           )
         )
         AND lp.status = 'active'
+        AND COALESCE(m.program_block_type, 'SINGLES') = 'SINGLES'
         ${groupId ? "AND l.group_id = $2" : ""}
       ORDER BY l.start_date DESC, m.match_order ASC
     `;

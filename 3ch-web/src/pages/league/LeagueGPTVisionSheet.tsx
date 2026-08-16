@@ -2532,13 +2532,23 @@ export default function LeagueGPTVisionSheet() {
           </Box>{/* /spacer */}
         </Box>{/* /scrollableInner */}
 
-        {/* 경기 순서 패널: 오버레이 고정 (scale 계산에서 분리)
-            landscape: 하단 가로 바 / portrait: 우측 세로 바 */}
+        {/* 경기 순서 패널: 가로형 패널을 세로모드에서 대진표와 함께 90° 회전 */}
         <Box ref={scheduleRef} sx={{
           position: "absolute", zIndex: 5, cursor: "pointer",
-          ...(landscape ? { bottom: 0, left: 0, right: 0 } : { top: 0, bottom: 0, right: 0 }),
+          ...(landscape
+            ? { bottom: 0, left: 0, right: 0 }
+            : { top: 0, bottom: 0, right: 0, width: 72, overflow: "hidden" }),
         }}>
-          <MatchSchedulePanel matches={matches} localOrder={localOrder} landscape={landscape} leagueId={id ?? ""} onProgramMatchUpdate={isProgramMode ? updateProgramMatch : undefined} />
+          <Box sx={landscape ? {} : {
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: wrapperRef.current?.clientHeight ?? 0,
+            transformOrigin: "top left",
+            transform: "rotate(90deg) translateY(-100%)",
+          }}>
+            <MatchSchedulePanel matches={matches} localOrder={localOrder} landscape leagueId={id ?? ""} onProgramMatchUpdate={isProgramMode ? updateProgramMatch : undefined} />
+          </Box>
         </Box>
 
         <Box sx={{

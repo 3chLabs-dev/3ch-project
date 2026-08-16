@@ -1,6 +1,6 @@
 // src/pages/Home.tsx
 import { useEffect, useMemo, useState } from "react";
-import { formatLeagueDate } from "../utils/dateUtils";
+import { formatLeagueDateTime } from "../utils/dateUtils";
 import { Link as RouterLink, useNavigate } from "react-router-dom";
 import {
     Box,
@@ -10,6 +10,7 @@ import {
     Card,
     CardContent,
     Button,
+    Divider,
     IconButton,
     Select,
     MenuItem,
@@ -25,11 +26,12 @@ import { useGetPreferencesQuery, useGetHomeSummaryQuery } from "../features/user
 import type { MyGroupItem, MyMatchItem, MyWinItem } from "../features/user/userApi";
 import { useGetLeaguesQuery } from "../features/league/leagueApi";
 import type { LeagueListItem } from "../features/league/leagueApi";
-import { useGetMyGroupsQuery } from "../features/group/groupApi";
+import { useGetMyGroupsQuery, useUpdateMyGroupPreferencesMutation } from "../features/group/groupApi";
 import { setPreferredGroupId } from "../features/league/leagueCreationSlice";
 import LeagueFilterDialog from "../components/LeagueFilterDialog.tsx";
 import AdFitBanner from "../components/AdFitBanner";
 import GuestHome from "../components/GuestHome.tsx";
+import ClubSelectionDialog from "../components/ClubSelectionDialog";
 
 const SPORT_EMOJI: Record<string, string> = {
     "탁구": "🏓",
@@ -87,6 +89,8 @@ export default function Home() {
     );
 
     const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+    const [clubSelectionOpen, setClubSelectionOpen] = useState(false);
+    const [updateGroupPreferences, { isLoading: isSavingGroupPreferences }] = useUpdateMyGroupPreferencesMutation();
     const [summaryFilterTarget, setSummaryFilterTarget] = useState<"groups" | "matches" | null>(null);
     const [groupFilter, setGroupFilter] = useState<SummaryFilter>(DEFAULT_SUMMARY_FILTER);
     const [matchFilter, setMatchFilter] = useState<SummaryFilter>(DEFAULT_SUMMARY_FILTER);
@@ -207,6 +211,10 @@ export default function Home() {
                             value={effectiveSelectedGroupId ?? ""}
                             onChange={(e: SelectChangeEvent<string>) => {
                                 const nextGroupId = e.target.value;
+                                if (nextGroupId === "__club_selection__") {
+                                    setClubSelectionOpen(true);
+                                    return;
+                                }
                                 setSelectedGroupId(nextGroupId || null);
                                 dispatch(setPreferredGroupId(nextGroupId || null));
                             }}
@@ -224,10 +232,27 @@ export default function Home() {
                             {groups.map((g) => (
                                 <MenuItem key={g.id} value={g.id}>{g.name}</MenuItem>
                             ))}
+                            <Divider />
+                            <MenuItem value="__club_selection__" sx={{ fontWeight: 800, color: "primary.main" }}>
+                                클럽 선택
+                            </MenuItem>
                         </Select>
                     )}
                 </Stack>
             )}
+
+            <ClubSelectionDialog
+                open={clubSelectionOpen}
+                groups={groups}
+                saving={isSavingGroupPreferences}
+                onClose={() => setClubSelectionOpen(false)}
+                onSave={async (orderedGroupIds, primaryGroupId) => {
+                    await updateGroupPreferences({ orderedGroupIds, primaryGroupId }).unwrap();
+                    setSelectedGroupId(primaryGroupId);
+                    dispatch(setPreferredGroupId(primaryGroupId));
+                    setClubSelectionOpen(false);
+                }}
+            />
 
             {/* 로그인/클럽 카드 */}
             {!isLoggedIn ? (
@@ -756,11 +781,28 @@ function LeagueCard({ league, goToMatches = false,}: { league: LeagueListItem; g
         >
             <CardContent sx={{ py: 1.8, px: 2.5, "&:last-child": { pb: 1.8 } }}>
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
-                    <Typography fontWeight={700} fontSize={15}>
-                        {formatLeagueDate(league.start_date)}
-                    </Typography>
+                    <Box minWidth={0}>
+                        <Stack direction="row" spacing={0.75} alignItems="center" useFlexGap flexWrap="wrap">
+                            <Typography fontWeight={700} fontSize={15}>
+                                {league.title || league.name}
+                            </Typography>
+                            {(league.invited_group_names ?? []).map((name) => (
+                                <Chip
+                                    key={name}
+                                    label={name}
+                                    size="small"
+                                    sx={{ height: 21, bgcolor: "#F3E8FF", color: "#7C3AED", fontSize: 11, fontWeight: 800 }}
+                                />
+                            ))}
+                        </Stack>
+                        <Typography fontSize={12} color="text.secondary">
+                            {formatLeagueDateTime(league.start_date)}
+                        </Typography>
+                    </Box>
                     <Typography variant="body2" color="text.secondary" fontWeight={600}>
-                        {league.participant_count} / {league.recruit_count}명
+                        {league.recruit_count > 0
+                            ? `${league.participant_count} / ${league.recruit_count}명`
+                            : `${league.participant_count}명`}
                     </Typography>
                 </Stack>
             </CardContent>

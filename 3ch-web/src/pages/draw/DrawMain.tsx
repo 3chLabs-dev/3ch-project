@@ -28,7 +28,7 @@ import CachedIcon from "@mui/icons-material/Cached";
 import HistoryIcon from "@mui/icons-material/History";
 import confetti from "canvas-confetti";
 import DragHandleIcon from "@mui/icons-material/DragHandle";
-import { useGetMyGroupsQuery } from "../../features/group/groupApi";
+import { useGetMyGroupsQuery, useUpdateMyGroupPreferencesMutation } from "../../features/group/groupApi";
 import { useGetLeagueParticipantsQuery, useGetLeaguesQuery } from "../../features/league/leagueApi";
 import { useGetDrawsQuery } from "../../features/draw/drawApi";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
@@ -36,6 +36,7 @@ import { setPreferredGroupId } from "../../features/league/leagueCreationSlice";
 import { generateId } from "../../utils/dateUtils";
 import confettiImg from "../../assets/128_축포.png";
 import AdFitBanner from "../../components/AdFitBanner";
+import ClubSelectionDialog from "../../components/ClubSelectionDialog";
 
 type DrawPhase = "list" | "create" | "animating" | "done";
 type DrawType = "league" | "tournament";
@@ -101,6 +102,8 @@ export default function DrawMain() {
   const myGroups = useMemo(() => data?.groups ?? [], [data]);
 
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [clubSelectionOpen, setClubSelectionOpen] = useState(false);
+  const [updateGroupPreferences, { isLoading: isSavingGroupPreferences }] = useUpdateMyGroupPreferencesMutation();
   const selectedSourceLeagueId = null;
   const [phase, setPhase] = useState<DrawPhase>("list");
   const [leagueFilterOpen, setLeagueFilterOpen] = useState(false);
@@ -446,6 +449,10 @@ export default function DrawMain() {
             value={effectiveSelectedGroupId ?? ""}
             onChange={(e: SelectChangeEvent<string>) => {
               const nextGroupId = e.target.value;
+              if (nextGroupId === "__club_selection__") {
+                setClubSelectionOpen(true);
+                return;
+              }
               setSelectedGroupId(nextGroupId || null);
               dispatch(setPreferredGroupId(nextGroupId || null));
             }}
@@ -464,9 +471,26 @@ export default function DrawMain() {
                 {g.name}
               </MenuItem>
             ))}
+            <Divider />
+            <MenuItem value="__club_selection__" sx={{ fontWeight: 800, color: "primary.main" }}>
+              클럽 선택
+            </MenuItem>
           </Select>
         )}
       </Stack>
+
+      <ClubSelectionDialog
+        open={clubSelectionOpen}
+        groups={myGroups}
+        saving={isSavingGroupPreferences}
+        onClose={() => setClubSelectionOpen(false)}
+        onSave={async (orderedGroupIds, primaryGroupId) => {
+          await updateGroupPreferences({ orderedGroupIds, primaryGroupId }).unwrap();
+          setSelectedGroupId(primaryGroupId);
+          dispatch(setPreferredGroupId(primaryGroupId));
+          setClubSelectionOpen(false);
+        }}
+      />
 
       {/* 로그인 유도 */}
       {!isLoggedIn && (

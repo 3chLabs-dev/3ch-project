@@ -2197,7 +2197,7 @@ export default function LeagueGPTVisionSheet() {
     ? Math.max(0, (wrapperRef.current?.clientWidth ?? 0) - portraitScheduleWidth)
     : 0;
   const portraitTableOffsetX = !landscape
-    ? Math.max(0, (portraitContentWidth - visualW) / 2)
+    ? portraitScheduleWidth + Math.max(0, (portraitContentWidth - visualW) / 2)
     : 0;
 
   const mobileDialogPaperSx = landscape
@@ -2378,9 +2378,9 @@ export default function LeagueGPTVisionSheet() {
             width: visualW || "100%", height: visualH || "100%",
             minWidth: "100%", minHeight: "100%",
             position: "relative", flexShrink: 0,
-            // landscape: 하단 패널 높이만큼 하단 여백 / portrait: 우측 패널 너비만큼 우측 여백
+            // landscape: 하단 패널 높이만큼 하단 여백 / portrait: 좌측 패널 너비만큼 좌측 여백
             pb: landscape ? `${scheduleRef.current?.offsetHeight ?? 0}px` : 0,
-            pr: landscape ? 0 : `${scheduleRef.current?.offsetWidth ?? 0}px`,
+            pl: landscape ? 0 : `${scheduleRef.current?.offsetWidth ?? 0}px`,
           }}>
             {/* 대진표 + 경기 순서 (scale 변환 컨테이너) */}
             <Box
@@ -2537,7 +2537,7 @@ export default function LeagueGPTVisionSheet() {
           position: "absolute", zIndex: 5, cursor: "pointer",
           ...(landscape
             ? { bottom: 0, left: 0, right: 0 }
-            : { top: 0, bottom: 0, right: 0, width: 72, overflow: "hidden" }),
+            : { top: 0, bottom: 0, left: 0, width: 72, overflow: "hidden" }),
         }}>
           <Box sx={landscape ? {} : {
             position: "absolute",

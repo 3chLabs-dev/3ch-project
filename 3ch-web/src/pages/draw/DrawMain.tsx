@@ -28,15 +28,13 @@ import CachedIcon from "@mui/icons-material/Cached";
 import HistoryIcon from "@mui/icons-material/History";
 import confetti from "canvas-confetti";
 import DragHandleIcon from "@mui/icons-material/DragHandle";
-import { useGetMyGroupsQuery, useUpdateMyGroupPreferencesMutation } from "../../features/group/groupApi";
+import { useGetMyGroupsQuery } from "../../features/group/groupApi";
 import { useGetLeagueParticipantsQuery, useGetLeaguesQuery } from "../../features/league/leagueApi";
 import { useGetDrawsQuery } from "../../features/draw/drawApi";
-import { useAppDispatch, useAppSelector } from "../../app/hooks";
-import { setPreferredGroupId } from "../../features/league/leagueCreationSlice";
+import { useAppSelector } from "../../app/hooks";
 import { generateId } from "../../utils/dateUtils";
 import confettiImg from "../../assets/128_축포.png";
 import AdFitBanner from "../../components/AdFitBanner";
-import ClubSelectionDialog from "../../components/ClubSelectionDialog";
 
 type DrawPhase = "list" | "create" | "animating" | "done";
 type DrawType = "league" | "tournament";
@@ -88,7 +86,6 @@ function formatDateTime(iso: string) {
 }
 
 export default function DrawMain() {
-  const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const token = useAppSelector((s) => s.auth.token);
   // const user = useAppSelector((s) => s.auth.user);
@@ -101,9 +98,6 @@ export default function DrawMain() {
   });
   const myGroups = useMemo(() => data?.groups ?? [], [data]);
 
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
-  const [clubSelectionOpen, setClubSelectionOpen] = useState(false);
-  const [updateGroupPreferences, { isLoading: isSavingGroupPreferences }] = useUpdateMyGroupPreferencesMutation();
   const selectedSourceLeagueId = null;
   const [phase, setPhase] = useState<DrawPhase>("list");
   const [leagueFilterOpen, setLeagueFilterOpen] = useState(false);
@@ -137,10 +131,7 @@ export default function DrawMain() {
     return myGroups[0].id;
   }, [myGroups, preferredGroupId]);
 
-  const effectiveSelectedGroupId =
-    selectedGroupId && myGroups.some((g) => g.id === selectedGroupId)
-      ? selectedGroupId
-      : defaultGroupId;
+  const effectiveSelectedGroupId = defaultGroupId;
 
   const selectedGroup = effectiveSelectedGroupId
     ? myGroups.find((g) => g.id === effectiveSelectedGroupId) ?? null
@@ -439,59 +430,6 @@ export default function DrawMain() {
 
   return (
     <Stack spacing={2.2}>
-      <Stack direction="row" alignItems="center" justifyContent="space-between">
-        <Typography variant="h5" fontWeight={900} lineHeight={1.1}>
-          {/* {user?.name || user?.email} */}
-        </Typography>
-        {myGroups.length > 1 && (
-          <Select
-            size="small"
-            value={effectiveSelectedGroupId ?? ""}
-            onChange={(e: SelectChangeEvent<string>) => {
-              const nextGroupId = e.target.value;
-              if (nextGroupId === "__club_selection__") {
-                setClubSelectionOpen(true);
-                return;
-              }
-              setSelectedGroupId(nextGroupId || null);
-              dispatch(setPreferredGroupId(nextGroupId || null));
-            }}
-            sx={{
-              borderRadius: 1,
-              height: 32,
-              fontSize: "0.85rem",
-              fontWeight: 700,
-              bgcolor: "#EEF2FF",
-              "& .MuiSelect-select": { py: 0.5, px: 1.5 },
-              "& .MuiOutlinedInput-notchedOutline": { borderColor: "#C7D2FE" },
-            }}
-          >
-            {myGroups.map((g) => (
-              <MenuItem key={g.id} value={g.id}>
-                {g.name}
-              </MenuItem>
-            ))}
-            <Divider />
-            <MenuItem value="__club_selection__" sx={{ fontWeight: 800, color: "primary.main" }}>
-              클럽 선택
-            </MenuItem>
-          </Select>
-        )}
-      </Stack>
-
-      <ClubSelectionDialog
-        open={clubSelectionOpen}
-        groups={myGroups}
-        saving={isSavingGroupPreferences}
-        onClose={() => setClubSelectionOpen(false)}
-        onSave={async (orderedGroupIds, primaryGroupId) => {
-          await updateGroupPreferences({ orderedGroupIds, primaryGroupId }).unwrap();
-          setSelectedGroupId(primaryGroupId);
-          dispatch(setPreferredGroupId(primaryGroupId));
-          setClubSelectionOpen(false);
-        }}
-      />
-
       {/* 로그인 유도 */}
       {!isLoggedIn && (
         <SoftCard>

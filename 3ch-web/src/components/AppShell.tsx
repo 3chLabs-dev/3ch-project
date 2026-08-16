@@ -157,8 +157,11 @@ export default function AppShell() {
                             <img src={logo} alt="우리리그" style={{ height: 32 }} />
                         </Box>
 
-                        {/* 클럽 셀렉트 — 리그메인(step 0)에서만 표시 */}
-                        {token && groups.length > 1 && location.pathname === "/league" && currentStep === 0 && (
+                        {/* 클럽 셀렉트 — 리그·대회 및 추첨 메인에서 표시 */}
+                        {token && groups.length > 1 && (
+                            (location.pathname === "/league" && currentStep === 0)
+                            || location.pathname === "/draw"
+                        ) && (
                             <Select
                                 value={effectiveGroupId}
                                 onChange={(e: SelectChangeEvent<string>) => {

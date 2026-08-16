@@ -1,17 +1,17 @@
 const pool = require("../db/pool");
 
 const DEFAULT_POINT_RULES = Object.freeze({
-  attendance: { league: 1, tournament: 2 },
+  attendance: { league: 10, tournament: 20 },
   matchPoints: {
     mode: "sets",
     winPoints: 3,
     eventTypes: { singles: true, doubles: true, team: true },
   },
   rankings: {
-    league: { first: 30, second: 20, third: 10, fourth: 10 },
-    group: { first: 30, second: 15, third: 10, fourth: 10 },
-    tournamentUpper: { first: 50, second: 30, third: 20, fourth: 20 },
-    tournamentLower: { first: 20, second: 10, third: 7, fourth: 7 },
+    league: { first: 30, second: 20, third: 15, fourth: 10 },
+    group: { first: 30, second: 20, third: 15, fourth: 10 },
+    tournamentUpper: { first: 50, second: 30, third: 20, fourth: 15 },
+    tournamentLower: { first: 20, second: 15, third: 10, fourth: 5 },
   },
 });
 

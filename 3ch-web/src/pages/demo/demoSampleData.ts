@@ -40,8 +40,7 @@ export const DEMO_LEAGUE = {
 } as const;
 
 export const DEMO_RECOMMENDED_PROGRAM = [
-  { round: "예선", program: "단식", format: "조별리그", detail: "4명씩 2개 조 · 5전 3선승제" },
-  { round: "본선", program: "단식", format: "토너먼트", detail: "각 조 상위 2명 진출 · 5전 3선승제" },
+  { round: "1라운드", program: "단식", format: "단일리그", detail: "8명 풀리그 · 5전 3선승제" },
 ] as const;
 
 export const DEMO_CUSTOM_PROGRAM = [

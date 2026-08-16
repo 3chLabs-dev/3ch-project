@@ -35,14 +35,14 @@ export default function GuestHome() {
                         리그·대회 운영, 한 번에 해결
                     </Typography>
                     <Typography sx={{ fontSize: 14, lineHeight: 1.6, color: "#6B7280", fontWeight: 600, mb: 1.25 }}>
-                        우리리그의 주요 기능과 운영 흐름을 한 페이지에서 먼저 확인할 수 있습니다.
+                        우리리그의 주요 기능과 운영 흐름을 소개해 드리겠습니다.
                     </Typography>
                     <Button
                         variant="outlined"
                         onClick={() => navigate("/demo")}
                         sx={{ height: 40, borderRadius: 9999, fontWeight: 800, px: 2.25 }}
                     >
-                        데모 버전 보기
+                        서비스 소개
                     </Button>
                 </Box>
 

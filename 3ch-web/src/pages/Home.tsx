@@ -56,10 +56,7 @@ function matchesSummaryFilter(
     if (filter.endDate && dateOnly > filter.endDate) return false;
     if (filter.status.length === 0) return true;
 
-    const startAt = new Date(item.league_start_date);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const status: LeagueStatus = item.league_status === "completed" || startAt < today
+    const status: LeagueStatus = item.league_status === "completed"
         ? "completed"
         : item.league_status === "draft"
             ? "scheduled"

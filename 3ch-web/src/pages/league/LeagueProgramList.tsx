@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useState } from "react";
+import { useMemo, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Box,
@@ -229,6 +229,7 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
     program: StoredProgramOption;
     roundIndex: number;
   } | null>(null);
+  const autoSyncedRoundsRef = useRef(new Set<number>());
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
@@ -283,6 +284,33 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
       })
       .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
   }, [participants]);
+
+  useEffect(() => {
+    if (!id || !canManage || !storedProgram?.blocks?.length || participants.length === 0) return;
+
+    storedProgram.blocks.forEach((block, index) => {
+      const round = index + 1;
+      const isPublished = block.groupFormationPublished || block.teamFormationPublished || block.doublesFormationPublished;
+      const hasServerMatches = matches.some((match) => match.is_program && match.program_round === round);
+      if (!isPublished || hasServerMatches || autoSyncedRoundsRef.current.has(round)) return;
+
+      autoSyncedRoundsRef.current.add(round);
+      const roundMatches = generateProgramRoundMatches(
+        id,
+        storedProgram as ProgramOption,
+        participants,
+        round,
+        matches,
+      ).map((match) => ({
+        ...match,
+        program_round: round,
+        program_block_type: block.type,
+      }));
+      if (roundMatches.length === 0) return;
+      void syncLeagueProgramMatches({ leagueId: id, matches: roundMatches }).unwrap()
+        .catch(() => autoSyncedRoundsRef.current.delete(round));
+    });
+  }, [canManage, id, matches, participants, storedProgram, syncLeagueProgramMatches]);
 
   const rotateBySeed = <T,>(items: T[], seed: number) => {
     if (items.length < 2) return items;
@@ -412,13 +440,14 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
     nextProgram: StoredProgramOption,
     roundIndex: number,
     resetMatches: boolean,
+    syncMatches = resetMatches,
   ) => {
     if (!id || !canManage) return;
     setStoredProgram(nextProgram);
     localStorage.setItem(`league-program-${id}`, JSON.stringify(nextProgram));
     await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
 
-    if (resetMatches) {
+    if (syncMatches) {
       const affectedRoundIndexes = [roundIndex];
       for (let index = roundIndex + 1; index < (nextProgram.blocks?.length ?? 0); index += 1) {
         const linked =
@@ -430,7 +459,7 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
       for (const affectedRoundIndex of affectedRoundIndexes) {
         const block = nextProgram.blocks?.[affectedRoundIndex];
         if (!block) continue;
-        clearProgramMatchState(id, affectedRoundIndex + 1);
+        if (resetMatches) clearProgramMatchState(id, affectedRoundIndex + 1);
         const roundMatches = generateProgramRoundMatches(
           id,
           nextProgram as ProgramOption,
@@ -445,7 +474,7 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
         await syncLeagueProgramMatches({
           leagueId: id,
           matches: roundMatches,
-          resetResults: true,
+          resetResults: resetMatches,
         }).unwrap();
       }
     }
@@ -475,7 +504,7 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
     const key = mode === "team" ? "teamFormationPublished" : mode === "doubles" ? "doublesFormationPublished" : "groupFormationPublished";
     const nextBlocks = storedProgram.blocks.map((block, index) => index === roundIndex ? { ...block, [key]: true } : block);
     const nextRounds = storedProgram.rounds?.map((round, index) => index === roundIndex ? { ...round, [key]: true } : round);
-    await persistFormation({ ...storedProgram, blocks: nextBlocks, ...(nextRounds ? { rounds: nextRounds } : {}) }, roundIndex, false);
+    await persistFormation({ ...storedProgram, blocks: nextBlocks, ...(nextRounds ? { rounds: nextRounds } : {}) }, roundIndex, false, true);
     setFormationDialog({ roundIndex, mode });
   };
 

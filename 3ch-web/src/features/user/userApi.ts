@@ -147,6 +147,7 @@ const userApi = baseApi.injectEndpoints({
         my_matches: res.my_matches,
         my_wins: res.my_wins,
       }),
+      providesTags: ["HomeSummary"],
     }),
     getMySportRankings: builder.query<{ sports: SportRankingSummaryItem[] }, void>({
       query: () => "/user/me/sport-rankings",

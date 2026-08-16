@@ -248,7 +248,20 @@ router.get("/user/me/home-summary", requireAuth, async (req, res) => {
       FROM league_participants lp
       JOIN leagues l ON l.id = lp.league_id
       JOIN league_programs pr ON pr.league_id = l.id
-      WHERE lp.member_id = $1
+      WHERE (
+          lp.member_id = $1
+          OR (
+            lp.member_id IS NULL
+            AND EXISTS (
+              SELECT 1
+              FROM users u
+              JOIN group_members gm ON gm.user_id = u.id
+              WHERE u.id = $1
+                AND gm.group_id = COALESCE(lp.source_group_id, l.group_id)
+                AND BTRIM(u.name) = BTRIM(lp.name)
+            )
+          )
+        )
         AND lp.status = 'active'
         ${groupId ? "AND l.group_id = $2" : ""}
       ORDER BY l.start_date DESC
@@ -408,10 +421,28 @@ router.get("/user/me/home-summary", requireAuth, async (req, res) => {
       FROM league_participants lp
       JOIN leagues l ON l.id = lp.league_id
       JOIN league_matches m ON m.league_id = l.id
-        AND (m.participant_a_id = lp.id OR m.participant_b_id = lp.id)
+        AND (
+          m.participant_a_id = lp.id
+          OR m.participant_b_id = lp.id
+          OR lp.id = ANY(COALESCE(m.participant_a_roster_ids, ARRAY[]::text[]))
+          OR lp.id = ANY(COALESCE(m.participant_b_roster_ids, ARRAY[]::text[]))
+        )
       LEFT JOIN league_participants pa ON pa.id = m.participant_a_id
       LEFT JOIN league_participants pb ON pb.id = m.participant_b_id
-      WHERE lp.member_id = $1
+      WHERE (
+          lp.member_id = $1
+          OR (
+            lp.member_id IS NULL
+            AND EXISTS (
+              SELECT 1
+              FROM users u
+              JOIN group_members gm ON gm.user_id = u.id
+              WHERE u.id = $1
+                AND gm.group_id = COALESCE(lp.source_group_id, l.group_id)
+                AND BTRIM(u.name) = BTRIM(lp.name)
+            )
+          )
+        )
         AND lp.status = 'active'
         ${groupId ? "AND l.group_id = $2" : ""}
       ORDER BY l.start_date DESC, m.match_order ASC

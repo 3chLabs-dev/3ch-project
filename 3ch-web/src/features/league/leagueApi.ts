@@ -936,6 +936,7 @@ export const leagueApi = baseApi.injectEndpoints({
       invalidatesTags: (_result, _error, { leagueId }) => [
         { type: "League", id: `program-${leagueId}` },
         { type: "League", id: leagueId },
+        "HomeSummary",
       ],
     }),
 
@@ -987,6 +988,7 @@ export const leagueApi = baseApi.injectEndpoints({
       invalidatesTags: (_result, _error, { leagueId }) => [
         { type: "League", id: `matches-${leagueId}` },
         { type: "League", id: leagueId },
+        "HomeSummary",
       ],
     }),
 

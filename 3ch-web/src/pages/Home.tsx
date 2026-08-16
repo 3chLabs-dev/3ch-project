@@ -722,7 +722,9 @@ function MyMatchCard({ item, navigate }: { item: MyMatchItem; navigate: (path: s
                             <Typography fontWeight={700} fontSize={12} color="text.secondary">vs</Typography>
                             <Typography fontWeight={700} fontSize={14}>
                                 {item.opponent_name ?? "?"}
-                                {item.opponent_division ? ` (${item.opponent_division})` : ""}
+                                {item.program_block_type === "SINGLES" && item.opponent_division
+                                    ? ` (${item.opponent_division})`
+                                    : ""}
                             </Typography>
                         </Stack>
                     </Stack>

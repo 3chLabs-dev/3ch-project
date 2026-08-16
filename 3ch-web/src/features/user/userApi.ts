@@ -28,6 +28,7 @@ export interface MyMatchItem {
   match_id: string;
   match_order: number;
   program_round: number | null;
+  program_block_type: "SINGLES" | "DOUBLES" | "TEAM" | null;
   status: string;
   my_score: number | null;
   opponent_score: number | null;

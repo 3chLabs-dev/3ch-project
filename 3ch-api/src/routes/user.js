@@ -282,7 +282,7 @@ router.get("/user/me/home-summary", requireAuth, async (req, res) => {
       const level = Number.parseInt(row.division ?? '', 10);
       const player = {
         name: row.name,
-        level: Number.isNaN(level) ? 999 : level,
+        level: Number.isNaN(level) ? 0 : level,
         sourceGroupId: row.source_group_id,
       };
       byLeague.set(row.league_id, [...(byLeague.get(row.league_id) ?? []), player]);
@@ -299,10 +299,10 @@ router.get("/user/me/home-summary", requireAuth, async (req, res) => {
       if (seed == null) return items;
       const buckets = new Map();
       items.forEach((item) => {
-        const level = item.level ?? 999;
+        const level = item.level ?? 0;
         buckets.set(level, [...(buckets.get(level) ?? []), item]);
       });
-      return [...buckets.keys()].sort((a, b) => a - b)
+      return [...buckets.keys()].sort((a, b) => (a || Number.MAX_SAFE_INTEGER) - (b || Number.MAX_SAFE_INTEGER))
         .flatMap((level) => rotateBySeed(buckets.get(level) ?? [], seed + level * 997));
     };
     const distributeSnake = (players, groupSizes) => {
@@ -359,7 +359,7 @@ router.get("/user/me/home-summary", requireAuth, async (req, res) => {
         ? participant.program_data.blocks
         : [];
       const allPlayers = [...(participantsByLeague.get(participant.league_id) ?? [])]
-        .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
+        .sort((a, b) => (a.level || Number.MAX_SAFE_INTEGER) - (b.level || Number.MAX_SAFE_INTEGER) || a.name.localeCompare(b.name));
       const group_assignments = [];
       const team_assignments = [];
 
@@ -435,10 +435,11 @@ router.get("/user/me/home-summary", requireAuth, async (req, res) => {
                   my_score: null,
                   opponent_score: null,
                   opponent_name: opponent?.name ?? null,
-                  opponent_division: opponent?.level && opponent.level !== 999 ? String(opponent.level) : null,
+                  opponent_division: opponent?.level > 0 && opponent.level < 999 ? String(opponent.level) : null,
                   participant_name: participant.participant_name,
                   my_division: participant.division,
                   program_round: index + 1,
+                  program_block_type: 'SINGLES',
                 });
               });
             });
@@ -462,25 +463,65 @@ router.get("/user/me/home-summary", requireAuth, async (req, res) => {
       SELECT
         l.id AS league_id, l.name AS league_name, l.league_code,
         l.start_date AS league_start_date, l.status AS league_status,
-        m.id AS match_id, m.match_order, m.status, m.program_round,
-        lp.name AS participant_name,
-        CASE WHEN m.participant_a_id = lp.id THEN m.score_a ELSE m.score_b END AS my_score,
-        CASE WHEN m.participant_a_id = lp.id THEN m.score_b ELSE m.score_a END AS opponent_score,
-        CASE WHEN m.participant_a_id = lp.id THEN pb.name ELSE pa.name END AS opponent_name,
-        CASE WHEN m.participant_a_id = lp.id THEN pb.division ELSE pa.division END AS opponent_division,
+        m.id AS match_id, m.match_order, m.status, m.program_round, m.program_block_type,
+        CASE
+          WHEN m.program_block_type IN ('TEAM', 'DOUBLES') THEN
+            CASE
+              WHEN lp.id = ANY(COALESCE(m.participant_a_roster_ids, ARRAY[]::text[])) THEN team_a_rep.name
+              ELSE team_b_rep.name
+            END
+          ELSE lp.name
+        END AS participant_name,
+        CASE
+          WHEN m.participant_a_id = lp.id
+            OR lp.id = ANY(COALESCE(m.participant_a_roster_ids, ARRAY[]::text[]))
+          THEN m.score_a ELSE m.score_b
+        END AS my_score,
+        CASE
+          WHEN m.participant_a_id = lp.id
+            OR lp.id = ANY(COALESCE(m.participant_a_roster_ids, ARRAY[]::text[]))
+          THEN m.score_b ELSE m.score_a
+        END AS opponent_score,
+        CASE
+          WHEN m.program_block_type IN ('TEAM', 'DOUBLES') THEN
+            CASE
+              WHEN lp.id = ANY(COALESCE(m.participant_a_roster_ids, ARRAY[]::text[])) THEN team_b_rep.name
+              ELSE team_a_rep.name
+            END
+          WHEN m.participant_a_id = lp.id THEN pb.name
+          ELSE pa.name
+        END AS opponent_name,
+        CASE
+          WHEN m.program_block_type IN ('TEAM', 'DOUBLES') THEN
+            CASE
+              WHEN lp.id = ANY(COALESCE(m.participant_a_roster_ids, ARRAY[]::text[])) THEN team_b_rep.division
+              ELSE team_a_rep.division
+            END
+          WHEN m.participant_a_id = lp.id THEN pb.division
+          ELSE pa.division
+        END AS opponent_division,
         lp.division AS my_division
       FROM league_participants lp
       JOIN leagues l ON l.id = lp.league_id
       JOIN users me ON me.id = $1
       JOIN league_matches m ON m.league_id = l.id
         AND (
-          m.participant_a_id = lp.id
-          OR m.participant_b_id = lp.id
-          OR lp.id = ANY(COALESCE(m.participant_a_roster_ids, ARRAY[]::text[]))
-          OR lp.id = ANY(COALESCE(m.participant_b_roster_ids, ARRAY[]::text[]))
+          (
+            COALESCE(m.program_block_type, 'SINGLES') = 'SINGLES'
+            AND (m.participant_a_id = lp.id OR m.participant_b_id = lp.id)
+          )
+          OR (
+            m.program_block_type IN ('TEAM', 'DOUBLES')
+            AND (
+              lp.id = ANY(COALESCE(m.participant_a_roster_ids, ARRAY[]::text[]))
+              OR lp.id = ANY(COALESCE(m.participant_b_roster_ids, ARRAY[]::text[]))
+            )
+          )
         )
       LEFT JOIN league_participants pa ON pa.id = m.participant_a_id
       LEFT JOIN league_participants pb ON pb.id = m.participant_b_id
+      LEFT JOIN league_participants team_a_rep ON team_a_rep.id = m.participant_a_roster_ids[1]
+      LEFT JOIN league_participants team_b_rep ON team_b_rep.id = m.participant_b_roster_ids[1]
       WHERE (
           lp.member_id = $1
           OR (

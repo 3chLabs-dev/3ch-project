@@ -96,11 +96,14 @@ const FORMATION_COLORS = [
   "#D81B60", "#00897B", "#0097A7", "#6D4C41",
 ];
 
+const hasFormationLevel = (level?: number): level is number =>
+  Number.isFinite(level) && Number(level) > 0 && Number(level) < 999;
+
 const formationLevelSum = (players: FormationPlayer[]): number =>
   players.reduce(
     (sum, player) => sum + (player.roster?.length
       ? formationLevelSum(player.roster)
-      : Number.isFinite(player.level) ? player.level : 0),
+      : hasFormationLevel(player.level) ? player.level : 0),
     0,
   );
 
@@ -127,7 +130,7 @@ function SortableFormationPlayer({ player, locked = false }: { player: Formation
     >
       {!locked && <DragHandleIcon sx={{ color: "#9CA3AF", fontSize: 17, flexShrink: 0 }} />}
       <Box sx={{ width: 22, height: 22, borderRadius: "50%", bgcolor: "#FAAA47", display: "grid", placeItems: "center", fontSize: 10, fontWeight: 900, flexShrink: 0 }}>
-        {player.level}부
+        {hasFormationLevel(player.level) ? `${player.level}부` : "-"}
       </Box>
       <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{player.name}</Typography>
     </Box>
@@ -279,10 +282,10 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
         const level = Number.parseInt(participant.division ?? "", 10);
         return {
           name: participant.name,
-          level: Number.isNaN(level) ? 999 : level,
+          level: Number.isNaN(level) ? 0 : level,
         };
       })
-      .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
+      .sort((a, b) => (a.level || Number.MAX_SAFE_INTEGER) - (b.level || Number.MAX_SAFE_INTEGER) || a.name.localeCompare(b.name));
   }, [participants]);
 
   useEffect(() => {
@@ -325,11 +328,11 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
     if (seed == null) return items;
     const buckets = new Map<number, T[]>();
     items.forEach((item) => {
-      const level = item.level ?? 999;
+      const level = item.level ?? 0;
       buckets.set(level, [...(buckets.get(level) ?? []), item]);
     });
     return [...buckets.keys()]
-      .sort((a, b) => a - b)
+      .sort((a, b) => (a || Number.MAX_SAFE_INTEGER) - (b || Number.MAX_SAFE_INTEGER))
       .flatMap((level) => rotateBySeed(buckets.get(level) ?? [], seed + level * 997));
   };
 
@@ -1206,13 +1209,13 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
                       <Typography sx={{ fontSize: 13, fontWeight: 700 }}>
                         {isDoublesGroupResult && roster
                           ? formatFormationName(player.name, player.level)
-                          : `${player.level}부 - ${formatFormationName(player.name, player.level)}`}
+                          : `${hasFormationLevel(player.level) ? `${player.level}부` : "-"} - ${formatFormationName(player.name, player.level)}`}
                       </Typography>
                       {roster && (
                         <Box sx={{ pl: isDoublesGroupResult ? 0 : 1.5, mt: 0.5, color: "#6B7280" }}>
                           {roster.map((member) => (
                             <Typography key={member.name} sx={{ fontSize: 12 }}>
-                              {member.level}부 - {formatFormationName(member.name, member.level)}
+                              {hasFormationLevel(member.level) ? `${member.level}부` : "-"} - {formatFormationName(member.name, member.level)}
                             </Typography>
                           ))}
                         </Box>

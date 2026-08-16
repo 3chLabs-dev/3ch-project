@@ -50,11 +50,11 @@ function toProgramPlayers(participants: LeagueParticipantItem[]): ProgramPlayer[
         id: participant.id,
         name: participant.name,
         division: participant.division ?? null,
-        level: Number.isNaN(level) ? 999 : level,
+        level: Number.isNaN(level) ? 0 : level,
         sourceGroupId: participant.source_group_id ?? null,
       };
     })
-    .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
+    .sort((a, b) => (a.level || Number.MAX_SAFE_INTEGER) - (b.level || Number.MAX_SAFE_INTEGER) || a.name.localeCompare(b.name));
 }
 
 function seededBracket(n: number): number[] {
@@ -121,11 +121,11 @@ function shuffleWithinLevel<T extends { level?: number; name?: string | null; id
   if (seed == null) return items;
   const buckets = new Map<number, T[]>();
   items.forEach((item) => {
-    const level = item.level ?? 999;
+    const level = item.level ?? 0;
     buckets.set(level, [...(buckets.get(level) ?? []), item]);
   });
   return [...buckets.keys()]
-    .sort((a, b) => a - b)
+    .sort((a, b) => (a || Number.MAX_SAFE_INTEGER) - (b || Number.MAX_SAFE_INTEGER))
     .flatMap((level) => rotateBySeed(buckets.get(level) ?? [], seed + level * 997));
 }
 
@@ -144,7 +144,7 @@ function sameClubMatch(left: ProgramPlayer | MatchUnit, right: ProgramPlayer | M
 function distributeClubAware<T extends { level?: number; sourceGroupId?: string | null; sourceGroupIds?: string[] }>(items: T[], sizes: number[]) {
   const groups = sizes.map(() => [] as T[]);
   const sums = sizes.map(() => 0);
-  [...items].sort((a, b) => (a.level ?? 999) - (b.level ?? 999)).forEach((item) => {
+  [...items].sort((a, b) => ((a.level ?? 0) || Number.MAX_SAFE_INTEGER) - ((b.level ?? 0) || Number.MAX_SAFE_INTEGER)).forEach((item) => {
     const itemGroups = sourceGroupsOf(item);
     const target = groups.map((group, index) => ({
       index,

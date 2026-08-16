@@ -1493,16 +1493,11 @@ export default function LeagueGPTVisionSheet() {
         ww - (landscape ? 0 : mobileScheduleReserve + 10),
       );
       const availableHeight = Math.max(1, wh);
-      const portraitDensity = localOrder.length <= 10
-        ? 1.5
-        : localOrder.length <= 16
-          ? 1.25
-          : 1;
       setAutoFitScale(
         landscape
           ? Math.min(ww / tw, (wh - sh) / th)
           : Math.min(
-              (availableWidth / sth) * portraitDensity,
+              availableWidth / sth,
               availableHeight / tw,
             ),
       );

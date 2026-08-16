@@ -33,6 +33,7 @@ export interface MyMatchItem {
   opponent_score: number | null;
   opponent_name: string | null;
   opponent_division: string | null;
+  participant_name: string;
   my_division: string | null;
 }
 

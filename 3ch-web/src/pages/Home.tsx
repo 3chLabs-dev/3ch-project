@@ -58,7 +58,10 @@ function matchesSummaryFilter(
     if (filter.endDate && dateOnly > filter.endDate) return false;
     if (filter.status.length === 0) return true;
 
-    const status: LeagueStatus = item.league_status === "completed"
+    const startAt = new Date(item.league_start_date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const status: LeagueStatus = item.league_status === "completed" || startAt < today
         ? "completed"
         : item.league_status === "draft"
             ? "scheduled"
@@ -714,7 +717,7 @@ function MyMatchCard({ item, navigate }: { item: MyMatchItem; navigate: (path: s
                         </Typography>
                         <Stack direction="row" alignItems="center" spacing={0.8} mt={0.4}>
                             <Typography fontWeight={800} fontSize={14}>
-                                {item.my_division ?? "나"}
+                                {item.participant_name || "나"}
                             </Typography>
                             <Typography fontWeight={700} fontSize={12} color="text.secondary">vs</Typography>
                             <Typography fontWeight={700} fontSize={14}>

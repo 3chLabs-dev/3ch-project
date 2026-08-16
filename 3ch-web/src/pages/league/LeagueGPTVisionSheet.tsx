@@ -957,6 +957,8 @@ type VisionPreviewCell = OpenAIVisionCell & {
   issue?: string;
 };
 
+const PORTRAIT_SCHEDULE_RAIL_WIDTH = 84;
+
 type VisionTargetRegion = "all" | "upper-right" | "lower-left";
 type OverlayRect = { left: number; top: number; width: number; height: number };
 
@@ -1471,7 +1473,9 @@ export default function LeagueGPTVisionSheet() {
       const wh = wrapperRef.current.clientHeight;
       // The group-tab strip lives in the same rotated container on mobile,
       // but it must never participate in the bracket scale calculation.
-      const measuredTable = tableOnlyRef.current ?? wrapperTableRef.current;
+      const measuredTable = !landscape && groupNames.length > 0
+        ? wrapperTableRef.current
+        : (tableOnlyRef.current ?? wrapperTableRef.current);
       const tw = measuredTable.scrollWidth;
       const th = measuredTable.scrollHeight;
       if (!tw || !th) return;
@@ -1483,7 +1487,7 @@ export default function LeagueGPTVisionSheet() {
       const sh = scheduleRef.current
         ? (landscape ? scheduleRef.current.offsetHeight : scheduleRef.current.offsetWidth)
         : 0;
-      const mobileScheduleReserve = Math.max(sh, 72);
+      const mobileScheduleReserve = Math.max(sh, PORTRAIT_SCHEDULE_RAIL_WIDTH);
       const availableWidth = Math.max(
         1,
         ww - (landscape ? 0 : mobileScheduleReserve + 10),
@@ -1514,7 +1518,7 @@ export default function LeagueGPTVisionSheet() {
     if (scheduleRef.current)     ro.observe(scheduleRef.current);
     window.addEventListener("resize", updateScale);
     return () => { ro.disconnect(); window.removeEventListener("resize", updateScale); };
-  }, [landscape, dataReady, localOrder.length]);
+  }, [landscape, dataReady, localOrder.length, groupNames.length]);
 
   // ── DnD 순서 변경 ─────────────────────────────────────────────────────────
   const [reorderParticipants] = useReorderLeagueParticipantsMutation();
@@ -2192,7 +2196,7 @@ export default function LeagueGPTVisionSheet() {
   // portrait: 90° 회전이므로 시각 너비=naturalTh, 시각 높이=naturalTw
   const visualW = naturalTw > 0 ? (landscape ? naturalTw : naturalTh) * appliedScale : 0;
   const visualH = naturalTh > 0 ? (landscape ? naturalTh : naturalTw) * appliedScale : 0;
-  const portraitScheduleWidth = !landscape ? (scheduleRef.current?.offsetWidth ?? 72) : 0;
+  const portraitScheduleWidth = !landscape ? (scheduleRef.current?.offsetWidth ?? PORTRAIT_SCHEDULE_RAIL_WIDTH) : 0;
   const portraitContentWidth = !landscape
     ? Math.max(0, (wrapperRef.current?.clientWidth ?? 0) - portraitScheduleWidth)
     : 0;
@@ -2311,65 +2315,6 @@ export default function LeagueGPTVisionSheet() {
 
       {/* ===== 대진표 영역 ===== */}
       <Box ref={wrapperRef} sx={{ flex: 1, overflow: "hidden", position: "relative", minHeight: 0, bgcolor: "#F0F2F5" }}>
-        {!landscape && groupNames.length > 0 && (
-          <Box
-            sx={{
-              position: "absolute",
-              zIndex: 8,
-              top: 4,
-              bottom: 8,
-              right: 76,
-              width: 42,
-              overflow: "hidden",
-              bgcolor: "#F0F2F5",
-            }}
-          >
-            <Stack
-              ref={groupTabsRef}
-              data-scroll-axis="vertical"
-              direction="column"
-              spacing={0.75}
-              sx={{
-                height: "100%",
-                alignItems: "center",
-                overflowX: "hidden",
-                overflowY: "auto",
-                scrollbarWidth: "none",
-                "&::-webkit-scrollbar": { display: "none" },
-              }}
-            >
-              {groupNames.map((gName) => (
-                <Button
-                  key={gName}
-                  data-selected={selectedGroup === gName}
-                  variant={selectedGroup === gName ? "contained" : "outlined"}
-                  onClick={() => setSelectedGroup(gName)}
-                  size="small"
-                  sx={{
-                    minWidth: 36,
-                    width: 36,
-                    minHeight: 58,
-                    flexShrink: 0,
-                    p: 0.5,
-                    borderRadius: 1.5,
-                    fontWeight: 800,
-                    fontSize: 13,
-                    lineHeight: 1,
-                    boxShadow: "none",
-                    writingMode: "vertical-rl",
-                    textOrientation: "sideways",
-                    ...(selectedGroup === gName
-                      ? { bgcolor: "#2563EB" }
-                      : { color: "#6B7280", borderColor: "#D1D5DB", bgcolor: "#fff" }),
-                  }}
-                >
-                  {gName}
-                </Button>
-              ))}
-            </Stack>
-          </Box>
-        )}
-
         {/* 스크롤 가능한 내부 컨테이너: spacer가 실제로 넘칠 때만 scrollbar 등장 (overflow:auto는 항상 켜두기) */}
         <Box sx={{ position: "absolute", inset: 0, overflow: "auto" }}>
           {/* spacer: CSS transform은 레이아웃 크기에 영향을 안 주므로
@@ -2398,6 +2343,34 @@ export default function LeagueGPTVisionSheet() {
                 left: landscape ? 0 : portraitTableOffsetX,
               }}
             >
+          {!landscape && groupNames.length > 0 && (
+            <Box sx={{ px: 0.5, pb: 0.5, bgcolor: "#F0F2F5" }}>
+              <Stack ref={groupTabsRef} direction="row" spacing={0.75} sx={{ overflowX: "auto", "&::-webkit-scrollbar": { display: "none" } }}>
+                {groupNames.map((gName) => (
+                  <Button
+                    key={gName}
+                    data-selected={selectedGroup === gName}
+                    variant={selectedGroup === gName ? "contained" : "outlined"}
+                    onClick={() => setSelectedGroup(gName)}
+                    size="small"
+                    sx={{
+                      minWidth: 60,
+                      flexShrink: 0,
+                      borderRadius: 1.5,
+                      fontWeight: 800,
+                      fontSize: 13,
+                      boxShadow: "none",
+                      ...(selectedGroup === gName
+                        ? { bgcolor: "#2563EB" }
+                        : { color: "#6B7280", borderColor: "#D1D5DB", bgcolor: "#fff" }),
+                    }}
+                  >
+                    {gName}
+                  </Button>
+                ))}
+              </Stack>
+            </Box>
+          )}
           {/* 대진표 테이블 (DnD 컨텍스트 내부) */}
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <TableContainer ref={tableOnlyRef} component={Paper} elevation={3} sx={{ borderRadius: "10px", overflow: "hidden", position: "relative" }}>
@@ -2537,7 +2510,7 @@ export default function LeagueGPTVisionSheet() {
           position: "absolute", zIndex: 5, cursor: "pointer",
           ...(landscape
             ? { bottom: 0, left: 0, right: 0 }
-            : { top: 0, bottom: 0, left: 0, width: 72, overflow: "hidden" }),
+            : { top: 0, bottom: 0, left: 0, width: PORTRAIT_SCHEDULE_RAIL_WIDTH, overflow: "visible" }),
         }}>
           <Box sx={landscape ? {} : {
             position: "absolute",

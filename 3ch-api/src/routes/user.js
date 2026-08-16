@@ -254,6 +254,13 @@ router.get("/user/me/home-summary", requireAuth, async (req, res) => {
           OR (
             lp.member_id IS NULL
             AND BTRIM(me.name) = BTRIM(lp.name)
+            AND NOT EXISTS (
+              SELECT 1
+              FROM league_participants linked_lp
+              WHERE linked_lp.league_id = lp.league_id
+                AND linked_lp.member_id = $1
+                AND linked_lp.status = 'active'
+            )
           )
         )
         AND lp.status = 'active'
@@ -429,6 +436,7 @@ router.get("/user/me/home-summary", requireAuth, async (req, res) => {
                   opponent_score: null,
                   opponent_name: opponent?.name ?? null,
                   opponent_division: opponent?.level && opponent.level !== 999 ? String(opponent.level) : null,
+                  participant_name: participant.participant_name,
                   my_division: participant.division,
                   program_round: index + 1,
                 });
@@ -455,6 +463,7 @@ router.get("/user/me/home-summary", requireAuth, async (req, res) => {
         l.id AS league_id, l.name AS league_name, l.league_code,
         l.start_date AS league_start_date, l.status AS league_status,
         m.id AS match_id, m.match_order, m.status, m.program_round,
+        lp.name AS participant_name,
         CASE WHEN m.participant_a_id = lp.id THEN m.score_a ELSE m.score_b END AS my_score,
         CASE WHEN m.participant_a_id = lp.id THEN m.score_b ELSE m.score_a END AS opponent_score,
         CASE WHEN m.participant_a_id = lp.id THEN pb.name ELSE pa.name END AS opponent_name,
@@ -477,6 +486,13 @@ router.get("/user/me/home-summary", requireAuth, async (req, res) => {
           OR (
             lp.member_id IS NULL
             AND BTRIM(me.name) = BTRIM(lp.name)
+            AND NOT EXISTS (
+              SELECT 1
+              FROM league_participants linked_lp
+              WHERE linked_lp.league_id = lp.league_id
+                AND linked_lp.member_id = $1
+                AND linked_lp.status = 'active'
+            )
           )
         )
         AND lp.status = 'active'

@@ -27,6 +27,8 @@ export interface Group {
   member_count: number;
   role: string;
   division?: string | null;
+  display_order?: number | null;
+  is_primary?: boolean;
 }
 
 export interface GetGroupsResponse {
@@ -436,6 +438,21 @@ export const groupApi = baseApi.injectEndpoints({
         return result.error ? { error: result.error } : { data: result.data as GetGroupsResponse };
       },
       providesTags: ["Group"],
+    }),
+
+    updateMyGroupPreferences: builder.mutation<
+      { message: string },
+      { orderedGroupIds: string[]; primaryGroupId: string }
+    >({
+      query: ({ orderedGroupIds, primaryGroupId }) => ({
+        url: "/group/preferences",
+        method: "PUT",
+        body: {
+          ordered_group_ids: orderedGroupIds,
+          primary_group_id: primaryGroupId,
+        },
+      }),
+      invalidatesTags: ["Group"],
     }),
 
     createGroup: builder.mutation<CreateGroupResponse, CreateGroupRequest>({
@@ -955,6 +972,7 @@ export const groupApi = baseApi.injectEndpoints({
 
 export const {
   useGetMyGroupsQuery,
+  useUpdateMyGroupPreferencesMutation,
   useCreateGroupMutation,
   useGetGroupDetailQuery,
   useLazyGetGroupDetailQuery,

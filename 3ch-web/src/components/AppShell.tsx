@@ -14,12 +14,13 @@ import { useDispatch, useSelector } from "react-redux";
 import type { RootState } from "../app/store";
 import { setToken, setUser } from "../features/auth/authSlice";
 import { setPreferredGroupId } from "../features/league/leagueCreationSlice";
-import { useGetMyGroupsQuery } from "../features/group/groupApi";
+import { useGetMyGroupsQuery, useUpdateMyGroupPreferencesMutation } from "../features/group/groupApi";
 import { useGetMyFeatureUsageQuery } from "../features/payment/usageApi";
 import { getLocalDevProfileByToken } from "../utils/localDevAuth";
 import logo from "../assets/512_우리리그 로고.svg";
 import SettingsIcon from "@mui/icons-material/Settings";
 import homeHeaderBg from "../assets/메인 배너_900x700_버튼X.png"
+import ClubSelectionDialog from "./ClubSelectionDialog";
 // import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
 
 const APP_BAR_H = 56;
@@ -39,6 +40,7 @@ export default function AppShell() {
     const bannerRef = useRef<HTMLDivElement>(null);
     const [showHomeBar, setShowHomeBar] = useState(false);
     const [usageOpen, setUsageOpen] = useState(false);
+    const [clubSelectionOpen, setClubSelectionOpen] = useState(false);
 
     useEffect(() => {
         const stored = localStorage.getItem("token");
@@ -55,6 +57,7 @@ export default function AppShell() {
         skip: !token,
         refetchOnMountOrArgChange: true,
     });
+    const [updateGroupPreferences, { isLoading: isSavingGroupPreferences }] = useUpdateMyGroupPreferencesMutation();
     useEffect(() => {
         if (usageOpen && token) void refetchUsage();
     }, [refetchUsage, token, usageOpen]);
@@ -75,7 +78,12 @@ export default function AppShell() {
     }, [groupData, token]);
     const effectiveGroupId = (preferredGroupId && groups.some((g) => g.id === preferredGroupId))
         ? preferredGroupId
-        : groups[0]?.id ?? "";
+        : groups.find((g) => g.is_primary)?.id ?? groups[0]?.id ?? "";
+
+    useEffect(() => {
+        const primaryGroupId = groups.find((group) => group.is_primary)?.id;
+        if (primaryGroupId && !preferredGroupId) dispatch(setPreferredGroupId(primaryGroupId));
+    }, [dispatch, groups, preferredGroupId]);
 
     // 홈에서만 스크롤 감지 — 배너가 완전히 사라진 시점에 AppBar 등장
     // bannerRef로 실제 높이를 측정해 임계값 사용 → 화면 크기 무관하게 정확히 동작
@@ -154,6 +162,10 @@ export default function AppShell() {
                             <Select
                                 value={effectiveGroupId}
                                 onChange={(e: SelectChangeEvent<string>) => {
+                                    if (e.target.value === "__club_selection__") {
+                                        setClubSelectionOpen(true);
+                                        return;
+                                    }
                                     dispatch(setPreferredGroupId(e.target.value || null));
                                 }}
                                 size="small"
@@ -171,6 +183,10 @@ export default function AppShell() {
                                 {groups.map((g) => (
                                     <MenuItem key={g.id} value={g.id}>{g.name}</MenuItem>
                                 ))}
+                                <Divider />
+                                <MenuItem value="__club_selection__" sx={{ fontWeight: 800, color: "primary.main" }}>
+                                    클럽 선택
+                                </MenuItem>
                             </Select>
                         )}
                         {isMyPage && token && (
@@ -217,6 +233,18 @@ export default function AppShell() {
                         )}  
                     </Toolbar>
                 </AppBar>
+
+                <ClubSelectionDialog
+                    open={clubSelectionOpen}
+                    groups={groups}
+                    saving={isSavingGroupPreferences}
+                    onClose={() => setClubSelectionOpen(false)}
+                    onSave={async (orderedGroupIds, primaryGroupId) => {
+                        await updateGroupPreferences({ orderedGroupIds, primaryGroupId }).unwrap();
+                        dispatch(setPreferredGroupId(primaryGroupId));
+                        setClubSelectionOpen(false);
+                    }}
+                />
 
                 {/* 스크롤 컨테이너
                      비홈: AppBar가 absolute이므로 paddingTop으로 콘텐츠 시작 위치 보정

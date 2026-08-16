@@ -528,13 +528,13 @@ router.get('/group', requireAuth, async (req, res) => {
 
     const result = await pool.query(
       `SELECT g.id, g.name, g.description, g.sport, g.region_city, g.region_district, g.created_at,
-              g.club_code, gm.role, gm.division,
+              g.club_code, gm.role, gm.division, gm.display_order, gm.is_primary,
               u.name AS creator_name,
               (SELECT COUNT(*) FROM group_members WHERE group_id = g.id)::int AS member_count
        FROM groups g
        INNER JOIN group_members gm ON gm.group_id = g.id AND gm.user_id = $1
        LEFT JOIN users u ON g.created_by_id = u.id
-       ORDER BY g.created_at DESC`,
+       ORDER BY gm.is_primary DESC, gm.display_order ASC NULLS LAST, gm.joined_at ASC`,
       [userId]
     );
 
@@ -961,6 +961,63 @@ router.get('/group/:id', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Error fetching group:', error);
     res.status(500).json({ message: '내부 서버 오류' });
+  }
+});
+
+router.put('/group/preferences', requireAuth, async (req, res) => {
+  const preferencesSchema = z.object({
+    ordered_group_ids: z.array(z.string().min(1)).min(1),
+    primary_group_id: z.string().min(1),
+  });
+
+  const client = await pool.connect();
+  try {
+    const userId = Number(req.user.sub);
+    const payload = preferencesSchema.parse(req.body);
+    const orderedIds = payload.ordered_group_ids;
+    const uniqueIds = new Set(orderedIds);
+
+    if (uniqueIds.size !== orderedIds.length || !uniqueIds.has(payload.primary_group_id)) {
+      return res.status(400).json({ message: '클럽 선택 정보가 올바르지 않습니다.' });
+    }
+
+    await client.query('BEGIN');
+    const memberships = await client.query(
+      `SELECT group_id FROM group_members WHERE user_id = $1 FOR UPDATE`,
+      [userId],
+    );
+    const membershipIds = new Set(memberships.rows.map((row) => String(row.group_id)));
+    if (
+      membershipIds.size !== orderedIds.length
+      || orderedIds.some((groupId) => !membershipIds.has(groupId))
+    ) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: '가입한 클럽 전체를 순서대로 지정해 주세요.' });
+    }
+
+    await client.query(
+      `UPDATE group_members SET is_primary = false WHERE user_id = $1`,
+      [userId],
+    );
+    for (const [index, groupId] of orderedIds.entries()) {
+      await client.query(
+        `UPDATE group_members
+            SET display_order = $1, is_primary = ($2 = group_id)
+          WHERE user_id = $3 AND group_id = $4`,
+        [index, payload.primary_group_id, userId, groupId],
+      );
+    }
+    await client.query('COMMIT');
+    return res.json({ message: '클럽 선택 설정이 저장되었습니다.' });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ message: '클럽 선택 정보가 올바르지 않습니다.' });
+    }
+    console.error('Error updating group preferences:', error);
+    return res.status(500).json({ message: '내부 서버 오류' });
+  } finally {
+    client.release();
   }
 });
 

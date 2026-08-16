@@ -82,6 +82,9 @@ import PrivacyPolicyPage from "../pages/mypage/PrivacyPolicyPage.tsx";
 import DemoLandingPage from "../pages/demo/DemoLandingPage";
 import AdminSupportChatPage from "../pages/admin/AdminSupportChatPage";
 import LeagueAlgorithmDemo from "../pages/demo/LeagueAlgorithmDemo";
+import DemoLeaguePage from "../pages/demo/DemoLeaguePage";
+import DemoClubPage from "../pages/demo/DemoClubPage";
+import DemoDrawPage from "../pages/demo/DemoDrawPage";
 // import League from "../pages/League";
 // import Match from "../pages/Match";
 // import My from "../pages/My";
@@ -154,7 +157,10 @@ export const router = createBrowserRouter([
       { path: "/payment/billing/checkout", element: <BillingCheckout /> },
       { path: "/payment/billing/success", element: <BillingSuccess /> },
       { path: "/payment/billing/fail", element: <BillingFail /> },
-      { path: "/demo/league-algorithm", element: <LeagueAlgorithmDemo />,}
+      { path: "/demo/league-algorithm", element: <LeagueAlgorithmDemo /> },
+      { path: "/demo/league", element: <DemoLeaguePage /> },
+      { path: "/demo/club", element: <DemoClubPage /> },
+      { path: "/demo/draw", element: <DemoDrawPage /> },
 
 
     //   { path: "/my", element: <My /> },

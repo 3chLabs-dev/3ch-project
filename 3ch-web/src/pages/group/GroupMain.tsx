@@ -123,15 +123,14 @@ export default function GroupMain() {
                         }}>
                             <Stack alignItems="center" spacing={1.2}>
                                 <Typography fontWeight={800}>로그인을 해주세요.</Typography>
-                                <Button
-                                    component={RouterLink}
-                                    to="/login"
-                                    variant="contained"
-                                    size="medium"
-                                    sx={{ px: 3, borderRadius: 1 }}
-                                >
-                                    로그인
-                                </Button>
+                                <Stack direction="row" spacing={1}>
+                                    <Button component={RouterLink} to="/demo/club" variant="outlined" size="medium" sx={{ px: 2, borderRadius: 1, fontWeight: 800 }}>
+                                        클럽 둘러보기
+                                    </Button>
+                                    <Button component={RouterLink} to="/login" variant="contained" size="medium" sx={{ px: 3, borderRadius: 1 }}>
+                                        로그인
+                                    </Button>
+                                </Stack>
                             </Stack>
                         </CardContent>
                     </Card>

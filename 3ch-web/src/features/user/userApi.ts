@@ -13,6 +13,8 @@ export interface MyGroupItem {
   format: string | null;
   division: string | null;
   participant_name: string;
+  group_assignments: string[];
+  team_assignments: string[];
 }
 
 export interface MyMatchItem {

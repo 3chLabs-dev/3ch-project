@@ -277,18 +277,18 @@ export default function Home() {
         <Box sx={{ mx: -2}}>
             <Stack spacing={2.5}>
 
-            {/* 나의 조편성 */}
+            {/* 나의 조 편성·팀 편성 */}
             {isLoggedIn && preferences?.show_group && (
                 <Box sx={{ mt: 3, px: 2, py: 2, backgroundColor: "#F5F3FF" }}>
                     <SectionHeader
-                        title="나의 조편성"
+                        title="나의 조 편성·팀 편성"
                         icon={<GridViewOutlinedIcon sx={{ fontSize: 18, color: "#6366F1", mr: 0.5 }} />}
                     />
                     <Box sx={{ mt: 2, mb: 1 }}>
                         {!homeSummary || homeSummary.my_groups.length === 0 ? (
                             <SoftCard>
                                 <Typography textAlign="center" color="text.secondary" fontWeight={700}>
-                                    배정된 조편성이 없습니다.
+                                    배정된 조·팀 편성이 없습니다.
                                 </Typography>
                             </SoftCard>
                         ) : (
@@ -530,20 +530,16 @@ function getLeagueProgressPath(id: string, format?: string | null) {
 }
 
 function MyGroupCard({ item, navigate }: { item: MyGroupItem; navigate: (path: string) => void }) {
+    const assignments = [
+        ...(item.group_assignments ?? []).map((label) => ({ label, kind: "group" as const })),
+        ...(item.team_assignments ?? []).map((label) => ({ label, kind: "team" as const })),
+    ];
+
     return (
         <Card
             elevation={2}
             onClick={() => {
-                const base = item.league_code ?? item.league_id;
-                navigate(
-                    item.format === "4인 리그 (OMR)"
-                        ? `/league/${base}/omr`
-                        : item.format === "OCR 텍스트 인식"
-                            ? `/league/${base}/ocr`
-                        : item.format?.includes("토너먼트")
-                            ? `/league/${base}/tournament`
-                            : `/league/${base}/bracket`,
-                );
+                navigate(`/league/${item.league_code ?? item.league_id}`);
             }}
             sx={{ borderRadius: 0.6, boxShadow: "0 4px 12px rgba(0,0,0,0.08)", cursor: "pointer" }}
         >
@@ -552,15 +548,21 @@ function MyGroupCard({ item, navigate }: { item: MyGroupItem; navigate: (path: s
                     <Typography fontWeight={700} fontSize={14} noWrap flex={1} mr={1}>
                         {item.league_name}
                     </Typography>
-                    {item.division ? (
-                        <Chip
-                            label={item.division}
-                            size="small"
-                            sx={{ bgcolor: "#EEF2FF", color: "#6366F1", fontWeight: 700, fontSize: 12 }}
-                        />
-                    ) : (
-                        <Typography fontSize={12} color="text.secondary" fontWeight={600}>미배정</Typography>
-                    )}
+                    <Stack direction="row" spacing={0.6} flexShrink={0}>
+                        {assignments.map(({ label, kind }) => (
+                            <Chip
+                                key={`${kind}-${label}`}
+                                label={label}
+                                size="small"
+                                sx={{
+                                    bgcolor: kind === "group" ? "#EEF2FF" : "#FDF2F8",
+                                    color: kind === "group" ? "#6366F1" : "#DB2777",
+                                    fontWeight: 700,
+                                    fontSize: 12,
+                                }}
+                            />
+                        ))}
+                    </Stack>
                 </Stack>
             </CardContent>
         </Card>

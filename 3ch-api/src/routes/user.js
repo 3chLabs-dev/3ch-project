@@ -172,6 +172,16 @@ router.put("/user/me/preferences", requireAuth, async (req, res) => {
  *                         nullable: true
  *                       participant_name:
  *                         type: string
+ *                       group_assignments:
+ *                         type: array
+ *                         description: 공개된 프로그램에서 배정된 조 이름
+ *                         items:
+ *                           type: string
+ *                       team_assignments:
+ *                         type: array
+ *                         description: 공개된 프로그램에서 배정된 팀 이름
+ *                         items:
+ *                           type: string
  *                 my_matches:
  *                   type: array
  *                   description: 활성 리그에서 대기/진행 중인 나의 경기 목록
@@ -229,18 +239,159 @@ router.get("/user/me/home-summary", requireAuth, async (req, res) => {
   const groupId = req.query.group_id ?? null;
 
   try {
-    // 1. 나의 조편성: 활성 리그에서 내 배정 부수/조
+    // 1. 공개된 프로그램 편성에서 나의 조/팀 찾기
     const groupsQuery = `
       SELECT l.id AS league_id, l.name AS league_name, l.league_code,
-             l.format, lp.division, lp.name AS participant_name
+             l.format, lp.division, lp.name AS participant_name,
+             lp.source_group_id, pr.program_data
       FROM league_participants lp
       JOIN leagues l ON l.id = lp.league_id
+      JOIN league_programs pr ON pr.league_id = l.id
       WHERE lp.member_id = $1
         AND l.status = 'active'
         ${groupId ? "AND l.group_id = $2" : ""}
       ORDER BY l.start_date DESC
     `;
     const groupsResult = await pool.query(groupsQuery, groupId ? [userId, groupId] : [userId]);
+
+    const leagueIds = groupsResult.rows.map((row) => row.league_id);
+    const participantRows = leagueIds.length > 0
+      ? await pool.query(
+        `SELECT league_id, name, division, source_group_id
+         FROM league_participants
+         WHERE league_id = ANY($1::uuid[]) AND status = 'active'`,
+        [leagueIds],
+      )
+      : { rows: [] };
+    const participantsByLeague = participantRows.rows.reduce((byLeague, row) => {
+      const level = Number.parseInt(row.division ?? '', 10);
+      const player = {
+        name: row.name,
+        level: Number.isNaN(level) ? 999 : level,
+        sourceGroupId: row.source_group_id,
+      };
+      byLeague.set(row.league_id, [...(byLeague.get(row.league_id) ?? []), player]);
+      return byLeague;
+    }, new Map());
+
+    const rotateBySeed = (items, seed) => {
+      if (items.length < 2) return items;
+      const offset = seed % items.length || 1;
+      const rotated = [...items.slice(offset), ...items.slice(0, offset)];
+      return Math.floor(seed / items.length) % 2 === 1 ? rotated.reverse() : rotated;
+    };
+    const reshuffleWithinLevel = (items, seed) => {
+      if (seed == null) return items;
+      const buckets = new Map();
+      items.forEach((item) => {
+        const level = item.level ?? 999;
+        buckets.set(level, [...(buckets.get(level) ?? []), item]);
+      });
+      return [...buckets.keys()].sort((a, b) => a - b)
+        .flatMap((level) => rotateBySeed(buckets.get(level) ?? [], seed + level * 997));
+    };
+    const distributeSnake = (players, groupSizes) => {
+      const groups = groupSizes.map(() => []);
+      if (groups.length === 0) return groups;
+      for (let offset = 0, reverse = false; offset < players.length; offset += groups.length, reverse = !reverse) {
+        const tier = players.slice(offset, offset + groups.length);
+        (reverse ? tier.reverse() : tier).forEach((player, index) => {
+          if (groups[index]?.length < groupSizes[index]) groups[index].push(player);
+        });
+      }
+      return groups;
+    };
+    const splitIntoTwoGroups = (count) => count <= 0 ? [] : count <= 2
+      ? [count]
+      : [Math.ceil(count / 2), Math.floor(count / 2)];
+
+    const containsParticipant = (entry, participant) => {
+      if (!entry || typeof entry !== 'object') return false;
+      const sameName = String(entry.name ?? '').trim() === String(participant.participant_name ?? '').trim();
+      const sourceMatches = !entry.sourceGroupId || !participant.source_group_id ||
+        entry.sourceGroupId === participant.source_group_id;
+      if (sameName && sourceMatches) return true;
+      return Array.isArray(entry.roster) && entry.roster.some((member) => containsParticipant(member, participant));
+    };
+
+    const findAssignmentLabels = (assignments, participant, suffix, alphabetic = false) => {
+      if (!Array.isArray(assignments)) return [];
+      return assignments.flatMap((entries, index) =>
+        Array.isArray(entries) && entries.some((entry) => containsParticipant(entry, participant))
+          ? [`${alphabetic ? String.fromCharCode(65 + index) : index + 1}${suffix}`]
+          : [],
+      );
+    };
+
+    const myGroups = groupsResult.rows.flatMap((participant) => {
+      const blocks = Array.isArray(participant.program_data?.blocks)
+        ? participant.program_data.blocks
+        : [];
+      const allPlayers = [...(participantsByLeague.get(participant.league_id) ?? [])]
+        .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
+      const group_assignments = [];
+      const team_assignments = [];
+
+      const resolveBlock = (index) => {
+        const block = blocks[index];
+        if (!block || index === 0 || block.type !== 'TEAM') return block;
+        const inherits = participant.program_data?.rounds?.[index]?.inheritPreviousTeamFormation ??
+          block.inheritPreviousTeamFormation;
+        if (!inherits) return block;
+        const previous = resolveBlock(index - 1);
+        return previous?.type === 'TEAM' ? {
+          ...block,
+          groupSizes: previous.groupSizes,
+          teamShuffleSeed: previous.teamShuffleSeed,
+          teamAssignments: previous.teamAssignments,
+        } : block;
+      };
+
+      blocks.forEach((rawBlock, index) => {
+        const block = resolveBlock(index) ?? rawBlock;
+        const defaultSeed = (index + 1) * 1000;
+        const teamSizes = block?.groupSizes ?? participant.program_data?.groupSizes ?? [allPlayers.length];
+        const teamPlayers = reshuffleWithinLevel(allPlayers, block?.teamShuffleSeed ?? defaultSeed + 101);
+        const teams = Array.isArray(block?.teamAssignments) && block.teamAssignments.length > 0
+          ? block.teamAssignments
+          : distributeSnake(teamPlayers, teamSizes);
+
+        if (block?.groupFormationPublished) {
+          let groups = block.groupAssignments;
+          if (!Array.isArray(groups) || groups.length === 0) {
+            if (block.type === 'TEAM') {
+              const teamUnits = teams.map((roster, teamIndex) => ({
+                name: `팀 ${roster[0]?.name ?? teamIndex + 1}`,
+                level: roster[0]?.level ?? teamIndex + 1,
+                roster,
+              }));
+              const sizes = block.teamGroupSizes ?? splitIntoTwoGroups(teamUnits.length);
+              groups = distributeSnake(
+                reshuffleWithinLevel(teamUnits, block.groupShuffleSeed ?? defaultSeed + 503),
+                sizes,
+              );
+            } else {
+              const sizes = block.groupSizes ?? participant.program_data?.groupSizes ?? [allPlayers.length];
+              groups = distributeSnake(
+                reshuffleWithinLevel(allPlayers, block.groupShuffleSeed ?? defaultSeed + 503),
+                sizes,
+              );
+            }
+          }
+          group_assignments.push(...findAssignmentLabels(groups, participant, '조'));
+        }
+        if (block?.type === 'TEAM' && block?.teamFormationPublished) {
+          team_assignments.push(...findAssignmentLabels(teams, participant, '팀', true));
+        }
+      });
+
+      const uniqueGroups = [...new Set(group_assignments)];
+      const uniqueTeams = [...new Set(team_assignments)];
+      if (uniqueGroups.length === 0 && uniqueTeams.length === 0) return [];
+
+      const { program_data, source_group_id, ...league } = participant;
+      return [{ ...league, group_assignments: uniqueGroups, team_assignments: uniqueTeams }];
+    });
 
     // 2. 나의 경기: 활성 리그에서 내 대기/진행 중 경기
     const matchesQuery = `
@@ -288,7 +439,7 @@ router.get("/user/me/home-summary", requireAuth, async (req, res) => {
 
     return res.json({
       ok: true,
-      my_groups: groupsResult.rows,
+      my_groups: myGroups,
       my_matches: matchesResult.rows,
       my_wins: winsResult.rows,
     });

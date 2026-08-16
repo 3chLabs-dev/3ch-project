@@ -137,7 +137,7 @@ export default function Home() {
     );
     const filteredMatches = useMemo(
         () => (homeSummary?.my_matches ?? []).filter((item) =>
-            (item.program_block_type == null || item.program_block_type === "SINGLES")
+            item.program_block_type === "SINGLES"
             && matchesSummaryFilter(item, matchFilter)
         ),
         [homeSummary?.my_matches, matchFilter],

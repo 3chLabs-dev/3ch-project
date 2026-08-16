@@ -507,7 +507,7 @@ router.get("/user/me/home-summary", requireAuth, async (req, res) => {
       JOIN league_matches m ON m.league_id = l.id
         AND (
           (
-            COALESCE(m.program_block_type, 'SINGLES') = 'SINGLES'
+            m.program_block_type = 'SINGLES'
             AND (m.participant_a_id = lp.id OR m.participant_b_id = lp.id)
           )
           OR (
@@ -537,7 +537,7 @@ router.get("/user/me/home-summary", requireAuth, async (req, res) => {
           )
         )
         AND lp.status = 'active'
-        AND COALESCE(m.program_block_type, 'SINGLES') = 'SINGLES'
+        AND m.program_block_type = 'SINGLES'
         ${groupId ? "AND l.group_id = $2" : ""}
       ORDER BY l.start_date DESC, m.match_order ASC
     `;

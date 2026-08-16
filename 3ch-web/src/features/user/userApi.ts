@@ -27,6 +27,7 @@ export interface MyMatchItem {
   league_status: string;
   match_id: string;
   match_order: number;
+  program_round: number | null;
   status: string;
   my_score: number | null;
   opponent_score: number | null;

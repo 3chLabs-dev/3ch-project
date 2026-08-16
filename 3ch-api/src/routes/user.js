@@ -337,6 +337,22 @@ router.get("/user/me/home-summary", requireAuth, async (req, res) => {
       );
     };
 
+    const generateRoundRobin = (count) => {
+      const games = [];
+      const size = count % 2 === 0 ? count : count + 1;
+      const positions = Array.from({ length: size }, (_, index) => index);
+      for (let round = 0; round < size - 1; round += 1) {
+        for (let index = 0; index < size / 2; index += 1) {
+          const left = positions[index];
+          const right = positions[size - 1 - index];
+          if (left < count && right < count) games.push([left, right]);
+        }
+        positions.splice(1, 0, positions.pop());
+      }
+      return games;
+    };
+
+    const fallbackMatches = [];
     const myGroups = groupsResult.rows.flatMap((participant) => {
       const blocks = Array.isArray(participant.program_data?.blocks)
         ? participant.program_data.blocks
@@ -393,6 +409,38 @@ router.get("/user/me/home-summary", requireAuth, async (req, res) => {
             }
           }
           group_assignments.push(...findAssignmentLabels(groups, participant, '조'));
+
+          // 프로그램 경기 동기화 전에도 공개된 단식 조 편성에서 내 대진을 복원한다.
+          if (block.type === 'SINGLES') {
+            let matchOrder = 0;
+            groups.forEach((entries, groupIndex) => {
+              generateRoundRobin(entries.length).forEach(([leftIndex, rightIndex], gameIndex) => {
+                matchOrder += 1;
+                const left = entries[leftIndex];
+                const right = entries[rightIndex];
+                const mineIsLeft = containsParticipant(left, participant);
+                const mineIsRight = containsParticipant(right, participant);
+                if (!mineIsLeft && !mineIsRight) return;
+                const opponent = mineIsLeft ? right : left;
+                fallbackMatches.push({
+                  league_id: participant.league_id,
+                  league_name: participant.league_name,
+                  league_code: participant.league_code,
+                  league_start_date: participant.league_start_date,
+                  league_status: participant.league_status,
+                  match_id: `fallback-${participant.league_id}-r${index + 1}-g${groupIndex + 1}-m${gameIndex + 1}`,
+                  match_order: matchOrder,
+                  status: 'pending',
+                  my_score: null,
+                  opponent_score: null,
+                  opponent_name: opponent?.name ?? null,
+                  opponent_division: opponent?.level && opponent.level !== 999 ? String(opponent.level) : null,
+                  my_division: participant.division,
+                  program_round: index + 1,
+                });
+              });
+            });
+          }
         }
         if (block?.type === 'TEAM' && block?.teamFormationPublished) {
           team_assignments.push(...findAssignmentLabels(teams, participant, '팀', true));
@@ -412,7 +460,7 @@ router.get("/user/me/home-summary", requireAuth, async (req, res) => {
       SELECT
         l.id AS league_id, l.name AS league_name, l.league_code,
         l.start_date AS league_start_date, l.status AS league_status,
-        m.id AS match_id, m.match_order, m.status,
+        m.id AS match_id, m.match_order, m.status, m.program_round,
         CASE WHEN m.participant_a_id = lp.id THEN m.score_a ELSE m.score_b END AS my_score,
         CASE WHEN m.participant_a_id = lp.id THEN m.score_b ELSE m.score_a END AS opponent_score,
         CASE WHEN m.participant_a_id = lp.id THEN pb.name ELSE pa.name END AS opponent_name,
@@ -448,6 +496,18 @@ router.get("/user/me/home-summary", requireAuth, async (req, res) => {
       ORDER BY l.start_date DESC, m.match_order ASC
     `;
     const matchesResult = await pool.query(matchesQuery, groupId ? [userId, groupId] : [userId]);
+    const persistedRoundKeys = new Set(matchesResult.rows.map((match) =>
+      `${match.league_id}:${match.program_round ?? 0}`,
+    ));
+    const myMatches = [
+      ...matchesResult.rows,
+      ...fallbackMatches.filter((match) =>
+        !persistedRoundKeys.has(`${match.league_id}:${match.program_round ?? 0}`),
+      ),
+    ].sort((left, right) => {
+      const dateCompare = String(right.league_start_date ?? '').localeCompare(String(left.league_start_date ?? ''));
+      return dateCompare || Number(left.match_order) - Number(right.match_order);
+    });
 
     // 3. 나의 당첨내역: 참가자 이름으로 draw_winners 매칭
     const winsQuery = `
@@ -471,7 +531,7 @@ router.get("/user/me/home-summary", requireAuth, async (req, res) => {
     return res.json({
       ok: true,
       my_groups: myGroups,
-      my_matches: matchesResult.rows,
+      my_matches: myMatches,
       my_wins: winsResult.rows,
     });
   } catch (e) {

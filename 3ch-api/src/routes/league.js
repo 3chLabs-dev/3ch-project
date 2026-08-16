@@ -1259,18 +1259,40 @@ router.post('/league', requireAuth, async (req, res) => {
     const leagueCode = await assignLeagueCode(client, { groupId: group_id, startDate: start_date, leagueId });
 
     const participantClaimCodes = [];
+    const createdParticipants = [];
     const allowedSourceGroupIds = new Set([group_id, ...invited_group_ids]);
     if (participants.some((participant) => participant.source_group_id && !allowedSourceGroupIds.has(participant.source_group_id))) {
       throw new Error('참여 클럽에 포함되지 않은 참가자 소속입니다.');
     }
     for (const p of participants) {
       const participantId = randomUUID();
+      const sourceGroupId = p.source_group_id ?? group_id;
+      let resolvedMemberId = p.member_id ?? null;
+      if (!resolvedMemberId) {
+        const memberMatch = await client.query(
+          `SELECT u.id
+           FROM group_members gm
+           JOIN users u ON u.id = gm.user_id
+           WHERE gm.group_id = $1 AND BTRIM(u.name) = BTRIM($2)
+           LIMIT 2`,
+          [sourceGroupId, p.name],
+        );
+        if (memberMatch.rowCount === 1) resolvedMemberId = memberMatch.rows[0].id;
+      }
       await client.query(
         `INSERT INTO league_participants (id, league_id, division, name, member_id, source_group_id, paid, arrived, "after")
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [participantId, leagueId, p.division ?? '', p.name, p.member_id ?? null, p.source_group_id ?? group_id, p.paid ?? false, p.arrived ?? false, p.after ?? false],
+        [participantId, leagueId, p.division ?? '', p.name, resolvedMemberId, sourceGroupId, p.paid ?? false, p.arrived ?? false, p.after ?? false],
       );
-      if (!p.member_id) {
+      createdParticipants.push({
+        id: participantId,
+        league_id: leagueId,
+        division: p.division ?? '',
+        name: p.name,
+        member_id: resolvedMemberId,
+        source_group_id: sourceGroupId,
+      });
+      if (!resolvedMemberId) {
         const code = makeClaimCode();
         await client.query(
           `INSERT INTO league_participant_claims (participant_id, code_hash) VALUES ($1, $2)`,
@@ -1302,6 +1324,7 @@ router.post('/league', requireAuth, async (req, res) => {
     return res.status(201).json({
       message: '리그가 성공적으로 생성되었습니다.',
       league: { ...result.rows[0], league_code: leagueCode },
+      participants: createdParticipants,
       participant_claim_codes: participantClaimCodes,
     });
   } catch (error) {

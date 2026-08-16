@@ -3,11 +3,13 @@ import type { PayloadAction } from "@reduxjs/toolkit";
 import axios from "axios";
 import type { RootState } from "../../app/store";
 import type { Participant, LeagueTypeValue, LeagueFormatValue, LeagueRuleValue } from "./leagueCreationSlice";
+import type { LeagueMatch, LeagueParticipantItem } from "./leagueApi";
 import type { ProgramOption, RoundConfig } from "./types/tournament.types";
 import { isLocalDevToken } from "../../utils/localDevAuth";
 import { createLocalDevLeague, saveLocalDevProgram } from "../../utils/localDevLeagueStore";
 import { generateProgramBlocks } from "./algorithms/generateProgramBlocks";
 import { generateGroupOptions } from "./algorithms/generateGroupOptions";
+import { generateProgramRoundMatches } from "../../utils/programMatchGenerator";
 
 export interface RenewalLeagueBasicInfo {
   title: string;
@@ -226,7 +228,37 @@ export const createRenewalLeague = createAsyncThunk.withTypes<{ state: RootState
           "Idempotency-Key": idempotencyKey,
         },
       });
-      return { leagueId: response.data.league.id as string };
+      const leagueId = response.data.league.id as string;
+      const createdParticipants = (response.data.participants ?? []) as LeagueParticipantItem[];
+      const generatedMatches: LeagueMatch[] = [];
+      for (let round = 1; round <= (programData.blocks?.length ?? 0); round += 1) {
+        generatedMatches.push(...generateProgramRoundMatches(
+          leagueId,
+          programData,
+          createdParticipants,
+          round,
+          generatedMatches,
+        ));
+      }
+      if (generatedMatches.length > 0) {
+        try {
+          await axios.post(
+            `${import.meta.env.VITE_API_BASE_URL}/league/${leagueId}/program/matches/sync`,
+            {
+              matches: generatedMatches.map((match) => ({
+                ...match,
+                program_round: match.program_round,
+                program_block_type: match.program_block_type,
+              })),
+            },
+            { headers: { Authorization: `Bearer ${token}` } },
+          );
+        } catch (syncError) {
+          // 리그 생성은 완료된 상태다. 프로그램 화면의 자동 복구가 다시 동기화한다.
+          console.error("프로그램 경기 초기 동기화 실패", syncError);
+        }
+      }
+      return { leagueId };
     } catch (error) {
       if (
         axios.isAxiosError(error) &&

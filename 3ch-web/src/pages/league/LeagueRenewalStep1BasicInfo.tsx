@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
   Button,
@@ -128,10 +128,19 @@ export default function LeagueRenewalStep1BasicInfo() {
   const [courtCount, setCourtCount] = useState<number | "">(existing?.courtCount ?? "");
   const [joinPermission, setJoinPermission] = useState<"public" | "club_only">(existing?.joinPermission ?? "club_only");
   const [premiumEnabled, setPremiumEnabled] = useState(existing?.premiumEnabled ?? false);
+  const premiumDefaultApplied = useRef(false);
   const authUserId = useAppSelector((state) => state.auth.user?.id);
   const { data: usageData } = useGetMyFeatureUsageQuery(authUserId, { skip: !authUserId, refetchOnMountOrArgChange: true });
   const premiumBalance = usageData?.usage.premium_promotion;
   const canUsePremium = Boolean(premiumBalance?.unlimited || Number(premiumBalance?.remaining ?? 0) > 0);
+  useEffect(() => {
+    if (premiumDefaultApplied.current || !usageData) return;
+    premiumDefaultApplied.current = true;
+    if (!existing && canUsePremium) {
+      setPremiumEnabled(true);
+      setJoinPermission("public");
+    }
+  }, [canUsePremium, existing, usageData]);
   const [participantCountDialogOpen, setParticipantCountDialogOpen] = useState(false);
   const [startHour, startMinute] = startTime ? startTime.split(":") : ["", ""];
   const [endHour, endMinute] = endTime ? endTime.split(":") : ["", ""];
@@ -217,8 +226,8 @@ export default function LeagueRenewalStep1BasicInfo() {
               </Typography>
             </Box>
             <Stack direction="row" spacing={1} sx={{ position: "relative" }}>
-              <Button fullWidth variant="contained" onClick={() => setPremiumEnabled(false)} sx={{ fontWeight: 900, border: !premiumEnabled ? "2px solid #fff" : "1px solid #D1D5DB", bgcolor: !premiumEnabled ? "#E5E7EB" : "#F3F4F6", color: "#4B5563", boxShadow: !premiumEnabled ? "0 4px 12px rgba(17,24,39,0.2)" : "none", "&:hover": { bgcolor: "#DDE0E5" } }}>사용 안 함</Button>
-              <Button fullWidth variant="contained" startIcon={<Typography component="span" sx={{ fontSize: 16 }}>👑</Typography>} onClick={() => { setPremiumEnabled(true); setJoinPermission("public"); }} sx={{ fontWeight: 950, border: premiumEnabled ? "2px solid #FFF7C2" : "1px solid #FFD24A", color: "#4A2A00", background: premiumEnabled ? "linear-gradient(135deg, #FFE97A 0%, #FFC928 100%)" : "linear-gradient(135deg, #FFF3AE 0%, #FFD75C 100%)", boxShadow: premiumEnabled ? "0 5px 16px rgba(255,184,0,0.48)" : "0 3px 10px rgba(255,184,0,0.28)", "&:hover": { background: "linear-gradient(135deg, #FFE36A 0%, #FFBC0A 100%)" } }}>프리미엄으로 홍보</Button>
+              <Button fullWidth variant="contained" onClick={() => setPremiumEnabled(false)} sx={{ fontWeight: 950, border: !premiumEnabled ? "3px solid #fff" : "1px solid #D1D5DB", bgcolor: !premiumEnabled ? "#E5E7EB" : "#F3F4F6", color: "#374151", opacity: !premiumEnabled ? 1 : 0.62, transform: !premiumEnabled ? "translateY(-2px)" : "none", boxShadow: !premiumEnabled ? "0 6px 16px rgba(17,24,39,0.3), 0 0 0 2px rgba(255,255,255,0.35)" : "none", "&:hover": { bgcolor: "#DDE0E5", opacity: 1 } }}>{!premiumEnabled ? "✓ 사용 안 함" : "사용 안 함"}</Button>
+              <Button fullWidth variant="contained" startIcon={<Typography component="span" sx={{ fontSize: 16 }}>👑</Typography>} onClick={() => { setPremiumEnabled(true); setJoinPermission("public"); }} sx={{ fontWeight: 950, border: premiumEnabled ? "3px solid #fff" : "1px solid #FFD24A", color: "#4A2A00", background: premiumEnabled ? "linear-gradient(135deg, #FFF09A 0%, #FFC107 100%)" : "linear-gradient(135deg, #FFF3AE 0%, #FFD75C 100%)", opacity: premiumEnabled ? 1 : 0.68, transform: premiumEnabled ? "translateY(-2px)" : "none", boxShadow: premiumEnabled ? "0 7px 20px rgba(255,184,0,0.58), 0 0 0 2px rgba(255,238,138,0.4)" : "none", "&:hover": { background: "linear-gradient(135deg, #FFE36A 0%, #FFBC0A 100%)", opacity: 1 } }}>{premiumEnabled ? "✓ 프리미엄으로 홍보" : "프리미엄으로 홍보"}</Button>
             </Stack>
           </Stack>
           <Stack spacing={0.65} sx={{ mt: 1.8, position: "relative" }}>

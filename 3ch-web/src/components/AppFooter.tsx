@@ -2,6 +2,13 @@ import { useState } from "react";
 import { Box, Collapse, IconButton, Link, Stack, Typography } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 
+const socialLinks = [
+    { label: "카카오톡", href: "http://pf.kakao.com/_NSrKX", icon: "/images/social/icon_kakaotalk.png" },
+    { label: "인스타그램", href: "https://www.instagram.com/woori_league/", icon: "/images/social/icon_instagram.png" },
+    { label: "유튜브", href: "https://www.youtube.com/@woorileague", icon: "/images/social/icon_youtube.png" },
+    { label: "틱톡", href: "https://www.tiktok.com/@woori_league", icon: "/images/social/icon_tiktok.png" },
+];
+
 export default function AppFooter() {
     const [bizOpen, setBizOpen] = useState(false);
 
@@ -15,6 +22,21 @@ export default function AppFooter() {
                 <Link href="/mypage/terms" underline="hover" variant="body2" fontWeight={700}>이용약관</Link>
                 <Typography variant="body2" color="text.secondary">|</Typography>
                 <Link href="/mypage/privacy" underline="hover" variant="body2" fontWeight={700}>개인정보 처리방침</Link>
+            </Stack>
+
+            <Stack direction="row" spacing={1.25} alignItems="center" sx={{ py: 1.5 }}>
+                {socialLinks.map(({ label, href, icon }) => (
+                    <Link
+                        key={label}
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`${label} 새 창에서 열기`}
+                        sx={{ display: "inline-flex", borderRadius: "50%" }}
+                    >
+                        <Box component="img" src={icon} alt="" sx={{ width: 36, height: 36, display: "block" }} />
+                    </Link>
+                ))}
             </Stack>
 
             <Box

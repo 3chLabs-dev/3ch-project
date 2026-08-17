@@ -207,7 +207,7 @@
     const { data: leagueMatchesData } = useGetLeagueMatchesQuery(id ?? "", { skip: !id });
     const { data: invitedGroupsData } = useGetLeagueInvitedGroupsQuery(id ?? "", { skip: !id });
     const { data: myGroupsData } = useGetMyGroupsQuery(undefined, { skip: !authUser });
-    const { data: usageData } = useGetMyFeatureUsageQuery(undefined, { skip: !authUser });
+    const { data: usageData } = useGetMyFeatureUsageQuery(authUser?.id, { skip: !authUser, refetchOnMountOrArgChange: true });
 
     const [updateParticipant] = useUpdateParticipantMutation();
     const [updateLeague, { isLoading: saving }] = useUpdateLeagueMutation();

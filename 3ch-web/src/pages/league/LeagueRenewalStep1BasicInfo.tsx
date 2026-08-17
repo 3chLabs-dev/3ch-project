@@ -12,7 +12,6 @@ import {
   Stack,
   TextField,
   Typography,
-  Switch,
   Divider,
   CircularProgress,
 } from "@mui/material";
@@ -128,9 +127,10 @@ export default function LeagueRenewalStep1BasicInfo() {
   const [searchVenues, { data: placeData, isFetching: placeSearching }] = useLazySearchLeagueVenuesQuery();
   const [participantCount, setParticipantCount] = useState<number | "">(existing?.participantCount ?? "");
   const [courtCount, setCourtCount] = useState<number | "">(existing?.courtCount ?? "");
-  const [joinPermission, setJoinPermission] = useState<"public" | "club_only">(existing?.joinPermission ?? "public");
+  const [joinPermission, setJoinPermission] = useState<"public" | "club_only">(existing?.joinPermission ?? "club_only");
   const [premiumEnabled, setPremiumEnabled] = useState(existing?.premiumEnabled ?? false);
-  const { data: usageData } = useGetMyFeatureUsageQuery();
+  const authUserId = useAppSelector((state) => state.auth.user?.id);
+  const { data: usageData } = useGetMyFeatureUsageQuery(authUserId, { skip: !authUserId, refetchOnMountOrArgChange: true });
   const premiumBalance = usageData?.usage.premium_promotion;
   const canUsePremium = Boolean(premiumBalance?.unlimited || Number(premiumBalance?.remaining ?? 0) > 0);
   const [participantCountDialogOpen, setParticipantCountDialogOpen] = useState(false);
@@ -171,8 +171,8 @@ export default function LeagueRenewalStep1BasicInfo() {
         <Typography sx={{ fontWeight: 900 }}>장소</Typography>
         <Box>
           <Stack direction="row" spacing={0.8}>
-            <TextField value={location} onChange={(event) => { setLocation(event.target.value); setVenueLat(null); setVenueLng(null); }} sx={{ ...fieldSx, flex: 1 }} placeholder="장소명 또는 직접 입력" />
-            <Button variant="outlined" size="small" startIcon={<SearchIcon />} onClick={() => { setPlaceQuery(location); setPlaceDialogOpen(true); }} sx={{ whiteSpace: "nowrap", fontWeight: 800 }}>장소 검색</Button>
+            <TextField value={location} onChange={(event) => { setLocation(event.target.value); setVenueLat(null); setVenueLng(null); }} sx={{ ...fieldSx, flex: 1 }} placeholder="탁구장 또는 주소" />
+            <Button variant="outlined" size="small" startIcon={<SearchIcon />} onClick={() => { setPlaceQuery(location); setPlaceDialogOpen(true); }} sx={{ whiteSpace: "nowrap", fontWeight: 800 }}>주소 검색</Button>
           </Stack>
           {venueAddress && <Typography fontSize={11.5} color="text.secondary" sx={{ mt: 0.6 }}>{venueAddress} · {venueRegionCity} {venueRegionDistrict}</Typography>}
         </Box>
@@ -191,67 +191,48 @@ export default function LeagueRenewalStep1BasicInfo() {
     <Box>
       {canUsePremium && (
         <Box>
-        <Typography sx={{ fontSize: 12, fontWeight: 900, color: "#7C3AED", letterSpacing: 1.2, mb: 1 }}>
-          PREMIUM OPTION
+        <Typography sx={{ fontSize: 12, fontWeight: 950, color: "#6D28D9", letterSpacing: 1.2, mb: 1 }}>
+          PREMIUM OPTION · 프리미엄 전용
         </Typography>
         <Box
           sx={{
             position: "relative",
             overflow: "hidden",
             borderRadius: 2,
-            border: "1px solid #D6B35A",
-            background: "linear-gradient(135deg, #24113F 0%, #4C1D75 58%, #2E1065 100%)",
-            boxShadow: premiumEnabled ? "0 10px 28px rgba(91,33,182,0.32), inset 0 0 0 1px rgba(245,215,122,0.14)" : "0 8px 22px rgba(46,16,101,0.2)",
+            border: premiumEnabled ? "2px solid #9A6A14" : "1px solid #D8C27A",
+            background: "linear-gradient(135deg, #FFFCF3 0%, #F7F0FF 58%, #FFF8DF 100%)",
+            boxShadow: premiumEnabled ? "0 12px 30px rgba(109,40,217,0.18), inset 0 0 0 1px rgba(255,255,255,0.9)" : "0 8px 22px rgba(109,40,217,0.09)",
             p: 2.2,
           }}
         >
-          <Box sx={{ position: "absolute", width: 150, height: 150, borderRadius: "50%", bgcolor: "rgba(216,180,254,0.09)", right: -55, top: -75 }} />
-          <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
+          <Box sx={{ position: "absolute", width: 150, height: 150, borderRadius: "50%", bgcolor: "rgba(167,139,250,0.12)", right: -55, top: -75 }} />
+          <Stack spacing={1.6}>
             <Box sx={{ position: "relative" }}>
               <Stack direction="row" spacing={0.8} alignItems="center" sx={{ mb: 0.8 }}>
                 <AutoAwesomeIcon sx={{ color: "#F5D77A", fontSize: 19 }} />
-                <Typography sx={{ color: "#F5D77A", fontSize: 12, fontWeight: 950, letterSpacing: 1.4 }}>PREMIUM</Typography>
+                <Typography sx={{ color: "#8A5B00", fontSize: 12, fontWeight: 950, letterSpacing: 1.4 }}>PREMIUM</Typography>
               </Stack>
-              <Typography sx={{ color: "#fff", fontSize: 18, fontWeight: 900 }}>프리미엄 노출</Typography>
-              <Typography sx={{ color: "#E9D5FF", fontSize: 12.5, mt: 0.55, lineHeight: 1.55 }}>
+              <Typography sx={{ color: "#3B176B", fontSize: 18, fontWeight: 950 }}>프리미엄 노출</Typography>
+              <Typography sx={{ color: "#65566F", fontSize: 12.5, mt: 0.55, lineHeight: 1.55 }}>
                 주변 사용자에게 리그를 소개하고 프리미엄 일정 영역에 우선 노출합니다.
               </Typography>
             </Box>
-            <Switch
-              checked={premiumEnabled}
-              onChange={(event) => {
-                setPremiumEnabled(event.target.checked);
-                if (event.target.checked) setJoinPermission("public");
-              }}
-              inputProps={{ "aria-label": "프리미엄 노출" }}
-              sx={{
-                "& .MuiSwitch-switchBase.Mui-checked": { color: "#F5D77A" },
-                "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": { bgcolor: "#D6B35A", opacity: 1 },
-                "& .MuiSwitch-track": { bgcolor: "#A78BFA", opacity: 0.45 },
-              }}
-            />
+            <Stack direction="row" spacing={1} sx={{ position: "relative" }}>
+              <Button fullWidth variant={!premiumEnabled ? "contained" : "outlined"} onClick={() => setPremiumEnabled(false)} sx={{ fontWeight: 900, borderColor: "#C4B5D8", bgcolor: !premiumEnabled ? "#6B6470" : "rgba(255,255,255,0.65)", color: !premiumEnabled ? "#fff" : "#65566F", "&:hover": { bgcolor: !premiumEnabled ? "#5B5560" : "#fff" } }}>사용 안 함</Button>
+              <Button fullWidth variant={premiumEnabled ? "contained" : "outlined"} startIcon={<AutoAwesomeIcon />} onClick={() => { setPremiumEnabled(true); setJoinPermission("public"); }} sx={{ fontWeight: 950, borderColor: "#9A6A14", color: premiumEnabled ? "#fff" : "#6D28D9", background: premiumEnabled ? "linear-gradient(135deg, #6D28D9, #8B5CF6)" : "rgba(255,255,255,0.72)", "&:hover": { background: premiumEnabled ? "linear-gradient(135deg, #5B21B6, #7C3AED)" : "#fff" } }}>프리미엄으로 홍보</Button>
+            </Stack>
           </Stack>
           <Stack spacing={0.65} sx={{ mt: 1.8, position: "relative" }}>
             {["전체 일정에 공개", "주변 일정 추천 영역 노출", "프리미엄 일정 우선 배치"].map((label) => (
-              <Typography key={label} sx={{ color: "#F3E8FF", fontSize: 12.5, fontWeight: 700 }}>✓ {label}</Typography>
+              <Typography key={label} sx={{ color: "#4C3266", fontSize: 12.5, fontWeight: 800 }}>✓ {label}</Typography>
             ))}
           </Stack>
-          <Typography sx={{ mt: 1.5, color: "#D8B4FE", fontSize: 11.5, position: "relative" }}>
+          <Typography sx={{ mt: 1.5, color: "#7C3AED", fontSize: 11.5, fontWeight: 800, position: "relative" }}>
             {premiumBalance?.unlimited ? "프리미엄 구독 혜택" : `사용 가능한 프리미엄 노출권 ${premiumBalance?.remaining ?? 0}회`}
           </Typography>
         </Box>
         </Box>
       )}
-      <Box sx={{ mt: 2, border: "1px solid #E5E7EB", borderRadius: 1.5, p: 1.5, bgcolor: "#FAFAFB" }}>
-        <Typography fontWeight={900} fontSize={14} sx={{ mb: 1 }}>공유 링크 참가 권한</Typography>
-        <Stack direction="row" spacing={1}>
-          <Button fullWidth size="small" disabled={premiumEnabled} variant={joinPermission === "club_only" ? "contained" : "outlined"} onClick={() => setJoinPermission("club_only")} sx={{ fontWeight: 800 }}>클럽 회원만</Button>
-          <Button fullWidth size="small" variant={joinPermission === "public" ? "contained" : "outlined"} onClick={() => setJoinPermission("public")} sx={{ fontWeight: 800 }}>링크가 있는 모든 사람</Button>
-        </Stack>
-        <Typography fontSize={11.5} color="text.secondary" sx={{ mt: 1 }}>
-          프리미엄 노출을 사용하지 않아도 공유 링크와 QR의 참가 권한은 그대로 유지됩니다.
-        </Typography>
-      </Box>
     </Box>
     <Stack direction="row" spacing={2} sx={{ mt: 4 }}><Button fullWidth variant="contained" disableElevation onClick={() => dispatch(setRenewalStep(0))} sx={{ height: 44, borderRadius: 1, fontWeight: 900, bgcolor: "#777", "&:hover": { bgcolor: "#777" } }}>이전</Button><Button fullWidth variant="contained" disableElevation disabled={!canNext} onClick={saveAndNext} sx={{ height: 44, borderRadius: 1, fontWeight: 900, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" }, "&.Mui-disabled": { bgcolor: "#CFE1FB", color: "#fff" } }}>다음</Button></Stack>
     <Dialog
@@ -271,10 +252,10 @@ export default function LeagueRenewalStep1BasicInfo() {
       </DialogActions>
     </Dialog>
     <Dialog open={placeDialogOpen} onClose={() => setPlaceDialogOpen(false)} fullWidth maxWidth="sm">
-      <DialogTitle sx={{ fontWeight: 900 }}>카카오 장소 검색</DialogTitle>
+      <DialogTitle sx={{ fontWeight: 900 }}>주소 검색</DialogTitle>
       <DialogContent>
         <Stack direction="row" spacing={1} sx={{ mt: 0.5, mb: 2 }}>
-          <TextField fullWidth size="small" autoFocus value={placeQuery} onChange={(event) => setPlaceQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && placeQuery.trim().length >= 2) void searchVenues(placeQuery.trim()); }} placeholder="체육관, 탁구장 또는 주소" />
+          <TextField fullWidth size="small" autoFocus value={placeQuery} onChange={(event) => setPlaceQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && placeQuery.trim().length >= 2) void searchVenues(placeQuery.trim()); }} placeholder="탁구장, 체육관 또는 주소" />
           <Button variant="contained" disabled={placeQuery.trim().length < 2 || placeSearching} onClick={() => void searchVenues(placeQuery.trim())}>{placeSearching ? <CircularProgress size={18} color="inherit" /> : "검색"}</Button>
         </Stack>
         <Stack spacing={1}>

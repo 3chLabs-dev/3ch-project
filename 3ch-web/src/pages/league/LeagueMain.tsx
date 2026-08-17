@@ -181,17 +181,33 @@ export default function LeagueMainBody() {
         onCalendarClick={leagues.length > 0 || (discoverData?.leagues.length ?? 0) > 0 ? () => setCalendarOpen(true) : undefined}
       />
 
-      {premiumLeagues.length > 0 && (
-        <Box>
-          <Stack direction="row" alignItems="center" spacing={0.7} sx={{ mb: 1 }}>
-            <AutoAwesomeIcon sx={{ color: "#D6B35A", fontSize: 18 }} />
-            <Typography fontSize={14} fontWeight={950} color="#5B21B6">프리미엄 일정</Typography>
-            <Typography fontSize={11.5} color="text.secondary">클럽 프로모션으로 소개되는 일정입니다.</Typography>
-          </Stack>
+      {isLoggedIn && visibleInvitations.length > 0 && (
+        <>
+          <LeagueSectionHeader title="초대된 리그" />
           <Stack spacing={1}>
-            {premiumLeagues.slice(0, 1).map((league) => <PremiumLeagueCard key={league.id} league={league} />)}
+            {visibleInvitations.map((invitation) => (
+              <Card key={invitation.invitation_id} elevation={2} sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
+                <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
+                  <Stack direction="row" spacing={0.75} alignItems="center" useFlexGap flexWrap="wrap">
+                    <Typography sx={{ fontWeight: 800 }}>{invitation.title ?? invitation.name}</Typography>
+                    {[invitation.host_group_name, ...(invitation.invited_group_names ?? [])]
+                      .filter((name, index, names): name is string => Boolean(name) && name !== invitation.invited_group_name && names.indexOf(name) === index)
+                      .map((name) => <Chip key={name} label={name} size="small" sx={{ height: 21, bgcolor: "#F3E8FF", color: "#7C3AED", fontSize: 11, fontWeight: 800 }} />)}
+                  </Stack>
+                  <Typography sx={{ fontSize: 12, color: "text.secondary" }}>{invitation.host_group_name} · {formatLeagueDateTime(invitation.start_date)}</Typography>
+                  {invitation.invitation_status === "pending" && (invitation.my_role === "owner" || invitation.my_role === "admin") ? (
+                    <Stack direction="row" spacing={1} sx={{ mt: 1.5 }}>
+                      <Button fullWidth variant="outlined" onClick={() => respondInvitation({ invitationId: invitation.invitation_id, status: "declined" })}>거절</Button>
+                      <Button fullWidth variant="contained" disableElevation onClick={() => respondInvitation({ invitationId: invitation.invitation_id, status: "accepted" })}>수락</Button>
+                    </Stack>
+                  ) : (
+                    <Button fullWidth variant="outlined" sx={{ mt: 1.5 }} onClick={() => navigate(`/league/${invitation.league_code ?? invitation.id}`)}>리그 보기</Button>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
           </Stack>
-        </Box>
+        </>
       )}
 
       {isLoggedIn && myGroups.length > 0 && leagues.length > 0 && (
@@ -269,6 +285,19 @@ export default function LeagueMainBody() {
           </Typography>
         </SoftCard>
       )}
+
+      {premiumLeagues.length > 0 && (
+        <Box>
+          <Stack direction="row" alignItems="center" spacing={0.7} sx={{ mb: 1 }}>
+            <AutoAwesomeIcon sx={{ color: "#B88919", fontSize: 18 }} />
+            <Typography fontSize={14} fontWeight={950} color="#6D28D9">프리미엄 일정</Typography>
+            <Typography fontSize={11.5} color="text.secondary">클럽 프로모션으로 소개되는 일정입니다.</Typography>
+          </Stack>
+          <Stack spacing={1}>
+            {premiumLeagues.slice(0, 8).map((league) => <PremiumLeagueCard key={league.id} league={league} />)}
+          </Stack>
+        </Box>
+      )}
       <LeagueFilterDialog
         key={filterOpen ? "open" : "closed"}
         open={filterOpen}
@@ -289,18 +318,14 @@ export default function LeagueMainBody() {
         leagues={[...leagues, ...(discoverData?.leagues ?? [])]}
       />
 
-      {(discoverLoading || nearbyLeagues.length > 0 || premiumLeagues.length > 1) && (
+      {(discoverLoading || nearbyLeagues.length > 0) && (
         <>
           <LeagueSectionHeader title="내 주변 일정" />
           {discoverLoading ? (
             <SoftCard><Typography color="text.secondary" fontWeight={700}>주변 일정을 찾는 중...</Typography></SoftCard>
           ) : (
             <Stack spacing={1}>
-              {[...premiumLeagues.slice(1), ...nearbyLeagues].slice(0, 8).map((league) => (
-                league.premium_enabled
-                  ? <PremiumLeagueCard key={league.id} league={league} compact />
-                  : <LeagueCard key={league.id} league={league} />
-              ))}
+              {nearbyLeagues.slice(0, 8).map((league) => <LeagueCard key={league.id} league={league} />)}
             </Stack>
           )}
         </>
@@ -316,35 +341,6 @@ export default function LeagueMainBody() {
             신규 생성
           </Button>
         </Stack>
-      )}
-
-      {isLoggedIn && visibleInvitations.length > 0 && (
-        <>
-          <LeagueSectionHeader title="초대된 리그" />
-          <Stack spacing={1}>
-            {visibleInvitations.map((invitation) => (
-              <Card key={invitation.invitation_id} elevation={2} sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
-                <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
-                  <Stack direction="row" spacing={0.75} alignItems="center" useFlexGap flexWrap="wrap">
-                    <Typography sx={{ fontWeight: 800 }}>{invitation.title ?? invitation.name}</Typography>
-                    {[invitation.host_group_name, ...(invitation.invited_group_names ?? [])]
-                      .filter((name, index, names): name is string => Boolean(name) && name !== invitation.invited_group_name && names.indexOf(name) === index)
-                      .map((name) => <Chip key={name} label={name} size="small" sx={{ height: 21, bgcolor: "#F3E8FF", color: "#7C3AED", fontSize: 11, fontWeight: 800 }} />)}
-                  </Stack>
-                  <Typography sx={{ fontSize: 12, color: "text.secondary" }}>{invitation.host_group_name} · {formatLeagueDateTime(invitation.start_date)}</Typography>
-                  {invitation.invitation_status === "pending" && (invitation.my_role === "owner" || invitation.my_role === "admin") ? (
-                    <Stack direction="row" spacing={1} sx={{ mt: 1.5 }}>
-                      <Button fullWidth variant="outlined" onClick={() => respondInvitation({ invitationId: invitation.invitation_id, status: "declined" })}>거절</Button>
-                      <Button fullWidth variant="contained" disableElevation onClick={() => respondInvitation({ invitationId: invitation.invitation_id, status: "accepted" })}>수락</Button>
-                    </Stack>
-                  ) : (
-                    <Button fullWidth variant="outlined" sx={{ mt: 1.5 }} onClick={() => navigate(`/league/${invitation.league_code ?? invitation.id}`)}>리그 보기</Button>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </Stack>
-        </>
       )}
 
       {/* 대회 일정 */}
@@ -441,9 +437,9 @@ function PremiumLeagueCard({ league, compact = false }: { league: LeagueListItem
       sx={{
         cursor: "pointer",
         borderRadius: 2,
-        border: "1px solid #D6B35A",
-        background: "linear-gradient(135deg, #24113F 0%, #4C1D75 62%, #2E1065 100%)",
-        boxShadow: "0 9px 25px rgba(91,33,182,0.24)",
+        border: "1px solid #D8B458",
+        background: "linear-gradient(135deg, #FFFCF3 0%, #F4EAFF 58%, #FFF7D8 100%)",
+        boxShadow: "0 9px 25px rgba(109,40,217,0.14)",
       }}
     >
       <CardContent sx={{ p: compact ? 1.6 : 2, "&:last-child": { pb: compact ? 1.6 : 2 } }}>
@@ -451,15 +447,15 @@ function PremiumLeagueCard({ league, compact = false }: { league: LeagueListItem
           <Box sx={{ minWidth: 0 }}>
             <Stack direction="row" alignItems="center" spacing={0.6} sx={{ mb: 0.7 }}>
               <AutoAwesomeIcon sx={{ color: "#F5D77A", fontSize: 15 }} />
-              <Typography sx={{ color: "#F5D77A", fontSize: 10.5, fontWeight: 950, letterSpacing: 1 }}>PREMIUM</Typography>
+              <Typography sx={{ color: "#8A5B00", fontSize: 10.5, fontWeight: 950, letterSpacing: 1 }}>PREMIUM</Typography>
             </Stack>
-            <Typography sx={{ color: "#fff", fontSize: 15, fontWeight: 900 }} noWrap>{league.title ?? league.name}</Typography>
-            <Typography sx={{ color: "#E9D5FF", fontSize: 11.5, mt: 0.45 }}>
+            <Typography sx={{ color: "#3B176B", fontSize: 15, fontWeight: 950 }} noWrap>{league.title ?? league.name}</Typography>
+            <Typography sx={{ color: "#65566F", fontSize: 11.5, mt: 0.45 }}>
               {[league.group_name, region, league.distance_km != null ? `${Number(league.distance_km).toFixed(1)}km` : null].filter(Boolean).join(" · ")}
             </Typography>
-            <Typography sx={{ color: "#D8B4FE", fontSize: 11.5, mt: 0.3 }}>{formatLeagueDateTime(league.start_date)}</Typography>
+            <Typography sx={{ color: "#7C3AED", fontSize: 11.5, fontWeight: 700, mt: 0.3 }}>{formatLeagueDateTime(league.start_date)}</Typography>
           </Box>
-          <Chip label={league.recruit_count > 0 && league.participant_count >= league.recruit_count ? "모집 마감" : "모집 중"} size="small" sx={{ bgcolor: "rgba(245,215,122,0.14)", color: "#F5D77A", border: "1px solid rgba(245,215,122,0.45)", fontWeight: 900 }} />
+          <Chip label={league.recruit_count > 0 && league.participant_count >= league.recruit_count ? "모집 마감" : "모집 중"} size="small" sx={{ bgcolor: "#FFF7D6", color: "#7A5000", border: "1px solid #D8B458", fontWeight: 900 }} />
         </Stack>
       </CardContent>
     </Card>

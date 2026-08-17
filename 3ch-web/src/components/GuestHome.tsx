@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Box, Button, Stack, Typography } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import AdFitBanner from "./AdFitBanner";
@@ -10,7 +10,29 @@ type GuideTab = "create" | "join";
 
 export default function GuestHome() {
     const [guideTab, setGuideTab] = useState<GuideTab>("create");
+    const videoRef = useRef<HTMLVideoElement>(null);
     const navigate = useNavigate();
+
+    useEffect(() => {
+        const video = videoRef.current;
+        if (!video) return;
+
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                if (entry.isIntersecting) {
+                    void video.play().catch(() => {
+                        // 브라우저 설정에서 자동재생이 차단된 경우 사용자가 컨트롤로 재생할 수 있습니다.
+                    });
+                } else {
+                    video.pause();
+                }
+            },
+            { threshold: 0.15 },
+        );
+
+        observer.observe(video);
+        return () => observer.disconnect();
+    }, [guideTab]);
 
     return (
         <Box
@@ -125,7 +147,10 @@ export default function GuestHome() {
                     >
                         <video
                             key={guideTab}
+                            ref={videoRef}
                             controls
+                            muted
+                            loop
                             playsInline
                             preload="metadata"
                             style={{

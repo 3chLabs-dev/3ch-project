@@ -202,7 +202,7 @@ export default function AdminPricingPlanPage() {
           <Box>
             <Typography fontWeight={900} sx={{ mb: 0.5 }}>기능</Typography>
             <Typography fontSize={12} color="text.secondary" sx={{ mb: 1.5 }}>
-              기능별 월 제공 횟수 또는 무제한 여부를 설정합니다.
+              기능별 월 제공 횟수, 무제한 또는 제공하지 않음을 설정합니다. 없음으로 설정한 기능은 요금제에 노출되지 않습니다.
             </Typography>
             <Stack spacing={0.8}>
               {FEATURE_OPTIONS.map(({ key, label }) => {
@@ -225,9 +225,10 @@ export default function AdminPricingPlanPage() {
                     <FormControl>
                       <RadioGroup
                         row
-                        value={limit === null ? "unlimited" : "monthly"}
+                        value={limit === null ? "unlimited" : limit === 0 ? "none" : "monthly"}
                         onChange={(event) => {
-                          setFeatureLimit(key, event.target.value === "unlimited" ? null : (limit ?? 0));
+                          const mode = event.target.value;
+                          setFeatureLimit(key, mode === "unlimited" ? null : mode === "none" ? 0 : (limit && limit > 0 ? limit : 1));
                         }}
                         sx={{ flexWrap: "nowrap", alignItems: "center", gap: 1 }}
                       >
@@ -238,16 +239,16 @@ export default function AdminPricingPlanPage() {
                             <Stack direction="row" alignItems="center" spacing={0.8}>
                               <Typography fontSize={13}>월</Typography>
                               <TextField
-                                value={limit ?? 0}
+                                value={typeof limit === "number" && limit > 0 ? limit : 1}
                                 type="number"
                                 size="small"
-                                disabled={limit === null}
+                                disabled={limit === null || limit === 0}
                                 onClick={(event) => event.stopPropagation()}
                                 onChange={(event) => {
-                                  const value = Math.min(100000, Math.max(0, Number.parseInt(event.target.value || "0", 10) || 0));
+                                  const value = Math.min(100000, Math.max(1, Number.parseInt(event.target.value || "1", 10) || 1));
                                   setFeatureLimit(key, value);
                                 }}
-                                inputProps={{ min: 0, max: 100000, style: { textAlign: "center" } }}
+                                inputProps={{ min: 1, max: 100000, style: { textAlign: "center" } }}
                                 sx={{ width: 82 }}
                               />
                               <Typography fontSize={13}>회</Typography>
@@ -259,6 +260,11 @@ export default function AdminPricingPlanPage() {
                           value="unlimited"
                           control={<Radio size="small" />}
                           label={<Typography fontSize={13}>무제한</Typography>}
+                        />
+                        <FormControlLabel
+                          value="none"
+                          control={<Radio size="small" />}
+                          label={<Typography fontSize={13}>없음</Typography>}
                         />
                       </RadioGroup>
                     </FormControl>

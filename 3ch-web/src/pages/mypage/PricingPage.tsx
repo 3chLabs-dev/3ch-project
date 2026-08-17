@@ -291,10 +291,11 @@ const FEATURE_LABELS: Array<[string, string]> = [
 ];
 const featureLimitLabels = (limits?: Record<string, number | null>) =>
   limits && Object.keys(limits).length > 0
-    ? FEATURE_LABELS.map(([key, label]) => {
+    ? FEATURE_LABELS.flatMap(([key, label]) => {
         const limit = limits[key];
-        if (limit === null) return `${label} 무제한`;
-        return Number(limit ?? 0) === 0 ? `${label} 이용 불가` : `${label} 월 ${limit}회`;
+        if (limit === null) return [`${label} 무제한`];
+        if (Number(limit ?? 0) === 0) return [];
+        return [`${label} 월 ${limit}회`];
       })
     : [];
 const normalizeFeatureLabel = (label: string) =>

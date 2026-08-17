@@ -779,6 +779,35 @@ router.get('/group/geocode', requireAuth, async (req, res) => {
  *       500:
  *         description: 서버 오류
  */
+router.get('/group/place-search', requireAuth, async (req, res) => {
+  try {
+    const query = String(req.query.q || '').trim();
+    if (query.length < 2) return res.status(400).json({ ok: false, error: 'QUERY_REQUIRED' });
+    const key = process.env.KAKAO_REST_API_KEY;
+    if (!key) return res.status(500).json({ ok: false, error: 'KAKAO_KEY_NOT_SET' });
+    const url = `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}&size=10`;
+    const response = await fetch(url, { headers: { Authorization: `KakaoAK ${key}` } });
+    const data = await response.json();
+    const places = (data.documents || []).map((place) => {
+      const address = place.road_address_name || place.address_name || '';
+      const parts = address.split(/\s+/).filter(Boolean);
+      return {
+        id: place.id,
+        name: place.place_name,
+        address,
+        region_city: parts[0] || null,
+        region_district: parts[1] || null,
+        lat: Number(place.y),
+        lng: Number(place.x),
+      };
+    });
+    return res.json({ ok: true, places });
+  } catch (error) {
+    console.error('Place search error:', error);
+    return res.status(500).json({ ok: false, error: 'PLACE_SEARCH_FAILED' });
+  }
+});
+
 // GPS 기반 AI 클럽 추천
 router.post('/group/recommend', requireAuth, async (req, res) => {
   try {

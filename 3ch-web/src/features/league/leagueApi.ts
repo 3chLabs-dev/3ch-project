@@ -1,6 +1,6 @@
 import { baseApi } from "../api/baseApi";
 import type { RootState } from "../../app/store";
-import { isLocalDevToken } from "../../utils/localDevAuth";
+import { getLocalDevProfileByToken, isLocalDevToken } from "../../utils/localDevAuth";
 import type { RoundConfig } from "./types/tournament.types";
 import {
   addLocalDevParticipants,
@@ -31,6 +31,8 @@ export interface CreateLeagueRequest {
   end_date?: string | null;
   court_count?: number | null;
   rules?: string;
+  join_permission?: "public" | "club_only";
+  premium_enabled?: boolean;
 }
 
 export interface UpdateLeagueRequest {
@@ -51,6 +53,8 @@ export interface UpdateLeagueRequest {
   recruit_count?: number;
   status?: "draft" | "active" | "completed";
   join_permission?: "public" | "club_only";
+  visibility?: "public" | "club_only";
+  premium_enabled?: boolean;
   tournament_seeding?: string;
   tournament_advancement?: string;
   tournament_rules?: string;
@@ -82,6 +86,16 @@ export interface League {
   recruit_count?: number;
   participant_count?: number;
   join_permission?: "public" | "club_only";
+  visibility?: "public" | "club_only";
+  premium_enabled?: boolean;
+  premium_started_at?: string | null;
+  premium_expires_at?: string | null;
+  venue_name?: string | null;
+  venue_address?: string | null;
+  venue_lat?: number | null;
+  venue_lng?: number | null;
+  venue_region_city?: string | null;
+  venue_region_district?: string | null;
   group_id?: string;
   status: "draft" | "active" | "completed";
   tournament_seeding?: string;
@@ -112,6 +126,9 @@ export interface LeagueListItem extends League {
   group_name?: string;
   invited_group_count?: number;
   invited_group_names?: string[];
+  distance_km?: number | null;
+  region_city?: string | null;
+  region_district?: string | null;
 }
 
 export interface LeagueParticipantItem {
@@ -143,6 +160,11 @@ export interface GetLeaguesParams {
   group_id?: string;
   my_groups?: boolean;
   user_id?: number;
+}
+
+export interface GetMyGroupLeaguesParams {
+  from?: string;
+  to?: string;
 }
 
 export interface GetLeaguesResponse {
@@ -552,6 +574,46 @@ export const leagueApi = baseApi.injectEndpoints({
           : [{ type: "League" as const, id: "LIST" }],
     }),
 
+    getMyGroupLeagues: builder.query<GetLeaguesResponse, GetMyGroupLeaguesParams | void>({
+      async queryFn(params, api, _extraOptions, fetchWithBQ) {
+        const token = (api.getState() as RootState).auth?.token;
+        if (isLocalDevToken(token)) {
+          let leagues = getLocalDevLeagues();
+          const profile = getLocalDevProfileByToken(token);
+          const groupIds = new Set(profile ? [profile.group.id] : []);
+          leagues = leagues.filter((league) => !league.group_id || groupIds.has(league.group_id));
+          if (params?.from) leagues = leagues.filter((league) => (league.end_date ?? league.start_date).slice(0, 10) >= params.from!);
+          if (params?.to) leagues = leagues.filter((league) => league.start_date.slice(0, 10) <= params.to!);
+          leagues.sort((a, b) => a.start_date.localeCompare(b.start_date));
+          return { data: normalizeLeaguesResponse({ leagues, total: leagues.length, page: 1, limit: leagues.length }) };
+        }
+
+        const searchParams = new URLSearchParams();
+        if (params?.from) searchParams.set("from", params.from);
+        if (params?.to) searchParams.set("to", params.to);
+        const qs = searchParams.toString();
+        const result = await fetchWithBQ(`/league/mine${qs ? `?${qs}` : ""}`);
+        if (result.error) return { error: result.error };
+        return { data: normalizeLeaguesResponse(result.data) };
+      },
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.leagues.map((league) => ({ type: "League" as const, id: league.id })),
+              { type: "League" as const, id: "LIST" },
+              { type: "League" as const, id: "MY_GROUPS" },
+            ]
+          : [
+              { type: "League" as const, id: "LIST" },
+              { type: "League" as const, id: "MY_GROUPS" },
+            ],
+    }),
+
+    getDiscoverLeagues: builder.query<{ leagues: LeagueListItem[] }, { lat?: number; lng?: number; limit?: number } | void>({
+      query: (params) => ({ url: "/league/discover", params: params || undefined }),
+      providesTags: [{ type: "League", id: "DISCOVER" }],
+    }),
+
     /**
      * 리그 생성
      */
@@ -674,6 +736,7 @@ export const leagueApi = baseApi.injectEndpoints({
         url: `/league/${id}`,
         method: "PUT",
         body: updates,
+        headers: { "Idempotency-Key": crypto.randomUUID() },
       }),
       invalidatesTags: (_result, _error, { id }) => [
         { type: "League", id },
@@ -1224,6 +1287,8 @@ export const leagueApi = baseApi.injectEndpoints({
  */
 export const {
   useGetLeaguesQuery,
+  useGetMyGroupLeaguesQuery,
+  useGetDiscoverLeaguesQuery,
   useCreateLeagueMutation,
   useGetLeagueQuery,
   useGetLeagueParticipantsQuery,

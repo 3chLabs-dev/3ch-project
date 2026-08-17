@@ -4,16 +4,20 @@ import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { setPreferredGroupId } from "../../features/league/leagueCreationSlice";
 import { resetRenewalLeagueCreation, setRenewalGroupId, setRenewalStep } from "../../features/league/leagueRenewalCreationSlice";
 import { useGetMyGroupsQuery } from "../../features/group/groupApi";
-import { useGetLeaguesQuery, useGetMyLeagueInvitationsQuery, useRespondLeagueInvitationMutation } from "../../features/league/leagueApi";
+import { useGetDiscoverLeaguesQuery, useGetMyGroupLeaguesQuery, useGetMyLeagueInvitationsQuery, useRespondLeagueInvitationMutation } from "../../features/league/leagueApi";
 import type { LeagueListItem } from "../../features/league/leagueApi";
 import {
-  Stack, Typography, Card, CardContent, Button, IconButton, Box, Chip
+  Stack, Typography, Card, CardContent, Button, IconButton, Box, Chip, Divider
 } from "@mui/material";
 import TuneIcon from "@mui/icons-material/Tune";
+import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
+import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import { formatLeagueDateTime } from "../../utils/dateUtils";
 import AdFitBanner from "../../components/AdFitBanner";
 import LeagueFilterDialog from "../../components/LeagueFilterDialog.tsx";
 import { getLocalDevProfileByToken } from "../../utils/localDevAuth";
+import LeagueCalendarDialog from "../../components/LeagueCalendarDialog";
+import { getLeagueClubColor } from "../../features/league/leagueScheduleColors";
 
 type LeagueStatus = "scheduled" | "active" | "completed";
 
@@ -26,6 +30,8 @@ export default function LeagueMainBody() {
 
   //리그 필터
   const [filterOpen, setFilterOpen] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [selectedScheduleGroupIds, setSelectedScheduleGroupIds] = useState<string[]>([]);
   const [leagueFilterStart, setLeagueFilterStart] = useState("");
   const [leagueFilterEnd, setLeagueFilterEnd] = useState("");
   const [leagueFilterStatus, setLeagueFilterStatus] = useState<LeagueStatus[]>([
@@ -54,11 +60,23 @@ export default function LeagueMainBody() {
     ? myGroups.find((g) => g.id === effectiveGroupId) ?? null
     : null;
 
-  const { data: leagueData, isLoading: leagueLoading } = useGetLeaguesQuery(
-    effectiveGroupId ? { group_id: effectiveGroupId } : undefined,
-    { skip: !isLoggedIn || !effectiveGroupId, refetchOnMountOrArgChange: true }
+  const { data: leagueData, isLoading: leagueLoading } = useGetMyGroupLeaguesQuery(
+    undefined,
+    { skip: !isLoggedIn || !myGroups.length, refetchOnMountOrArgChange: true }
   );
   const leagues = useMemo(() => leagueData?.leagues ?? [], [leagueData]);
+  const { data: discoverData, isLoading: discoverLoading } = useGetDiscoverLeaguesQuery({ limit: 20 });
+  const premiumLeagues = useMemo(() => (discoverData?.leagues ?? []).filter((league) => league.premium_enabled), [discoverData]);
+  const nearbyLeagues = useMemo(() => (discoverData?.leagues ?? []).filter((league) => !league.premium_enabled), [discoverData]);
+  const calendarGroups = useMemo(() => {
+    const groups: Array<{ id: string; name: string }> = myGroups.map(({ id, name }) => ({ id, name }));
+    (discoverData?.leagues ?? []).forEach((league) => {
+      if (league.group_id && !groups.some((group) => group.id === league.group_id)) {
+        groups.push({ id: league.group_id, name: league.group_name ?? "주변 클럽" });
+      }
+    });
+    return groups;
+  }, [discoverData, myGroups]);
   const { data: invitationData } = useGetMyLeagueInvitationsQuery(undefined, { skip: !isLoggedIn, refetchOnMountOrArgChange: true });
   const [respondInvitation] = useRespondLeagueInvitationMutation();
   const invitations = invitationData?.invitations ?? [];
@@ -91,6 +109,7 @@ export default function LeagueMainBody() {
 
     return leagues.filter((league) => {
       if (!league.start_date) return false;
+      if (selectedScheduleGroupIds.length > 0 && (!league.group_id || !selectedScheduleGroupIds.includes(league.group_id))) return false;
 
       const startAt = new Date(league.start_date);
       const dateOnly = league.start_date.slice(0, 10);
@@ -109,7 +128,24 @@ export default function LeagueMainBody() {
 
       return false;
     });
-  }, [leagueData, leagueFilterStart, leagueFilterEnd, leagueFilterStatus]);
+  }, [leagueData, leagueFilterStart, leagueFilterEnd, leagueFilterStatus, selectedScheduleGroupIds]);
+
+  const leaguesByGroup = useMemo(() => myGroups.map((group) => ({
+    group,
+    leagues: filteredLeagues.filter((league) => league.group_id === group.id),
+  })).filter((section) => section.leagues.length > 0), [filteredLeagues, myGroups]);
+
+  const scheduleGroupIds = useMemo(() => myGroups.map((group) => group.id), [myGroups]);
+
+  const toggleScheduleGroup = (groupId: string) => {
+    setSelectedScheduleGroupIds((current) => {
+      if (current.length === 0) return [groupId];
+      const next = current.includes(groupId)
+        ? current.filter((id) => id !== groupId)
+        : [...current, groupId];
+      return next.length === myGroups.length ? [] : next;
+    });
+  };
 
 
   return (
@@ -142,7 +178,52 @@ export default function LeagueMainBody() {
       <LeagueSectionHeader
         title="리그 일정"
         onFilterClick={leagueData && leagueData.leagues.length > 0 ? () => setFilterOpen(true) : undefined}
+        onCalendarClick={leagues.length > 0 || (discoverData?.leagues.length ?? 0) > 0 ? () => setCalendarOpen(true) : undefined}
       />
+
+      {premiumLeagues.length > 0 && (
+        <Box>
+          <Stack direction="row" alignItems="center" spacing={0.7} sx={{ mb: 1 }}>
+            <AutoAwesomeIcon sx={{ color: "#D6B35A", fontSize: 18 }} />
+            <Typography fontSize={14} fontWeight={950} color="#5B21B6">프리미엄 일정</Typography>
+            <Typography fontSize={11.5} color="text.secondary">클럽 프로모션으로 소개되는 일정입니다.</Typography>
+          </Stack>
+          <Stack spacing={1}>
+            {premiumLeagues.slice(0, 1).map((league) => <PremiumLeagueCard key={league.id} league={league} />)}
+          </Stack>
+        </Box>
+      )}
+
+      {isLoggedIn && myGroups.length > 0 && leagues.length > 0 && (
+        <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
+          <Chip
+            label="전체 클럽"
+            onClick={() => setSelectedScheduleGroupIds([])}
+            color={selectedScheduleGroupIds.length === 0 ? "primary" : "default"}
+            variant={selectedScheduleGroupIds.length === 0 ? "filled" : "outlined"}
+            sx={{ fontWeight: 800 }}
+          />
+          {myGroups.map((group) => {
+            const selected = selectedScheduleGroupIds.includes(group.id);
+            const color = getLeagueClubColor(group.id, scheduleGroupIds);
+            return (
+              <Chip
+                key={group.id}
+                label={group.name}
+                onClick={() => toggleScheduleGroup(group.id)}
+                variant={selected ? "filled" : "outlined"}
+                sx={{
+                  fontWeight: 800,
+                  bgcolor: selected ? color : "transparent",
+                  color: selected ? "#fff" : color,
+                  borderColor: color,
+                  "&:hover": { bgcolor: selected ? color : `${color}14` },
+                }}
+              />
+            );
+          })}
+        </Stack>
+      )}
 
       {!isLoggedIn || !myGroups.length ? (
         <SoftCard>
@@ -156,10 +237,23 @@ export default function LeagueMainBody() {
         </SoftCard>
       ) : leagues.length > 0 ? (
         filteredLeagues.length > 0 ? (
-          <Stack spacing={1}>
-            {filteredLeagues.map((league) => (
-              <LeagueCard key={league.id} league={league} />
-            ))}
+          <Stack spacing={2}>
+            {leaguesByGroup.map(({ group, leagues: groupLeagues }) => {
+              const color = getLeagueClubColor(group.id, scheduleGroupIds);
+              return (
+                <Stack key={group.id} spacing={1}>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Box sx={{ width: 9, height: 9, borderRadius: "50%", bgcolor: color, flex: "0 0 auto" }} />
+                    <Typography fontSize={14} fontWeight={900}>{group.name}</Typography>
+                    <Typography fontSize={12} color="text.secondary">{groupLeagues.length}개</Typography>
+                    <Divider sx={{ flex: 1 }} />
+                  </Stack>
+                  {groupLeagues.map((league) => (
+                    <LeagueCard key={league.id} league={league} color={color} />
+                  ))}
+                </Stack>
+              );
+            })}
           </Stack>
         ) : (
           <SoftCard>
@@ -188,6 +282,29 @@ export default function LeagueMainBody() {
           setLeagueFilterStatus(status);
         }}
       />
+      <LeagueCalendarDialog
+        open={calendarOpen}
+        onClose={() => setCalendarOpen(false)}
+        groups={calendarGroups}
+        leagues={[...leagues, ...(discoverData?.leagues ?? [])]}
+      />
+
+      {(discoverLoading || nearbyLeagues.length > 0 || premiumLeagues.length > 1) && (
+        <>
+          <LeagueSectionHeader title="내 주변 일정" />
+          {discoverLoading ? (
+            <SoftCard><Typography color="text.secondary" fontWeight={700}>주변 일정을 찾는 중...</Typography></SoftCard>
+          ) : (
+            <Stack spacing={1}>
+              {[...premiumLeagues.slice(1), ...nearbyLeagues].slice(0, 8).map((league) => (
+                league.premium_enabled
+                  ? <PremiumLeagueCard key={league.id} league={league} compact />
+                  : <LeagueCard key={league.id} league={league} />
+              ))}
+            </Stack>
+          )}
+        </>
+      )}
 
       {canCreate && (
         <Stack spacing={1}>
@@ -254,21 +371,20 @@ export default function LeagueMainBody() {
 type LeagueSectionHeaderProps = {
   title: string;
   onFilterClick?: () => void;
+  onCalendarClick?: () => void;
 };
 
-function LeagueSectionHeader({ title, onFilterClick }: LeagueSectionHeaderProps) {
+function LeagueSectionHeader({ title, onFilterClick, onCalendarClick }: LeagueSectionHeaderProps) {
   return (
     <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 0.5 }}>
       <Typography variant="subtitle1" fontWeight={900}>
         {title}
       </Typography>
-      {onFilterClick ? (
-        <IconButton size="small" onClick={onFilterClick} sx={{ width: 32, height: 32 }}>
-          <TuneIcon fontSize="small" />
-        </IconButton>
-      ) : (
-        <Box sx={{ width: 32, height: 32 }} />
-      )}
+      <Stack direction="row" spacing={0.25}>
+        {onCalendarClick && <IconButton size="small" onClick={onCalendarClick} aria-label="달력으로 보기" sx={{ width: 32, height: 32 }}><CalendarMonthIcon fontSize="small" /></IconButton>}
+        {onFilterClick && <IconButton size="small" onClick={onFilterClick} aria-label="일정 필터" sx={{ width: 32, height: 32 }}><TuneIcon fontSize="small" /></IconButton>}
+        {!onCalendarClick && !onFilterClick && <Box sx={{ width: 32, height: 32 }} />}
+      </Stack>
     </Stack>
   );
 }
@@ -286,13 +402,13 @@ function SectionHeader({ title }: { title: string }) {
   );
 }
 
-function LeagueCard({ league }: { league: LeagueListItem }) {
+function LeagueCard({ league, color }: { league: LeagueListItem; color?: string }) {
   const navigate = useNavigate();
   return (
     <Card
       elevation={2}
       onClick={() => navigate(`/league/${league.league_code ?? league.id}`)}
-      sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)", cursor: "pointer" }}
+      sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)", cursor: "pointer", borderLeft: color ? `4px solid ${color}` : undefined }}
     >
       <CardContent sx={{ py: 1.8, px: 2.5, "&:last-child": { pb: 1.8 } }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center">
@@ -310,6 +426,40 @@ function LeagueCard({ league }: { league: LeagueListItem }) {
               ? `${league.participant_count} / ${league.recruit_count}명`
               : `${league.participant_count}명`}
           </Typography>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
+function PremiumLeagueCard({ league, compact = false }: { league: LeagueListItem; compact?: boolean }) {
+  const navigate = useNavigate();
+  const region = [league.region_city, league.region_district].filter(Boolean).join(" ");
+  return (
+    <Card
+      onClick={() => navigate(`/league/${league.league_code ?? league.id}`)}
+      sx={{
+        cursor: "pointer",
+        borderRadius: 2,
+        border: "1px solid #D6B35A",
+        background: "linear-gradient(135deg, #24113F 0%, #4C1D75 62%, #2E1065 100%)",
+        boxShadow: "0 9px 25px rgba(91,33,182,0.24)",
+      }}
+    >
+      <CardContent sx={{ p: compact ? 1.6 : 2, "&:last-child": { pb: compact ? 1.6 : 2 } }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1.5}>
+          <Box sx={{ minWidth: 0 }}>
+            <Stack direction="row" alignItems="center" spacing={0.6} sx={{ mb: 0.7 }}>
+              <AutoAwesomeIcon sx={{ color: "#F5D77A", fontSize: 15 }} />
+              <Typography sx={{ color: "#F5D77A", fontSize: 10.5, fontWeight: 950, letterSpacing: 1 }}>PREMIUM</Typography>
+            </Stack>
+            <Typography sx={{ color: "#fff", fontSize: 15, fontWeight: 900 }} noWrap>{league.title ?? league.name}</Typography>
+            <Typography sx={{ color: "#E9D5FF", fontSize: 11.5, mt: 0.45 }}>
+              {[league.group_name, region, league.distance_km != null ? `${Number(league.distance_km).toFixed(1)}km` : null].filter(Boolean).join(" · ")}
+            </Typography>
+            <Typography sx={{ color: "#D8B4FE", fontSize: 11.5, mt: 0.3 }}>{formatLeagueDateTime(league.start_date)}</Typography>
+          </Box>
+          <Chip label={league.recruit_count > 0 && league.participant_count >= league.recruit_count ? "모집 마감" : "모집 중"} size="small" sx={{ bgcolor: "rgba(245,215,122,0.14)", color: "#F5D77A", border: "1px solid rgba(245,215,122,0.45)", fontWeight: 900 }} />
         </Stack>
       </CardContent>
     </Card>

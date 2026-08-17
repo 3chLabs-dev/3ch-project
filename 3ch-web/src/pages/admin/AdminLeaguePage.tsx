@@ -26,6 +26,12 @@ type League = {
   club_name: string | null;
   has_program?: boolean;
   program_updated_at?: string | null;
+  visibility: "public" | "club_only";
+  premium_enabled: boolean;
+  premium_started_at?: string | null;
+  premium_expires_at?: string | null;
+  venue_name?: string | null;
+  venue_address?: string | null;
 };
 
 type Filters = {
@@ -91,6 +97,16 @@ export default function AdminLeaguePage() {
 
   const handleSearch = () => { setPage(1); setQuery({ ...filters }); };
   const handleReset  = () => { setFilters(EMPTY_FILTERS); setPage(1); setQuery(EMPTY_FILTERS); };
+  const togglePremium = async (league: League) => {
+    const enabled = !league.premium_enabled;
+    if (!window.confirm(`이 리그의 프리미엄 노출을 ${enabled ? "시작" : "중단"}하시겠습니까?`)) return;
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/admin/leagues/${league.id}/premium`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    });
+    if (response.ok) await fetchLeagues(query, page);
+  };
 
   const setDateRange = (field: "league" | "created", days: number) => {
     const to   = new Date();
@@ -118,7 +134,7 @@ export default function AdminLeaguePage() {
     const end = formatTime(league.end_date);
     return end ? `${start} ~ ${end}` : start || "-";
   };
-  const formatLocation = (description?: string | null) => description?.replace(/^장소:\s*/, "") || "-";
+  const formatLocation = (league: League) => league.venue_name || league.description?.replace(/^장소:\s*/, "") || "-";
 
   return (
     <Box sx={{ p: 3 }}>
@@ -234,7 +250,7 @@ export default function AdminLeaguePage() {
         <Table size="small">
           <TableHead>
             <TableRow sx={{ bgcolor: "#F9FAFB" }}>
-              {["리그코드", "종목", "클럽", "리그명", "리그날짜", "시간", "장소", "탁구대", "참가자", "생성자", "생성일시"].map((h) => (
+              {["리그코드", "종목", "클럽", "리그명", "노출", "리그날짜", "시간", "장소", "탁구대", "참가자", "생성자", "생성일시"].map((h) => (
                 <TableCell key={h} sx={{ fontWeight: 800, fontSize: 12, color: "#374151", py: 1.2 }}>{h}</TableCell>
               ))}
             </TableRow>
@@ -242,13 +258,13 @@ export default function AdminLeaguePage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={11} align="center" sx={{ py: 6 }}>
+                <TableCell colSpan={12} align="center" sx={{ py: 6 }}>
                   <CircularProgress size={28} />
                 </TableCell>
               </TableRow>
             ) : leagues.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={11} align="center" sx={{ py: 6, color: "#9CA3AF", fontWeight: 700, fontSize: 13 }}>
+                <TableCell colSpan={12} align="center" sx={{ py: 6, color: "#9CA3AF", fontWeight: 700, fontSize: 13 }}>
                   생성된 리그가 없습니다.
                 </TableCell>
               </TableRow>
@@ -263,9 +279,17 @@ export default function AdminLeaguePage() {
                   </TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{l.club_name ?? "-"}</TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{l.title ? l.title : "-"}</TableCell>
+                  <TableCell sx={{ whiteSpace: "nowrap" }}>
+                    <Stack direction="row" spacing={0.5} alignItems="center">
+                      <Chip label={l.visibility === "public" ? "전체 공개" : "클럽 공개"} size="small" sx={{ height: 20, fontSize: 10.5 }} />
+                      <Button size="small" onClick={() => void togglePremium(l)} sx={{ minWidth: 0, px: 0.8, color: l.premium_enabled ? "#7C3AED" : "text.secondary", fontWeight: 900 }}>
+                        {l.premium_enabled ? "PREMIUM ON" : "OFF"}
+                      </Button>
+                    </Stack>
+                  </TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{l.start_date ? l.start_date.slice(0, 10) : "-"}</TableCell>
                   <TableCell sx={{ fontSize: 12, whiteSpace: "nowrap" }}>{formatTimeRange(l)}</TableCell>
-                  <TableCell sx={{ fontSize: 12 }}>{formatLocation(l.description)}</TableCell>
+                  <TableCell sx={{ fontSize: 12 }} title={l.venue_address ?? undefined}>{formatLocation(l)}</TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{l.court_count ? `${l.court_count}대` : "-"}</TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{l.participant_count ?? 0}명</TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{l.creator_name ?? "-"}</TableCell>

@@ -295,6 +295,16 @@ model League {
   participant_count      Int       @default(0)
   league_code            String?   @unique
   join_permission        String    @default("public") // "public" | "club_only"
+  visibility             String    @default("club_only") // "club_only" | "public"
+  premium_enabled        Boolean   @default(false)
+  premium_started_at     DateTime? @db.Timestamptz(6)
+  premium_expires_at     DateTime? @db.Timestamptz(6)
+  venue_name             String?   @db.VarChar(120)
+  venue_address          String?
+  venue_lat              Float?
+  venue_lng              Float?
+  venue_region_city      String?   @db.VarChar(80)
+  venue_region_district  String?   @db.VarChar(80)
   tournament_seeding     String?
   tournament_advancement String?
   tournament_rules       String?

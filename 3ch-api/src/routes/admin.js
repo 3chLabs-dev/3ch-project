@@ -21,6 +21,7 @@ const QUOTA_FEATURES = new Set([
   "EVENT_JOIN",
   "VISION_SCAN",
   "DRAW_CREATE",
+  "PREMIUM_PROMOTION",
 ]);
 const PRICING_FEATURE_KEYS = [
   "club_create",
@@ -30,6 +31,7 @@ const PRICING_FEATURE_KEYS = [
   "event_join",
   "vision_scan",
   "draw_create",
+  "premium_promotion",
 ];
 
 async function assertMaster(req, res) {
@@ -1415,7 +1417,9 @@ router.get('/leagues', requireAdmin, async (req, res) => {
       pool.query(
         `SELECT l.id, l.league_code, l.name, l.sport, l.type, l.format, l.title, l.description,
                 l.start_date::text, l.end_date::text, l.court_count, l.created_at::text,
-                l.participant_count,
+                l.venue_name, l.venue_address, l.venue_region_city, l.venue_region_district,
+                l.participant_count, l.visibility, l.premium_enabled,
+                l.premium_started_at::text, l.premium_expires_at::text,
                 u.id AS creator_id, u.name AS creator_name,
                 g.name AS club_name
          ${baseFrom}
@@ -1435,6 +1439,29 @@ router.get('/leagues', requireAdmin, async (req, res) => {
     });
   } catch (e) {
     return res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
+});
+
+router.patch('/leagues/:id/premium', requireAdmin, async (req, res) => {
+  const parsed = z.object({ enabled: z.boolean() }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ ok: false, error: 'VALIDATION_ERROR' });
+  try {
+    const result = await pool.query(
+      `UPDATE leagues
+          SET premium_enabled=$1,
+              visibility=CASE WHEN $1 THEN 'public' ELSE visibility END,
+              premium_started_at=CASE WHEN $1 THEN COALESCE(premium_started_at, NOW()) ELSE premium_started_at END,
+              premium_expires_at=CASE WHEN $1 THEN COALESCE(end_date, start_date + INTERVAL '30 days') ELSE NOW() END,
+              updated_at=NOW()
+        WHERE id=$2
+        RETURNING id, visibility, premium_enabled, premium_started_at, premium_expires_at`,
+      [parsed.data.enabled, req.params.id],
+    );
+    if (!result.rowCount) return res.status(404).json({ ok: false, error: 'LEAGUE_NOT_FOUND' });
+    return res.json({ ok: true, league: result.rows[0] });
+  } catch (error) {
+    console.error('admin league premium update error:', error);
+    return res.status(500).json({ ok: false, error: 'DB_ERROR' });
   }
 });
 

@@ -24,6 +24,7 @@
     Chip,
     ToggleButtonGroup,
     ToggleButton,
+    Switch,
   } from "@mui/material";
   import QRCode from "react-qr-code";
   import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -36,6 +37,7 @@
   import RefreshIcon from "@mui/icons-material/Refresh";
   import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
   import LanguageIcon from "@mui/icons-material/Language";
+  import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
   import {
     useGetLeagueQuery,
     useGetLeagueProgramQuery,
@@ -62,6 +64,7 @@
   import ParticipantClaimDialog from "./ParticipantClaimDialog";
   import LeagueInvitedGroupsDialog from "./LeagueInvitedGroupsDialog";
   import { distributeSnake } from "../../features/league/algorithms/distributeSnake";
+  import { useGetMyFeatureUsageQuery } from "../../features/payment/usageApi";
 
   function parseLocation(description?: string) {
     if (!description) return "-";
@@ -204,6 +207,7 @@
     const { data: leagueMatchesData } = useGetLeagueMatchesQuery(id ?? "", { skip: !id });
     const { data: invitedGroupsData } = useGetLeagueInvitedGroupsQuery(id ?? "", { skip: !id });
     const { data: myGroupsData } = useGetMyGroupsQuery(undefined, { skip: !authUser });
+    const { data: usageData } = useGetMyFeatureUsageQuery(undefined, { skip: !authUser });
 
     const [updateParticipant] = useUpdateParticipantMutation();
     const [updateLeague, { isLoading: saving }] = useUpdateLeagueMutation();
@@ -218,6 +222,8 @@
       skip: !leagueData?.league?.group_id,
     });
     const league = leagueData?.league;
+    const premiumBalance = usageData?.usage.premium_promotion;
+    const canUsePremium = Boolean(league?.premium_enabled || premiumBalance?.unlimited || Number(premiumBalance?.remaining ?? 0) > 0);
 
     useEffect(() => {
       if (!league) return;
@@ -1743,6 +1749,60 @@ const handleSaveEdit = async () => {
                     <ToggleButton value="club_only" sx={{ gap: 0.5 }}><LockOutlinedIcon sx={{ fontSize: 16 }} />클럽에 가입한 회원만</ToggleButton>
                     <ToggleButton value="public" sx={{ gap: 0.5 }}><LanguageIcon sx={{ fontSize: 16 }} />링크가 있는 모든 사람</ToggleButton>
                   </ToggleButtonGroup>
+                </Box>
+              )}
+              {canManage && canUsePremium && (
+                <Box
+                  sx={{
+                    width: "100%",
+                    p: 2,
+                    borderRadius: 2,
+                    border: "1px solid #D6B35A",
+                    background: "linear-gradient(135deg, #24113F 0%, #4C1D75 60%, #2E1065 100%)",
+                    boxShadow: league?.premium_enabled ? "0 8px 24px rgba(91,33,182,0.28)" : undefined,
+                  }}
+                >
+                  <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
+                    <Box>
+                      <Stack direction="row" alignItems="center" spacing={0.7}>
+                        <AutoAwesomeIcon sx={{ color: "#F5D77A", fontSize: 18 }} />
+                        <Typography sx={{ color: "#F5D77A", fontSize: 11, fontWeight: 950, letterSpacing: 1.2 }}>PREMIUM</Typography>
+                      </Stack>
+                      <Typography sx={{ color: "#fff", fontWeight: 900, mt: 0.6 }}>프리미엄 노출</Typography>
+                      <Typography sx={{ color: "#E9D5FF", fontSize: 12, mt: 0.5 }}>
+                        전체 일정과 프리미엄 영역에 리그를 소개합니다.
+                      </Typography>
+                    </Box>
+                    <Switch
+                      checked={Boolean(league?.premium_enabled)}
+                      disabled={saving}
+                      onChange={async (event) => {
+                        if (!id) return;
+                        const enabled = event.target.checked;
+                        if (enabled && !window.confirm("프리미엄 노출을 시작할까요? 전체 일정 공개와 외부 참가 권한이 함께 적용됩니다.")) return;
+                        try {
+                          await updateLeague({
+                            id,
+                            updates: enabled
+                              ? { premium_enabled: true, visibility: "public", join_permission: "public" }
+                              : { premium_enabled: false },
+                          }).unwrap();
+                          setAlertSeverity("success");
+                          setAlertMsg(enabled ? "프리미엄 노출을 시작했습니다." : "프리미엄 노출을 중단했습니다.");
+                        } catch {
+                          setAlertSeverity("error");
+                          setAlertMsg("프리미엄 노출 설정을 변경하지 못했습니다.");
+                        }
+                      }}
+                      sx={{
+                        "& .MuiSwitch-switchBase.Mui-checked": { color: "#F5D77A" },
+                        "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": { bgcolor: "#D6B35A", opacity: 1 },
+                      }}
+                    />
+                  </Stack>
+                  <Typography sx={{ color: "#D8B4FE", fontSize: 11.5, mt: 1.4 }}>
+                    {premiumBalance?.unlimited ? "프리미엄 구독 혜택" : `남은 프리미엄 노출권 ${premiumBalance?.remaining ?? 0}회`}
+                  </Typography>
                 </Box>
               )}
               <Box sx={{ p: 2, bgcolor: "#fff", borderRadius: 1, border: "1px solid #E0E0E0" }}>

@@ -15,6 +15,7 @@ const FEATURE_OPTIONS = [
   { key: "event_join", label: "리그·대회 참가" },
   { key: "vision_scan", label: "참가자·대진표 사진 인식" },
   { key: "draw_create", label: "추첨 생성" },
+  { key: "premium_promotion", label: "프리미엄 노출" },
 ] as const;
 type FeatureKey = typeof FEATURE_OPTIONS[number]["key"];
 type FeatureLimits = Record<FeatureKey, number | null>;
@@ -26,6 +27,7 @@ const DEFAULT_FEATURE_LIMITS: FeatureLimits = {
   event_join: null,
   vision_scan: 0,
   draw_create: 1,
+  premium_promotion: 0,
 };
 type Plan = {
   id: number; code: string; name: string; badge_text: string | null; price: number;
@@ -74,7 +76,13 @@ export default function AdminPricingPlanPage() {
       price: plan.price, original_price: plan.original_price,
       billing_cycle: plan.billing_cycle, sale_start_at: plan.sale_start_at,
       sale_end_at: plan.sale_end_at, featuresText: (plan.features ?? []).join("\n"),
-      feature_limits: { ...DEFAULT_FEATURE_LIMITS, ...(plan.feature_limits ?? {}) },
+      feature_limits: {
+        ...DEFAULT_FEATURE_LIMITS,
+        ...(plan.code.toLowerCase() === "premium" && plan.feature_limits?.premium_promotion === undefined
+          ? { premium_promotion: null }
+          : {}),
+        ...(plan.feature_limits ?? {}),
+      },
       display_order: plan.display_order, is_visible: plan.is_visible,
     });
     setError(""); setOpen(true);

@@ -12,6 +12,7 @@ export type FeatureUsageResponse = {
     league_create: FeatureBalance;
     vision_scan: FeatureBalance;
     draw_create: FeatureBalance;
+    premium_promotion: FeatureBalance;
   };
 };
 

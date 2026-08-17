@@ -19,6 +19,13 @@ export interface RenewalLeagueBasicInfo {
   location: string;
   participantCount: number | null;
   courtCount: number | null;
+  joinPermission: "public" | "club_only";
+  premiumEnabled: boolean;
+  venueAddress: string;
+  venueLat: number | null;
+  venueLng: number | null;
+  venueRegionCity: string;
+  venueRegionDistrict: string;
 }
 
 export interface RenewalLeagueConfiguration {
@@ -209,6 +216,14 @@ export const createRenewalLeague = createAsyncThunk.withTypes<{ state: RootState
       sort_order: "부수",
       participants: state.participants,
       invited_group_ids: state.invitedGroupIds,
+      join_permission: state.basicInfo.joinPermission,
+      premium_enabled: state.basicInfo.premiumEnabled,
+      venue_name: state.basicInfo.location || undefined,
+      venue_address: state.basicInfo.venueAddress || undefined,
+      venue_lat: state.basicInfo.venueLat ?? undefined,
+      venue_lng: state.basicInfo.venueLng ?? undefined,
+      venue_region_city: state.basicInfo.venueRegionCity || undefined,
+      venue_region_district: state.basicInfo.venueRegionDistrict || undefined,
       tournament_seeding: "seed",
       program_data: programData,
     };

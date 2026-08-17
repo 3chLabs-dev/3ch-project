@@ -280,6 +280,16 @@ export interface PointRankingRow {
   total_points: number;
 }
 
+export interface LeagueVenuePlace {
+  id: string;
+  name: string;
+  address: string;
+  region_city: string | null;
+  region_district: string | null;
+  lat: number;
+  lng: number;
+}
+
 export interface GroupRankingSeason {
   id: string;
   name: string;
@@ -810,6 +820,10 @@ export const groupApi = baseApi.injectEndpoints({
       providesTags: (_result, _error, { groupId }) => [{ type: "Group", id: `ranking-${groupId}` }],
     }),
 
+    searchLeagueVenues: builder.query<{ ok: boolean; places: LeagueVenuePlace[] }, string>({
+      query: (query) => `/group/place-search?q=${encodeURIComponent(query)}`,
+    }),
+
     getGroupPointRanking: builder.query<GroupPointRankingResponse, { groupId: string; year?: number; seasonId?: string; scope: "club" | "national" }>({
       async queryFn({ groupId, year, seasonId, scope }, api, _extraOptions, fetchWithBQ) {
         const token = (api.getState() as RootState).auth?.token;
@@ -991,6 +1005,7 @@ export const {
   useDeleteGroupMutation,
   useLeaveGroupMutation,
   useLazyGeocodeAddressQuery,
+  useLazySearchLeagueVenuesQuery,
   useRecommendGroupsMutation,
   useGetGroupMemberDetailQuery,
   useGetGroupMemberLeagueHistoryQuery,

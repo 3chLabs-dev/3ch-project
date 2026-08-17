@@ -954,6 +954,14 @@ const createLeagueSchema = z.object({
   finals_advance: z.number().int().min(2).optional(), // 결승 진출
   program_data: z.unknown().optional(),
   invited_group_ids: z.array(z.string().uuid()).default([]),
+  join_permission: z.enum(['public', 'club_only']).default('public'),
+  premium_enabled: z.boolean().default(false),
+  venue_name: z.string().max(120).optional(),
+  venue_address: z.string().max(500).optional(),
+  venue_lat: z.number().min(-90).max(90).optional(),
+  venue_lng: z.number().min(-180).max(180).optional(),
+  venue_region_city: z.string().max(80).optional(),
+  venue_region_district: z.string().max(80).optional(),
 });
 
 const updateLeagueSchema = z.object({
@@ -974,6 +982,8 @@ const updateLeagueSchema = z.object({
   recruit_count: z.number().int().min(1).optional(),
   status: z.enum(['draft', 'active', 'completed']).optional(),
   join_permission: z.enum(['public', 'club_only']).optional(),
+  visibility: z.enum(['public', 'club_only']).optional(),
+  premium_enabled: z.boolean().optional(),
   tournament_seeding: z.string().optional(),
   tournament_advancement: z.string().optional(),
   tournament_rules: z.string().optional(),
@@ -1077,6 +1087,7 @@ router.get('/league', async (req, res) => {
     const result = await pool.query(
       `SELECT l.id, l.name, l.description, l.title, l.type, l.sport, l.start_date, l.end_date, l.court_count, l.status,
               l.recruit_count, l.participant_count, l.group_id, l.created_at, l.league_code, l.title,
+              l.visibility, l.premium_enabled, l.premium_started_at, l.premium_expires_at,
               u.name AS creator_name,
               g.name AS group_name,
               (SELECT COUNT(*)::int FROM league_invited_groups lig
@@ -1104,6 +1115,139 @@ router.get('/league', async (req, res) => {
   } catch (error) {
     console.error('Error fetching leagues:', error);
     return res.status(500).json({ message: '리그 목록 조회 중 서버 오류' });
+  }
+});
+
+/**
+ * GET /league/mine
+ * 로그인 사용자가 가입한 모든 클럽이 개설한 리그를 조회합니다.
+ * 캘린더에서는 from/to로 조회 범위를 제한할 수 있습니다.
+ */
+router.get('/league/mine', requireAuth, async (req, res) => {
+  try {
+    const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional();
+    const from = dateSchema.parse(req.query.from);
+    const to = dateSchema.parse(req.query.to);
+
+    if (from && to && from > to) {
+      return res.status(400).json({ message: '조회 시작일은 종료일보다 늦을 수 없습니다.' });
+    }
+
+    const userId = Number(req.user.sub);
+    const conditions = [
+      'l.group_id IN (SELECT group_id FROM group_members WHERE user_id = $1)',
+    ];
+    const params = [userId];
+
+    if (from) {
+      params.push(from);
+      conditions.push(`COALESCE(l.end_date, l.start_date) >= $${params.length}::date`);
+    }
+    if (to) {
+      params.push(to);
+      conditions.push(`l.start_date < ($${params.length}::date + INTERVAL '1 day')`);
+    }
+
+    const result = await pool.query(
+      `SELECT l.id, l.name, l.description, l.title, l.type, l.sport, l.start_date, l.end_date,
+              l.court_count, l.status, l.recruit_count, l.participant_count, l.group_id,
+              l.created_at, l.league_code, l.visibility, l.premium_enabled, l.premium_started_at, l.premium_expires_at,
+              u.name AS creator_name, g.name AS group_name,
+              (SELECT COUNT(*)::int FROM league_invited_groups lig
+                WHERE lig.league_id = l.id AND lig.status <> 'declined') AS invited_group_count,
+              ARRAY(SELECT invited.name
+                      FROM league_invited_groups lig
+                      JOIN groups invited ON invited.id = lig.group_id
+                     WHERE lig.league_id = l.id AND lig.status <> 'declined'
+                     ORDER BY lig.created_at) AS invited_group_names
+         FROM leagues l
+         LEFT JOIN users u ON l.created_by_id = u.id
+         LEFT JOIN groups g ON l.group_id = g.id
+        WHERE ${conditions.join(' AND ')}
+        ORDER BY l.start_date ASC, l.created_at ASC`,
+      params,
+    );
+
+    return res.status(200).json({
+      leagues: result.rows,
+      total: result.rowCount,
+      page: 1,
+      limit: result.rowCount,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ message: '날짜 형식은 YYYY-MM-DD여야 합니다.' });
+    }
+    console.error('Error fetching my group leagues:', error);
+    return res.status(500).json({ message: '내 클럽 리그 목록 조회 중 서버 오류' });
+  }
+});
+
+// 공개된 주변 리그 및 프리미엄 일정을 조회합니다.
+router.get('/league/discover', optionalAuth, async (req, res) => {
+  try {
+    const parsed = z.object({
+      lat: z.coerce.number().min(-90).max(90).optional(),
+      lng: z.coerce.number().min(-180).max(180).optional(),
+      limit: z.coerce.number().int().min(1).max(50).default(20),
+    }).parse(req.query);
+    const userId = req.user?.sub ? Number(req.user.sub) : null;
+    let latitude = parsed.lat ?? null;
+    let longitude = parsed.lng ?? null;
+    let regionCity = null;
+    let regionDistrict = null;
+
+    if (userId && (latitude === null || longitude === null)) {
+      const location = await pool.query(
+        `SELECT g.lat, g.lng, g.region_city, g.region_district
+           FROM group_members gm
+           JOIN groups g ON g.id = gm.group_id
+          WHERE gm.user_id = $1
+          ORDER BY CASE WHEN g.lat IS NOT NULL AND g.lng IS NOT NULL THEN 0 ELSE 1 END,
+                   gm.joined_at ASC
+          LIMIT 1`,
+        [userId],
+      );
+      latitude = location.rows[0]?.lat ?? null;
+      longitude = location.rows[0]?.lng ?? null;
+      regionCity = location.rows[0]?.region_city ?? null;
+      regionDistrict = location.rows[0]?.region_district ?? null;
+    }
+
+    const result = await pool.query(
+      `SELECT l.id, l.name, l.title, l.type, l.sport, l.start_date, l.end_date, l.status,
+              l.recruit_count, l.participant_count, l.group_id, l.league_code, l.join_permission,
+              l.visibility, l.premium_started_at, l.premium_expires_at,
+              (l.premium_enabled = TRUE AND (l.premium_expires_at IS NULL OR l.premium_expires_at > NOW())) AS premium_enabled,
+              g.name AS group_name, COALESCE(l.venue_region_city, g.region_city) AS region_city,
+              COALESCE(l.venue_region_district, g.region_district) AS region_district,
+              CASE WHEN $1::double precision IS NOT NULL AND $2::double precision IS NOT NULL
+                         AND COALESCE(l.venue_lat, g.lat) IS NOT NULL AND COALESCE(l.venue_lng, g.lng) IS NOT NULL
+                THEN 6371 * acos(LEAST(1, cos(radians($1)) * cos(radians(COALESCE(l.venue_lat, g.lat)))
+                     * cos(radians(COALESCE(l.venue_lng, g.lng)) - radians($2)) + sin(radians($1)) * sin(radians(COALESCE(l.venue_lat, g.lat)))))
+                ELSE NULL END AS distance_km
+         FROM leagues l
+         JOIN groups g ON g.id = l.group_id
+        WHERE l.visibility = 'public'
+          AND l.start_date >= CURRENT_DATE
+          AND ($3::integer IS NULL OR l.group_id NOT IN (
+            SELECT group_id FROM group_members WHERE user_id = $3
+          ))
+          AND (
+            ($1::double precision IS NOT NULL AND $2::double precision IS NOT NULL AND COALESCE(l.venue_lat, g.lat) IS NOT NULL AND COALESCE(l.venue_lng, g.lng) IS NOT NULL)
+            OR ($4::text IS NOT NULL AND (COALESCE(l.venue_region_city, g.region_city) = $4 OR COALESCE(l.venue_region_district, g.region_district) = $4))
+            OR ($5::text IS NOT NULL AND (COALESCE(l.venue_region_city, g.region_city) = $5 OR COALESCE(l.venue_region_district, g.region_district) = $5))
+            OR ($1::double precision IS NULL AND $4::text IS NULL AND $5::text IS NULL)
+          )
+        ORDER BY premium_enabled DESC, distance_km ASC NULLS LAST, l.start_date ASC
+        LIMIT $6`,
+      [latitude, longitude, userId, regionCity, regionDistrict, parsed.limit],
+    );
+    return res.json({ leagues: result.rows });
+  } catch (error) {
+    if (error instanceof z.ZodError) return res.status(400).json({ message: '위치 조회 조건이 올바르지 않습니다.' });
+    console.error('Error discovering leagues:', error);
+    return res.status(500).json({ message: '주변 리그 조회 중 서버 오류' });
   }
 });
 
@@ -1178,6 +1322,8 @@ router.post('/league', requireAuth, async (req, res) => {
   let quotaRequestKey = null;
   let quotaUserId = null;
   let quotaConsumed = false;
+  let premiumRequestKey = null;
+  let premiumConsumed = false;
   try {
     const {
       name,
@@ -1203,6 +1349,14 @@ router.post('/league', requireAuth, async (req, res) => {
       finals_advance,
       program_data,
       invited_group_ids,
+      join_permission,
+      premium_enabled,
+      venue_name,
+      venue_address,
+      venue_lat,
+      venue_lng,
+      venue_region_city,
+      venue_region_district,
     } = createLeagueSchema.parse(req.body);
 
     const userId = req.user.sub;
@@ -1247,13 +1401,42 @@ router.post('/league', requireAuth, async (req, res) => {
     }
     quotaConsumed = true;
 
+    let premiumExpiresAt = null;
+    if (premium_enabled) {
+      premiumRequestKey = `premium-promotion:${quotaUserId}:${clientRequestKey}`;
+      const premium = await consumeFeatureCredit({
+        userId: quotaUserId,
+        feature: FEATURES.PREMIUM_PROMOTION,
+        requestKey: premiumRequestKey,
+        referenceType: 'LEAGUE',
+        referenceId: leagueId,
+        metadata: { groupId: group_id },
+      });
+      if (!premium.allowed) {
+        await refundFeatureCredit({
+          userId: quotaUserId,
+          feature: FEATURES.EVENT_CREATE,
+          requestKey: quotaRequestKey,
+          reason: 'PREMIUM_PROMOTION_EXHAUSTED',
+        });
+        quotaConsumed = false;
+        return res.status(402).json({
+          message: '사용 가능한 프리미엄 노출 혜택이 없습니다.',
+          code: 'PREMIUM_PROMOTION_EXHAUSTED',
+          pricingPath: '/mypage/pricing#token-packages',
+        });
+      }
+      premiumConsumed = true;
+      premiumExpiresAt = premium.expiresAt ?? end_date ?? null;
+    }
+
     await client.query('BEGIN');
 
     const result = await client.query(
-      `INSERT INTO leagues (id, name, description, title, type, format, sport, start_date, end_date, court_count, rules, sort_order, recruit_count, participant_count, group_id, created_by_id, billing_owner_id, tournament_seeding, tournament_advancement, tournament_rules, advance_count, advance_method, finals_advance)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $16, $17, $18, $19, $20, $21, $22)
-       RETURNING id, name, description, title, type, format, sport, start_date, end_date, court_count, status, rules, notice, entry_fee, bank_account, sort_order, recruit_count, participant_count, group_id, tournament_seeding, tournament_advancement, tournament_rules, advance_count, advance_method, finals_advance, created_at, updated_at;`,
-      [leagueId, name, description, title, type, format, sport, start_date, end_date ?? null, court_count ?? null, rules, sort_order ?? null, recruit_count, participant_count, group_id, userId, tournament_seeding ?? null, tournament_advancement ?? null, tournament_rules ?? null, advance_count ?? null, advance_method ?? null, finals_advance ?? null],
+      `INSERT INTO leagues (id, name, description, title, type, format, sport, start_date, end_date, court_count, rules, sort_order, recruit_count, participant_count, group_id, created_by_id, billing_owner_id, tournament_seeding, tournament_advancement, tournament_rules, advance_count, advance_method, finals_advance, join_permission, visibility, premium_enabled, premium_started_at, premium_expires_at, venue_name, venue_address, venue_lat, venue_lng, venue_region_city, venue_region_district)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33)
+       RETURNING id, name, description, title, type, format, sport, start_date, end_date, court_count, status, rules, notice, entry_fee, bank_account, sort_order, recruit_count, participant_count, group_id, join_permission, visibility, premium_enabled, premium_started_at, premium_expires_at, venue_name, venue_address, venue_lat, venue_lng, venue_region_city, venue_region_district, tournament_seeding, tournament_advancement, tournament_rules, advance_count, advance_method, finals_advance, created_at, updated_at;`,
+      [leagueId, name, description, title, type, format, sport, start_date, end_date ?? null, court_count ?? null, rules, sort_order ?? null, recruit_count, participant_count, group_id, userId, tournament_seeding ?? null, tournament_advancement ?? null, tournament_rules ?? null, advance_count ?? null, advance_method ?? null, finals_advance ?? null, premium_enabled ? 'public' : join_permission, premium_enabled ? 'public' : 'club_only', premium_enabled, premium_enabled ? new Date() : null, premiumExpiresAt, venue_name ?? null, venue_address ?? null, venue_lat ?? null, venue_lng ?? null, venue_region_city ?? null, venue_region_district ?? null],
     );
 
     const leagueCode = await assignLeagueCode(client, { groupId: group_id, startDate: start_date, leagueId });
@@ -1345,6 +1528,15 @@ router.post('/league', requireAuth, async (req, res) => {
         requestKey: quotaRequestKey,
         reason: 'LEAGUE_CREATE_FAILED',
       }).catch((refundError) => console.error('League creation quota refund failed:', refundError));
+    }
+
+    if (premiumConsumed && premiumRequestKey && quotaUserId) {
+      await refundFeatureCredit({
+        userId: quotaUserId,
+        feature: FEATURES.PREMIUM_PROMOTION,
+        requestKey: premiumRequestKey,
+        reason: 'LEAGUE_CREATE_FAILED',
+      }).catch((refundError) => console.error('Premium promotion refund failed:', refundError));
     }
 
     console.error('Error creating league:', error);
@@ -2274,6 +2466,8 @@ router.get('/league/:id', optionalAuth, async (req, res) => {
     const leagueResult = await pool.query(
       `SELECT id, name, description, title, type, format, sport, start_date, end_date, court_count, rules, status,
               sort_order, notice, entry_fee, bank_account, league_code, recruit_count, participant_count, join_permission,
+              visibility, premium_enabled, premium_started_at, premium_expires_at,
+              venue_name, venue_address, venue_lat, venue_lng, venue_region_city, venue_region_district,
               group_id, created_by_id, tournament_seeding, tournament_advancement,
               tournament_rules, advance_count, advance_method, finals_advance,
               created_at, updated_at
@@ -2359,12 +2553,15 @@ router.get('/league/:id', optionalAuth, async (req, res) => {
  *         description: 서버 오류
  */
 router.put('/league/:id', requireAuth, async (req, res) => {
+  let premiumUpdateRequestKey = null;
+  let premiumUpdateConsumed = false;
+  let premiumUpdateUserId = null;
   try {
     const { id } = req.params;
     const userId = Number(req.user.sub);
 
     const accessCheck = await pool.query(
-      `SELECT 1
+      `SELECT l.premium_enabled, l.premium_started_at
        FROM leagues l
        INNER JOIN group_members gm ON gm.group_id = l.group_id
        WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
@@ -2375,6 +2572,40 @@ router.put('/league/:id', requireAuth, async (req, res) => {
     }
 
     const updates = updateLeagueSchema.parse(req.body);
+
+    const enablingPremium = updates.premium_enabled === true && !accessCheck.rows[0].premium_enabled;
+    if (updates.visibility === 'public' && !enablingPremium && !accessCheck.rows[0].premium_started_at) {
+      return res.status(403).json({
+        message: '전체 공개는 프리미엄 노출 혜택을 사용한 리그에서만 설정할 수 있습니다.',
+        code: 'PREMIUM_REQUIRED_FOR_PUBLIC_VISIBILITY',
+      });
+    }
+    if (enablingPremium) {
+      premiumUpdateUserId = userId;
+      const clientRequestKey = String(req.get('Idempotency-Key') || randomUUID()).trim().slice(0, 64);
+      premiumUpdateRequestKey = `premium-update:${id}:${userId}:${clientRequestKey}`;
+      const premium = await consumeFeatureCredit({
+        userId,
+        feature: FEATURES.PREMIUM_PROMOTION,
+        requestKey: premiumUpdateRequestKey,
+        referenceType: 'LEAGUE',
+        referenceId: id,
+        metadata: { action: 'ENABLE' },
+      });
+      if (!premium.allowed) {
+        return res.status(402).json({
+          message: '사용 가능한 프리미엄 노출 혜택이 없습니다.',
+          code: 'PREMIUM_PROMOTION_EXHAUSTED',
+          pricingPath: '/mypage/pricing#token-packages',
+        });
+      }
+      premiumUpdateConsumed = true;
+      updates.visibility = 'public';
+      updates.premium_started_at = new Date();
+      updates.premium_expires_at = premium.expiresAt ?? null;
+    } else if (updates.premium_enabled === false && accessCheck.rows[0].premium_enabled) {
+      updates.premium_expires_at = new Date();
+    }
 
     const fields = [];
     const values = [];
@@ -2397,7 +2628,7 @@ router.put('/league/:id', requireAuth, async (req, res) => {
       UPDATE leagues
       SET ${fields.join(', ')}, updated_at = NOW()
       WHERE id = $${queryIndex}
-      RETURNING id, name, description, title, type, format, sport, start_date, end_date, court_count, rules, notice, entry_fee, bank_account, sort_order, status, recruit_count, participant_count, join_permission, created_by_id, tournament_seeding, tournament_advancement, tournament_rules, advance_count, advance_method, finals_advance, created_at, updated_at;
+      RETURNING id, name, description, title, type, format, sport, start_date, end_date, court_count, rules, notice, entry_fee, bank_account, sort_order, status, recruit_count, participant_count, join_permission, visibility, premium_enabled, premium_started_at, premium_expires_at, created_by_id, tournament_seeding, tournament_advancement, tournament_rules, advance_count, advance_method, finals_advance, created_at, updated_at;
     `;
 
     const result = await pool.query(updateQuery, values);
@@ -2411,6 +2642,14 @@ router.put('/league/:id', requireAuth, async (req, res) => {
       league: result.rows[0],
     });
   } catch (error) {
+    if (premiumUpdateConsumed && premiumUpdateRequestKey && premiumUpdateUserId) {
+      await refundFeatureCredit({
+        userId: premiumUpdateUserId,
+        feature: FEATURES.PREMIUM_PROMOTION,
+        requestKey: premiumUpdateRequestKey,
+        reason: 'PREMIUM_UPDATE_FAILED',
+      }).catch((refundError) => console.error('Premium update refund failed:', refundError));
+    }
     if (error instanceof z.ZodError) {
       return res.status(400).json({ errors: error.errors });
     }

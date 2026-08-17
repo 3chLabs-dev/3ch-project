@@ -29,6 +29,7 @@ const FEATURES = [
   { value: "EVENT_JOIN", label: "리그·대회 참가" },
   { value: "VISION_SCAN", label: "참가자·대진표 사진 인식" },
   { value: "DRAW_CREATE", label: "추첨 생성" },
+  { value: "PREMIUM_PROMOTION", label: "프리미엄 노출" },
 ];
 const ACTION_LABEL: Record<string, string> = {
   CONSUME: "차감",

@@ -19,7 +19,6 @@ export default function BillingSuccess() {
 
   useEffect(() => {
     if (requestedRef.current) return;
-
     const authKey = searchParams.get("authKey");
     const customerKey = searchParams.get("customerKey");
     const planCode =
@@ -38,11 +37,12 @@ export default function BillingSuccess() {
 
     axios.post(
       `${API}/payment/billing/issue`,
-      { authKey, customerKey, planCode },
+      { authKey, customerKey, planCode, couponRedemptionId:sessionStorage.getItem("billing_coupon_id")||null },
       { headers: { Authorization: `Bearer ${resolvedToken}` } },
     )
       .then(() => {
         sessionStorage.removeItem("billing_plan_code");
+        sessionStorage.removeItem("billing_coupon_id");
         setStatus("success");
       })
       .catch((error) => {

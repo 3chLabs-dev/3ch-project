@@ -333,7 +333,7 @@ export default function PricingPage() {
     const resolvedToken = token ?? localStorage.getItem("token");
     if (!resolvedToken) { navigate("/login"); return; }
     setCouponLoading(true); setCouponMessage(null);
-    try { const response=await fetch(`${API}/coupons/redeem`,{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${resolvedToken}`},body:JSON.stringify({code:couponCode})}); const data=await response.json(); if(!response.ok) throw new Error(data.message||"쿠폰을 사용할 수 없습니다."); setCouponMessage({type:"success",text:`${data.coupon.name} 쿠폰이 적용되었습니다.`}); setCouponCode(""); await loadCoupons(); loadPurchaseHistory(); }
+    try { const response=await fetch(`${API}/coupons/redeem`,{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${resolvedToken}`},body:JSON.stringify({code:couponCode})}); const data=await response.json(); if(!response.ok) throw new Error(data.message||"쿠폰을 등록할 수 없습니다."); const isDiscount=data.coupon.type==="PERCENT_DISCOUNT"; setCouponMessage({type:"success",text:isDiscount?`${data.coupon.name} 쿠폰이 등록되었습니다. 구독 결제 화면에서 적용해 주세요.`:`${data.coupon.name} 혜택이 즉시 지급되었습니다.`}); setCouponCode(""); await loadCoupons(); loadPurchaseHistory(); }
     catch(error){setCouponMessage({type:"error",text:error instanceof Error?error.message:"쿠폰을 사용할 수 없습니다."});} finally{setCouponLoading(false);}
   };
   useEffect(() => {

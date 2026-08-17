@@ -1840,13 +1840,18 @@ router.get('/payments', requireAdmin, async (req, res) => {
   const paymentSource = `
     SELECT s.id::text AS id, s.plan, s.order_id, s.amount, s.status,
            s.started_at AS starts_at, s.expires_at, s.created_at,
-           u.id AS user_id, u.name, u.email, 'SUBSCRIPTION'::text AS purchase_type
+           u.id AS user_id, u.name, u.email, 'SUBSCRIPTION'::text AS purchase_type,
+           pp.price AS original_amount, c.name AS coupon_name, c.value AS coupon_discount_percent
       FROM subscriptions s
       JOIN users u ON u.id = s.user_id
+      LEFT JOIN pricing_plans pp ON pp.code=s.plan
+      LEFT JOIN coupon_redemptions cr ON cr.applied_order_id=s.order_id
+      LEFT JOIN coupons c ON c.id=cr.coupon_id
     UNION ALL
     SELECT tp.id::text AS id, pkg.name AS plan, tp.order_id, tp.amount, tp.status,
            tp.created_at AS starts_at, tp.expires_at, tp.created_at,
-           u.id AS user_id, u.name, u.email, 'TOKEN'::text AS purchase_type
+           u.id AS user_id, u.name, u.email, 'TOKEN'::text AS purchase_type,
+           tp.amount AS original_amount, NULL::varchar AS coupon_name, NULL::int AS coupon_discount_percent
       FROM token_purchases tp
       JOIN token_packages pkg ON pkg.id = tp.package_id
       JOIN users u ON u.id = tp.user_id`;

@@ -666,7 +666,7 @@ router.get("/payment/billing/customer-key", requireAuth, async (req, res) => {
 
 router.post("/payment/billing/issue", requireAuth, async (req, res) => {
   const userId = Number(req.user.sub);
-  const { authKey, customerKey, planCode } = req.body || {};
+  const { authKey, customerKey, planCode, couponRedemptionId } = req.body || {};
   if (!authKey || !customerKey || !planCode) {
     return res.status(400).json({ ok: false, error: "MISSING_PARAMS" });
   }
@@ -743,8 +743,9 @@ router.post("/payment/billing/issue", requireAuth, async (req, res) => {
               COALESCE(NULLIF(r.benefit->>'remainingMonths','')::int, 1) AS duration_months
          FROM coupon_redemptions r JOIN coupons c ON c.id=r.coupon_id
         WHERE r.user_id=$1 AND r.status='AVAILABLE' AND c.type='PERCENT_DISCOUNT'
+          AND r.id=$3::uuid
           AND c.is_active=true AND c.valid_until>NOW() AND (c.plan_code IS NULL OR c.plan_code=$2)
-        ORDER BY r.redeemed_at ASC LIMIT 1`, [userId,plan.code],
+        ORDER BY r.redeemed_at ASC LIMIT 1`, [userId,plan.code,couponRedemptionId||null],
     );
     const discount = discountResult.rows[0];
     const chargedAmount = discount
@@ -766,7 +767,7 @@ router.post("/payment/billing/issue", requireAuth, async (req, res) => {
       payment,
       chargedAmount,
     });
-    if (discount) await pool.query(`UPDATE coupon_redemptions SET status=CASE WHEN $2>1 THEN 'ACTIVE' ELSE 'APPLIED' END,benefit=jsonb_set(benefit,'{remainingMonths}',to_jsonb(GREATEST($2-1,0))),applied_at=NOW() WHERE id=$1 AND status='AVAILABLE'`,[discount.id,Number(discount.duration_months)]);
+    if (discount) await pool.query(`UPDATE coupon_redemptions SET status='APPLIED',benefit=jsonb_set(benefit,'{remainingMonths}','0'::jsonb),applied_at=NOW(),applied_order_id=$2 WHERE id=$1 AND status='AVAILABLE'`,[discount.id,payment.orderId]);
     return res.json({ ok: true, plan: plan.code, expiresAt: subscription.expiresAt });
   } catch (error) {
     console.error("billing issue error:", error);

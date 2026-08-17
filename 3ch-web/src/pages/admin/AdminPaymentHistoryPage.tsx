@@ -17,6 +17,9 @@ type Payment = {
   created_at: string;
   order_id?: string | null;
   amount?: number | null;
+  original_amount?: number | null;
+  coupon_name?: string | null;
+  coupon_discount_percent?: number | null;
   purchase_type?: "SUBSCRIPTION" | "TOKEN";
 };
 
@@ -116,7 +119,7 @@ export default function AdminPaymentHistoryPage() {
                     <Typography fontSize={11} color="#7C3AED">추가 사용량</Typography>
                   )}
                 </TableCell>
-                <TableCell>{payment.amount == null ? "-" : `${Number(payment.amount).toLocaleString("ko-KR")}원`}</TableCell>
+                <TableCell>{payment.amount == null ? "-" : <Box>{payment.coupon_name&&<Typography fontSize={11} color="text.secondary" sx={{textDecoration:"line-through"}}>{Number(payment.original_amount??payment.amount).toLocaleString("ko-KR")}원</Typography>}<Typography fontSize={13} fontWeight={800}>{Number(payment.amount).toLocaleString("ko-KR")}원</Typography>{payment.coupon_name&&<Typography fontSize={11} color="#2563EB">쿠폰 사용 · {payment.coupon_name} ({payment.coupon_discount_percent}% 할인)</Typography>}</Box>}</TableCell>
                 <TableCell>{statusLabel(payment.status)}</TableCell>
                 <TableCell sx={{ whiteSpace: "nowrap" }}>
                   {dateTime(payment.starts_at)} ~ {dateTime(payment.expires_at)}

@@ -8,6 +8,8 @@ import {
   IconButton,
   Stack,
   Typography,
+  TextField,
+  MenuItem,
 } from "@mui/material";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import CreditCardOutlinedIcon from "@mui/icons-material/CreditCardOutlined";
@@ -24,6 +26,7 @@ type Plan = {
   name: string;
   price: number;
 };
+type Coupon={id:string;name:string;type:"PERCENT_DISCOUNT";value:number};
 
 export default function BillingCheckout() {
   const navigate = useNavigate();
@@ -35,6 +38,8 @@ export default function BillingCheckout() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [coupons,setCoupons]=useState<Coupon[]>([]);
+  const [couponId,setCouponId]=useState("");
 
   const authHeaders = useMemo(
     () => ({ Authorization: `Bearer ${token}` }),
@@ -56,6 +61,7 @@ export default function BillingCheckout() {
         const selected = (data.plans ?? []).find((item: Plan) => item.code === planCode);
         if (!selected || Number(selected.price) <= 0) throw new Error("INVALID_PLAN");
         setPlan(selected);
+        fetch(`${API}/coupons/available?plan=${encodeURIComponent(planCode)}`,{headers:{Authorization:`Bearer ${token}`}}).then(r=>r.json()).then(d=>setCoupons(d.coupons??[]));
       })
       .catch(() => setError("요금제 정보를 불러오지 못했습니다."))
       .finally(() => setLoading(false));
@@ -81,6 +87,7 @@ export default function BillingCheckout() {
       const successUrl = new URL("/payment/billing/success", window.location.origin);
       successUrl.searchParams.set("plan", plan.code);
       sessionStorage.setItem("billing_plan_code", plan.code);
+      sessionStorage.setItem("billing_coupon_id",couponId);
 
       await payment.requestBillingAuth({
         method: "CARD",
@@ -98,6 +105,8 @@ export default function BillingCheckout() {
       setSubmitting(false);
     }
   };
+  const selectedCoupon=coupons.find(c=>c.id===couponId);
+  const finalAmount=selectedCoupon?Math.round(Number(plan?.price||0)*(100-selectedCoupon.value)/100):Number(plan?.price||0);
 
   return (
     <Stack sx={{ width: "100%", maxWidth: 420, mx: "auto", mt: "-4px" }}>
@@ -123,9 +132,10 @@ export default function BillingCheckout() {
               </Box>
             </Stack>
             <Typography fontWeight={900} fontSize={24} sx={{ mt: 2 }}>
-              월 {Number(plan.price).toLocaleString("ko-KR")}원
+              월 {finalAmount.toLocaleString("ko-KR")}원
             </Typography>
           </Box>
+          <TextField select fullWidth label="할인 쿠폰 적용" value={couponId} onChange={e=>setCouponId(e.target.value)} sx={{mt:2}}><MenuItem value="">쿠폰을 사용하지 않음</MenuItem>{coupons.map(c=><MenuItem key={c.id} value={c.id}>{c.name} · {c.value}% 할인</MenuItem>)}</TextField>
 
           <Alert severity="info" sx={{ mt: 2, borderRadius: 1.5 }}>
             카드를 등록하면 첫 달 요금이 바로 결제되며, 이후 매월 같은 날짜에 자동결제됩니다.

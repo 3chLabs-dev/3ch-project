@@ -144,10 +144,10 @@ export default function LeagueCalendarDialog({ open, onClose, groups, leagues }:
                 </Typography>
                 <Stack spacing={0.35} sx={{ mt: 0.35 }}>
                   {events.slice(0, fullScreen ? 2 : 3).map((league) => {
-                    const color = league.premium_enabled ? "#F5ECFF" : getLeagueClubColor(league.group_id, groupIds);
+                    const color = league.premium_enabled ? "#7C3AED" : getLeagueClubColor(league.group_id, groupIds);
                     return (
-                      <Box key={league.id} role="button" tabIndex={0} onClick={() => { onClose(); navigate(`/league/${league.league_code ?? league.id}`); }} onKeyDown={(event) => { if (event.key === "Enter") { onClose(); navigate(`/league/${league.league_code ?? league.id}`); } }} sx={{ px: 0.55, py: 0.3, borderRadius: 0.5, bgcolor: color, color: league.premium_enabled ? "#54208A" : "#fff", cursor: "pointer", border: league.premium_enabled ? "1px solid #D6B35A" : undefined, boxShadow: league.premium_enabled ? "0 2px 6px rgba(109,40,217,0.12)" : undefined }}>
-                        <Typography fontSize={{ xs: 9, sm: 11 }} fontWeight={800} noWrap>{league.premium_enabled ? "✦ " : ""}{league.title ?? league.name}</Typography>
+                      <Box key={league.id} role="button" tabIndex={0} onClick={() => { onClose(); navigate(`/league/${league.league_code ?? league.id}`); }} onKeyDown={(event) => { if (event.key === "Enter") { onClose(); navigate(`/league/${league.league_code ?? league.id}`); } }} sx={{ px: 0.55, py: 0.3, borderRadius: 0.5, bgcolor: color, color: "#fff", cursor: "pointer", border: league.premium_enabled ? "1px solid #F2C94C" : undefined, boxShadow: league.premium_enabled ? "0 2px 7px rgba(91,33,182,0.28)" : undefined }}>
+                        <Typography fontSize={{ xs: 9, sm: 11 }} fontWeight={800} noWrap>{league.premium_enabled ? "👑 " : ""}{league.title ?? league.name}</Typography>
                       </Box>
                     );
                   })}

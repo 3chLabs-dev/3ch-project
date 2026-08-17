@@ -37,7 +37,6 @@
   import RefreshIcon from "@mui/icons-material/Refresh";
   import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
   import LanguageIcon from "@mui/icons-material/Language";
-  import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
   import {
     useGetLeagueQuery,
     useGetLeagueProgramQuery,
@@ -1759,15 +1758,15 @@ const handleSaveEdit = async () => {
                     width: "100%",
                     p: 2,
                     borderRadius: 2,
-                    border: "1px solid #D6B35A",
-                    background: "linear-gradient(135deg, #24113F 0%, #4C1D75 60%, #2E1065 100%)",
-                    boxShadow: league?.premium_enabled ? "0 8px 24px rgba(91,33,182,0.28)" : undefined,
+                    border: "1px solid #E2BE4F",
+                    background: "linear-gradient(135deg, #5B21B6 0%, #7C3AED 60%, #9333EA 100%)",
+                    boxShadow: league?.premium_enabled ? "0 10px 26px rgba(91,33,182,0.32)" : undefined,
                   }}
                 >
                   <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
                     <Box>
                       <Stack direction="row" alignItems="center" spacing={0.7}>
-                        <AutoAwesomeIcon sx={{ color: "#F5D77A", fontSize: 18 }} />
+                        <Typography component="span" sx={{ fontSize: 18, lineHeight: 1 }}>👑</Typography>
                         <Typography sx={{ color: "#F5D77A", fontSize: 11, fontWeight: 950, letterSpacing: 1.2 }}>PREMIUM</Typography>
                       </Stack>
                       <Typography sx={{ color: "#fff", fontWeight: 900, mt: 0.6 }}>프리미엄 노출</Typography>

@@ -15,7 +15,6 @@ import {
   Divider,
   CircularProgress,
 } from "@mui/material";
-import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import SearchIcon from "@mui/icons-material/Search";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { setRenewalBasicInfo, setRenewalStep } from "../../features/league/leagueRenewalCreationSlice";
@@ -199,35 +198,35 @@ export default function LeagueRenewalStep1BasicInfo() {
             position: "relative",
             overflow: "hidden",
             borderRadius: 2,
-            border: premiumEnabled ? "2px solid #9A6A14" : "1px solid #D8C27A",
-            background: "linear-gradient(135deg, #FFFCF3 0%, #F7F0FF 58%, #FFF8DF 100%)",
-            boxShadow: premiumEnabled ? "0 12px 30px rgba(109,40,217,0.18), inset 0 0 0 1px rgba(255,255,255,0.9)" : "0 8px 22px rgba(109,40,217,0.09)",
+            border: premiumEnabled ? "2px solid #F2C94C" : "1px solid #D9B95B",
+            background: "linear-gradient(135deg, #5B21B6 0%, #7C3AED 58%, #9333EA 100%)",
+            boxShadow: premiumEnabled ? "0 14px 32px rgba(91,33,182,0.34), inset 0 0 0 1px rgba(255,238,170,0.28)" : "0 10px 26px rgba(91,33,182,0.24)",
             p: 2.2,
           }}
         >
-          <Box sx={{ position: "absolute", width: 150, height: 150, borderRadius: "50%", bgcolor: "rgba(167,139,250,0.12)", right: -55, top: -75 }} />
+          <Box sx={{ position: "absolute", width: 170, height: 170, borderRadius: "50%", bgcolor: "rgba(255,255,255,0.10)", right: -55, top: -80 }} />
           <Stack spacing={1.6}>
             <Box sx={{ position: "relative" }}>
               <Stack direction="row" spacing={0.8} alignItems="center" sx={{ mb: 0.8 }}>
-                <AutoAwesomeIcon sx={{ color: "#F5D77A", fontSize: 19 }} />
-                <Typography sx={{ color: "#8A5B00", fontSize: 12, fontWeight: 950, letterSpacing: 1.4 }}>PREMIUM</Typography>
+                <Typography component="span" sx={{ fontSize: 19, lineHeight: 1 }}>👑</Typography>
+                <Typography sx={{ color: "#FFE38A", fontSize: 12, fontWeight: 950, letterSpacing: 1.4 }}>PREMIUM</Typography>
               </Stack>
-              <Typography sx={{ color: "#3B176B", fontSize: 18, fontWeight: 950 }}>프리미엄 노출</Typography>
-              <Typography sx={{ color: "#65566F", fontSize: 12.5, mt: 0.55, lineHeight: 1.55 }}>
+              <Typography sx={{ color: "#fff", fontSize: 18, fontWeight: 950 }}>프리미엄 노출</Typography>
+              <Typography sx={{ color: "#F3E8FF", fontSize: 12.5, mt: 0.55, lineHeight: 1.55 }}>
                 주변 사용자에게 리그를 소개하고 프리미엄 일정 영역에 우선 노출합니다.
               </Typography>
             </Box>
             <Stack direction="row" spacing={1} sx={{ position: "relative" }}>
-              <Button fullWidth variant={!premiumEnabled ? "contained" : "outlined"} onClick={() => setPremiumEnabled(false)} sx={{ fontWeight: 900, borderColor: "#C4B5D8", bgcolor: !premiumEnabled ? "#6B6470" : "rgba(255,255,255,0.65)", color: !premiumEnabled ? "#fff" : "#65566F", "&:hover": { bgcolor: !premiumEnabled ? "#5B5560" : "#fff" } }}>사용 안 함</Button>
-              <Button fullWidth variant={premiumEnabled ? "contained" : "outlined"} startIcon={<AutoAwesomeIcon />} onClick={() => { setPremiumEnabled(true); setJoinPermission("public"); }} sx={{ fontWeight: 950, borderColor: "#9A6A14", color: premiumEnabled ? "#fff" : "#6D28D9", background: premiumEnabled ? "linear-gradient(135deg, #6D28D9, #8B5CF6)" : "rgba(255,255,255,0.72)", "&:hover": { background: premiumEnabled ? "linear-gradient(135deg, #5B21B6, #7C3AED)" : "#fff" } }}>프리미엄으로 홍보</Button>
+              <Button fullWidth variant="contained" onClick={() => setPremiumEnabled(false)} sx={{ fontWeight: 900, border: !premiumEnabled ? "2px solid #FFE38A" : "1px solid rgba(255,255,255,0.5)", bgcolor: !premiumEnabled ? "#40364A" : "rgba(255,255,255,0.15)", color: "#fff", "&:hover": { bgcolor: !premiumEnabled ? "#332B3B" : "rgba(255,255,255,0.24)" } }}>사용 안 함</Button>
+              <Button fullWidth variant="contained" startIcon={<Typography component="span" sx={{ fontSize: 16 }}>👑</Typography>} onClick={() => { setPremiumEnabled(true); setJoinPermission("public"); }} sx={{ fontWeight: 950, border: premiumEnabled ? "2px solid #FFF0A6" : "1px solid #F2C94C", color: premiumEnabled ? "#4C1D75" : "#FFE38A", bgcolor: premiumEnabled ? "#FFE38A" : "rgba(54,20,91,0.42)", "&:hover": { bgcolor: premiumEnabled ? "#FFD95C" : "rgba(54,20,91,0.58)" } }}>프리미엄으로 홍보</Button>
             </Stack>
           </Stack>
           <Stack spacing={0.65} sx={{ mt: 1.8, position: "relative" }}>
             {["전체 일정에 공개", "주변 일정 추천 영역 노출", "프리미엄 일정 우선 배치"].map((label) => (
-              <Typography key={label} sx={{ color: "#4C3266", fontSize: 12.5, fontWeight: 800 }}>✓ {label}</Typography>
+              <Typography key={label} sx={{ color: "#fff", fontSize: 12.5, fontWeight: 800 }}>✓ {label}</Typography>
             ))}
           </Stack>
-          <Typography sx={{ mt: 1.5, color: "#7C3AED", fontSize: 11.5, fontWeight: 800, position: "relative" }}>
+          <Typography sx={{ mt: 1.5, color: "#FFE38A", fontSize: 11.5, fontWeight: 900, position: "relative" }}>
             {premiumBalance?.unlimited ? "프리미엄 구독 혜택" : `사용 가능한 프리미엄 노출권 ${premiumBalance?.remaining ?? 0}회`}
           </Typography>
         </Box>

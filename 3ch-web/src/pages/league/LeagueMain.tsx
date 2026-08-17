@@ -11,7 +11,6 @@ import {
 } from "@mui/material";
 import TuneIcon from "@mui/icons-material/Tune";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
-import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import { formatLeagueDateTime } from "../../utils/dateUtils";
 import AdFitBanner from "../../components/AdFitBanner";
 import LeagueFilterDialog from "../../components/LeagueFilterDialog.tsx";
@@ -289,7 +288,7 @@ export default function LeagueMainBody() {
       {premiumLeagues.length > 0 && (
         <Box>
           <Stack direction="row" alignItems="center" spacing={0.7} sx={{ mb: 1 }}>
-            <AutoAwesomeIcon sx={{ color: "#B88919", fontSize: 18 }} />
+            <Typography component="span" sx={{ fontSize: 17, lineHeight: 1 }}>👑</Typography>
             <Typography fontSize={14} fontWeight={950} color="#6D28D9">프리미엄 일정</Typography>
             <Typography fontSize={11.5} color="text.secondary">클럽 프로모션으로 소개되는 일정입니다.</Typography>
           </Stack>
@@ -413,14 +412,13 @@ function LeagueCard({ league, color }: { league: LeagueListItem; color?: string 
               <Typography fontWeight={700} fontSize={15}>{league.title}</Typography>
               {league.premium_enabled && (
                 <Chip
-                  icon={<AutoAwesomeIcon sx={{ "&&": { color: "#9A6700", fontSize: 13 } }} />}
-                  label="프리미엄"
+                  label="👑 프리미엄"
                   size="small"
                   sx={{
                     height: 22,
-                    bgcolor: "#F7EFFF",
-                    color: "#6D28D9",
-                    border: "1px solid #D8B458",
+                    bgcolor: "#6D28D9",
+                    color: "#FFF2A8",
+                    border: "1px solid #E2BE4F",
                     fontSize: 10.5,
                     fontWeight: 950,
                     "& .MuiChip-label": { px: 0.8 },
@@ -453,25 +451,25 @@ function PremiumLeagueCard({ league, compact = false }: { league: LeagueListItem
       sx={{
         cursor: "pointer",
         borderRadius: 2,
-        border: "1px solid #D8B458",
-        background: "linear-gradient(135deg, #FFFCF3 0%, #F4EAFF 58%, #FFF7D8 100%)",
-        boxShadow: "0 9px 25px rgba(109,40,217,0.14)",
+        border: "1px solid #E2BE4F",
+        background: "linear-gradient(135deg, #5B21B6 0%, #7C3AED 62%, #9333EA 100%)",
+        boxShadow: "0 10px 26px rgba(91,33,182,0.3)",
       }}
     >
       <CardContent sx={{ p: compact ? 1.6 : 2, "&:last-child": { pb: compact ? 1.6 : 2 } }}>
         <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1.5}>
           <Box sx={{ minWidth: 0 }}>
             <Stack direction="row" alignItems="center" spacing={0.6} sx={{ mb: 0.7 }}>
-              <AutoAwesomeIcon sx={{ color: "#F5D77A", fontSize: 15 }} />
-              <Typography sx={{ color: "#8A5B00", fontSize: 10.5, fontWeight: 950, letterSpacing: 1 }}>PREMIUM</Typography>
+              <Typography component="span" sx={{ fontSize: 15, lineHeight: 1 }}>👑</Typography>
+              <Typography sx={{ color: "#FFE38A", fontSize: 10.5, fontWeight: 950, letterSpacing: 1 }}>PREMIUM</Typography>
             </Stack>
-            <Typography sx={{ color: "#3B176B", fontSize: 15, fontWeight: 950 }} noWrap>{league.title ?? league.name}</Typography>
-            <Typography sx={{ color: "#65566F", fontSize: 11.5, mt: 0.45 }}>
+            <Typography sx={{ color: "#fff", fontSize: 15, fontWeight: 950 }} noWrap>{league.title ?? league.name}</Typography>
+            <Typography sx={{ color: "#F3E8FF", fontSize: 11.5, mt: 0.45 }}>
               {[league.group_name, region, league.distance_km != null ? `${Number(league.distance_km).toFixed(1)}km` : null].filter(Boolean).join(" · ")}
             </Typography>
-            <Typography sx={{ color: "#7C3AED", fontSize: 11.5, fontWeight: 700, mt: 0.3 }}>{formatLeagueDateTime(league.start_date)}</Typography>
+            <Typography sx={{ color: "#E9D5FF", fontSize: 11.5, fontWeight: 700, mt: 0.3 }}>{formatLeagueDateTime(league.start_date)}</Typography>
           </Box>
-          <Chip label={league.recruit_count > 0 && league.participant_count >= league.recruit_count ? "모집 마감" : "모집 중"} size="small" sx={{ bgcolor: "#FFF7D6", color: "#7A5000", border: "1px solid #D8B458", fontWeight: 900 }} />
+          <Chip label={league.recruit_count > 0 && league.participant_count >= league.recruit_count ? "모집 마감" : "모집 중"} size="small" sx={{ bgcolor: "#FFE38A", color: "#4C1D75", border: "1px solid #FFF0B8", fontWeight: 900 }} />
         </Stack>
       </CardContent>
     </Card>

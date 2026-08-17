@@ -216,6 +216,9 @@ export default function AdminGuidePage() {
             {/* 내용 에디터 */}
             <Stack spacing={0.5}>
               <Typography fontWeight={700} fontSize={14}>내용 (이미지 업로드)</Typography>
+              <Typography fontSize={12} color="text.secondary">
+                YouTube 영상 주소를 한 줄에 단독으로 입력하면 이용방법 화면에 플레이어가 표시됩니다.
+              </Typography>
               <PolicyEditor
                 value={form.content}
                 onChange={(v) => setForm((f) => ({ ...f, content: v }))}

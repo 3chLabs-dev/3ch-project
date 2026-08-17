@@ -5,7 +5,7 @@ import ManageAccountsOutlinedIcon from "@mui/icons-material/ManageAccountsOutlin
 import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { sanitizeRichHtml } from "../../utils/sanitizeHtml";
+import { sanitizeGuideHtml } from "../../utils/sanitizeHtml";
 
 const API = import.meta.env.VITE_API_BASE_URL;
 
@@ -99,8 +99,21 @@ export default function GuidePage() {
         </Stack>
       ) : current ? (
         <Box
-          dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(current.content) }}
-          sx={{ "& img": { maxWidth: "100%", borderRadius: 1.5 }, lineHeight: 1.8 }}
+          dangerouslySetInnerHTML={{ __html: sanitizeGuideHtml(current.content) }}
+          sx={{
+            "& img": { maxWidth: "100%", borderRadius: 1.5 },
+            "& .youtube-player": {
+              position: "relative",
+              width: "100%",
+              aspectRatio: "16 / 9",
+              my: 2,
+              overflow: "hidden",
+              borderRadius: 1.5,
+              bgcolor: "#000",
+            },
+            "& .youtube-player iframe": { width: "100%", height: "100%", border: 0 },
+            lineHeight: 1.8,
+          }}
         />
       ) : (
         <Box sx={{ py: 6, textAlign: "center" }}>

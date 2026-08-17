@@ -264,7 +264,9 @@
     const canInteract = isMember || isPublicLeague;
     const isClubEventLeague = league?.type === "클럽 이벤트" || league?.type === "클럽 교류전";
     const isEventProgramFormat = league?.format === "이벤트 프로그램" || league?.format === "프로그램별 설정";
-    const canViewProgram = isClubEventLeague && (canManage || (!canManage && league?.status === "active"));
+    // 프로그램 조회와 수정 권한은 분리한다. 공개 리그 방문자는 리그 시작 전에도
+    // 리더가 이미 구성한 프로그램을 확인할 수 있어야 한다.
+    const canViewProgram = isClubEventLeague && (canManage || Boolean(programData?.program));
 
     // const isEditing = canManage;
 

@@ -411,6 +411,22 @@ function LeagueCard({ league, color }: { league: LeagueListItem; color?: string 
           <Box>
             <Stack direction="row" spacing={0.75} alignItems="center" useFlexGap flexWrap="wrap">
               <Typography fontWeight={700} fontSize={15}>{league.title}</Typography>
+              {league.premium_enabled && (
+                <Chip
+                  icon={<AutoAwesomeIcon sx={{ "&&": { color: "#9A6700", fontSize: 13 } }} />}
+                  label="프리미엄"
+                  size="small"
+                  sx={{
+                    height: 22,
+                    bgcolor: "#F7EFFF",
+                    color: "#6D28D9",
+                    border: "1px solid #D8B458",
+                    fontSize: 10.5,
+                    fontWeight: 950,
+                    "& .MuiChip-label": { px: 0.8 },
+                  }}
+                />
+              )}
               {(league.invited_group_names ?? []).map((name) => <Chip key={name} label={name} size="small" sx={{ height: 21, bgcolor: "#F3E8FF", color: "#7C3AED", fontSize: 11, fontWeight: 800 }} />)}
             </Stack>
             <Typography fontSize={12} color="text.secondary">

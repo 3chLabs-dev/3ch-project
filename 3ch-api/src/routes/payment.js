@@ -739,7 +739,9 @@ router.post("/payment/billing/issue", requireAuth, async (req, res) => {
     );
     const user = userResult.rows[0] || {};
     const discountResult = await pool.query(
-      `SELECT r.id,c.value,COALESCE(c.duration_months,1) AS duration_months FROM coupon_redemptions r JOIN coupons c ON c.id=r.coupon_id
+      `SELECT r.id, c.value,
+              COALESCE(NULLIF(r.benefit->>'remainingMonths','')::int, 1) AS duration_months
+         FROM coupon_redemptions r JOIN coupons c ON c.id=r.coupon_id
         WHERE r.user_id=$1 AND r.status='AVAILABLE' AND c.type='PERCENT_DISCOUNT'
           AND c.is_active=true AND c.valid_until>NOW() AND (c.plan_code IS NULL OR c.plan_code=$2)
         ORDER BY r.redeemed_at ASC LIMIT 1`, [userId,plan.code],

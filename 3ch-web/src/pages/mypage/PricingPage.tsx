@@ -54,7 +54,7 @@ const PLANS = [
     features: [
       "클럽 생성 무제한",
       "리그 생성 월 3회",
-      "참가자·대진표 사진 인식 월 3회",
+        "클럽회원·참가자·대진표 사진 인식 월 3회",
       "추첨 생성 월 3회",
     ],
     inheritFrom: "STARTER 혜택",
@@ -77,7 +77,7 @@ const PLANS = [
     originalPrice: "14,900",
     features: [
       "리그 생성 무제한",
-      "참가자·대진표 사진 인식 월 20회",
+        "클럽회원·참가자·대진표 사진 인식 월 20회",
       "추첨 생성 무제한",
     ],
     inheritFrom: "BASIC 혜택",
@@ -100,7 +100,7 @@ const PLANS = [
     originalPrice: "24,900",
     features: [
       "대회 생성 무제한",
-      "참가자·대진표 사진 인식 월 500회",
+        "클럽회원·참가자·대진표 사진 인식 월 500회",
       "AI 추천 클럽 상단 배치",
     ],
     inheritFrom: "PRO 혜택",
@@ -286,9 +286,8 @@ const FEATURE_LABELS: Array<[string, string]> = [
   ["league_create", "리그 생성"],
   ["tournament_create", "대회 생성"],
   ["event_join", "리그·대회 참가"],
-  ["vision_scan", "참가자·대진표 사진 인식"],
+  ["vision_scan", "클럽회원·참가자·대진표 사진 인식"],
   ["draw_create", "추첨 생성"],
-  ["premium_promotion", "프리미엄 노출"],
 ];
 const featureLimitLabels = (limits?: Record<string, number | null>) =>
   limits && Object.keys(limits).length > 0
@@ -299,7 +298,10 @@ const featureLimitLabels = (limits?: Record<string, number | null>) =>
       })
     : [];
 const normalizeFeatureLabel = (label: string) =>
-  label.replace("대진표 사진 인식", "참가자·대진표 사진 인식");
+  label.replace(
+    /(?:클럽회원·)?(?:참가자·)*대진표 사진 인식/,
+    "클럽회원·참가자·대진표 사진 인식",
+  );
 
 // ─── 메인 페이지 ─────────────────────────────────────────────────────────────
 export default function PricingPage() {

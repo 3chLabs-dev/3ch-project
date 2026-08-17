@@ -20,3 +20,17 @@ UPDATE pricing_plans
           CASE WHEN LOWER(code) = 'premium' THEN NULL ELSE 0 END
         )
  WHERE NOT COALESCE(feature_limits, '{}'::jsonb) ? 'premium_promotion';
+
+-- Some databases had the coupon migration recorded before this column was
+-- introduced. Repair it idempotently so billing registration never depends
+-- on migration history drift.
+ALTER TABLE coupons
+  ADD COLUMN IF NOT EXISTS duration_months INTEGER;
+
+UPDATE coupons
+   SET duration_months = CASE
+     WHEN type = 'PERCENT_DISCOUNT' THEN 1
+     WHEN type = 'FREE_MONTHS' THEN value
+     ELSE NULL
+   END
+ WHERE duration_months IS NULL;

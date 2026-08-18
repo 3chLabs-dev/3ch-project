@@ -57,7 +57,7 @@ export default function GuestHome() {
                         리그·대회 운영, 한 번에 해결
                     </Typography>
                     <Typography sx={{ fontSize: 14, lineHeight: 1.6, color: "#6B7280", fontWeight: 600, mb: 1.25 }}>
-                        우리리그의 주요 기능과 운영 흐름을 소개해 드리겠습니다.
+                        우리리그의 주요 기능과 사용방법을 소개하겠습니다.
                     </Typography>
                     <Button
                         variant="outlined"
@@ -70,10 +70,10 @@ export default function GuestHome() {
 
                 <FeatureCard
                     icon={icon1}
-                    title="리그·대회 생성, 단 30초면 충분합니다"
+                    title="리그·대회 생성, 단 1분이면 충분합니다"
                     description={
                         <>
-                            클릭 몇 번이면 생성 완료!
+                            클릭 몇 번으로 생성 완료!
                             <br />
                             리그·대회를 간편하게 공유할 수 있고
                             <br />
@@ -99,12 +99,12 @@ export default function GuestHome() {
 
                 <FeatureCard
                     icon={icon3}
-                    title="간편하게 경기 결과 등록하세요"
+                    title="간편하게 등록하세요"
                     description={
                         <>
-                            참가자 각자의 휴대폰에서
+                            조별리그 조 편성, 단체전 팀 편성 결과를 한 화면에!
                             <br />
-                            조 편성, 대진표, 경기 결과까지 한눈에 확인!
+                            AI 자동 인식으로 경기 결과 등록을 한 번에!
                             <br />
                             누구나 쉽게 입력하고, 실시간으로 확인해 보세요.
                         </>

@@ -44,8 +44,8 @@ export default function SettingsPage() {
                         <SettingItem
                             icon={<GridViewOutlinedIcon sx={{ fontSize: 20, color: "#6366F1" }} />}
                             iconBg="#EEF2FF"
-                            label="나의 조편성 표시"
-                            desc="홈 화면에 내가 배정된 조편성 정보를 표시합니다."
+                            label="나의 조 편성·팀 편성 표시"
+                            desc="홈 화면에 내가 배정된 조·팀 편성 정보를 표시합니다."
                             checked={prefs?.show_group ?? false}
                             onChange={() => handleToggle("show_group")}
                         />

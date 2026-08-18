@@ -153,7 +153,8 @@ export default function SupportChat() {
   if (location.pathname === "/mypage/inquiry") return null;
   const isProgramMatchOrder = location.pathname.endsWith("/program/matches");
   const isLeagueDetail = /^\/league\/[^/]+\/?$/.test(location.pathname);
-  const isClubFloatingActionPage = /^\/club\/[^/]+(?:\/manage)?\/?$/.test(location.pathname);
+  const isClubFloatingActionPage = location.pathname === "/club/create"
+    || /^\/club\/[^/]+(?:\/manage)?\/?$/.test(location.pathname);
 
   return (
     <>

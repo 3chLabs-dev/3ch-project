@@ -303,7 +303,7 @@ export default function GroupCreate() {
     }
 
     return (
-        <Box>
+        <Box sx={{ pb: 9 }}>
             {/* 헤더 */}
             <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 3 }}>
                 <IconButton onClick={() => navigate(-1)} size="small">
@@ -564,22 +564,33 @@ export default function GroupCreate() {
                 </Box>
 
                 {/* 클럽 생성 버튼 */}
-                <Button
-                    fullWidth
-                    variant="contained"
-                    disableElevation
-                    disabled={!canSubmit || creating}
-                    onClick={handleSubmit}
+                <Box
                     sx={{
-                        borderRadius: 1,
-                        py: 1.2,
-                        fontWeight: 900,
-                        fontSize: 16,
-                        mt: 2,
+                        position: "fixed",
+                        bottom: "calc(56px + env(safe-area-inset-bottom))",
+                        left: "50%",
+                        transform: "translateX(-50%)",
+                        width: "min(calc(100% - 32px), 398px)",
+                        pb: 1,
+                        zIndex: 10,
                     }}
                 >
-                    클럽 생성
-                </Button>
+                    <Button
+                        fullWidth
+                        variant="contained"
+                        disableElevation
+                        disabled={!canSubmit || creating}
+                        onClick={handleSubmit}
+                        sx={{
+                            borderRadius: 1,
+                            py: 1.2,
+                            fontWeight: 900,
+                            fontSize: 16,
+                        }}
+                    >
+                        클럽 생성
+                    </Button>
+                </Box>
             </Stack>
 
             {/* 확인 다이얼로그 */}

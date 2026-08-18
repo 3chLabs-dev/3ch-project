@@ -186,11 +186,37 @@ export default function LeagueMainBody() {
       />
 
       {isLoggedIn && visibleInvitations.length > 0 && (
-        <>
-          <LeagueSectionHeader title="초대된 리그" />
-          <Stack spacing={1}>
+        <Card
+          elevation={0}
+          sx={{
+            position: "relative",
+            overflow: "hidden",
+            borderRadius: 2.5,
+            border: "1px solid #E7D7B5",
+            background: "linear-gradient(145deg, #FFFDF8 0%, #FFF8E8 100%)",
+            boxShadow: "0 8px 24px rgba(120,86,35,0.12)",
+            "&::before": {
+              content: '""',
+              position: "absolute",
+              inset: "0 0 auto 0",
+              height: 5,
+              background: "repeating-linear-gradient(135deg, #2563EB 0 12px, #FFF 12px 20px, #E11D48 20px 32px, #FFF 32px 40px)",
+            },
+          }}
+        >
+          <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 2, pt: 2.2, pb: 1.25 }}>
+            <Box sx={{ width: 34, height: 34, borderRadius: "50%", bgcolor: "#FFF", border: "1px solid #E7D7B5", display: "grid", placeItems: "center", boxShadow: "0 3px 8px rgba(120,86,35,0.1)" }}>
+              <MailOutlineIcon sx={{ color: "#9A6A14", fontSize: 20 }} />
+            </Box>
+            <Box sx={{ flex: 1 }}>
+              <Typography fontSize={16} fontWeight={950} color="#3F2D18">초대된 리그</Typography>
+              <Typography fontSize={11.5} color="#8A7355">클럽에 도착한 리그 초대장입니다.</Typography>
+            </Box>
+            <Chip label={`${visibleInvitations.length}건`} size="small" sx={{ height: 24, bgcolor: "#7C3AED", color: "#fff", fontWeight: 900 }} />
+          </Stack>
+          <Stack spacing={1} sx={{ px: 1.5, pb: 1.5 }}>
             {visibleInvitations.map((invitation) => (
-              <Card key={invitation.invitation_id} elevation={2} sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
+              <Card key={invitation.invitation_id} elevation={0} sx={{ borderRadius: 1.8, border: "1px dashed #D7B875", bgcolor: "rgba(255,255,255,0.92)", boxShadow: "0 4px 12px rgba(120,86,35,0.08)" }}>
                 <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
                   <Stack direction="row" spacing={0.75} alignItems="center" useFlexGap flexWrap="wrap">
                     <Typography sx={{ fontWeight: 800 }}>{invitation.title ?? invitation.name}</Typography>
@@ -201,8 +227,8 @@ export default function LeagueMainBody() {
                   <Typography sx={{ fontSize: 12, color: "text.secondary" }}>{invitation.host_group_name} · {formatLeagueDateTime(invitation.start_date)}</Typography>
                   {invitation.invitation_status === "pending" && (invitation.my_role === "owner" || invitation.my_role === "admin") ? (
                     <Stack direction="row" spacing={1} sx={{ mt: 1.5 }}>
-                      <Button fullWidth variant="outlined" onClick={() => respondInvitation({ invitationId: invitation.invitation_id, status: "declined" })}>거절</Button>
-                      <Button fullWidth variant="contained" disableElevation onClick={() => respondInvitation({ invitationId: invitation.invitation_id, status: "accepted" })}>수락</Button>
+                      <Button fullWidth variant="outlined" onClick={() => respondInvitation({ invitationId: invitation.invitation_id, status: "declined" })} sx={{ borderRadius: 1.2, fontWeight: 800 }}>거절</Button>
+                      <Button fullWidth variant="contained" disableElevation onClick={() => respondInvitation({ invitationId: invitation.invitation_id, status: "accepted" })} sx={{ borderRadius: 1.2, fontWeight: 900 }}>초대 수락</Button>
                     </Stack>
                   ) : (
                     <Button fullWidth variant="outlined" sx={{ mt: 1.5 }} onClick={() => navigate(`/league/${invitation.league_code ?? invitation.id}`)}>리그 보기</Button>
@@ -211,7 +237,7 @@ export default function LeagueMainBody() {
               </Card>
             ))}
           </Stack>
-        </>
+        </Card>
       )}
 
       {isLoggedIn && myGroups.length > 0 && leagues.length > 0 && (

@@ -174,6 +174,7 @@
     const [alertMsg, setAlertMsg] = useState("");
     const [alertSeverity, setAlertSeverity] = useState<"success" | "warning" | "error">("warning");
     const [isSmartphone] = useState(() => typeof navigator !== "undefined" && isSmartphoneBrowser());
+    const [tossQrOpen, setTossQrOpen] = useState(false);
     const [shareDialogOpen, setShareDialogOpen] = useState(false);
     const [deleteConfirm, setDeleteConfirm] = useState(false);
     const [cancelJoinConfirm, setCancelJoinConfirm] = useState(false);
@@ -1018,6 +1019,15 @@ const handleSaveEdit = async () => {
           setAlertMsg("송금 앱을 실행할 수 없습니다. 계좌번호를 복사해 은행 앱에서 송금해주세요.");
         }
       }, 1800);
+    };
+
+    const handleTossTransfer = () => {
+      if (!transferLinks?.toss) return;
+      if (isSmartphone) {
+        handleOpenTransferApp(transferLinks.toss);
+        return;
+      }
+      setTossQrOpen(true);
     };
 
     useEffect(() => {
@@ -2304,21 +2314,6 @@ const handleSaveEdit = async () => {
               placeholder="은행명과 계좌번호를 입력해주세요"
               value={bankAccount}
               onChange={(e) => setBankAccount(e.target.value)}
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton
-                      aria-label="계좌번호 복사"
-                      onClick={handleCopyBankAccount}
-                      disabled={!bankAccount.trim()}
-                      edge="end"
-                      size="small"
-                    >
-                      <ContentCopyOutlinedIcon sx={{ fontSize: 19 }} />
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
               sx={{
                 "& .MuiOutlinedInput-root": {
                   borderRadius: 1,
@@ -2336,8 +2331,7 @@ const handleSaveEdit = async () => {
                 bgcolor: "#fff",
                 borderRadius: 1,
                 border: "1px solid #E5E7EB",
-                pl: 1.75,
-                pr: 0.75,
+                px: 1.75,
               }}
             >
               <Typography
@@ -2348,37 +2342,122 @@ const handleSaveEdit = async () => {
               >
                 {league.bank_account || "등록된 입금 계좌가 없습니다."}
               </Typography>
-              <IconButton
-                aria-label="계좌번호 복사"
-                onClick={handleCopyBankAccount}
-                disabled={!league.bank_account}
-                size="small"
-              >
-                <ContentCopyOutlinedIcon sx={{ fontSize: 19 }} />
-              </IconButton>
             </Box>
           )}
-          {isSmartphone && transferLinks?.toss && (
-            <Stack spacing={1} sx={{ mt: 1.25 }}>
+          <Stack direction="row" spacing={1} sx={{ mt: 1.25 }}>
+            <Button
+              fullWidth
+              variant="outlined"
+              disableElevation
+              disabled={!(bankAccount.trim() || league.bank_account?.trim())}
+              onClick={() => void handleCopyBankAccount()}
+              startIcon={<ContentCopyOutlinedIcon sx={{ fontSize: 19 }} />}
+              sx={{
+                flex: 1,
+                minWidth: 0,
+                minHeight: 46,
+                borderRadius: 1,
+                bgcolor: "#fff",
+                borderColor: "#2F80ED",
+                color: "#2F80ED",
+                fontWeight: 800,
+                whiteSpace: "nowrap",
+                "&:hover": { bgcolor: "#F7FAFF", borderColor: "#256FD1" },
+              }}
+            >
+              계좌번호 복사
+            </Button>
+            {transferLinks?.toss && (
               <Button
                 fullWidth
                 variant="contained"
                 disableElevation
-                onClick={() => handleOpenTransferApp(transferLinks.toss!)}
+                onClick={handleTossTransfer}
+                startIcon={(
+                  <Box
+                    component="img"
+                    src="/images/payment/toss-symbol-mono-white.png"
+                    alt=""
+                    aria-hidden="true"
+                    sx={{ width: 25, height: 25, objectFit: "contain" }}
+                  />
+                )}
                 sx={{
+                  flex: 1,
+                  minWidth: 0,
                   minHeight: 46,
                   borderRadius: 1,
-                  bgcolor: "#3182F6",
+                  bgcolor: "#0064FF",
                   color: "#fff",
                   fontWeight: 800,
-                  "&:hover": { bgcolor: "#1B64DA" },
+                  whiteSpace: "nowrap",
+                  "& .MuiButton-startIcon": { mr: 0.8 },
+                  "&:hover": { bgcolor: "#0056DB" },
                 }}
               >
                 토스로 송금
               </Button>
-            </Stack>
-          )}
+            )}
+          </Stack>
         </Box>
+
+        <Dialog
+          open={tossQrOpen}
+          onClose={() => setTossQrOpen(false)}
+          fullWidth
+          maxWidth="xs"
+          slotProps={{ paper: { sx: { borderRadius: 2, mx: 2 } } }}
+        >
+          <DialogTitle sx={{ fontWeight: 900, textAlign: "center", pb: 1 }}>
+            토스로 송금
+          </DialogTitle>
+          <DialogContent>
+            <Stack alignItems="center" spacing={2} sx={{ pt: 1 }}>
+              <Typography sx={{ fontSize: 13, fontWeight: 700, color: "text.secondary", textAlign: "center" }}>
+                휴대폰 카메라로 QR코드를 스캔하면<br />토스 앱의 송금 화면으로 이동합니다.
+              </Typography>
+              <Box
+                sx={{
+                  display: "grid",
+                  placeItems: "center",
+                  p: 2,
+                  bgcolor: "#fff",
+                  border: "1px solid #E5E7EB",
+                  borderRadius: 2,
+                }}
+              >
+                {transferLinks?.toss && <QRCode value={transferLinks.toss} size={196} level="M" />}
+              </Box>
+              <Box sx={{ width: "100%", textAlign: "center" }}>
+                <Typography sx={{ fontSize: 14, fontWeight: 800, overflowWrap: "anywhere" }}>
+                  {bankAccount.trim() || league.bank_account}
+                </Typography>
+                <Typography sx={{ mt: 0.5, fontSize: 18, fontWeight: 900, color: "#0064FF" }}>
+                  {entryFee.trim() || league.entry_fee}
+                </Typography>
+              </Box>
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 2, pb: 2 }}>
+            <Button
+              fullWidth
+              variant="outlined"
+              onClick={() => void handleCopyBankAccount()}
+              sx={{ height: 42, borderRadius: 1, fontWeight: 800 }}
+            >
+              계좌번호 복사
+            </Button>
+            <Button
+              fullWidth
+              variant="contained"
+              disableElevation
+              onClick={() => setTossQrOpen(false)}
+              sx={{ height: 42, borderRadius: 1, bgcolor: "#0064FF", fontWeight: 800, "&:hover": { bgcolor: "#0056DB" } }}
+            >
+              닫기
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         {/* 수정 모드 리그 삭제 버튼 */}
         {canManage  && (

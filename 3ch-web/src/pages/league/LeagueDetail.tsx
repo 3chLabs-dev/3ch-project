@@ -66,6 +66,8 @@
   import { useGetMyFeatureUsageQuery } from "../../features/payment/usageApi";
   import {
     createTossTransferLink,
+    formatTransferAmountDisplay,
+    formatTransferAmountInput,
     isSmartphoneBrowser,
     parseBankAccount,
   } from "../../utils/paymentDeepLink";
@@ -243,7 +245,7 @@
     useEffect(() => {
       if (!league) return;
       setNotice(league.notice ?? "");
-      setEntryFee(league.entry_fee ?? "");
+      setEntryFee(formatTransferAmountDisplay(league.entry_fee ?? ""));
       setBankAccount(league.bank_account ?? "");
     }, [league?.id]);
     // groupLoading 중엔 판단 보류 (플리커 방지)
@@ -820,7 +822,7 @@
         currentSortOrder !== league.sort_order ||
         currentRecruitCount !== league.recruit_count ||
         currentNotice !== (league.notice || "") ||
-        currentEntryFee !== (league.entry_fee || "") ||
+        currentEntryFee !== formatTransferAmountDisplay(league.entry_fee || "") ||
         currentBankAccount !== (league.bank_account || "")
       );
     }, [
@@ -1022,7 +1024,11 @@ const handleSaveEdit = async () => {
     };
 
     const handleTossTransfer = () => {
-      if (!transferLinks?.toss) return;
+      if (!transferLinks?.toss) {
+        setAlertSeverity("warning");
+        setAlertMsg("토스 송금을 이용하려면 은행명, 계좌번호, 참가비를 모두 입력해주세요.");
+        return;
+      }
       if (isSmartphone) {
         handleOpenTransferApp(transferLinks.toss);
         return;
@@ -2269,7 +2275,8 @@ const handleSaveEdit = async () => {
               fullWidth
               placeholder="참가비를 입력해주세요"
               value={entryFee}
-              onChange={(e) => setEntryFee(e.target.value)}
+              onChange={(e) => setEntryFee(formatTransferAmountInput(e.target.value))}
+              inputProps={{ inputMode: "numeric" }}
               sx={{
                 "& .MuiOutlinedInput-root": {
                   borderRadius: 1,
@@ -2297,7 +2304,7 @@ const handleSaveEdit = async () => {
                 color={league.entry_fee ? "#111827" : "#9CA3AF"}
                 sx={{ overflowWrap: "anywhere" }}
               >
-                {league.entry_fee || "등록된 참가비가 없습니다."}
+                {league.entry_fee ? formatTransferAmountDisplay(league.entry_fee) : "등록된 참가비가 없습니다."}
               </Typography>
             </Box>
           )}
@@ -2367,37 +2374,35 @@ const handleSaveEdit = async () => {
             >
               계좌번호 복사
             </Button>
-            {transferLinks?.toss && (
-              <Button
-                fullWidth
-                variant="contained"
-                disableElevation
-                onClick={handleTossTransfer}
-                startIcon={(
-                  <Box
-                    component="img"
-                    src="/images/payment/toss-symbol-mono-white.png"
-                    alt=""
-                    aria-hidden="true"
-                    sx={{ width: 25, height: 25, objectFit: "contain" }}
-                  />
-                )}
-                sx={{
-                  flex: 1,
-                  minWidth: 0,
-                  minHeight: 46,
-                  borderRadius: 1,
-                  bgcolor: "#0064FF",
-                  color: "#fff",
-                  fontWeight: 800,
-                  whiteSpace: "nowrap",
-                  "& .MuiButton-startIcon": { mr: 0.8 },
-                  "&:hover": { bgcolor: "#0056DB" },
-                }}
-              >
-                토스로 송금
-              </Button>
-            )}
+            <Button
+              fullWidth
+              variant="contained"
+              disableElevation
+              onClick={handleTossTransfer}
+              startIcon={(
+                <Box
+                  component="img"
+                  src="/images/payment/toss-symbol-mono-white.png"
+                  alt=""
+                  aria-hidden="true"
+                  sx={{ width: 25, height: 25, objectFit: "contain" }}
+                />
+              )}
+              sx={{
+                flex: 1,
+                minWidth: 0,
+                minHeight: 46,
+                borderRadius: 1,
+                bgcolor: "#0064FF",
+                color: "#fff",
+                fontWeight: 800,
+                whiteSpace: "nowrap",
+                "& .MuiButton-startIcon": { mr: 0.8 },
+                "&:hover": { bgcolor: "#0056DB" },
+              }}
+            >
+              토스로 송금
+            </Button>
           </Stack>
         </Box>
 
@@ -2433,7 +2438,7 @@ const handleSaveEdit = async () => {
                   {bankAccount.trim() || league.bank_account}
                 </Typography>
                 <Typography sx={{ mt: 0.5, fontSize: 18, fontWeight: 900, color: "#0064FF" }}>
-                  {entryFee.trim() || league.entry_fee}
+                  {formatTransferAmountDisplay(entryFee.trim() || league.entry_fee || "")}
                 </Typography>
               </Box>
             </Stack>

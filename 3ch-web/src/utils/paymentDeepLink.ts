@@ -29,6 +29,20 @@ export function normalizeTransferAmount(amount: string | number): string {
   return String(amount).replace(/\D/g, "");
 }
 
+export function formatTransferAmount(amount: string | number): string {
+  const digits = normalizeTransferAmount(amount).replace(/^0+(?=\d)/, "");
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+export function formatTransferAmountInput(amount: string): string {
+  return /^[\d,]*$/.test(amount) ? formatTransferAmount(amount) : amount;
+}
+
+export function formatTransferAmountDisplay(amount: string | number): string {
+  const value = String(amount).trim();
+  return /^[\d,\s]+$/.test(value) ? formatTransferAmount(value) : value;
+}
+
 export function parseBankAccount(value: string): { bankName: string; accountNumber: string } | null {
   const bankName = BANK_ALIASES.find((alias) => value.includes(alias));
   if (!bankName) return null;

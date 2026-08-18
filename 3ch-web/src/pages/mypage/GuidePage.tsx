@@ -101,7 +101,13 @@ export default function GuidePage() {
         <Box
           dangerouslySetInnerHTML={{ __html: sanitizeGuideHtml(current.content) }}
           sx={{
-            "& img": { maxWidth: "100%", borderRadius: 1.5 },
+            "& img": {
+              display: "block",
+              maxWidth: "100%",
+              height: "auto",
+              objectFit: "contain",
+              objectPosition: "left top",
+            },
             "& .youtube-player": {
               position: "relative",
               width: "100%",

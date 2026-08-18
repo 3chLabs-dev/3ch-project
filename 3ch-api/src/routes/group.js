@@ -364,6 +364,11 @@ router.post('/group', requireAuth, async (req, res) => {
  *           type: string
  *         description: 지역 필터 (시/도)
  *       - in: query
+ *         name: sport
+ *         schema:
+ *           type: string
+ *         description: 종목 필터 (예 탁구, 배드민턴, 테니스)
+ *       - in: query
  *         name: region_district
  *         schema:
  *           type: string
@@ -414,7 +419,7 @@ router.post('/group', requireAuth, async (req, res) => {
 router.get('/group/search', requireAuth, async (req, res) => {
   try {
     const userId = req.user.sub;
-    const { q, region_city, region_district, limit = '20', sort_by_region, include_joined } = req.query;
+    const { q, sport, region_city, region_district, limit = '20', sort_by_region, include_joined } = req.query;
 
     const conditions = [];
     const params = [];
@@ -431,6 +436,12 @@ router.get('/group/search', requireAuth, async (req, res) => {
     if (q && q.trim()) {
       conditions.push(`g.name ILIKE $${paramIdx}`);
       params.push(`%${q.trim()}%`);
+      paramIdx++;
+    }
+
+    if (sport && sport.trim()) {
+      conditions.push(`g.sport = $${paramIdx}`);
+      params.push(sport.trim());
       paramIdx++;
     }
 

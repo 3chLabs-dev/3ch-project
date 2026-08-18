@@ -97,6 +97,7 @@ export interface GroupPreMembersResponse {
 
 export interface SearchGroupsParams {
   q?: string;
+  sport?: string;
   region_city?: string;
   region_district?: string;
   limit?: number;
@@ -526,6 +527,7 @@ export const groupApi = baseApi.injectEndpoints({
           const query = params.q?.trim().toLocaleLowerCase() ?? "";
           const groups = LOCAL_DEV_GROUPS
             .filter((group) => !query || group.name.toLocaleLowerCase().includes(query))
+            .filter((group) => !params.sport || group.sport === params.sport)
             .filter((group) => !params.region_city || group.region_city === params.region_city)
             .filter((group) => !params.region_district || group.region_district === params.region_district)
             .slice(0, params.limit ?? LOCAL_DEV_GROUPS.length)
@@ -534,6 +536,7 @@ export const groupApi = baseApi.injectEndpoints({
         }
         const sp = new URLSearchParams();
         if (params.q) sp.set("q", params.q);
+        if (params.sport) sp.set("sport", params.sport);
         if (params.region_city) sp.set("region_city", params.region_city);
         if (params.region_district) sp.set("region_district", params.region_district);
         if (params.limit) sp.set("limit", String(params.limit));

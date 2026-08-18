@@ -23,7 +23,7 @@ const SPORT_EMOJI: Record<string, string> = {
     "테니스": "\uD83C\uDFBE",
 };
 
-const SPORT_FILTERS = ["탁구", "배드민턴", "스포츠"];
+const SPORT_FILTERS = ["탁구", "배드민턴", "테니스"];
 
 export default function GroupMain() {
     const token = useAppSelector((s) => s.auth.token);
@@ -55,7 +55,7 @@ export default function GroupMain() {
                     const result = await recommend({
                         lat: pos.coords.latitude,
                         lng: pos.coords.longitude,
-                        sport: selectedFilter !== "스포츠" ? selectedFilter ?? undefined : undefined,
+                        sport: selectedFilter ?? undefined,
                     }).unwrap();
                     setAiClubs(result.clubs);
                 } catch {
@@ -79,10 +79,11 @@ export default function GroupMain() {
 
     const searchParams = useMemo(() => ({
         q: groupSearch || undefined,
+        sport: selectedFilter ?? undefined,
         region_city: !groupSearch && myRegionCity ? myRegionCity : undefined,
         limit: 10,
         sort_by_region: !groupSearch && myRegionCity ? true : undefined,
-    }), [groupSearch, myRegionCity]);
+    }), [groupSearch, myRegionCity, selectedFilter]);
 
     const { data: searchData, isLoading: searchLoading } = useSearchGroupsQuery(
         searchParams,

@@ -508,7 +508,7 @@ export default function GroupCreate() {
                             <Box key={index}>
                                 <Stack direction="row" spacing={1} mb={1}>
                                     <TextField
-                                        placeholder="URL 이름 예: 카카오톡"
+                                        placeholder="URL 이름 예: 오픈채팅방"
                                         size="small"
                                         value={link.label}
                                         onChange={(e) =>

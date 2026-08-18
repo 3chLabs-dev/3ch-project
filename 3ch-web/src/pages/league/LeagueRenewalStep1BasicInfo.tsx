@@ -54,7 +54,7 @@ function OptionalNumberStepper({
       sx={{ width: "100%" }}
     >
       <IconButton
-        aria-label={`${suffix} 수 감소`}
+        aria-label="수량 감소"
         disabled={value === "" || numericValue <= min}
         onClick={() => onChange(Math.max(min, numericValue - 1))}
         sx={{ width: 36, height: 36, border: "1px solid #90CAF9", color: "#1976D2", fontSize: 21 }}
@@ -74,10 +74,10 @@ function OptionalNumberStepper({
           }
           onChange(Math.min(max, Math.max(min, Number(digits))));
         }}
-        inputProps={{ inputMode: "numeric", "aria-label": `${suffix} 수` }}
+        inputProps={{ inputMode: "numeric", "aria-label": "수량" }}
         size="small"
         sx={{
-          width: suffix === "명" ? 66 : 56,
+          width: 66,
           "& .MuiInputBase-root": { height: 36, borderRadius: 1 },
           "& input": {
             p: 0,
@@ -93,16 +93,14 @@ function OptionalNumberStepper({
         }}
       />
       <IconButton
-        aria-label={`${suffix} 수 증가`}
+        aria-label="수량 증가"
         disabled={value !== "" && numericValue >= max}
         onClick={() => onChange(value === "" ? min : Math.min(max, numericValue + 1))}
         sx={{ width: 36, height: 36, border: "1px solid #90CAF9", color: "#1976D2", fontSize: 21 }}
       >
         +
       </IconButton>
-      <Typography sx={{ width: 28, flexShrink: 0, fontSize: 14, fontWeight: 700 }}>
-        {suffix}
-      </Typography>
+      {suffix && <Typography sx={{ width: 28, flexShrink: 0, fontSize: 14, fontWeight: 700 }}>{suffix}</Typography>}
     </Stack>
   );
 }
@@ -179,19 +177,19 @@ export default function LeagueRenewalStep1BasicInfo() {
         <Typography sx={{ fontWeight: 900 }}>장소</Typography>
         <Box>
           <Stack direction="row" spacing={0.8}>
-            <TextField value={location} onChange={(event) => { setLocation(event.target.value); setVenueLat(null); setVenueLng(null); }} sx={{ ...fieldSx, flex: 1 }} placeholder="탁구장 또는 주소" />
+            <TextField value={location} onChange={(event) => { setLocation(event.target.value); setVenueLat(null); setVenueLng(null); }} sx={{ ...fieldSx, flex: 1 }} placeholder="장소명 또는 주소" />
             <Button variant="outlined" size="small" startIcon={<SearchIcon />} onClick={() => { setPlaceQuery(location); setPlaceDialogOpen(true); }} sx={{ whiteSpace: "nowrap", fontWeight: 800 }}>주소 검색</Button>
           </Stack>
           {venueAddress && <Typography fontSize={11.5} color="text.secondary" sx={{ mt: 0.6 }}>{venueAddress} · {venueRegionCity} {venueRegionDistrict}</Typography>}
         </Box>
       </Box>
       <Box sx={rowSx}>
-        <Typography sx={{ fontWeight: 900 }}>탁구대 수</Typography>
-        <OptionalNumberStepper value={courtCount} min={1} max={99} suffix="대" onChange={setCourtCount} />
+        <Typography sx={{ fontWeight: 900 }}>코트 수</Typography>
+        <OptionalNumberStepper value={courtCount} min={1} max={999} suffix="" onChange={setCourtCount} />
       </Box>
       <Box sx={rowSx}>
         <Typography sx={{ fontWeight: 900 }}>참가자 수</Typography>
-        <OptionalNumberStepper value={participantCount} min={1} max={999} suffix="명" onChange={setParticipantCount} />
+        <OptionalNumberStepper value={participantCount} min={1} max={999} suffix="" onChange={setParticipantCount} />
       </Box>
     </Box>
     <LeagueInvitedGroupsPicker />

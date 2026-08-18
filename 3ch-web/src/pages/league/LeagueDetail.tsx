@@ -1247,7 +1247,7 @@ const handleSaveEdit = async () => {
           <Divider sx={{ borderColor: "#F3F4F6" }} />
 
           <Box sx={infoRowSx}>
-            <Typography sx={labelSx}>탁구대</Typography>
+            <Typography sx={labelSx}>코트</Typography>
             {canManage ? (
               <TextField
                 type="number"

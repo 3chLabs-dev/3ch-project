@@ -147,7 +147,7 @@ export default function LeagueRenewalStep2Composition() {
         <DialogTitle sx={{ fontWeight: 800 }}>추천 프로그램</DialogTitle>
         <DialogContent>
           <Typography>
-            추천 프로그램 생성을 위해 종료시간, 참가자 수, 탁구대 수를 모두 선택해주세요.
+            추천 프로그램 생성을 위해 종료시간, 참가자 수, 코트 수를 모두 선택해주세요.
           </Typography>
         </DialogContent>
         <DialogActions>

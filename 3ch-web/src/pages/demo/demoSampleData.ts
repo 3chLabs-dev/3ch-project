@@ -50,12 +50,12 @@ export const DEMO_CUSTOM_PROGRAM = [
 ] as const;
 
 export const DEMO_MATCHES = [
-  { order: 1, court: "1번 탁구대", left: "김민준", right: "윤태호", score: "3 : 0", status: "완료" },
-  { order: 2, court: "2번 탁구대", left: "이서준", right: "오승민", score: "3 : 1", status: "완료" },
-  { order: 3, court: "3번 탁구대", left: "박도윤", right: "한지훈", score: "3 : 2", status: "완료" },
-  { order: 4, court: "4번 탁구대", left: "최현우", right: "정우진", score: "2 : 3", status: "완료" },
-  { order: 5, court: "1번 탁구대", left: "김민준", right: "오승민", score: "3 : 1", status: "완료" },
-  { order: 6, court: "2번 탁구대", left: "이서준", right: "윤태호", score: "3 : 0", status: "완료" },
+  { order: 1, court: "1번 코트", left: "김민준", right: "윤태호", score: "3 : 0", status: "완료" },
+  { order: 2, court: "2번 코트", left: "이서준", right: "오승민", score: "3 : 1", status: "완료" },
+  { order: 3, court: "3번 코트", left: "박도윤", right: "한지훈", score: "3 : 2", status: "완료" },
+  { order: 4, court: "4번 코트", left: "최현우", right: "정우진", score: "2 : 3", status: "완료" },
+  { order: 5, court: "1번 코트", left: "김민준", right: "오승민", score: "3 : 1", status: "완료" },
+  { order: 6, court: "2번 코트", left: "이서준", right: "윤태호", score: "3 : 0", status: "완료" },
 ] as const;
 
 export const DEMO_BRACKET = [

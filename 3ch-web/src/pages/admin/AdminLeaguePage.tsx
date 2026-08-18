@@ -250,7 +250,7 @@ export default function AdminLeaguePage() {
         <Table size="small">
           <TableHead>
             <TableRow sx={{ bgcolor: "#F9FAFB" }}>
-              {["리그코드", "종목", "클럽", "리그명", "노출", "리그날짜", "시간", "장소", "탁구대", "참가자", "생성자", "생성일시"].map((h) => (
+              {["리그코드", "종목", "클럽", "리그명", "노출", "리그날짜", "시간", "장소", "코트", "참가자", "생성자", "생성일시"].map((h) => (
                 <TableCell key={h} sx={{ fontWeight: 800, fontSize: 12, color: "#374151", py: 1.2 }}>{h}</TableCell>
               ))}
             </TableRow>

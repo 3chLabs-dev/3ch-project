@@ -2480,7 +2480,7 @@ const LeagueAlgorithmDemo = ({
           fontWeight: 700,
           marginBottom: '8px',
         }}>
-        탁구대 수
+        코트 수
       </div>
 
         <input

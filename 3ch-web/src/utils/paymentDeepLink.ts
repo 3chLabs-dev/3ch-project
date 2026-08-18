@@ -1,20 +1,3 @@
-const KAKAO_PAY_BANK_CODES: Record<string, string> = {
-  "우리은행": "020",
-  "우리": "020",
-  "KB국민은행": "004",
-  "국민은행": "004",
-  "국민": "004",
-  "신한은행": "088",
-  "신한": "088",
-  "NH농협은행": "011",
-  "농협은행": "011",
-  "농협": "011",
-  "하나은행": "081",
-  "하나": "081",
-  "카카오뱅크": "090",
-  "토스뱅크": "092",
-};
-
 const TOSS_BANK_NAMES: Record<string, string> = {
   "우리은행": "우리",
   "우리": "우리",
@@ -32,11 +15,7 @@ const TOSS_BANK_NAMES: Record<string, string> = {
   "토스뱅크": "토스뱅크",
 };
 
-const BANK_ALIASES = Object.keys(KAKAO_PAY_BANK_CODES).sort((a, b) => b.length - a.length);
-
-export function getKakaoPayBankCode(bankName: string): string | undefined {
-  return KAKAO_PAY_BANK_CODES[bankName.trim()];
-}
+const BANK_ALIASES = Object.keys(TOSS_BANK_NAMES).sort((a, b) => b.length - a.length);
 
 export function getTossBankName(bankName: string): string | undefined {
   return TOSS_BANK_NAMES[bankName.trim()];
@@ -56,24 +35,6 @@ export function parseBankAccount(value: string): { bankName: string; accountNumb
 
   const accountNumber = normalizeAccountNumber(value.replace(bankName, ""));
   return accountNumber ? { bankName, accountNumber } : null;
-}
-
-export function createKakaoPayTransferLink(
-  bankName: string,
-  accountNumber: string,
-  amount: string | number,
-): string | null {
-  const bankCode = getKakaoPayBankCode(bankName);
-  const normalizedAccountNumber = normalizeAccountNumber(accountNumber);
-  const normalizedAmount = normalizeTransferAmount(amount);
-  if (!bankCode || !normalizedAccountNumber || !normalizedAmount) return null;
-
-  const params = new URLSearchParams({
-    bank_code: bankCode,
-    bank_account_number: normalizedAccountNumber,
-    amount: normalizedAmount,
-  });
-  return `kakaopay://money/to/bank?${params.toString()}`;
 }
 
 export function createTossTransferLink(

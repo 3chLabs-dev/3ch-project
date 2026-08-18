@@ -65,7 +65,6 @@
   import { distributeSnake } from "../../features/league/algorithms/distributeSnake";
   import { useGetMyFeatureUsageQuery } from "../../features/payment/usageApi";
   import {
-    createKakaoPayTransferLink,
     createTossTransferLink,
     isSmartphoneBrowser,
     parseBankAccount,
@@ -234,7 +233,6 @@
       if (!parsedAccount || !fee) return null;
 
       return {
-        kakaoPay: createKakaoPayTransferLink(parsedAccount.bankName, parsedAccount.accountNumber, fee),
         toss: createTossTransferLink(parsedAccount.bankName, parsedAccount.accountNumber, fee),
       };
     }, [bankAccount, entryFee, league?.bank_account, league?.entry_fee]);
@@ -2303,7 +2301,7 @@ const handleSaveEdit = async () => {
           {canManage ? (
             <TextField
               fullWidth
-              placeholder="계좌번호를 입력해주세요"
+              placeholder="은행명과 계좌번호를 입력해주세요"
               value={bankAccount}
               onChange={(e) => setBankAccount(e.target.value)}
               InputProps={{
@@ -2360,44 +2358,24 @@ const handleSaveEdit = async () => {
               </IconButton>
             </Box>
           )}
-          {isSmartphone && transferLinks && (transferLinks.kakaoPay || transferLinks.toss) && (
+          {isSmartphone && transferLinks?.toss && (
             <Stack spacing={1} sx={{ mt: 1.25 }}>
-              {transferLinks.kakaoPay && (
-                <Button
-                  fullWidth
-                  variant="contained"
-                  disableElevation
-                  onClick={() => handleOpenTransferApp(transferLinks.kakaoPay!)}
-                  sx={{
-                    minHeight: 46,
-                    borderRadius: 1,
-                    bgcolor: "#FEE500",
-                    color: "#191919",
-                    fontWeight: 800,
-                    "&:hover": { bgcolor: "#F5DC00" },
-                  }}
-                >
-                  카카오페이로 송금
-                </Button>
-              )}
-              {transferLinks.toss && (
-                <Button
-                  fullWidth
-                  variant="contained"
-                  disableElevation
-                  onClick={() => handleOpenTransferApp(transferLinks.toss!)}
-                  sx={{
-                    minHeight: 46,
-                    borderRadius: 1,
-                    bgcolor: "#3182F6",
-                    color: "#fff",
-                    fontWeight: 800,
-                    "&:hover": { bgcolor: "#1B64DA" },
-                  }}
-                >
-                  토스로 송금
-                </Button>
-              )}
+              <Button
+                fullWidth
+                variant="contained"
+                disableElevation
+                onClick={() => handleOpenTransferApp(transferLinks.toss!)}
+                sx={{
+                  minHeight: 46,
+                  borderRadius: 1,
+                  bgcolor: "#3182F6",
+                  color: "#fff",
+                  fontWeight: 800,
+                  "&:hover": { bgcolor: "#1B64DA" },
+                }}
+              >
+                토스로 송금
+              </Button>
             </Stack>
           )}
         </Box>
@@ -2480,8 +2458,9 @@ const handleSaveEdit = async () => {
             disabled={saving}
             onClick={() => void handleSaveEdit()}
             sx={{
-              position: "absolute",
-              right: 120,
+              position: "fixed",
+              left: "50%",
+              transform: "translateX(-50%)",
               bottom: "calc(124px + env(safe-area-inset-bottom))",
               zIndex: 21,
               minWidth: 86,

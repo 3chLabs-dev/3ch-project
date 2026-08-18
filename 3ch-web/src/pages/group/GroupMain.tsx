@@ -29,7 +29,7 @@ export default function GroupMain() {
     const token = useAppSelector((s) => s.auth.token);
     const isLoggedIn = !!token;
 
-    const { data, isLoading } = useGetMyGroupsQuery(undefined, {
+    const { data, isLoading, isError, refetch } = useGetMyGroupsQuery(undefined, {
         skip: !isLoggedIn,
         refetchOnMountOrArgChange: true,
     });
@@ -136,6 +136,20 @@ export default function GroupMain() {
                     </Card>
                 ) : isLoading ? (
                     <EmptyCard text="로딩 중..." />
+                ) : isError ? (
+                    <Card elevation={0} sx={{ borderRadius: 1, border: "1px solid #FCA5A5", bgcolor: "#FEF2F2" }}>
+                        <CardContent sx={{ py: 2.5, textAlign: "center", "&:last-child": { pb: 2.5 } }}>
+                            <Typography fontWeight={800} color="error.main">
+                                가입한 클럽 정보를 불러오지 못했습니다.
+                            </Typography>
+                            <Typography sx={{ mt: 0.5, mb: 1.5, fontSize: 13, color: "text.secondary" }}>
+                                네트워크 상태를 확인한 뒤 다시 시도해주세요.
+                            </Typography>
+                            <Button variant="outlined" color="error" size="small" onClick={() => void refetch()}>
+                                다시 시도
+                            </Button>
+                        </CardContent>
+                    </Card>
                 ) : myGroups.length > 0 ? (
                     <Stack spacing={1}>
                         {myGroups.map((g) => (

@@ -2472,6 +2472,36 @@ const handleSaveEdit = async () => {
           </IconButton>
         )}
 
+        {/* 변경사항이 있을 때만 채팅 문의 옆에 노출되는 수동 저장 버튼 */}
+        {canManage && hasChanges && (
+          <Button
+            variant="contained"
+            disableElevation
+            disabled={saving}
+            onClick={() => void handleSaveEdit()}
+            sx={{
+              position: "absolute",
+              right: 120,
+              bottom: "calc(124px + env(safe-area-inset-bottom))",
+              zIndex: 21,
+              minWidth: 86,
+              height: 54,
+              px: 2,
+              borderRadius: 999,
+              bgcolor: "#2F80ED",
+              color: "#fff",
+              fontSize: 13,
+              fontWeight: 900,
+              boxShadow: "0 6px 18px rgba(37, 99, 235, 0.3)",
+              border: "2px solid rgba(255,255,255,0.9)",
+              "&:hover": { bgcolor: "#256FD1" },
+              "&.Mui-disabled": { bgcolor: "#93C5FD", color: "#fff" },
+            }}
+          >
+            {saving ? <CircularProgress size={20} sx={{ color: "#fff" }} /> : "저장"}
+          </Button>
+        )}
+
         {/* 뷰 모드 리그 시작 버튼 (관리자) */}
         { canManage && (
           <Box

@@ -8,6 +8,7 @@ import Link from "@mui/material/Link";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import Stack from "@mui/material/Stack";
+import Alert from "@mui/material/Alert";
 import { styled } from "@mui/material/styles";
 import AppTheme from "../shared-theme/AppTheme";
 import { GoogleIcon } from "../../components/CustomIcons";
@@ -172,6 +173,7 @@ export default function Login(props: Record<string, unknown>) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const redirectTo = searchParams.get("redirect") || "/";
+  const sessionExpired = searchParams.get("reason") === "session-expired";
   const dispatch = useDispatch();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -307,6 +309,10 @@ try {
 
   // 소셜 로그인 요청처리
   useEffect(() => {
+    sessionStorage.removeItem("auth-expiry-redirecting");
+  }, []);
+
+  useEffect(() => {
     const messageHandler = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
       void handleSocialAuthPayload(event.data);
@@ -366,6 +372,12 @@ try {
             </Typography>
             <Box sx={{ height: 6 }} />
           </Box>
+
+          {sessionExpired && (
+            <Alert severity="info" sx={{ fontWeight: 700 }}>
+              로그인 시간이 만료되었습니다. 다시 로그인해주세요.
+            </Alert>
+          )}
 
           <Box
             component="form"

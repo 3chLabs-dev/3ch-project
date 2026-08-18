@@ -979,7 +979,8 @@ const updateLeagueSchema = z.object({
   entry_fee: z.string().optional(),
   bank_account: z.string().optional(),
   sort_order: z.string().optional(),
-  recruit_count: z.number().int().min(1).optional(),
+  // 생성 시와 동일하게 0은 모집 인원 제한 없음으로 사용한다.
+  recruit_count: z.number().int().min(0).optional(),
   status: z.enum(['draft', 'active', 'completed']).optional(),
   join_permission: z.enum(['public', 'club_only']).optional(),
   visibility: z.enum(['public', 'club_only']).optional(),

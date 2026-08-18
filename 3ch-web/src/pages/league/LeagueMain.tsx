@@ -126,6 +126,10 @@ export default function LeagueMainBody() {
       if (isCompleted && leagueFilterStatus.includes("completed")) return true;
 
       return false;
+    }).sort((a, b) => {
+      const startDifference = new Date(b.start_date).getTime() - new Date(a.start_date).getTime();
+      if (startDifference !== 0) return startDifference;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
   }, [leagueData, leagueFilterStart, leagueFilterEnd, leagueFilterStatus, selectedScheduleGroupIds]);
 

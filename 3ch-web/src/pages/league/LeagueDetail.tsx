@@ -64,6 +64,12 @@
   import LeagueInvitedGroupsDialog from "./LeagueInvitedGroupsDialog";
   import { distributeSnake } from "../../features/league/algorithms/distributeSnake";
   import { useGetMyFeatureUsageQuery } from "../../features/payment/usageApi";
+  import {
+    createKakaoPayTransferLink,
+    createTossTransferLink,
+    isSmartphoneBrowser,
+    parseBankAccount,
+  } from "../../utils/paymentDeepLink";
 
   function parseLocation(description?: string) {
     if (!description) return "-";
@@ -168,6 +174,7 @@
     const [openLoadDialog, setOpenLoadDialog] = useState(false);
     const [alertMsg, setAlertMsg] = useState("");
     const [alertSeverity, setAlertSeverity] = useState<"success" | "warning" | "error">("warning");
+    const [isSmartphone] = useState(() => typeof navigator !== "undefined" && isSmartphoneBrowser());
     const [shareDialogOpen, setShareDialogOpen] = useState(false);
     const [deleteConfirm, setDeleteConfirm] = useState(false);
     const [cancelJoinConfirm, setCancelJoinConfirm] = useState(false);
@@ -221,6 +228,16 @@
       skip: !leagueData?.league?.group_id,
     });
     const league = leagueData?.league;
+    const transferLinks = useMemo(() => {
+      const parsedAccount = parseBankAccount(bankAccount.trim() || league?.bank_account?.trim() || "");
+      const fee = entryFee.trim() || league?.entry_fee?.trim() || "";
+      if (!parsedAccount || !fee) return null;
+
+      return {
+        kakaoPay: createKakaoPayTransferLink(parsedAccount.bankName, parsedAccount.accountNumber, fee),
+        toss: createTossTransferLink(parsedAccount.bankName, parsedAccount.accountNumber, fee),
+      };
+    }, [bankAccount, entryFee, league?.bank_account, league?.entry_fee]);
     const premiumBalance = usageData?.usage.premium_promotion;
     const canUsePremium = Boolean(league?.premium_enabled || premiumBalance?.unlimited || Number(premiumBalance?.remaining ?? 0) > 0);
 
@@ -984,6 +1001,25 @@ const handleSaveEdit = async () => {
         setAlertSeverity("error");
         setAlertMsg("계좌번호를 복사하지 못했습니다.");
       }
+    };
+
+    const handleOpenTransferApp = (deepLink: string) => {
+      // Custom scheme 실행 성공 여부는 브라우저에서 확정할 수 없다. 앱 전환이
+      // 일어나지 않고 페이지가 계속 보이는 경우에만 기존 계좌 송금을 안내한다.
+      let appOpened = false;
+      const handleVisibilityChange = () => {
+        if (document.hidden) appOpened = true;
+      };
+      document.addEventListener("visibilitychange", handleVisibilityChange, { once: true });
+      window.location.href = deepLink;
+
+      window.setTimeout(() => {
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+        if (!appOpened && !document.hidden) {
+          setAlertSeverity("warning");
+          setAlertMsg("송금 앱을 실행할 수 없습니다. 계좌번호를 복사해 은행 앱에서 송금해주세요.");
+        }
+      }, 1800);
     };
 
     useEffect(() => {
@@ -2323,6 +2359,46 @@ const handleSaveEdit = async () => {
                 <ContentCopyOutlinedIcon sx={{ fontSize: 19 }} />
               </IconButton>
             </Box>
+          )}
+          {isSmartphone && transferLinks && (transferLinks.kakaoPay || transferLinks.toss) && (
+            <Stack spacing={1} sx={{ mt: 1.25 }}>
+              {transferLinks.kakaoPay && (
+                <Button
+                  fullWidth
+                  variant="contained"
+                  disableElevation
+                  onClick={() => handleOpenTransferApp(transferLinks.kakaoPay!)}
+                  sx={{
+                    minHeight: 46,
+                    borderRadius: 1,
+                    bgcolor: "#FEE500",
+                    color: "#191919",
+                    fontWeight: 800,
+                    "&:hover": { bgcolor: "#F5DC00" },
+                  }}
+                >
+                  카카오페이로 송금
+                </Button>
+              )}
+              {transferLinks.toss && (
+                <Button
+                  fullWidth
+                  variant="contained"
+                  disableElevation
+                  onClick={() => handleOpenTransferApp(transferLinks.toss!)}
+                  sx={{
+                    minHeight: 46,
+                    borderRadius: 1,
+                    bgcolor: "#3182F6",
+                    color: "#fff",
+                    fontWeight: 800,
+                    "&:hover": { bgcolor: "#1B64DA" },
+                  }}
+                >
+                  토스로 송금
+                </Button>
+              )}
+            </Stack>
           )}
         </Box>
 

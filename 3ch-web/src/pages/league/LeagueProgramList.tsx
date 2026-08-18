@@ -266,8 +266,6 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
       })
     : [];
 
-  const r1Match = matches.find((m) => m.round_number === 1 && m.bracket === "upper");
-  const bracketSizeLabel = r1Match?.match_label ?? "";
   const advancementLabel = ADVANCEMENT_LABEL[league?.tournament_advancement ?? ""] ?? "";
   const seedingLabel = SEEDING_LABEL[league?.tournament_seeding ?? ""] ?? "";
   const isLoading = leagueLoading || matchesLoading || groupLoading || programLoading || participantsLoading;
@@ -964,8 +962,7 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
                 </Box>
               </Stack>}
 
-              {(bracketSizeLabel || advancementLabel || (!embedded && seedingLabel)) && <Stack direction="row" spacing={0.75} flexWrap="wrap" mb={2}>
-                {bracketSizeLabel && <Chip label={bracketSizeLabel} size="small" sx={{ fontSize: 11, fontWeight: 700, bgcolor: "#EFF6FF", color: "#2563EB", height: 22, border: "1px solid #BFDBFE" }} />}
+              {(advancementLabel || (!embedded && seedingLabel)) && <Stack direction="row" spacing={0.75} flexWrap="wrap" mb={2}>
                 {advancementLabel && <Chip label={advancementLabel} size="small" sx={{ fontSize: 11, fontWeight: 700, bgcolor: "#F5F3FF", color: "#7C3AED", height: 22, border: "1px solid #DDD6FE" }} />}
                 {!embedded && seedingLabel && <Chip label={`시드: ${seedingLabel}`} size="small" sx={{ fontSize: 11, fontWeight: 700, bgcolor: "#F0FDF4", color: "#16A34A", height: 22, border: "1px solid #BBF7D0" }} />}
               </Stack>}

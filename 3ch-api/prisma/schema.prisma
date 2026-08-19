@@ -705,6 +705,7 @@ model LeagueMatch {
   score_b     Int?
   court       String?
   status      String   @default("pending")
+  match_rule  String?
   created_at  DateTime @default(now())
 
   league_id String

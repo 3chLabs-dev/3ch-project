@@ -585,6 +585,7 @@ export default function LeagueMatchOrder() {
         score_b: serverMatch.score_b,
         court: serverMatch.court,
         status: serverMatch.status,
+        match_rule: serverMatch.match_rule ?? match.match_rule,
       };
     });
     return applyProgramTournamentAdvancement(hydratedMatches)
@@ -797,7 +798,7 @@ export default function LeagueMatchOrder() {
 
   const tournamentTabs = useMemo<RoundTab[]>(() => {
     if (!isTournamentProgramRound) return [];
-    return (["upper", "lower"] as const).flatMap((bracket) => {
+    const makeTabs = (bracket: "upper" | "lower") => {
       const rounds = [...new Set(activeProgramMatches
         .filter((match) => match.bracket === bracket)
         .map((match) => match.round_number ?? 0)
@@ -817,7 +818,23 @@ export default function LeagueMatchOrder() {
           bracket,
         };
       });
-    });
+    };
+
+    const upperTabs = makeTabs("upper");
+    const lowerTabs = makeTabs("lower");
+    if (upperTabs.length === 0) return lowerTabs;
+
+    // 최초 공통 라운드 후에는 같은 진행 단계의 상위 → 하위 순서로 배치한다.
+    // 예: 8강 → 상위 4강 → 하위 4강 → 상위 결승 → 하위 결승
+    const orderedTabs: RoundTab[] = [upperTabs[0]];
+    for (let index = 1; index < upperTabs.length; index += 1) {
+      orderedTabs.push(upperTabs[index]);
+      if (lowerTabs[index - 1]) orderedTabs.push(lowerTabs[index - 1]);
+    }
+    if (lowerTabs.length >= upperTabs.length) {
+      orderedTabs.push(...lowerTabs.slice(upperTabs.length - 1));
+    }
+    return orderedTabs;
   }, [activeProgramMatches, isTournamentProgramRound]);
 
   const activeTournamentTab = tournamentTabKey ?? tournamentTabs[0]?.key ?? "";
@@ -1243,7 +1260,7 @@ export default function LeagueMatchOrder() {
                     canManage={canManage}
                     canMember={canMember}
                     leagueId={leagueId}
-                    rules={isProgramMode ? currentProgramBlock?.matchRule : league?.rules}
+                    rules={match.match_rule ?? (isProgramMode ? currentProgramBlock?.matchRule : league?.rules)}
                     myName={myName ?? undefined}
                     seedA={isTournamentProgramRound ? seed?.a : undefined}
                     seedB={isTournamentProgramRound ? seed?.b : undefined}

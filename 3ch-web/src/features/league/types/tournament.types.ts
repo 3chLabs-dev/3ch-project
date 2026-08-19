@@ -25,6 +25,8 @@ export interface EventConfig {
   type: EventType;
 
   matchRule: MatchRule;
+  ruleSwitchSize?: number;
+  lateMatchRule?: MatchRule;
 
   enabled: boolean;
 }
@@ -110,6 +112,8 @@ export interface ProgramBlock {
     | "TEAM";
 
   matchRule: MatchRule;
+  ruleSwitchSize?: number;
+  lateMatchRule?: MatchRule;
   format?: RoundFormat;
   expectedMinutes: number;
   matchCount: number;
@@ -207,6 +211,8 @@ export interface RoundConfig {
   format: RoundFormat;
   option: RoundOption;
   matchRule: MatchRuleType;
+  ruleSwitchSize?: number;
+  lateMatchRule?: MatchRuleType;
   teamPlayerCount: number;
   teamMatchType: TeamLineupType;
   teamSinglesCount?: number;

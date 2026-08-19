@@ -595,7 +595,7 @@ const SortableBracketRow = memo(function SortableBracketRow({
         const m   = matchLookup.get(`${participant.id}__${colPlayer.id}`);
         const isA = m?.participant_a_id === participant.id;
         return (
-          <BracketScoreCell key={colIdx} match={m} isA={isA} leagueId={leagueId} winScore={winScore} canManage={canScore} landscape={landscape} rowIndex={rowIdx} colIndex={colIdx} totalRows={n} totalCols={n} onProgramMatchUpdate={onProgramMatchUpdate}/>
+          <BracketScoreCell key={colIdx} match={m} isA={isA} leagueId={leagueId} winScore={getWinScore(m?.match_rule ?? rules) ?? winScore} canManage={canScore} landscape={landscape} rowIndex={rowIdx} colIndex={colIdx} totalRows={n} totalCols={n} onProgramMatchUpdate={onProgramMatchUpdate}/>
         );
       })}
 
@@ -1129,6 +1129,7 @@ export default function LeagueGPTVisionSheet() {
             score_b: serverMatch.score_b,
             court: serverMatch.court,
             status: serverMatch.status,
+            match_rule: serverMatch.match_rule ?? match.match_rule,
           }
         : match;
     });

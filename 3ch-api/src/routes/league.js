@@ -3310,6 +3310,7 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
         loser_next_slot: match.loser_next_slot ?? null,
         program_round: match.program_round == null ? null : Number(match.program_round),
         program_block_type: match.program_block_type,
+        match_rule: match.match_rule ?? null,
         participant_a_roster_ids: isSingles ? [] : rosterIds(match.participant_a_id),
         participant_b_roster_ids: isSingles ? [] : rosterIds(match.participant_b_id),
       });
@@ -3321,7 +3322,7 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
     if (targetProgramRounds.length > 0) {
       const existingRows = await pool.query(
         `SELECT id, participant_a_id, participant_b_id, program_block_type,
-                score_a, score_b, court, status
+                score_a, score_b, court, status, match_rule
          FROM league_matches
          WHERE league_id = $1 AND is_program = TRUE AND program_round = ANY($2::int[])`,
         [leagueId, targetProgramRounds],
@@ -3339,7 +3340,7 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
     if (validMatches.length > 0) {
       const values = [];
       const placeholders = validMatches.map((match, index) => {
-        const base = index * 20;
+        const base = index * 21;
         const previous = existingState.get(match.id);
         const canPreserveState = !resetResults && previous && (
           match.program_block_type !== 'SINGLES' ||
@@ -3370,15 +3371,18 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
           match.program_block_type,
           match.participant_a_roster_ids,
           match.participant_b_roster_ids,
+          canPreserveState && previous.status !== 'pending' && previous.match_rule
+            ? previous.match_rule
+            : match.match_rule,
         );
-        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9}, $${base + 10}, $${base + 11}, $${base + 12}, $${base + 13}, $${base + 14}, $${base + 15}, $${base + 16}, TRUE, $${base + 17}, $${base + 18}, $${base + 19}::text[], $${base + 20}::text[])`;
+        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9}, $${base + 10}, $${base + 11}, $${base + 12}, $${base + 13}, $${base + 14}, $${base + 15}, $${base + 16}, TRUE, $${base + 17}, $${base + 18}, $${base + 19}::text[], $${base + 20}::text[], $${base + 21})`;
       });
 
       await pool.query(
         `INSERT INTO league_matches
          (id, league_id, match_order, participant_a_id, participant_b_id, bracket, round_number, match_label,
           next_match_id, next_slot, loser_next_match_id, loser_next_slot, score_a, score_b, court, status,
-          is_program, program_round, program_block_type, participant_a_roster_ids, participant_b_roster_ids)
+          is_program, program_round, program_block_type, participant_a_roster_ids, participant_b_roster_ids, match_rule)
          VALUES ${placeholders.join(', ')}`,
         values,
       );
@@ -3571,7 +3575,7 @@ router.get('/league/:id/matches', optionalAuth, async (req, res) => {
 
     const result = await pool.query(
       `SELECT
-         m.id, m.match_order, m.score_a, m.score_b, m.court, m.status,
+         m.id, m.match_order, m.score_a, m.score_b, m.court, m.status, m.match_rule,
          m.participant_a_id, m.participant_b_id,
          m.is_program, m.program_round, m.program_block_type,
          m.bracket, m.round_number, m.match_label,
@@ -3788,7 +3792,7 @@ router.post('/league/:id/matches/init', requireAuth, async (req, res) => {
 
     const result = await pool.query(
       `SELECT
-         m.id, m.match_order, m.score_a, m.score_b, m.court, m.status,
+         m.id, m.match_order, m.score_a, m.score_b, m.court, m.status, m.match_rule,
          m.participant_a_id, m.participant_b_id,
          pa.name AS participant_a_name, pa.division AS participant_a_division,
          pb.name AS participant_b_name, pb.division AS participant_b_division
@@ -3920,7 +3924,7 @@ router.post('/league/:id/matches/extend', requireAuth, async (req, res) => {
 
       const result = await client.query(
         `SELECT
-           m.id, m.match_order, m.score_a, m.score_b, m.court, m.status,
+           m.id, m.match_order, m.score_a, m.score_b, m.court, m.status, m.match_rule,
            m.participant_a_id, m.participant_b_id,
            pa.name AS participant_a_name, pa.division AS participant_a_division,
            pb.name AS participant_b_name, pb.division AS participant_b_division
@@ -3987,7 +3991,7 @@ router.post('/league/:id/matches/extend', requireAuth, async (req, res) => {
     // 최종 경기 목록 반환
     const result = await client.query(
       `SELECT
-         m.id, m.match_order, m.score_a, m.score_b, m.court, m.status,
+         m.id, m.match_order, m.score_a, m.score_b, m.court, m.status, m.match_rule,
          m.participant_a_id, m.participant_b_id,
          pa.name AS participant_a_name, pa.division AS participant_a_division,
          pb.name AS participant_b_name, pb.division AS participant_b_division
@@ -4349,7 +4353,7 @@ router.patch('/league/:id/matches/:matchId', optionalAuth, async (req, res) => {
 
     const refreshed = await pool.query(
       `SELECT
-         m.id, m.match_order, m.score_a, m.score_b, m.court, m.status,
+         m.id, m.match_order, m.score_a, m.score_b, m.court, m.status, m.match_rule,
          m.participant_a_id, m.participant_b_id,
          m.is_program, m.program_round, m.program_block_type,
          m.bracket, m.round_number, m.match_label,
@@ -5181,7 +5185,7 @@ router.post('/league/:id/matches/init-tournament', requireAuth, async (req, res)
     // 생성된 경기 반환
     const result = await pool.query(
       `SELECT
-         m.id, m.match_order, m.score_a, m.score_b, m.court, m.status,
+         m.id, m.match_order, m.score_a, m.score_b, m.court, m.status, m.match_rule,
          m.participant_a_id, m.participant_b_id,
          m.bracket, m.round_number, m.match_label,
          m.next_match_id, m.next_slot, m.loser_next_match_id, m.loser_next_slot,

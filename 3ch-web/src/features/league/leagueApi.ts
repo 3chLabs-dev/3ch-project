@@ -258,6 +258,7 @@ export interface LeagueMatch {
   participant_a_roster_details?: Array<{ name: string; division: string | null }>;
   participant_b_roster_details?: Array<{ name: string; division: string | null }>;
   is_no_game?: boolean;
+  match_rule?: string | null;
 }
 
 export interface InitTournamentRequest {

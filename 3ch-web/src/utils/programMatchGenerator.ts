@@ -478,7 +478,15 @@ function buildTournamentMatches(
     }
   }
 
-  return matches;
+  return matches.map((match) => {
+    const stageSize = bracketSize / 2 ** ((match.round_number ?? 1) - 1);
+    return {
+      ...match,
+      match_rule: block.lateMatchRule && block.ruleSwitchSize && stageSize <= block.ruleSwitchSize
+        ? block.lateMatchRule
+        : block.matchRule,
+    };
+  });
 }
 
 function buildUpperLowerTournamentMatches(
@@ -583,7 +591,17 @@ function buildUpperLowerTournamentMatches(
     });
   });
 
-  return matches;
+  return matches.map((match) => {
+    const stageSize = match.bracket === "lower"
+      ? bracketSize / 2 ** (match.round_number ?? 1)
+      : bracketSize / 2 ** ((match.round_number ?? 1) - 1);
+    return {
+      ...match,
+      match_rule: block.lateMatchRule && block.ruleSwitchSize && stageSize <= block.ruleSwitchSize
+        ? block.lateMatchRule
+        : block.matchRule,
+    };
+  });
 }
 
 function splitTournamentUnits(units: MatchUnit[], bracketCount: number): MatchUnit[][] {

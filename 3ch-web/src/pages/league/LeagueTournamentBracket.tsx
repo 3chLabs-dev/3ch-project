@@ -333,7 +333,7 @@ function calcCenterOutPositions(matches: LeagueMatch[]): MatchPos[] {
   const lowerThird = matches.find((match) => match.bracket === "lower" && match.match_label?.includes("3·4위전"));
   const lowerFinalPos = result.find((pos) => pos.match.bracket === "lower" && pos.match.match_label?.includes("결승"));
   if (lowerThird && lowerFinalPos) {
-    result.push({ id: lowerThird.id, x: lowerFinalPos.x, y: lowerFinalPos.y - CO_ROW_H / 2, match: lowerThird });
+    result.push({ id: lowerThird.id, x: lowerFinalPos.x, y: lowerFinalPos.y - CO_ROW_H, match: lowerThird });
   }
 
   return result;
@@ -598,6 +598,22 @@ function Connectors({ positions }: { positions: MatchPos[] }) {
         const sy = y + MH;
 
         if (tgt.match.match_label?.includes("3·4위전")) {
+          if (Math.abs(y - tgt.y) < 1) {
+            const sourceOnLeft = x < tgt.x;
+            const sourceX = sourceOnLeft ? x + MW : x;
+            const targetX = sourceOnLeft ? tgt.x : tgt.x + MW;
+            const lineY = y + MH / 2;
+            return (
+              <path
+                key={`lc-${id}`}
+                d={`M ${sourceX} ${lineY} H ${targetX}`}
+                stroke="#CBD5E1"
+                strokeWidth={1.5}
+                strokeDasharray="4 3"
+                fill="none"
+              />
+            );
+          }
           const targetX = tgt.x;
           const isFirstSlot = m.loser_next_slot === "a";
           const sourceX = x + MW / 2;

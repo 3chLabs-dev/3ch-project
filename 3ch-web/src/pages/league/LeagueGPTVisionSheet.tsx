@@ -244,6 +244,18 @@ function DivBadge({ division, aggregate = false }: { division?: string | null; a
   );
 }
 
+function sortParticipantsByDivision<T extends Pick<LeagueParticipantItem, "division" | "sort_order" | "name">>(participants: T[]): T[] {
+  const divisionNumber = (division?: string | null) => {
+    const parsed = Number.parseInt(String(division ?? "").replace(/[^0-9]/g, ""), 10);
+    return Number.isFinite(parsed) ? parsed : Number.MAX_SAFE_INTEGER;
+  };
+  return [...participants].sort((left, right) =>
+    divisionNumber(left.division) - divisionNumber(right.division)
+    || (left.sort_order ?? Number.MAX_SAFE_INTEGER) - (right.sort_order ?? Number.MAX_SAFE_INTEGER)
+    || left.name.localeCompare(right.name, "ko"),
+  );
+}
+
 // ─── 점수 조정 버튼 (공통) ────────────────────────────────────────────────────
 // BracketScoreCell(점수 조정)과 SortableBracketRow(시드 순서 이동)에서 공통 사용
 // - rotate=true: writingMode가 90° 회전된 portrait 모드에서 화살표 방향 보정
@@ -1378,9 +1390,9 @@ export default function LeagueGPTVisionSheet() {
       return programDisplayParticipants;
     }
     if (groupNames.length > 0 && selectedGroup) {
-      return rawParticipants.filter(p => p.group_name === selectedGroup);
+      return sortParticipantsByDivision(rawParticipants.filter(p => p.group_name === selectedGroup));
     }
-    return rawParticipants;
+    return sortParticipantsByDivision(rawParticipants);
   }, [currentProgramBlock, currentProgramRound, isProgramTeamRound, programTeamParticipants, programDisplayParticipants, isProgramMode, programMatchesAll, rawParticipants, groupNames, selectedGroup]);
 
   // 4. 선택된 조의 경기만 필터링
@@ -1420,7 +1432,7 @@ export default function LeagueGPTVisionSheet() {
     const participantIds = new Set(
       matches.flatMap((match) => [match.participant_a_id, match.participant_b_id]).filter(Boolean) as string[],
     );
-    const orderedIds = rawParticipants
+    const orderedIds = sortParticipantsByDivision(rawParticipants)
       .filter((participant) => participantIds.has(participant.id))
       .map((participant) => participant.id);
     matches.forEach((match) => {

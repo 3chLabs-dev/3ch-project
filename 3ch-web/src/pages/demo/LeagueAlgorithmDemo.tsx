@@ -3860,7 +3860,8 @@ const LeagueAlgorithmDemo = ({
           <Typography sx={{ fontSize: 15, lineHeight: 1.8 }}>
             계속 진행을 하면 종료·진행 중인 경기는 그대로 유지됩니다.<br />
             초기화를 하면 대진표와 경기 결과가 초기 상태로 돌아갑니다.<br />
-            (원활한 진행을 위해 대진표 초기화를 권장합니다.)
+            (원활한 진행을 위해 대진표 초기화 권장)<br />
+            어떤 방식으로 적용하겠습니까?
           </Typography>
         </DialogContent>
         <DialogActions>

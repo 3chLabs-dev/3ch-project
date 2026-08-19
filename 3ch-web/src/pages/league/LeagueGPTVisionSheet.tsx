@@ -844,9 +844,10 @@ function useMatchStats(localOrder: LeagueParticipantItem[], matches: LeagueMatch
  * - landscape: 테이블 아래에 세로로 붙음 (mt: 1.5)
  * - portrait:  테이블 오른쪽에 가로로 붙음 (mr: 1.5)
  */
-function MatchSchedulePanel({ matches, localOrder, landscape, leagueId, onProgramMatchUpdate }: {
+function MatchSchedulePanel({ matches, localOrder, participantNumberMap, landscape, leagueId, onProgramMatchUpdate }: {
   matches: LeagueMatch[];
   localOrder: LeagueParticipantItem[];
+  participantNumberMap: Map<string, string>;
   landscape: boolean;
   leagueId: string;
   onProgramMatchUpdate?: (matchId: string, updates: ProgramMatchPatch) => void;
@@ -904,6 +905,12 @@ function MatchSchedulePanel({ matches, localOrder, landscape, leagueId, onProgra
             const p2Idx = localOrder.findIndex((p) => p.id === m.participant_b_id);
             // 참가자 목록에 없는 경기는 표시 생략
             if (p1Idx === -1 || p2Idx === -1) return null;
+            const p1Number = m.participant_a_id
+              ? participantNumberMap.get(m.participant_a_id) ?? String(p1Idx + 1)
+              : String(p1Idx + 1);
+            const p2Number = m.participant_b_id
+              ? participantNumberMap.get(m.participant_b_id) ?? String(p2Idx + 1)
+              : String(p2Idx + 1);
 
             const isDone    = m.status === "done";
             const isPlaying = m.status === "playing";
@@ -917,9 +924,9 @@ function MatchSchedulePanel({ matches, localOrder, landscape, leagueId, onProgra
               <Box key={m.id} onClick={() => handleStatus(m, i)} sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.5, flexShrink: 0 }}>
                 {/* 시드 번호 카드 */}
                 <Box sx={{ bgcolor: cardBg, borderRadius: "5px", px: 1.25, py: 0.75, textAlign: "center", minWidth: 42, display: "flex", flexDirection: "column", alignItems: "center" }}>
-                  <Typography sx={{ color: numColor, fontSize: 14, fontWeight: 800, lineHeight: 1.3 }}>{p1Idx + 1}</Typography>
+                  <Typography sx={{ color: numColor, fontSize: 14, fontWeight: 800, lineHeight: 1.3 }}>{p1Number}</Typography>
                   <Box sx={{ width: "100%", height: "1px", bgcolor: "#4B5563", my: 0.25 }} />
-                  <Typography sx={{ color: numColor, fontSize: 14, fontWeight: 800, lineHeight: 1.3 }}>{p2Idx + 1}</Typography>
+                  <Typography sx={{ color: numColor, fontSize: 14, fontWeight: 800, lineHeight: 1.3 }}>{p2Number}</Typography>
                 </Box>
                 {/* 코트 배지: 코트 미배정이면 글자색=배경색(사실상 투명하게) */}
                 <Box sx={{ bgcolor: courtBg, borderRadius: "100px", px: 0.75, py: 0.15 }}>
@@ -1393,6 +1400,37 @@ export default function LeagueGPTVisionSheet() {
     }
     return serverMatches;
   }, [isProgramMode, programMatchesAll, matchData?.matches, groupNames.length, selectedGroup, rawParticipants]);
+
+  // 경기 순서 화면과 동일한 안정적인 참가자 번호를 사용한다.
+  // 대진표 표시 순서(localOrder)가 바뀌어도 경기 번호는 함께 바뀌지 않아야 한다.
+  const scheduleParticipantNumberMap = useMemo(() => {
+    const map = new Map<string, string>();
+    if (isProgramMode) {
+      matches.forEach((match) => {
+        if (match.participant_a_id && match.participant_a_seed_label) {
+          map.set(match.participant_a_id, match.participant_a_seed_label);
+        }
+        if (match.participant_b_id && match.participant_b_seed_label) {
+          map.set(match.participant_b_id, match.participant_b_seed_label);
+        }
+      });
+      if (map.size > 0) return map;
+    }
+
+    const participantIds = new Set(
+      matches.flatMap((match) => [match.participant_a_id, match.participant_b_id]).filter(Boolean) as string[],
+    );
+    const orderedIds = rawParticipants
+      .filter((participant) => participantIds.has(participant.id))
+      .map((participant) => participant.id);
+    matches.forEach((match) => {
+      [match.participant_a_id, match.participant_b_id].forEach((participantId) => {
+        if (participantId && !orderedIds.includes(participantId)) orderedIds.push(participantId);
+      });
+    });
+    orderedIds.forEach((participantId, index) => map.set(participantId, String(index + 1)));
+    return map;
+  }, [isProgramMode, matches, rawParticipants]);
 
   // ── 권한 ─────────────────────────────────────────────────────────────────
   // canManage: 점수 편집 + 시드 순서 변경 가능 여부
@@ -2515,7 +2553,7 @@ export default function LeagueGPTVisionSheet() {
             transformOrigin: "top left",
             transform: "rotate(90deg) translateY(-100%)",
           }}>
-            <MatchSchedulePanel matches={matches} localOrder={localOrder} landscape leagueId={id ?? ""} onProgramMatchUpdate={isProgramMode ? updateProgramMatch : undefined} />
+            <MatchSchedulePanel matches={matches} localOrder={localOrder} participantNumberMap={scheduleParticipantNumberMap} landscape leagueId={id ?? ""} onProgramMatchUpdate={isProgramMode ? updateProgramMatch : undefined} />
           </Box>
         </Box>
 

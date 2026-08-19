@@ -4723,8 +4723,9 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
     if (requestedParticipantIds.length > 0) {
       const participantById = new Map(participants.map((participant) => [String(participant.id), participant]));
       const uniqueIds = new Set(requestedParticipantIds);
-      const requestedOrderIsValid = uniqueIds.size === participants.length
-        && requestedParticipantIds.length === participants.length
+      // 조별리그 사진은 현재 선택한 조의 대진표만 담으므로 리그 전체가
+      // 아니라 화면에 표시된 참가자 부분집합의 순서를 받을 수 있어야 한다.
+      const requestedOrderIsValid = uniqueIds.size === requestedParticipantIds.length
         && requestedParticipantIds.every((participantId) => participantById.has(participantId));
       if (!requestedOrderIsValid) {
         return res.status(400).json({ message: '현재 대진표의 참가자 순서가 서버 참가자 명단과 일치하지 않습니다.' });

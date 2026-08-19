@@ -43,6 +43,7 @@ import {
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
 import { formatLeagueDate } from "../../utils/dateUtils";
 import { distributeSnake } from "../../features/league/algorithms/distributeSnake";
+import { generateGroupOptions } from "../../features/league/algorithms/generateGroupOptions";
 import { clearProgramMatchState, generateProgramRoundMatches } from "../../utils/programMatchGenerator";
 import type { ProgramOption } from "../../features/league/types/tournament.types";
 
@@ -225,6 +226,8 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [storedProgram, setStoredProgram] = useState<StoredProgramOption | null>(null);
   const [formationDialog, setFormationDialog] = useState<{ roundIndex: number; mode: "team" | "doubles" | "group" } | null>(null);
+  const [groupStructureRoundIndex, setGroupStructureRoundIndex] = useState<number | null>(null);
+  const [pendingGroupStructureSizes, setPendingGroupStructureSizes] = useState<number[]>([]);
   const [formationDraft, setFormationDraft] = useState<FormationPlayer[][]>([]);
   const [isFormationEditing, setIsFormationEditing] = useState(false);
   const [reshuffleConfirmOpen, setReshuffleConfirmOpen] = useState(false);
@@ -429,6 +432,45 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
           ? distributeSnake(reshuffleWithinLevel(doublesUnits, activeFormationBlock?.groupShuffleSeed ?? defaultFormationSeed + 503), groupResultSizes)
         : distributeSnake(reshuffleWithinLevel(programPlayers, activeFormationBlock?.groupShuffleSeed ?? defaultFormationSeed + 503), groupResultSizes);
   const isDoublesGroupResult = formationDialog?.mode === "group" && activeFormationBlock?.type === "DOUBLES";
+  const groupStructureBlock = groupStructureRoundIndex == null
+    ? undefined
+    : storedProgram?.blocks?.[groupStructureRoundIndex];
+  const groupStructureMemberCount = groupStructureBlock?.groupSizes?.reduce((sum, size) => sum + size, 0)
+    || programPlayers.length;
+  const groupStructureOptions = useMemo(
+    () => generateGroupOptions(groupStructureMemberCount),
+    [groupStructureMemberCount],
+  );
+
+  const openGroupStructureDialog = (roundIndex: number) => {
+    const block = storedProgram?.blocks?.[roundIndex];
+    setPendingGroupStructureSizes(block?.groupSizes ?? generateGroupOptions(programPlayers.length)[0]?.groups ?? [programPlayers.length]);
+    setGroupStructureRoundIndex(roundIndex);
+  };
+
+  const closeGroupStructureDialog = () => {
+    setGroupStructureRoundIndex(null);
+    setPendingGroupStructureSizes([]);
+  };
+
+  const saveGroupStructure = async () => {
+    if (groupStructureRoundIndex == null || !storedProgram || pendingGroupStructureSizes.length === 0) return;
+    const block = storedProgram.blocks?.[groupStructureRoundIndex];
+    if (!block) return;
+    const nextProgram: StoredProgramOption = {
+      ...storedProgram,
+      blocks: (storedProgram.blocks ?? []).map((currentBlock, index) => index === groupStructureRoundIndex
+        ? {
+            ...currentBlock,
+            groupSizes: pendingGroupStructureSizes,
+            groupAssignments: undefined,
+            groupShuffleSeed: (currentBlock.groupShuffleSeed ?? (index + 1) * 1000 + 503) + 1,
+          }
+        : currentBlock),
+    };
+    await persistFormation(nextProgram, groupStructureRoundIndex, true);
+    closeGroupStructureDialog();
+  };
 
   const closeFormationDialog = () => {
     setFormationDialog(null);
@@ -1006,6 +1048,16 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
 
                     {(round.type === "TEAM" || round.type === "DOUBLES" || round.format === "GROUP") && (
                       <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                        {canManage && round.format === "GROUP" && (
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={() => openGroupStructureDialog(round.round - 1)}
+                            sx={{ flex: 1, height: 34, fontWeight: 700, fontSize: 12, borderRadius: 1.5, textTransform: "none", whiteSpace: "nowrap" }}
+                          >
+                            조 편성 구조
+                          </Button>
+                        )}
                         {round.type === "TEAM" && (round.teamFormationPublished || canManage) && (
                           <Button
                             variant="outlined"
@@ -1094,6 +1146,49 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
           </Box>
         )}
       </Box>
+
+      <Dialog
+        open={groupStructureRoundIndex !== null}
+        onClose={closeGroupStructureDialog}
+        fullWidth
+        maxWidth="sm"
+        slotProps={{ paper: { sx: { borderRadius: 2, mx: 2 } } }}
+      >
+        <DialogTitle sx={{ fontWeight: 900, fontSize: 16 }}>조 편성 구조</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={1.25}>
+            {groupStructureOptions.map((option) => {
+              const selected = option.groups.length === pendingGroupStructureSizes.length
+                && option.groups.every((size, index) => size === pendingGroupStructureSizes[index]);
+              return (
+                <Box
+                  key={option.groups.join("-")}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setPendingGroupStructureSizes(option.groups)}
+                  sx={{
+                    border: selected ? "2px solid #3B82F6" : "1px solid #D1D5DB",
+                    borderRadius: 1.5,
+                    p: 2,
+                    bgcolor: selected ? "#EFF6FF" : "#FFF",
+                    cursor: "pointer",
+                  }}
+                >
+                  {option.recommended && <Typography sx={{ mb: 0.5, color: "#2563EB", fontSize: 12, fontWeight: 800 }}>추천</Typography>}
+                  <Typography sx={{ fontSize: 16, fontWeight: 800 }}>{option.groups.length}개 조</Typography>
+                  <Typography sx={{ mt: 0.5, color: "#6B7280", fontSize: 13 }}>
+                    {option.groups.map((size) => `${size}인`).join(" / ")}
+                  </Typography>
+                </Box>
+              );
+            })}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 2.5, py: 2 }}>
+          <Button onClick={closeGroupStructureDialog}>취소</Button>
+          <Button variant="contained" onClick={() => void saveGroupStructure()} disabled={isSavingFormation}>완료</Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={formationDialog !== null}

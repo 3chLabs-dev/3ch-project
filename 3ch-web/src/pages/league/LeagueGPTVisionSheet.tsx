@@ -1319,54 +1319,6 @@ export default function LeagueGPTVisionSheet() {
 
   // 3. 선택된 조의 팀원만 필터링 (조가 없으면 전체)
   const targetParticipants = useMemo(() => {
-    const normalizeDivision = (division?: string | null) => {
-      const parsed = Number.parseInt(String(division ?? "").replace(/[^0-9]/g, ""), 10);
-      return Number.isFinite(parsed) ? parsed : null;
-    };
-    const selectedGroupIndex = selectedGroup
-      ? Number.parseInt(selectedGroup.replace(/[^0-9]/g, ""), 10) - 1
-      : -1;
-    const savedAssignments =
-      currentProgramRound?.groupAssignments ?? currentProgramBlock?.groupAssignments;
-    const savedGroupAssignments =
-      selectedGroupIndex >= 0 ? savedAssignments?.[selectedGroupIndex] : undefined;
-    const isHalfSplitRound = Boolean(
-      currentProgramRound?.halfSplitOnlyMatches
-      ?? currentProgramBlock?.halfSplitOnlyMatches,
-    );
-    const orderBySavedFormation = <
-      T extends { id: string; name: string; division?: string | null }
-    >(participants: T[]) => {
-      const savedParticipantOrder =
-        currentProgramRound?.participantOrder ?? currentProgramBlock?.participantOrder;
-      if (savedParticipantOrder?.length && !isHalfSplitRound) {
-        const orderById = new Map(
-          savedParticipantOrder.map((participantId, index) => [participantId, index]),
-        );
-        return [...participants].sort(
-          (left, right) =>
-            (orderById.get(left.id) ?? Number.MAX_SAFE_INTEGER)
-            - (orderById.get(right.id) ?? Number.MAX_SAFE_INTEGER),
-        );
-      }
-
-      if (!savedGroupAssignments?.length) return participants;
-      const remaining = [...participants];
-      const ordered = savedGroupAssignments.flatMap((assignment) => {
-        let index = remaining.findIndex(
-          (participant) =>
-            participant.name === assignment.name
-            && normalizeDivision(participant.division) === assignment.level,
-        );
-        if (index < 0) {
-          index = remaining.findIndex((participant) => participant.name === assignment.name);
-        }
-        if (index < 0) return [];
-        return remaining.splice(index, 1);
-      });
-      return [...ordered, ...remaining];
-    };
-
     if (isProgramTeamRound) {
       if (groupNames.length > 0 && selectedGroup) {
         const selectedMatches = programMatchesAll.filter((match) => match.match_label === selectedGroup);
@@ -1382,18 +1334,18 @@ export default function LeagueGPTVisionSheet() {
       const ids = new Set(
         selectedMatches.flatMap((match) => [match.participant_a_id, match.participant_b_id]).filter(Boolean) as string[],
       );
-      return orderBySavedFormation(
+      return sortParticipantsByDivision(
         programDisplayParticipants.filter((participant) => ids.has(participant.id)),
       );
     }
     if (isProgramMode) {
-      return programDisplayParticipants;
+      return sortParticipantsByDivision(programDisplayParticipants);
     }
     if (groupNames.length > 0 && selectedGroup) {
       return sortParticipantsByDivision(rawParticipants.filter(p => p.group_name === selectedGroup));
     }
     return sortParticipantsByDivision(rawParticipants);
-  }, [currentProgramBlock, currentProgramRound, isProgramTeamRound, programTeamParticipants, programDisplayParticipants, isProgramMode, programMatchesAll, rawParticipants, groupNames, selectedGroup]);
+  }, [isProgramTeamRound, programTeamParticipants, programDisplayParticipants, isProgramMode, programMatchesAll, rawParticipants, groupNames, selectedGroup]);
 
   // 4. 선택된 조의 경기만 필터링
   const matches = useMemo(() => {
@@ -1417,7 +1369,7 @@ export default function LeagueGPTVisionSheet() {
   // 대진표 표시 순서(localOrder)가 바뀌어도 경기 번호는 함께 바뀌지 않아야 한다.
   const scheduleParticipantNumberMap = useMemo(() => {
     const map = new Map<string, string>();
-    if (isProgramMode) {
+    if (isProgramTeamRound) {
       matches.forEach((match) => {
         if (match.participant_a_id && match.participant_a_seed_label) {
           map.set(match.participant_a_id, match.participant_a_seed_label);
@@ -1442,7 +1394,7 @@ export default function LeagueGPTVisionSheet() {
     });
     orderedIds.forEach((participantId, index) => map.set(participantId, String(index + 1)));
     return map;
-  }, [isProgramMode, matches, rawParticipants]);
+  }, [isProgramTeamRound, matches, rawParticipants]);
 
   // ── 권한 ─────────────────────────────────────────────────────────────────
   // canManage: 점수 편집 + 시드 순서 변경 가능 여부

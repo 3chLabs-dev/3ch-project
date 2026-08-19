@@ -6,7 +6,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { generateGroupOptions } from '../../features/league/algorithms/generateGroupOptions';
 import { useGetLeagueInvitedGroupsQuery, useGetLeagueParticipantsQuery, useGetLeagueProgramQuery, useGetLeagueQuery, useSaveLeagueProgramMutation, useSyncLeagueProgramMatchesMutation } from '../../features/league/leagueApi';
 import type { ProgramBlock, ProgramOption, ProgramType, TeamMatchType, RoundConfig, FormationAssignmentPlayer, FinalAdvancementMode, RoundOption, TournamentMode } from '../../features/league/types/tournament.types';
-import { ToggleButton, ToggleButtonGroup, Button, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Chip, Radio, CircularProgress, Box, Typography, Stack, Divider, Tooltip } from "@mui/material";
+import { ToggleButton, ToggleButtonGroup, Button, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Chip, Radio, CircularProgress, Box, Typography, Stack, Divider, Tooltip, Switch, FormControlLabel } from "@mui/material";
 import { DndContext, PointerSensor, TouchSensor, useSensor, useSensors, closestCenter,
   useDroppable, type DragEndEvent, type DragOverEvent, } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable, } from "@dnd-kit/sortable";
@@ -1198,6 +1198,8 @@ const LeagueAlgorithmDemo = ({
   const { id: leagueId } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const isEditMode = searchParams.get("edit") === "true";
+  const [nextRuleRounds, setNextRuleRounds] = useState<number[]>([]);
+  const [pendingRuleChange, setPendingRuleChange] = useState<{ roundId: number; rule: RoundConfig["matchRule"] } | null>(null);
   const shouldHideSetupInputs = hideSetupInputs || isEditMode;
   const restoredRef = useRef(false);
   const skipNextResetRef = useRef(false);
@@ -1210,6 +1212,7 @@ const LeagueAlgorithmDemo = ({
   const { data: leagueData } = useGetLeagueQuery(leagueId ?? "", {
     skip: !leagueId || !isEditMode,
   });
+  const isStartedProgram = isEditMode && leagueData?.league?.status === "active";
   const [saveLeagueProgram] = useSaveLeagueProgramMutation();
   const [syncLeagueProgramMatches] = useSyncLeagueProgramMatchesMutation();
   const [pendingProgramSave, setPendingProgramSave] = useState<StoredProgramWithEditState | null>(null);
@@ -2913,6 +2916,7 @@ const LeagueAlgorithmDemo = ({
                     <ToggleButtonGroup
                       exclusive
                       value={round.matchRule}
+                      disabled={isStartedProgram}
                       fullWidth
                       onChange={(_, value) => {
                         if (!value) return;
@@ -2941,6 +2945,21 @@ const LeagueAlgorithmDemo = ({
                         3세트제
                       </ToggleButton>
                     </ToggleButtonGroup>
+                    {isStartedProgram && (
+                      <Box sx={{ mt: 1.5 }}>
+                        <FormControlLabel
+                          control={<Switch checked={nextRuleRounds.includes(round.id)} onChange={(_, checked) => setNextRuleRounds((current) => checked ? [...current, round.id] : current.filter((id) => id !== round.id))} />}
+                          label="다음 경기부터 경기방식 변경"
+                        />
+                        {nextRuleRounds.includes(round.id) && (
+                          <ToggleButtonGroup exclusive fullWidth value={null} onChange={(_, value) => value && setPendingRuleChange({ roundId: round.id, rule: value })}>
+                            <ToggleButton value="BEST_OF_3">3전 2선승제</ToggleButton>
+                            <ToggleButton value="BEST_OF_5">5전 3선승제</ToggleButton>
+                            <ToggleButton value="THREE_SET">3세트제</ToggleButton>
+                          </ToggleButtonGroup>
+                        )}
+                      </Box>
+                    )}
                   </div>
                   <ClubPolicyControls round={round} enabled={clubPoliciesEnabled} onChange={(patch) => setRounds(rounds.map((item) => item.id === round.id ? { ...item, ...patch } : item))} />
                   <HalfSplitMatchControl round={round} enabled={isEditMode && !clubPoliciesEnabled} onChange={(patch) => setRounds(rounds.map((item) => item.id === round.id ? { ...item, ...patch } : item))} />
@@ -3451,6 +3470,23 @@ const LeagueAlgorithmDemo = ({
 
       </>
       )}
+      <Dialog open={pendingRuleChange !== null} onClose={() => setPendingRuleChange(null)}>
+        <DialogTitle>다음 경기부터 경기방식을 변경할까요?</DialogTitle>
+        <DialogContent>
+          <Typography>
+            이미 시작했거나 종료된 경기는 기존 경기방식을 유지합니다. 계속 진행하면 아직 시작하지 않은 경기부터 선택한 경기방식으로 진행됩니다.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPendingRuleChange(null)}>취소</Button>
+          <Button variant="contained" onClick={() => {
+            if (!pendingRuleChange) return;
+            setRounds(rounds.map((round) => round.id === pendingRuleChange.roundId ? { ...round, matchRule: pendingRuleChange.rule } : round));
+            setPendingRuleChange(null);
+          }}>계속 진행</Button>
+        </DialogActions>
+      </Dialog>
+
       <Dialog
         open={editingOptionIndex !== null}
         onClose={closeProgramEditDialog}

@@ -591,18 +591,6 @@ function buildUpperLowerTournamentMatches(
     });
   });
 
-  return matches.map((match) => {
-    const stageSize = match.bracket === "lower"
-      ? bracketSize / 2 ** (match.round_number ?? 1)
-      : bracketSize / 2 ** ((match.round_number ?? 1) - 1);
-    return {
-      ...match,
-      match_rule: block.nextMatchRule ?? (block.lateMatchRule && block.ruleSwitchSize && stageSize <= block.ruleSwitchSize
-        ? block.lateMatchRule
-        : block.matchRule),
-    };
-  });
-
   if (block.thirdPlaceMatch && innerRounds >= 2) {
     const addThirdPlaceMatch = (bracket: "upper" | "lower", semifinalRound: number, finalRound: number) => {
       const semifinals = matches.filter((match) => match.bracket === bracket && match.round_number === semifinalRound);
@@ -621,6 +609,18 @@ function buildUpperLowerTournamentMatches(
     addThirdPlaceMatch("upper", innerRounds, innerRounds + 1);
     addThirdPlaceMatch("lower", innerRounds - 1, innerRounds);
   }
+
+  return matches.map((match) => {
+    const stageSize = match.bracket === "lower"
+      ? bracketSize / 2 ** (match.round_number ?? 1)
+      : bracketSize / 2 ** ((match.round_number ?? 1) - 1);
+    return {
+      ...match,
+      match_rule: block.nextMatchRule ?? (block.lateMatchRule && block.ruleSwitchSize && stageSize <= block.ruleSwitchSize
+        ? block.lateMatchRule
+        : block.matchRule),
+    };
+  });
 }
 
 function splitTournamentUnits(units: MatchUnit[], bracketCount: number): MatchUnit[][] {

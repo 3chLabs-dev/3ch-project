@@ -112,6 +112,7 @@ export interface ProgramBlock {
     | "TEAM";
 
   matchRule: MatchRule;
+  nextMatchRule?: MatchRule;
   ruleSwitchSize?: number;
   lateMatchRule?: MatchRule;
   format?: RoundFormat;
@@ -211,6 +212,7 @@ export interface RoundConfig {
   format: RoundFormat;
   option: RoundOption;
   matchRule: MatchRuleType;
+  nextMatchRule?: MatchRuleType;
   ruleSwitchSize?: number;
   lateMatchRule?: MatchRuleType;
   teamPlayerCount: number;

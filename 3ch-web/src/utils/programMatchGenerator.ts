@@ -482,9 +482,9 @@ function buildTournamentMatches(
     const stageSize = bracketSize / 2 ** ((match.round_number ?? 1) - 1);
     return {
       ...match,
-      match_rule: block.lateMatchRule && block.ruleSwitchSize && stageSize <= block.ruleSwitchSize
+      match_rule: block.nextMatchRule ?? (block.lateMatchRule && block.ruleSwitchSize && stageSize <= block.ruleSwitchSize
         ? block.lateMatchRule
-        : block.matchRule,
+        : block.matchRule),
     };
   });
 }
@@ -597,9 +597,9 @@ function buildUpperLowerTournamentMatches(
       : bracketSize / 2 ** ((match.round_number ?? 1) - 1);
     return {
       ...match,
-      match_rule: block.lateMatchRule && block.ruleSwitchSize && stageSize <= block.ruleSwitchSize
+      match_rule: block.nextMatchRule ?? (block.lateMatchRule && block.ruleSwitchSize && stageSize <= block.ruleSwitchSize
         ? block.lateMatchRule
-        : block.matchRule,
+        : block.matchRule),
     };
   });
 }

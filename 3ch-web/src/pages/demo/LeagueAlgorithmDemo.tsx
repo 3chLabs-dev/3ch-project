@@ -1858,20 +1858,36 @@ const LeagueAlgorithmDemo = ({
     console.log("selected program option", selectedOption);
   };
 
-  const completeCustomProgramConfiguration = () => {
+  const completeCustomProgramConfiguration = async () => {
     if (getTeamRoundValidationError(rounds, playerCount)) return;
-
-    const completedRoundSignature = JSON.stringify(rounds);
-    shouldScrollToRecommendationRef.current = true;
     setIsCompletingCustomProgram(true);
-    setIsCustomProgramCompleted(false);
-    // 직접 구성 값을 기준으로 추천안을 다시 계산한다.
-    setCustomProgramOptions({});
-    window.setTimeout(() => {
-      completedCustomRoundSignatureRef.current = completedRoundSignature;
-      setIsCustomProgramCompleted(true);
+    try {
+      const baseOption = programOptions[0];
+      if (!baseOption) return;
+      const directOption: StoredProgramWithEditState = {
+        ...buildProgramOptionFromRounds(baseOption, getCustomModeRounds(baseOption)),
+        title: "직접 구성 프로그램",
+        compositionMode: "custom",
+        editState: {
+          playerCount, courtCount, startHour, startMinute, endHour, endMinute,
+          programMode: "custom", isProgramGenerated: true,
+          isCustomProgramCompleted: true, selectedProgramOptionIndex: null,
+          rounds, recommendationOptions: [], customProgramOptions: {},
+        },
+      };
+      if (onComplete) {
+        onComplete(directOption);
+        return;
+      }
+      const previousProgram = savedProgramData?.program?.program_data as ProgramOption | undefined;
+      if (leagueId && isEditMode && previousProgram) {
+        setPendingProgramSave(directOption);
+      } else if (leagueId) {
+        await persistSelectedProgram(directOption, true);
+      }
+    } finally {
       setIsCompletingCustomProgram(false);
-    }, 600);
+    }
   };
 
   const sameGroupSizes = (
@@ -2948,11 +2964,14 @@ const LeagueAlgorithmDemo = ({
                     {isStartedProgram && (
                       <Box sx={{ mt: 1.5 }}>
                         <FormControlLabel
-                          control={<Switch checked={nextRuleRounds.includes(round.id)} onChange={(_, checked) => setNextRuleRounds((current) => checked ? [...current, round.id] : current.filter((id) => id !== round.id))} />}
+                          control={<Switch checked={nextRuleRounds.includes(round.id) || Boolean(round.nextMatchRule)} onChange={(_, checked) => {
+                            setNextRuleRounds((current) => checked ? [...new Set([...current, round.id])] : current.filter((id) => id !== round.id));
+                            if (!checked) setRounds(rounds.map((item) => item.id === round.id ? { ...item, nextMatchRule: undefined } : item));
+                          }} />}
                           label="다음 경기부터 경기방식 변경"
                         />
-                        {nextRuleRounds.includes(round.id) && (
-                          <ToggleButtonGroup exclusive fullWidth value={null} onChange={(_, value) => value && setPendingRuleChange({ roundId: round.id, rule: value })}>
+                        {(nextRuleRounds.includes(round.id) || round.nextMatchRule) && (
+                          <ToggleButtonGroup exclusive fullWidth value={round.nextMatchRule ?? null} onChange={(_, value) => value && setPendingRuleChange({ roundId: round.id, rule: value })}>
                             <ToggleButton value="BEST_OF_3">3전 2선승제</ToggleButton>
                             <ToggleButton value="BEST_OF_5">5전 3선승제</ToggleButton>
                             <ToggleButton value="THREE_SET">3세트제</ToggleButton>
@@ -3062,8 +3081,7 @@ const LeagueAlgorithmDemo = ({
       )}
 
       {isProgramGenerated && !isGeneratingProgram && !isCompletingCustomProgram && (
-        programMode === "recommend" ||
-        (programMode === "custom" && isCustomProgramCompleted)
+        programMode === "recommend"
       ) && (
       <>
 <div ref={recommendationSectionRef} style={{ scrollMarginTop: "16px" }} />
@@ -3481,7 +3499,7 @@ const LeagueAlgorithmDemo = ({
           <Button onClick={() => setPendingRuleChange(null)}>취소</Button>
           <Button variant="contained" onClick={() => {
             if (!pendingRuleChange) return;
-            setRounds(rounds.map((round) => round.id === pendingRuleChange.roundId ? { ...round, matchRule: pendingRuleChange.rule } : round));
+            setRounds(rounds.map((round) => round.id === pendingRuleChange.roundId ? { ...round, nextMatchRule: pendingRuleChange.rule } : round));
             setPendingRuleChange(null);
           }}>계속 진행</Button>
         </DialogActions>
@@ -3876,13 +3894,12 @@ const LeagueAlgorithmDemo = ({
             variant="contained"
             fullWidth
             disabled={
-              programMode === "custom" && !isCustomProgramCompleted
-                ? isCompletingCustomProgram ||
-                  Boolean(getTeamRoundValidationError(rounds, playerCount))
+              programMode === "custom"
+                ? isCompletingCustomProgram || Boolean(getTeamRoundValidationError(rounds, playerCount))
                 : selectedProgramOptionIndex === null
             }
             onClick={
-              programMode === "custom" && !isCustomProgramCompleted
+              programMode === "custom"
                 ? completeCustomProgramConfiguration
                 : completeProgramCreation
             }
@@ -3892,8 +3909,8 @@ const LeagueAlgorithmDemo = ({
               fontWeight: 800,
             }}
           >
-            {programMode === "custom" && !isCustomProgramCompleted
-              ? "추천안 확인"
+            {programMode === "custom"
+              ? isEditMode ? "수정 완료" : "바로 적용"
               : isEditMode
                 ? "수정 완료"
                 : "완료"}

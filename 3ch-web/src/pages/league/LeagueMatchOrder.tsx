@@ -579,10 +579,12 @@ export default function LeagueMatchOrder() {
         participant_b_id: serverMatch.participant_b_id ?? match.participant_b_id,
         participant_b_name: serverMatch.participant_b_name ?? match.participant_b_name,
         participant_b_division: serverMatch.participant_b_division ?? match.participant_b_division,
-        score_a: match.score_a ?? serverMatch.score_a,
-        score_b: match.score_b ?? serverMatch.score_b,
-        court: match.court ?? serverMatch.court,
-        status: match.status !== "pending" ? match.status : serverMatch.status,
+        // 서버에 동기화된 경기는 서버 결과가 최종값이다. 생성 경기의
+        // 기본 0점/playing 상태가 저장된 결과를 덮어쓰지 않도록 한다.
+        score_a: serverMatch.score_a,
+        score_b: serverMatch.score_b,
+        court: serverMatch.court,
+        status: serverMatch.status,
       };
     });
     return applyProgramTournamentAdvancement(hydratedMatches)

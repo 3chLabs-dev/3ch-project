@@ -1172,12 +1172,13 @@ export default function LeagueGPTVisionSheet() {
   const guideDragRef = useRef<{ pointerId: number; startX: number; startScrollLeft: number } | null>(null);
   const updateProgramMatch = useCallback(async (matchId: string, updates: ProgramMatchPatch) => {
     if (!id) return;
-    if (serverProgramMatchesAll.some((match) => match.id === matchId)) {
-      await updateMatch({ leagueId: id, matchId, updates }).unwrap();
-      return;
-    }
+    // 경기순서 화면도 동일한 생성 경기 상태를 사용하므로 서버 저장 여부와
+    // 무관하게 로컬 패치를 함께 갱신한다.
     saveProgramMatchPatch(id, programRound, matchId, updates);
     setProgramMatchStateVersion((version) => version + 1);
+    if (serverProgramMatchesAll.some((match) => match.id === matchId)) {
+      await updateMatch({ leagueId: id, matchId, updates }).unwrap();
+    }
   }, [id, programRound, serverProgramMatchesAll, updateMatch]);
   const isProgramTeamRound = isProgramMode && isProgramUnitRound;
   const programTeamParticipants = useMemo(() => {

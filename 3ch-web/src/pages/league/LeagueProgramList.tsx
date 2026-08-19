@@ -63,6 +63,7 @@ type StoredProgramBlock = {
   type?: "SINGLES" | "DOUBLES" | "TEAM";
   program?: "SINGLES" | "DOUBLES" | "TEAM";
   format?: "LEAGUE" | "GROUP" | "TOURNAMENT";
+  matchRule?: "BEST_OF_3" | "BEST_OF_5" | "THREE_SET" | "3전 2선승제" | "5전 3선승제" | "3세트제";
   groupSizes?: number[];
   teamGroupSizes?: number[];
   groupShuffleSeed?: number;
@@ -199,6 +200,21 @@ function getProgramFormatLabel(format?: StoredProgramBlock["format"]) {
   }
 }
 
+function getProgramMatchRuleLabel(matchRule?: StoredProgramBlock["matchRule"]) {
+  switch (matchRule) {
+    case "BEST_OF_5":
+    case "5전 3선승제":
+      return "5전 3선승제";
+    case "THREE_SET":
+    case "3세트제":
+      return "3세트제";
+    case "BEST_OF_3":
+    case "3전 2선승제":
+    default:
+      return "3전 2선승제";
+  }
+}
+
 function getProgramBracketPath(format?: StoredProgramBlock["format"]) {
   return format === "TOURNAMENT" ? "tournament-bracket" : "bracket";
 }
@@ -257,6 +273,8 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
         title: block.title ?? `${index + 1}라운드 ${getProgramTypeLabel(block.type)}`.trim(),
         format: block.format ?? "GROUP",
         formatLabel: getProgramFormatLabel(block.format),
+        typeLabel: getProgramTypeLabel(block.type),
+        matchRuleLabel: getProgramMatchRuleLabel(block.matchRule),
         bracketLabel: getProgramBracketLabel(),
         bracketPath: getProgramBracketPath(block.format),
         type: block.type,
@@ -1012,11 +1030,13 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
               <Stack spacing={1}>
                 {programRounds.map((round) => (
                   <Box key={round.round} sx={{ border: "1px solid #E5E7EB", borderRadius: 1.5, p: 1.25, bgcolor: "#F9FAFB" }}>
-                    <Stack direction="row" alignItems="center" spacing={0.75} mb={1}>
-                      <Typography sx={{ fontSize: 13, fontWeight: 800, flex: 1 }}>
-                        {round.title}
+                    <Stack direction="row" alignItems="center" spacing={0.6} mb={1} flexWrap="wrap" useFlexGap>
+                      <Typography sx={{ fontSize: 13, fontWeight: 900, mr: 0.25 }}>
+                        {round.round}라운드
                       </Typography>
-                      <Chip label={round.formatLabel} size="small" sx={{ height: 22, fontSize: 11, fontWeight: 700, bgcolor: "#F5F3FF", color: "#7C3AED", border: "1px solid #DDD6FE" }} />
+                      <Chip label={round.typeLabel} size="small" sx={{ height: 22, fontSize: 11, fontWeight: 800, bgcolor: "#EFF6FF", color: "#2563EB", border: "1px solid #BFDBFE" }} />
+                      <Chip label={round.formatLabel} size="small" sx={{ height: 22, fontSize: 11, fontWeight: 800, bgcolor: "#F5F3FF", color: "#7C3AED", border: "1px solid #DDD6FE" }} />
+                      <Chip label={round.matchRuleLabel} size="small" sx={{ height: 22, fontSize: 11, fontWeight: 800, bgcolor: "#FFF7ED", color: "#C2410C", border: "1px solid #FED7AA" }} />
                     </Stack>
 
                     {round.type === "TEAM" && (

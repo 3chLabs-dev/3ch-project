@@ -2738,8 +2738,9 @@ export default function LeagueGPTVisionSheet() {
       <Dialog open={isScanning} maxWidth="xs" fullWidth sx={{ zIndex: 10002 }} slotProps={{ paper: { sx: mobileDialogPaperSx } }}>
         <DialogContent sx={{ px: 3.5, py: 4 }}>
           <Typography sx={{ mb: 0.75, textAlign: "center", color: "#111827", fontSize: 15, fontWeight: 900 }}>AI가 사진 속 점수를 인식하는 중입니다.</Typography>
-          <Typography sx={{ mb: 1.5, textAlign: "center", color: "#6B7280", fontSize: 12, lineHeight: 1.5 }}>
-            사진 상태에 따라 점수가 다르게 인식될 수 있습니다. 결과 화면에서 점수를 확인하고 수정해 주세요.
+          <Typography sx={{ mb: 1.5, textAlign: "center", color: "#6B7280", fontSize: 13, lineHeight: 1.5 }}>
+            사진 상태에 따라 점수가 다르게 인식될 수 있습니다.<br />
+            결과 화면에서 점수를 확인하고 수정해 주세요.
           </Typography>
           <LinearProgress sx={{ height: 11, borderRadius: 999, bgcolor: "#DBEAFE", "& .MuiLinearProgress-bar": { borderRadius: 999 } }} />
         </DialogContent>

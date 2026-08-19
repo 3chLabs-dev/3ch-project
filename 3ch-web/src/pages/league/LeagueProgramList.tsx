@@ -1407,11 +1407,15 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
         slotProps={{ paper: { sx: { borderRadius: 2, mx: 2 } } }}
       >
         <DialogTitle sx={{ fontWeight: 900, fontSize: 16 }}>
-          대진표 초기화
+          프로그램 수정 적용
         </DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ fontSize: 14, color: "text.primary" }}>
-            원활한 리그 진행을 위해 대진표를 초기화하겠습니까?
+            프로그램 구성이 변경되면 기존 대진표의 연결 관계가 달라질 수 있습니다.<br />
+            원활한 진행을 위해 대진표 초기화를 권장합니다.<br />
+            기존 경기를 유지하면 종료되었거나 진행 중인 경기는 그대로 유지됩니다.<br />
+            변경사항은 아직 시작하지 않은 경기에만 적용됩니다.<br />
+            대진표를 초기화하면 기존 경기 결과와 진행 상태가 모두 삭제되고 대진표가 새로 생성됩니다.
           </DialogContentText>
         </DialogContent>
         <DialogActions sx={{ px: 2, pb: 2 }}>
@@ -1420,7 +1424,7 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
             disabled={isSavingFormation}
             sx={{ fontWeight: 700 }}
           >
-            계속 진행
+            기존 경기 유지
           </Button>
           <Button
             variant="contained"
@@ -1433,7 +1437,7 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
               fontWeight: 700,
             }}
           >
-            초기화
+            대진표 초기화
           </Button>
         </DialogActions>
       </Dialog>

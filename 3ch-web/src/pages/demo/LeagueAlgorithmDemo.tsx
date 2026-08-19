@@ -1199,7 +1199,6 @@ const LeagueAlgorithmDemo = ({
   const [searchParams] = useSearchParams();
   const isEditMode = searchParams.get("edit") === "true";
   const [nextRuleRounds, setNextRuleRounds] = useState<number[]>([]);
-  const [pendingRuleChange, setPendingRuleChange] = useState<{ roundId: number; rule: RoundConfig["matchRule"] } | null>(null);
   const shouldHideSetupInputs = hideSetupInputs || isEditMode;
   const restoredRef = useRef(false);
   const skipNextResetRef = useRef(false);
@@ -2971,7 +2970,7 @@ const LeagueAlgorithmDemo = ({
                           label="다음 경기부터 경기방식 변경"
                         />
                         {(nextRuleRounds.includes(round.id) || round.nextMatchRule) && (
-                          <ToggleButtonGroup exclusive fullWidth value={round.nextMatchRule ?? null} onChange={(_, value) => value && setPendingRuleChange({ roundId: round.id, rule: value })}>
+                          <ToggleButtonGroup exclusive fullWidth value={round.nextMatchRule ?? null} onChange={(_, value) => value && setRounds(rounds.map((item) => item.id === round.id ? { ...item, nextMatchRule: value } : item))}>
                             <ToggleButton value="BEST_OF_3">3전 2선승제</ToggleButton>
                             <ToggleButton value="BEST_OF_5">5전 3선승제</ToggleButton>
                             <ToggleButton value="THREE_SET">3세트제</ToggleButton>
@@ -3488,23 +3487,6 @@ const LeagueAlgorithmDemo = ({
 
       </>
       )}
-      <Dialog open={pendingRuleChange !== null} onClose={() => setPendingRuleChange(null)}>
-        <DialogTitle>다음 경기부터 경기방식을 변경할까요?</DialogTitle>
-        <DialogContent>
-          <Typography>
-            이미 시작했거나 종료된 경기는 기존 경기방식을 유지합니다. 계속 진행하면 아직 시작하지 않은 경기부터 선택한 경기방식으로 진행됩니다.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPendingRuleChange(null)}>취소</Button>
-          <Button variant="contained" onClick={() => {
-            if (!pendingRuleChange) return;
-            setRounds(rounds.map((round) => round.id === pendingRuleChange.roundId ? { ...round, nextMatchRule: pendingRuleChange.rule } : round));
-            setPendingRuleChange(null);
-          }}>계속 진행</Button>
-        </DialogActions>
-      </Dialog>
-
       <Dialog
         open={editingOptionIndex !== null}
         onClose={closeProgramEditDialog}

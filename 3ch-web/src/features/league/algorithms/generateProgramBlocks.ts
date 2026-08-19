@@ -172,6 +172,9 @@ export function generateProgramBlocks(
     roundOption: round.option,
     type: "SINGLES",
     matchRule: getMatchRuleLabel(round.matchRule),
+    nextMatchRule: round.nextMatchRule ? getMatchRuleLabel(round.nextMatchRule) : undefined,
+    ruleSwitchSize: round.ruleSwitchSize,
+    lateMatchRule: round.lateMatchRule ? getMatchRuleLabel(round.lateMatchRule) : undefined,
     format: round.format,
 
     expectedMinutes: duration,
@@ -225,6 +228,9 @@ export function generateProgramBlocks(
       roundOption: round.option,
       type: "DOUBLES",
       matchRule: getMatchRuleLabel(round.matchRule),
+      nextMatchRule: round.nextMatchRule ? getMatchRuleLabel(round.nextMatchRule) : undefined,
+      ruleSwitchSize: round.ruleSwitchSize,
+      lateMatchRule: round.lateMatchRule ? getMatchRuleLabel(round.lateMatchRule) : undefined,
       format: round.format,
 
       expectedMinutes: duration,
@@ -298,6 +304,9 @@ export function generateProgramBlocks(
       roundOption: round.option,
       type: "TEAM",
       matchRule: getMatchRuleLabel(round.matchRule),
+      nextMatchRule: round.nextMatchRule ? getMatchRuleLabel(round.nextMatchRule) : undefined,
+      ruleSwitchSize: round.ruleSwitchSize,
+      lateMatchRule: round.lateMatchRule ? getMatchRuleLabel(round.lateMatchRule) : undefined,
       format: round.format,
 
       expectedMinutes: duration,

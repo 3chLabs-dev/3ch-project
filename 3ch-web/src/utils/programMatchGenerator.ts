@@ -602,6 +602,25 @@ function buildUpperLowerTournamentMatches(
         : block.matchRule),
     };
   });
+
+  if (block.thirdPlaceMatch && innerRounds >= 2) {
+    const addThirdPlaceMatch = (bracket: "upper" | "lower", semifinalRound: number, finalRound: number) => {
+      const semifinals = matches.filter((match) => match.bracket === bracket && match.round_number === semifinalRound);
+      const final = matches.find((match) => match.bracket === bracket && match.round_number === finalRound);
+      if (semifinals.length !== 2 || !final) return;
+      const thirdPlaceId = `program-${leagueId}-r${roundIndex + 1}-t${bracketIndex}-${bracket}-third-m0`;
+      semifinals.forEach((semifinal, index) => {
+        semifinal.loser_next_match_id = thirdPlaceId;
+        semifinal.loser_next_slot = index === 0 ? "a" : "b";
+      });
+      matches.push({
+        ...makeMatch(thirdPlaceId, final.match_order, { id: null, name: null }, { id: null, name: null }, finalRound, bracket, `${bracket === "upper" ? "상위" : "하위"} 3·4위전`),
+        tournament_bracket_index: bracketIndex,
+      });
+    };
+    addThirdPlaceMatch("upper", innerRounds, innerRounds + 1);
+    addThirdPlaceMatch("lower", innerRounds - 1, innerRounds);
+  }
 }
 
 function splitTournamentUnits(units: MatchUnit[], bracketCount: number): MatchUnit[][] {

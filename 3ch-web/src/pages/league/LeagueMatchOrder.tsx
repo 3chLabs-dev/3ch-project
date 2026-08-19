@@ -258,7 +258,7 @@ function MatchCard({
   const matchLabel = useCallback(() => {
     const aDiv = match.participant_a_division ? `(${match.participant_a_division})` : "";
     const bDiv = match.participant_b_division ? `(${match.participant_b_division})` : "";
-    const title = match.match_label === "3·4위전" || match.match_label === "결승"
+    const title = match.match_label?.includes("3·4위전") || match.match_label?.includes("결승")
       ? match.match_label
       : `${index + 1}경기`;
     return `${title}\n${aDiv}${match.participant_a_name ?? "?"} VS ${bDiv}${match.participant_b_name ?? "?"}`;
@@ -347,7 +347,7 @@ function MatchCard({
         {/* Row 1: n경기 + 드래그 + ⋮ */}
         <Stack direction="row" alignItems="center" mb={1.5}>
           <Typography sx={{ fontWeight: 700, fontSize: 13, color: "#9CA3AF", flex: 1 }}>
-            {match.match_label === "3·4위전" || match.match_label === "결승"
+            {match.match_label?.includes("3·4위전") || match.match_label?.includes("결승")
               ? match.match_label
               : `${index + 1}경기`}
           </Typography>
@@ -809,7 +809,7 @@ export default function LeagueMatchOrder() {
         const roundMatches = activeProgramMatches.filter(
           (match) => match.bracket === bracket && match.round_number === roundNumber,
         );
-        const sample = roundMatches.find((match) => match.match_label === "결승")
+        const sample = roundMatches.find((match) => match.match_label?.includes("결승"))
           ?? roundMatches[0];
         return {
           key: `${bracket}-${roundNumber}`,

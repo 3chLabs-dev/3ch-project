@@ -234,7 +234,7 @@ function calcPositions(matches: LeagueMatch[]): MatchPos[] {
  */
 function calcCenterOutPositions(matches: LeagueMatch[]): MatchPos[] {
   const upper = matches.filter(
-    (m) => m.round_number != null && (!m.bracket || m.bracket === "upper"),
+    (m) => m.round_number != null && (!m.bracket || m.bracket === "upper") && !m.match_label?.includes("3·4위전"),
   );
   if (!upper.length) return [];
 
@@ -282,7 +282,7 @@ function calcCenterOutPositions(matches: LeagueMatch[]): MatchPos[] {
   }
 
   const lower = matches.filter(
-    (m) => m.round_number != null && m.bracket === "lower",
+    (m) => m.round_number != null && m.bracket === "lower" && !m.match_label?.includes("3·4위전"),
   );
   if (lower.length) {
     const lowerByRound = new Map<number, LeagueMatch[]>();
@@ -323,6 +323,17 @@ function calcCenterOutPositions(matches: LeagueMatch[]): MatchPos[] {
       const y = centerY + r * CO_ROW_H;
       for (const m of arr) result.push({ id: m.id, x: xMap.get(m.id) ?? CO_PX, y, match: m });
     }
+  }
+
+  const upperThird = matches.find((match) => match.bracket === "upper" && match.match_label?.includes("3·4위전"));
+  const upperFinalPos = result.find((pos) => pos.match.bracket === "upper" && pos.match.match_label?.includes("결승"));
+  if (upperThird && upperFinalPos) {
+    result.push({ id: upperThird.id, x: upperFinalPos.x, y: upperFinalPos.y + CO_ROW_H, match: upperThird });
+  }
+  const lowerThird = matches.find((match) => match.bracket === "lower" && match.match_label?.includes("3·4위전"));
+  const lowerFinalPos = result.find((pos) => pos.match.bracket === "lower" && pos.match.match_label?.includes("결승"));
+  if (lowerThird && lowerFinalPos) {
+    result.push({ id: lowerThird.id, x: lowerFinalPos.x, y: lowerFinalPos.y - CO_ROW_H / 2, match: lowerThird });
   }
 
   return result;
@@ -586,7 +597,7 @@ function Connectors({ positions }: { positions: MatchPos[] }) {
         const sx = x + MW / 2;
         const sy = y + MH;
 
-        if (tgt.match.match_label === "3·4위전") {
+        if (tgt.match.match_label?.includes("3·4위전")) {
           const targetX = tgt.x;
           const isFirstSlot = m.loser_next_slot === "a";
           const sourceX = x + MW / 2;
@@ -1162,7 +1173,7 @@ export default function LeagueTournamentBracket() {
       if (
         m.round_number &&
         m.match_label &&
-        m.match_label !== "3·4위전" &&
+        !m.match_label?.includes("3·4위전") &&
         (!m.bracket || m.bracket === "upper")
       )
         map.set(m.round_number, m.match_label);
@@ -1323,7 +1334,7 @@ export default function LeagueTournamentBracket() {
                 if (!isDoubleElim) {
                   return (
                     <React.Fragment key={pos.id}>
-                      {pos.match.match_label === "3·4위전" && (
+                      {pos.match.match_label?.includes("3·4위전") && (
                         <Typography sx={{
                           position: "absolute",
                           left: pos.x,

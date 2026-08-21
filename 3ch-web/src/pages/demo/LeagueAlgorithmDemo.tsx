@@ -3330,13 +3330,22 @@ const LeagueAlgorithmDemo = ({
           const blockEndMinutes =
             block.endMinutes ??
             blockStartMinutes + block.expectedMinutes;
+          const currentRoundOption = option.rounds?.[blockIndex]?.option ?? block.roundOption;
+          const previousBlock = option.blocks[blockIndex - 1];
+          const previousRoundOption = option.rounds?.[blockIndex - 1]?.option ?? previousBlock?.roundOption;
+          const showSinglesAdvancement =
+            blockIndex > 0 &&
+            previousBlock?.type === "SINGLES" &&
+            previousRoundOption === "PRELIM" &&
+            block.type === "SINGLES" &&
+            currentRoundOption === "FINAL";
 
           return (
           <div
             key={blockIndex}
             style={{
               position: 'relative',
-              padding: '14px 12px 14px 16px',
+              padding: '14px 12px 14px 18px',
               border: '1px solid #e2e8f0',
               borderRadius: '12px',
               backgroundColor: '#ffffff',
@@ -3347,50 +3356,37 @@ const LeagueAlgorithmDemo = ({
                   : "12px",
             }}
           >
-            <div style={{ position: 'absolute', left: '-5px', top: '17px', width: '9px', height: '9px', borderRadius: '50%', backgroundColor: '#3b82f6', boxShadow: '0 0 0 3px #dbeafe' }} />
             <div
               style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: "6px",
                 marginBottom: "10px",
-                alignItems: 'center',
               }}
             >
-              <span
-                style={{
-                  fontWeight: 900,
-                  lineHeight: "24px",
-                  color: '#0f172a',
-                  marginRight: '2px',
-                }}
-              >
-                {blockIndex + 1}라운드
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', paddingLeft: '2px' }}>
+                <span style={{ fontWeight: 900, lineHeight: "24px", color: '#0f172a' }}>
+                  {blockIndex + 1}라운드
+                </span>
 
-              <span style={{ marginLeft: 'auto', fontSize: '11px', fontWeight: 800, color: '#2563eb', whiteSpace: 'nowrap' }}>
-                {formatTime(blockStartMinutes)}–{formatTime(blockEndMinutes)}
-              </span>
+                {option.rounds?.[blockIndex]?.option &&
+                  option.rounds[blockIndex].option !== "NONE" && (
+                    <Chip
+                      label={
+                        block.format === "TOURNAMENT"
+                          ? `${option.rounds[blockIndex].option === "PRELIM" ? "예선" : "본선"}(${block.tournamentMode === "upper-lower" ? "상·하위" : "일반"})`
+                          : option.rounds[blockIndex].option === "PRELIM"
+                          ? "예선"
+                          : option.rounds[blockIndex].option === "FINAL"
+                            ? "본선"
+                            : option.rounds[blockIndex].option === "UPPER"
+                              ? "상위"
+                              : "하위"
+                      }
+                      size="small"
+                      sx={{ height: 22, fontSize: 11, fontWeight: 800, bgcolor: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0' }}
+                    />
+                  )}
+              </div>
 
-              {option.rounds?.[blockIndex]?.option &&
-                option.rounds[blockIndex].option !== "NONE" && (
-                  <Chip
-                    label={
-                      block.format === "TOURNAMENT"
-                        ? `${option.rounds[blockIndex].option === "PRELIM" ? "예선" : "본선"}(${block.tournamentMode === "upper-lower" ? "상·하위" : "일반"})`
-                        : option.rounds[blockIndex].option === "PRELIM"
-                        ? "예선"
-                        : option.rounds[blockIndex].option === "FINAL"
-                          ? "본선"
-                          : option.rounds[blockIndex].option === "UPPER"
-                            ? "상위"
-                            : "하위"
-                    }
-                    size="small"
-                    sx={{ height: 22, fontSize: 11, fontWeight: 800, bgcolor: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0' }}
-                  />
-                )}
-
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '7px', paddingLeft: '2px' }}>
               <Chip
                 label={
                   block.type === "SINGLES"
@@ -3414,6 +3410,7 @@ const LeagueAlgorithmDemo = ({
                 size="small"
                 sx={{ height: 22, fontSize: 11, fontWeight: 800, bgcolor: '#FFF7ED', color: '#C2410C', border: '1px solid #FED7AA' }}
               />
+              </div>
             </div>
 
             <div style={{ display: 'grid', gap: '5px', color: '#475569', fontSize: '13px', lineHeight: 1.5 }}>
@@ -3424,30 +3421,22 @@ const LeagueAlgorithmDemo = ({
           )}
 
             <div>
-              <span style={{ color: '#94a3b8', marginRight: '8px' }}>경기수</span><strong style={{ color: '#0f172a' }}>{block.matchCount}경기</strong>
+              <span style={{ color: '#94a3b8', marginRight: '8px' }}>경기 수</span><strong style={{ color: '#0f172a' }}>{block.matchCount}경기</strong>
             </div>
 
-            {option.rounds?.[blockIndex]?.option === "FINAL" && block.format === "LEAGUE" && (
-              <div style={{ paddingLeft: "12px" }}>
-                본선 진출: 이전 라운드 상위 {block.advanceCount ?? 2}명
-              </div>
-            )}
-
-            {option.rounds?.[blockIndex]?.option === "FINAL" && block.format === "GROUP" && (
-              <div style={{ paddingLeft: "12px" }}>
-                본선 편성: {block.finalAdvancementMode === "upper-lower-groups"
-                  ? "상·하위부"
+            {showSinglesAdvancement && (
+              <div style={{ margin: '3px 0', padding: '7px 9px', borderRadius: '8px', backgroundColor: '#EFF6FF', color: '#1D4ED8', fontSize: '12px', fontWeight: 800 }}>
+                {block.finalAdvancementMode === "upper-lower-groups"
+                  ? "예선 결과에 따라 상·하위부 편성"
                   : block.finalAdvancementMode === "rank-groups"
-                    ? "순위대로"
-                    : `상위 ${block.advanceCount ?? 2}명`}
+                    ? "예선 결과의 같은 순위끼리 본선 편성"
+                    : `예선 ${previousBlock.format === "GROUP" ? "각 조 " : ""}상위 ${block.advanceCount ?? 2}명 진출`}
               </div>
             )}
 
             <div>
-              <span style={{ color: '#94a3b8', marginRight: '8px' }}>소요시간</span>
-              {Math.floor(block.expectedMinutes / 60) > 0 &&
-                `${Math.floor(block.expectedMinutes / 60)}시간 `}
-              {block.expectedMinutes % 60}분
+              <span style={{ color: '#94a3b8', marginRight: '8px' }}>진행시간</span>
+              <strong style={{ color: '#0F172A' }}>{formatTime(blockStartMinutes)} ~ {formatTime(blockEndMinutes)}</strong>
             </div>
 
             </div>

@@ -1,4 +1,5 @@
 ﻿  import { useMemo, useState } from "react";
+  import { useRef } from "react";
   import { useNavigate, useParams } from "react-router-dom";
   import { useEffect } from "react";
 import {
@@ -37,6 +38,8 @@ import {
   import RefreshIcon from "@mui/icons-material/Refresh";
   import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
   import LanguageIcon from "@mui/icons-material/Language";
+  import DownloadIcon from "@mui/icons-material/Download";
+  import PrintIcon from "@mui/icons-material/Print";
   import {
     useGetLeagueQuery,
     useGetLeagueProgramQuery,
@@ -57,7 +60,7 @@ import {
   import { useAppSelector } from "../../app/hooks";
   import LoadMembersDialog from "./LoadMembersDialog";
   import type { MemberRow } from "./LoadMembersDialog";
-  import LeagueProgramList from "./LeagueProgramList";
+  import LeagueProgramList, { type LeagueProgramListHandle } from "./LeagueProgramList";
 
   import MemberEditDialog from "./MemberEditDialog.tsx";
   import ParticipantClaimDialog from "./ParticipantClaimDialog";
@@ -149,6 +152,7 @@ import {
     const RECRUIT_OPTIONS = [0, 4, 6, 8, 10, 12, 16, 20, 24, 32];
 
   export default function LeagueDetail() {
+    const programListRef = useRef<LeagueProgramListHandle | null>(null);
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const [notice, setNotice] = useState("");
@@ -1441,6 +1445,17 @@ const handleSaveEdit = async () => {
               <Divider sx={{ borderColor: "#F3F4F6" }} />
               <Stack direction="row" alignItems="center" sx={{ py: 0.8 }}>
                 <Typography sx={{ ...labelSx, flex: 1 }}>프로그램</Typography>
+                {hasEventProgram && (
+                  <Stack direction="row" alignItems="center" sx={{ mr: canManage ? 0.75 : 0, border: "1px solid #E5E7EB", borderRadius: "999px", overflow: "hidden", bgcolor: "#fff" }}>
+                    <IconButton size="small" aria-label="프로그램 이미지 저장" onClick={() => void programListRef.current?.download()} sx={{ width: 30, height: 24, borderRadius: 0, color: "#6B7280" }}>
+                      <DownloadIcon sx={{ fontSize: 17 }} />
+                    </IconButton>
+                    <Divider orientation="vertical" flexItem sx={{ borderColor: "#E5E7EB" }} />
+                    <IconButton size="small" aria-label="프로그램 인쇄" onClick={() => void programListRef.current?.print()} sx={{ width: 30, height: 24, borderRadius: 0, color: "#6B7280" }}>
+                      <PrintIcon sx={{ fontSize: 17 }} />
+                    </IconButton>
+                  </Stack>
+                )}
                 {canManage && (
                   <Button
                     size="small"
@@ -1452,7 +1467,7 @@ const handleSaveEdit = async () => {
                   </Button>
                 )}
               </Stack>
-              <LeagueProgramList embedded />
+              <LeagueProgramList ref={programListRef} embedded />
             </>
           )}
           <Divider sx={{ borderColor: "#F3F4F6" }} />

@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useRef, useState, useCallback } from "react";
+import { forwardRef, useMemo, useEffect, useRef, useState, useCallback, useImperativeHandle } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Box,
@@ -24,8 +24,6 @@ import AddIcon from "@mui/icons-material/Add";
 import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import DragHandleIcon from "@mui/icons-material/DragHandle";
-import DownloadIcon from "@mui/icons-material/Download";
-import PrintIcon from "@mui/icons-material/Print";
 import {
   DndContext, PointerSensor, TouchSensor, closestCenter, useDroppable, useSensor, useSensors,
   type DragEndEvent, type DragOverEvent,
@@ -249,7 +247,15 @@ function getProgramBracketLabel() {
   return "대진표 보기";
 }
 
-export default function LeagueProgramList({ embedded = false }: { embedded?: boolean }) {
+export type LeagueProgramListHandle = {
+  download: () => Promise<void>;
+  print: () => Promise<void>;
+};
+
+const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boolean }>(function LeagueProgramList(
+  { embedded = false },
+  ref,
+) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: leagueData, isLoading: leagueLoading } = useGetLeagueQuery(id!);
@@ -377,6 +383,11 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
     printWindow.focus();
     printWindow.onload = () => printWindow.print();
   }, [league?.name, renderProgramSheet]);
+
+  useImperativeHandle(ref, () => ({
+    download: handleDownloadProgram,
+    print: handlePrintProgram,
+  }), [handleDownloadProgram, handlePrintProgram]);
 
   const programPlayers = useMemo(() => {
     return [...participants]
@@ -1123,29 +1134,7 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
           <Box ref={programExportRef} sx={{ position: "relative", bgcolor: "#fff", border: embedded ? 0 : "1px solid #E5E7EB", borderRadius: embedded ? 0 : 2, overflow: "hidden", boxShadow: embedded ? "none" : "0 1px 4px rgba(0,0,0,0.05)" }}>
             {!embedded && <Box sx={{ height: 4, bgcolor: "#2563EB", borderRadius: "8px 8px 0 0" }} />}
 
-            <Stack
-              direction="row"
-              className="program-export-hidden"
-              sx={{
-                position: "absolute", right: 4, top: embedded ? 4 : 10, zIndex: 2,
-                bgcolor: "#fff", borderRadius: "999px", boxShadow: "0 3px 12px rgba(15,23,42,0.16)",
-                overflow: "hidden", border: "1px solid #F1F5F9",
-              }}
-            >
-              <Tooltip title="프로그램 이미지 저장" placement="left">
-                <IconButton size="small" aria-label="프로그램 이미지 저장" onClick={handleDownloadProgram} sx={{ width: 32, height: 31, color: "#6B7280" }}>
-                  <DownloadIcon sx={{ fontSize: 18 }} />
-                </IconButton>
-              </Tooltip>
-              <Box sx={{ width: "1px", my: 0.8, bgcolor: "#E5E7EB" }} />
-              <Tooltip title="프로그램 인쇄" placement="left">
-                <IconButton size="small" aria-label="프로그램 인쇄" onClick={handlePrintProgram} sx={{ width: 32, height: 31, color: "#6B7280" }}>
-                  <PrintIcon sx={{ fontSize: 18 }} />
-                </IconButton>
-              </Tooltip>
-            </Stack>
-
-            <Box sx={{ px: embedded ? 0 : 2.5, pr: embedded ? 9.5 : 2.5, pt: embedded ? 0.5 : 2, pb: embedded ? 1 : 2 }}>
+            <Box sx={{ px: embedded ? 0 : 2.5, pt: embedded ? 0.5 : 2, pb: embedded ? 1 : 2 }}>
               {!embedded && <Stack direction="row" alignItems="center" spacing={1.5} mb={1.5}>
                 <Box sx={{ width: 40, height: 40, borderRadius: 2, bgcolor: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   <AccountTreeOutlinedIcon sx={{ fontSize: 20, color: "#2563EB" }} />
@@ -1601,4 +1590,6 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
       </Dialog>
     </Box>
   );
-}
+});
+
+export default LeagueProgramList;

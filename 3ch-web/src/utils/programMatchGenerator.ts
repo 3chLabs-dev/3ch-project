@@ -1263,6 +1263,42 @@ function balancedSizes(total: number, preferredGroupCount: number) {
   );
 }
 
+function distributeQualifiedPoolsToFinalGroups(
+  pools: MatchUnit[][],
+  advanceCount: number,
+  preferredGroupCount: number,
+): MatchUnit[][] {
+  const groupCount = Math.max(1, Math.min(preferredGroupCount, pools.length));
+  const finalGroups = Array.from({ length: groupCount }, () => [] as MatchUnit[]);
+
+  // Cross-seed source pools from the outside in (1, N, 2, N-1, ...), then
+  // rotate the destination group for every rank. This keeps qualifiers from
+  // the same preliminary pool apart for as many ranks as the group count allows.
+  const crossSeededPools: MatchUnit[][] = [];
+  for (let left = 0, right = pools.length - 1; left <= right; left += 1, right -= 1) {
+    crossSeededPools.push(pools[left]);
+    if (left !== right) crossSeededPools.push(pools[right]);
+  }
+  const poolGroupSizes = balancedSizes(crossSeededPools.length, groupCount);
+  const poolChunks: MatchUnit[][][] = [];
+  let poolOffset = 0;
+  poolGroupSizes.forEach((poolCount) => {
+    poolChunks.push(crossSeededPools.slice(poolOffset, poolOffset + poolCount));
+    poolOffset += poolCount;
+  });
+
+  for (let rankIndex = 0; rankIndex < advanceCount; rankIndex += 1) {
+    poolChunks.forEach((chunk, chunkIndex) => {
+      const destinationIndex = (chunkIndex + rankIndex) % groupCount;
+      chunk.forEach((pool) => {
+        if (pool[rankIndex]) finalGroups[destinationIndex].push(pool[rankIndex]);
+      });
+    });
+  }
+
+  return finalGroups;
+}
+
 function buildRankPlaceholderPools(
   groupSizes: number[],
   maxRank?: number,
@@ -1596,13 +1632,13 @@ export function generateProgramRoundMatches(
         })).filter((group) => group.players.length > 1);
       } else {
         const preferredGroupCount = Math.max(1, block.groupSizes?.length ?? finalPools.length);
-        const sizes = balancedSizes(selectedFinalUnits.length, preferredGroupCount);
-        finalGroups = distributeSnake(
-          selectedFinalUnits as ProgramPlayer[],
-          sizes,
-        ).map((group, index) => ({
+        finalGroups = distributeQualifiedPoolsToFinalGroups(
+          finalPools,
+          advanceCount,
+          preferredGroupCount,
+        ).map((players, index) => ({
           name: `${index + 1}조`,
-          players: group.players as MatchUnit[],
+          players,
         }));
       }
 

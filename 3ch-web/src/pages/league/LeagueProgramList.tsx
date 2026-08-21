@@ -64,6 +64,8 @@ type StoredProgramBlock = {
   program?: "SINGLES" | "DOUBLES" | "TEAM";
   format?: "LEAGUE" | "GROUP" | "TOURNAMENT";
   matchRule?: "BEST_OF_3" | "BEST_OF_5" | "THREE_SET" | "3전 2선승제" | "5전 3선승제" | "3세트제";
+  option?: "NONE" | "PRELIM" | "FINAL" | "UPPER" | "LOWER";
+  roundOption?: "NONE" | "PRELIM" | "FINAL" | "UPPER" | "LOWER";
   groupSizes?: number[];
   teamGroupSizes?: number[];
   groupShuffleSeed?: number;
@@ -215,6 +217,21 @@ function getProgramMatchRuleLabel(matchRule?: StoredProgramBlock["matchRule"]) {
   }
 }
 
+function getProgramStageLabel(option?: StoredProgramBlock["option"] | StoredProgramBlock["roundOption"]) {
+  switch (option) {
+    case "PRELIM":
+      return "예선";
+    case "FINAL":
+      return "본선";
+    case "UPPER":
+      return "상위";
+    case "LOWER":
+      return "하위";
+    default:
+      return "";
+  }
+}
+
 function getProgramBracketPath(format?: StoredProgramBlock["format"]) {
   return format === "TOURNAMENT" ? "tournament-bracket" : "bracket";
 }
@@ -275,6 +292,7 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
         formatLabel: getProgramFormatLabel(block.format),
         typeLabel: getProgramTypeLabel(block.type),
         matchRuleLabel: getProgramMatchRuleLabel(block.matchRule),
+        stageLabel: getProgramStageLabel(storedProgram?.rounds?.[index]?.option ?? block.roundOption),
         bracketLabel: getProgramBracketLabel(),
         bracketPath: getProgramBracketPath(block.format),
         type: block.type,
@@ -438,7 +456,7 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
     : activeFormationBlock?.type === "DOUBLES"
       ? validDoublesGroupSizes
       : configuredGroupSizes ?? [programPlayers.length];
-  const formationGroups = formationDialog?.mode === "team"
+  const standardFormationGroups = formationDialog?.mode === "team"
     ? teamResultGroups
     : formationDialog?.mode === "doubles"
       ? doublesResultGroups
@@ -449,6 +467,41 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
         : activeFormationBlock?.type === "DOUBLES"
           ? distributeSnake(reshuffleWithinLevel(doublesUnits, activeFormationBlock?.groupShuffleSeed ?? defaultFormationSeed + 503), groupResultSizes)
         : distributeSnake(reshuffleWithinLevel(programPlayers, activeFormationBlock?.groupShuffleSeed ?? defaultFormationSeed + 503), groupResultSizes);
+  const isRankAdvancementGroupRound = formationDialog?.mode === "group"
+    && formationDialog.roundIndex > 0
+    && activeFormationBlock?.format === "GROUP"
+    && (
+      storedProgram?.rounds?.[formationDialog.roundIndex]?.option === "FINAL"
+      || activeFormationBlock.roundOption === "FINAL"
+      || activeFormationBlock.title?.includes("본선") === true
+    );
+  const rankAdvancementFormationGroups = useMemo(() => {
+    if (!isRankAdvancementGroupRound || !id || !storedProgram || !formationDialog) return [];
+    const generated = generateProgramRoundMatches(
+      id,
+      storedProgram as ProgramOption,
+      participants,
+      formationDialog.roundIndex + 1,
+      matches,
+    );
+    const labels = [...new Set(generated.map((match) => match.match_label).filter(Boolean) as string[])]
+      .sort((left, right) => (Number.parseInt(left, 10) || 0) - (Number.parseInt(right, 10) || 0));
+    return labels.map((label) => {
+      const players = new Map<string, FormationPlayer>();
+      generated.filter((match) => match.match_label === label).forEach((match) => {
+        if (match.participant_a_id && match.participant_a_name) {
+          players.set(match.participant_a_id, { name: match.participant_a_name, level: Number(match.participant_a_seed_label) || 0 });
+        }
+        if (match.participant_b_id && match.participant_b_name) {
+          players.set(match.participant_b_id, { name: match.participant_b_name, level: Number(match.participant_b_seed_label) || 0 });
+        }
+      });
+      return { name: label, players: [...players.values()].sort((left, right) => left.level - right.level) };
+    });
+  }, [formationDialog, id, isRankAdvancementGroupRound, matches, participants, storedProgram]);
+  const formationGroups = isRankAdvancementGroupRound
+    ? rankAdvancementFormationGroups
+    : standardFormationGroups;
   const isDoublesGroupResult = formationDialog?.mode === "group" && activeFormationBlock?.type === "DOUBLES";
   const groupStructureBlock = groupStructureRoundIndex == null
     ? undefined
@@ -1034,6 +1087,7 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
                       <Typography sx={{ fontSize: 13, fontWeight: 900, mr: 0.25 }}>
                         {round.round}라운드
                       </Typography>
+                      {round.stageLabel && <Chip label={round.stageLabel} size="small" sx={{ height: 22, fontSize: 11, fontWeight: 800, bgcolor: "#ECFDF5", color: "#047857", border: "1px solid #A7F3D0" }} />}
                       <Chip label={round.typeLabel} size="small" sx={{ height: 22, fontSize: 11, fontWeight: 800, bgcolor: "#EFF6FF", color: "#2563EB", border: "1px solid #BFDBFE" }} />
                       <Chip label={round.formatLabel} size="small" sx={{ height: 22, fontSize: 11, fontWeight: 800, bgcolor: "#F5F3FF", color: "#7C3AED", border: "1px solid #DDD6FE" }} />
                       <Chip label={round.matchRuleLabel} size="small" sx={{ height: 22, fontSize: 11, fontWeight: 800, bgcolor: "#FFF7ED", color: "#C2410C", border: "1px solid #FED7AA" }} />
@@ -1068,7 +1122,7 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
 
                     {(round.type === "TEAM" || round.type === "DOUBLES" || round.format === "GROUP") && (
                       <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-                        {canManage && round.format === "GROUP" && (
+                        {canManage && round.format === "GROUP" && round.stageLabel !== "본선" && (
                           <Button
                             variant="outlined"
                             size="small"

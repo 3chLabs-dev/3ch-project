@@ -205,7 +205,7 @@ export default function LoadMembersDialog({
 
             <Divider />
 
-            <DialogContent sx={{ pt: 1.2 }}>
+            <DialogContent sx={{ p: 0 }}>
                 {loading ? (
                     <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
                         <CircularProgress size={32} />
@@ -221,8 +221,10 @@ export default function LoadMembersDialog({
                                 display: "grid",
                                 gridTemplateColumns: "34px 1fr 1fr",
                                 alignItems: "center",
-                                px: 0.5,
-                                mb: 0.7,
+                                px: 3.5,
+                                py: 1,
+                                borderBottom: "1px solid",
+                                borderColor: "divider",
                             }}
                         >
                             <Checkbox
@@ -242,9 +244,7 @@ export default function LoadMembersDialog({
                             </Typography>
                         </Box>
 
-                        <Divider sx={{ mb: 1 }} />
-
-                        <Box sx={{ display: "flex", flexDirection: "column", gap: 0.6 }}>
+                        <Box sx={{ display: "flex", flexDirection: "column", gap: 0.6, px: 3, pt: 1 }}>
                             {view.map((r) => (
                                 <Box
                                     key={r.id}

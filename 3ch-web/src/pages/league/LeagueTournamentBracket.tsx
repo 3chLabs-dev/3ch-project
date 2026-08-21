@@ -110,6 +110,37 @@ function isWalkoverWinner(match: LeagueMatch, slot: "a" | "b") {
 // ─── 위치 타입 ───────────────────────────────────────────────────────────────
 interface MatchPos { id: string; x: number; y: number; match: LeagueMatch }
 
+interface RankedParticipant { name: string | null; division: string | null }
+
+function getMatchResultParticipant(match: LeagueMatch | undefined, winner: boolean): RankedParticipant | null {
+  if (!match || match.status !== "done") return null;
+  const winnerSlot = isWalkoverWinner(match, "a") ? "a" : isWalkoverWinner(match, "b") ? "b" : null;
+  if (!winnerSlot) return null;
+  const slot = winner ? winnerSlot : winnerSlot === "a" ? "b" : "a";
+  const name = slot === "a" ? match.participant_a_name : match.participant_b_name;
+  if (!name) return null;
+  return { name, division: slot === "a" ? match.participant_a_division : match.participant_b_division };
+}
+
+function RankingSummary({ title, rankings, color, borderColor, left, top }: {
+  title: string; rankings: Array<RankedParticipant | null>; color: string;
+  borderColor: string; left: number; top: number;
+}) {
+  return (
+    <Box sx={{ position: "absolute", left, top, width: 150, height: CO_WINNER_H, bgcolor: "rgba(255,255,255,0.96)", border: `1px solid ${borderColor}`, borderRadius: "8px", overflow: "hidden", boxShadow: "0 2px 6px rgba(15,23,42,0.06)" }}>
+      <Typography sx={{ height: 18, display: "flex", alignItems: "center", px: 1, fontSize: 8, fontWeight: 900, color, bgcolor: `${color}0D` }}>{title}</Typography>
+      {rankings.map((participant, index) => (
+        <Box key={index} sx={{ height: 13.5, px: 1, display: "flex", alignItems: "center", gap: 0.6, borderTop: index ? "1px solid #F1F5F9" : 0 }}>
+          <Typography sx={{ width: 14, fontSize: 8, fontWeight: 900, color }}>{index + 1}위</Typography>
+          <Typography sx={{ minWidth: 0, fontSize: 8, fontWeight: 700, color: participant ? "#334155" : "#94A3B8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {participant ? `${participant.division ? `${participant.division} ` : ""}${participant.name}` : "-"}
+          </Typography>
+        </Box>
+      ))}
+    </Box>
+  );
+}
+
 // ─── 슬롯 액션 타입 ──────────────────────────────────────────────────────────
 interface SlotActions {
   canManage: boolean;
@@ -1186,16 +1217,37 @@ export default function LeagueTournamentBracket() {
     [matches, isDoubleElim],
   );
 
+  const { standardFinalPos, standardRankings } = useMemo(() => {
+    if (isDoubleElim) return { standardFinalPos: null, standardRankings: [] };
+    const finalMatch = matches
+      .filter((match) => (!match.bracket || match.bracket === "upper") && !match.match_label?.includes("3·4위전"))
+      .reduce<LeagueMatch | null>((latest, match) =>
+        !latest || (match.round_number ?? 0) > (latest.round_number ?? 0) ? match : latest, null);
+    const thirdPlaceMatch = matches.find((match) =>
+      (!match.bracket || match.bracket === "upper") && match.match_label?.includes("3·4위전"));
+    return {
+      standardFinalPos: finalMatch ? positions.find((position) => position.id === finalMatch.id) ?? null : null,
+      standardRankings: [
+        getMatchResultParticipant(finalMatch ?? undefined, true),
+        getMatchResultParticipant(finalMatch ?? undefined, false),
+        getMatchResultParticipant(thirdPlaceMatch, true),
+        getMatchResultParticipant(thirdPlaceMatch, false),
+      ],
+    };
+  }, [isDoubleElim, matches, positions]);
+
   // 상위/하위 우승자 계산
-  const { upperWinner, lowerWinner, upperFinalPos, lowerFinalPos } = useMemo(() => {
-    if (!isDoubleElim) return { upperWinner: null, lowerWinner: null, upperFinalPos: null, lowerFinalPos: null };
+  const { upperWinner, lowerWinner, upperFinalPos, lowerFinalPos, upperRankings, lowerRankings } = useMemo(() => {
+    if (!isDoubleElim) return { upperWinner: null, lowerWinner: null, upperFinalPos: null, lowerFinalPos: null, upperRankings: [], lowerRankings: [] };
     const posMap = new Map(positions.map((p) => [p.id, p]));
     const upperMatches = matches.filter((m) => !m.bracket || m.bracket === "upper");
     const lowerMatches = matches.filter((m) => m.bracket === "lower");
     const maxUpperRound = Math.max(...upperMatches.map((m) => m.round_number ?? 0));
     const maxLowerRound = Math.max(...lowerMatches.map((m) => m.round_number ?? 0));
-    const upperFinal = upperMatches.find((m) => m.round_number === maxUpperRound);
-    const lowerFinal = lowerMatches.find((m) => m.round_number === maxLowerRound);
+    const upperFinal = upperMatches.find((m) => m.round_number === maxUpperRound && !m.match_label?.includes("3·4위전"));
+    const lowerFinal = lowerMatches.find((m) => m.round_number === maxLowerRound && !m.match_label?.includes("3·4위전"));
+    const upperThird = upperMatches.find((m) => m.match_label?.includes("3·4위전"));
+    const lowerThird = lowerMatches.find((m) => m.match_label?.includes("3·4위전"));
     const getWinner = (m?: LeagueMatch) => {
       if (!m || m.status !== "done") return null;
       if (isWalkoverWinner(m, "a")) {
@@ -1211,6 +1263,8 @@ export default function LeagueTournamentBracket() {
       lowerWinner: getWinner(lowerFinal),
       upperFinalPos: upperFinal ? posMap.get(upperFinal.id) ?? null : null,
       lowerFinalPos: lowerFinal ? posMap.get(lowerFinal.id) ?? null : null,
+      upperRankings: [getMatchResultParticipant(upperFinal, true), getMatchResultParticipant(upperFinal, false), getMatchResultParticipant(upperThird, true), getMatchResultParticipant(upperThird, false)],
+      lowerRankings: [getMatchResultParticipant(lowerFinal, true), getMatchResultParticipant(lowerFinal, false), getMatchResultParticipant(lowerThird, true), getMatchResultParticipant(lowerThird, false)],
     };
   }, [isDoubleElim, matches, positions]);
 
@@ -1237,10 +1291,11 @@ export default function LeagueTournamentBracket() {
       return { canvasW: maxX, canvasH: maxY };
     }
     const maxRound = Math.max(...positions.map((p) => p.match.round_number ?? 1));
-    const w = PX * 2 + maxRound * MW + (maxRound - 1) * RGAP;
+    const summarySpace = standardFinalPos ? 174 : 0;
+    const w = PX * 2 + maxRound * MW + (maxRound - 1) * RGAP + summarySpace;
     const h = positions.reduce((acc, p) => Math.max(acc, p.y + MH), PT) + PB;
     return { canvasW: w, canvasH: h };
-  }, [positions, isDoubleElim]);
+  }, [positions, isDoubleElim, standardFinalPos]);
 
   // 필터된 참가자 목록
   const filteredParticipants = useMemo(() => {
@@ -1375,6 +1430,17 @@ export default function LeagueTournamentBracket() {
                 </Typography>
               ))}
 
+              {!isDoubleElim && standardFinalPos && (
+                <RankingSummary
+                  title="최종 순위"
+                  rankings={standardRankings}
+                  color="#2563EB"
+                  borderColor="#BFDBFE"
+                  left={standardFinalPos.x + MW + 24}
+                  top={standardFinalPos.y + (MH - CO_WINNER_H) / 2}
+                />
+              )}
+
               {positions.map((pos) => {
                 const visibleSlotActions = (canManage && !isCompleted) || (isProgramMode && manualSeeding)
                   ? slotActions
@@ -1423,7 +1489,9 @@ export default function LeagueTournamentBracket() {
                 const bx = cx - CO_WINNER_W / 2;
                 const by = upperFinalPos.y - CO_WINNER_H - 16;
                 return (
-                  <Box key="upper-winner" sx={{
+                  <React.Fragment key="upper-winner">
+                  <RankingSummary title="상위 최종 순위" rankings={upperRankings} color="#2563EB" borderColor="#BFDBFE" left={bx - 162} top={by} />
+                  <Box sx={{
                     position: "absolute", left: bx, top: by,
                     width: CO_WINNER_W, height: CO_WINNER_H,
                     bgcolor: upperWinner ? "#FFF7ED" : "#F8FAFC",
@@ -1448,6 +1516,7 @@ export default function LeagueTournamentBracket() {
                       <Typography sx={{ fontSize: 9, color: "#CBD5E1" }}>미결정</Typography>
                     )}
                   </Box>
+                  </React.Fragment>
                 );
               })()}
 
@@ -1457,7 +1526,9 @@ export default function LeagueTournamentBracket() {
                 const bx = cx - CO_WINNER_W / 2;
                 const by = lowerFinalPos.y + SS_H + 16;
                 return (
-                  <Box key="lower-winner" sx={{
+                  <React.Fragment key="lower-winner">
+                  <RankingSummary title="하위 최종 순위" rankings={lowerRankings} color="#7C3AED" borderColor="#DDD6FE" left={bx - 162} top={by} />
+                  <Box sx={{
                     position: "absolute", left: bx, top: by,
                     width: CO_WINNER_W, height: CO_WINNER_H,
                     bgcolor: lowerWinner ? "#F5F3FF" : "#F8FAFC",
@@ -1482,6 +1553,7 @@ export default function LeagueTournamentBracket() {
                       <Typography sx={{ fontSize: 9, color: "#CBD5E1" }}>미결정</Typography>
                     )}
                   </Box>
+                  </React.Fragment>
                 );
               })()}
             </Box>

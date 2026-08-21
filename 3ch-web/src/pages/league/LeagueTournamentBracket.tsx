@@ -745,9 +745,6 @@ function CenterOutConnectors({ positions }: { positions: MatchPos[] }) {
     if (!map.has(pid)) map.set(pid, []);
     map.get(pid)!.push(pos);
   }
-  drawBracket(byWinnerUpper, (id) => posById.get(id), "#22C55E", "wn");
-  drawBracket(byWinnerLower, (id) => posById.get(id), "#22C55E", "wl");
-
   // ── 패자 연결: 소스들을 하위 대상별로 묶어서 ⊔ 브래킷 ──
   const byLoserTarget = new Map<string, MatchPos[]>();
   for (const pos of positions) {
@@ -763,7 +760,33 @@ function CenterOutConnectors({ positions }: { positions: MatchPos[] }) {
     (target?.match.match_label?.includes("3·4위전") ? thirdPlaceLosers : otherLosers).set(targetId, sources);
   }
   drawBracket(otherLosers, (id) => posById.get(id), "#22C55E", "lo");
-  drawBracket(thirdPlaceLosers, (id) => posById.get(id), "#CBD5E1", "lo-third", true);
+  for (const [targetId, sources] of thirdPlaceLosers) {
+    const target = posById.get(targetId);
+    if (!target) continue;
+    [...sources].sort((a, b) => a.x - b.x).forEach((source, index, sorted) => {
+      const connectsLeftSlot = index < sorted.length / 2;
+      const sourceX = source.x < target.x ? source.x + CO_MATCH_W : source.x;
+      const targetX = connectsLeftSlot ? target.x : target.x + CO_MATCH_W;
+      const sourceY = source.y + SS_H / 2;
+      const targetY = target.y + SS_H / 2;
+      const bendX = (sourceX + targetX) / 2;
+      paths.push(
+        <path
+          key={`lo-third-${targetId}-${source.id}`}
+          d={`M ${sourceX} ${sourceY} H ${bendX} V ${targetY} H ${targetX}`}
+          stroke="#CBD5E1"
+          strokeWidth={1.5}
+          strokeDasharray="4 3"
+          fill="none"
+        />,
+      );
+    });
+  }
+
+  // 승자 진출 실선은 패자 점선보다 나중에 그려 겹치는 VS 아래 구간이
+  // 항상 초록 실선으로 표시되도록 한다.
+  drawBracket(byWinnerUpper, (id) => posById.get(id), "#22C55E", "wn");
+  drawBracket(byWinnerLower, (id) => posById.get(id), "#22C55E", "wl");
 
   return <>{paths}</>;
 }

@@ -958,11 +958,29 @@ export function buildProgramRoundStandingsSnapshot(
     const playerById = new Map(rankingPlayers.map((player) => [player.id, player]));
     const pools = labels.map((label) => {
       const labelMatches = roundMatches.filter((match) => match.match_label === label);
+      const seedByParticipantId = new Map<string, number>();
+      labelMatches.forEach((match) => {
+        const aSeed = match.participant_a_seed_label == null
+          ? null
+          : Number(match.participant_a_seed_label);
+        const bSeed = match.participant_b_seed_label == null
+          ? null
+          : Number(match.participant_b_seed_label);
+        if (match.participant_a_id && aSeed != null && Number.isFinite(aSeed)) {
+          seedByParticipantId.set(match.participant_a_id, aSeed);
+        }
+        if (match.participant_b_id && bSeed != null && Number.isFinite(bSeed)) {
+          seedByParticipantId.set(match.participant_b_id, bSeed);
+        }
+      });
       const participantIds = [...new Set(
         labelMatches.flatMap((match) =>
           [match.participant_a_id, match.participant_b_id].filter(Boolean) as string[]
         ),
-      )];
+      )].sort((left, right) =>
+        (seedByParticipantId.get(left) ?? Number.MAX_SAFE_INTEGER)
+        - (seedByParticipantId.get(right) ?? Number.MAX_SAFE_INTEGER)
+      );
       const groupPlayers = participantIds.flatMap((id) => {
         const player = playerById.get(id);
         return player ? [player] : [];

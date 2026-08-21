@@ -693,6 +693,7 @@ function CenterOutConnectors({ positions }: { positions: MatchPos[] }) {
     getParentPos: (id: string) => MatchPos | undefined,
     stroke: string,
     keyPrefix: string,
+    dashed = false,
   ) => {
     for (const [parentId, children] of childrenByParent) {
       const parentPos = getParentPos(parentId);
@@ -713,11 +714,11 @@ function CenterOutConnectors({ positions }: { positions: MatchPos[] }) {
         paths.push(
           <path key={`${keyPrefix}-br-${parentId}`}
             d={`M ${cx1} ${srcY} V ${midY} H ${cx2} V ${srcY}`}
-            stroke={stroke} strokeWidth={1.5} fill="none"
+            stroke={stroke} strokeWidth={1.5} strokeDasharray={dashed ? "4 3" : undefined} fill="none"
           />,
           <path key={`${keyPrefix}-st-${parentId}`}
             d={`M ${pcx} ${tgtY} V ${midY}`}
-            stroke={stroke} strokeWidth={1.5} fill="none"
+            stroke={stroke} strokeWidth={1.5} strokeDasharray={dashed ? "4 3" : undefined} fill="none"
           />,
         );
       } else {
@@ -725,7 +726,7 @@ function CenterOutConnectors({ positions }: { positions: MatchPos[] }) {
         paths.push(
           <path key={`${keyPrefix}-l-${parentId}`}
             d={`M ${cx1} ${srcY} V ${midY} H ${pcx} V ${tgtY}`}
-            stroke={stroke} strokeWidth={1.5} fill="none"
+            stroke={stroke} strokeWidth={1.5} strokeDasharray={dashed ? "4 3" : undefined} fill="none"
           />,
         );
       }
@@ -755,7 +756,14 @@ function CenterOutConnectors({ positions }: { positions: MatchPos[] }) {
     if (!byLoserTarget.has(tid)) byLoserTarget.set(tid, []);
     byLoserTarget.get(tid)!.push(pos);
   }
-  drawBracket(byLoserTarget, (id) => posById.get(id), "#22C55E", "lo");
+  const thirdPlaceLosers = new Map<string, MatchPos[]>();
+  const otherLosers = new Map<string, MatchPos[]>();
+  for (const [targetId, sources] of byLoserTarget) {
+    const target = posById.get(targetId);
+    (target?.match.match_label?.includes("3·4위전") ? thirdPlaceLosers : otherLosers).set(targetId, sources);
+  }
+  drawBracket(otherLosers, (id) => posById.get(id), "#22C55E", "lo");
+  drawBracket(thirdPlaceLosers, (id) => posById.get(id), "#CBD5E1", "lo-third", true);
 
   return <>{paths}</>;
 }
@@ -860,10 +868,11 @@ export default function LeagueTournamentBracket() {
       return {
         ...match,
         ...manualRoundOneParticipants,
-        score_a: match.score_a ?? serverMatch.score_a,
-        score_b: match.score_b ?? serverMatch.score_b,
-        court: match.court ?? serverMatch.court,
-        status: match.status !== "pending" ? match.status : serverMatch.status,
+        score_a: serverMatch.score_a,
+        score_b: serverMatch.score_b,
+        court: serverMatch.court,
+        status: serverMatch.status,
+        match_rule: serverMatch.match_rule ?? match.match_rule,
       };
     });
     return applyProgramTournamentAdvancement(hydratedMatches).filter((match) => match.bracket);
@@ -1378,7 +1387,7 @@ export default function LeagueTournamentBracket() {
                       width: SS_GAP,
                       textAlign: "center",
                       fontSize: 11, fontWeight: 900, color: "#94A3B8", lineHeight: 1,
-                      pointerEvents: "none",
+                      pointerEvents: "none", bgcolor: "#F1F5F9", zIndex: 2,
                     }}>vs</Typography>
                     <SingleSlotBox pos={pos} slot="b" actions={visibleSlotActions} manualSeeding={manualSeeding} />
                   </React.Fragment>

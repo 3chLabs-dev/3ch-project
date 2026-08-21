@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Box, Button, CircularProgress, Dialog, DialogContent, DialogTitle,
@@ -376,6 +376,19 @@ export default function LeagueTournamentMatchOrder() {
     }
     return result;
   }, [matches]);
+
+  useEffect(() => {
+    if (tabKey !== null || tabs.length === 0) return;
+    const defaultTab = [...tabs].reverse().find((tab) =>
+      matches.some((match) =>
+        (match.bracket ?? "upper") === tab.bracket &&
+        match.round_number === tab.roundNumber &&
+        (match.status === "playing" || match.status === "pending") &&
+        Boolean(match.participant_a_id && match.participant_b_id)
+      )
+    );
+    setTabKey(defaultTab?.key ?? tabs[0].key);
+  }, [matches, tabKey, tabs]);
 
   const activeTab = tabKey ?? tabs[0]?.key ?? "";
 

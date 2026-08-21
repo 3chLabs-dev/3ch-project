@@ -3342,7 +3342,12 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
       const placeholders = validMatches.map((match, index) => {
         const base = index * 21;
         const previous = existingState.get(match.id);
+        const hasStartedState = previous && (
+          previous.status === 'playing' || previous.status === 'done' ||
+          previous.score_a != null || previous.score_b != null
+        );
         const canPreserveState = !resetResults && previous && (
+          hasStartedState ||
           match.program_block_type !== 'SINGLES' ||
           (
             previous.program_block_type === match.program_block_type &&
@@ -3354,8 +3359,8 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
           match.id,
           leagueId,
           match.match_order,
-          match.participant_a_id,
-          match.participant_b_id,
+          hasStartedState ? previous.participant_a_id : match.participant_a_id,
+          hasStartedState ? previous.participant_b_id : match.participant_b_id,
           match.bracket,
           match.round_number,
           match.match_label,

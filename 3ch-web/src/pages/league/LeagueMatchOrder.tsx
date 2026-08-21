@@ -837,6 +837,22 @@ export default function LeagueMatchOrder() {
     return orderedTabs;
   }, [activeProgramMatches, isTournamentProgramRound]);
 
+  useEffect(() => {
+    if (!isTournamentProgramRound || tournamentTabKey !== null || tournamentTabs.length === 0) return;
+    const defaultTab = [...tournamentTabs].reverse().find((tab) =>
+      activeProgramMatches.some((match) =>
+        match.bracket === tab.bracket &&
+        match.round_number === tab.roundNumber &&
+        (match.status === "playing" || match.status === "pending") &&
+        Boolean(
+          match.participant_a_id && !match.participant_a_id.startsWith("placeholder-") &&
+          match.participant_b_id && !match.participant_b_id.startsWith("placeholder-")
+        )
+      )
+    );
+    setTournamentTabKey(defaultTab?.key ?? tournamentTabs[0].key);
+  }, [activeProgramMatches, isTournamentProgramRound, tournamentTabKey, tournamentTabs]);
+
   const activeTournamentTab = tournamentTabKey ?? tournamentTabs[0]?.key ?? "";
   const tournamentMatchNumberMap = useMemo(() => {
     const map = new Map<string, number>();

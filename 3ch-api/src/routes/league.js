@@ -3319,15 +3319,33 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
     await pool.query('BEGIN');
     const targetProgramRounds = [...new Set(validMatches.map((match) => match.program_round).filter((round) => Number.isFinite(round)))];
     const existingState = new Map();
+    const existingStateByParticipants = new Map();
+    const participantMatchKey = (match) => {
+      const normalizeSide = (participantId, rosterIds) => {
+        const roster = Array.isArray(rosterIds) ? rosterIds.filter(Boolean).map(String).sort() : [];
+        return roster.length > 0 ? roster.join('+') : participantId ? String(participantId) : '';
+      };
+      const sides = [
+        normalizeSide(match.participant_a_id, match.participant_a_roster_ids),
+        normalizeSide(match.participant_b_id, match.participant_b_roster_ids),
+      ].sort();
+      if (!sides[0] || !sides[1]) return null;
+      return `${match.program_round ?? ''}|${match.program_block_type ?? ''}|${sides[0]}::${sides[1]}`;
+    };
     if (targetProgramRounds.length > 0) {
       const existingRows = await pool.query(
-        `SELECT id, participant_a_id, participant_b_id, program_block_type,
+        `SELECT id, participant_a_id, participant_b_id, program_round, program_block_type,
+                participant_a_roster_ids, participant_b_roster_ids,
                 score_a, score_b, court, status, match_rule
          FROM league_matches
          WHERE league_id = $1 AND is_program = TRUE AND program_round = ANY($2::int[])`,
         [leagueId, targetProgramRounds],
       );
-      existingRows.rows.forEach((row) => existingState.set(row.id, row));
+      existingRows.rows.forEach((row) => {
+        existingState.set(row.id, row);
+        const key = participantMatchKey(row);
+        if (key && !existingStateByParticipants.has(key)) existingStateByParticipants.set(key, row);
+      });
     }
 
     if (targetProgramRounds.length > 0) {
@@ -3341,7 +3359,16 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
       const values = [];
       const placeholders = validMatches.map((match, index) => {
         const base = index * 21;
-        const previous = existingState.get(match.id);
+        // Generated round-robin IDs contain a group/order index. If participant
+        // ordering changes after a deploy, retain an already-started match by its
+        // actual pairing instead of treating it as a new match.
+        const identityMatch = existingStateByParticipants.get(participantMatchKey(match));
+        const previous = existingState.get(match.id) ?? (
+          identityMatch && (
+            identityMatch.status === 'playing' || identityMatch.status === 'done' ||
+            identityMatch.score_a != null || identityMatch.score_b != null
+          ) ? identityMatch : null
+        );
         const hasStartedState = previous && (
           previous.status === 'playing' || previous.status === 'done' ||
           previous.score_a != null || previous.score_b != null
@@ -3374,8 +3401,12 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
           canPreserveState ? previous.status : 'pending',
           match.program_round,
           match.program_block_type,
-          match.participant_a_roster_ids,
-          match.participant_b_roster_ids,
+          hasStartedState && match.program_block_type !== 'SINGLES'
+            ? previous.participant_a_roster_ids
+            : match.participant_a_roster_ids,
+          hasStartedState && match.program_block_type !== 'SINGLES'
+            ? previous.participant_b_roster_ids
+            : match.participant_b_roster_ids,
           canPreserveState && previous.status !== 'pending' && previous.match_rule
             ? previous.match_rule
             : match.match_rule,
@@ -4759,13 +4790,25 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
     }
 
     const visionMode = req.body?.mode === 'star-grid' ? 'star-grid' : 'sheet';
-    const targetRegion = ['upper-right', 'lower-left'].includes(req.body?.target_region)
+    const targetRegion = ['upper-right', 'lower-left', 'row-band'].includes(req.body?.target_region)
       ? req.body.target_region
       : 'all';
     const splitIndex = Math.ceil(participants.length / 2);
+    const requestedRowStart = Number.parseInt(String(req.body?.target_row_start ?? '0'), 10);
+    const requestedRowEnd = Number.parseInt(String(req.body?.target_row_end ?? participants.length - 1), 10);
+    if (
+      !Number.isInteger(requestedRowStart)
+      || !Number.isInteger(requestedRowEnd)
+      || requestedRowStart < 0
+      || requestedRowEnd < requestedRowStart
+      || requestedRowEnd >= participants.length
+    ) {
+      return res.status(400).json({ message: '사진 인식 행 범위가 올바르지 않습니다.' });
+    }
     const isInTargetRegion = (rowIndex, columnIndex) => {
       if (targetRegion === 'upper-right') return rowIndex < splitIndex && columnIndex >= splitIndex;
       if (targetRegion === 'lower-left') return rowIndex >= splitIndex && columnIndex < splitIndex;
+      if (targetRegion === 'row-band') return rowIndex >= requestedRowStart && rowIndex <= requestedRowEnd;
       return true;
     };
     let requestedTargetCells = [];
@@ -4825,6 +4868,8 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
       participants,
       mode: visionMode,
       targetRegion,
+      targetRowStart: requestedRowStart,
+      targetRowEnd: requestedRowEnd,
       playableCells: visionMode === 'star-grid'
         ? participants.flatMap((rowParticipant, rowIndex) =>
             participants.flatMap((columnParticipant, columnIndex) =>
@@ -4839,6 +4884,9 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
     });
     const parsed = openAIVisionResultSchema.parse(vision.result);
     const normalizedCells = parsed.cells.map((cell) => {
+      if (targetRegion === 'row-band') {
+        return { ...cell, rowIndex: cell.rowIndex + requestedRowStart };
+      }
       if (targetRegion === 'upper-right' && cell.columnIndex < splitIndex) {
         return { ...cell, columnIndex: cell.columnIndex + splitIndex };
       }

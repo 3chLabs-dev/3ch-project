@@ -997,8 +997,21 @@ type VisionPreviewCell = OpenAIVisionCell & {
 
 const PORTRAIT_SCHEDULE_RAIL_WIDTH = 84;
 
-type VisionTargetRegion = "all" | "upper-right" | "lower-left";
+type VisionTargetRegion = "all" | "upper-right" | "lower-left" | "row-band";
 type OverlayRect = { left: number; top: number; width: number; height: number };
+
+function getVisionRowBands(participantCount: number) {
+  const bandCount = participantCount <= 12 ? 1 : participantCount <= 16 ? 2 : 3;
+  const baseSize = Math.floor(participantCount / bandCount);
+  const remainder = participantCount % bandCount;
+  let startRow = 0;
+  return Array.from({ length: bandCount }, (_, index) => {
+    const size = baseSize + (index < remainder ? 1 : 0);
+    const band = { index, startRow, endRow: startRow + size - 1 };
+    startRow += size;
+    return band;
+  });
+}
 
 type FilePickerHandle = { getFile: () => Promise<File> };
 type FilePickerWindow = Window & {
@@ -1157,7 +1170,8 @@ export default function LeagueGPTVisionSheet() {
   const [scanVision, { isLoading: isScanning }] = useScanLeagueOpenAIVisionMutation();
   const [resultDialogOpen, setResultDialogOpen] = useState(false);
   const [visionTargetRegion, setVisionTargetRegion] = useState<VisionTargetRegion>("all");
-  const [inlineOverlayRects, setInlineOverlayRects] = useState<Partial<Record<VisionTargetRegion, OverlayRect>>>({});
+  const [visionTargetRowRange, setVisionTargetRowRange] = useState<{ startRow: number; endRow: number } | null>(null);
+  const [inlineOverlayRects, setInlineOverlayRects] = useState<Record<string, OverlayRect | undefined>>({});
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewCells, setPreviewCells] = useState<VisionPreviewCell[]>([]);
   const [isSavingVision, setIsSavingVision] = useState(false);
@@ -1829,10 +1843,17 @@ export default function LeagueGPTVisionSheet() {
     const update = () => {
       const lastIndex = localOrder.length - 1;
       const splitIndex = Math.ceil(localOrder.length / 2);
+      const rowBandRects = Object.fromEntries(
+        getVisionRowBands(localOrder.length).map((band) => [
+          `row-band-${band.index}`,
+          measureRegion(band.startRow, 0, band.endRow, lastIndex) ?? undefined,
+        ]),
+      );
       setInlineOverlayRects({
         all: measureRegion(0, 0, lastIndex, lastIndex) ?? undefined,
         "upper-right": measureRegion(0, splitIndex, splitIndex - 1, lastIndex) ?? undefined,
         "lower-left": measureRegion(splitIndex, 0, lastIndex, splitIndex - 1) ?? undefined,
+        ...rowBandRects,
       });
     };
 
@@ -1969,8 +1990,9 @@ export default function LeagueGPTVisionSheet() {
     handleGuideScroll();
   };
 
-  const handleOpenResultDialog = (targetRegion: VisionTargetRegion = "all") => {
+  const handleOpenResultDialog = (targetRegion: VisionTargetRegion = "all", rowRange: { startRow: number; endRow: number } | null = null) => {
     setVisionTargetRegion(targetRegion);
+    setVisionTargetRowRange(rowRange);
     setResultDialogOpen(true);
   };
 
@@ -1990,6 +2012,7 @@ export default function LeagueGPTVisionSheet() {
           const splitIndex = Math.ceil(localOrder.length / 2);
           if (visionTargetRegion === "upper-right" && !(rowIndex < splitIndex && columnIndex >= splitIndex)) return;
           if (visionTargetRegion === "lower-left" && !(rowIndex >= splitIndex && columnIndex < splitIndex)) return;
+          if (visionTargetRegion === "row-band" && visionTargetRowRange && !(rowIndex >= visionTargetRowRange.startRow && rowIndex <= visionTargetRowRange.endRow)) return;
           const match = matchLookup.get(`${rowPlayer.id}__${columnPlayer.id}`);
           if (!match || match.is_no_game) return;
           localPreview.push({
@@ -2026,6 +2049,7 @@ export default function LeagueGPTVisionSheet() {
           if (rowIndex === columnIndex) return [];
           if (visionTargetRegion === "upper-right" && !(rowIndex < splitIndex && columnIndex >= splitIndex)) return [];
           if (visionTargetRegion === "lower-left" && !(rowIndex >= splitIndex && columnIndex < splitIndex)) return [];
+          if (visionTargetRegion === "row-band" && visionTargetRowRange && !(rowIndex >= visionTargetRowRange.startRow && rowIndex <= visionTargetRowRange.endRow)) return [];
           const match = matchLookup.get(`${rowPlayer.id}__${columnPlayer.id}`);
           return match && !match.is_no_game ? [{ rowIndex, columnIndex }] : [];
         }),
@@ -2037,6 +2061,8 @@ export default function LeagueGPTVisionSheet() {
         idempotencyKey: crypto.randomUUID(),
         participantIds: localOrder.map((participant) => participant.id),
         targetRegion: visionTargetRegion,
+        targetRowStart: visionTargetRowRange?.startRow,
+        targetRowEnd: visionTargetRowRange?.endRow,
         targetCells,
       }).unwrap();
       setVisionUsage(result.usage ?? null);
@@ -2050,6 +2076,7 @@ export default function LeagueGPTVisionSheet() {
           const splitIndex = Math.ceil(localOrder.length / 2);
           if (visionTargetRegion === "upper-right" && !(rowIndex < splitIndex && columnIndex >= splitIndex)) return;
           if (visionTargetRegion === "lower-left" && !(rowIndex >= splitIndex && columnIndex < splitIndex)) return;
+          if (visionTargetRegion === "row-band" && visionTargetRowRange && !(rowIndex >= visionTargetRowRange.startRow && rowIndex <= visionTargetRowRange.endRow)) return;
           const cell = byPosition.get(`${rowIndex}__${columnIndex}`);
           completeCells.push({
             ...(cell ?? {
@@ -2190,6 +2217,21 @@ export default function LeagueGPTVisionSheet() {
     (match) => !match.is_no_game && (match.status === "playing" || match.status === "done"),
   );
   const showInlineResultButtons = canScore && !hasStartedMatch && n > 1;
+  const fullMatchRowBands = getVisionRowBands(n);
+  const inlineVisionTargets = isHalfSplitRound
+    ? [
+        { key: "upper-right", region: "upper-right" as const, order: 1, startRow: 0, endRow: Math.ceil(n / 2) - 1 },
+        { key: "lower-left", region: "lower-left" as const, order: 2, startRow: Math.ceil(n / 2), endRow: n - 1 },
+      ]
+    : fullMatchRowBands.length === 1
+      ? [{ key: "all", region: "all" as const, order: 1, startRow: 0, endRow: n - 1 }]
+      : fullMatchRowBands.map((band) => ({
+          key: `row-band-${band.index}`,
+          region: "row-band" as const,
+          order: band.index + 1,
+          startRow: band.startRow,
+          endRow: band.endRow,
+        }));
   const leagueStarted = league.status === "completed"; // 완료 상태면 수정 버튼 숨김
   const date          = formatLeagueDate(league.start_date);
   const winScore      = getWinScore(currentRule);
@@ -2204,6 +2246,8 @@ export default function LeagueGPTVisionSheet() {
     ? indexedPreviewParticipants.slice(0, previewSplitIndex)
     : visionTargetRegion === "lower-left"
       ? indexedPreviewParticipants.slice(previewSplitIndex)
+      : visionTargetRegion === "row-band" && visionTargetRowRange
+        ? indexedPreviewParticipants.slice(visionTargetRowRange.startRow, visionTargetRowRange.endRow + 1)
       : indexedPreviewParticipants;
   const previewColumns = visionTargetRegion === "upper-right"
     ? indexedPreviewParticipants.slice(previewSplitIndex)
@@ -2467,15 +2511,13 @@ export default function LeagueGPTVisionSheet() {
                   </TableBody>
                 </SortableContext>
               </Table>
-              {showInlineResultButtons && (isHalfSplitRound
-                ? (["upper-right", "lower-left"] as const)
-                : (["all"] as const)
-              ).map((targetRegion) => {
-                const rect = inlineOverlayRects[targetRegion];
+              {showInlineResultButtons && inlineVisionTargets.map((target) => {
+                const rect = inlineOverlayRects[target.key];
                 if (!rect) return null;
+                const showMultipleTargets = inlineVisionTargets.length > 1;
                 return (
                   <Box
-                    key={targetRegion}
+                    key={target.key}
                     sx={{
                       position: "absolute",
                       left: rect.left,
@@ -2487,32 +2529,51 @@ export default function LeagueGPTVisionSheet() {
                       justifyContent: "center",
                       pointerEvents: "none",
                       zIndex: 4,
+                      bgcolor: target.order % 2 === 1 ? "rgba(37,99,235,0.035)" : "transparent",
+                      ...(target.region === "row-band" && target.order > 1
+                        ? { borderTop: "3px dashed rgba(37,99,235,0.8)" }
+                        : {}),
                     }}
                   >
-                    <Box
-                      component="button"
-                      type="button"
-                      onPointerDown={(event) => event.stopPropagation()}
-                      onClick={() => handleOpenResultDialog(targetRegion)}
-                      sx={{
-                        pointerEvents: "auto",
-                        appearance: "none",
-                        border: "2px solid #fff",
-                        borderRadius: 2,
-                        px: 1.75,
-                        height: 36,
-                        color: "#fff",
-                        bgcolor: "#16A34A",
-                        boxShadow: "0 3px 12px rgba(0,0,0,0.25)",
-                        fontSize: 13,
-                        fontWeight: 900,
-                        whiteSpace: "nowrap",
-                        cursor: "pointer",
-                        "&:hover": { bgcolor: "#15803D" },
-                      }}
-                    >
-                      결과 등록
-                    </Box>
+                    {target.region === "row-band" && target.order > 1 && (
+                      <Typography sx={{ position: "absolute", top: 3, left: 8, px: 0.75, py: 0.2, borderRadius: 1, color: "#1D4ED8", bgcolor: "rgba(255,255,255,0.92)", fontSize: 10, fontWeight: 900 }}>
+                        {target.startRow + 1}행부터 {target.order}차 영역
+                      </Typography>
+                    )}
+                    <Stack alignItems="center" spacing={0.65}>
+                      <Box
+                        component="button"
+                        type="button"
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={() => handleOpenResultDialog(
+                          target.region,
+                          target.region === "row-band" ? { startRow: target.startRow, endRow: target.endRow } : null,
+                        )}
+                        sx={{
+                          pointerEvents: "auto",
+                          appearance: "none",
+                          border: "2px solid #fff",
+                          borderRadius: 2,
+                          px: 1.75,
+                          height: 36,
+                          color: "#fff",
+                          bgcolor: "#16A34A",
+                          boxShadow: "0 3px 12px rgba(0,0,0,0.25)",
+                          fontSize: 13,
+                          fontWeight: 900,
+                          whiteSpace: "nowrap",
+                          cursor: "pointer",
+                          "&:hover": { bgcolor: "#15803D" },
+                        }}
+                      >
+                        {showMultipleTargets ? `${target.order}차 결과 등록` : "결과 등록"}
+                      </Box>
+                      {target.region === "row-band" && (
+                        <Typography sx={{ px: 0.8, py: 0.3, borderRadius: 1, color: "#1E3A8A", bgcolor: "rgba(255,255,255,0.9)", fontSize: 10, fontWeight: 800, whiteSpace: "nowrap" }}>
+                          {target.startRow + 1}~{target.endRow + 1}행만 보이도록 잘라서 올려주세요
+                        </Typography>
+                      )}
+                    </Stack>
                   </Box>
                 );
               })}

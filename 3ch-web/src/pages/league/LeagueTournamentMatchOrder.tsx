@@ -379,7 +379,7 @@ export default function LeagueTournamentMatchOrder() {
 
   useEffect(() => {
     if (tabKey !== null || tabs.length === 0) return;
-    const defaultTab = [...tabs].reverse().find((tab) =>
+    const defaultTab = tabs.find((tab) =>
       matches.some((match) =>
         (match.bracket ?? "upper") === tab.bracket &&
         match.round_number === tab.roundNumber &&

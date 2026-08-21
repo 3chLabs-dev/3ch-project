@@ -1527,7 +1527,10 @@ export function generateProgramRoundMatches(
     : null;
   const finalPools = rankedPools ?? placeholderPools;
   const selectedFinalUnits = finalPools
-    ? finalPools.flatMap((pool) => pool.slice(0, advanceCount))
+    ? Array.from({ length: advanceCount }, (_, rankIndex) => rankIndex)
+        .flatMap((rankIndex) =>
+          finalPools.flatMap((pool) => pool[rankIndex] ? [pool[rankIndex]] : [])
+        )
     : [];
 
   if (block.format === "TOURNAMENT") {

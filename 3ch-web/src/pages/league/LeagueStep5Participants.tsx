@@ -229,11 +229,12 @@ export default function LeagueStep5Participants() {
         <Stack direction="row" spacing={1} alignItems="baseline">
           <Typography sx={{ fontSize: 22, fontWeight: 900, mb: 1 }}>
             참가자 사전 등록
-          </Typography>          {effectiveRecruitCount !== "" && (
-            <Typography sx={{ fontSize: 14, fontWeight: 700, color: isFull ? "#E53935" : "#6B7280" }}>
-              {participants.length}/{effectiveRecruitCount}
-            </Typography>
-          )}
+          </Typography>
+          <Typography sx={{ fontSize: 14, fontWeight: 700, color: isFull ? "#E53935" : "#6B7280" }}>
+            {effectiveRecruitCount !== ""
+              ? `${participants.length} / ${effectiveRecruitCount}명`
+              : `${participants.length}명`}
+          </Typography>
         </Stack>
 
         <Button variant="contained" disableElevation onClick={handleOpenLoad} sx={smallBtnSx("#87B8FF", "#79AEFF")}>

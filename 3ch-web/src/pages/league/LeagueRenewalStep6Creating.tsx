@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { Box, Button, CircularProgress, Stack, Typography } from "@mui/material";
+import { useEffect, useState } from "react";
+import { Alert, Box, Button, CircularProgress, Snackbar, Stack, Typography } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import {
@@ -15,6 +15,7 @@ export default function LeagueRenewalStep6Creating() {
   const status = useAppSelector((state) => state.leagueRenewalCreation.createStatus);
   const error = useAppSelector((state) => state.leagueRenewalCreation.createError);
   const token = useAppSelector((state) => state.auth.token);
+  const [errorToastOpen, setErrorToastOpen] = useState(false);
   const {
     data: featureUsageData,
     isLoading: featureUsageLoading,
@@ -47,6 +48,10 @@ export default function LeagueRenewalStep6Creating() {
   useEffect(() => {
     if (status === "succeeded") dispatch(setRenewalStep(9));
   }, [dispatch, status]);
+
+  useEffect(() => {
+    if (status === "failed" && error) setErrorToastOpen(true);
+  }, [error, status]);
 
   const handleBack = () => {
     dispatch(resetRenewalCreateStatus());
@@ -118,6 +123,9 @@ export default function LeagueRenewalStep6Creating() {
           </Button>
         </Stack>
       )}
+      <Snackbar open={errorToastOpen} autoHideDuration={6000} onClose={() => setErrorToastOpen(false)} anchorOrigin={{ vertical: "bottom", horizontal: "center" }}>
+        <Alert severity="warning" onClose={() => setErrorToastOpen(false)} sx={{ fontWeight: 700 }}>{error}</Alert>
+      </Snackbar>
     </Box>
   );
 }

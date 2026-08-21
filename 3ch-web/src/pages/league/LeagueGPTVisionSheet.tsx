@@ -2515,6 +2515,11 @@ export default function LeagueGPTVisionSheet() {
                 const rect = inlineOverlayRects[target.key];
                 if (!rect) return null;
                 const showMultipleTargets = inlineVisionTargets.length > 1;
+                const rowBandColor = target.order % 3 === 1
+                  ? "rgba(37,99,235,0.85)"
+                  : target.order % 3 === 2
+                    ? "rgba(124,58,237,0.82)"
+                    : "rgba(8,145,178,0.82)";
                 return (
                   <Box
                     key={target.key}
@@ -2530,14 +2535,15 @@ export default function LeagueGPTVisionSheet() {
                       pointerEvents: "none",
                       zIndex: 4,
                       bgcolor: target.order % 2 === 1 ? "rgba(37,99,235,0.035)" : "transparent",
-                      ...(target.region === "row-band" && target.order > 1
-                        ? { borderTop: "3px dashed rgba(37,99,235,0.8)" }
+                      boxSizing: "border-box",
+                      ...(target.region === "row-band"
+                        ? { border: `2px dashed ${rowBandColor}` }
                         : {}),
                     }}
                   >
-                    {target.region === "row-band" && target.order > 1 && (
-                      <Typography sx={{ position: "absolute", top: 3, left: 8, px: 0.75, py: 0.2, borderRadius: 1, color: "#1D4ED8", bgcolor: "rgba(255,255,255,0.92)", fontSize: 10, fontWeight: 900 }}>
-                        {target.startRow + 1}행부터 {target.order}차 영역
+                    {target.region === "row-band" && (
+                      <Typography sx={{ position: "absolute", top: 3, left: 8, px: 0.75, py: 0.2, borderRadius: 1, color: rowBandColor, bgcolor: "rgba(255,255,255,0.94)", fontSize: 10, fontWeight: 900 }}>
+                        {target.order}차: {target.startRow + 1}~{target.endRow + 1}행 × 1~{n}열
                       </Typography>
                     )}
                     <Stack alignItems="center" spacing={0.65}>
@@ -2570,7 +2576,7 @@ export default function LeagueGPTVisionSheet() {
                       </Box>
                       {target.region === "row-band" && (
                         <Typography sx={{ px: 0.8, py: 0.3, borderRadius: 1, color: "#1E3A8A", bgcolor: "rgba(255,255,255,0.9)", fontSize: 10, fontWeight: 800, whiteSpace: "nowrap" }}>
-                          {target.startRow + 1}~{target.endRow + 1}행만 보이도록 잘라서 올려주세요
+                          {target.startRow + 1}~{target.endRow + 1}행과 1~{n}열이 모두 보이도록 잘라서 올려주세요
                         </Typography>
                       )}
                     </Stack>

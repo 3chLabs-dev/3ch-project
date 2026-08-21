@@ -1,7 +1,7 @@
 ﻿  import { useMemo, useState } from "react";
   import { useNavigate, useParams } from "react-router-dom";
   import { useEffect } from "react";
-  import {
+import {
     Box,
     Stack,
     Typography,
@@ -64,6 +64,11 @@
   import LeagueInvitedGroupsDialog from "./LeagueInvitedGroupsDialog";
   import { distributeSnake } from "../../features/league/algorithms/distributeSnake";
   import { useGetMyFeatureUsageQuery } from "../../features/payment/usageApi";
+  import {
+    getSingleLeagueParticipantLimitMessage,
+    isSingleRoundSinglesLeagueProgram,
+    SINGLE_ROUND_SINGLES_LEAGUE_MAX_PARTICIPANTS,
+  } from "../../features/league/singleLeagueLimits";
   import {
     createTossTransferLink,
     formatTransferAmountDisplay,
@@ -713,6 +718,21 @@
 
     const handleStart = async () => {
       if (!id) return;
+      const activeProgram = programData?.program?.program_data as {
+        rounds?: Array<{ program?: string | null; format?: string | null }>;
+        blocks?: Array<{ type?: string | null; format?: string | null }>;
+      } | null;
+      const isLimitedSingleLeague = isEventProgramFormat
+        ? isSingleRoundSinglesLeagueProgram(activeProgram)
+        : league?.type === "단식" && league?.format === "단일리그";
+      if (
+        isLimitedSingleLeague
+        && rawParticipants.length > SINGLE_ROUND_SINGLES_LEAGUE_MAX_PARTICIPANTS
+      ) {
+        setAlertSeverity("warning");
+        setAlertMsg(getSingleLeagueParticipantLimitMessage(rawParticipants.length));
+        return;
+      }
       if (league?.status !== "active") {
         await updateLeague({ id, updates: { status: "active" } });
       }

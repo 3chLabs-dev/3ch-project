@@ -10,6 +10,11 @@ import { createLocalDevLeague, saveLocalDevProgram } from "../../utils/localDevL
 import { generateProgramBlocks } from "./algorithms/generateProgramBlocks";
 import { generateGroupOptions } from "./algorithms/generateGroupOptions";
 import { generateProgramRoundMatches } from "../../utils/programMatchGenerator";
+import {
+  getSingleLeagueParticipantLimitMessage,
+  isSingleRoundSinglesLeagueProgram,
+  SINGLE_ROUND_SINGLES_LEAGUE_MAX_PARTICIPANTS,
+} from "./singleLeagueLimits";
 
 export interface RenewalLeagueBasicInfo {
   title: string;
@@ -192,6 +197,16 @@ export const createRenewalLeague = createAsyncThunk.withTypes<{ state: RootState
       };
     }
     if (!programData) throw new Error("이벤트 프로그램을 선택해주세요.");
+    const configuredParticipantCount = Math.max(
+      state.basicInfo.participantCount ?? 0,
+      state.participants.length,
+    );
+    if (
+      isSingleRoundSinglesLeagueProgram(programData)
+      && configuredParticipantCount > SINGLE_ROUND_SINGLES_LEAGUE_MAX_PARTICIPANTS
+    ) {
+      throw new Error(getSingleLeagueParticipantLimitMessage(configuredParticipantCount));
+    }
     programData = {
       ...programData,
       compositionMode: state.compositionMode,

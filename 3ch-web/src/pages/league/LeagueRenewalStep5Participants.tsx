@@ -91,7 +91,9 @@ export default function LeagueRenewalStep5Participants() {
     <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", pb: 0.8 }}>
       <Stack direction="row" spacing={1} alignItems="baseline">
         <Typography sx={{ fontSize: 22, fontWeight: 900, mb: 1 }}>참가자 사전 등록</Typography>
-        {targetCount !== null && <Typography sx={{ fontSize: 14, fontWeight: 700, color: isFull ? "#E53935" : "#6B7280" }}>{participants.length}/{targetCount}</Typography>}
+        <Typography sx={{ fontSize: 14, fontWeight: 700, color: isFull ? "#E53935" : "#6B7280" }}>
+          {targetCount !== null ? `${participants.length} / ${targetCount}명` : `${participants.length}명`}
+        </Typography>
       </Stack>
     </Box>
     <Divider sx={{ mb: 1.2, borderColor: "#D9DDE6" }} />

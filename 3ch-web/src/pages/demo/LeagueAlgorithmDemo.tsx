@@ -1275,6 +1275,7 @@ const LeagueAlgorithmDemo = ({
   const shouldScrollToRecommendationRef = useRef(false);
   const completedCustomRoundSignatureRef = useRef<string | null>(null);
   const [selectedProgramOptionIndex, setSelectedProgramOptionIndex] = useState<number | null>(null);
+  const [expandedProgramOptionIndex, setExpandedProgramOptionIndex] = useState<number | null>(0);
   const [customProgramOptions, setCustomProgramOptions] = useState<Record<number, ProgramOption>>({});
   const [editingOptionIndex, setEditingOptionIndex] = useState<number | null>(null);
   const [editingRounds, setEditingRounds] = useState<RoundConfig[]>([]);
@@ -3118,22 +3119,26 @@ const LeagueAlgorithmDemo = ({
         selectedProgramOptionIndex === index
           ? '2px solid rgb(47, 128, 237)'
           : '1px solid #ddd',
-      borderRadius: '12px',
-      padding: '16px',
-      marginTop: '12px',
+      borderRadius: '16px',
+      padding: '18px',
+      marginTop: '14px',
       backgroundColor:
         selectedProgramOptionIndex === index
           ? 'rgb(239, 246, 255)'
           : '#ffffff',
       cursor: 'pointer',
+      boxShadow: selectedProgramOptionIndex === index
+        ? '0 10px 28px rgba(47, 128, 237, 0.12)'
+        : '0 4px 16px rgba(15, 23, 42, 0.06)',
+      transition: 'border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease',
     }}
   >
     <div
       style={{
         display: 'flex',
         justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '12px',
+        alignItems: 'flex-start',
+        marginBottom: '8px',
       }}
     >
       <div
@@ -3160,7 +3165,7 @@ const LeagueAlgorithmDemo = ({
           }}
         />
 
-        <h3 style={{ margin: 0 }}>
+        <h3 style={{ margin: 0, fontSize: '18px', lineHeight: 1.35 }}>
           {option.title}
         </h3>
       </div>
@@ -3194,13 +3199,27 @@ const LeagueAlgorithmDemo = ({
         </IconButton>
       </div>
     </div>
-  <div style={{ paddingLeft: '16px'}}>
-    <div>
-      - 총 경기수: {option.totalBlockMatchCount}경기
+  <div style={{ paddingLeft: '28px'}}>
+    <div style={{ color: '#64748b', fontSize: '13px', lineHeight: 1.55, marginBottom: '14px' }}>
+      {option.description}
     </div>
 
-    <div>
-      - 1인 평균 경기수: {(
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+        border: '1px solid #e2e8f0',
+        borderRadius: '12px',
+        overflow: 'hidden',
+        backgroundColor: selectedProgramOptionIndex === index ? '#ffffff' : '#f8fafc',
+      }}
+    >
+      <div style={{ padding: '11px 6px', textAlign: 'center', borderRight: '1px solid #e2e8f0' }}>
+        <div style={{ fontSize: '16px', fontWeight: 900, color: '#0f172a' }}>{option.totalBlockMatchCount}</div>
+        <div style={{ marginTop: '2px', fontSize: '10px', fontWeight: 700, color: '#64748b' }}>전체 경기</div>
+      </div>
+      <div style={{ padding: '11px 6px', textAlign: 'center', borderRight: '1px solid #e2e8f0' }}>
+        <div style={{ fontSize: '16px', fontWeight: 900, color: '#0f172a' }}>{(
         option.blocks.reduce(
           (sum, block) => {
             if (block.type === "SINGLES") {
@@ -3219,14 +3238,31 @@ const LeagueAlgorithmDemo = ({
           },
           0
         ) / playerCount
-      ).toFixed(1)}경기
+      ).toFixed(1)}</div>
+        <div style={{ marginTop: '2px', fontSize: '10px', fontWeight: 700, color: '#64748b' }}>1인 평균 경기</div>
+      </div>
+      <div style={{ padding: '11px 4px', textAlign: 'center' }}>
+        <div style={{ fontSize: '15px', fontWeight: 900, color: '#0f172a', whiteSpace: 'nowrap' }}>
+          {Math.floor(option.totalProgramMinutes / 60) > 0 && `${Math.floor(option.totalProgramMinutes / 60)}시간 `}
+          {option.totalProgramMinutes % 60}분
+        </div>
+        <div style={{ marginTop: '2px', fontSize: '10px', fontWeight: 700, color: '#64748b' }}>예상 소요시간</div>
+      </div>
     </div>
 
-    <div>
-      - 예상 소요시간:{" "}
-      {Math.floor(option.totalProgramMinutes / 60) > 0 &&
-        `${Math.floor(option.totalProgramMinutes / 60)}시간 `}
-      {option.totalProgramMinutes % 60}분
+    <div style={{ marginTop: '14px', padding: '12px 14px', borderRadius: '12px', backgroundColor: selectedProgramOptionIndex === index ? '#FFFFFF' : '#F8FAFC', color: '#1E3A8A', border: '1px solid #BFDBFE', boxShadow: selectedProgramOptionIndex === index ? '0 3px 10px rgba(37, 99, 235, 0.06)' : 'none', transition: 'background-color 160ms ease, box-shadow 160ms ease' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '12px' }}>
+        <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748B' }}>전체 진행시간</span>
+        <strong style={{ fontSize: '15px', letterSpacing: '-0.01em', color: '#1D4ED8' }}>
+          {formatTime(rentalStartMinutes)} ~ {formatTime(rentalStartMinutes + option.totalProgramMinutes)}
+        </strong>
+      </div>
+      <div style={{ height: '5px', marginTop: '9px', borderRadius: '999px', backgroundColor: '#DBEAFE', overflow: 'hidden' }}>
+        <div style={{ width: `${Math.min(100, Math.round((option.totalProgramMinutes / Math.max(rentalMinutes, 1)) * 100))}%`, height: '100%', borderRadius: 'inherit', backgroundColor: option.isOverTime ? '#ef4444' : '#3B82F6' }} />
+      </div>
+      <div style={{ marginTop: '7px', fontSize: '11px', color: '#64748B' }}>
+        {courtCount}개 코트 · 대관 종료 {formatTime(rentalStartMinutes + rentalMinutes)}
+      </div>
     </div>
 
     {option.isOverTime && (
@@ -3240,12 +3276,42 @@ const LeagueAlgorithmDemo = ({
       </div>
     )}
 
+    <button
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        setExpandedProgramOptionIndex((previous) => previous === index ? null : index);
+      }}
+      aria-expanded={expandedProgramOptionIndex === index}
+      style={{
+        width: '100%',
+        marginTop: '12px',
+        padding: '10px 0 2px',
+        border: 0,
+        borderTop: '1px solid #e2e8f0',
+        background: 'transparent',
+        color: '#334155',
+        fontSize: '13px',
+        fontWeight: 800,
+        cursor: 'pointer',
+      }}
+    >
+      {expandedProgramOptionIndex === index ? '상세 진행표 접기 ︿' : '상세 진행표 보기 ﹀'}
+    </button>
+
+    {expandedProgramOptionIndex === index && (
     <div
       style={{
         marginTop: '12px',
-        paddingLeft: '12px',
+        padding: '14px 12px',
+        borderRadius: '14px',
+        backgroundColor: '#f8fafc',
+        border: '1px solid #e2e8f0',
       }}
     >
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '14px' }}>
+        <div style={{ fontSize: '14px', fontWeight: 900, color: '#0f172a' }}>라운드별 진행 일정</div>
+      </div>
       {option.blocks?.map(
         (
           block: ProgramBlock,
@@ -3269,27 +3335,41 @@ const LeagueAlgorithmDemo = ({
           <div
             key={blockIndex}
             style={{
+              position: 'relative',
+              padding: '14px 12px 14px 16px',
+              border: '1px solid #e2e8f0',
+              borderRadius: '12px',
+              backgroundColor: '#ffffff',
+              boxShadow: '0 2px 8px rgba(15, 23, 42, 0.04)',
               marginBottom:
                 blockIndex === option.blocks.length - 1
                   ? 0
-                  : "32px",
+                  : "12px",
             }}
           >
+            <div style={{ position: 'absolute', left: '-5px', top: '17px', width: '9px', height: '9px', borderRadius: '50%', backgroundColor: '#3b82f6', boxShadow: '0 0 0 3px #dbeafe' }} />
             <div
               style={{
                 display: "flex",
                 flexWrap: "wrap",
                 gap: "6px",
-                marginBottom: "8px",
+                marginBottom: "10px",
+                alignItems: 'center',
               }}
             >
               <span
                 style={{
-                  fontWeight: 700,
+                  fontWeight: 900,
                   lineHeight: "24px",
+                  color: '#0f172a',
+                  marginRight: '2px',
                 }}
               >
                 {blockIndex + 1}라운드
+              </span>
+
+              <span style={{ marginLeft: 'auto', fontSize: '11px', fontWeight: 800, color: '#2563eb', whiteSpace: 'nowrap' }}>
+                {formatTime(blockStartMinutes)}–{formatTime(blockEndMinutes)}
               </span>
 
               {option.rounds?.[blockIndex]?.option &&
@@ -3307,6 +3387,7 @@ const LeagueAlgorithmDemo = ({
                             : "하위"
                     }
                     size="small"
+                    sx={{ height: 22, fontSize: 11, fontWeight: 800, bgcolor: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0' }}
                   />
                 )}
 
@@ -3319,26 +3400,31 @@ const LeagueAlgorithmDemo = ({
                       : "단체전"
                 }
                 size="small"
+                sx={{ height: 22, fontSize: 11, fontWeight: 800, bgcolor: '#EFF6FF', color: '#2563EB', border: '1px solid #BFDBFE' }}
               />
 
               <Chip
                 label={getRoundFormatLabel(block.format)}
                 size="small"
+                sx={{ height: 22, fontSize: 11, fontWeight: 800, bgcolor: '#F5F3FF', color: '#7C3AED', border: '1px solid #DDD6FE' }}
+              />
+
+              <Chip
+                label={block.matchRule}
+                size="small"
+                sx={{ height: 22, fontSize: 11, fontWeight: 800, bgcolor: '#FFF7ED', color: '#C2410C', border: '1px solid #FED7AA' }}
               />
             </div>
 
-            <div style={{ paddingLeft: '12px' }}>
-              경기방식: {block.matchRule}
-            </div>
-            
+            <div style={{ display: 'grid', gap: '5px', color: '#475569', fontSize: '13px', lineHeight: 1.5 }}>
           {block.description && (
-            <div style={{ paddingLeft: '12px' }}>
-              구성: {block.description}
+            <div>
+              <span style={{ color: '#94a3b8', marginRight: '8px' }}>구성</span>{block.description}
             </div>
           )}
 
-            <div style={{ paddingLeft: '12px' }}>
-              경기수: {block.matchCount}경기
+            <div>
+              <span style={{ color: '#94a3b8', marginRight: '8px' }}>경기수</span><strong style={{ color: '#0f172a' }}>{block.matchCount}경기</strong>
             </div>
 
             {option.rounds?.[blockIndex]?.option === "FINAL" && block.format === "LEAGUE" && (
@@ -3357,16 +3443,13 @@ const LeagueAlgorithmDemo = ({
               </div>
             )}
 
-            <div style={{ paddingLeft: '12px' }}>
-              예상시간:{" "}
+            <div>
+              <span style={{ color: '#94a3b8', marginRight: '8px' }}>소요시간</span>
               {Math.floor(block.expectedMinutes / 60) > 0 &&
                 `${Math.floor(block.expectedMinutes / 60)}시간 `}
               {block.expectedMinutes % 60}분
             </div>
 
-            <div style={{ paddingLeft: '12px' }}>
-              진행시간: {formatTime(blockStartMinutes)} ~{" "}
-              {formatTime(blockEndMinutes)}
             </div>
 
             {!hideFormationActions && block.type === "TEAM" && (
@@ -3481,6 +3564,7 @@ const LeagueAlgorithmDemo = ({
         }
       )}
     </div>
+    )}
   </div>
     </div>
 ))}

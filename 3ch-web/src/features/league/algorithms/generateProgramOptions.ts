@@ -63,7 +63,7 @@ const RECOMMENDATION_PROFILES: RecommendationProfile[] = [
     type: "regular",
     title: "✨정규 경기",
     description:
-      "순위 정확도와 경기 품질을 우선으로 구성한 프로그램입니다.",
+      "참가자가 더 많은 세트를 경험하고, 다양한 라운드로 대관시간을 알차게 채우는 구성입니다.",
     idealUsageRate: 0.92,
     weights: {
       totalMatches: 18,
@@ -79,7 +79,7 @@ const RECOMMENDATION_PROFILES: RecommendationProfile[] = [
     type: "balanced",
     title: "⚖️밸런스형",
     description:
-      "종목 경험, 경기 수, 진행시간의 균형을 맞춘 프로그램입니다.",
+      "경기 수와 라운드 구성, 진행시간이 한쪽에 치우치지 않도록 균형 있게 맞춘 구성입니다.",
     idealUsageRate: 0.82,
     weights: {
       totalMatches: 13,
@@ -95,7 +95,7 @@ const RECOMMENDATION_PROFILES: RecommendationProfile[] = [
     type: "fast",
     title: "⚡빠른 진행",
     description:
-      "빠른 종료와 대관시간 여유를 우선으로 구성한 프로그램입니다.",
+      "정규 경기보다 세트 수를 줄이고, 대관 종료시간보다 넉넉하게 마칠 수 있도록 구성했습니다.",
     idealUsageRate: 0.62,
     weights: {
       totalMatches: 7,

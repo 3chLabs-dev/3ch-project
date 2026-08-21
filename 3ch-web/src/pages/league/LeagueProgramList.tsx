@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useRef, useState } from "react";
+import { useMemo, useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Box,
@@ -24,6 +24,8 @@ import AddIcon from "@mui/icons-material/Add";
 import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import DragHandleIcon from "@mui/icons-material/DragHandle";
+import DownloadIcon from "@mui/icons-material/Download";
+import PrintIcon from "@mui/icons-material/Print";
 import {
   DndContext, PointerSensor, TouchSensor, closestCenter, useDroppable, useSensor, useSensors,
   type DragEndEvent, type DragOverEvent,
@@ -57,6 +59,13 @@ const SEEDING_LABEL: Record<string, string> = {
   seed: "시드",
   random: "랜덤",
 };
+
+const escapeHtml = (value: string) => value
+  .replaceAll("&", "&amp;")
+  .replaceAll("<", "&lt;")
+  .replaceAll(">", "&gt;")
+  .replaceAll('"', "&quot;")
+  .replaceAll("'", "&#039;");
 
 type StoredProgramBlock = {
   title?: string;
@@ -269,6 +278,7 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
     roundIndex: number;
   } | null>(null);
   const autoSyncedRoundsRef = useRef(new Set<number>());
+  const programExportRef = useRef<HTMLDivElement | null>(null);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
@@ -312,6 +322,61 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
   useEffect(() => {
     setStoredProgram((programData?.program?.program_data as StoredProgramOption | null | undefined) ?? null);
   }, [programData]);
+
+  const renderProgramSheet = useCallback(async () => {
+    const source = programExportRef.current;
+    if (!source) return null;
+    const clone = source.cloneNode(true) as HTMLElement;
+    clone.querySelectorAll<HTMLElement>("button, .program-export-hidden").forEach((element) => element.remove());
+    clone.style.width = "620px";
+    clone.style.maxWidth = "none";
+    clone.style.border = "0";
+    clone.style.borderRadius = "0";
+    clone.style.boxShadow = "none";
+
+    const sheet = document.createElement("div");
+    sheet.style.cssText = [
+      "position:fixed", "top:-99999px", "left:0", "width:700px", "padding:44px 40px 52px",
+      "box-sizing:border-box", "background:#fff", "color:#111827",
+      "font-family:Pretendard,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif",
+    ].join(";");
+    const header = document.createElement("div");
+    header.style.cssText = "padding-bottom:20px;margin-bottom:20px;border-bottom:3px solid #2563EB";
+    const title = document.createElement("div");
+    title.textContent = `${league?.name ?? "리그"} 프로그램`;
+    title.style.cssText = "font-size:26px;font-weight:900;line-height:1.35";
+    const subtitle = document.createElement("div");
+    subtitle.textContent = [league?.start_date ? formatLeagueDate(league.start_date) : "", storedProgram?.title ?? ""].filter(Boolean).join(" · ");
+    subtitle.style.cssText = "margin-top:7px;font-size:13px;color:#64748B";
+    header.append(title, subtitle);
+    sheet.append(header, clone);
+    document.body.appendChild(sheet);
+    const html2canvas = (await import("html2canvas")).default;
+    const canvas = await html2canvas(sheet, { scale: 2, useCORS: true, backgroundColor: "#FFFFFF" });
+    document.body.removeChild(sheet);
+    return canvas;
+  }, [league?.name, league?.start_date, storedProgram?.title]);
+
+  const handleDownloadProgram = useCallback(async () => {
+    const canvas = await renderProgramSheet();
+    if (!canvas) return;
+    const link = document.createElement("a");
+    link.href = canvas.toDataURL("image/png");
+    link.download = `프로그램_${league?.name ?? "league"}.png`;
+    link.click();
+  }, [league?.name, renderProgramSheet]);
+
+  const handlePrintProgram = useCallback(async () => {
+    const canvas = await renderProgramSheet();
+    if (!canvas) return;
+    const imageUrl = canvas.toDataURL("image/png");
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+    printWindow.document.write(`<!DOCTYPE html><html><head><title>${escapeHtml(league?.name ?? "리그")} 프로그램</title><style>html,body{margin:0;background:#fff}body{padding:16px;box-sizing:border-box}img{display:block;width:100%;height:auto}@media print{body{padding:0}}</style></head><body><img src="${imageUrl}" alt="리그 프로그램" /></body></html>`);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.onload = () => printWindow.print();
+  }, [league?.name, renderProgramSheet]);
 
   const programPlayers = useMemo(() => {
     return [...participants]
@@ -1055,10 +1120,32 @@ export default function LeagueProgramList({ embedded = false }: { embedded?: boo
 
       <Box sx={{ px: embedded ? 0 : 2 }}>
         {hasProgram ? (
-          <Box sx={{ bgcolor: "#fff", border: embedded ? 0 : "1px solid #E5E7EB", borderRadius: embedded ? 0 : 2, overflow: "hidden", boxShadow: embedded ? "none" : "0 1px 4px rgba(0,0,0,0.05)" }}>
+          <Box ref={programExportRef} sx={{ position: "relative", bgcolor: "#fff", border: embedded ? 0 : "1px solid #E5E7EB", borderRadius: embedded ? 0 : 2, overflow: "hidden", boxShadow: embedded ? "none" : "0 1px 4px rgba(0,0,0,0.05)" }}>
             {!embedded && <Box sx={{ height: 4, bgcolor: "#2563EB", borderRadius: "8px 8px 0 0" }} />}
 
-            <Box sx={{ px: embedded ? 0 : 2.5, pt: embedded ? 0.5 : 2, pb: embedded ? 1 : 2 }}>
+            <Stack
+              direction="row"
+              className="program-export-hidden"
+              sx={{
+                position: "absolute", right: 4, top: embedded ? 4 : 10, zIndex: 2,
+                bgcolor: "#fff", borderRadius: "999px", boxShadow: "0 3px 12px rgba(15,23,42,0.16)",
+                overflow: "hidden", border: "1px solid #F1F5F9",
+              }}
+            >
+              <Tooltip title="프로그램 이미지 저장" placement="left">
+                <IconButton size="small" aria-label="프로그램 이미지 저장" onClick={handleDownloadProgram} sx={{ width: 32, height: 31, color: "#6B7280" }}>
+                  <DownloadIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+              </Tooltip>
+              <Box sx={{ width: "1px", my: 0.8, bgcolor: "#E5E7EB" }} />
+              <Tooltip title="프로그램 인쇄" placement="left">
+                <IconButton size="small" aria-label="프로그램 인쇄" onClick={handlePrintProgram} sx={{ width: 32, height: 31, color: "#6B7280" }}>
+                  <PrintIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+              </Tooltip>
+            </Stack>
+
+            <Box sx={{ px: embedded ? 0 : 2.5, pr: embedded ? 9.5 : 2.5, pt: embedded ? 0.5 : 2, pb: embedded ? 1 : 2 }}>
               {!embedded && <Stack direction="row" alignItems="center" spacing={1.5} mb={1.5}>
                 <Box sx={{ width: 40, height: 40, borderRadius: 2, bgcolor: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   <AccountTreeOutlinedIcon sx={{ fontSize: 20, color: "#2563EB" }} />

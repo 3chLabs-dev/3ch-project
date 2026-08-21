@@ -79,11 +79,17 @@ const COLOR = {
  */
 function getWinScore(rules?: string | null): number | null {
   if (!rules) return null;
-  if (rules.includes("3세트제"))    return null;
-  if (rules.includes("3전 2선승"))  return 2;
-  if (rules.includes("5전 3선승"))  return 3;
+  if (rules === "THREE_SET" || rules.includes("3세트제"))    return null;
+  if (rules === "BEST_OF_3" || rules.includes("3전 2선승"))  return 2;
+  if (rules === "BEST_OF_5" || rules.includes("5전 3선승"))  return 3;
   if (rules.includes("7전 4선승"))  return 4;
   return null;
+}
+
+function hasReachedAutomaticCompletion(rules: string | null | undefined, scoreA: number, scoreB: number): boolean {
+  if (rules === "THREE_SET" || rules?.includes("3세트제")) return scoreA + scoreB === 3;
+  const winScore = getWinScore(rules);
+  return winScore !== null && (scoreA >= winScore || scoreB >= winScore);
 }
 
 const NEXT_STATUS: Record<string, "pending" | "playing" | "done"> = {
@@ -265,10 +271,11 @@ function ScoreButton({ icon, disabled, rotate, variant = "order", onClick }: {
  * - landscape(가로): ↑ 점수 ↓ 세로 배치
  * - portrait(세로, writingMode 적용): ← 점수 → 가로 배치 + 아이콘 90° 회전
  */
-function BracketScoreCell({ match, isA, leagueId, winScore, canManage, landscape, rowIndex, colIndex, totalRows, totalCols, onProgramMatchUpdate }: {
+function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, landscape, rowIndex, colIndex, totalRows, totalCols, onProgramMatchUpdate }: {
   match: LeagueMatch | undefined;
   isA: boolean;         // 현재 행 참가자가 해당 경기의 A선수인지 여부
   leagueId: string;
+  rules?: string | null;
   winScore: number | null; // 선승 기준 점수 (null이면 선승제 아님)
   canManage: boolean;
   landscape: boolean;
@@ -280,13 +287,18 @@ function BracketScoreCell({ match, isA, leagueId, winScore, canManage, landscape
 }) {
   const [updateMatch] = useUpdateLeagueMatchMutation();
   const autoCompleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestMatchRef = useRef(match);
   const isActive = match?.status === "playing" || match?.status === "done";
   const score    = isActive ? ((isA ? match!.score_a : match!.score_b) ?? 0) : null;
   const [isEditing, setIsEditing] = useState(false);
   const [tempValue, setTempValue] = useState<string>("");
   const canEdit  = canManage && isActive;
+  useEffect(() => {
+    latestMatchRef.current = match;
+  }, [match]);
   const updateCurrentMatch = useCallback((updates: ProgramMatchPatch) => {
     if (!match) return;
+    latestMatchRef.current = { ...match, ...latestMatchRef.current, ...updates };
     if (onProgramMatchUpdate) {
       onProgramMatchUpdate(match.id, updates);
       return;
@@ -295,17 +307,23 @@ function BracketScoreCell({ match, isA, leagueId, winScore, canManage, landscape
   }, [leagueId, match, onProgramMatchUpdate, updateMatch]);
 
   const scheduleAutoComplete = useCallback(() => {
-    if (!match || !canEdit) return;
-
     if (autoCompleteTimerRef.current) {
       clearTimeout(autoCompleteTimerRef.current);
+      autoCompleteTimerRef.current = null;
     }
 
+    const currentMatch = latestMatchRef.current;
+    if (!currentMatch || currentMatch.status !== "playing" || !canEdit) return;
+    if (!hasReachedAutomaticCompletion(rules, currentMatch.score_a ?? 0, currentMatch.score_b ?? 0)) return;
+
     autoCompleteTimerRef.current = setTimeout(() => {
-      updateCurrentMatch({ status: "done" });
+      const latestMatch = latestMatchRef.current;
+      if (latestMatch?.status === "playing" && hasReachedAutomaticCompletion(rules, latestMatch.score_a ?? 0, latestMatch.score_b ?? 0)) {
+        updateCurrentMatch({ status: "done" });
+      }
       autoCompleteTimerRef.current = null;
     }, AUTO_COMPLETE_DELAY_MS);
-  }, [canEdit, match, updateCurrentMatch]);
+  }, [canEdit, rules, updateCurrentMatch]);
 
   useEffect(() => () => {
     if (autoCompleteTimerRef.current) {
@@ -554,7 +572,7 @@ const SortableBracketRow = memo(function SortableBracketRow({
         const m   = matchLookup.get(`${participant.id}__${colPlayer.id}`);
         const isA = m?.participant_a_id === participant.id;
         return (
-          <BracketScoreCell key={colIdx} match={m} isA={isA} leagueId={leagueId} winScore={winScore} canManage={canScore} landscape={landscape} rowIndex={rowIdx} colIndex={colIdx} totalRows={n} totalCols={n} onProgramMatchUpdate={onProgramMatchUpdate}/>
+          <BracketScoreCell key={colIdx} match={m} isA={isA} leagueId={leagueId} rules={m?.match_rule ?? rules} winScore={winScore} canManage={canScore} landscape={landscape} rowIndex={rowIdx} colIndex={colIdx} totalRows={n} totalCols={n} onProgramMatchUpdate={onProgramMatchUpdate}/>
         );
       })}
 

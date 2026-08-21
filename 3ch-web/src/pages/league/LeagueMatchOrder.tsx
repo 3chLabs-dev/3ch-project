@@ -103,6 +103,19 @@ function getWinScore(rules?: string | null): number | null {
   return null;
 }
 
+function hasReachedAutomaticCompletion(
+  rules: string | null | undefined,
+  scoreA: number,
+  scoreB: number,
+): boolean {
+  if (rules === "THREE_SET" || rules?.includes("3세트제")) {
+    return scoreA + scoreB === 3;
+  }
+
+  const winScore = getWinScore(rules);
+  return winScore !== null && (scoreA >= winScore || scoreB >= winScore);
+}
+
 // ─── 참가자 행 (번호 + 이름/부 + 점수) ──────────────────────────────────────
 /** 테두리 박스 안 참가자 행: [번호셀] | [배지+이름] [점수] */
 function ParticipantRow({
@@ -239,15 +252,34 @@ function MatchCard({
   }, [getWinnerPatch, leagueId, match.id, onProgramMatchUpdate, updateMatch]);
 
   const scheduleAutoComplete = useCallback(() => {
-    if (match.status !== "playing" && match.status !== "done") return;
     if (autoCompleteTimerRef.current) {
       clearTimeout(autoCompleteTimerRef.current);
+      autoCompleteTimerRef.current = null;
     }
+
+    const currentMatch = latestMatchRef.current;
+    if (currentMatch.status !== "playing") return;
+    if (!hasReachedAutomaticCompletion(
+      rules,
+      currentMatch.score_a ?? 0,
+      currentMatch.score_b ?? 0,
+    )) return;
+
     autoCompleteTimerRef.current = setTimeout(() => {
-      updateCurrentMatch({ status: "done" });
+      const latestMatch = latestMatchRef.current;
+      if (
+        latestMatch.status === "playing" &&
+        hasReachedAutomaticCompletion(
+          rules,
+          latestMatch.score_a ?? 0,
+          latestMatch.score_b ?? 0,
+        )
+      ) {
+        updateCurrentMatch({ status: "done" });
+      }
       autoCompleteTimerRef.current = null;
     }, AUTO_COMPLETE_DELAY_MS);
-  }, [match.status, updateCurrentMatch]);
+  }, [rules, updateCurrentMatch]);
 
   useEffect(() => () => {
     if (autoCompleteTimerRef.current) {

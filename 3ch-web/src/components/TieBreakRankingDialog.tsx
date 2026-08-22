@@ -64,7 +64,7 @@ export default function TieBreakRankingDialog({
   };
 
   return (
-    <Dialog open={open} onClose={saving ? undefined : handleClose} maxWidth="xs" fullWidth>
+    <Dialog open={open} onClose={saving ? undefined : handleClose} maxWidth="xs" fullWidth sx={{ zIndex: 10003 }}>
       <DialogTitle sx={{ fontWeight: 900 }}>동점순위 결정</DialogTitle>
       <DialogContent>
         <Typography sx={{ fontSize: 13, color: "text.secondary", lineHeight: 1.65, mb: 2 }}>

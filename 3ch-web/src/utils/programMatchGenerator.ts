@@ -394,6 +394,17 @@ function getTournamentRoundLabel(bracketSize: number, bracketRound: number) {
   return roundSize <= 2 ? "결승" : `${roundSize}강`;
 }
 
+function completeAutomaticOpeningWalkover(
+  match: LeagueMatch,
+  seeding?: "manual" | "seed" | "random",
+): LeagueMatch {
+  const hasExactlyOneParticipant = Boolean(match.participant_a_id) !== Boolean(match.participant_b_id);
+  if (seeding === "manual" || match.bracket !== "upper" || match.round_number !== 1 || !hasExactlyOneParticipant) {
+    return match;
+  }
+  return { ...match, status: "done", score_a: 0, score_b: 0 };
+}
+
 function buildTournamentMatches(
   leagueId: string,
   roundIndex: number,
@@ -478,7 +489,9 @@ function buildTournamentMatches(
     }
   }
 
-  return matches.map((match) => {
+  const seeding = forcedSeeding ?? block.tournamentSeeding;
+  return matches.map((sourceMatch) => {
+    const match = completeAutomaticOpeningWalkover(sourceMatch, seeding);
     const stageSize = bracketSize / 2 ** ((match.round_number ?? 1) - 1);
     return {
       ...match,
@@ -610,7 +623,9 @@ function buildUpperLowerTournamentMatches(
     addThirdPlaceMatch("lower", innerRounds - 1, innerRounds);
   }
 
-  return matches.map((match) => {
+  const seeding = forcedSeeding ?? block.tournamentSeeding;
+  return matches.map((sourceMatch) => {
+    const match = completeAutomaticOpeningWalkover(sourceMatch, seeding);
     const stageSize = match.bracket === "lower"
       ? bracketSize / 2 ** (match.round_number ?? 1)
       : bracketSize / 2 ** ((match.round_number ?? 1) - 1);

@@ -358,9 +358,13 @@ function MatchCard({
   const winScore = getWinScore(rules);
   const sa = match.score_a ?? 0;
   const sb = match.score_b ?? 0;
-  const aWins = winScore !== null && isDone && sa === winScore;
-  const bWins = winScore !== null && isDone && sb === winScore;
-  const canEditScore = canMember && (isPlaying || isDone);
+  const aWins = (isDone && Boolean(match.participant_a_id) && !match.participant_b_id)
+    || (winScore !== null && isDone && sa === winScore);
+  const bWins = (isDone && Boolean(match.participant_b_id) && !match.participant_a_id)
+    || (winScore !== null && isDone && sb === winScore);
+  const canEditScore = canMember
+    && Boolean(match.participant_a_id && match.participant_b_id)
+    && (isPlaying || isDone);
 
   return (
     <Card

@@ -2257,7 +2257,7 @@ export default function LeagueGPTVisionSheet() {
       storeProgramOption(id, programWithStandings);
       await saveLeagueProgram({ leagueId: id, program: programWithStandings }).unwrap();
       setTieBreakDialogOpen(false);
-      setVisionNotice({ type: "success", message: "동점 순위를 확정했습니다." });
+      setVisionNotice({ type: "success", message: "동점자 순위를 확정했습니다." });
     } catch (error) {
       setVisionNotice({ type: "error", message: getErrorMessage(error, "동점 순위 저장에 실패했습니다.") });
     } finally {

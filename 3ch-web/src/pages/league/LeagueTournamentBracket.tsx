@@ -17,6 +17,7 @@ import DownloadIcon from "@mui/icons-material/Download";
 import PrintIcon from "@mui/icons-material/Print";
 import SearchIcon from "@mui/icons-material/Search";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import {
   useGetLeagueQuery,
   useGetLeagueMatchesQuery,
@@ -58,6 +59,34 @@ const SS_W = 96;          // 슬롯 박스 너비 (이름이 잘리지 않도록
 const SS_H = 76;          // 슬롯 박스 높이 (라벨 20 + 이름 영역 + 점수 영역 24)
 const SS_GAP = 22;        // A·B 슬롯 사이 간격 — "vs" 텍스트 표시 공간
 const CO_MATCH_W = SS_W * 2 + SS_GAP;  // 매치 1개 전체 너비 = 96*2 + 22 = 214px
+
+function getProgramTypeLabel(type?: string) {
+  if (type === "SINGLES") return "단식";
+  if (type === "DOUBLES") return "복식";
+  if (type === "TEAM") return "단체전";
+  return "";
+}
+
+function getProgramFormatLabel(format?: string) {
+  if (format === "LEAGUE") return "단일리그";
+  if (format === "GROUP") return "조별리그";
+  if (format === "TOURNAMENT") return "토너먼트";
+  return "";
+}
+
+function getProgramRuleLabel(rule?: string | null) {
+  if (rule === "BEST_OF_3" || rule?.includes("3전 2선승")) return "3전 2선승제";
+  if (rule === "BEST_OF_5" || rule?.includes("5전 3선승")) return "5전 3선승제";
+  if (rule === "THREE_SET" || rule?.includes("3세트")) return "3세트제";
+  return rule ?? "";
+}
+
+function getRuleDescription(rule?: string | null) {
+  if (rule === "BEST_OF_3" || rule?.includes("3전 2선승")) return "세 번의 경기 중 두 번을 먼저 이기면 승리합니다.";
+  if (rule === "BEST_OF_5" || rule?.includes("5전 3선승")) return "다섯 번의 경기 중 세 번을 먼저 이기면 승리합니다.";
+  if (rule === "THREE_SET" || rule?.includes("3세트")) return "세 번의 경기를 모두 진행하며, 양 선수의 세트스코어 합이 3이 되면 종료됩니다.";
+  return "경기 규칙에 따라 세트스코어를 입력합니다.";
+}
 
 // ─── 표준 토너먼트 시드 배치 ────────────────────────────────────────────────
 /**
@@ -861,6 +890,10 @@ export default function LeagueTournamentBracket() {
     [isProgramMode, id, programData],
   );
   const programBlock = isProgramMode ? programOption?.blocks?.[programRound - 1] : undefined;
+  const headerRule = programBlock?.matchRule ?? league?.rules;
+  const headerSummary = isProgramMode && programBlock
+    ? `${programRound}라운드 ${getProgramTypeLabel(programBlock.type)} ${getProgramFormatLabel(programBlock.format)} │ ${getProgramRuleLabel(headerRule)}`
+    : league ? `${league.type} ${league.format ?? ""} │ ${league.rules ?? ""}` : "";
   const isManualProgramSeeding = programBlock?.tournamentSeeding === "manual";
   const programSourceMatches = useMemo(() => {
     if (!isProgramMode || !id || !programOption) return matchesData?.matches ?? [];
@@ -926,7 +959,7 @@ export default function LeagueTournamentBracket() {
         score_b: serverMatch.score_b,
         court: serverMatch.court,
         status: serverMatch.status,
-        match_rule: serverMatch.match_rule ?? match.match_rule,
+        match_rule: match.match_rule ?? serverMatch.match_rule,
       };
     });
     return applyProgramTournamentAdvancement(hydratedMatches).filter((match) => match.bracket);
@@ -971,10 +1004,10 @@ export default function LeagueTournamentBracket() {
     ) return;
 
     const generatedKey = allProgramMatches
-      .map((match) => `${match.id}:${match.participant_a_id ?? ""}:${match.participant_b_id ?? ""}`)
+      .map((match) => `${match.id}:${match.participant_a_id ?? ""}:${match.participant_b_id ?? ""}:${match.match_rule ?? ""}`)
       .join("|");
     const serverKey = serverProgramMatches
-      .map((match) => `${match.id}:${match.participant_a_id ?? ""}:${match.participant_b_id ?? ""}`)
+      .map((match) => `${match.id}:${match.participant_a_id ?? ""}:${match.participant_b_id ?? ""}:${match.match_rule ?? ""}`)
       .join("|");
     if (serverProgramMatches.length === allProgramMatches.length && generatedKey === serverKey) return;
     if (programSyncKeyRef.current === generatedKey) return;
@@ -1342,10 +1375,24 @@ export default function LeagueTournamentBracket() {
           <ChevronLeftIcon />
         </IconButton>
 
-        <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Box sx={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 0.25 }}>
           <Typography sx={{ fontSize: 11, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {league ? `${formatLeagueDate(league.start_date)} / ${league.type} ${league.format ?? ""}` : ""}
+            {league ? `${formatLeagueDate(league.start_date)} │ ${headerSummary}` : ""}
           </Typography>
+          <Tooltip
+            title={(
+              <Box sx={{ py: 0.5 }}>
+                <Typography sx={{ fontSize: 12, fontWeight: 800, color: "inherit" }}>{getProgramRuleLabel(headerRule)}</Typography>
+                <Typography sx={{ mt: 0.25, fontSize: 11, lineHeight: 1.5, color: "inherit" }}>{getRuleDescription(headerRule)}</Typography>
+              </Box>
+            )}
+            arrow
+            slotProps={{ popper: { sx: { zIndex: 10001 } } }}
+          >
+            <IconButton size="small" sx={{ flexShrink: 0, p: 0.25 }}>
+              <InfoOutlinedIcon sx={{ fontSize: 16, color: "#9CA3AF" }} />
+            </IconButton>
+          </Tooltip>
         </Box>
 
         {isDoubleElim && (

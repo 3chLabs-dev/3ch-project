@@ -621,7 +621,7 @@ export default function LeagueMatchOrder() {
         score_b: serverMatch.score_b,
         court: serverMatch.court,
         status: serverMatch.status,
-        match_rule: serverMatch.match_rule ?? match.match_rule,
+        match_rule: match.match_rule ?? serverMatch.match_rule,
       };
     });
     return applyProgramTournamentAdvancement(hydratedMatches)
@@ -1093,8 +1093,8 @@ export default function LeagueMatchOrder() {
       )
     ) return;
 
-    const syncKey = `${leagueId}-${programRound}-${matchesToSync.map((match) => `${match.id}:${match.participant_a_id ?? ""}:${match.participant_b_id ?? ""}`).join("|")}`;
-    const serverKey = `${leagueId}-${programRound}-${serverProgramMatches.map((match) => `${match.id}:${match.participant_a_id ?? ""}:${match.participant_b_id ?? ""}`).join("|")}`;
+    const syncKey = `${leagueId}-${programRound}-${matchesToSync.map((match) => `${match.id}:${match.participant_a_id ?? ""}:${match.participant_b_id ?? ""}:${match.match_rule ?? ""}`).join("|")}`;
+    const serverKey = `${leagueId}-${programRound}-${serverProgramMatches.map((match) => `${match.id}:${match.participant_a_id ?? ""}:${match.participant_b_id ?? ""}:${match.match_rule ?? ""}`).join("|")}`;
     if (serverProgramMatches.length > 0 && serverKey === syncKey) return;
     if (programSyncCalledRef.current === syncKey) return;
     programSyncCalledRef.current = syncKey;

@@ -1176,7 +1176,7 @@ export default function LeagueGPTVisionSheet() {
             score_b: serverMatch.score_b,
             court: serverMatch.court,
             status: serverMatch.status,
-            match_rule: serverMatch.match_rule ?? match.match_rule,
+            match_rule: match.match_rule ?? serverMatch.match_rule,
           }
         : match;
     });

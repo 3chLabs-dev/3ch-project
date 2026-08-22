@@ -122,16 +122,16 @@ function getMatchResultParticipant(match: LeagueMatch | undefined, winner: boole
   return { name, division: slot === "a" ? match.participant_a_division : match.participant_b_division };
 }
 
-function RankingSummary({ title, rankings, color, borderColor, left, top }: {
+function RankingSummary({ title, rankings, rankLabels, color, borderColor, left, top }: {
   title: string; rankings: Array<RankedParticipant | null>; color: string;
-  borderColor: string; left: number; top: number;
+  rankLabels?: number[]; borderColor: string; left: number; top: number;
 }) {
   return (
     <Box sx={{ position: "absolute", left, top, width: 150, height: CO_WINNER_H, bgcolor: "rgba(255,255,255,0.96)", border: `1px solid ${borderColor}`, borderRadius: "8px", overflow: "hidden", boxShadow: "0 2px 6px rgba(15,23,42,0.06)" }}>
       <Typography sx={{ height: 18, display: "flex", alignItems: "center", px: 1, fontSize: 8, fontWeight: 900, color, bgcolor: `${color}0D` }}>{title}</Typography>
       {rankings.map((participant, index) => (
         <Box key={index} sx={{ height: 13.5, px: 1, display: "flex", alignItems: "center", gap: 0.6, borderTop: index ? "1px solid #F1F5F9" : 0 }}>
-          <Typography sx={{ width: 14, fontSize: 8, fontWeight: 900, color }}>{index + 1}위</Typography>
+          <Typography sx={{ width: 14, fontSize: 8, fontWeight: 900, color }}>{rankLabels?.[index] ?? index + 1}위</Typography>
           <Typography sx={{ minWidth: 0, fontSize: 8, fontWeight: 700, color: participant ? "#334155" : "#94A3B8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {participant ? `${participant.division ? `${participant.division} ` : ""}${participant.name}` : "-"}
           </Typography>
@@ -1217,22 +1217,31 @@ export default function LeagueTournamentBracket() {
     [matches, isDoubleElim],
   );
 
-  const { standardFinalPos, standardRankings } = useMemo(() => {
-    if (isDoubleElim) return { standardFinalPos: null, standardRankings: [] };
+  const { standardFinalPos, standardRankings, standardRankLabels } = useMemo(() => {
+    if (isDoubleElim) return { standardFinalPos: null, standardRankings: [], standardRankLabels: [] };
     const finalMatch = matches
       .filter((match) => (!match.bracket || match.bracket === "upper") && !match.match_label?.includes("3·4위전"))
       .reduce<LeagueMatch | null>((latest, match) =>
         !latest || (match.round_number ?? 0) > (latest.round_number ?? 0) ? match : latest, null);
     const thirdPlaceMatch = matches.find((match) =>
       (!match.bracket || match.bracket === "upper") && match.match_label?.includes("3·4위전"));
+    const semifinalLosers = finalMatch && !thirdPlaceMatch
+      ? matches
+          .filter((match) => match.next_match_id === finalMatch.id)
+          .sort((left, right) => left.match_order - right.match_order)
+          .map((match) => getMatchResultParticipant(match, false))
+          .slice(0, 2)
+      : [];
     return {
       standardFinalPos: finalMatch ? positions.find((position) => position.id === finalMatch.id) ?? null : null,
       standardRankings: [
         getMatchResultParticipant(finalMatch ?? undefined, true),
         getMatchResultParticipant(finalMatch ?? undefined, false),
-        getMatchResultParticipant(thirdPlaceMatch, true),
-        getMatchResultParticipant(thirdPlaceMatch, false),
+        ...(thirdPlaceMatch
+          ? [getMatchResultParticipant(thirdPlaceMatch, true), getMatchResultParticipant(thirdPlaceMatch, false)]
+          : semifinalLosers),
       ],
+      standardRankLabels: thirdPlaceMatch ? [1, 2, 3, 4] : [1, 2, 3, 3],
     };
   }, [isDoubleElim, matches, positions]);
 
@@ -1434,6 +1443,7 @@ export default function LeagueTournamentBracket() {
                 <RankingSummary
                   title="최종 순위"
                   rankings={standardRankings}
+                  rankLabels={standardRankLabels}
                   color="#2563EB"
                   borderColor="#BFDBFE"
                   left={standardFinalPos.x + MW + 24}

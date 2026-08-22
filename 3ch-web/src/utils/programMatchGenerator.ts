@@ -1362,6 +1362,16 @@ function buildSingleLeagueRankPlaceholderPool(
   return [placeholders];
 }
 
+function buildTournamentRankPlaceholderPool(sourceRound: number, advanceCount: number): MatchUnit[][] {
+  return [Array.from({ length: advanceCount }, (_, index) => ({
+    id: `placeholder-tournament-r${sourceRound}-rank-${index + 1}`,
+    name: `${sourceRound}라운드 ${index + 1}위`,
+    division: null,
+    level: index + 1,
+    seedLabel: String(index + 1),
+  }))];
+}
+
 export function getStoredProgramOption(leagueId: string): ProgramOption | null {
   try {
     const raw = localStorage.getItem(`league-program-${leagueId}`);
@@ -1591,7 +1601,9 @@ export function generateProgramRoundMatches(
       ? buildRankPlaceholderPools(previousGroupSizes)
       : previousBlock?.format === "LEAGUE"
         ? buildSingleLeagueRankPlaceholderPool(matchUnits.length)
-        : null
+        : previousBlock?.format === "TOURNAMENT"
+          ? buildTournamentRankPlaceholderPool(sourceRound, advanceCount)
+          : null
     : null;
   const finalPools = rankedPools ?? placeholderPools;
   const selectedFinalUnits = finalPools
@@ -1613,7 +1625,7 @@ export function generateProgramRoundMatches(
         ? [crossGroupSeedOrder]
         : qualifiedPools?.length
           ? distributeRankedUnitPoolsToBrackets(qualifiedPools, bracketCount)
-          : splitTournamentUnits(matchUnits, bracketCount);
+          : [];
       return withoutDeleted(tournamentBrackets.flatMap((bracketPlayers, bracketIndex) =>
         tournamentBuilder(
           leagueId,

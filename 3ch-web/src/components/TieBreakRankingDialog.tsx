@@ -10,8 +10,8 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-import RemoveIcon from "@mui/icons-material/Remove";
+import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
+import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import type { LeagueParticipantItem } from "../features/league/leagueApi";
 
 interface TieBreakRankingDialogProps {
@@ -65,7 +65,7 @@ export default function TieBreakRankingDialog({
 
   return (
     <Dialog open={open} onClose={saving ? undefined : handleClose} maxWidth="xs" fullWidth sx={{ zIndex: 10003 }}>
-      <DialogTitle sx={{ fontWeight: 900 }}>동점순위 결정</DialogTitle>
+      <DialogTitle sx={{ fontWeight: 900 }}>동점자 순위 결정</DialogTitle>
       <DialogContent>
         <Typography sx={{ fontSize: 13, color: "text.secondary", lineHeight: 1.65, mb: 2 }}>
           동점자 간 세트 득실이 같을 경우 부수가 낮은 참가자가 높은 순위가 되며,
@@ -107,10 +107,10 @@ export default function TieBreakRankingDialog({
                 </Box>
                 <Stack direction="row" spacing={0.5}>
                   <IconButton size="small" disabled={!canMoveUp || saving} onClick={() => move(index, -1)} aria-label={`${player.name} 순위 올리기`}>
-                    <RemoveIcon fontSize="small" />
+                    <ArrowUpwardIcon fontSize="small" />
                   </IconButton>
                   <IconButton size="small" disabled={!canMoveDown || saving} onClick={() => move(index, 1)} aria-label={`${player.name} 순위 내리기`}>
-                    <AddIcon fontSize="small" />
+                    <ArrowDownwardIcon fontSize="small" />
                   </IconButton>
                 </Stack>
               </Box>

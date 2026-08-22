@@ -44,6 +44,7 @@ import ReactCrop, { type Crop, type PixelCrop } from "react-image-crop";
 import "react-image-crop/dist/ReactCrop.css";
 import QRCode from "react-qr-code";
 import { formatLeagueDate } from "../../utils/dateUtils";
+import { calculateRoundRobinStandings } from "../../utils/roundRobinStandings";
 import {
   applyProgramMatchState,
   generateProgramRoundMatches,
@@ -71,6 +72,7 @@ import { useGetGroupDetailQuery } from "../../features/group/groupApi";
 import { useGetMyFeatureUsageQuery } from "../../features/payment/usageApi";
 import { useAppSelector } from "../../app/hooks";
 import { isLocalDevToken } from "../../utils/localDevAuth";
+import TieBreakRankingDialog from "../../components/TieBreakRankingDialog";
 
 // ─── 색상 상수 ────────────────────────────────────────────────────────────────
 // 매직 컬러 문자열을 한 곳에서 관리. 디자인 변경 시 여기만 수정하면 됨
@@ -653,7 +655,7 @@ const SortableBracketRow = memo(function SortableBracketRow({
  *
  * tieSetDiffs: 동점 그룹에 속한 참가자만 "득/실" 형식으로 반환, 나머지는 빈 문자열
  */
-function useMatchStats(localOrder: LeagueParticipantItem[], matches: LeagueMatch[], rules?: string | null) {
+function useLegacyMatchStats(localOrder: LeagueParticipantItem[], matches: LeagueMatch[], rules?: string | null) {
   // 3세트제인지 확인
   const isThreeSetRule = rules === "3세트제";
   // 1단계: 참가자별 승/패 + 세트 합계 집계
@@ -859,6 +861,19 @@ function useMatchStats(localOrder: LeagueParticipantItem[], matches: LeagueMatch
   }, [playerStats, localOrder, matches, isThreeSetRule]);
 
   return { playerStats, rankings, tieSetDiffs };
+}
+void useLegacyMatchStats;
+
+function useMatchStats(
+  localOrder: LeagueParticipantItem[],
+  matches: LeagueMatch[],
+  rules?: string | null,
+  manualParticipantOrder: string[] = [],
+) {
+  return useMemo(
+    () => calculateRoundRobinStandings(localOrder, matches, rules, manualParticipantOrder),
+    [localOrder, manualParticipantOrder, matches, rules],
+  );
 }
 
 // ─── 경기 순서 패널 ───────────────────────────────────────────────────────────
@@ -1169,6 +1184,9 @@ export default function LeagueGPTVisionSheet() {
   const [updateMatch] = useUpdateLeagueMatchMutation();
   const [scanVision, { isLoading: isScanning }] = useScanLeagueOpenAIVisionMutation();
   const [resultDialogOpen, setResultDialogOpen] = useState(false);
+  const [tieBreakDialogOpen, setTieBreakDialogOpen] = useState(false);
+  const [isSavingTieBreak, setIsSavingTieBreak] = useState(false);
+  const [localTieBreakOrder, setLocalTieBreakOrder] = useState<string[] | null>(null);
   const [visionTargetRegion, setVisionTargetRegion] = useState<VisionTargetRegion>("all");
   const [visionTargetRowRange, setVisionTargetRowRange] = useState<{ startRow: number; endRow: number } | null>(null);
   const [inlineOverlayRects, setInlineOverlayRects] = useState<Record<string, OverlayRect | undefined>>({});
@@ -2196,7 +2214,56 @@ export default function LeagueGPTVisionSheet() {
     }
   };
 
-  const { playerStats, rankings, tieSetDiffs } = useMatchStats(localOrder, matches, currentRule);
+  const savedTieBreakOrder = useMemo(
+    () => programOption?.roundTieBreaks?.find(
+      (tieBreak) => tieBreak.round === programRound && tieBreak.poolLabel === selectedGroup,
+    )?.participantIds ?? [],
+    [programOption?.roundTieBreaks, programRound, selectedGroup],
+  );
+  useEffect(() => {
+    setLocalTieBreakOrder(null);
+    setTieBreakDialogOpen(false);
+  }, [programRound, selectedGroup]);
+  const manualTieBreakOrder = localTieBreakOrder ?? savedTieBreakOrder;
+  const {
+    playerStats,
+    rankings,
+    tieSetDiffs,
+    unresolvedTieGroups,
+    rankingOrder,
+  } = useMatchStats(localOrder, matches, currentRule, manualTieBreakOrder);
+
+  const handleSaveTieBreak = useCallback(async (participantIds: string[]) => {
+    if (!id || !programOption || !selectedGroup) return;
+    setIsSavingTieBreak(true);
+    try {
+      const remaining = (programOption.roundTieBreaks ?? []).filter(
+        (tieBreak) => !(tieBreak.round === programRound && tieBreak.poolLabel === selectedGroup),
+      );
+      const nextProgram = {
+        ...programOption,
+        roundTieBreaks: [
+          ...remaining,
+          {
+            round: programRound,
+            poolLabel: selectedGroup,
+            participantIds,
+            updatedAt: new Date().toISOString(),
+          },
+        ],
+      };
+      const programWithStandings = withProgramRoundStandingsSnapshot(nextProgram, programRound, matches);
+      setLocalTieBreakOrder(participantIds);
+      storeProgramOption(id, programWithStandings);
+      await saveLeagueProgram({ leagueId: id, program: programWithStandings }).unwrap();
+      setTieBreakDialogOpen(false);
+      setVisionNotice({ type: "success", message: "동점 순위를 확정했습니다." });
+    } catch (error) {
+      setVisionNotice({ type: "error", message: getErrorMessage(error, "동점 순위 저장에 실패했습니다.") });
+    } finally {
+      setIsSavingTieBreak(false);
+    }
+  }, [id, matches, programOption, programRound, saveLeagueProgram, selectedGroup]);
 
   // ── 로딩 / 빈 상태 ───────────────────────────────────────────────────────
   if (leagueLoading || participantsLoading) {
@@ -2634,6 +2701,17 @@ export default function LeagueGPTVisionSheet() {
               결과 등록
             </Box>
           </Box>
+          {canScore && isProgramMode && selectedGroup && unresolvedTieGroups.length > 0 ? (
+            <Box
+              component="button"
+              type="button"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={() => setTieBreakDialogOpen(true)}
+              sx={{ appearance: "none", border: 0, borderRadius: 2, color: "#fff", fontSize: 12, fontWeight: 900, bgcolor: "#EA580C", minWidth: 104, height: 32, whiteSpace: "nowrap", cursor: "pointer", ...(landscape ? {} : { transform: "rotate(90deg)", mt: 4 }), "&:hover": { bgcolor: "#C2410C" } }}
+            >
+              동점순위 결정
+            </Box>
+          ) : null}
         </Box>
 
         {/* 플로팅 버튼들 (position: absolute, wrapperRef 기준 → 스크롤 영역 위에 고정) */}
@@ -2710,6 +2788,16 @@ export default function LeagueGPTVisionSheet() {
       <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" hidden onChange={handleVisionFile} />
       <input ref={fileInputRef} type="file" accept="image/*,.jpg,.jpeg,.png,.heic,.heif,.webp" hidden onChange={handleVisionFile} />
       <input ref={galleryInputRef} type="file" accept="image/*" hidden onChange={handleVisionFile} />
+
+      <TieBreakRankingDialog
+        open={tieBreakDialogOpen}
+        players={localOrder}
+        rankingOrder={rankingOrder}
+        unresolvedTieGroups={unresolvedTieGroups}
+        saving={isSavingTieBreak}
+        onClose={() => setTieBreakDialogOpen(false)}
+        onSave={handleSaveTieBreak}
+      />
 
       <Dialog open={resultDialogOpen} onClose={() => !isScanning && setResultDialogOpen(false)} maxWidth="xs" fullWidth sx={{ zIndex: 10002 }} slotProps={{ paper: { sx: { borderRadius: 3, overflow: "hidden", width: "min(360px, calc(100% - 48px))", ...mobileDialogPaperSx } } }}>
         <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 16, fontWeight: 900, pl: 2.5, pr: 1, py: 1.25 }}>

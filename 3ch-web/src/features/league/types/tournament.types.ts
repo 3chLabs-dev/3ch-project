@@ -85,6 +85,14 @@ export interface ProgramOption {
   isOverTime: boolean;
   rounds?: RoundConfig[];
   roundStandings?: ProgramRoundStandingsSnapshot[];
+  roundTieBreaks?: ProgramRoundTieBreak[];
+}
+
+export interface ProgramRoundTieBreak {
+  round: number;
+  poolLabel: string;
+  participantIds: string[];
+  updatedAt: string;
 }
 
 export interface ProgramRoundStandingPool {

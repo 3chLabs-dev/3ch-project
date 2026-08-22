@@ -644,6 +644,7 @@ function getRankedPlayersFromPreviousRound(
   sourceMatches: LeagueMatch[],
   previousRound: number,
   matchRule?: string | null,
+  manualParticipantOrder?: string[],
 ): ProgramPlayer[] | null {
   const previousMatches = sourceMatches.filter(
     (match) =>
@@ -660,6 +661,19 @@ function getRankedPlayersFromPreviousRound(
 
   const playerById = new Map(players.map((player) => [player.id, player]));
   const playerIndex = new Map(players.map((player, index) => [player.id, index]));
+  const manualIndex = new Map((manualParticipantOrder ?? []).map((id, index) => [id, index]));
+  const divisionNumber = (player: ProgramPlayer) => {
+    const parsed = Number.parseInt(String(player.division ?? "").replace(/[^0-9]/g, ""), 10);
+    return Number.isFinite(parsed) ? parsed : Number.MIN_SAFE_INTEGER;
+  };
+  const compareFinalTieBreak = (left: ProgramPlayer, right: ProgramPlayer) => {
+    const divisionDiff = divisionNumber(right) - divisionNumber(left);
+    if (divisionDiff !== 0) return divisionDiff;
+    const manualDiff = (manualIndex.get(left.id) ?? Number.MAX_SAFE_INTEGER)
+      - (manualIndex.get(right.id) ?? Number.MAX_SAFE_INTEGER);
+    if (manualDiff !== 0) return manualDiff;
+    return (playerIndex.get(left.id) ?? 0) - (playerIndex.get(right.id) ?? 0);
+  };
   const stats = new Map<string, { wins: number; losses: number; setTotal: number; played: number }>();
   players.forEach((player) => stats.set(player.id, { wins: 0, losses: 0, setTotal: 0, played: 0 }));
 
@@ -736,7 +750,7 @@ function getRankedPlayersFromPreviousRound(
       const rightTieWon = tieWon.get(right.id) ?? 0;
       if (leftTieWon !== rightTieWon) return rightTieWon - leftTieWon;
       if (leftTieLost !== rightTieLost) return leftTieLost - rightTieLost;
-      return (playerIndex.get(left.id) ?? 0) - (playerIndex.get(right.id) ?? 0);
+      return compareFinalTieBreak(left, right);
     }
 
     if (leftStats.wins !== rightStats.wins) return rightStats.wins - leftStats.wins;
@@ -744,7 +758,7 @@ function getRankedPlayersFromPreviousRound(
     const rightRatio = rightTieLost === 0 ? Infinity : (tieWon.get(right.id) ?? 0) / rightTieLost;
     if (leftRatio !== rightRatio) return rightRatio - leftRatio;
 
-    return (playerIndex.get(left.id) ?? 0) - (playerIndex.get(right.id) ?? 0);
+    return compareFinalTieBreak(left, right);
   });
 }
 
@@ -990,6 +1004,9 @@ export function buildProgramRoundStandingsSnapshot(
         labelMatches,
         round,
         block.matchRule,
+        option.roundTieBreaks?.find(
+          (tieBreak) => tieBreak.round === round && tieBreak.poolLabel === label,
+        )?.participantIds,
       );
 
       return {

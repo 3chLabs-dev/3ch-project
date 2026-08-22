@@ -34,11 +34,14 @@ import DownloadIcon from "@mui/icons-material/Download";
 import PrintIcon from "@mui/icons-material/Print";
 import QRCode from "react-qr-code";
 import { formatLeagueDate } from "../../utils/dateUtils";
+import { calculateRoundRobinStandings } from "../../utils/roundRobinStandings";
 import {
   applyProgramMatchState,
   generateProgramRoundMatches,
   getStoredProgramOption,
   saveProgramMatchPatch,
+  storeProgramOption,
+  withProgramRoundStandingsSnapshot,
   type ProgramMatchPatch,
 } from "../../utils/programMatchGenerator";
 import {
@@ -55,6 +58,7 @@ import {
 } from "../../features/league/leagueApi";
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
 import { useAppSelector } from "../../app/hooks";
+import TieBreakRankingDialog from "../../components/TieBreakRankingDialog";
 
 // ─── 색상 상수 ────────────────────────────────────────────────────────────────
 // 매직 컬러 문자열을 한 곳에서 관리. 디자인 변경 시 여기만 수정하면 됨
@@ -611,7 +615,7 @@ const SortableBracketRow = memo(function SortableBracketRow({
  *
  * tieSetDiffs: 동점 그룹에 속한 참가자만 "득/실" 형식으로 반환, 나머지는 빈 문자열
  */
-function useMatchStats(localOrder: LeagueParticipantItem[], matches: LeagueMatch[], rules?: string | null) {
+function useLegacyMatchStats(localOrder: LeagueParticipantItem[], matches: LeagueMatch[], rules?: string | null) {
   // 3세트제인지 확인
   const isThreeSetRule = rules === "3세트제";
   // 1단계: 참가자별 승/패 + 세트 합계 집계
@@ -818,6 +822,19 @@ function useMatchStats(localOrder: LeagueParticipantItem[], matches: LeagueMatch
 
   return { playerStats, rankings, tieSetDiffs };
 }
+void useLegacyMatchStats;
+
+function useMatchStats(
+  localOrder: LeagueParticipantItem[],
+  matches: LeagueMatch[],
+  rules?: string | null,
+  manualParticipantOrder: string[] = [],
+) {
+  return useMemo(
+    () => calculateRoundRobinStandings(localOrder, matches, rules, manualParticipantOrder),
+    [localOrder, manualParticipantOrder, matches, rules],
+  );
+}
 
 // ─── 경기 순서 패널 ───────────────────────────────────────────────────────────
 /**
@@ -970,6 +987,9 @@ export default function LeagueBracket() {
   const currentProgramRound = isProgramMode ? programOption?.rounds?.[programRound - 1] : undefined;
   const currentProgramBlock = isProgramMode ? programOption?.blocks?.[programRound - 1] : undefined;
   const currentRule = currentProgramBlock?.matchRule ?? league?.rules;
+  const [tieBreakDialogOpen, setTieBreakDialogOpen] = useState(false);
+  const [isSavingTieBreak, setIsSavingTieBreak] = useState(false);
+  const [localTieBreakOrder, setLocalTieBreakOrder] = useState<string[] | null>(null);
   const [programMatchStateVersion, setProgramMatchStateVersion] = useState(0);
   const programSourceMatches = useMemo(() => {
     if (!isProgramMode || !id || !programOption) return matchData?.matches ?? [];
@@ -1633,7 +1653,55 @@ export default function LeagueBracket() {
     return map;
   }, [matches]);
 
-  const { playerStats, rankings, tieSetDiffs } = useMatchStats(localOrder, matches, currentRule);
+  const savedTieBreakOrder = useMemo(
+    () => programOption?.roundTieBreaks?.find(
+      (tieBreak) => tieBreak.round === programRound && tieBreak.poolLabel === selectedGroup,
+    )?.participantIds ?? [],
+    [programOption?.roundTieBreaks, programRound, selectedGroup],
+  );
+  useEffect(() => {
+    setLocalTieBreakOrder(null);
+    setTieBreakDialogOpen(false);
+  }, [programRound, selectedGroup]);
+  const manualTieBreakOrder = localTieBreakOrder ?? savedTieBreakOrder;
+  const {
+    playerStats,
+    rankings,
+    tieSetDiffs,
+    unresolvedTieGroups,
+    rankingOrder,
+  } = useMatchStats(localOrder, matches, currentRule, manualTieBreakOrder);
+
+  const handleSaveTieBreak = useCallback(async (participantIds: string[]) => {
+    if (!id || !programOption || !selectedGroup) return;
+    setIsSavingTieBreak(true);
+    try {
+      const remaining = (programOption.roundTieBreaks ?? []).filter(
+        (tieBreak) => !(tieBreak.round === programRound && tieBreak.poolLabel === selectedGroup),
+      );
+      const nextProgram = {
+        ...programOption,
+        roundTieBreaks: [
+          ...remaining,
+          {
+            round: programRound,
+            poolLabel: selectedGroup,
+            participantIds,
+            updatedAt: new Date().toISOString(),
+          },
+        ],
+      };
+      const programWithStandings = withProgramRoundStandingsSnapshot(nextProgram, programRound, matches);
+      setLocalTieBreakOrder(participantIds);
+      storeProgramOption(id, programWithStandings);
+      await saveLeagueProgram({ leagueId: id, program: programWithStandings }).unwrap();
+      setTieBreakDialogOpen(false);
+    } catch {
+      window.alert("동점 순위 저장에 실패했습니다.");
+    } finally {
+      setIsSavingTieBreak(false);
+    }
+  }, [id, matches, programOption, programRound, saveLeagueProgram, selectedGroup]);
 
   // ── 로딩 / 빈 상태 ───────────────────────────────────────────────────────
   if (leagueLoading || participantsLoading) {
@@ -1949,6 +2017,16 @@ export default function LeagueBracket() {
                 결과 등록
               </Box>
             </Box>
+            {isProgramMode && selectedGroup && unresolvedTieGroups.length > 0 ? (
+              <Button
+                variant="contained"
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={() => setTieBreakDialogOpen(true)}
+                sx={{ minWidth: 104, height: 32, px: 1, bgcolor: "#EA580C", fontSize: 11, fontWeight: 900, whiteSpace: "nowrap", "&:hover": { bgcolor: "#C2410C" } }}
+              >
+                동점순위 결정
+              </Button>
+            ) : null}
           </Box>
         )}
 
@@ -1996,6 +2074,15 @@ export default function LeagueBracket() {
       </Box>{/* /wrapperRef */}
         </Box>
       </Box>
+      <TieBreakRankingDialog
+        open={tieBreakDialogOpen}
+        players={localOrder}
+        rankingOrder={rankingOrder}
+        unresolvedTieGroups={unresolvedTieGroups}
+        saving={isSavingTieBreak}
+        onClose={() => setTieBreakDialogOpen(false)}
+        onSave={handleSaveTieBreak}
+      />
     </Box>,
     document.body
   );

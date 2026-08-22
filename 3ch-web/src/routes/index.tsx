@@ -79,6 +79,7 @@ import BillingSuccess from "../pages/payment/BillingSuccess.tsx";
 import BillingFail from "../pages/payment/BillingFail.tsx";
 import TermsPage from "../pages/mypage/TermsPage.tsx";
 import PrivacyPolicyPage from "../pages/mypage/PrivacyPolicyPage.tsx";
+import LicensePage from "../pages/mypage/LicensePage.tsx";
 import DemoLandingPage from "../pages/demo/DemoLandingPage";
 import AdminSupportChatPage from "../pages/admin/AdminSupportChatPage";
 import LeagueAlgorithmDemo from "../pages/demo/LeagueAlgorithmDemo";
@@ -145,6 +146,7 @@ export const router = createBrowserRouter([
       { path: "/mypage/donate", element: <DonatePage />},
       { path: "/mypage/terms", element: <TermsPage />},
       { path: "/mypage/privacy", element: <PrivacyPolicyPage />},
+      { path: "/mypage/license", element: <LicensePage />},
       { path: "/mypage/inquiry", element: <InquiryPage />},
       { path: "/mypage/faq", element: <FaqPage />},
       { path: "/mypage/guide", element: <GuidePage />},

@@ -11,7 +11,6 @@ import Stack from "@mui/material/Stack";
 import Alert from "@mui/material/Alert";
 import { styled } from "@mui/material/styles";
 import AppTheme from "../shared-theme/AppTheme";
-import { GoogleIcon } from "../../components/CustomIcons";
 import { Link as RouterLink } from "react-router-dom";
 import googleAuth from "../util/googleAuth";
 import kakaoAuth from "../util/kakaoAuth";
@@ -23,8 +22,9 @@ import { setToken, setUser } from "../../features/auth/authSlice";
 import { getLocalDevLogin } from "../../utils/localDevAuth";
 
 const emailIcon = "/free-icon-email-5812886.png";
-const kakaoIcon = "/free-icon-kakao-talk-3991999.png";
-const naverIcon = "/naver-icon.png";
+const googleIcon = "/images/social/login_icon_google.png";
+const kakaoIcon = "/images/social/login_icon_kakao.png";
+const naverIcon = "/images/social/login_icon_naver.png";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
 const SOCIAL_AUTH_RESULT_KEY = "socialAuthResult";
@@ -460,20 +460,12 @@ try {
               disableElevation
               sx={{
                 ...socialBtnSx,
-                borderColor: "#cfcfcf",
-                color: "#111",
-                backgroundColor: "#fff",
-                backgroundImage: "none !important",
-                boxShadow: "none !important",
+                ...forceSolid("#F2F2F2", "#F2F2F2", "#111"),
                 p: 0,
-                "&:hover": {
-                backgroundColor: "#fff",   // 살짝 회색
-                boxShadow: "none",
-              },
               }}
             >
               <SocialBtnInner
-                icon={<GoogleIcon sx={{ fontSize: 26 }} />}
+                icon={<SocialIcon src={googleIcon} alt="google" />}
                 label="구글로 시작하기"
               />
             </Button>
@@ -486,7 +478,7 @@ try {
               disableElevation
               sx={{
                 ...socialBtnSx,
-                ...forceSolid("#FFEB3B", "#FFEB3B", "#111"),
+                ...forceSolid("#FEE500", "#FEE500", "#111"),
                 p: 0,
               }}
             >
@@ -504,7 +496,7 @@ try {
               disableElevation
               sx={{
                 ...socialBtnSx,
-                ...forceSolid("#00C63B", "#00C63B", "#fff"),
+                ...forceSolid("#03C75A", "#03C75A", "#fff"),
                 p: 0,
               }}
             >

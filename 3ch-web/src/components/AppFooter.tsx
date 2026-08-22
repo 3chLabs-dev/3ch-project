@@ -3,10 +3,10 @@ import { Box, Collapse, IconButton, Link, Stack, Typography } from "@mui/materia
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 
 const socialLinks = [
-    { label: "카카오톡", href: "http://pf.kakao.com/_NSrKX", icon: "/images/social/icon_kakaotalk.png" },
-    { label: "인스타그램", href: "https://www.instagram.com/woori_league/", icon: "/images/social/icon_instagram.png" },
-    { label: "유튜브", href: "https://www.youtube.com/@woorileague", icon: "/images/social/icon_youtube.png" },
-    { label: "틱톡", href: "https://www.tiktok.com/@woori_league", icon: "/images/social/icon_tiktok.png" },
+    { label: "카카오톡", href: "http://pf.kakao.com/_NSrKX", icon: "/images/social/footer_icon_kakao.png" },
+    { label: "인스타그램", href: "https://www.instagram.com/woori_league/", icon: "/images/social/footer_icon_instagram.png" },
+    { label: "유튜브", href: "https://www.youtube.com/@woorileague", icon: "/images/social/footer_icon_youtube.png" },
+    { label: "틱톡", href: "https://www.tiktok.com/@woori_league", icon: "/images/social/footer_icon_tiktok.png" },
 ];
 
 export default function AppFooter() {

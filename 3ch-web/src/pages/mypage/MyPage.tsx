@@ -9,6 +9,7 @@ import LiveHelpOutlinedIcon from "@mui/icons-material/LiveHelpOutlined";
 import FavoriteBorderIcon from "@mui/icons-material/FavoriteBorder";
 import ArticleOutlinedIcon from "@mui/icons-material/ArticleOutlined";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
+import DataObjectOutlinedIcon from "@mui/icons-material/DataObjectOutlined";
 import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
 import CreditCardOutlinedIcon from "@mui/icons-material/CreditCardOutlined";
 import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
@@ -42,6 +43,7 @@ const SUPPORT_ITEMS = [
 const POLICY_ITEMS = [
     { label: "이용약관", to: "/mypage/terms", icon: <ArticleOutlinedIcon fontSize="small" /> },
     { label: "개인정보 처리방침", to: "/mypage/privacy", icon: <LockOutlinedIcon fontSize="small" /> },
+    { label: "라이선스 및 저작권", to: "/mypage/license", icon: <DataObjectOutlinedIcon fontSize="small" /> },
 ];
 
 export default function MyPage() {

@@ -4885,6 +4885,20 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
       targetCellSet.size > 0
         ? targetCellSet.has(`${rowIndex}__${columnIndex}`)
         : isInTargetRegion(rowIndex, columnIndex);
+    const playableCells = visionMode === 'star-grid'
+      ? participants.flatMap((rowParticipant, rowIndex) =>
+          participants.flatMap((columnParticipant, columnIndex) =>
+            rowIndex !== columnIndex
+            && isRequestedCell(rowIndex, columnIndex)
+            && matchLookup.has(visionMatchKey(rowParticipant.id, columnParticipant.id))
+              ? [{ rowIndex, columnIndex }]
+              : [],
+          ),
+        )
+      : null;
+    if (visionMode === 'star-grid' && playableCells.length === 0) {
+      return res.status(409).json({ message: '현재 복식 편성과 대진표 경기가 연결되지 않았습니다. 대진표를 다시 생성해 주세요.' });
+    }
     const usage = await consumeFeatureCredit({
       userId: usageOwnerId,
       feature: FEATURES.VISION_SCAN,
@@ -4917,17 +4931,7 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
       targetRegion,
       targetRowStart: requestedRowStart,
       targetRowEnd: requestedRowEnd,
-      playableCells: visionMode === 'star-grid'
-        ? participants.flatMap((rowParticipant, rowIndex) =>
-            participants.flatMap((columnParticipant, columnIndex) =>
-              rowIndex !== columnIndex
-              && isRequestedCell(rowIndex, columnIndex)
-              && matchLookup.has(visionMatchKey(rowParticipant.id, columnParticipant.id))
-                ? [{ rowIndex, columnIndex }]
-                : [],
-            ),
-          )
-        : null,
+      playableCells,
     });
     const parsed = openAIVisionResultSchema.parse(vision.result);
     const normalizedCells = parsed.cells.map((cell) => {

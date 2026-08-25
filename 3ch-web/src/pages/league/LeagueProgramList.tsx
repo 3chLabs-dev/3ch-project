@@ -425,6 +425,24 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
       .sort((a, b) => (a.level || Number.MAX_SAFE_INTEGER) - (b.level || Number.MAX_SAFE_INTEGER) || a.name.localeCompare(b.name));
   }, [participants]);
 
+  const hasCurrentDoublesRoster = (assignments?: FormationPlayer[][]) => {
+    if (!assignments?.length) return false;
+    const assignedPlayers = assignments.flat();
+    if (assignedPlayers.length !== Math.floor(programPlayers.length / 2) * 2) return false;
+    const availableCounts = new Map<string, number>();
+    programPlayers.forEach((player) => {
+      const key = formationPlayerId(player);
+      availableCounts.set(key, (availableCounts.get(key) ?? 0) + 1);
+    });
+    return assignedPlayers.every((player) => {
+      const key = formationPlayerId(player);
+      const remaining = availableCounts.get(key) ?? 0;
+      if (remaining === 0) return false;
+      availableCounts.set(key, remaining - 1);
+      return true;
+    });
+  };
+
   useEffect(() => {
     if (!id || !canManage || !storedProgram?.blocks?.length || participants.length === 0) return;
 
@@ -538,8 +556,8 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
   const isTeamLocked = (index: number) =>
     activeFormationBlock?.teamAssignmentLocks?.[index] ?? teamFormationMode(index) === "manual";
   const doublesResultGroups = activeFormationBlock?.type === "DOUBLES"
-    ? activeFormationBlock.doublesAssignments?.length
-      ? activeFormationBlock.doublesAssignments.map((players, index) => ({ name: `${index + 1}복식`, players }))
+    ? hasCurrentDoublesRoster(activeFormationBlock.doublesAssignments)
+      ? activeFormationBlock.doublesAssignments!.map((players, index) => ({ name: `${index + 1}복식`, players }))
       : distributeSnake(
           teamFormationPlayers,
           Array.from({ length: Math.floor(programPlayers.length / 2) }, () => 2),
@@ -774,8 +792,23 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
   const publishFormation = async (roundIndex: number, mode: "team" | "doubles" | "group") => {
     if (!storedProgram?.blocks || !canManage) return;
     const key = mode === "team" ? "teamFormationPublished" : mode === "doubles" ? "doublesFormationPublished" : "groupFormationPublished";
-    const nextBlocks = storedProgram.blocks.map((block, index) => index === roundIndex ? { ...block, [key]: true } : block);
-    const nextRounds = storedProgram.rounds?.map((round, index) => index === roundIndex ? { ...round, [key]: true } : round);
+    const block = storedProgram.blocks[roundIndex];
+    const doublesAssignments = mode === "doubles"
+      ? distributeSnake(
+          reshuffleWithinLevel(programPlayers, block?.teamShuffleSeed ?? (roundIndex + 1) * 1000 + 101),
+          Array.from({ length: Math.floor(programPlayers.length / 2) }, () => 2),
+        ).map((group) => group.players).filter((players) => players.length === 2)
+      : undefined;
+    const formationUpdates = mode === "doubles"
+      ? {
+          [key]: true,
+          doublesAssignments,
+          doublesAssignmentModes: doublesAssignments?.map(() => "auto" as const),
+          doublesAssignmentLocks: doublesAssignments?.map(() => false),
+        }
+      : { [key]: true };
+    const nextBlocks = storedProgram.blocks.map((currentBlock, index) => index === roundIndex ? { ...currentBlock, ...formationUpdates } : currentBlock);
+    const nextRounds = storedProgram.rounds?.map((round, index) => index === roundIndex ? { ...round, ...formationUpdates } : round);
     await persistFormation({ ...storedProgram, blocks: nextBlocks, ...(nextRounds ? { rounds: nextRounds } : {}) }, roundIndex, false, true);
     setFormationDialog({ roundIndex, mode });
   };
@@ -1324,7 +1357,15 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
                           <Button
                             variant="outlined"
                             size="small"
-                            onClick={() => round.doublesFormationPublished ? setFormationDialog({ roundIndex: round.round - 1, mode: "doubles" }) : void publishFormation(round.round - 1, "doubles")}
+                            onClick={() => {
+                              const roundIndex = round.round - 1;
+                              const savedAssignments = storedProgram?.blocks?.[roundIndex]?.doublesAssignments;
+                              if (round.doublesFormationPublished && hasCurrentDoublesRoster(savedAssignments)) {
+                                setFormationDialog({ roundIndex, mode: "doubles" });
+                                return;
+                              }
+                              void publishFormation(roundIndex, "doubles");
+                            }}
                             sx={{ flex: 1, height: 34, fontWeight: 700, fontSize: 12, borderRadius: 1.5, textTransform: "none", whiteSpace: "nowrap" }}
                           >
                             {round.doublesFormationPublished ? "복식 편성 결과" : "복식 편성하기"}

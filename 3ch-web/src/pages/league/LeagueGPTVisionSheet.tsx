@@ -242,7 +242,7 @@ function DivBadge({ division, aggregate = false }: { division?: string | null; a
       sx={{
         display: "inline-flex", alignItems: "center", justifyContent: "center",
         width: 20, height: 20, borderRadius: "50%",
-        bgcolor: COLOR.divBadge, color: aggregate ? "#FF0000" : "#000",
+        bgcolor: COLOR.divBadge, color: aggregate ? "#0057FF" : "#000",
         fontSize: 9, fontWeight: 900, lineHeight: 1,
         flexShrink: 0, verticalAlign: "middle",
       }}
@@ -481,6 +481,7 @@ function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, la
 interface BracketRowProps {
   participant: LeagueParticipantItem;
   teamRoster?: Array<{ name: string; division: string | null }>;
+  aggregateDivision?: boolean;
   rowIdx: number;       // 현재 행의 인덱스 (0-based)
   n: number;            // 전체 참가자 수 (첫/마지막 행 이동 비활성화에 사용)
   localOrder: LeagueParticipantItem[]; // 현재 표시 순서 (열 헤더와 동기화용)
@@ -513,7 +514,7 @@ interface BracketRowProps {
  * - 시드 번호 셀 자체가 드래그 핸들 역할을 겸함
  */
 const SortableBracketRow = memo(function SortableBracketRow({
-  participant, teamRoster, rowIdx, n, localOrder, editMode, canManage, canScore, landscape,
+  participant, teamRoster, aggregateDivision = false, rowIdx, n, localOrder, editMode, canManage, canScore, landscape,
   matchLookup, wins, losses, setTotal, rank, tieSetDiff, hasPlayed, leagueId, winScore, isMe, rules, onProgramMatchUpdate,
 }: BracketRowProps) {
   const canDrag = editMode && canManage;
@@ -578,7 +579,7 @@ const SortableBracketRow = memo(function SortableBracketRow({
         {teamRoster?.length ? (
           <Stack spacing={0.35} alignItems="center">
             <Stack direction="row" spacing={0.4} alignItems="center" justifyContent="center" flexWrap="wrap">
-              <DivBadge division={teamRoster[0]?.division} />
+              <DivBadge division={teamRoster[0]?.division} aggregate={aggregateDivision} />
               <Box component="span" sx={{ color: isMe ? COLOR.myText : "inherit", fontWeight: 800 }}>
                 {participant.name.split("\n")[0]}
               </Box>
@@ -594,7 +595,7 @@ const SortableBracketRow = memo(function SortableBracketRow({
           </Stack>
         ) : (
           <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0.4, flexWrap: "wrap" }}>
-            <DivBadge division={participant.division} />
+            <DivBadge division={participant.division} aggregate={aggregateDivision} />
             <Box
               component="span"
               sx={{
@@ -2554,6 +2555,7 @@ export default function LeagueGPTVisionSheet() {
                         key={rowPlayer.id}
                         participant={rowPlayer}
                         teamRoster={(rowPlayer as LeagueParticipantItem & { teamRoster?: Array<{ name: string; division: string | null }> }).teamRoster}
+                        aggregateDivision={isProgramTeamRound}
                         rowIdx={rowIdx}
                         n={n}
                         localOrder={localOrder}

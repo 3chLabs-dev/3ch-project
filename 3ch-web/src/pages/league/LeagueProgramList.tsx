@@ -75,6 +75,7 @@ type StoredProgramBlock = {
   roundOption?: "NONE" | "PRELIM" | "FINAL" | "UPPER" | "LOWER";
   groupSizes?: number[];
   teamGroupSizes?: number[];
+  teamFormationSizes?: number[];
   groupShuffleSeed?: number;
   teamShuffleSeed?: number;
   groupAssignments?: FormationPlayer[][];
@@ -93,6 +94,12 @@ type StoredProgramBlock = {
   teamDoublesCount?: number;
   teamPlayerCount?: number;
   inheritPreviousTeamFormation?: boolean;
+  expectedMinutes?: number;
+  matchCount?: number;
+  startMinutes?: number;
+  endMinutes?: number;
+  advanceCount?: number;
+  finalAdvancementMode?: "top-n" | "upper-lower-groups" | "rank-groups";
 };
 
 type FormationPlayer = {
@@ -178,6 +185,11 @@ function FormationEditCard({ players, index, label, locked = false, teamMode }: 
 
 type StoredProgramOption = {
   title?: string;
+  description?: string;
+  recommendationScore?: number;
+  totalBlockMatchCount?: number;
+  totalProgramMinutes?: number;
+  compositionMode?: "recommend" | "custom";
   groupSizes?: number[];
   blocks?: StoredProgramBlock[];
   rounds?: StoredProgramBlock[];
@@ -252,6 +264,11 @@ export type LeagueProgramListHandle = {
   print: () => Promise<void>;
 };
 
+const formatClockMinutes = (minutes: number) => {
+  const normalized = ((minutes % 1440) + 1440) % 1440;
+  return `${String(Math.floor(normalized / 60)).padStart(2, "0")}:${String(normalized % 60).padStart(2, "0")}`;
+};
+
 const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boolean }>(function LeagueProgramList(
   { embedded = false },
   ref,
@@ -275,6 +292,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
   const [storedProgram, setStoredProgram] = useState<StoredProgramOption | null>(null);
   const [formationDialog, setFormationDialog] = useState<{ roundIndex: number; mode: "team" | "doubles" | "group" } | null>(null);
   const [groupStructureRoundIndex, setGroupStructureRoundIndex] = useState<number | null>(null);
+  const [groupStructureMode, setGroupStructureMode] = useState<"group" | "team">("group");
   const [pendingGroupStructureSizes, setPendingGroupStructureSizes] = useState<number[]>([]);
   const [formationDraft, setFormationDraft] = useState<FormationPlayer[][]>([]);
   const [isFormationEditing, setIsFormationEditing] = useState(false);
@@ -317,6 +335,13 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
         teamFormationPublished: block.teamFormationPublished,
         doublesFormationPublished: block.doublesFormationPublished,
         groupFormationPublished: block.groupFormationPublished,
+        expectedMinutes: block.expectedMinutes ?? 0,
+        matchCount: block.matchCount ?? 0,
+        startMinutes: block.startMinutes,
+        endMinutes: block.endMinutes,
+        description: block.description,
+        advanceCount: block.advanceCount,
+        finalAdvancementMode: block.finalAdvancementMode,
       };
       })
     : [];
@@ -325,6 +350,32 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
   const seedingLabel = SEEDING_LABEL[league?.tournament_seeding ?? ""] ?? "";
   const isLoading = leagueLoading || matchesLoading || groupLoading || programLoading || participantsLoading;
 
+  const exportTotalMatches = storedProgram?.totalBlockMatchCount
+    ?? programRounds.reduce((sum, round) => sum + round.matchCount, 0);
+  const exportTotalMinutes = storedProgram?.totalProgramMinutes
+    ?? programRounds.reduce((sum, round) => sum + round.expectedMinutes, 0);
+  const exportStartMinutes = programRounds[0]?.startMinutes ?? (() => {
+    const start = league?.start_date ? new Date(league.start_date) : null;
+    return start && !Number.isNaN(start.getTime()) ? start.getHours() * 60 + start.getMinutes() : 0;
+  })();
+  const exportEndMinutes = programRounds.at(-1)?.endMinutes ?? exportStartMinutes + exportTotalMinutes;
+  const exportRentalEndMinutes = (() => {
+    const end = league?.end_date ? new Date(league.end_date) : null;
+    return end && !Number.isNaN(end.getTime()) ? end.getHours() * 60 + end.getMinutes() : exportEndMinutes;
+  })();
+  const exportPlayerSlots = storedProgram?.blocks?.reduce((sum, block) => {
+    const multiplier = block.type === "DOUBLES" ? 4 : 2;
+    return sum + (block.matchCount ?? 0) * multiplier;
+  }, 0) ?? 0;
+  const exportAverageMatches = participants.length > 0 ? (exportPlayerSlots / participants.length).toFixed(1) : "0.0";
+  const exportDurationLabel = `${Math.floor(exportTotalMinutes / 60) > 0 ? `${Math.floor(exportTotalMinutes / 60)}시간 ` : ""}${exportTotalMinutes % 60}분`;
+  const exportRentalMinutes = Math.max(exportTotalMinutes, exportRentalEndMinutes - exportStartMinutes);
+  const exportDescription = storedProgram?.description
+    || (storedProgram?.compositionMode === "custom"
+      ? "리그 운영 조건에 맞춰 직접 구성한 프로그램입니다."
+      : "경기 수와 라운드 구성, 진행시간을 고려해 만든 프로그램입니다.");
+  const exportScore = Math.max(0, Math.min(5, Math.round(storedProgram?.recommendationScore ?? 0)));
+
   useEffect(() => {
     setStoredProgram((programData?.program?.program_data as StoredProgramOption | null | undefined) ?? null);
   }, [programData]);
@@ -332,36 +383,9 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
   const renderProgramSheet = useCallback(async () => {
     const source = programExportRef.current;
     if (!source) return null;
-    const clone = source.cloneNode(true) as HTMLElement;
-    clone.querySelectorAll<HTMLElement>("button, .program-export-hidden").forEach((element) => element.remove());
-    clone.style.width = "620px";
-    clone.style.maxWidth = "none";
-    clone.style.border = "0";
-    clone.style.borderRadius = "0";
-    clone.style.boxShadow = "none";
-
-    const sheet = document.createElement("div");
-    sheet.style.cssText = [
-      "position:fixed", "top:-99999px", "left:0", "width:700px", "padding:44px 40px 52px",
-      "box-sizing:border-box", "background:#fff", "color:#111827",
-      "font-family:Pretendard,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif",
-    ].join(";");
-    const header = document.createElement("div");
-    header.style.cssText = "padding-bottom:20px;margin-bottom:20px;border-bottom:3px solid #2563EB";
-    const title = document.createElement("div");
-    title.textContent = `${league?.name ?? "리그"} 프로그램`;
-    title.style.cssText = "font-size:26px;font-weight:900;line-height:1.35";
-    const subtitle = document.createElement("div");
-    subtitle.textContent = [league?.start_date ? formatLeagueDate(league.start_date) : "", storedProgram?.title ?? ""].filter(Boolean).join(" · ");
-    subtitle.style.cssText = "margin-top:7px;font-size:13px;color:#64748B";
-    header.append(title, subtitle);
-    sheet.append(header, clone);
-    document.body.appendChild(sheet);
     const html2canvas = (await import("html2canvas")).default;
-    const canvas = await html2canvas(sheet, { scale: 2, useCORS: true, backgroundColor: "#FFFFFF" });
-    document.body.removeChild(sheet);
-    return canvas;
-  }, [league?.name, league?.start_date, storedProgram?.title]);
+    return html2canvas(source, { scale: 2, useCORS: true, backgroundColor: "#F8FAFC" });
+  }, []);
 
   const handleDownloadProgram = useCallback(async () => {
     const canvas = await renderProgramSheet();
@@ -458,6 +482,17 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
     return [Math.ceil(count / 2), Math.floor(count / 2)];
   };
 
+  const buildTeamFormationSizes = (count: number, teamPlayerCount: number) => {
+    if (count <= 0) return [];
+    if (count < 4) return [count];
+    const preferredSize = Math.max(2, teamPlayerCount);
+    const teamCount = Math.max(1, Math.min(Math.floor(count / 2), Math.ceil(count / preferredSize)));
+    return Array.from(
+      { length: teamCount },
+      (_, index) => Math.floor(count / teamCount) + (index < count % teamCount ? 1 : 0),
+    );
+  };
+
   const resolveFormationBlock = (roundIndex: number): StoredProgramBlock | undefined => {
     const block = storedProgram?.blocks?.[roundIndex];
     if (!block) return undefined;
@@ -470,6 +505,8 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
     return {
       ...block,
       groupSizes: previousBlock.groupSizes,
+      teamPlayerCount: previousBlock.teamPlayerCount,
+      teamFormationSizes: previousBlock.teamFormationSizes,
       teamShuffleSeed: previousBlock.teamShuffleSeed,
       teamAssignments: previousBlock.teamAssignments,
     };
@@ -477,7 +514,11 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
   const activeFormationBlock = formationDialog
     ? resolveFormationBlock(formationDialog.roundIndex)
     : undefined;
-  const teamGroupSizes = activeFormationBlock?.groupSizes ?? storedProgram?.groupSizes ?? [programPlayers.length];
+  const activeTeamPlayerCount = activeFormationBlock?.teamPlayerCount
+    ?? (formationDialog ? storedProgram?.rounds?.[formationDialog.roundIndex]?.teamPlayerCount : undefined)
+    ?? 4;
+  const teamGroupSizes = activeFormationBlock?.teamFormationSizes
+    ?? buildTeamFormationSizes(programPlayers.length, activeTeamPlayerCount);
   const defaultFormationSeed = formationDialog ? (formationDialog.roundIndex + 1) * 1000 : 0;
   const teamFormationPlayers = reshuffleWithinLevel(
     programPlayers,
@@ -582,16 +623,46 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
   const groupStructureBlock = groupStructureRoundIndex == null
     ? undefined
     : storedProgram?.blocks?.[groupStructureRoundIndex];
-  const groupStructureMemberCount = groupStructureBlock?.groupSizes?.reduce((sum, size) => sum + size, 0)
+  const groupStructureMemberCount = (groupStructureMode === "team" ? groupStructureBlock?.teamFormationSizes : groupStructureBlock?.groupSizes)
+    ?.reduce((sum, size) => sum + size, 0)
     || programPlayers.length;
   const groupStructureOptions = useMemo(
-    () => generateGroupOptions(groupStructureMemberCount),
-    [groupStructureMemberCount],
+    () => {
+      const options = generateGroupOptions(groupStructureMemberCount);
+      if (groupStructureMode !== "team") return options;
+      if (groupStructureMemberCount < 2) return [];
+      const maxTeamCount = Math.max(1, Math.floor(groupStructureMemberCount / 2));
+      const minTeamCount = groupStructureMemberCount >= 4 ? 2 : 1;
+      const teamOptions = Array.from({ length: maxTeamCount - minTeamCount + 1 }, (_, index) => {
+        const teamCount = minTeamCount + index;
+        const groups = Array.from(
+          { length: teamCount },
+          (_, groupIndex) => Math.floor(groupStructureMemberCount / teamCount)
+            + (groupIndex < groupStructureMemberCount % teamCount ? 1 : 0),
+        );
+        const averageSize = groupStructureMemberCount / teamCount;
+        return {
+          tierSize: Math.round(averageSize),
+          groupCount: teamCount,
+          groups,
+          recommended: false,
+          score: 100 - Math.abs(averageSize - 3) * 10,
+        };
+      }).sort((left, right) => right.score - left.score || left.groupCount - right.groupCount);
+      if (teamOptions[0]) teamOptions[0].recommended = true;
+      return teamOptions;
+    },
+    [groupStructureMemberCount, groupStructureMode],
   );
 
-  const openGroupStructureDialog = (roundIndex: number) => {
+  const openGroupStructureDialog = (roundIndex: number, mode: "group" | "team" = "group") => {
     const block = storedProgram?.blocks?.[roundIndex];
-    setPendingGroupStructureSizes(block?.groupSizes ?? generateGroupOptions(programPlayers.length)[0]?.groups ?? [programPlayers.length]);
+    const teamPlayerCount = block?.teamPlayerCount ?? storedProgram?.rounds?.[roundIndex]?.teamPlayerCount ?? 4;
+    const currentSizes = mode === "team"
+      ? block?.teamFormationSizes ?? buildTeamFormationSizes(programPlayers.length, teamPlayerCount)
+      : block?.groupSizes ?? generateGroupOptions(programPlayers.length)[0]?.groups ?? [programPlayers.length];
+    setGroupStructureMode(mode);
+    setPendingGroupStructureSizes(currentSizes);
     setGroupStructureRoundIndex(roundIndex);
   };
 
@@ -609,9 +680,20 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
       blocks: (storedProgram.blocks ?? []).map((currentBlock, index) => index === groupStructureRoundIndex
         ? {
             ...currentBlock,
-            groupSizes: pendingGroupStructureSizes,
-            groupAssignments: undefined,
-            groupShuffleSeed: (currentBlock.groupShuffleSeed ?? (index + 1) * 1000 + 503) + 1,
+            ...(groupStructureMode === "team"
+              ? {
+                  teamFormationSizes: pendingGroupStructureSizes,
+                  teamPlayerCount: pendingGroupStructureSizes[0],
+                  teamAssignments: undefined,
+                  teamAssignmentModes: undefined,
+                  teamAssignmentLocks: undefined,
+                  teamShuffleSeed: (currentBlock.teamShuffleSeed ?? (index + 1) * 1000 + 101) + 1,
+                }
+              : {
+                  groupSizes: pendingGroupStructureSizes,
+                  groupAssignments: undefined,
+                  groupShuffleSeed: (currentBlock.groupShuffleSeed ?? (index + 1) * 1000 + 503) + 1,
+                }),
           }
         : currentBlock),
     };
@@ -1131,7 +1213,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
 
       <Box sx={{ px: embedded ? 0 : 2 }}>
         {hasProgram ? (
-          <Box ref={programExportRef} sx={{ position: "relative", bgcolor: "#fff", border: embedded ? 0 : "1px solid #E5E7EB", borderRadius: embedded ? 0 : 2, overflow: "hidden", boxShadow: embedded ? "none" : "0 1px 4px rgba(0,0,0,0.05)" }}>
+          <Box sx={{ position: "relative", bgcolor: "#fff", border: embedded ? 0 : "1px solid #E5E7EB", borderRadius: embedded ? 0 : 2, overflow: "hidden", boxShadow: embedded ? "none" : "0 1px 4px rgba(0,0,0,0.05)" }}>
             {!embedded && <Box sx={{ height: 4, bgcolor: "#2563EB", borderRadius: "8px 8px 0 0" }} />}
 
             <Box sx={{ px: embedded ? 0 : 2.5, pt: embedded ? 0.5 : 2, pb: embedded ? 1 : 2 }}>
@@ -1198,11 +1280,21 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
 
                     {(round.type === "TEAM" || round.type === "DOUBLES" || round.format === "GROUP") && (
                       <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                        {canManage && round.type === "TEAM" && (
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={() => openGroupStructureDialog(round.round - 1, "team")}
+                            sx={{ flex: 1, height: 34, fontWeight: 700, fontSize: 12, borderRadius: 1.5, textTransform: "none", whiteSpace: "nowrap" }}
+                          >
+                            팀 편성 구조
+                          </Button>
+                        )}
                         {canManage && round.format === "GROUP" && round.stageLabel !== "본선" && (
                           <Button
                             variant="outlined"
                             size="small"
-                            onClick={() => openGroupStructureDialog(round.round - 1)}
+                            onClick={() => openGroupStructureDialog(round.round - 1, "group")}
                             sx={{ flex: 1, height: 34, fontWeight: 700, fontSize: 12, borderRadius: 1.5, textTransform: "none", whiteSpace: "nowrap" }}
                           >
                             조 편성 구조
@@ -1297,6 +1389,87 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
         )}
       </Box>
 
+      {hasProgram && (
+        <Box sx={{ position: "fixed", left: -10000, top: 0, width: 380, pointerEvents: "none" }}>
+          <Box ref={programExportRef} sx={{ width: 380, boxSizing: "border-box", p: 2, bgcolor: "#F8FAFC", fontFamily: "Pretendard, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" }}>
+            <Box sx={{ p: 2, border: "1px solid #D7DCE3", borderRadius: 2.5, bgcolor: "#FFF", boxShadow: "0 8px 28px rgba(15,23,42,0.06)" }}>
+              <Stack direction="row" alignItems="center" spacing={1}>
+                <Typography sx={{ fontSize: 18, fontWeight: 900, color: "#111827", flex: 1 }}>
+                  {storedProgram?.title ?? "리그 프로그램"}
+                </Typography>
+                {storedProgram?.compositionMode !== "custom" && exportScore > 0 && (
+                  <Typography sx={{ fontSize: 19, fontWeight: 900, color: "#F59E0B", whiteSpace: "nowrap", letterSpacing: -1 }}>
+                    {"★".repeat(exportScore)}{"☆".repeat(5 - exportScore)}
+                  </Typography>
+                )}
+              </Stack>
+
+              <Typography sx={{ mt: 1, fontSize: 13, lineHeight: 1.55, color: "#64748B" }}>
+                {exportDescription}
+              </Typography>
+
+              <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "repeat(3, 1fr)", border: "1px solid #E2E8F0", borderRadius: 1.5, overflow: "hidden", bgcolor: "#F8FAFC" }}>
+                {[
+                  [String(exportTotalMatches), "전체 경기"],
+                  [exportAverageMatches, "1인 평균 경기"],
+                  [exportDurationLabel, "예상 소요시간"],
+                ].map(([value, label], metricIndex) => (
+                  <Box key={label} sx={{ py: 1.2, px: 0.4, textAlign: "center", borderRight: metricIndex < 2 ? "1px solid #E2E8F0" : 0 }}>
+                    <Typography sx={{ fontSize: metricIndex === 2 ? 15 : 17, fontWeight: 900, color: "#0F172A", whiteSpace: "nowrap" }}>{value}</Typography>
+                    <Typography sx={{ mt: 0.2, fontSize: 10, fontWeight: 700, color: "#64748B" }}>{label}</Typography>
+                  </Box>
+                ))}
+              </Box>
+
+              <Box sx={{ mt: 1.5, p: 1.4, border: "1px solid #BFDBFE", borderRadius: 1.5, bgcolor: "#FFF" }}>
+                <Stack direction="row" justifyContent="space-between" alignItems="baseline">
+                  <Typography sx={{ fontSize: 11, fontWeight: 800, color: "#64748B" }}>전체 진행시간</Typography>
+                  <Typography sx={{ fontSize: 15, fontWeight: 900, color: "#1D4ED8" }}>
+                    {formatClockMinutes(exportStartMinutes)} ~ {formatClockMinutes(exportEndMinutes)}
+                  </Typography>
+                </Stack>
+                <Box sx={{ height: 5, mt: 0.8, borderRadius: 999, bgcolor: "#DBEAFE", overflow: "hidden" }}>
+                  <Box sx={{ width: `${Math.min(100, Math.round(exportTotalMinutes / Math.max(1, exportRentalMinutes) * 100))}%`, height: "100%", bgcolor: "#3B82F6", borderRadius: 999 }} />
+                </Box>
+                <Typography sx={{ mt: 0.7, fontSize: 11, color: "#64748B" }}>
+                  {league?.court_count ?? 1}개 코트 · 대관 종료 {formatClockMinutes(exportRentalEndMinutes)}
+                </Typography>
+              </Box>
+
+              <Box sx={{ mt: 1.5, p: 1.4, border: "1px solid #E2E8F0", borderRadius: 1.8, bgcolor: "#F8FAFC" }}>
+                <Typography sx={{ mb: 1.2, fontSize: 14, fontWeight: 900, color: "#0F172A" }}>라운드별 진행 일정</Typography>
+                <Stack spacing={1.1}>
+                  {programRounds.map((round, roundIndex) => {
+                    const fallbackStart = exportStartMinutes + programRounds.slice(0, roundIndex).reduce((sum, item) => sum + item.expectedMinutes, 0);
+                    const roundStart = round.startMinutes ?? fallbackStart;
+                    const roundEnd = round.endMinutes ?? roundStart + round.expectedMinutes;
+                    const previousRound = programRounds[roundIndex - 1];
+                    const showAdvancement = previousRound?.stageLabel === "예선" && previousRound.type === "SINGLES" && round.stageLabel === "본선" && round.type === "SINGLES";
+                    return (
+                      <Box key={round.round} sx={{ p: 1.4, border: "1px solid #E2E8F0", borderRadius: 1.5, bgcolor: "#FFF", boxShadow: "0 2px 7px rgba(15,23,42,0.04)" }}>
+                        <Stack direction="row" alignItems="center" spacing={0.7}>
+                          <Typography sx={{ fontSize: 16, fontWeight: 900, color: "#0F172A" }}>{round.round}라운드</Typography>
+                          {round.stageLabel && <Chip label={round.stageLabel} size="small" sx={{ height: 22, fontSize: 11, fontWeight: 800, bgcolor: "#ECFDF5", color: "#047857", border: "1px solid #A7F3D0" }} />}
+                        </Stack>
+                        <Stack direction="row" spacing={0.6} flexWrap="wrap" useFlexGap sx={{ mt: 0.8 }}>
+                          <Chip label={round.typeLabel} size="small" sx={{ height: 22, fontSize: 11, fontWeight: 800, bgcolor: "#EFF6FF", color: "#2563EB", border: "1px solid #BFDBFE" }} />
+                          <Chip label={round.formatLabel} size="small" sx={{ height: 22, fontSize: 11, fontWeight: 800, bgcolor: "#F5F3FF", color: "#7C3AED", border: "1px solid #DDD6FE" }} />
+                          <Chip label={round.matchRuleLabel} size="small" sx={{ height: 22, fontSize: 11, fontWeight: 800, bgcolor: "#FFF7ED", color: "#C2410C", border: "1px solid #FED7AA" }} />
+                        </Stack>
+                        {round.description && <Typography sx={{ mt: 0.8, fontSize: 12, color: "#64748B" }}>구성&nbsp;&nbsp;<Box component="span" sx={{ color: "#0F172A", fontWeight: 700 }}>{round.description}</Box></Typography>}
+                        <Typography sx={{ mt: 0.8, fontSize: 12, color: "#94A3B8" }}>경기 수&nbsp;&nbsp;<Box component="span" sx={{ color: "#0F172A", fontWeight: 900 }}>{round.matchCount}경기</Box></Typography>
+                        {showAdvancement && <Typography sx={{ mt: 0.7, p: 0.7, borderRadius: 1, bgcolor: "#EFF6FF", color: "#1D4ED8", fontSize: 11, fontWeight: 800 }}>예선 {previousRound.format === "GROUP" ? "각 조 " : ""}상위 {round.advanceCount ?? 2}명 진출</Typography>}
+                        <Typography sx={{ mt: 0.45, fontSize: 12, color: "#94A3B8" }}>진행시간&nbsp;&nbsp;<Box component="span" sx={{ color: "#0F172A", fontWeight: 900 }}>{formatClockMinutes(roundStart)} ~ {formatClockMinutes(roundEnd)}</Box></Typography>
+                      </Box>
+                    );
+                  })}
+                </Stack>
+              </Box>
+            </Box>
+          </Box>
+        </Box>
+      )}
+
       <Dialog
         open={groupStructureRoundIndex !== null}
         onClose={closeGroupStructureDialog}
@@ -1304,7 +1477,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
         maxWidth="sm"
         slotProps={{ paper: { sx: { borderRadius: 2, mx: 2 } } }}
       >
-        <DialogTitle sx={{ fontWeight: 900, fontSize: 16 }}>조 편성 구조</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 900, fontSize: 16 }}>{groupStructureMode === "team" ? "팀 편성 구조" : "조 편성 구조"}</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={1.25}>
             {groupStructureOptions.map((option) => {
@@ -1325,7 +1498,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
                   }}
                 >
                   {option.recommended && <Typography sx={{ mb: 0.5, color: "#2563EB", fontSize: 12, fontWeight: 800 }}>추천</Typography>}
-                  <Typography sx={{ fontSize: 16, fontWeight: 800 }}>{option.groups.length}개 조</Typography>
+                  <Typography sx={{ fontSize: 16, fontWeight: 800 }}>{option.groups.length}개 {groupStructureMode === "team" ? "팀" : "조"}</Typography>
                   <Typography sx={{ mt: 0.5, color: "#6B7280", fontSize: 13 }}>
                     {option.groups.map((size) => `${size}인`).join(" / ")}
                   </Typography>

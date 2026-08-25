@@ -1295,6 +1295,17 @@ function balancedSizes(total: number, preferredGroupCount: number) {
   );
 }
 
+function buildTeamFormationSizes(total: number, teamPlayerCount: number) {
+  if (total <= 0) return [];
+  if (total < 4) return [total];
+  const preferredSize = Math.max(2, teamPlayerCount);
+  const teamCount = Math.max(1, Math.min(Math.floor(total / 2), Math.ceil(total / preferredSize)));
+  return Array.from(
+    { length: teamCount },
+    (_, index) => Math.floor(total / teamCount) + (index < total % teamCount ? 1 : 0),
+  );
+}
+
 function distributeQualifiedPoolsToFinalGroups(
   pools: MatchUnit[][],
   advanceCount: number,
@@ -1521,6 +1532,8 @@ export function generateProgramRoundMatches(
     ...storedBlock,
     groupSizes: currentRound?.groupSizes ?? storedBlock.groupSizes,
     teamGroupSizes: currentRound?.teamGroupSizes ?? storedBlock.teamGroupSizes,
+    teamPlayerCount: currentRound?.teamPlayerCount ?? storedBlock.teamPlayerCount,
+    teamFormationSizes: currentRound?.teamFormationSizes ?? storedBlock.teamFormationSizes,
     groupShuffleSeed: currentRound?.groupShuffleSeed ?? storedBlock.groupShuffleSeed,
     groupAssignments: currentRound?.groupAssignments ?? storedBlock.groupAssignments,
     teamAssignments: inheritsPreviousTeamFormation
@@ -1553,10 +1566,13 @@ export function generateProgramRoundMatches(
   const defaultFormationSeed = round * 1000;
   const teamFormationPlayers = shuffleWithinLevel(players, block.teamShuffleSeed ?? defaultFormationSeed + 101);
   const groupSizes = block.groupSizes?.length ? block.groupSizes : option?.groupSizes ?? [players.length];
+  const teamFormationSizes = block.teamFormationSizes?.length
+    ? block.teamFormationSizes
+    : buildTeamFormationSizes(players.length, block.teamPlayerCount ?? 4);
   let matchUnits: MatchUnit[] = block.type === "TEAM"
     ? block.teamAssignments?.length
       ? teamUnitsFromAssignments(block.teamAssignments, players)
-      : toTeamUnitsFromGroupSizes(teamFormationPlayers, groupSizes, block.unitClubMode ?? "mixed")
+      : toTeamUnitsFromGroupSizes(teamFormationPlayers, teamFormationSizes, block.unitClubMode ?? "mixed")
     : block.type === "DOUBLES"
       ? toDoublesUnits(players, block.doublesAssignments, block.unitClubMode ?? "mixed")
       : players;

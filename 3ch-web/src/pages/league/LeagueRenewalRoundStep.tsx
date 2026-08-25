@@ -571,25 +571,6 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
                   </RadioGroup>
                 </Box>
               )}
-              {!round.inheritPreviousTeamFormation && (
-                <Stack direction="row" alignItems="center" spacing={1}>
-                  <Typography sx={{ flex: 1, fontWeight: 900 }}>팀 인원 수</Typography>
-                  <CompactNumberStepper
-                    value={round.teamPlayerCount ?? 3}
-                    min={2}
-                    max={10}
-                    suffix="명"
-                    onChange={(value) => updateRound(index, { teamPlayerCount: value })}
-                  />
-                </Stack>
-              )}
-              {!round.inheritPreviousTeamFormation &&
-                participantCount &&
-                (round.teamPlayerCount ?? 3) > participantCount && (
-                  <Typography sx={{ mt: 1, color: "#D32F2F", fontSize: 13 }}>
-                    팀 인원 수는 참가자 수({participantCount}명)보다 많을 수 없습니다.
-                  </Typography>
-                )}
               <Box sx={{ mt: 2 }}>
                 <Typography sx={{ fontWeight: 900, mb: 1 }}>단체전 구성</Typography>
                 <Stack spacing={1}>

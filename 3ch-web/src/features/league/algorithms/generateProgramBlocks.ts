@@ -317,6 +317,7 @@ export function generateProgramBlocks(
 	        teamInfo.description,
 	      groupSizes: roundGroupSizes,
         teamGroupSizes,
+        teamPlayerCount: round.teamPlayerCount,
         groupShuffleSeed: round.groupShuffleSeed,
         teamShuffleSeed: round.teamShuffleSeed,
         groupAssignments: round.groupAssignments,

@@ -129,6 +129,8 @@ export interface ProgramBlock {
   description?: string;
   groupSizes?: number[];
   teamGroupSizes?: number[];
+  teamPlayerCount?: number;
+  teamFormationSizes?: number[];
   groupShuffleSeed?: number;
   teamShuffleSeed?: number;
   groupAssignments?: FormationAssignmentPlayer[][];
@@ -224,6 +226,7 @@ export interface RoundConfig {
   ruleSwitchSize?: number;
   lateMatchRule?: MatchRuleType;
   teamPlayerCount: number;
+  teamFormationSizes?: number[];
   teamMatchType: TeamLineupType;
   teamSinglesCount?: number;
   teamDoublesCount?: number;

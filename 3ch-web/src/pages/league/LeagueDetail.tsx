@@ -54,6 +54,7 @@ import {
     useAutoLinkGuestParticipantMutation,
     useGetLeagueInvitedGroupsQuery,
     useSaveLeagueProgramMutation,
+    useDeleteAllLeagueMatchesMutation,
   } from "../../features/league/leagueApi";
   import { toUTCDate, formatLeagueDate, formatLeagueTime } from "../../utils/dateUtils";
   import { useGetGroupDetailQuery, useGetMyGroupsQuery } from "../../features/group/groupApi";
@@ -66,6 +67,7 @@ import {
   import ParticipantClaimDialog from "./ParticipantClaimDialog";
   import LeagueInvitedGroupsDialog from "./LeagueInvitedGroupsDialog";
   import { distributeSnake } from "../../features/league/algorithms/distributeSnake";
+  import { generateGroupOptions } from "../../features/league/algorithms/generateGroupOptions";
   import { useGetMyFeatureUsageQuery } from "../../features/payment/usageApi";
   import {
     getSingleLeagueParticipantLimitMessage,
@@ -234,6 +236,7 @@ import {
     const [replaceParticipant, { isLoading: replacingParticipant }] = useReplaceParticipantMutation();
     const [autoLinkGuestParticipant] = useAutoLinkGuestParticipantMutation();
     const [saveLeagueProgram, { isLoading: savingTeam }] = useSaveLeagueProgramMutation();
+    const [deleteAllProgramMatches] = useDeleteAllLeagueMatchesMutation();
 
     const { data: groupData, isLoading: groupLoading } = useGetGroupDetailQuery(leagueData?.league?.group_id ?? "", {
       skip: !leagueData?.league?.group_id,
@@ -333,8 +336,15 @@ import {
     const teamProgram = programData?.program?.program_data as {
       blocks?: Array<{
         type?: string;
+        format?: string;
         groupSizes?: number[];
+        teamGroupSizes?: number[];
         teamPlayerCount?: number;
+        teamFormationSizes?: number[];
+        groupAssignments?: Array<Array<{ name: string; level: number }>>;
+        groupFormationPublished?: boolean;
+        teamFormationPublished?: boolean;
+        doublesFormationPublished?: boolean;
         teamAssignments?: Array<Array<{ name: string; level: number }>>;
         teamAssignmentModes?: Array<"manual" | "auto">;
         teamAssignmentLocks?: boolean[];
@@ -347,7 +357,7 @@ import {
     const firstFormationBlockIndex = teamProgram?.blocks?.findIndex((block) => block.type === "TEAM" || block.type === "DOUBLES") ?? -1;
     const firstFormationBlock = firstFormationBlockIndex >= 0 ? teamProgram?.blocks?.[firstFormationBlockIndex] : undefined;
     const isDoublesBuilder = firstFormationBlock?.type === "DOUBLES";
-    const teamSize = isDoublesBuilder ? 2 : (firstFormationBlock?.groupSizes?.[0] ?? firstFormationBlock?.teamPlayerCount ?? 0);
+    const teamSize = isDoublesBuilder ? 2 : (firstFormationBlock?.teamFormationSizes?.[0] ?? firstFormationBlock?.teamPlayerCount ?? 0);
     const canBuildTeam = canManage && firstFormationBlockIndex >= 0 && teamSize >= 2;
     const joinCompanionCount = isDoublesBuilder ? 1 : Math.max(1, teamSize - 1);
 
@@ -419,6 +429,7 @@ import {
           leagueId: id,
           participants: [{ division: participantDivision, name: participantName }, ...companions],
         }).unwrap();
+        await resetProgramForParticipantCount(rawParticipants.length + 1 + companions.length);
         setAlertSeverity("success");
         setAlertMsg("참가 신청이 완료되었습니다.");
         // 비로그인 게스트 하이라이트용: 입력한 이름을 리그별로 저장
@@ -443,6 +454,7 @@ import {
       if (!confirmParticipantChange("delete")) return;
       try {
         await deleteParticipant({ leagueId: id, participantId: myParticipant.id }).unwrap();
+        await resetProgramForParticipantCount(Math.max(0, rawParticipants.length - 1));
         setCancelJoinConfirm(false);
         setAlertSeverity("success");
         setAlertMsg("리그 참가 신청이 취소되었습니다.");
@@ -516,8 +528,8 @@ import {
         }));
       const groupSizes = isDoublesBuilder
         ? Array.from({ length: Math.floor(participants.length / 2) }, () => 2)
-        : firstFormationBlock.groupSizes?.length
-        ? firstFormationBlock.groupSizes
+        : firstFormationBlock.teamFormationSizes?.length
+        ? firstFormationBlock.teamFormationSizes
         : Array.from({ length: Math.ceil(participants.length / teamSize) }, (_, index) =>
             index === Math.ceil(participants.length / teamSize) - 1
               ? participants.length - teamSize * index
@@ -537,7 +549,7 @@ import {
                   doublesAssignmentLocks: teamAssignments.map((_, pairIndex) => pairIndex === 0),
                 }
               : {
-                  groupSizes: teamAssignments.map((team) => team.length),
+                  teamFormationSizes: teamAssignments.map((team) => team.length),
                   teamAssignments,
                   teamAssignmentModes: teamAssignments.map((_, teamIndex) => teamIndex === 0 ? "manual" as const : "auto" as const),
                   teamAssignmentLocks: teamAssignments.map((_, teamIndex) => teamIndex === 0),
@@ -576,6 +588,43 @@ import {
       : filteredParticipants.slice(0, visibleParticipantCount);
     const remainingParticipantCount = Math.max(filteredParticipants.length - visibleParticipantCount, 0);
 
+    const resetProgramForParticipantCount = async (participantCount: number) => {
+      if (!id || !hasEventProgram || league?.status === "active" || !teamProgram?.blocks) return;
+      const resetBlock = (block: typeof teamProgram.blocks[number]) => {
+        const unitCount = block.type === "DOUBLES" ? Math.floor(participantCount / 2) : participantCount;
+        const nextGroupSizes = block.type === "TEAM"
+          ? undefined
+          : generateGroupOptions(unitCount)[0]?.groups ?? [unitCount];
+        return {
+          ...block,
+          ...(block.type !== "TEAM" && block.format === "GROUP" ? { groupSizes: nextGroupSizes } : {}),
+          ...(block.type === "TEAM" ? { teamFormationSizes: undefined, teamGroupSizes: undefined } : {}),
+          groupAssignments: undefined,
+          teamAssignments: undefined,
+          teamAssignmentModes: undefined,
+          teamAssignmentLocks: undefined,
+          doublesAssignments: undefined,
+          doublesAssignmentModes: undefined,
+          doublesAssignmentLocks: undefined,
+          groupFormationPublished: false,
+          teamFormationPublished: false,
+          doublesFormationPublished: false,
+        };
+      };
+      const nextProgram = {
+        ...teamProgram,
+        blocks: teamProgram.blocks.map(resetBlock),
+        rounds: teamProgram.rounds?.map((round, index) => ({
+          ...round,
+          ...resetBlock({ ...teamProgram.blocks![index], ...round }),
+        })),
+        roundStandings: undefined,
+      };
+      await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
+      await deleteAllProgramMatches({ leagueId: id }).unwrap();
+      localStorage.setItem(`league-program-${id}`, JSON.stringify(nextProgram));
+    };
+
     const submitAddedParticipant = async (placement?: { program_round: number; match_id: string; slot: "a" | "b" }) => {
       if (!id || !inputName.trim()) return;
       try {
@@ -588,14 +637,17 @@ import {
           }],
           placement: placement ? { kind: "tournament", ...placement } : undefined,
         }).unwrap();
+        await resetProgramForParticipantCount(rawParticipants.length + 1);
         setInputDivision("");
         setInputName("");
         setTournamentPlacementOpen(false);
         setSelectedTournamentPlacement(null);
+        return true;
       } catch (e: unknown) {
         const msg = (e as { data?: { message?: string } })?.data?.message;
         setAlertSeverity("warning");
         setAlertMsg(msg ?? "참가자 추가에 실패했습니다.");
+        return false;
       }
     };
 
@@ -629,6 +681,7 @@ import {
           leagueId: id,
           participants: selected.map((m) => ({ division: m.division, name: m.name, member_id: m.member_id })),
         }).unwrap();
+        await resetProgramForParticipantCount(rawParticipants.length + selected.length);
       } catch {
         setAlertSeverity("error");
         setAlertMsg("불러오기에 실패했습니다.");
@@ -660,6 +713,7 @@ import {
           source_group_id: participant.source_group_id ?? (showParticipantGroups ? inputSourceGroupId || null : undefined),
         })),
       }).unwrap();
+      await resetProgramForParticipantCount(rawParticipants.length + recognized.length);
       setAlertSeverity("success");
       setAlertMsg(`${recognized.length}명의 참가자를 등록했습니다.`);
     };
@@ -885,6 +939,7 @@ import {
       if (!id || !deleteParticipantTarget) return;
       try {
         await deleteParticipant({ leagueId: id, participantId: deleteParticipantTarget.id }).unwrap();
+        await resetProgramForParticipantCount(Math.max(0, rawParticipants.length - 1));
         setDeleteParticipantTarget(null);
       } catch {
         setAlertSeverity("error");

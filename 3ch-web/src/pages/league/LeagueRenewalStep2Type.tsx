@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Box, Button, FormControl, FormControlLabel, MenuItem, Radio, RadioGroup, Stack, TextField, Typography } from "@mui/material";
+import { Box, Button, FormControl, FormControlLabel, Radio, RadioGroup, Stack, Typography } from "@mui/material";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { setRenewalConfiguration, setRenewalStep } from "../../features/league/leagueRenewalCreationSlice";
 import type { LeagueTypeValue } from "../../features/league/leagueCreationSlice";
@@ -15,11 +15,10 @@ export default function LeagueRenewalStep2Type() {
   const dispatch = useAppDispatch();
   const configuration = useAppSelector((state) => state.leagueRenewalCreation.configuration);
   const [type, setType] = useState<LeagueTypeValue | "">(configuration.type ?? "");
-  const [teamPlayerCount, setTeamPlayerCount] = useState(configuration.teamPlayerCount);
 
   const handleNext = () => {
     if (!type) return;
-    dispatch(setRenewalConfiguration({ type, teamPlayerCount }));
+    dispatch(setRenewalConfiguration({ type }));
     dispatch(setRenewalStep(5));
   };
 
@@ -41,11 +40,6 @@ export default function LeagueRenewalStep2Type() {
           </Stack>
         </RadioGroup>
       </FormControl>
-      {type === "team" && (
-        <TextField select fullWidth label="팀 인원 수" value={teamPlayerCount} onChange={(event) => setTeamPlayerCount(Number(event.target.value))} sx={{ mt: 2, "& .MuiOutlinedInput-root": { borderRadius: 1 } }}>
-          {[2, 3, 4, 5].map((count) => <MenuItem key={count} value={count}>{count}명</MenuItem>)}
-        </TextField>
-      )}
       <Stack direction="row" spacing={1.5} sx={{ mt: 4 }}>
         <Button fullWidth variant="contained" disableElevation onClick={() => dispatch(setRenewalStep(2))} sx={{ height: 44, borderRadius: 1, fontWeight: 900, bgcolor: "#777", "&:hover": { bgcolor: "#666" } }}>이전</Button>
         <Button fullWidth variant="contained" disableElevation disabled={!type} onClick={handleNext} sx={{ height: 44, borderRadius: 1, fontWeight: 900 }}>다음</Button>

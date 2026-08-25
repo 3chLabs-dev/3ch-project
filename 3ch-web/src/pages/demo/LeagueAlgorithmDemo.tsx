@@ -918,7 +918,7 @@ function RoundConfigEditor({
                       marginBottom: "8px",
                     }}
                   >
-                    진행방식
+                    진행 방식
                   </div>
 
                   <ToggleButtonGroup
@@ -1088,7 +1088,7 @@ function RoundConfigEditor({
                     marginBottom: "8px",
                   }}
                 >
-                  경기방식
+                  경기 규칙
                 </div>
 
                 <ToggleButtonGroup
@@ -2820,7 +2820,7 @@ const LeagueAlgorithmDemo = ({
                     marginBottom: "8px",
                   }}
                 >
-                  진행방식
+                  진행 방식
                 </div>
 
                 <ToggleButtonGroup
@@ -2926,7 +2926,7 @@ const LeagueAlgorithmDemo = ({
                         marginBottom: "8px",
                       }}
                     >
-                      경기방식
+                      경기 규칙
                     </div>
 
                     <ToggleButtonGroup

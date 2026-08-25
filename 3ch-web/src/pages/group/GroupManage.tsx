@@ -408,7 +408,7 @@ export default function GroupManage() {
                 externalAliases: pendingOwnerTransfer.updated.externalAliases,
             }).unwrap();
             setPendingOwnerTransfer(null);
-            navigate(`/group/${id}`, { replace: true });
+            navigate(`/club/${id}`, { replace: true });
         } catch (error) {
             const apiError = error as { data?: { message?: string } };
             setOwnerTransferError(apiError.data?.message || "리더 권한 이관에 실패했습니다. 다시 시도해주세요.");

@@ -1193,6 +1193,7 @@ export default function LeagueGPTVisionSheet() {
   const [visionTargetRowRange, setVisionTargetRowRange] = useState<{ startRow: number; endRow: number } | null>(null);
   const [inlineOverlayRects, setInlineOverlayRects] = useState<Record<string, OverlayRect | undefined>>({});
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [visionRuleMismatch, setVisionRuleMismatch] = useState<"best3-over" | "best5-under" | null>(null);
   const [previewCells, setPreviewCells] = useState<VisionPreviewCell[]>([]);
   const [isSavingVision, setIsSavingVision] = useState(false);
   const [visionSaveProgress, setVisionSaveProgress] = useState(0);
@@ -2162,8 +2163,27 @@ export default function LeagueGPTVisionSheet() {
     }
   };
 
-  const saveVisionPreview = async () => {
+  const getVisionRuleMismatch = () => {
+    if (!isProgramMode || !programOption) return null;
+    const recognizedScores = previewCells
+      .filter((cell) => cell.recognized !== false)
+      .map((cell) => cell.score);
+    if (recognizedScores.length === 0) return null;
+    const ruleLabel = getProgramRuleLabel(currentRule ?? "");
+    if (ruleLabel === "3전 2선승제" && recognizedScores.some((score) => score > 2)) return "best3-over" as const;
+    if (ruleLabel === "5전 3선승제" && recognizedScores.every((score) => score < 3)) return "best5-under" as const;
+    return null;
+  };
+
+  const saveVisionPreview = async (skipRuleCheck = false) => {
     if (isSavingVision) return;
+    if (!skipRuleCheck) {
+      const mismatch = getVisionRuleMismatch();
+      if (mismatch) {
+        setVisionRuleMismatch(mismatch);
+        return;
+      }
+    }
     const grouped = new Map<string, { match: LeagueMatch; scoreA: number | null; scoreB: number | null }>();
     previewCells.forEach((cell) => {
       if (!cell.matchId || !cell.playerId || cell.recognized === false) return;
@@ -2215,6 +2235,47 @@ export default function LeagueGPTVisionSheet() {
     } finally {
       setIsSavingVision(false);
     }
+  };
+
+  const changeVisionRoundRule = async (matchRule: "3전 2선승제" | "5전 3선승제" | "3세트제") => {
+    if (!id || !programOption) return;
+    setIsSavingVision(true);
+    try {
+      const roundIndex = programRound - 1;
+      const roundMatchRule = matchRule === "3전 2선승제"
+        ? "BEST_OF_3" as const
+        : matchRule === "5전 3선승제"
+          ? "BEST_OF_5" as const
+          : "THREE_SET" as const;
+      const nextProgram = {
+        ...programOption,
+        blocks: programOption.blocks.map((block, index) => index === roundIndex ? { ...block, matchRule } : block),
+        rounds: programOption.rounds?.map((round, index) => index === roundIndex ? { ...round, matchRule: roundMatchRule } : round),
+      };
+      storeProgramOption(id, nextProgram);
+      await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
+      const nextMatches = generateProgramRoundMatches(
+        id,
+        nextProgram,
+        rawParticipants,
+        programRound,
+        programSourceMatches,
+      );
+      await syncProgramMatches({ leagueId: id, matches: nextMatches }).unwrap();
+      await refetchMatches();
+      setVisionRuleMismatch(null);
+      setIsSavingVision(false);
+      await saveVisionPreview(true);
+    } catch (error) {
+      setVisionNotice({ type: "error", message: getErrorMessage(error, "라운드 규칙 변경에 실패했습니다.") });
+      setIsSavingVision(false);
+    }
+  };
+
+  const retryVisionRegistration = () => {
+    setVisionRuleMismatch(null);
+    setPreviewOpen(false);
+    setResultDialogOpen(true);
   };
 
   const savedTieBreakOrder = useMemo(
@@ -2961,6 +3022,44 @@ export default function LeagueGPTVisionSheet() {
         <DialogActions><Button onClick={() => setVisionError(null)}>확인</Button></DialogActions>
       </Dialog>
 
+      <Dialog
+        open={visionRuleMismatch !== null}
+        onClose={() => !isSavingVision && setVisionRuleMismatch(null)}
+        maxWidth="xs"
+        fullWidth
+        sx={{ zIndex: 10004 }}
+        slotProps={{ paper: { sx: { borderRadius: 3, ...mobileDialogPaperSx } } }}
+      >
+        <DialogTitle sx={{ fontWeight: 900 }}>경기방식 확인</DialogTitle>
+        <DialogContent dividers>
+          <Typography sx={{ fontSize: 14, lineHeight: 1.7, fontWeight: 700 }}>
+            {visionRuleMismatch === "best3-over"
+              ? "3전 2선승제 대진표에 2를 초과한 세트 스코어가 있습니다."
+              : "5전 3선승제 대진표에 3 미만의 세트 스코어만 있습니다."}
+          </Typography>
+          <Typography sx={{ mt: 1, fontSize: 14, color: "#6B7280" }}>
+            해당 라운드 규칙을 변경하겠습니까?
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 2, py: 1.5, flexDirection: "column", alignItems: "stretch", gap: 1 }}>
+          {visionRuleMismatch === "best3-over" ? (
+            <Button variant="contained" onClick={() => void changeVisionRoundRule("5전 3선승제")} disabled={isSavingVision}>
+              5전 3선승제로 변경
+            </Button>
+          ) : (
+            <Button variant="contained" onClick={() => void changeVisionRoundRule("3전 2선승제")} disabled={isSavingVision}>
+              3전 2선승제로 변경
+            </Button>
+          )}
+          <Button variant="outlined" onClick={() => void changeVisionRoundRule("3세트제")} disabled={isSavingVision}>
+            3세트제로 변경
+          </Button>
+          <Button onClick={retryVisionRegistration} disabled={isSavingVision} sx={{ color: "#6B7280" }}>
+            다시 등록하기
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Dialog open={previewOpen} onClose={() => !isScanning && !isSavingVision && setPreviewOpen(false)} maxWidth="lg" fullWidth sx={{ zIndex: 10002 }} slotProps={{ paper: { sx: { overflow: "hidden", position: "relative", ...mobileDialogPaperSx } } }}>
         <DialogTitle sx={{ fontWeight: 900 }}>AI 인식 결과</DialogTitle>
         <DialogContent dividers sx={{ overflow: "hidden" }}>
@@ -3066,7 +3165,7 @@ export default function LeagueGPTVisionSheet() {
         </DialogContent>
         <DialogActions sx={{ px: 2.5, py: 1.5 }}>
           <Button onClick={() => setPreviewOpen(false)} disabled={isSavingVision}>취소</Button>
-          <Button variant="contained" onClick={saveVisionPreview} disabled={isScanning || isSavingVision || leagueStarted}>저장</Button>
+          <Button variant="contained" onClick={() => void saveVisionPreview()} disabled={isScanning || isSavingVision || leagueStarted}>저장</Button>
         </DialogActions>
         {isSavingVision && (
           <Box

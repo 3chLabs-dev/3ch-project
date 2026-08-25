@@ -5006,7 +5006,7 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
       for (const cell of matchCells) {
         cell.needsReview = true;
         cell.confidence = Math.min(cell.confidence, 0.5);
-        cell.issue = [cell.issue, '경기 방식에 맞는 두 셀의 세트 점수를 확인해 주세요.']
+        cell.issue = [cell.issue, '서로 마주 보는 두 점수 칸을 확인해 주세요.']
           .filter(Boolean)
           .join(' ');
       }

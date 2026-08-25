@@ -1009,6 +1009,7 @@ type VisionPreviewCell = OpenAIVisionCell & {
   matchId?: string;
   playerId?: string;
   issue?: string;
+  recognized?: boolean;
 };
 
 const PORTRAIT_SCHEDULE_RAIL_WIDTH = 84;
@@ -1889,7 +1890,7 @@ export default function LeagueGPTVisionSheet() {
   const updatePreviewCell = (rowIndex: number, columnIndex: number, score: number) => {
     setPreviewCells((cells) => cells.map((cell) => (
       cell.rowIndex === rowIndex && cell.columnIndex === columnIndex
-        ? { ...cell, score: Math.min(99, Math.max(0, score)), needsReview: false, issue: undefined }
+        ? { ...cell, score: Math.min(99, Math.max(0, score)), needsReview: false, issue: undefined, recognized: true }
         : cell
     )));
   };
@@ -2098,7 +2099,7 @@ export default function LeagueGPTVisionSheet() {
           if (visionTargetRegion === "row-band" && visionTargetRowRange && !(rowIndex >= visionTargetRowRange.startRow && rowIndex <= visionTargetRowRange.endRow)) return;
           const cell = byPosition.get(`${rowIndex}__${columnIndex}`);
           completeCells.push({
-            ...(cell ?? {
+            ...(cell ? { ...cell, recognized: true } : {
               rowPlayerName: rowPlayer.name,
               columnPlayerName: columnPlayer.name,
               rowIndex,
@@ -2107,6 +2108,7 @@ export default function LeagueGPTVisionSheet() {
               confidence: 0,
               needsReview: true,
               issue: "인식하지 못한 점수 칸입니다.",
+              recognized: false,
             }),
             matchId: match.id,
             playerId: rowPlayer.id,
@@ -2164,7 +2166,7 @@ export default function LeagueGPTVisionSheet() {
     if (isSavingVision) return;
     const grouped = new Map<string, { match: LeagueMatch; scoreA: number | null; scoreB: number | null }>();
     previewCells.forEach((cell) => {
-      if (!cell.matchId || !cell.playerId) return;
+      if (!cell.matchId || !cell.playerId || cell.recognized === false) return;
       const match = matches.find((item) => item.id === cell.matchId);
       if (!match) return;
       const current = grouped.get(match.id) ?? {
@@ -3018,7 +3020,8 @@ export default function LeagueGPTVisionSheet() {
                           maxLength={2}
                           disabled={isSavingVision}
                           aria-label={`${rowPlayer.name} 대 ${columnPlayer.name} 점수`}
-                          value={cell?.score ?? 0}
+                          value={cell?.recognized === false ? "" : cell?.score ?? ""}
+                          placeholder="-"
                           onFocus={(event) => event.currentTarget.select()}
                           onChange={(event) => {
                             const digits = event.currentTarget.value.replace(/\D/g, "").slice(0, 2);
@@ -3041,7 +3044,7 @@ export default function LeagueGPTVisionSheet() {
                             p: 0,
                             border: "1px solid #9CA3AF",
                             borderRadius: 1,
-                            bgcolor: "#fff",
+                            bgcolor: cell?.recognized === false ? "#FFF7ED" : "#fff",
                             color: "#111827",
                             fontSize: 24,
                             fontWeight: 900,

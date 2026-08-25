@@ -4808,20 +4808,32 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
         WHERE league_id = $1 AND bracket IS NULL`,
       [leagueId],
     );
+    const canonicalParticipantId = (value) => String(value ?? '')
+      .split('+')
+      .map((id) => id.trim())
+      .filter(Boolean)
+      .sort()
+      .join('+');
+    const visionMatchKey = (participantAId, participantBId) =>
+      `${canonicalParticipantId(participantAId)}__${canonicalParticipantId(participantBId)}`;
+    const resolveMatchParticipantId = (participantId, rosterIds) => {
+      const rosterId = Array.isArray(rosterIds)
+        ? canonicalParticipantId(rosterIds.filter(Boolean).join('+'))
+        : '';
+      return rosterId || canonicalParticipantId(participantId);
+    };
     const matchLookup = new Map();
     for (const match of matchesResult.rows) {
-      const participantAId = match.participant_a_id
-        || (Array.isArray(match.participant_a_roster_ids) ? match.participant_a_roster_ids.filter(Boolean).join('+') : '');
-      const participantBId = match.participant_b_id
-        || (Array.isArray(match.participant_b_roster_ids) ? match.participant_b_roster_ids.filter(Boolean).join('+') : '');
+      const participantAId = resolveMatchParticipantId(match.participant_a_id, match.participant_a_roster_ids);
+      const participantBId = resolveMatchParticipantId(match.participant_b_id, match.participant_b_roster_ids);
       if (!participantAId || !participantBId) continue;
       const resolvedMatch = {
         ...match,
         participant_a_id: participantAId,
         participant_b_id: participantBId,
       };
-      matchLookup.set(`${participantAId}__${participantBId}`, resolvedMatch);
-      matchLookup.set(`${participantBId}__${participantAId}`, resolvedMatch);
+      matchLookup.set(visionMatchKey(participantAId, participantBId), resolvedMatch);
+      matchLookup.set(visionMatchKey(participantBId, participantAId), resolvedMatch);
     }
 
     const visionMode = req.body?.mode === 'star-grid' ? 'star-grid' : 'sheet';
@@ -4910,7 +4922,7 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
             participants.flatMap((columnParticipant, columnIndex) =>
               rowIndex !== columnIndex
               && isRequestedCell(rowIndex, columnIndex)
-              && matchLookup.has(`${rowParticipant.id}__${columnParticipant.id}`)
+              && matchLookup.has(visionMatchKey(rowParticipant.id, columnParticipant.id))
                 ? [{ rowIndex, columnIndex }]
                 : [],
             ),
@@ -4936,7 +4948,7 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
       const rowParticipant = participants[cell.rowIndex];
       const columnParticipant = participants[cell.columnIndex];
       const match = rowParticipant && columnParticipant
-        ? matchLookup.get(`${rowParticipant.id}__${columnParticipant.id}`)
+        ? matchLookup.get(visionMatchKey(rowParticipant.id, columnParticipant.id))
         : null;
       return Boolean(match);
     }).map((cell) => {
@@ -4954,17 +4966,13 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
       if (cell.rowIndex === cell.columnIndex) issues.push('대각선 셀은 점수를 입력할 수 없습니다.');
 
       const match = rowParticipant && columnParticipant
-        ? matchLookup.get(`${rowParticipant.id}__${columnParticipant.id}`)
+        ? matchLookup.get(visionMatchKey(rowParticipant.id, columnParticipant.id))
         : null;
       if (!match && rowParticipant && columnParticipant && cell.rowIndex !== cell.columnIndex) {
         issues.push('해당 참가자 간 경기가 존재하지 않습니다.');
       }
 
-      const playerId = match
-        ? match.participant_a_id === rowParticipant?.id
-          ? match.participant_a_id
-          : match.participant_b_id
-        : undefined;
+      const playerId = match ? rowParticipant?.id : undefined;
 
       return {
         rowPlayerName: visionMode === 'star-grid' ? rowParticipant?.name ?? '' : cell.rowPlayerName,

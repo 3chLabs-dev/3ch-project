@@ -117,7 +117,7 @@ async function scanLeagueSheetWithOpenAIVision({ imageBuffer, mimeType, particip
     throw error;
   }
 
-  const model = process.env.OPENAI_VISION_MODEL || 'gpt-5.6-luna';
+  const model = process.env.OPENAI_VISION_MODEL || 'gpt-4.1-mini';
   const dataUrl = `data:${mimeType};base64,${imageBuffer.toString('base64')}`;
   const participantLines = participants.map((participant, index) => `${index + 1}. ${participant.name}`).join('\n');
   const expectedCellCount = participants.length * Math.max(0, participants.length - 1);
@@ -133,7 +133,6 @@ async function scanLeagueSheetWithOpenAIVision({ imageBuffer, mimeType, particip
   const body = {
     model,
     ...(model.startsWith('gpt-4') ? { temperature: 0 } : {}),
-    ...(model.startsWith('gpt-5.6') ? { reasoning: { effort: 'low' } } : {}),
     input: [
       {
         role: 'user',

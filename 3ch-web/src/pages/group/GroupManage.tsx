@@ -1403,10 +1403,7 @@ export default function GroupManage() {
                 <DialogContent>
                     <Stack spacing={2} sx={{ pt: 1 }}>
                         <Typography sx={{ fontSize: 14 }}>
-                            <strong>{pendingOwnerTransfer?.member.name}</strong>님에게 클럽의 관리 권한과 기존 리그의 향후 기능 사용 책임을 이관합니다.
-                        </Typography>
-                        <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
-                            기존 리더의 개인 구독기간, 결제수단, 기능 잔여량과 사용 이력은 이관되지 않습니다.
+                            <strong>{pendingOwnerTransfer?.member.name}</strong>{" "}님에게 클럽의 관리 권한과 기존 리그의 향후 기능 사용 책임을 이관합니다.
                         </Typography>
                         <Stack spacing={1}>
                             {([

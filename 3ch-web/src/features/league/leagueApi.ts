@@ -14,6 +14,7 @@ import {
   initLocalDevMatches,
   saveLocalDevProgram,
   syncLocalDevProgramMatches,
+  setLocalDevLeagueStatus,
   updateLocalDevMatch,
   updateLocalDevParticipant,
 } from "../../utils/localDevLeagueStore";
@@ -1042,6 +1043,7 @@ export const leagueApi = baseApi.injectEndpoints({
             })) as LeagueMatch[],
             programRounds,
           );
+          if (resetResults) setLocalDevLeagueStatus(leagueId, "draft");
           return { data: { ok: true, inserted: matches.length } };
         }
         const result = await fetchWithBQ({

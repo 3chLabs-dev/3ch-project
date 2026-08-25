@@ -3425,6 +3425,13 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
       );
     }
 
+    if (resetResults) {
+      await pool.query(
+        `UPDATE leagues SET status = 'draft', updated_at = NOW() WHERE id = $1`,
+        [leagueId],
+      );
+    }
+
     await pool.query('COMMIT');
     await triggerRankingRebuildByLeagueId(leagueId);
 

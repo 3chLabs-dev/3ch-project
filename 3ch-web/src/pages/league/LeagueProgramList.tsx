@@ -1026,21 +1026,31 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
     const reshuffledTeamLocks = mode === "team"
       ? teamResultGroups.map((_, index) => lockedTeamIndexes.has(index))
       : [];
+    const doublesGroupCount = Math.floor(programPlayers.length / 2);
     const lockedDoublesIndexes = mode === "doubles"
-      ? new Set(doublesResultGroups.flatMap((_, index) => isDoublesLocked(index) ? [index] : []))
+      ? new Set(doublesResultGroups.flatMap((_, index) => index < doublesGroupCount && isDoublesLocked(index) ? [index] : []))
       : new Set<number>();
     const lockedDoublesPlayerIds = new Set([...lockedDoublesIndexes].flatMap((index) => doublesResultGroups[index].players.map(formationPlayerId)));
-    const unlockedDoublesIndexes = doublesResultGroups.flatMap((_, index) => lockedDoublesIndexes.has(index) ? [] : [index]);
+    const unlockedDoublesIndexes = mode === "doubles"
+      ? Array.from({ length: doublesGroupCount }, (_, index) => index).filter((index) => !lockedDoublesIndexes.has(index))
+      : [];
     const reshuffledUnlockedDoubles = mode === "doubles" && unlockedDoublesIndexes.length > 0
-      ? distributeSnake(reshuffleWithinLevel(programPlayers, nextTeamShuffleSeed).filter((player) => !lockedDoublesPlayerIds.has(formationPlayerId(player))), unlockedDoublesIndexes.map((index) => doublesResultGroups[index].players.length)).map((group) => group.players)
+      ? distributeSnake(
+          reshuffleWithinLevel(programPlayers, nextTeamShuffleSeed).filter((player) => !lockedDoublesPlayerIds.has(formationPlayerId(player))),
+          unlockedDoublesIndexes.map(() => 2),
+        ).map((group) => group.players)
       : [];
     const reshuffledDoublesAssignments = mode === "doubles"
-      ? doublesResultGroups.map((group, index) => lockedDoublesIndexes.has(index) ? group.players : reshuffledUnlockedDoubles[unlockedDoublesIndexes.indexOf(index)] ?? [])
+      ? Array.from({ length: doublesGroupCount }, (_, index) => lockedDoublesIndexes.has(index)
+          ? doublesResultGroups[index].players
+          : reshuffledUnlockedDoubles[unlockedDoublesIndexes.indexOf(index)] ?? [])
       : [];
     const reshuffledDoublesModes = mode === "doubles"
-      ? doublesResultGroups.map((_, index) => lockedDoublesIndexes.has(index) ? doublesFormationMode(index) : "auto" as const)
+      ? Array.from({ length: doublesGroupCount }, (_, index) => lockedDoublesIndexes.has(index) ? doublesFormationMode(index) : "auto" as const)
       : [];
-    const reshuffledDoublesLocks = mode === "doubles" ? doublesResultGroups.map((_, index) => lockedDoublesIndexes.has(index)) : [];
+    const reshuffledDoublesLocks = mode === "doubles"
+      ? Array.from({ length: doublesGroupCount }, (_, index) => lockedDoublesIndexes.has(index))
+      : [];
     let propagateTeamFormation = false;
     const nextBlocks = storedProgram.blocks.map((block, index) => {
       if (mode === "team") {

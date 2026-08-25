@@ -69,6 +69,17 @@ export function syncLocalDevProgramMatches(
   saveLocalDevMatches(leagueId, [...existing, ...matches]);
 }
 
+export function setLocalDevLeagueStatus(
+  leagueId: string,
+  status: "draft" | "active" | "completed",
+) {
+  const now = new Date().toISOString();
+  const leagues = getLocalDevLeagues().map((league) =>
+    league.id === leagueId ? { ...league, status, updated_at: now } : league,
+  );
+  writeJson(LOCAL_DEV_LEAGUES_KEY, leagues);
+}
+
 export function initLocalDevMatches(leagueId: string, force = false) {
   const existing = getLocalDevMatches(leagueId);
   if (existing.length > 0 && !force) return existing;

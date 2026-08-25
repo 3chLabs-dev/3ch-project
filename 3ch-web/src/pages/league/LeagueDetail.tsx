@@ -391,9 +391,23 @@ import {
       );
     }, [hasEventProgram, league?.status, programData?.program?.program_data]);
 
+    const canAddUnassignedFormationParticipant = useMemo(() => {
+      if (!hasEventProgram || league?.status !== "active") return false;
+      const data = programData?.program?.program_data as {
+        blocks?: Array<{ type?: string }>;
+      } | null;
+      return Boolean(data?.blocks?.length)
+        && data!.blocks!.every((block) => block.type === "DOUBLES" || block.type === "TEAM");
+    }, [hasEventProgram, league?.status, programData?.program?.program_data]);
+
     const confirmParticipantChange = (changeType: "add" | "edit" | "delete") => {
       if (!hasEventProgram) return true;
       if (!canAddParticipantToProgram) {
+        if (canAddUnassignedFormationParticipant && changeType === "add") {
+          return window.confirm(
+            "참가자를 미편성 상태로 추가합니다. 기존 경기와 편성은 유지되며, 추가 후 편성 결과에서 복식·팀을 구성해 주세요.",
+          );
+        }
         setAlertSeverity("warning");
         setAlertMsg("현재는 단식 단일리그 프로그램에서만 참가자를 변경할 수 있습니다. 조별리그, 단체전, 토너먼트 참가자 변경은 추후 지원됩니다.");
         return false;
@@ -698,7 +712,7 @@ import {
         setAlertMsg(`모집 인원(${league!.recruit_count}명)을 초과합니다. 최대 ${remaining}명 추가 가능합니다.`);
         throw new Error("participant limit");
       }
-      if (hasEventProgram && !canAddParticipantToProgram) {
+      if (hasEventProgram && !canAddParticipantToProgram && !canAddUnassignedFormationParticipant) {
         setAlertSeverity("warning");
         setAlertMsg("현재 프로그램 구성에서는 이미지로 참가자를 일괄 추가할 수 없습니다.");
         throw new Error("program does not support participant batch add");
@@ -747,7 +761,7 @@ import {
 
     const handleAddParticipant = async () => {
       if (!id || !inputName.trim()) return;
-      if (hasEventProgram && !canAddParticipantToProgram) {
+      if (hasEventProgram && !canAddParticipantToProgram && !canAddUnassignedFormationParticipant) {
         if (tournamentByeSlots.length > 0) {
           setSelectedTournamentPlacement(tournamentByeSlots[0]);
           setTournamentPlacementOpen(true);

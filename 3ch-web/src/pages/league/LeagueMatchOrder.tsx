@@ -138,7 +138,7 @@ function ParticipantRow({
       {/* 배지 + 이름 */}
       <Stack direction="row" alignItems="center" spacing={0.5} flex={1} px={1.5} minWidth={0}>
         {division && (
-          <Box component="span" sx={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 22, height: 22, borderRadius: "50%", bgcolor: "#FAAA47", color: name?.startsWith("팀 ") || name?.includes(" · ") ? "#FF0000" : "#000", fontSize: 9, fontWeight: 900, flexShrink: 0, px: 0.3 }}>
+          <Box component="span" sx={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 22, height: 22, borderRadius: "50%", bgcolor: "#FAAA47", color: name?.startsWith("팀 ") || name?.includes(" · ") ? "#0057FF" : "#000", fontSize: 9, fontWeight: 900, flexShrink: 0, px: 0.3 }}>
             {division}
           </Box>
         )}

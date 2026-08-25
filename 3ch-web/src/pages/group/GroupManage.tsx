@@ -37,6 +37,7 @@ import { useAppSelector } from "../../app/hooks";
 import {
     useGetGroupDetailQuery,
     useUpdateMemberRoleMutation,
+    useTransferGroupOwnerMutation,
     useUpdateMemberMutation,
     useRemoveMemberMutation,
     useUpdateGroupMutation,
@@ -83,6 +84,7 @@ export default function GroupManage() {
     });
 
     const [updateMemberRole] = useUpdateMemberRoleMutation();
+    const [transferGroupOwner, { isLoading: isTransferringOwner }] = useTransferGroupOwnerMutation();
     const [updateMember] = useUpdateMemberMutation();
     const [removeMember] = useRemoveMemberMutation();
     const [updateGroup, { isLoading: isUpdating }] = useUpdateGroupMutation();
@@ -100,6 +102,14 @@ export default function GroupManage() {
     const [memberEditOpen, setMemberEditOpen] = useState(false);
     const [preMemberDialogOpen, setPreMemberDialogOpen] = useState(false);
     const [selectedMember, setSelectedMember] = useState<{ id: string; name: string; email: string; role: "owner" | "admin" | "member"; division?: string; externalAliases?: string[] } | null>(null);
+    const [pendingOwnerTransfer, setPendingOwnerTransfer] = useState<{
+        member: NonNullable<typeof selectedMember>;
+        updated: { role: "owner" | "admin" | "member"; division: string; externalAliases: string[] };
+    } | null>(null);
+    const [ownerTransferStep, setOwnerTransferStep] = useState<1 | 2>(1);
+    const [previousOwnerAction, setPreviousOwnerAction] = useState<"" | "admin" | "member" | "leave">("");
+    const [benefitsAction, setBenefitsAction] = useState<"" | "keep" | "transfer">("");
+    const [ownerTransferError, setOwnerTransferError] = useState("");
 
     const leagueManagementRef = useRef<HTMLDivElement>(null);
 
@@ -355,6 +365,14 @@ export default function GroupManage() {
 
     const handleSaveMemberEdit = async (updated: { role: "owner" | "admin" | "member"; division: string; externalAliases: string[] }) => {
         if (!selectedMember || !id) return;
+        if (updated.role === "owner" && selectedMember.role !== "owner") {
+            setPendingOwnerTransfer({ member: selectedMember, updated });
+            setOwnerTransferStep(1);
+            setPreviousOwnerAction("");
+            setBenefitsAction("");
+            setOwnerTransferError("");
+            return;
+        }
         try {
             if (updated.role !== selectedMember.role && updated.role !== "owner" && selectedMember.role !== "owner") {
                 await updateMemberRole({
@@ -374,6 +392,26 @@ export default function GroupManage() {
             handleCloseMemberEdit();
         } catch (error) {
             console.error("Failed to update member:", error);
+        }
+    };
+
+    const handleTransferOwner = async () => {
+        if (!pendingOwnerTransfer || !id || !previousOwnerAction || !benefitsAction) return;
+        setOwnerTransferError("");
+        try {
+            await transferGroupOwner({
+                groupId: id,
+                newOwnerUserId: pendingOwnerTransfer.member.id,
+                previousOwnerAction,
+                benefitsAction,
+                division: pendingOwnerTransfer.updated.division.trim(),
+                externalAliases: pendingOwnerTransfer.updated.externalAliases,
+            }).unwrap();
+            setPendingOwnerTransfer(null);
+            navigate(`/group/${id}`, { replace: true });
+        } catch (error) {
+            const apiError = error as { data?: { message?: string } };
+            setOwnerTransferError(apiError.data?.message || "리더 권한 이관에 실패했습니다. 다시 시도해주세요.");
         }
     };
 
@@ -1354,6 +1392,135 @@ export default function GroupManage() {
                     isOwner={isOwner}
                 />
             )}
+
+            <Dialog
+                open={!!pendingOwnerTransfer && ownerTransferStep === 1}
+                onClose={isTransferringOwner ? undefined : () => setPendingOwnerTransfer(null)}
+                fullWidth
+                maxWidth="xs"
+            >
+                <DialogTitle sx={{ fontWeight: 900 }}>리더 권한 이관</DialogTitle>
+                <DialogContent>
+                    <Stack spacing={2} sx={{ pt: 1 }}>
+                        <Typography sx={{ fontSize: 14 }}>
+                            <strong>{pendingOwnerTransfer?.member.name}</strong>님에게 클럽의 관리 권한과 기존 리그의 향후 기능 사용 책임을 이관합니다.
+                        </Typography>
+                        <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
+                            기존 리더의 개인 구독기간, 결제수단, 기능 잔여량과 사용 이력은 이관되지 않습니다.
+                        </Typography>
+                        <Stack spacing={1}>
+                            {([
+                                ["admin", "운영진으로 남기기", "리더 권한만 넘기고 클럽 운영에 계속 참여합니다."],
+                                ["member", "회원으로 남기기", "일반 회원으로 클럽에 계속 소속됩니다."],
+                                ["leave", "클럽에서 탈퇴", "리더 이관과 동시에 클럽에서 나갑니다."],
+                            ] as const).map(([value, title, description]) => {
+                                const selected = previousOwnerAction === value;
+                                return (
+                                    <Button
+                                        key={value}
+                                        variant="outlined"
+                                        onClick={() => setPreviousOwnerAction(value)}
+                                        aria-pressed={selected}
+                                        sx={{
+                                            justifyContent: "flex-start",
+                                            textAlign: "left",
+                                            px: 2,
+                                            py: 1.4,
+                                            borderWidth: selected ? 2 : 1,
+                                            borderColor: selected ? "primary.main" : "divider",
+                                            bgcolor: selected ? "#EFF6FF" : "background.paper",
+                                            color: "text.primary",
+                                            "&:hover": { borderWidth: selected ? 2 : 1, bgcolor: selected ? "#EFF6FF" : "action.hover" },
+                                        }}
+                                    >
+                                        <Box>
+                                            <Typography sx={{ fontSize: 14, fontWeight: 900 }}>{title}</Typography>
+                                            <Typography sx={{ mt: 0.3, fontSize: 12, color: "text.secondary", textTransform: "none" }}>{description}</Typography>
+                                        </Box>
+                                    </Button>
+                                );
+                            })}
+                        </Stack>
+                        {ownerTransferError && (
+                            <Typography sx={{ fontSize: 13, color: "error.main" }}>{ownerTransferError}</Typography>
+                        )}
+                    </Stack>
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2 }}>
+                    <Button onClick={() => setPendingOwnerTransfer(null)}>취소</Button>
+                    <Button
+                        variant="contained"
+                        disabled={!previousOwnerAction}
+                        onClick={() => setOwnerTransferStep(2)}
+                    >
+                        다음
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            <Dialog
+                open={!!pendingOwnerTransfer && ownerTransferStep === 2}
+                onClose={isTransferringOwner ? undefined : () => setPendingOwnerTransfer(null)}
+                fullWidth
+                maxWidth="xs"
+            >
+                <DialogTitle sx={{ fontWeight: 900 }}>구독 및 기능 잔여량 처리</DialogTitle>
+                <DialogContent>
+                    <Stack spacing={2} sx={{ pt: 1 }}>
+                        <Typography sx={{ fontSize: 14 }}>
+                            기존 리더의 남은 구독기간과 미사용 기능 잔여량을 어떻게 처리할지 선택해주세요.
+                        </Typography>
+                        <Stack spacing={1}>
+                            {([
+                                ["keep", "기존 리더가 그대로 보유", "새 클럽에서도 남은 구독기간과 기능 잔여량을 사용할 수 있습니다."],
+                                ["transfer", "새 리더에게 이관", "남은 이용기간과 미사용 기능 잔여량을 새 리더에게 넘깁니다."],
+                            ] as const).map(([value, title, description]) => {
+                                const selected = benefitsAction === value;
+                                return (
+                                    <Button
+                                        key={value}
+                                        variant="outlined"
+                                        onClick={() => setBenefitsAction(value)}
+                                        aria-pressed={selected}
+                                        sx={{
+                                            justifyContent: "flex-start",
+                                            textAlign: "left",
+                                            px: 2,
+                                            py: 1.4,
+                                            borderWidth: selected ? 2 : 1,
+                                            borderColor: selected ? "primary.main" : "divider",
+                                            bgcolor: selected ? "#EFF6FF" : "background.paper",
+                                            color: "text.primary",
+                                            "&:hover": { borderWidth: selected ? 2 : 1, bgcolor: selected ? "#EFF6FF" : "action.hover" },
+                                        }}
+                                    >
+                                        <Box>
+                                            <Typography sx={{ fontSize: 14, fontWeight: 900 }}>{title}</Typography>
+                                            <Typography sx={{ mt: 0.3, fontSize: 12, color: "text.secondary", textTransform: "none" }}>{description}</Typography>
+                                        </Box>
+                                    </Button>
+                                );
+                            })}
+                        </Stack>
+                        <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
+                            결제수단과 과거 결제·사용 이력은 이관되지 않습니다. 이관 시 자동결제는 종료되고 남은 이용기간만 새 리더에게 적용됩니다.
+                        </Typography>
+                        {ownerTransferError && (
+                            <Typography sx={{ fontSize: 13, color: "error.main" }}>{ownerTransferError}</Typography>
+                        )}
+                    </Stack>
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2 }}>
+                    <Button disabled={isTransferringOwner} onClick={() => setOwnerTransferStep(1)}>이전</Button>
+                    <Button
+                        variant="contained"
+                        disabled={isTransferringOwner || !benefitsAction}
+                        onClick={handleTransferOwner}
+                    >
+                        {isTransferringOwner ? <CircularProgress size={18} color="inherit" /> : "리더 변경"}
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Stack>
     );
 }

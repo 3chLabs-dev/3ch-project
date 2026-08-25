@@ -1108,9 +1108,9 @@ router.put('/clubs/:id', requireAdmin, async (req, res) => {
 
     if (owner_id) {
       const newOwnerId = Number(owner_id);
-      // 기존 owner → member 강등
+      // 기존 owner는 운영진으로 남기고 신규 owner에게 운영 책임을 이관
       await client.query(
-        `UPDATE group_members SET role = 'member' WHERE group_id = $1 AND role = 'owner'`,
+        `UPDATE group_members SET role = 'admin' WHERE group_id = $1 AND role = 'owner'`,
         [id],
       );
       // 신규 owner 업서트
@@ -1121,6 +1121,12 @@ router.put('/clubs/:id', requireAdmin, async (req, res) => {
         [randomUUID(), id, newOwnerId],
       );
       await client.query(`UPDATE groups SET created_by_id = $1 WHERE id = $2`, [newOwnerId, id]);
+      await client.query(
+        `UPDATE leagues
+            SET created_by_id = $1, billing_owner_id = $1, updated_at = NOW()
+          WHERE group_id = $2`,
+        [newOwnerId, id],
+      );
     }
 
     // 클럽 URL 수정

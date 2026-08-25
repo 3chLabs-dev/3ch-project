@@ -1610,7 +1610,6 @@ router.patch('/group/:id/member/:userId/role', requireAuth, requireGroupOwner, a
       [id, targetUserId]
     );
     if (targetCheck.rows.length === 0) {
-      await client.query('ROLLBACK');
       return res.status(404).json({ message: '해당 멤버를 찾을 수 없습니다' });
     }
     if (targetCheck.rows[0].role === 'owner') {
@@ -1626,6 +1625,228 @@ router.patch('/group/:id/member/:userId/role', requireAuth, requireGroupOwner, a
   } catch (error) {
     console.error('Error updating member role:', error);
     res.status(500).json({ message: '내부 서버 오류' });
+  }
+});
+
+/**
+ * POST /group/:id/transfer-owner
+ * 클럽 리더 권한과 클럽에 속한 리그의 운영/과금 책임을 한 번에 이관합니다.
+ * 구 리더의 개인 구독, 결제수단, 기능 잔여량과 사용 이력은 변경하지 않습니다.
+ */
+router.post('/group/:id/transfer-owner', requireAuth, requireGroupOwner, async (req, res) => {
+  const { id } = req.params;
+  const currentOwnerId = Number(req.user.sub);
+  const newOwnerId = Number(req.body?.new_owner_user_id);
+  const previousOwnerAction = req.body?.previous_owner_action;
+  const benefitsAction = req.body?.benefits_action;
+  const division = req.body?.division;
+  const externalAliases = req.body?.external_aliases;
+
+  if (!Number.isInteger(newOwnerId) || newOwnerId <= 0) {
+    return res.status(400).json({ message: '새 리더를 선택해주세요' });
+  }
+  if (!['admin', 'member', 'leave'].includes(previousOwnerAction)) {
+    return res.status(400).json({ message: '기존 리더의 변경 후 역할이 올바르지 않습니다' });
+  }
+  if (!['keep', 'transfer'].includes(benefitsAction)) {
+    return res.status(400).json({ message: '구독기간과 기능 잔여량 처리 방식을 선택해주세요' });
+  }
+  if (newOwnerId === currentOwnerId) {
+    return res.status(400).json({ message: '현재 리더가 아닌 다른 회원을 선택해주세요' });
+  }
+  if (externalAliases !== undefined && !Array.isArray(externalAliases)) {
+    return res.status(400).json({ message: '외부 닉네임 형식이 올바르지 않습니다' });
+  }
+  const aliases = externalAliases === undefined
+    ? undefined
+    : [...new Map(externalAliases
+      .map((value) => String(value || '').normalize('NFKC').trim())
+      .filter((value) => value.length > 0 && value.length <= 60)
+      .map((value) => [value.replace(/\s+/g, '').toLocaleLowerCase('ko-KR'), value])).entries()]
+      .map(([normalized, alias]) => ({ alias, normalized }));
+  if (aliases && aliases.length > 20) {
+    return res.status(400).json({ message: '외부 닉네임은 최대 20개까지 등록할 수 있습니다' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const groupResult = await client.query(
+      `SELECT id FROM groups WHERE id = $1 FOR UPDATE`,
+      [id],
+    );
+    if (groupResult.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: '클럽을 찾을 수 없습니다' });
+    }
+
+    const membersResult = await client.query(
+      `SELECT user_id, role
+         FROM group_members
+        WHERE group_id = $1
+          AND (user_id = $2 OR user_id = $3)
+        FOR UPDATE`,
+      [id, currentOwnerId, newOwnerId],
+    );
+    const currentOwner = membersResult.rows.find((member) => Number(member.user_id) === currentOwnerId);
+    const newOwner = membersResult.rows.find((member) => Number(member.user_id) === newOwnerId);
+
+    if (!currentOwner || currentOwner.role !== 'owner') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: '리더가 이미 변경되었습니다. 화면을 새로고침해주세요' });
+    }
+    if (!newOwner) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: '새 리더는 현재 클럽의 회원 또는 운영진이어야 합니다' });
+    }
+    if (newOwner.role === 'owner') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: '선택한 회원이 이미 리더입니다' });
+    }
+
+    // 먼저 구 리더의 owner 역할을 제거한 후 새 리더를 지정한다.
+    if (previousOwnerAction === 'leave') {
+      await client.query(
+        `DELETE FROM group_members WHERE group_id = $1 AND user_id = $2`,
+        [id, currentOwnerId],
+      );
+    } else {
+      await client.query(
+        `UPDATE group_members SET role = $1 WHERE group_id = $2 AND user_id = $3`,
+        [previousOwnerAction, id, currentOwnerId],
+      );
+    }
+    await client.query(
+      `UPDATE group_members
+          SET role = 'owner', division = COALESCE($3, division)
+        WHERE group_id = $1 AND user_id = $2`,
+      [id, newOwnerId, division],
+    );
+
+    if (aliases !== undefined) {
+      await client.query(
+        `DELETE FROM user_external_aliases
+          WHERE group_id = $1 AND user_id = $2 AND source = 'external'`,
+        [id, newOwnerId],
+      );
+      for (const item of aliases) {
+        await client.query(
+          `INSERT INTO user_external_aliases
+             (id, user_id, group_id, alias, normalized_alias, source)
+           VALUES ($1, $2, $3, $4, $5, 'external')`,
+          [randomUUID(), newOwnerId, id, item.alias, item.normalized],
+        );
+      }
+    }
+
+    if (previousOwnerAction === 'leave') {
+      await client.query(
+        `DELETE FROM user_external_aliases WHERE group_id = $1 AND user_id = $2`,
+        [id, currentOwnerId],
+      );
+    }
+
+    await client.query(
+      `UPDATE groups SET created_by_id = $1, updated_at = NOW() WHERE id = $2`,
+      [newOwnerId, id],
+    );
+
+    // 기존 생성자에게 남을 수 있는 우회 관리 권한과 향후 사용량 차감 대상을 함께 이관한다.
+    await client.query(
+      `UPDATE leagues
+          SET created_by_id = $1, billing_owner_id = $1, updated_at = NOW()
+        WHERE group_id = $2`,
+      [newOwnerId, id],
+    );
+
+    if (benefitsAction === 'transfer') {
+      // 결제 이력과 결제수단은 구 리더에게 보존한다. 남은 이용기간은 무상·비갱신 구독으로 복제한다.
+      const subscriptions = await client.query(
+        `SELECT id, plan, expires_at
+           FROM subscriptions
+          WHERE user_id = $1 AND status = 'ACTIVE' AND expires_at > NOW()
+          FOR UPDATE`,
+        [currentOwnerId],
+      );
+      const transferredSubscriptionBuckets = [];
+
+      for (const subscription of subscriptions.rows) {
+        const transferredSubscription = await client.query(
+          `INSERT INTO subscriptions
+             (user_id, plan, order_id, payment_key, amount, status, started_at, expires_at,
+              billing_method_id, is_recurring, cancel_at_period_end, canceled_at)
+           VALUES ($1, $2, $3, 'TRANSFER', 0, 'ACTIVE', NOW(), $4, NULL, false, false, NULL)
+           RETURNING id`,
+          [newOwnerId, subscription.plan, `TRANSFER_${randomUUID()}`, subscription.expires_at],
+        );
+
+        const subscriptionBuckets = await client.query(
+          `UPDATE feature_credit_buckets
+              SET user_id = $1, subscription_id = $2, updated_at = NOW()
+            WHERE subscription_id = $3
+              AND starts_at <= NOW()
+              AND (expires_at IS NULL OR expires_at > NOW())
+              AND (remaining_amount IS NULL OR remaining_amount > 0)
+          RETURNING id, feature, remaining_amount`,
+          [newOwnerId, transferredSubscription.rows[0].id, subscription.id],
+        );
+        transferredSubscriptionBuckets.push(...subscriptionBuckets.rows);
+        await client.query(
+          `UPDATE subscriptions
+              SET status = 'EXPIRED', is_recurring = false, cancel_at_period_end = false,
+                  canceled_at = NOW()
+            WHERE id = $1`,
+          [subscription.id],
+        );
+      }
+
+      // 충전권·쿠폰·관리자 지급분 등 구독 외의 활성 미사용 잔여량도 함께 이관한다.
+      const transferredBuckets = await client.query(
+        `UPDATE feature_credit_buckets
+            SET user_id = $1, updated_at = NOW()
+          WHERE user_id = $2
+            AND subscription_id IS NULL
+            AND starts_at <= NOW()
+            AND (expires_at IS NULL OR expires_at > NOW())
+            AND (remaining_amount IS NULL OR remaining_amount > 0)
+        RETURNING id, feature, remaining_amount`,
+        [newOwnerId, currentOwnerId],
+      );
+
+      // 실제로 이번 트랜잭션에서 옮긴 버킷만 양쪽 사용자 이력에 남긴다.
+      const allTransferredBuckets = [...transferredSubscriptionBuckets, ...transferredBuckets.rows];
+      for (const bucket of allTransferredBuckets) {
+        const amount = bucket.remaining_amount === null ? 0 : Number(bucket.remaining_amount);
+        const metadata = JSON.stringify({
+          group_id: id,
+          from_user_id: currentOwnerId,
+          to_user_id: newOwnerId,
+          unlimited: bucket.remaining_amount === null,
+        });
+        await client.query(
+          `INSERT INTO feature_usage_events
+             (user_id, feature, action, amount, credit_bucket_id, reference_type, reference_id, metadata)
+           VALUES
+             ($1, $3, 'TRANSFER_OUT', $4, $5, 'GROUP_OWNER_TRANSFER', $6, $7::jsonb),
+             ($2, $3, 'TRANSFER_IN',  $4, $5, 'GROUP_OWNER_TRANSFER', $6, $7::jsonb)`,
+          [currentOwnerId, newOwnerId, bucket.feature, amount, bucket.id, id, metadata],
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+    return res.json({
+      message: '리더 권한이 이관되었습니다',
+      previous_owner_action: previousOwnerAction,
+      benefits_transferred: benefitsAction === 'transfer',
+    });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('Error transferring group owner:', error);
+    return res.status(500).json({ message: '리더 권한 이관 중 오류가 발생했습니다' });
+  } finally {
+    client.release();
   }
 });
 

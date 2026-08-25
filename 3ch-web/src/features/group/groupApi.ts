@@ -917,6 +917,35 @@ export const groupApi = baseApi.injectEndpoints({
       ],
     }),
 
+    transferGroupOwner: builder.mutation<
+      { message: string; previous_owner_action: "admin" | "member" | "leave"; benefits_transferred: boolean },
+      {
+        groupId: string;
+        newOwnerUserId: string;
+        previousOwnerAction: "admin" | "member" | "leave";
+        benefitsAction: "keep" | "transfer";
+        division?: string;
+        externalAliases?: string[];
+      }
+    >({
+      query: ({ groupId, newOwnerUserId, previousOwnerAction, benefitsAction, division, externalAliases }) => ({
+        url: `/group/${groupId}/transfer-owner`,
+        method: "POST",
+        body: {
+          new_owner_user_id: Number(newOwnerUserId),
+          previous_owner_action: previousOwnerAction,
+          benefits_action: benefitsAction,
+          division,
+          external_aliases: externalAliases,
+        },
+      }),
+      invalidatesTags: (_result, _error, { groupId }) => [
+        { type: "Group", id: groupId },
+        "Group",
+        "League",
+      ],
+    }),
+
     updateGroupRankingSeason: builder.mutation<{ message: string; season: GroupRankingSeason }, { groupId: string; seasonId: string; startDate: string; endDate: string; autoRenew: boolean; pointRules: GroupRankingPointRules }>({
       async queryFn({ groupId, seasonId, startDate, endDate, autoRenew, pointRules }, api, _extraOptions, fetchWithBQ) {
         const token = (api.getState() as RootState).auth?.token;
@@ -1002,6 +1031,7 @@ export const {
   useRequestGroupMemberClaimMutation,
   useReviewGroupMemberClaimMutation,
   useUpdateMemberRoleMutation,
+  useTransferGroupOwnerMutation,
   useUpdateMemberMutation,
   useRemoveMemberMutation,
   useUpdateGroupMutation,

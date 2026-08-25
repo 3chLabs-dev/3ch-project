@@ -4751,7 +4751,7 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
     }
 
     const participantsResult = await pool.query(
-      `SELECT id, name
+      `SELECT id, name, division
          FROM league_participants
         WHERE league_id = $1
         ORDER BY sort_order ASC NULLS LAST, division ASC, created_at ASC`,
@@ -4770,31 +4770,58 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
 
     if (requestedParticipantIds.length > 0) {
       const participantById = new Map(participants.map((participant) => [String(participant.id), participant]));
+      const resolveRequestedParticipant = (requestedId) => {
+        const directParticipant = participantById.get(requestedId);
+        if (directParticipant) return directParticipant;
+
+        const rosterIds = requestedId.split('+').map((id) => id.trim()).filter(Boolean);
+        if (rosterIds.length < 2 || new Set(rosterIds).size !== rosterIds.length) return null;
+        const roster = rosterIds.map((participantId) => participantById.get(participantId));
+        if (roster.some((participant) => !participant)) return null;
+        return {
+          id: requestedId,
+          name: roster.map((participant) => participant.name).join(' · '),
+          division: String(roster.reduce((sum, participant) => {
+            const level = Number.parseInt(String(participant.division ?? ''), 10);
+            return sum + (Number.isFinite(level) ? level : 0);
+          }, 0)),
+        };
+      };
       const uniqueIds = new Set(requestedParticipantIds);
       // 조별리그 사진은 현재 선택한 조의 대진표만 담으므로 리그 전체가
       // 아니라 화면에 표시된 참가자 부분집합의 순서를 받을 수 있어야 한다.
       const requestedOrderIsValid = uniqueIds.size === requestedParticipantIds.length
-        && requestedParticipantIds.every((participantId) => participantById.has(participantId));
+        && requestedParticipantIds.every((participantId) => resolveRequestedParticipant(participantId));
       if (!requestedOrderIsValid) {
         return res.status(400).json({ message: '현재 대진표의 참가자 순서가 서버 참가자 명단과 일치하지 않습니다.' });
       }
-      participants = requestedParticipantIds.map((participantId) => participantById.get(participantId));
+      participants = requestedParticipantIds.map((participantId) => resolveRequestedParticipant(participantId));
     }
     if (participants.length < 2) {
       return res.status(400).json({ message: '참가자가 2명 이상이어야 Vision 인식을 사용할 수 있습니다.' });
     }
 
     const matchesResult = await pool.query(
-      `SELECT id, participant_a_id, participant_b_id
+      `SELECT id, participant_a_id, participant_b_id,
+              participant_a_roster_ids, participant_b_roster_ids
          FROM league_matches
         WHERE league_id = $1 AND bracket IS NULL`,
       [leagueId],
     );
     const matchLookup = new Map();
     for (const match of matchesResult.rows) {
-      if (!match.participant_a_id || !match.participant_b_id) continue;
-      matchLookup.set(`${match.participant_a_id}__${match.participant_b_id}`, match);
-      matchLookup.set(`${match.participant_b_id}__${match.participant_a_id}`, match);
+      const participantAId = match.participant_a_id
+        || (Array.isArray(match.participant_a_roster_ids) ? match.participant_a_roster_ids.filter(Boolean).join('+') : '');
+      const participantBId = match.participant_b_id
+        || (Array.isArray(match.participant_b_roster_ids) ? match.participant_b_roster_ids.filter(Boolean).join('+') : '');
+      if (!participantAId || !participantBId) continue;
+      const resolvedMatch = {
+        ...match,
+        participant_a_id: participantAId,
+        participant_b_id: participantBId,
+      };
+      matchLookup.set(`${participantAId}__${participantBId}`, resolvedMatch);
+      matchLookup.set(`${participantBId}__${participantAId}`, resolvedMatch);
     }
 
     const visionMode = req.body?.mode === 'star-grid' ? 'star-grid' : 'sheet';

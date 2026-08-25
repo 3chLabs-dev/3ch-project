@@ -2271,8 +2271,11 @@ router.post('/league/:leagueId/participants', optionalAuth, async (req, res) => 
     const placementBlock = placement ? programBlocks[placement.program_round - 1] : null;
     const validTournamentPlacement = placement && participants.length === 1 &&
       placementBlock?.type === 'SINGLES' && placementBlock?.format === 'TOURNAMENT';
+    const validUnassignedFormationJoin = !placement && programBlocks.length > 0 &&
+      programBlocks.every((block) => block?.type === 'DOUBLES' || block?.type === 'TEAM');
     if (isLeagueActive && programBlocks.length > 0 &&
         !programBlocks.every((block) => block?.type === 'SINGLES' && block?.format === 'LEAGUE') &&
+        !validUnassignedFormationJoin &&
         !validTournamentPlacement) {
       return res.status(409).json({
         message: '해당 프로그램에서는 참가자를 추가할 위치를 먼저 선택해야 합니다.',

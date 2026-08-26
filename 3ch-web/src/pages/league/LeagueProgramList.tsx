@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   CircularProgress,
+  LinearProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -294,6 +295,9 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
   const [groupStructureRoundIndex, setGroupStructureRoundIndex] = useState<number | null>(null);
   const [groupStructureMode, setGroupStructureMode] = useState<"group" | "team">("group");
   const [pendingGroupStructureSizes, setPendingGroupStructureSizes] = useState<number[]>([]);
+  const [isFormationStarting, setIsFormationStarting] = useState(false);
+  const [formationStartingStep, setFormationStartingStep] = useState(0);
+  const [formationProgress, setFormationProgress] = useState(0);
   const [formationDraft, setFormationDraft] = useState<FormationPlayer[][]>([]);
   const [isFormationEditing, setIsFormationEditing] = useState(false);
   const [reshuffleConfirmOpen, setReshuffleConfirmOpen] = useState(false);
@@ -641,6 +645,14 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
   const groupStructureBlock = groupStructureRoundIndex == null
     ? undefined
     : storedProgram?.blocks?.[groupStructureRoundIndex];
+  const isGroupStructureReadOnly = groupStructureMode === "group"
+    && groupStructureRoundIndex !== null
+    && groupStructureRoundIndex > 0
+    && (
+      storedProgram?.rounds?.[groupStructureRoundIndex]?.option === "FINAL"
+      || groupStructureBlock?.roundOption === "FINAL"
+      || groupStructureBlock?.title?.includes("본선") === true
+    );
   const groupStructureMemberCount = (groupStructureMode === "team" ? groupStructureBlock?.teamFormationSizes : groupStructureBlock?.groupSizes)
     ?.reduce((sum, size) => sum + size, 0)
     || programPlayers.length;
@@ -685,20 +697,62 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
   };
 
   const closeGroupStructureDialog = () => {
+    if (isFormationStarting) return;
     setGroupStructureRoundIndex(null);
     setPendingGroupStructureSizes([]);
   };
 
-  const saveGroupStructure = async () => {
+  const runFormationProgress = async (operation: () => Promise<void>) => {
+    let currentProgress = 0;
+    const animateProgressTo = (target: number, duration: number) => new Promise<void>((resolve) => {
+      const startProgress = currentProgress;
+      const startedAt = performance.now();
+      const tick = (now: number) => {
+        const ratio = Math.min(1, (now - startedAt) / duration);
+        const easedRatio = 1 - Math.pow(1 - ratio, 3);
+        currentProgress = startProgress + (target - startProgress) * easedRatio;
+        setFormationProgress(Math.round(currentProgress));
+        if (ratio < 1) window.requestAnimationFrame(tick);
+        else {
+          currentProgress = target;
+          setFormationProgress(target);
+          resolve();
+        }
+      };
+      window.requestAnimationFrame(tick);
+    });
+
+    try {
+      setIsFormationStarting(true);
+      setFormationStartingStep(0);
+      setFormationProgress(0);
+      await animateProgressTo(35, 600);
+      setFormationStartingStep(1);
+      await Promise.all([operation(), animateProgressTo(70, 600)]);
+      setFormationStartingStep(2);
+      await animateProgressTo(92, 450);
+      await animateProgressTo(100, 200);
+    } finally {
+      setIsFormationStarting(false);
+      setFormationStartingStep(0);
+      setFormationProgress(0);
+    }
+  };
+
+  const startStructuredFormation = async () => {
     if (groupStructureRoundIndex == null || !storedProgram || pendingGroupStructureSizes.length === 0) return;
     const block = storedProgram.blocks?.[groupStructureRoundIndex];
     if (!block) return;
+    const publishedKey = groupStructureMode === "team" ? "teamFormationPublished" : "groupFormationPublished";
     const nextProgram: StoredProgramOption = {
       ...storedProgram,
       blocks: (storedProgram.blocks ?? []).map((currentBlock, index) => index === groupStructureRoundIndex
         ? {
             ...currentBlock,
-            ...(groupStructureMode === "team"
+            [publishedKey]: true,
+            ...(isGroupStructureReadOnly
+              ? {}
+              : groupStructureMode === "team"
               ? {
                   teamFormationSizes: pendingGroupStructureSizes,
                   teamPlayerCount: pendingGroupStructureSizes[0],
@@ -714,9 +768,32 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
                 }),
           }
         : currentBlock),
+      rounds: storedProgram.rounds?.map((round, index) => index === groupStructureRoundIndex
+        ? {
+            ...round,
+            [publishedKey]: true,
+            ...(isGroupStructureReadOnly
+              ? {}
+              : groupStructureMode === "team"
+              ? {
+                  teamFormationSizes: pendingGroupStructureSizes,
+                  teamPlayerCount: pendingGroupStructureSizes[0],
+                  teamAssignments: undefined,
+                  teamAssignmentModes: undefined,
+                  teamAssignmentLocks: undefined,
+                }
+              : {
+                  groupSizes: pendingGroupStructureSizes,
+                  groupAssignments: undefined,
+                }),
+          }
+        : round),
     };
-    await persistFormation(nextProgram, groupStructureRoundIndex, true);
-    closeGroupStructureDialog();
+    const roundIndex = groupStructureRoundIndex;
+    await runFormationProgress(() => persistFormation(nextProgram, roundIndex, true));
+    setGroupStructureRoundIndex(null);
+    setPendingGroupStructureSizes([]);
+    setFormationDialog({ roundIndex, mode: groupStructureMode });
   };
 
   const closeFormationDialog = () => {
@@ -780,7 +857,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
     if (!pendingFormationSave) return;
     const pending = pendingFormationSave;
     setPendingFormationSave(null);
-    await persistFormation(pending.program, pending.roundIndex, resetMatches);
+    await runFormationProgress(() => persistFormation(pending.program, pending.roundIndex, resetMatches));
     closeFormationDialog();
   };
 
@@ -1183,10 +1260,10 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
       };
     });
     setReshuffleConfirmOpen(false);
-    requestFormationSave(
-      { ...storedProgram, blocks: nextBlocks, ...(nextRounds ? { rounds: nextRounds } : {}) },
-      roundIndex,
-    );
+    setIsFormationEditing(false);
+    setFormationDraft([]);
+    const nextProgram = { ...storedProgram, blocks: nextBlocks, ...(nextRounds ? { rounds: nextRounds } : {}) };
+    await runFormationProgress(() => persistFormation(nextProgram, roundIndex, true));
   };
 
   const handleDelete = async () => {
@@ -1323,31 +1400,11 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
 
                     {(round.type === "TEAM" || round.type === "DOUBLES" || round.format === "GROUP") && (
                       <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-                        {canManage && round.type === "TEAM" && (
-                          <Button
-                            variant="outlined"
-                            size="small"
-                            onClick={() => openGroupStructureDialog(round.round - 1, "team")}
-                            sx={{ flex: 1, height: 34, fontWeight: 700, fontSize: 12, borderRadius: 1.5, textTransform: "none", whiteSpace: "nowrap" }}
-                          >
-                            팀 편성 구조
-                          </Button>
-                        )}
-                        {canManage && round.format === "GROUP" && round.stageLabel !== "본선" && (
-                          <Button
-                            variant="outlined"
-                            size="small"
-                            onClick={() => openGroupStructureDialog(round.round - 1, "group")}
-                            sx={{ flex: 1, height: 34, fontWeight: 700, fontSize: 12, borderRadius: 1.5, textTransform: "none", whiteSpace: "nowrap" }}
-                          >
-                            조 편성 구조
-                          </Button>
-                        )}
                         {round.type === "TEAM" && (round.teamFormationPublished || canManage) && (
                           <Button
                             variant="outlined"
                             size="small"
-                            onClick={() => round.teamFormationPublished ? setFormationDialog({ roundIndex: round.round - 1, mode: "team" }) : void publishFormation(round.round - 1, "team")}
+                            onClick={() => round.teamFormationPublished ? setFormationDialog({ roundIndex: round.round - 1, mode: "team" }) : openGroupStructureDialog(round.round - 1, "team")}
                             sx={{ flex: 1, height: 34, fontWeight: 700, fontSize: 12, borderRadius: 1.5, textTransform: "none", whiteSpace: "nowrap" }}
                           >
                             {round.teamFormationPublished ? "팀 편성 결과" : "팀 편성하기"}
@@ -1375,7 +1432,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
                           <Button
                             variant="outlined"
                             size="small"
-                            onClick={() => round.groupFormationPublished ? setFormationDialog({ roundIndex: round.round - 1, mode: "group" }) : void publishFormation(round.round - 1, "group")}
+                            onClick={() => round.groupFormationPublished ? setFormationDialog({ roundIndex: round.round - 1, mode: "group" }) : openGroupStructureDialog(round.round - 1, "group")}
                             sx={{ flex: 1, height: 34, fontWeight: 700, fontSize: 12, borderRadius: 1.5, textTransform: "none", whiteSpace: "nowrap" }}
                           >
                             {round.groupFormationPublished ? "조 편성 결과" : "조 편성하기"}
@@ -1528,8 +1585,53 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
         maxWidth="sm"
         slotProps={{ paper: { sx: { borderRadius: 2, mx: 2 } } }}
       >
-        <DialogTitle sx={{ fontWeight: 900, fontSize: 16 }}>{groupStructureMode === "team" ? "팀 편성 구조" : "조 편성 구조"}</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 900, fontSize: 16 }}>{groupStructureMode === "team" ? "팀 편성하기" : "조 편성하기"}</DialogTitle>
         <DialogContent dividers>
+          {isFormationStarting ? (
+            <Stack spacing={2} sx={{ py: 5, px: { xs: 1, sm: 3 } }}>
+              <Typography sx={{ fontSize: 15, fontWeight: 900 }}>
+                {formationStartingStep === 0
+                  ? "참가자를 섞고 있습니다…"
+                  : formationStartingStep === 1
+                    ? "균형을 맞추고 있습니다…"
+                    : "편성 결과를 준비하고 있습니다…"}
+              </Typography>
+              <Box>
+                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.75 }}>
+                  <Typography sx={{ color: "#6B7280", fontSize: 12, fontWeight: 700 }}>편성 진행률</Typography>
+                  <Typography sx={{ color: "#2563EB", fontSize: 13, fontWeight: 900 }}>{formationProgress}%</Typography>
+                </Stack>
+                <LinearProgress
+                  variant="determinate"
+                  value={formationProgress}
+                  sx={{
+                    height: 10,
+                    borderRadius: 999,
+                    bgcolor: "#E5E7EB",
+                    "& .MuiLinearProgress-bar": {
+                      borderRadius: 999,
+                      bgcolor: "#2F80ED",
+                      transition: "transform 80ms linear",
+                    },
+                  }}
+                />
+              </Box>
+            </Stack>
+          ) : (
+          <>
+          <Typography sx={{ mb: 1.25, color: "#374151", fontSize: 13, fontWeight: 800 }}>
+            현재 참가자 {groupStructureMemberCount}명
+          </Typography>
+          {isGroupStructureReadOnly && (
+            <Typography sx={{ mb: 1.5, color: "#6B7280", fontSize: 13, lineHeight: 1.6 }}>
+              본선 조 구조는 이전 라운드의 진출 규칙에 따라 자동으로 결정됩니다.
+            </Typography>
+          )}
+          {!isGroupStructureReadOnly && (
+            <Typography sx={{ mb: 1.5, color: "#6B7280", fontSize: 13, lineHeight: 1.6 }}>
+              편성 구조를 선택하면 참가자 부수를 기준으로 균형 있게 {groupStructureMode === "team" ? "팀을" : "조를"} 편성합니다.
+            </Typography>
+          )}
           <Stack spacing={1.25}>
             {groupStructureOptions.map((option) => {
               const selected = option.groups.length === pendingGroupStructureSizes.length
@@ -1539,13 +1641,13 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
                   key={option.groups.join("-")}
                   role="button"
                   tabIndex={0}
-                  onClick={() => setPendingGroupStructureSizes(option.groups)}
+                  onClick={() => { if (!isGroupStructureReadOnly) setPendingGroupStructureSizes(option.groups); }}
                   sx={{
                     border: selected ? "2px solid #3B82F6" : "1px solid #D1D5DB",
                     borderRadius: 1.5,
                     p: 2,
                     bgcolor: selected ? "#EFF6FF" : "#FFF",
-                    cursor: "pointer",
+                    cursor: isGroupStructureReadOnly ? "default" : "pointer",
                   }}
                 >
                   {option.recommended && <Typography sx={{ mb: 0.5, color: "#2563EB", fontSize: 12, fontWeight: 800 }}>추천</Typography>}
@@ -1557,10 +1659,14 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
               );
             })}
           </Stack>
+          </>
+          )}
         </DialogContent>
         <DialogActions sx={{ px: 2.5, py: 2 }}>
-          <Button onClick={closeGroupStructureDialog}>취소</Button>
-          <Button variant="contained" onClick={() => void saveGroupStructure()} disabled={isSavingFormation}>완료</Button>
+          <Button onClick={closeGroupStructureDialog} disabled={isFormationStarting}>취소</Button>
+          <Button variant="contained" onClick={() => void startStructuredFormation()} disabled={isSavingFormation || isFormationStarting}>
+            편성 시작
+          </Button>
         </DialogActions>
       </Dialog>
 
@@ -1761,15 +1867,14 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
         slotProps={{ paper: { sx: { borderRadius: 2, mx: 2 } } }}
       >
         <DialogTitle sx={{ fontWeight: 900, fontSize: 16 }}>
-          프로그램 수정 적용
+          프로그램 수정
         </DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ fontSize: 14, color: "text.primary" }}>
-            프로그램 구성이 변경되면 기존 대진표의 연결 관계가 달라질 수 있습니다.<br />
-            원활한 진행을 위해 대진표 초기화를 권장합니다.<br />
-            기존 경기를 유지하면 종료되었거나 진행 중인 경기는 그대로 유지됩니다.<br />
-            변경사항은 아직 시작하지 않은 경기에만 적용됩니다.<br />
-            대진표를 초기화하면 기존 경기 결과와 진행 상태가 모두 삭제되고 대진표가 새로 생성됩니다.
+            계속 진행을 하면 종료·진행 중인 경기는 그대로 유지됩니다.<br /><br />
+            초기화를 하면 대진표와 경기 결과가 초기 상태로 돌아갑니다.<br />
+            (원활한 진행을 위해 대진표 초기화 권장)<br /><br />
+            어떤 방식으로 적용하시겠습니까?
           </DialogContentText>
         </DialogContent>
         <DialogActions sx={{ px: 2, pb: 2 }}>
@@ -1778,7 +1883,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
             disabled={isSavingFormation}
             sx={{ fontWeight: 700 }}
           >
-            기존 경기 유지
+            계속 진행
           </Button>
           <Button
             variant="contained"
@@ -1791,9 +1896,50 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
               fontWeight: 700,
             }}
           >
-            대진표 초기화
+            초기화
           </Button>
         </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={isFormationStarting && groupStructureRoundIndex === null}
+        fullWidth
+        maxWidth="xs"
+        disableEscapeKeyDown
+        slotProps={{ paper: { sx: { borderRadius: 2, mx: 2 } } }}
+      >
+        <DialogTitle sx={{ fontWeight: 900, fontSize: 16 }}>편성 적용 중</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2} sx={{ py: 3, px: 1 }}>
+            <Typography sx={{ fontSize: 15, fontWeight: 900 }}>
+              {formationStartingStep === 0
+                ? "참가자를 섞고 있습니다…"
+                : formationStartingStep === 1
+                  ? "균형을 맞추고 있습니다…"
+                  : "편성 결과를 준비하고 있습니다…"}
+            </Typography>
+            <Box>
+              <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.75 }}>
+                <Typography sx={{ color: "#6B7280", fontSize: 12, fontWeight: 700 }}>편성 진행률</Typography>
+                <Typography sx={{ color: "#2563EB", fontSize: 13, fontWeight: 900 }}>{formationProgress}%</Typography>
+              </Stack>
+              <LinearProgress
+                variant="determinate"
+                value={formationProgress}
+                sx={{
+                  height: 10,
+                  borderRadius: 999,
+                  bgcolor: "#E5E7EB",
+                  "& .MuiLinearProgress-bar": {
+                    borderRadius: 999,
+                    bgcolor: "#2F80ED",
+                    transition: "transform 80ms linear",
+                  },
+                }}
+              />
+            </Box>
+          </Stack>
+        </DialogContent>
       </Dialog>
 
       <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)} slotProps={{ paper: { sx: { borderRadius: 2, mx: 2 } } }}>

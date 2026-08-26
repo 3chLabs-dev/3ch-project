@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Box, Button, Stack, Typography } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import AdFitBanner from "./AdFitBanner";
+import Seo from "./Seo";
 const icon1 = "/128_첫번째 아이콘.png";
 const icon2 = "/128_두번째 아이콘.png";
 const icon3 = "/128_세번째 아이콘.png";
@@ -44,6 +45,12 @@ export default function GuestHome() {
                 minHeight: "100%",
             }}
         >
+            <Seo
+                title="우리리그"
+                description="생활체육 리그 생성, 경기순서, 대진표, 클럽 랭킹과 경품 추첨을 한곳에서 운영하는 우리리그입니다."
+                path="/"
+                structuredData={{ "@context": "https://schema.org", "@type": "WebSite", name: "우리리그", url: "https://woorileague.com/", inLanguage: "ko-KR" }}
+            />
             <Stack>
                 <AdFitBanner
                     unitId="DAN-39yopQXEuZ0jdlDM"

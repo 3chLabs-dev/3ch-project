@@ -8,6 +8,7 @@ import SportsScoreOutlinedIcon from "@mui/icons-material/SportsScoreOutlined";
 import ViewKanbanOutlinedIcon from "@mui/icons-material/ViewKanbanOutlined";
 import { Link as RouterLink } from "react-router-dom";
 import logo from "../../assets/512_우리리그 로고.svg";
+import Seo from "../../components/Seo";
 
 const sections = [
   { label: "리그 운영", href: "#league" },
@@ -134,6 +135,7 @@ function FeatureGrid({
 export default function DemoLandingPage() {
   return (
     <Box sx={{ minHeight: "100dvh", bgcolor: "#F9FAFB" }}>
+      <Seo title="우리리그 서비스 소개" description="리그 생성, 경기 운영, 클럽 랭킹과 추첨까지 우리리그의 주요 기능과 활용 방법을 소개합니다." path="/demo" />
       <Box sx={{ position: "sticky", top: 0, zIndex: 10, bgcolor: "rgba(255,255,255,0.94)", backdropFilter: "blur(10px)", borderBottom: "1px solid #E5E7EB" }}>
         <Box sx={{ width: "min(1120px, calc(100% - 32px))", mx: "auto", py: 1.5, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
           <Box

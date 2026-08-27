@@ -267,6 +267,13 @@ type TokenPackage = {
   credits: Record<string, number>;
 };
 type CouponHistory = { name:string; type:string; value:number; expires_at:string; status:string; benefit:Record<string,unknown>; redeemed_at:string };
+type CouponPlanDialog = {
+  kind: "blocked" | "upgrade";
+  currentPlan: string;
+  currentExpiresAt: string;
+  couponPlan: string;
+  couponName: string;
+};
 const API = import.meta.env.VITE_API_BASE_URL ?? "/api";
 const PLAN_NAMES: Record<string, string> = {
   starter: "STARTER",
@@ -324,6 +331,7 @@ export default function PricingPage() {
   const [couponCode, setCouponCode] = useState("");
   const [couponLoading, setCouponLoading] = useState(false);
   const [couponMessage, setCouponMessage] = useState<{type:"success"|"error";text:string}|null>(null);
+  const [couponPlanDialog, setCouponPlanDialog] = useState<CouponPlanDialog | null>(null);
   const [coupons, setCoupons] = useState<CouponHistory[]>([]);
   const loadCoupons = useCallback(async () => {
     const resolvedToken = token ?? localStorage.getItem("token"); if (!resolvedToken) return setCoupons([]);
@@ -331,11 +339,27 @@ export default function PricingPage() {
     if (response.ok) setCoupons((await response.json()).coupons ?? []);
   }, [token]);
   useEffect(() => { void loadCoupons(); }, [loadCoupons]);
-  const redeemCoupon = async () => {
+  const redeemCoupon = async (confirmUpgrade = false) => {
     const resolvedToken = token ?? localStorage.getItem("token");
     if (!resolvedToken) { navigate("/login"); return; }
     setCouponLoading(true); setCouponMessage(null);
-    try { const response=await fetch(`${API}/coupons/redeem`,{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${resolvedToken}`},body:JSON.stringify({code:couponCode})}); const data=await response.json(); if(!response.ok) throw new Error(data.message||"쿠폰을 등록할 수 없습니다."); const isDiscount=data.coupon.type==="PERCENT_DISCOUNT"; setCouponMessage({type:"success",text:isDiscount?`${data.coupon.name} 쿠폰이 등록되었습니다. 구독 결제 화면에서 적용해 주세요.`:`${data.coupon.name} 혜택이 즉시 지급되었습니다.`}); setCouponCode(""); await loadCoupons(); loadPurchaseHistory(); }
+    try {
+      const response=await fetch(`${API}/coupons/redeem`,{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${resolvedToken}`},body:JSON.stringify({code:couponCode,confirmUpgrade})});
+      const data=await response.json();
+      if(!response.ok){
+        if(data.error==="COUPON_PLAN_ACTIVE"||data.error==="COUPON_UPGRADE_CONFIRM_REQUIRED"){
+          setCouponPlanDialog({kind:data.error==="COUPON_PLAN_ACTIVE"?"blocked":"upgrade",currentPlan:data.currentPlan,currentExpiresAt:data.currentExpiresAt,couponPlan:data.couponPlan,couponName:data.couponName});
+          return;
+        }
+        throw new Error(data.message||"쿠폰을 등록할 수 없습니다.");
+      }
+      const isDiscount=data.coupon.type==="PERCENT_DISCOUNT";
+      setCouponPlanDialog(null);
+      setCouponMessage({type:"success",text:isDiscount?`${data.coupon.name} 쿠폰이 등록되었습니다. 구독 결제 화면에서 적용해 주세요.`:`${data.coupon.name} 혜택이 즉시 지급되었습니다.`});
+      setCouponCode("");
+      await loadCoupons();
+      loadPurchaseHistory();
+    }
     catch(error){setCouponMessage({type:"error",text:error instanceof Error?error.message:"쿠폰을 사용할 수 없습니다."});} finally{setCouponLoading(false);}
   };
   useEffect(() => {
@@ -489,7 +513,47 @@ export default function PricingPage() {
       <Dialog open={couponOpen} onClose={()=>!couponLoading&&setCouponOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle fontWeight={900}>쿠폰 등록</DialogTitle>
         <DialogContent><Typography fontSize={13} color="text.secondary" sx={{mb:2}}>발급받은 쿠폰번호를 입력해 주세요.</Typography>{couponMessage&&<Alert severity={couponMessage.type} sx={{mb:2}}>{couponMessage.text}</Alert>}<TextField autoFocus fullWidth label="쿠폰번호" value={couponCode} onChange={e=>setCouponCode(e.target.value.toUpperCase())} placeholder="ABCD-EFGH-JKLM-NPQR"/></DialogContent>
-        <DialogActions><Button onClick={()=>setCouponOpen(false)} disabled={couponLoading}>취소</Button><Button variant="contained" onClick={redeemCoupon} disabled={couponLoading||!couponCode.trim()}>{couponLoading?"확인 중":"등록"}</Button></DialogActions>
+        <DialogActions><Button onClick={()=>setCouponOpen(false)} disabled={couponLoading}>취소</Button><Button variant="contained" onClick={()=>void redeemCoupon()} disabled={couponLoading||!couponCode.trim()}>{couponLoading?"확인 중":"등록"}</Button></DialogActions>
+      </Dialog>
+
+      <Dialog open={Boolean(couponPlanDialog)} onClose={()=>!couponLoading&&setCouponPlanDialog(null)} maxWidth="xs" fullWidth>
+        <DialogTitle fontWeight={900}>
+          {couponPlanDialog?.kind === "upgrade" ? "상위 요금제 쿠폰 적용" : "쿠폰 등록 안내"}
+        </DialogTitle>
+        <DialogContent>
+          {couponPlanDialog?.kind === "upgrade" ? (
+            <>
+              <Typography fontSize={14} lineHeight={1.7}>
+                {PLAN_NAMES[couponPlanDialog.couponPlan] ?? couponPlanDialog.couponPlan} 쿠폰을 지금 적용하시겠습니까?
+              </Typography>
+              <Alert severity="warning" sx={{ mt: 2 }}>
+                적용 즉시 현재 {PLAN_NAMES[couponPlanDialog.currentPlan] ?? couponPlanDialog.currentPlan} 요금제는 종료되고 상위 요금제가 시작됩니다. 남은 기존 이용기간은 복구되거나 환불되지 않습니다.
+              </Alert>
+            </>
+          ) : couponPlanDialog ? (
+            <>
+              <Typography fontSize={14} lineHeight={1.7}>
+                현재 {PLAN_NAMES[couponPlanDialog.currentPlan] ?? couponPlanDialog.currentPlan} 요금제를 이용 중입니다.
+              </Typography>
+              <Typography fontSize={14} lineHeight={1.7} sx={{ mt: 1 }}>
+                이 쿠폰은 현재 요금제 이용기간이 종료된 후 등록할 수 있습니다.
+              </Typography>
+              <Typography fontSize={13} color="text.secondary" sx={{ mt: 1.5 }}>
+                현재 이용 종료일: {formatDate(couponPlanDialog.currentExpiresAt)}
+              </Typography>
+            </>
+          ) : null}
+        </DialogContent>
+        <DialogActions>
+          {couponPlanDialog?.kind === "upgrade" && <Button onClick={()=>setCouponPlanDialog(null)} disabled={couponLoading}>취소</Button>}
+          <Button
+            variant={couponPlanDialog?.kind === "upgrade" ? "contained" : "text"}
+            onClick={()=>couponPlanDialog?.kind === "upgrade" ? void redeemCoupon(true) : setCouponPlanDialog(null)}
+            disabled={couponLoading}
+          >
+            {couponPlanDialog?.kind === "upgrade" ? (couponLoading ? "적용 중" : "확인 후 적용") : "확인"}
+          </Button>
+        </DialogActions>
       </Dialog>
 
       <Dialog

@@ -25,7 +25,6 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import CloseIcon from "@mui/icons-material/Close";
 import TuneIcon from "@mui/icons-material/Tune";
 import CachedIcon from "@mui/icons-material/Cached";
-import HistoryIcon from "@mui/icons-material/History";
 import confetti from "canvas-confetti";
 import DragHandleIcon from "@mui/icons-material/DragHandle";
 import { useGetMyGroupsQuery } from "../../features/group/groupApi";
@@ -571,24 +570,43 @@ function LeagueResultCard({ item, canCreate, navigate, statusFilters }: {
         && Number(latestDraw.winner_count) >= Number(latestDraw.total_quantity)
       ? "completed"
       : "scheduled";
+  const statusLabel = LEAGUE_DRAW_STATUS_OPTIONS.find((option) => option.value === status)?.label ?? "추첨 미진행";
 
   if (statusFilters.length > 0 && !statusFilters.includes(status)) return null;
 
   return (
     <ResultCard
-      name={`${item.title ?? ""} | ${item.type}`}
+      name={item.title || item.name}
       start_date={item.start_date}
-      onClick={canCreate ? () => navigate(`/draw/${item.league_code ?? item.id}?create=1`) : undefined}
-      onHistory={hasDraws ? () => navigate(`/draw/${item.league_code ?? item.id}`) : undefined}
+      onClick={hasDraws
+        ? () => navigate(`/draw/${item.league_code ?? item.id}`)
+        : canCreate
+          ? () => navigate(`/draw/${item.league_code ?? item.id}?create=1`)
+          : undefined}
+      statusLabel={statusLabel}
+      status={status}
     />
   );
 }
 
-function ResultCard({ name, start_date , onClick, onHistory  }: { name: string; start_date: string; onClick?: () => void; onHistory?: () => void }) {
+function ResultCard({ name, start_date, onClick, statusLabel, status }: {
+  name: string;
+  start_date: string;
+  onClick?: () => void;
+  statusLabel?: string;
+  status?: LeagueDrawStatus;
+}) {
   return (
     <Card
       elevation={2}
-      sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
+      onClick={onClick}
+      sx={{
+        borderRadius: 1,
+        boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+        cursor: onClick ? "pointer" : "default",
+        transition: "transform 120ms ease, box-shadow 120ms ease",
+        "&:hover": onClick ? { transform: "translateY(-1px)", boxShadow: "0 6px 16px rgba(0,0,0,0.12)" } : undefined,
+      }}
     >
       <CardContent sx={{ py: 1.8, px: 2.5, minHeight: 56, display: "flex", alignItems: "center", "&:last-child": { pb: 1.8 } }}>
         <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ width: "100%" }}>
@@ -599,20 +617,20 @@ function ResultCard({ name, start_date , onClick, onHistory  }: { name: string; 
             </Typography>
           </Box>
           <Stack direction="row" alignItems="center" spacing={0.5}>
-            {onHistory && (
-              <IconButton size="small" onClick={onHistory} sx={{ color: "#6B7280" }} title="추첨 목록">
-                <HistoryIcon fontSize="small" />
-              </IconButton>
-            )}
-            {onClick && (
-              <Button
+            {statusLabel && (
+              <Chip
+                label={statusLabel}
                 size="small"
-                variant="outlined"
-                onClick={onClick}
-                sx={{ fontWeight: 700, borderRadius: 1, whiteSpace: "nowrap" }}
-              >
-                추첨하기
-              </Button>
+                sx={{
+                  height: 26,
+                  fontSize: 11,
+                  fontWeight: 800,
+                  border: "1px solid",
+                  borderColor: status === "completed" ? "#86EFAC" : status === "scheduled" ? "#93C5FD" : "#D1D5DB",
+                  bgcolor: status === "completed" ? "#F0FDF4" : status === "scheduled" ? "#EFF6FF" : "#F9FAFB",
+                  color: status === "completed" ? "#16A34A" : status === "scheduled" ? "#1D6FBF" : "#6B7280",
+                }}
+              />
             )}
           </Stack>
         </Stack>

@@ -6,6 +6,7 @@ const { provisionSubscriptionCredits } = require("../services/featureUsageServic
 const router = express.Router();
 const TYPES = new Set(["FREE_MONTHS", "PERCENT_DISCOUNT", "LEAGUE_CREATE", "VISION_SCAN", "DRAW_CREATE"]);
 const FEATURES = { LEAGUE_CREATE: "LEAGUE_CREATE", VISION_SCAN: "VISION_SCAN", DRAW_CREATE: "DRAW_CREATE" };
+const PLAN_RANKS = { starter: 0, basic: 1, pro: 2, premium: 3 };
 const ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
 
 function generateCode() {
@@ -17,6 +18,17 @@ function normalizeCode(value) {
   return String(value || "").normalize("NFKC").trim().toUpperCase().replace(/[\s-]+/g, "");
 }
 function couponError(status, code, message) { return Object.assign(new Error(message), { status, couponCode: code }); }
+
+function subscriptionCouponError(code, message, currentSubscription, coupon) {
+  return Object.assign(couponError(409, code, message), {
+    details: {
+      currentPlan: currentSubscription.plan,
+      currentExpiresAt: currentSubscription.expires_at,
+      couponPlan: coupon.plan_code,
+      couponName: coupon.name,
+    },
+  });
+}
 
 router.post("/coupons/redeem", requireAuth, async (req, res) => {
   const userId = Number(req.user.sub); const code = normalizeCode(req.body?.code);
@@ -38,13 +50,36 @@ router.post("/coupons/redeem", requireAuth, async (req, res) => {
       : new Date(coupon.valid_until);
     let benefit;
     if(FEATURES[coupon.type]){await client.query(`INSERT INTO feature_credit_buckets(user_id,feature,source,initial_amount,remaining_amount,starts_at,expires_at,source_ref) VALUES($1,$2,'COUPON',$3,$3,NOW(),$4,$5)`,[userId,FEATURES[coupon.type],coupon.value,redemptionExpiresAt,`coupon:${coupon.id}:${userId}`]);benefit={feature:FEATURES[coupon.type],count:coupon.value,expiresAt:redemptionExpiresAt};}
-    else if(coupon.type==="FREE_MONTHS"){const active=await client.query(`SELECT id,plan,expires_at FROM subscriptions WHERE user_id=$1 AND status='ACTIVE' AND expires_at>NOW() ORDER BY expires_at DESC LIMIT 1 FOR UPDATE`,[userId]);const plan=coupon.plan_code||active.rows[0]?.plan||"basic",expiresAt=new Date(active.rows[0]?.expires_at||Date.now());expiresAt.setUTCMonth(expiresAt.getUTCMonth()+coupon.value);const sub=await client.query(`INSERT INTO subscriptions(user_id,plan,order_id,payment_key,amount,expires_at,is_recurring) VALUES($1,$2,$3,'COUPON',0,$4,false) RETURNING id,started_at`,[userId,plan,`COUPON_${coupon.id}_${userId}`,expiresAt]);if(active.rowCount)await client.query(`UPDATE subscriptions SET status='EXPIRED' WHERE id=$1`,[active.rows[0].id]);await provisionSubscriptionCredits(client,{subscriptionId:sub.rows[0].id,userId,plan,startsAt:sub.rows[0].started_at,expiresAt});benefit={plan,months:coupon.value,expiresAt};}
+    else if(coupon.type==="FREE_MONTHS"){
+      const plan=coupon.plan_code;
+      if (PLAN_RANKS[plan] === undefined) throw couponError(400,"COUPON_INVALID_PLAN","쿠폰의 요금제 정보가 올바르지 않습니다.");
+      const active=await client.query(`SELECT id,plan,expires_at FROM subscriptions WHERE user_id=$1 AND status='ACTIVE' AND expires_at>NOW() ORDER BY created_at DESC LIMIT 1 FOR UPDATE`,[userId]);
+      const current=active.rows[0];
+      if(current){
+        const currentRank=PLAN_RANKS[current.plan];
+        if(currentRank === undefined || PLAN_RANKS[plan] <= currentRank){
+          throw subscriptionCouponError("COUPON_PLAN_ACTIVE","현재 요금제 이용기간이 종료된 후 등록할 수 있는 쿠폰입니다.",current,coupon);
+        }
+        if(req.body?.confirmUpgrade !== true){
+          throw subscriptionCouponError("COUPON_UPGRADE_CONFIRM_REQUIRED","상위 요금제 쿠폰 적용 전 확인이 필요합니다.",current,coupon);
+        }
+      }
+      const expiresAt=new Date();
+      expiresAt.setUTCMonth(expiresAt.getUTCMonth()+coupon.value);
+      const sub=await client.query(`INSERT INTO subscriptions(user_id,plan,order_id,payment_key,amount,expires_at,is_recurring) VALUES($1,$2,$3,'COUPON',0,$4,false) RETURNING id,started_at`,[userId,plan,`COUPON_${coupon.id}_${userId}`,expiresAt]);
+      if(current){
+        await client.query(`UPDATE subscriptions SET status='EXPIRED' WHERE user_id=$1 AND status='ACTIVE' AND id<>$2`,[userId,sub.rows[0].id]);
+        await client.query(`UPDATE feature_credit_buckets SET expires_at=NOW(),updated_at=NOW() WHERE subscription_id=$1 AND (expires_at IS NULL OR expires_at>NOW())`,[current.id]);
+      }
+      await provisionSubscriptionCredits(client,{subscriptionId:sub.rows[0].id,userId,plan,startsAt:sub.rows[0].started_at,expiresAt});
+      benefit={plan,months:coupon.value,expiresAt};
+    }
     else benefit={percent:coupon.value,planCode:coupon.plan_code};
     const immediatelyApplied=coupon.type!=="PERCENT_DISCOUNT";
     await client.query(`INSERT INTO coupon_redemptions (coupon_id,user_id,status,benefit,applied_at,expires_at) VALUES ($1,$2,$3,$4::jsonb,$5,$6)`,
       [coupon.id,userId,immediatelyApplied?"APPLIED":"AVAILABLE",JSON.stringify(benefit),immediatelyApplied?new Date():null,redemptionExpiresAt]);
     await client.query("COMMIT"); return res.json({ok:true,coupon:{name:coupon.name,type:coupon.type,value:coupon.value},benefit});
-  } catch(e) { await client.query("ROLLBACK"); return res.status(e.status||500).json({ok:false,error:e.couponCode||"COUPON_REDEEM_FAILED",message:e.message}); }
+  } catch(e) { await client.query("ROLLBACK"); return res.status(e.status||500).json({ok:false,error:e.couponCode||"COUPON_REDEEM_FAILED",message:e.message,...(e.details||{})}); }
   finally { client.release(); }
 });
 

@@ -1153,7 +1153,9 @@ export default function DrawList() {
               <CardContent sx={{ py: 1.5, px: 2, "&:last-child": { pb: 1.5 } }}>
                 <Stack direction="row" alignItems="center" justifyContent="space-between">
                   <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography fontWeight={800} noWrap>{draw.title}</Typography>
+                    <Typography fontWeight={800} noWrap>
+                      {draw.prize_names?.length > 0 ? `${draw.prize_names.join(", ")} 경품 추첨` : "경품 추첨"}
+                    </Typography>
                     <Stack direction="row" spacing={1} alignItems="center" mt={0.3}>
                       <Typography variant="caption" color="text.secondary" fontWeight={700}>
                         {formatDate(draw.start_date)}

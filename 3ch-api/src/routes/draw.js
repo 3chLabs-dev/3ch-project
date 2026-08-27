@@ -141,6 +141,7 @@ router.get('/draw/:leagueId', requireAuth, async (req, res) => {
       `SELECT d.id, d.name, d.created_at, d.draw_code, u.name AS creator_name,
               COUNT(DISTINCT dp.id) AS prize_count,
               COALESCE((SELECT SUM(quantity) FROM draw_prizes WHERE draw_id = d.id), 0) AS total_quantity,
+              COALESCE((SELECT json_agg(prize_name ORDER BY display_order) FROM draw_prizes WHERE draw_id = d.id), '[]'::json) AS prize_names,
               COUNT(DISTINCT dw.id) AS winner_count,
               l.title, l.type, l.start_date
        FROM draws d

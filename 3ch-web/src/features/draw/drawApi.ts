@@ -9,6 +9,7 @@ export interface DrawListItem {
   created_at: string;
   prize_count: number;
   total_quantity: number;
+  prize_names: string[];
   winner_count: number;
   creator_name?: string;
   title?: string;

@@ -280,6 +280,8 @@ const formatDate = (value: string) =>
     month: "2-digit",
     day: "2-digit",
   }).format(new Date(value));
+const formatCouponDate = (value: string) =>
+  new Date(value).toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
 const FEATURE_LABELS: Array<[string, string]> = [
   ["club_create", "클럽 생성"],
   ["club_join", "클럽 가입"],
@@ -795,7 +797,7 @@ export default function PricingPage() {
       {/* 쿠폰내역 탭 */}
       {tab === 3 && (
         <Box>
-          <Stack spacing={1.5}>{coupons.map((coupon,index)=><Box key={`${coupon.redeemed_at}-${index}`} sx={{border:"1px solid #E5E7EB",borderRadius:2,p:2,textAlign:"left"}}><Stack direction="row" justifyContent="space-between"><Box><Typography fontWeight={900}>{coupon.name}</Typography><Typography fontSize={12} color="text.secondary">{new Date(coupon.redeemed_at).toLocaleDateString("ko-KR")} 등록 · {new Date(coupon.expires_at).toLocaleDateString("ko-KR")}까지</Typography></Box><Chip size="small" label={coupon.status==="AVAILABLE"?"다음 결제에 사용 가능":"적용 완료"} color={coupon.status==="AVAILABLE"?"primary":"success"}/></Stack></Box>)}</Stack>
+          <Stack spacing={1.5}>{coupons.map((coupon,index)=><Box key={`${coupon.redeemed_at}-${index}`} sx={{border:"1px solid #E5E7EB",borderRadius:2,p:2,textAlign:"left"}}><Stack direction="row" justifyContent="space-between"><Box><Typography fontWeight={900}>{coupon.name}</Typography><Typography fontSize={12} color="text.secondary">{formatCouponDate(coupon.redeemed_at)} 등록 ~ {formatCouponDate(coupon.expires_at)} 까지</Typography></Box><Chip size="small" label={coupon.status==="AVAILABLE"?"다음 결제에 사용 가능":"적용 완료"} color={coupon.status==="AVAILABLE"?"primary":"success"}/></Stack></Box>)}</Stack>
           <Box sx={{ py: coupons.length ? 0 : 6, textAlign: "center", display: coupons.length ? "none" : "block" }}>
           <Typography fontSize={14} fontWeight={700} color="text.secondary">등록된 쿠폰이 없습니다.</Typography>
           </Box>

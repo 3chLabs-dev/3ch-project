@@ -14,7 +14,6 @@ import {
   DialogTitle,
   Divider,
   IconButton,
-  LinearProgress,
   MenuItem,
   Select,
   Snackbar,
@@ -28,7 +27,6 @@ import AddIcon from "@mui/icons-material/Add";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
-import CachedIcon from "@mui/icons-material/Cached";
 import confetti from "canvas-confetti";
 import {
   useGetLeagueQuery,
@@ -50,7 +48,7 @@ import { useGetMyFeatureUsageQuery } from "../../features/payment/usageApi";
 // Animation delay steps (ms): fast → slow
 const ANIM_STEPS = [50,50,50,50,50,50,50,50,50,50,50,50,50,50,50,80,110,150,200,280,400,600];
 
-type Phase = "list" | "create" | "animating" | "done";
+type Phase = "list" | "create";
 
 type PrizeInput = {
   id: string;
@@ -142,12 +140,15 @@ export default function DrawList() {
   const { leagueId } = useParams<{ leagueId: string; }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const animationRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [drawingPrize, setDrawingPrize] = useState<PrizeInput | null>(null);
   const [animPhase, setAnimPhase] = useState<"spinning" | "result">("spinning");
   const [rollingName, setRollingName] = useState("");
   const [pendingWinners, setPendingWinners] = useState<PendingWinner[]>([]);
   const [isSavingWinner, setIsSavingWinner] = useState(false);
+  const [autoDrawOpen, setAutoDrawOpen] = useState(false);
+  const [autoDrawPhase, setAutoDrawPhase] = useState<"spinning" | "result">("spinning");
+  const [autoPrizeIndex, setAutoPrizeIndex] = useState(0);
+  const [autoRollingName, setAutoRollingName] = useState("");
 
   const [confirmState, setConfirmState] = useState<{
     message: string;
@@ -336,27 +337,6 @@ export default function DrawList() {
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [deleteConfirmDraw, setDeleteConfirmDraw] = useState<DrawListItem | null>(null);
 
-  // 완료 화면 폭죽 애니메이션
-  useEffect(() => {
-    if (phase !== "done") return;
-    const fire = (originX: number, angle: number) =>
-      confetti({
-        particleCount: 6,
-        angle,
-        spread: 50,
-        origin: { x: originX, y: 0.65 },
-        colors: ["#2F80ED", "#56CCF2", "#F2994A", "#27AE60", "#EB5757"],
-        zIndex: 9999,
-      });
-    let count = 0;
-    animationRef.current = setInterval(() => {
-      fire(0.1, 60);
-      fire(0.9, 120);
-      if (++count >= 8) { clearInterval(animationRef.current!); animationRef.current = null; }
-    }, 200);
-    return () => { if (animationRef.current) clearInterval(animationRef.current); };
-  }, [phase]);
-
   const handleAddPrize = () => {
     if (!pendingPrizeName.trim()) {
       setAlertMsg("경품 이름을 입력해주세요.");
@@ -458,10 +438,49 @@ export default function DrawList() {
       results.push({ ...prize, winners });
     }
     setPrizeResults(results);
-    setPhase("animating");
-    setTimeout(() => {
-      setPhase("done");
-    }, 1600);
+    clearAnimTimer();
+    setAutoDrawOpen(true);
+    setAutoDrawPhase("spinning");
+    setAutoPrizeIndex(0);
+
+    const rollingNames = participantRows.filter((participant) => participant.weight > 0).map((participant) => participant.name);
+    let prizeIndex = 0;
+    let stepIndex = 0;
+
+    const finishAutoDraw = () => {
+      setAutoDrawPhase("result");
+      setTimeout(() => {
+        confetti({ particleCount: 160, spread: 90, origin: { y: 0.6 } });
+      }, 50);
+    };
+
+    const tick = () => {
+      const prize = results[prizeIndex];
+      if (!prize) {
+        finishAutoDraw();
+        return;
+      }
+
+      if (stepIndex >= ANIM_STEPS.length) {
+        setAutoRollingName(prize.winners[0]?.participant_name ?? "당첨자 없음");
+        animTimerRef.current = setTimeout(() => {
+          prizeIndex += 1;
+          stepIndex = 0;
+          if (prizeIndex >= results.length) {
+            finishAutoDraw();
+            return;
+          }
+          setAutoPrizeIndex(prizeIndex);
+          tick();
+        }, 600);
+        return;
+      }
+
+      setAutoRollingName(rollingNames[Math.floor(Math.random() * rollingNames.length)] ?? "당첨자 없음");
+      animTimerRef.current = setTimeout(tick, ANIM_STEPS[stepIndex++]);
+    };
+
+    tick();
   };
 
   const handleSaveAsDraft = async () => {
@@ -506,13 +525,13 @@ export default function DrawList() {
     setPendingPrizeName("");
     setPendingQuantity(1);
     setParticipantWeights({});
+    setAutoDrawOpen(false);
     setPhase("list");
   };
 
   // nak 이게 추첨내용 최종 저장하는 로직
   const handleSaveAndReturn = async () => {
     if (!leagueId) return;
-    if (animationRef.current) { clearInterval(animationRef.current); animationRef.current = null; }
 
     const now = new Date();
     const drawName = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} 추첨`;
@@ -570,6 +589,7 @@ export default function DrawList() {
     setPendingPrizeName("");
     setPendingQuantity(1);
     setParticipantWeights({});
+    setAutoDrawOpen(false);
     // (수정)이 부분에서 다시 원래 화면으로 돌아가야 하는거 추가해야함
     if (draftId) {
       navigate(`/draw/${leagueId}/${draftId}`, { replace: true });
@@ -708,7 +728,7 @@ export default function DrawList() {
                       </IconButton>
                     </Stack>
                   </Stack>
-                  <Divider sx={{ mb: 1 }} />
+                  <Divider sx={{ mt: 0.75, mb: 1 }} />
                   {prize.winners.length === 0 ? (
                     <Typography color="text.secondary" fontSize={13} fontWeight={700}>추첨 전</Typography>
                   ) : (
@@ -743,35 +763,54 @@ export default function DrawList() {
                 참가자가 없습니다.
               </Typography>
             ) : (
-              <>
-                <Stack direction="row" sx={{ px: 0.5 }}>
-                  <Typography variant="caption" sx={{ width: 52, color: "text.secondary", fontWeight: 700 }}>부수</Typography>
-                  <Typography variant="caption" sx={{ flex: 1, color: "text.secondary", fontWeight: 700 }}>이름</Typography>
-                  <Typography variant="caption" sx={{ width: 72, color: "text.secondary", fontWeight: 700, textAlign: "center" }}>가중치</Typography>
-                </Stack>
-                <Divider />
-                <Stack spacing={0.8}>
-                  {participantRows.map((row) => (
-                    <Stack key={row.id} direction="row" alignItems="center" sx={{ px: 0.5, opacity: row.weight === 0 ? 0.35 : 1 }}>
-                      <Box sx={{ width: 52 }}>
-                        <Chip label={row.division} size="small" sx={{ fontSize: 10, display: "inline-flex", borderRadius: 9999, height: 36, minWidth: 36, fontWeight: 800, bgcolor: "#FAAA47", color: "#000000" }} />
+              <Box sx={{ bgcolor: "#fff", borderRadius: 1, border: "1px solid #E5E7EB", overflow: "hidden" }}>
+                <Box sx={{ display: "flex", alignItems: "center", px: 1.5, py: 0.8, bgcolor: "#F9FAFB", borderBottom: "1px solid #E5E7EB" }}>
+                  <Box sx={{ width: 40, display: "flex", justifyContent: "center", flexShrink: 0 }}>
+                    <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#6B7280" }}>부수</Typography>
+                  </Box>
+                  <Box sx={{ flex: 1, display: "flex", justifyContent: "center", minWidth: 0 }}>
+                    <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#6B7280" }}>이름</Typography>
+                  </Box>
+                  <Box sx={{ width: 92, display: "flex", justifyContent: "center", flexShrink: 0 }}>
+                    <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#6B7280" }}>가중치</Typography>
+                  </Box>
+                </Box>
+
+                {participantRows.map((row, idx) => (
+                  <Box
+                    key={row.id}
+                    sx={{ display: "flex", alignItems: "center", px: 1.5, py: 0.9, borderTop: idx === 0 ? "none" : "1px solid #F3F4F6", opacity: row.weight === 0 ? 0.35 : 1 }}
+                  >
+                    <Box sx={{ width: 40, display: "flex", justifyContent: "center", flexShrink: 0 }}>
+                      <Box sx={{ width: 32, height: 32, borderRadius: "50%", bgcolor: "#FAAA47", color: "#000", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 900 }}>
+                        {row.division || "-"}
                       </Box>
-                      <Typography sx={{ flex: 1, fontWeight: 800, fontSize: 15, textDecoration: row.weight === 0 ? "line-through" : "none" }}>{row.name}</Typography>
-                      <Stack direction="row" alignItems="center" spacing={0.5} sx={{ width: 72, justifyContent: "center" }}>
-                        <Box
-                          onClick={() => handleWeightChange(row.id, -1)}
-                          sx={{ width: 22, height: 22, border: "1px solid #BDBDBD", borderRadius: 0.5, display: "grid", placeItems: "center", fontSize: 16, fontWeight: 900, cursor: "pointer", userSelect: "none", "&:hover": { bgcolor: "#F3F4F6" } }}
-                        >-</Box>
-                        <Typography sx={{ fontWeight: 900, minWidth: 16, textAlign: "center" }}>{row.weight}</Typography>
-                        <Box
-                          onClick={() => handleWeightChange(row.id, 1)}
-                          sx={{ width: 22, height: 22, border: "1px solid #BDBDBD", borderRadius: 0.5, display: "grid", placeItems: "center", fontSize: 16, fontWeight: 900, cursor: "pointer", userSelect: "none", "&:hover": { bgcolor: "#F3F4F6" } }}
-                        >+</Box>
-                      </Stack>
+                    </Box>
+                    <Box sx={{ flex: 1, minWidth: 0, textAlign: "center" }}>
+                      <Typography sx={{ fontWeight: 800, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: row.weight === 0 ? "line-through" : "none" }}>
+                        {row.name}
+                      </Typography>
+                    </Box>
+                    <Stack direction="row" alignItems="center" justifyContent="center" spacing={0.5} sx={{ width: 92, flexShrink: 0 }}>
+                      <Box
+                        component="button"
+                        type="button"
+                        aria-label={`${row.name} 가중치 감소`}
+                        onClick={() => handleWeightChange(row.id, -1)}
+                        sx={{ width: 24, height: 24, p: 0, border: "1px solid #D1D5DB", borderRadius: 0.6, bgcolor: "#fff", color: "#374151", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit", fontSize: 16, fontWeight: 800, lineHeight: 1, cursor: "pointer", userSelect: "none", flexShrink: 0, "&:hover": { bgcolor: "#F3F4F6" } }}
+                      >−</Box>
+                      <Typography sx={{ width: 20, fontWeight: 900, fontSize: 14, lineHeight: 1, textAlign: "center" }}>{row.weight}</Typography>
+                      <Box
+                        component="button"
+                        type="button"
+                        aria-label={`${row.name} 가중치 증가`}
+                        onClick={() => handleWeightChange(row.id, 1)}
+                        sx={{ width: 24, height: 24, p: 0, border: "1px solid #D1D5DB", borderRadius: 0.6, bgcolor: "#fff", color: "#374151", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit", fontSize: 16, fontWeight: 800, lineHeight: 1, cursor: "pointer", userSelect: "none", flexShrink: 0, "&:hover": { bgcolor: "#F3F4F6" } }}
+                      >+</Box>
                     </Stack>
-                  ))}
-                </Stack>
-              </>
+                  </Box>
+                ))}
+              </Box>
             )}
           </>
         )}
@@ -949,6 +988,82 @@ export default function DrawList() {
           </DialogActions>
         )}
       </Dialog>
+      {/* 자동 추첨 진행 및 결과 다이얼로그 */}
+      <Dialog
+        open={autoDrawOpen}
+        onClose={autoDrawPhase === "result" ? () => setAutoDrawOpen(false) : undefined}
+        maxWidth="xs"
+        fullWidth
+      >
+        {autoDrawPhase === "spinning" ? (
+          <>
+            <DialogTitle sx={{ fontWeight: 800, pb: 0 }}>
+              {prizeResults[autoPrizeIndex]?.prize_name ?? "자동 추첨"}
+            </DialogTitle>
+            <DialogContent sx={{ textAlign: "center" }}>
+              <Box sx={{ py: 4 }}>
+                <Typography
+                  fontSize={38}
+                  fontWeight={900}
+                  sx={{
+                    filter: "blur(2px)",
+                    color: "primary.main",
+                    letterSpacing: 1,
+                    userSelect: "none",
+                    minHeight: 52,
+                  }}
+                >
+                  {autoRollingName}
+                </Typography>
+                <Typography color="text.secondary" fontSize={13} mt={2}>
+                  추첨 중... ({autoPrizeIndex + 1}/{prizeResults.length})
+                </Typography>
+              </Box>
+            </DialogContent>
+          </>
+        ) : (
+          <>
+            <DialogTitle sx={{ fontWeight: 900, pb: 1 }}>자동 추첨 결과</DialogTitle>
+            <DialogContent sx={{ pt: "8px !important" }}>
+              <Stack spacing={1.5}>
+                {prizeResults.map((prize, prizeIndex) => (
+                  <Box key={prize.id}>
+                    <Stack direction="row" alignItems="center" spacing={0.8} sx={{ mb: 0.8 }}>
+                      <Chip label={`${prizeIndex + 1}`} size="small" sx={{ height: 22, minWidth: 28, fontWeight: 800, bgcolor: "#EEF2FF", color: "#2F80ED" }} />
+                      <Typography sx={{ flex: 1, fontSize: 14, fontWeight: 900 }}>{prize.prize_name}</Typography>
+                      <Chip label={`${prize.quantity}명`} size="small" sx={{ height: 22, fontWeight: 700 }} />
+                    </Stack>
+                    <Stack spacing={0.7}>
+                      {prize.winners.length === 0 ? (
+                        <Box sx={{ bgcolor: "#F9FAFB", borderRadius: 2, px: 2, py: 1.5, textAlign: "center" }}>
+                          <Typography color="text.secondary" fontSize={13} fontWeight={700}>당첨자 없음 (참가자 부족)</Typography>
+                        </Box>
+                      ) : (
+                        prize.winners.map((winner, winnerIndex) => (
+                          <Box key={`${winner.participant_name}-${winnerIndex}`} sx={{ bgcolor: "#EEF2FF", borderRadius: 2, px: 2, py: 1.2, textAlign: "center" }}>
+                            {winner.participant_division && winner.participant_division !== "-" && (
+                              <Typography fontSize={12} color="text.secondary" fontWeight={700}>{winner.participant_division}</Typography>
+                            )}
+                            <Typography fontSize={24} fontWeight={900} color="#2F80ED">{winner.participant_name}</Typography>
+                          </Box>
+                        ))
+                      )}
+                    </Stack>
+                  </Box>
+                ))}
+              </Stack>
+            </DialogContent>
+            <DialogActions sx={{ px: 2, pb: 2, pt: 1.5, gap: 1 }}>
+              <Button variant="outlined" onClick={handleRunDraw} sx={{ fontWeight: 700, flex: 1 }}>
+                다시 추첨
+              </Button>
+              <Button variant="contained" disableElevation onClick={handleSaveAndReturn} sx={{ fontWeight: 700, flex: 1 }}>
+                추첨 결과 저장
+              </Button>
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
       {/* 개별추첨 진행 다이얼로그 */}
       <Dialog
         open={dialogConfirmState.open}
@@ -982,66 +1097,6 @@ export default function DrawList() {
         </DialogActions>
       </Dialog>
       </>
-    );
-  }
-
-  // ─── 추첨 진행 중 ─────────────────────────────────────────
-  if (phase === "animating") {
-    return (
-      <Stack spacing={3} alignItems="center" sx={{ pt: 8 }}>
-        <CachedIcon sx={{ fontSize: 52 }} />
-        <Typography color="text.secondary" fontWeight={700}>추첨 진행 중...</Typography>
-        <Box sx={{ width: "100%", maxWidth: 260 }}>
-          <LinearProgress />
-        </Box>
-      </Stack>
-    );
-  }
-
-  // ─── 추첨 완료 화면 ───────────────────────────────────────
-  if (phase === "done") {
-    return (
-      <Stack spacing={2.2}>
-        <Typography fontWeight={900} fontSize={20} sx={{ flex: 1 }}>추첨 결과</Typography>
-
-        {prizeResults.map((prize, idx) => (
-          <Card key={prize.id} elevation={2} sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
-            <CardContent sx={{ py: 1.5, px: 1.8, "&:last-child": { pb: 1.5 } }}>
-              <Stack direction="row" alignItems="center" spacing={1} mb={1}>
-                <Chip label={`${idx + 1}`} size="small" sx={{ height: 22, fontWeight: 800, bgcolor: "#EEF2FF", color: "#2F80ED" }} />
-                <Typography fontWeight={900} fontSize={15} sx={{ flex: 1 }}>{prize.prize_name}</Typography>
-                <Chip label={`${prize.quantity}명`} size="small" sx={{ height: 22, fontWeight: 700 }} />
-              </Stack>
-              <Divider sx={{ mb: 1 }} />
-              {prize.winners.length === 0 ? (
-                <Typography color="text.secondary" fontSize={13} fontWeight={700}>당첨자 없음 (참가자 부족)</Typography>
-              ) : (
-                <Stack spacing={0.6}>
-                  {prize.winners.map((w, wi) => (
-                    <Stack key={wi} direction="row" alignItems="center" spacing={1}>
-                      <Chip label={`${wi + 1}`} size="small" sx={{ height: 22, fontWeight: 800, minWidth: 28 }} />
-                      {w.participant_division !== "-" && (
-                        <Chip label={w.participant_division} size="small" sx={{ borderRadius: 9999, fontWeight: 700, bgcolor: "#FAAA47", color: "#000000", height: 36, minWidth: 36 }} />
-                      )}
-                      <Typography fontWeight={800} fontSize={15}>{w.participant_name}</Typography>
-                    </Stack>
-                  ))}
-                </Stack>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-
-        <Button
-          fullWidth
-          variant="contained"
-          onClick={handleSaveAndReturn}
-          disableElevation
-          sx={{ mt: 1, borderRadius: 1, height: 44, fontWeight: 900, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}
-        >
-          추첨 결과 저장
-        </Button>
-      </Stack>
     );
   }
 
@@ -1097,7 +1152,7 @@ export default function DrawList() {
               <CardContent sx={{ py: 1.5, px: 2, "&:last-child": { pb: 1.5 } }}>
                 <Stack direction="row" alignItems="center" justifyContent="space-between">
                   <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography fontWeight={800} noWrap>{draw.title} | {draw.type}</Typography>
+                    <Typography fontWeight={800} noWrap>{draw.title}</Typography>
                     <Stack direction="row" spacing={1} alignItems="center" mt={0.3}>
                       <Typography variant="caption" color="text.secondary" fontWeight={700}>
                         {formatDate(draw.start_date)}

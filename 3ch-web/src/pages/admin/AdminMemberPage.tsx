@@ -508,7 +508,6 @@ export default function AdminMemberPage() {
               onChange={(e: SelectChangeEvent) => setFilters((p) => ({ ...p, plan: e.target.value }))}
             >
               <MenuItem value="" sx={{ fontSize: 12 }}>전체</MenuItem>
-              <MenuItem value="none" sx={{ fontSize: 12 }}>미구독</MenuItem>
               <MenuItem value="starter" sx={{ fontSize: 12 }}>STARTER</MenuItem>
               <MenuItem value="basic" sx={{ fontSize: 12 }}>BASIC</MenuItem>
               <MenuItem value="pro" sx={{ fontSize: 12 }}>PRO</MenuItem>
@@ -561,7 +560,18 @@ export default function AdminMemberPage() {
 
       {/* 테이블 */}
       <Box sx={{ border: "1px solid #E5E7EB", borderRadius: 1.5, overflow: "hidden" }}>
-        <Table size="small">
+        <Table size="small" sx={{ tableLayout: "fixed", width: "100%" }}>
+          <colgroup>
+            <col style={{ width: "13%" }} />
+            <col style={{ width: "19%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "21%" }} />
+            <col style={{ width: "8%" }} />
+            <col style={{ width: "6%" }} />
+            <col style={{ width: "9%" }} />
+            <col style={{ width: "9%" }} />
+            <col style={{ width: "5%" }} />
+          </colgroup>
           <TableHead>
             <TableRow sx={{ bgcolor: "#F9FAFB" }}>
               {["회원코드", "아이디", "이름", "가입 클럽", "역할", "급수", "요금제", "가입일", "상태"].map((h) => (
@@ -591,12 +601,12 @@ export default function AdminMemberPage() {
                   >
                     {m.member_code ?? String(m.id)}
                   </TableCell>
-                  <TableCell sx={{ fontSize: 12 }}>
+                  <TableCell sx={{ fontSize: 12, overflow: "hidden" }}>
                     <Stack direction="row" alignItems="center" spacing={0.75}>
                       <Typography component="span" sx={{ fontSize: 11, color: "#6B7280", flexShrink: 0 }}>
                         ({AUTH_PROVIDER_LABELS[m.auth_provider] ?? m.auth_provider})
                       </Typography>
-                      <Typography component="span" sx={{ fontSize: 12 }}>{m.email}</Typography>
+                      <Typography component="span" noWrap title={m.email} sx={{ fontSize: 12 }}>{m.email}</Typography>
                     </Stack>
                   </TableCell>
                   <TableCell sx={{ fontSize: 12, fontWeight: 700 }}>{m.name ?? "-"}</TableCell>
@@ -628,9 +638,7 @@ export default function AdminMemberPage() {
                           ...(PLAN_CHIP_STYLES[m.subscription_plan] ?? PLAN_CHIP_STYLES.starter),
                         }}
                       />
-                    ) : (
-                      <Typography component="span" sx={{ fontSize: 12, color: "#9CA3AF" }}>미구독</Typography>
-                    )}
+                    ) : <Chip label="STARTER" size="small" sx={{ height: 20, fontSize: 10, fontWeight: 800, ...PLAN_CHIP_STYLES.starter }} />}
                   </TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{m.created_at.slice(0, 10)}</TableCell>
                   <TableCell sx={{ fontSize: 12 }}>
@@ -868,7 +876,7 @@ export default function AdminMemberPage() {
                         </Box>
                         <Stack direction="row" spacing={0.5} alignItems="center">
                           <Chip
-                            label={club.role === "owner" ? "클럽장" : club.role === "admin" ? "관리자" : "일반"}
+                            label={club.role === "owner" ? "리더" : club.role === "admin" ? "운영진" : "회원"}
                             size="small" sx={{ height: 20, fontSize: 11, fontWeight: 700 }}
                           />
                           <Button size="small" onClick={(e) => { e.stopPropagation(); handleKickClub(club); }}
@@ -919,9 +927,7 @@ export default function AdminMemberPage() {
                       ~ {formatSubscriptionDate(editMember.subscription.expires_at)}
                     </Typography>
                   </Box>
-                ) : (
-                  <Typography sx={{ fontSize: 13, color: "#9CA3AF" }}>활성 요금제 없음</Typography>
-                )}
+                ) : <Chip label="STARTER" size="small" sx={{ height: 22, fontSize: 11, fontWeight: 800, ...PLAN_CHIP_STYLES.starter }} />}
               </FormRow>
 
               {/* 가입일시 */}

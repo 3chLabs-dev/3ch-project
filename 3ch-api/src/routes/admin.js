@@ -248,8 +248,10 @@ router.get('/members', requireAdmin, async (req, res) => {
   if (email) { conditions.push(`u.email ILIKE $${params.push(`%${email}%`)}`); }
   if (grade) { conditions.push(`gm.division ILIKE $${params.push(`%${grade}%`)}`); }
   if (name)  { conditions.push(`u.name ILIKE $${params.push(`%${name}%`)}`); }
-  if (plan === 'none') { conditions.push('active_subscription.plan IS NULL'); }
-  if (['starter', 'basic', 'pro', 'premium'].includes(plan)) {
+  if (plan === 'starter') {
+    conditions.push("(active_subscription.plan IS NULL OR active_subscription.plan = 'starter')");
+  }
+  if (['basic', 'pro', 'premium'].includes(plan)) {
     conditions.push(`active_subscription.plan = $${params.push(plan)}`);
   }
   if (from)  { conditions.push(`u.created_at >= $${params.push(from)}`); }

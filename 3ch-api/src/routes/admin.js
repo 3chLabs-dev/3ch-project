@@ -233,7 +233,7 @@ router.get('/stats', requireAdmin, async (req, res) => {
  */
 // GET /admin/members - 회원 목록 (필터 + 페이지네이션)
 router.get('/members', requireAdmin, async (req, res) => {
-  const { code, sport, club, role, email, grade, name, from, to, status } = req.query;
+  const { code, sport, club, role, email, grade, name, plan, from, to, status } = req.query;
   const page   = Math.max(1, parseInt(req.query.page  || '1',  10));
   const limit  = Math.min(100, Math.max(1, parseInt(req.query.limit || '20', 10)));
   const offset = (page - 1) * limit;
@@ -248,6 +248,10 @@ router.get('/members', requireAdmin, async (req, res) => {
   if (email) { conditions.push(`u.email ILIKE $${params.push(`%${email}%`)}`); }
   if (grade) { conditions.push(`gm.division ILIKE $${params.push(`%${grade}%`)}`); }
   if (name)  { conditions.push(`u.name ILIKE $${params.push(`%${name}%`)}`); }
+  if (plan === 'none') { conditions.push('active_subscription.plan IS NULL'); }
+  if (['starter', 'basic', 'pro', 'premium'].includes(plan)) {
+    conditions.push(`active_subscription.plan = $${params.push(plan)}`);
+  }
   if (from)  { conditions.push(`u.created_at >= $${params.push(from)}`); }
   if (to)    { conditions.push(`u.created_at < ($${params.push(to)}::date + interval '1 day')`); }
   if (status === 'active')    { conditions.push('u.deleted_at IS NULL'); }

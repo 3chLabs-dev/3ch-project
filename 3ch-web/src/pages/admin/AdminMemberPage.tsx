@@ -48,13 +48,13 @@ type DetailMember  = Member & {
 type Filters = {
   code: string; sport: string; club: string; role: string;
   email: string; grade: string; name: string; from: string; to: string;
-  status: string;
+  status: string; plan: string;
 };
 
 const EMPTY_FILTERS: Filters = {
   code: "", sport: "", club: "", role: "",
   email: "", grade: "", name: "", from: "", to: "",
-  status: "active",
+  status: "active", plan: "",
 };
 
 const ROLE_OPTIONS = [
@@ -502,6 +502,19 @@ export default function AdminMemberPage() {
               <MenuItem value=""          sx={{ fontSize: 12 }}>전체</MenuItem>
             </Select>
           </FilterField>
+          <FilterField label="요금제">
+            <Select size="small" fullWidth value={filters.plan}
+              displayEmpty sx={{ fontSize: 12 }}
+              onChange={(e: SelectChangeEvent) => setFilters((p) => ({ ...p, plan: e.target.value }))}
+            >
+              <MenuItem value="" sx={{ fontSize: 12 }}>전체</MenuItem>
+              <MenuItem value="none" sx={{ fontSize: 12 }}>미구독</MenuItem>
+              <MenuItem value="starter" sx={{ fontSize: 12 }}>STARTER</MenuItem>
+              <MenuItem value="basic" sx={{ fontSize: 12 }}>BASIC</MenuItem>
+              <MenuItem value="pro" sx={{ fontSize: 12 }}>PRO</MenuItem>
+              <MenuItem value="premium" sx={{ fontSize: 12 }}>PREMIUM</MenuItem>
+            </Select>
+          </FilterField>
           <Box sx={{ gridColumn: "span 2" }}>
             <FilterField label="가입일">
               <Stack direction="row" alignItems="center" spacing={0.6}>
@@ -551,7 +564,7 @@ export default function AdminMemberPage() {
         <Table size="small">
           <TableHead>
             <TableRow sx={{ bgcolor: "#F9FAFB" }}>
-              {["회원코드", "종목", "클럽", "역할", "아이디", "급수", "이름", "요금제", "가입일", "상태"].map((h) => (
+              {["회원코드", "아이디", "이름", "가입 클럽", "역할", "급수", "요금제", "가입일", "상태"].map((h) => (
                 <TableCell key={h} sx={{ fontWeight: 800, fontSize: 12, color: "#374151", py: 1.2 }}>{h}</TableCell>
               ))}
             </TableRow>
@@ -559,13 +572,13 @@ export default function AdminMemberPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={10} align="center" sx={{ py: 6 }}>
+                <TableCell colSpan={9} align="center" sx={{ py: 6 }}>
                   <CircularProgress size={28} />
                 </TableCell>
               </TableRow>
             ) : members.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} align="center" sx={{ py: 6, color: "#9CA3AF", fontWeight: 700, fontSize: 13 }}>
+                <TableCell colSpan={9} align="center" sx={{ py: 6, color: "#9CA3AF", fontWeight: 700, fontSize: 13 }}>
                   가입한 회원이 없습니다.
                 </TableCell>
               </TableRow>
@@ -578,7 +591,15 @@ export default function AdminMemberPage() {
                   >
                     {m.member_code ?? String(m.id)}
                   </TableCell>
-                  <TableCell sx={{ fontSize: 12 }}>{m.sport ?? "-"}</TableCell>
+                  <TableCell sx={{ fontSize: 12 }}>
+                    <Stack direction="row" alignItems="center" spacing={0.75}>
+                      <Typography component="span" sx={{ fontSize: 11, color: "#6B7280", flexShrink: 0 }}>
+                        ({AUTH_PROVIDER_LABELS[m.auth_provider] ?? m.auth_provider})
+                      </Typography>
+                      <Typography component="span" sx={{ fontSize: 12 }}>{m.email}</Typography>
+                    </Stack>
+                  </TableCell>
+                  <TableCell sx={{ fontSize: 12, fontWeight: 700 }}>{m.name ?? "-"}</TableCell>
                   <TableCell sx={{ fontSize: 12 }}>
                     <Stack direction="row" alignItems="center" spacing={0.5}>
                       <span>{m.club_name ?? "-"}</span>
@@ -594,18 +615,7 @@ export default function AdminMemberPage() {
                         size="small" sx={{ height: 20, fontSize: 11, fontWeight: 700 }} />
                     ) : "-"}
                   </TableCell>
-                  <TableCell sx={{ fontSize: 12 }}>
-                    <Stack direction="row" alignItems="center" spacing={0.75}>
-                      <Typography component="span" sx={{ fontSize: 11, color: "#6B7280", flexShrink: 0 }}>
-                        ({AUTH_PROVIDER_LABELS[m.auth_provider] ?? m.auth_provider})
-                      </Typography>
-                      <Typography component="span" sx={{ fontSize: 12 }}>
-                        {m.email}
-                      </Typography>
-                    </Stack>
-                  </TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{m.grade ?? "-"}</TableCell>
-                  <TableCell sx={{ fontSize: 12, fontWeight: 700 }}>{m.name ?? "-"}</TableCell>
                   <TableCell sx={{ fontSize: 12 }}>
                     {m.subscription_plan ? (
                       <Chip
@@ -773,31 +783,22 @@ export default function AdminMemberPage() {
                 </Typography>
               </FormRow>
 
-              <FormRow label="요금제">
-                {editMember.subscription ? (
-                  <Box>
-                    <Chip
-                      label={PLAN_LABELS[editMember.subscription.plan] ?? editMember.subscription.plan.toUpperCase()}
-                      size="small"
-                      sx={{
-                        height: 22,
-                        fontSize: 11,
-                        fontWeight: 800,
-                        ...(PLAN_CHIP_STYLES[editMember.subscription.plan] ?? PLAN_CHIP_STYLES.starter),
-                      }}
-                    />
-                    <Typography sx={{ mt: 0.75, fontSize: 12, color: "#6B7280", lineHeight: 1.6 }}>
-                      {formatSubscriptionDate(editMember.subscription.started_at)}<br />
-                      ~ {formatSubscriptionDate(editMember.subscription.expires_at)}
-                    </Typography>
-                  </Box>
-                ) : (
-                  <Typography sx={{ fontSize: 13, color: "#9CA3AF" }}>활성 요금제 없음</Typography>
-                )}
+              <FormRow label="아이디">
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <Typography sx={{ fontSize: 12, color: "#6B7280", flexShrink: 0 }}>
+                    ({AUTH_PROVIDER_LABELS[editMember.auth_provider] ?? editMember.auth_provider})
+                  </Typography>
+                  <Typography sx={{ fontSize: 13, color: "#374151" }}>{editMember.email}</Typography>
+                </Stack>
+              </FormRow>
+
+              <FormRow label="이름">
+                <TextField size="small" fullWidth slotProps={{ input: { style: { fontSize: 13 } } }}
+                  value={editName} onChange={(e) => setEditName(e.target.value)} />
               </FormRow>
 
               {isMaster && (
-                <>
+                <Stack spacing={2} sx={{ order: 8 }}>
                   <FormRow label="시스템 권한">
                     <Select
                       size="small"
@@ -840,7 +841,7 @@ export default function AdminMemberPage() {
                       </Stack>
                     </Box>
                   )}
-                </>
+                </Stack>
               )}
 
                             {/* 가입 클럽 목록 */}
@@ -892,22 +893,6 @@ export default function AdminMemberPage() {
                 </FormRow>
               )}
 
-              {/* 아이디 (read-only) */}
-              <FormRow label="아이디">
-                <Stack direction="row" alignItems="center" spacing={1}>
-                  <Typography sx={{ fontSize: 12, color: "#6B7280", flexShrink: 0 }}>
-                    ({AUTH_PROVIDER_LABELS[editMember.auth_provider] ?? editMember.auth_provider})
-                  </Typography>
-                  <Typography sx={{ fontSize: 13, color: "#374151" }}>{editMember.email}</Typography>
-                </Stack>
-              </FormRow>
-
-              {/* 이름 */}
-              <FormRow label="이름">
-                <TextField size="small" fullWidth slotProps={{ input: { style: { fontSize: 13 } } }}
-                  value={editName} onChange={(e) => setEditName(e.target.value)} />
-              </FormRow>
-
               {/* 급수 (선택된 클럽) */}
               {selectedClub && (
                 <FormRow label="급수">
@@ -916,13 +901,41 @@ export default function AdminMemberPage() {
                 </FormRow>
               )}
 
+              <FormRow label="요금제">
+                {editMember.subscription ? (
+                  <Box>
+                    <Chip
+                      label={PLAN_LABELS[editMember.subscription.plan] ?? editMember.subscription.plan.toUpperCase()}
+                      size="small"
+                      sx={{
+                        height: 22,
+                        fontSize: 11,
+                        fontWeight: 800,
+                        ...(PLAN_CHIP_STYLES[editMember.subscription.plan] ?? PLAN_CHIP_STYLES.starter),
+                      }}
+                    />
+                    <Typography sx={{ mt: 0.75, fontSize: 12, color: "#6B7280", lineHeight: 1.6 }}>
+                      {formatSubscriptionDate(editMember.subscription.started_at)}<br />
+                      ~ {formatSubscriptionDate(editMember.subscription.expires_at)}
+                    </Typography>
+                  </Box>
+                ) : (
+                  <Typography sx={{ fontSize: 13, color: "#9CA3AF" }}>활성 요금제 없음</Typography>
+                )}
+              </FormRow>
+
               {/* 가입일시 */}
               <FormRow label="가입일시">
                 <Typography sx={{ fontSize: 13, color: "#6B7280" }}>
-                  {selectedClub?.joined_at
-                    ? selectedClub.joined_at.slice(0, 19).replace("T", " ")
-                    : editMember.created_at.slice(0, 19).replace("T", " ")}
+                  {editMember.created_at.slice(0, 19).replace("T", " ")}
                 </Typography>
+              </FormRow>
+
+              <FormRow label="상태">
+                {editMember.deleted_at
+                  ? <Chip label="탈퇴" size="small" sx={{ height: 22, fontSize: 11, fontWeight: 700, bgcolor: "#FEE2E2", color: "#EF4444" }} />
+                  : <Chip label="활성" size="small" sx={{ height: 22, fontSize: 11, fontWeight: 700, bgcolor: "#D1FAE5", color: "#059669" }} />
+                }
               </FormRow>
 
               {/* 탈퇴일시 */}
@@ -935,7 +948,7 @@ export default function AdminMemberPage() {
               )}
 
               {/* 위험 액션 */}
-              <Stack direction="row" spacing={2} pt={0.5}>
+              <Stack direction="row" spacing={2} pt={0.5} sx={{ order: 9 }}>
                 <Button size="small" onClick={handleResetPassword}
                   disabled={resetLoading || editMember.auth_provider !== "local"}
                   sx={{ fontSize: 12, color: "#2F80ED", p: 0, minWidth: 0, fontWeight: 700 }}>

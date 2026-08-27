@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Alert,
@@ -25,7 +25,6 @@ import type { SelectChangeEvent } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
-import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import confetti from "canvas-confetti";
 import {
@@ -36,7 +35,6 @@ import {
   useGetDrawsQuery,
   useCreateDrawMutation,
   useDeleteDrawMutation,
-  useUpdateDrawMutation,
   useRunDrawMutation,
   useGetDrawDetailQuery,
 } from "../../features/draw/drawApi";
@@ -96,17 +94,6 @@ function weightedRandomPick(pool: ParticipantRow[], count: number): DrawWinner[]
 }
 
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <Stack direction="row" alignItems="center" spacing={1.5}>
-      <Typography variant="body2" fontWeight={700} color="text.secondary" sx={{ width: 56, flexShrink: 0, fontSize: 13 }}>
-        {label}
-      </Typography>
-      <Box sx={{ flex: 1, minWidth: 0 }}>{children}</Box>
-    </Stack>
-  );
-}
-
 function generateLocalId() {
   return Math.random().toString(36).slice(2, 10);
 }
@@ -120,17 +107,6 @@ function formatDate(iso: string) {
   const hh = String(d.getHours()).padStart(2, "0");;
   const minute = String(d.getMinutes()).padStart(2, "0");;
   return `${y}-${m}-${day}(${wd}) ${hh}:${minute}`;
-}
-
-function formatDateTime(iso: string) {
-  const d = new Date(iso);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  const h = String(d.getHours()).padStart(2, "0");
-  const min = String(d.getMinutes()).padStart(2, "0");
-  const sec = String(d.getSeconds()).padStart(2, "0");
-  return `${y}-${m}-${day} ${h}:${min}:${sec}`;
 }
 
 type PendingWinner = { participant_name: string; participant_division: string | null };
@@ -285,7 +261,6 @@ export default function DrawList() {
 
   const [createDraw] = useCreateDrawMutation();
   const [deleteDraw] = useDeleteDrawMutation();
-  const [updateDraw] = useUpdateDrawMutation();
   const [runDraw] = useRunDrawMutation();
 
   const { data: draftData, refetch: refetchDetail } = useGetDrawDetailQuery(
@@ -310,11 +285,6 @@ export default function DrawList() {
     }
   }, [draftData, draftId, phase]);
 
-  // 수정 다이얼로그 상태
-  const [editDraw, setEditDraw] = useState<DrawListItem | null>(null);
-  const editDrawSnapshot = useRef<DrawListItem | null>(null); // 닫힘 애니메이션 중 데이터 유지용
-  const [editName, setEditName] = useState("");
-  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [deleteConfirmDraw, setDeleteConfirmDraw] = useState<DrawListItem | null>(null);
 
   const handleAddPrize = () => {
@@ -593,41 +563,6 @@ export default function DrawList() {
     } catch {
       setAlertMsg("추첨 삭제에 실패했습니다.");
     }
-  };
-
-  const handleOpenEdit = (e: React.MouseEvent, draw: DrawListItem) => {
-    e.stopPropagation();
-    editDrawSnapshot.current = draw;
-    setEditDraw(draw);
-    setEditName(draw.name);
-  };
-
-  const handleSaveEdit = async () => {
-    if (!leagueId || !editDraw) return;
-    if (!editName.trim()) {
-      setAlertMsg("추첨 이름을 입력해주세요.");
-      return;
-    }
-    setIsSavingEdit(true);
-    try {
-      await updateDraw({
-        leagueId,
-        drawId: editDraw.id,
-        name: editName.trim(),
-      }).unwrap();
-      setEditDraw(null);
-      refetchDraws();
-    } catch {
-      setAlertMsg("수정에 실패했습니다.");
-    } finally {
-      setIsSavingEdit(false);
-    }
-  };
-
-  const handleDeleteFromEdit = () => {
-    if (!editDraw) return;
-    setDeleteConfirmDraw(editDraw);
-    setEditDraw(null);
   };
 
   const handleConfirmDelete = async () => {
@@ -1171,14 +1106,9 @@ export default function DrawList() {
                   </Box>
                   <Stack direction="row" alignItems="center" spacing={0.5}>
                     {canManage && (
-                      <>
-                        <IconButton onClick={(e) => handleOpenEdit(e, draw)} sx={{ color: "#9CA3AF", p: 1 }}>
-                          <EditOutlinedIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton onClick={(e) => { e.stopPropagation(); setDeleteConfirmDraw(draw); }} sx={{ color: "#9CA3AF", p: 1 }}>
-                          <DeleteOutlineIcon fontSize="small" />
-                        </IconButton>
-                      </>
+                      <IconButton onClick={(e) => { e.stopPropagation(); setDeleteConfirmDraw(draw); }} sx={{ color: "#9CA3AF", p: 1 }}>
+                        <DeleteOutlineIcon fontSize="small" />
+                      </IconButton>
                     )}
                     <ChevronRightIcon sx={{ color: "#9CA3AF", ml: 0.5 }} />
                   </Stack>
@@ -1210,53 +1140,6 @@ export default function DrawList() {
         </DialogActions>
       </Dialog>
 
-      {/* ─── 수정 다이얼로그 ─── */}
-      <Dialog open={!!editDraw} onClose={() => setEditDraw(null)} fullWidth maxWidth="xs">
-        <DialogTitle sx={{ fontWeight: 900, fontSize: 16, pb: 0, pt: 2, px: 2.5 }}>추첨 수정</DialogTitle>
-        <DialogContent sx={{ px: 2.5, pb: 1, pt: "12px !important" }}>
-          <Stack spacing={1.2}>
-            {/* 추첨코드 */}
-            <Row label="추첨코드">
-              <Typography variant="body2" fontWeight={800} sx={{ fontFamily: "monospace" }}>
-                {editDrawSnapshot.current?.id.replace(/-/g, "").slice(0, 12).toUpperCase() ?? "-"}
-              </Typography>
-            </Row>
-
-            {/* 추첨명 */}
-            <Row label="추첨명">
-              <TextField size="small" value={editName} onChange={(e) => setEditName(e.target.value)} sx={{ flex: 1 }} inputProps={{ style: { fontSize: 13, padding: "5px 8px" } }} />
-            </Row>
-
-            <Divider sx={{ my: 0.5 }} />
-
-            {/* 생성자 */}
-            <Row label="생성자">
-              <Typography variant="body2" fontWeight={700}>
-                {editDrawSnapshot.current?.creator_name ?? <span style={{ color: "#9CA3AF" }}>정보 없음</span>}
-              </Typography>
-            </Row>
-
-            {/* 생성일시 */}
-            <Row label="생성일시">
-              <Typography variant="body2">
-                {editDrawSnapshot.current ? formatDateTime(editDrawSnapshot.current.created_at) : "정보 없음"}
-              </Typography>
-            </Row>
-
-            <Divider sx={{ my: 0.5 }} />
-
-            <Box>
-              <Button size="small" sx={{ color: "error.main", p: 0, fontWeight: 700, minWidth: 0, fontSize: 13 }} onClick={handleDeleteFromEdit}>
-                추첨 삭제
-              </Button>
-            </Box>
-          </Stack>
-        </DialogContent>
-        <DialogActions sx={{ px: 2.5, pb: 2, pt: 1, gap: 1 }}>
-          <Button onClick={() => setEditDraw(null)} sx={{ fontWeight: 700, fontSize: 13 }}>취소</Button>
-          <Button variant="contained" disableElevation disabled={isSavingEdit} onClick={handleSaveEdit} sx={{ fontWeight: 700, fontSize: 13 }}>수정</Button>
-        </DialogActions>
-      </Dialog>
     </Stack>
   );
 }

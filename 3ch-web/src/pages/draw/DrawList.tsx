@@ -39,7 +39,6 @@ import {
   useUpdateDrawMutation,
   useRunDrawMutation,
   useGetDrawDetailQuery,
-  useDrawPrizeWinnersMutation,
 } from "../../features/draw/drawApi";
 import type { DrawListItem } from "../../features/draw/drawApi";
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
@@ -197,7 +196,7 @@ export default function DrawList() {
           setRollingName(selected[0]?.participant_name ?? "");
           setAnimPhase("result");
           setTimeout(() => {
-            confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+            confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 }, zIndex: 9999 });
           }, 50);
           return;
         }
@@ -218,18 +217,7 @@ export default function DrawList() {
     }
   }
   
-  const [prizes, setPrizes] = useState<PrizeInput[]>(() => {
-    // draftId가 있으면 API에서 로드하므로 sessionStorage 무시
-    if (draftId || !leagueId) return [];
-    try {
-      const saved = sessionStorage.getItem(`draw_prizes_${leagueId}`);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        return Array.isArray(parsed) ? parsed : [];
-      }
-    } catch { /* */ }
-    return [];
-  });
+  const [prizes, setPrizes] = useState<PrizeInput[]>([]);
   const [prizeResults, setPrizeResults] = useState<PrizeResult[]>([]);
   const [pendingPrizeName, setPendingPrizeName] = useState("");
   const [pendingQuantity, setPendingQuantity] = useState(1);
@@ -267,8 +255,6 @@ export default function DrawList() {
     leagueId ?? "",
     { skip: !leagueId || phase !== "create", refetchOnMountOrArgChange: true },
   );
-
-  const [drawPrizeWinners] = useDrawPrizeWinnersMutation();
 
   function getEligiblePool(targetPrizeId: string) {
     const participants = participantData?.participants ?? [];
@@ -323,12 +309,6 @@ export default function DrawList() {
       );
     }
   }, [draftData, draftId, phase]);
-
-  // prizes 변경 시 sessionStorage 자동 저장 (draftId 없을 때만)
-  useEffect(() => {
-    if (draftId || !leagueId) return;
-    sessionStorage.setItem(`draw_prizes_${leagueId}`, JSON.stringify(prizes));
-  }, [prizes, draftId, leagueId]);
 
   // 수정 다이얼로그 상태
   const [editDraw, setEditDraw] = useState<DrawListItem | null>(null);
@@ -398,13 +378,19 @@ export default function DrawList() {
     if (!drawingPrize || !leagueId || !draftId) return;
     setIsSavingWinner(true);
     try {
-      await drawPrizeWinners({
+      await runDraw({
         leagueId,
         drawId: draftId,
-        prizeId: drawingPrize.id,
-        winners: pendingWinners,
+        prizes: prizeResults.map((prize) => ({
+          prize_name: prize.prize_name,
+          quantity: prize.quantity,
+          winners: prize.winners.map((winner) => ({
+            participant_name: winner.participant_name,
+            participant_division: winner.participant_division !== "-" ? winner.participant_division : undefined,
+          })),
+        })),
       }).unwrap();
-      refetchDetail();
+      await refetchDetail();
       handleCloseDialog();
     } catch {
       setAlertMsg("저장 중 오류가 발생했습니다.");
@@ -450,7 +436,7 @@ export default function DrawList() {
     const finishAutoDraw = () => {
       setAutoDrawPhase("result");
       setTimeout(() => {
-        confetti({ particleCount: 160, spread: 90, origin: { y: 0.6 } });
+        confetti({ particleCount: 160, spread: 90, origin: { y: 0.6 }, zIndex: 9999 });
       }, 50);
     };
 
@@ -656,7 +642,20 @@ export default function DrawList() {
       <>
       <Stack spacing={2.2}>
         <Stack direction="row" alignItems="center" spacing={1}>
-          <IconButton onClick={() => navigate(`/draw/${leagueId}`, { replace: true })} size="small">
+          <IconButton
+            onClick={() => {
+              clearAnimTimer();
+              if (leagueId) sessionStorage.removeItem(`draw_prizes_${leagueId}`);
+              setPrizes([]);
+              setPrizeResults([]);
+              setPendingPrizeName("");
+              setPendingQuantity(1);
+              setParticipantWeights({});
+              setPhase("list");
+              navigate(`/draw/${leagueId}`, { replace: true });
+            }}
+            size="small"
+          >
             <ArrowBackIcon />
           </IconButton>
           <Typography fontWeight={900} fontSize={20}>{draftId ? "추첨 진행하기" : "경품 추첨"}</Typography>
@@ -1110,18 +1109,20 @@ export default function DrawList() {
         <Typography fontWeight={900} fontSize={20} sx={{ flex: 1 }}>경품 추첨</Typography>
       </Stack>
 
-      {league && (
-        <Typography variant="body2" color="text.secondary" fontWeight={700} sx={{ mt: -1 }}>
-          {league.name}
-        </Typography>
-      )}
-
       {canManage && (
         <Button
           variant="contained"
           startIcon={<AddIcon />}
           disableElevation
-          onClick={() => setPhase("create")}
+          onClick={() => {
+            if (leagueId) sessionStorage.removeItem(`draw_prizes_${leagueId}`);
+            setPrizes([]);
+            setPrizeResults([]);
+            setPendingPrizeName("");
+            setPendingQuantity(1);
+            setParticipantWeights({});
+            setPhase("create");
+          }}
           sx={{ borderRadius: 1, fontWeight: 700, alignSelf: "flex-start" }}
         >
           추첨 생성

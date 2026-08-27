@@ -23,6 +23,7 @@ type Member = {
   club_name: string | null;
   sport: string | null;
   club_count: number;
+  subscription_plan: string | null;
 };
 
 type ClubOption    = { id: string; name: string; sport: string | null };
@@ -37,6 +38,11 @@ type DetailMember  = Member & {
   clubs: ClubDetail[];
   system_role: "USER" | "MANAGER" | "MASTER";
   feature_credits: FeatureCredit[];
+  subscription: {
+    plan: string;
+    started_at: string;
+    expires_at: string;
+  } | null;
 };
 
 type Filters = {
@@ -78,6 +84,26 @@ const AUTH_PROVIDER_LABELS: Record<string, string> = {
   naver: "네이버",
   local: "이메일",
 };
+const PLAN_LABELS: Record<string, string> = {
+  starter: "STARTER",
+  basic: "BASIC",
+  pro: "PRO",
+  premium: "PREMIUM",
+};
+const PLAN_CHIP_STYLES: Record<string, { bgcolor: string; color: string }> = {
+  starter: { bgcolor: "#F3F4F6", color: "#6B7280" },
+  basic: { bgcolor: "#ECFDF5", color: "#059669" },
+  pro: { bgcolor: "#EFF6FF", color: "#2563EB" },
+  premium: { bgcolor: "#FDF4FF", color: "#A855F7" },
+};
+const formatSubscriptionDate = (value: string) =>
+  new Intl.DateTimeFormat("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
 
 export default function AdminMemberPage() {
   const token = useAppSelector((s) => s.admin.token) ?? "";
@@ -525,7 +551,7 @@ export default function AdminMemberPage() {
         <Table size="small">
           <TableHead>
             <TableRow sx={{ bgcolor: "#F9FAFB" }}>
-              {["회원코드", "종목", "클럽", "역할", "아이디", "급수", "이름", "가입일", "상태"].map((h) => (
+              {["회원코드", "종목", "클럽", "역할", "아이디", "급수", "이름", "요금제", "가입일", "상태"].map((h) => (
                 <TableCell key={h} sx={{ fontWeight: 800, fontSize: 12, color: "#374151", py: 1.2 }}>{h}</TableCell>
               ))}
             </TableRow>
@@ -533,13 +559,13 @@ export default function AdminMemberPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={9} align="center" sx={{ py: 6 }}>
+                <TableCell colSpan={10} align="center" sx={{ py: 6 }}>
                   <CircularProgress size={28} />
                 </TableCell>
               </TableRow>
             ) : members.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} align="center" sx={{ py: 6, color: "#9CA3AF", fontWeight: 700, fontSize: 13 }}>
+                <TableCell colSpan={10} align="center" sx={{ py: 6, color: "#9CA3AF", fontWeight: 700, fontSize: 13 }}>
                   가입한 회원이 없습니다.
                 </TableCell>
               </TableRow>
@@ -580,6 +606,22 @@ export default function AdminMemberPage() {
                   </TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{m.grade ?? "-"}</TableCell>
                   <TableCell sx={{ fontSize: 12, fontWeight: 700 }}>{m.name ?? "-"}</TableCell>
+                  <TableCell sx={{ fontSize: 12 }}>
+                    {m.subscription_plan ? (
+                      <Chip
+                        label={PLAN_LABELS[m.subscription_plan] ?? m.subscription_plan.toUpperCase()}
+                        size="small"
+                        sx={{
+                          height: 20,
+                          fontSize: 10,
+                          fontWeight: 800,
+                          ...(PLAN_CHIP_STYLES[m.subscription_plan] ?? PLAN_CHIP_STYLES.starter),
+                        }}
+                      />
+                    ) : (
+                      <Typography component="span" sx={{ fontSize: 12, color: "#9CA3AF" }}>미구독</Typography>
+                    )}
+                  </TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{m.created_at.slice(0, 10)}</TableCell>
                   <TableCell sx={{ fontSize: 12 }}>
                     {m.deleted_at
@@ -729,6 +771,29 @@ export default function AdminMemberPage() {
                 <Typography sx={{ fontSize: 13, fontFamily: "monospace", fontWeight: 700, color: "#2F80ED" }}>
                   {editMember.member_code ?? String(editMember.id)}
                 </Typography>
+              </FormRow>
+
+              <FormRow label="요금제">
+                {editMember.subscription ? (
+                  <Box>
+                    <Chip
+                      label={PLAN_LABELS[editMember.subscription.plan] ?? editMember.subscription.plan.toUpperCase()}
+                      size="small"
+                      sx={{
+                        height: 22,
+                        fontSize: 11,
+                        fontWeight: 800,
+                        ...(PLAN_CHIP_STYLES[editMember.subscription.plan] ?? PLAN_CHIP_STYLES.starter),
+                      }}
+                    />
+                    <Typography sx={{ mt: 0.75, fontSize: 12, color: "#6B7280", lineHeight: 1.6 }}>
+                      {formatSubscriptionDate(editMember.subscription.started_at)}<br />
+                      ~ {formatSubscriptionDate(editMember.subscription.expires_at)}
+                    </Typography>
+                  </Box>
+                ) : (
+                  <Typography sx={{ fontSize: 13, color: "#9CA3AF" }}>활성 요금제 없음</Typography>
+                )}
               </FormRow>
 
               {isMaster && (

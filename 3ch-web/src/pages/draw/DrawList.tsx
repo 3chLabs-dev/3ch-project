@@ -1137,7 +1137,7 @@ export default function DrawList() {
         <Card elevation={2} sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
           <CardContent sx={{ py: 3, textAlign: "center", "&:last-child": { pb: 3 } }}>
             <Typography color="text.secondary" fontWeight={700}>
-              {canManage ? "추첨 만들기 버튼으로 첫 추첨을 생성하세요." : "아직 추첨이 없습니다."}
+              {canManage ? "경품 추첨을 생성해 보세요." : "경품 추첨 내역이 없습니다."}
             </Typography>
           </CardContent>
         </Card>

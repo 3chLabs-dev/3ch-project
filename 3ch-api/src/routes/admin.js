@@ -263,6 +263,16 @@ router.get('/members', requireAdmin, async (req, res) => {
       LIMIT 1
     ) gm ON true
     LEFT JOIN groups g ON g.id = gm.group_id
+    LEFT JOIN LATERAL (
+      SELECT s.plan, s.started_at, s.expires_at
+      FROM subscriptions s
+      WHERE s.user_id = u.id
+        AND s.status = 'ACTIVE'
+        AND s.started_at <= NOW()
+        AND s.expires_at > NOW()
+      ORDER BY s.created_at DESC
+      LIMIT 1
+    ) active_subscription ON true
     WHERE ${conditions.join(' AND ')}
   `;
 
@@ -277,6 +287,7 @@ router.get('/members', requireAdmin, async (req, res) => {
                 u.created_at::text, u.deleted_at::text,
                 gm.role, gm.division AS grade,
                 g.name AS club_name, g.sport,
+                active_subscription.plan AS subscription_plan,
                 (SELECT COUNT(*)::int FROM group_members WHERE user_id = u.id) AS club_count
          ${baseFrom}
          ORDER BY u.created_at DESC
@@ -377,12 +388,23 @@ router.get('/members/search', requireAdmin, async (req, res) => {
 router.get('/members/:id', requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
   try {
-    const [userResult, clubsResult] = await Promise.all([
+    const [userResult, subscriptionResult, clubsResult] = await Promise.all([
       pool.query(
         `SELECT u.id, u.member_code, u.email, u.name, u.auth_provider,
                 u.created_at::text, u.deleted_at::text
          FROM users u
          WHERE u.id = $1 AND u.is_admin = false`,
+        [id],
+      ),
+      pool.query(
+        `SELECT plan, started_at::text, expires_at::text
+         FROM subscriptions
+         WHERE user_id = $1
+           AND status = 'ACTIVE'
+           AND started_at <= NOW()
+           AND expires_at > NOW()
+         ORDER BY created_at DESC
+         LIMIT 1`,
         [id],
       ),
       pool.query(
@@ -413,7 +435,12 @@ router.get('/members/:id', requireAdmin, async (req, res) => {
     );
     return res.json({
       ok: true,
-      member: { ...userResult.rows[0], clubs: clubsResult.rows, feature_credits: creditResult.rows },
+      member: {
+        ...userResult.rows[0],
+        clubs: clubsResult.rows,
+        feature_credits: creditResult.rows,
+        subscription: subscriptionResult.rows[0] ?? null,
+      },
     });
   } catch (e) {
     return res.status(500).json({ ok: false, error: String(e.message || e) });

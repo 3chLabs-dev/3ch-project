@@ -744,7 +744,7 @@ router.post("/payment/billing/issue", requireAuth, async (req, res) => {
          FROM coupon_redemptions r JOIN coupons c ON c.id=r.coupon_id
         WHERE r.user_id=$1 AND r.status='AVAILABLE' AND c.type='PERCENT_DISCOUNT'
           AND r.id=$3::uuid
-          AND c.is_active=true AND c.valid_until>NOW() AND (c.plan_code IS NULL OR c.plan_code=$2)
+          AND c.is_active=true AND r.expires_at>NOW() AND (c.plan_code IS NULL OR c.plan_code=$2)
         ORDER BY r.redeemed_at ASC LIMIT 1`, [userId,plan.code,couponRedemptionId||null],
     );
     const discount = discountResult.rows[0];

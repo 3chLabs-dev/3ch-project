@@ -294,6 +294,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
   const [formationDialog, setFormationDialog] = useState<{ roundIndex: number; mode: "team" | "doubles" | "group" } | null>(null);
   const [groupStructureRoundIndex, setGroupStructureRoundIndex] = useState<number | null>(null);
   const [groupStructureMode, setGroupStructureMode] = useState<"group" | "team">("group");
+  const [isStructuredReshuffle, setIsStructuredReshuffle] = useState(false);
   const [pendingGroupStructureSizes, setPendingGroupStructureSizes] = useState<number[]>([]);
   const [isFormationStarting, setIsFormationStarting] = useState(false);
   const [formationStartingStep, setFormationStartingStep] = useState(0);
@@ -654,9 +655,24 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
       || groupStructureBlock?.roundOption === "FINAL"
       || groupStructureBlock?.title?.includes("본선") === true
     );
-  const groupStructureMemberCount = (groupStructureMode === "team" ? groupStructureBlock?.teamFormationSizes : groupStructureBlock?.groupSizes)
-    ?.reduce((sum, size) => sum + size, 0)
-    || programPlayers.length;
+  const getGroupStructureUnitCount = (
+    block?: StoredProgramBlock,
+    mode: "group" | "team" = groupStructureMode,
+  ) => {
+    if (mode === "team") return programPlayers.length;
+    if (block?.type === "DOUBLES") {
+      return hasCurrentDoublesRoster(block.doublesAssignments)
+        ? block.doublesAssignments!.length
+        : Math.floor(programPlayers.length / 2);
+    }
+    if (block?.type === "TEAM") {
+      return block.teamAssignments?.length
+        || block.teamFormationSizes?.length
+        || buildTeamFormationSizes(programPlayers.length, block.teamPlayerCount ?? 4).length;
+    }
+    return programPlayers.length;
+  };
+  const groupStructureMemberCount = getGroupStructureUnitCount(groupStructureBlock);
   const groupStructureOptions = useMemo(
     () => {
       const options = generateGroupOptions(groupStructureMemberCount);
@@ -686,13 +702,22 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
     [groupStructureMemberCount, groupStructureMode],
   );
 
-  const openGroupStructureDialog = (roundIndex: number, mode: "group" | "team" = "group") => {
+  const openGroupStructureDialog = (
+    roundIndex: number,
+    mode: "group" | "team" = "group",
+    reshuffle = false,
+  ) => {
     const block = storedProgram?.blocks?.[roundIndex];
     const teamPlayerCount = block?.teamPlayerCount ?? storedProgram?.rounds?.[roundIndex]?.teamPlayerCount ?? 4;
-    const currentSizes = mode === "team"
-      ? block?.teamFormationSizes ?? buildTeamFormationSizes(programPlayers.length, teamPlayerCount)
-      : block?.groupSizes ?? generateGroupOptions(programPlayers.length)[0]?.groups ?? [programPlayers.length];
+    const unitCount = getGroupStructureUnitCount(block, mode);
+    const savedSizes = mode === "team" ? block?.teamFormationSizes : block?.groupSizes;
+    const currentSizes = savedSizes?.reduce((sum, size) => sum + size, 0) === unitCount
+      ? savedSizes
+      : mode === "team"
+        ? buildTeamFormationSizes(programPlayers.length, teamPlayerCount)
+        : generateGroupOptions(unitCount)[0]?.groups ?? [unitCount];
     setGroupStructureMode(mode);
+    setIsStructuredReshuffle(reshuffle);
     setPendingGroupStructureSizes(currentSizes);
     setGroupStructureRoundIndex(roundIndex);
   };
@@ -700,6 +725,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
   const closeGroupStructureDialog = () => {
     if (isFormationStarting) return;
     setGroupStructureRoundIndex(null);
+    setIsStructuredReshuffle(false);
     setPendingGroupStructureSizes([]);
   };
 
@@ -794,9 +820,10 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
     const roundIndex = groupStructureRoundIndex;
     await runFormationProgress(
       () => persistFormation(nextProgram, roundIndex, true),
-      groupStructureMode === "team" ? "팀 편성 중" : "조 편성 중",
+      isStructuredReshuffle ? "재편성 중" : groupStructureMode === "team" ? "팀 편성 중" : "조 편성 중",
     );
     setGroupStructureRoundIndex(null);
+    setIsStructuredReshuffle(false);
     setPendingGroupStructureSizes([]);
     setFormationDialog({ roundIndex, mode: groupStructureMode });
   };
@@ -1279,6 +1306,18 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
     await runFormationProgress(() => persistFormation(nextProgram, roundIndex, true), "재편성 중");
   };
 
+  const confirmReshuffle = async () => {
+    if (!formationDialog) return;
+    if (formationDialog.mode === "doubles") {
+      await reshuffleFormation();
+      return;
+    }
+    const { roundIndex, mode } = formationDialog;
+    setReshuffleConfirmOpen(false);
+    closeFormationDialog();
+    openGroupStructureDialog(roundIndex, mode, true);
+  };
+
   const handleDelete = async () => {
     setConfirmOpen(false);
     if (!id || !canManage) return;
@@ -1599,7 +1638,11 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
         slotProps={{ paper: { sx: { borderRadius: 2, mx: 2 } } }}
       >
         <DialogTitle sx={{ fontWeight: 900, fontSize: 16 }}>
-          {isFormationStarting ? formationProgressTitle : groupStructureMode === "team" ? "팀 편성하기" : "조 편성하기"}
+          {isFormationStarting
+            ? formationProgressTitle
+            : isStructuredReshuffle
+              ? groupStructureMode === "team" ? "팀 재편성하기" : "조 재편성하기"
+              : groupStructureMode === "team" ? "팀 편성하기" : "조 편성하기"}
         </DialogTitle>
         <DialogContent dividers>
           {isFormationStarting ? (
@@ -1680,7 +1723,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
         <DialogActions sx={{ px: 2.5, py: 2 }}>
           <Button onClick={closeGroupStructureDialog} disabled={isFormationStarting}>취소</Button>
           <Button variant="contained" onClick={() => void startStructuredFormation()} disabled={isSavingFormation || isFormationStarting}>
-            편성 시작
+            {isStructuredReshuffle ? "재편성 시작" : "편성 시작"}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1870,7 +1913,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
         </DialogContent>
         <DialogActions sx={{ px: 2, pb: 2 }}>
           <Button onClick={() => setReshuffleConfirmOpen(false)} disabled={isSavingFormation}>취소</Button>
-          <Button variant="contained" onClick={() => void reshuffleFormation()} disabled={isSavingFormation}>확인</Button>
+          <Button variant="contained" onClick={() => void confirmReshuffle()} disabled={isSavingFormation}>확인</Button>
         </DialogActions>
       </Dialog>
 

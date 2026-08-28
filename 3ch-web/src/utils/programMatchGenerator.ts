@@ -1718,6 +1718,8 @@ export function generateProgramRoundMatches(
       ? block.teamGroupSizes?.length
         ? block.teamGroupSizes
         : [Math.ceil(matchUnits.length / 2), Math.floor(matchUnits.length / 2)].filter((size) => size > 0)
+      : block.type === "DOUBLES" && groupSizes.reduce((sum, size) => sum + size, 0) !== matchUnits.length
+        ? balancedSizes(matchUnits.length, Math.min(2, matchUnits.length))
       : groupSizes;
     const groups = block.groupAssignments?.length
       ? block.type === "DOUBLES" || block.type === "TEAM"

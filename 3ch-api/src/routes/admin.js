@@ -554,8 +554,8 @@ router.post('/members/:id/feature-grants', requireAdmin, async (req, res) => {
 
   const normalized = Object.entries(grants)
     .filter(([feature]) => QUOTA_FEATURES.has(feature))
-    .map(([feature, amount]) => [feature, Number(amount)])
-    .filter(([, amount]) => Number.isInteger(amount) && amount > 0 && amount <= 100000);
+    .map(([feature, amount]) => [feature, amount === null ? null : Number(amount)])
+    .filter(([, amount]) => amount === null || (Number.isInteger(amount) && amount > 0 && amount <= 100000));
   if (normalized.length === 0) {
     return res.status(400).json({ ok: false, error: "EMPTY_GRANT" });
   }

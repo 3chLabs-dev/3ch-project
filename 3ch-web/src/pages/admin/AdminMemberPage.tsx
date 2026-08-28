@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import {
   Alert, Box, Button, Chip, CircularProgress,
   Dialog, DialogActions, DialogContent, DialogTitle,
-  Divider, MenuItem, Pagination, Select, Stack,
+  Divider, FormControl, FormControlLabel, MenuItem, Pagination, Radio, RadioGroup, Select, Stack,
   Table, TableBody, TableCell, TableHead, TableRow,
   TextField, Typography,
 } from "@mui/material";
@@ -29,11 +29,13 @@ type Member = {
 type ClubOption    = { id: string; name: string; sport: string | null };
 type ClubDetail    = { group_id: string; club_name: string; sport: string | null; role: string | null; grade: string | null; joined_at: string | null };
 type FeatureCredit = {
-  feature: "EVENT_CREATE" | "VISION_SCAN" | "DRAW_CREATE";
+  feature: GrantFeature;
   unlimited: boolean;
   remaining: number;
   expires_at: string | null;
 };
+type GrantFeature = "LEAGUE_CREATE" | "VISION_SCAN" | "DRAW_CREATE" | "PREMIUM_PROMOTION";
+type GrantValue = { amount: string; unlimited: boolean };
 type DetailMember  = Member & {
   clubs: ClubDetail[];
   system_role: "USER" | "MANAGER" | "MASTER";
@@ -96,6 +98,18 @@ const PLAN_CHIP_STYLES: Record<string, { bgcolor: string; color: string }> = {
   pro: { bgcolor: "#EFF6FF", color: "#2563EB" },
   premium: { bgcolor: "#FDF4FF", color: "#A855F7" },
 };
+const GRANT_FEATURES: Array<{ key: GrantFeature; label: string }> = [
+  { key: "LEAGUE_CREATE", label: "리그·대회 생성" },
+  { key: "VISION_SCAN", label: "클럽회원·참가자·대진표 사진 인식" },
+  { key: "DRAW_CREATE", label: "추첨 생성" },
+  { key: "PREMIUM_PROMOTION", label: "프리미엄 노출" },
+];
+const emptyGrantValues = (): Record<GrantFeature, GrantValue> => ({
+  LEAGUE_CREATE: { amount: "0", unlimited: false },
+  VISION_SCAN: { amount: "0", unlimited: false },
+  DRAW_CREATE: { amount: "0", unlimited: false },
+  PREMIUM_PROMOTION: { amount: "0", unlimited: false },
+});
 const formatSubscriptionDate = (value: string) =>
   new Intl.DateTimeFormat("ko-KR", {
     year: "numeric",
@@ -144,9 +158,7 @@ export default function AdminMemberPage() {
   const [resetPasswordResult, setResetPasswordResult] = useState<string | null>(null);
   const [passwordCopied, setPasswordCopied] = useState(false);
   const [editSystemRole, setEditSystemRole] = useState<"USER" | "MANAGER" | "MASTER">("USER");
-  const [grantEvent, setGrantEvent] = useState("0");
-  const [grantVision, setGrantVision] = useState("0");
-  const [grantDraw, setGrantDraw] = useState("0");
+  const [grantValues, setGrantValues] = useState<Record<GrantFeature, GrantValue>>(emptyGrantValues);
   const [grantExpiresAt, setGrantExpiresAt] = useState(() => {
     const date = new Date();
     date.setDate(date.getDate() + 30);
@@ -209,9 +221,7 @@ export default function AdminMemberPage() {
       setEditMember(m);
       setEditName(m.name ?? "");
       setEditSystemRole(m.system_role ?? "USER");
-      setGrantEvent("0");
-      setGrantVision("0");
-      setGrantDraw("0");
+      setGrantValues(emptyGrantValues());
       if (m.clubs.length > 0) {
         setSelectedClub(m.clubs[0]);
         setEditRole(m.clubs[0].role ?? "");
@@ -274,12 +284,18 @@ export default function AdminMemberPage() {
 
   const handleFeatureGrant = async () => {
     if (!editMember || grantLoading || editSystemRole !== "MANAGER") return;
-    const grants = {
-      EVENT_CREATE: Number(grantEvent),
-      VISION_SCAN: Number(grantVision),
-      DRAW_CREATE: Number(grantDraw),
-    };
-    if (!Object.values(grants).some((value) => Number.isInteger(value) && value > 0)) {
+    const grantEntries: Array<[GrantFeature, number | null]> = [];
+    GRANT_FEATURES.forEach(({ key }) => {
+      const value = grantValues[key];
+      if (value.unlimited) {
+        grantEntries.push([key, null]);
+        return;
+      }
+      const amount = Number(value.amount);
+      if (Number.isInteger(amount) && amount > 0) grantEntries.push([key, amount]);
+    });
+    const grants = Object.fromEntries(grantEntries);
+    if (Object.keys(grants).length === 0) {
       setEditError("지급할 기능 횟수를 입력해 주세요.");
       return;
     }
@@ -825,10 +841,50 @@ export default function AdminMemberPage() {
                   {editSystemRole === "MANAGER" && (
                     <Box sx={{ p: 1.5, border: "1px solid #D9DDE6", borderRadius: 1, bgcolor: "#F8FAFC" }}>
                       <Typography sx={{ mb: 1.25, fontSize: 13, fontWeight: 900 }}>기능 횟수 지급</Typography>
-                      <Stack spacing={1}>
-                        <TextField label="리그·대회 생성" type="number" size="small" value={grantEvent} onChange={(e) => setGrantEvent(e.target.value)} inputProps={{ min: 0 }} />
-                        <TextField label="클럽회원·참가자·대진표 사진 인식" type="number" size="small" value={grantVision} onChange={(e) => setGrantVision(e.target.value)} inputProps={{ min: 0 }} />
-                        <TextField label="추첨 생성" type="number" size="small" value={grantDraw} onChange={(e) => setGrantDraw(e.target.value)} inputProps={{ min: 0 }} />
+                      <Stack spacing={0.8}>
+                        {GRANT_FEATURES.map(({ key, label }) => {
+                          const value = grantValues[key];
+                          return (
+                            <Box key={key} sx={{ px: 1, py: 0.8, border: "1px solid #E5E7EB", borderRadius: 1, bgcolor: "#fff" }}>
+                              <Typography sx={{ mb: 0.4, fontSize: 12, fontWeight: 800 }}>{label}</Typography>
+                              <FormControl>
+                                <RadioGroup
+                                  row
+                                  value={value.unlimited ? "unlimited" : "count"}
+                                  onChange={(event) => setGrantValues((prev) => ({
+                                    ...prev,
+                                    [key]: { ...prev[key], unlimited: event.target.value === "unlimited" },
+                                  }))}
+                                  sx={{ flexWrap: "nowrap", alignItems: "center", gap: 0.5 }}
+                                >
+                                  <FormControlLabel
+                                    value="count"
+                                    control={<Radio size="small" />}
+                                    label={(
+                                      <Stack direction="row" alignItems="center" spacing={0.5}>
+                                        <TextField
+                                          type="number"
+                                          size="small"
+                                          value={value.amount}
+                                          disabled={value.unlimited}
+                                          onChange={(event) => setGrantValues((prev) => ({
+                                            ...prev,
+                                            [key]: { ...prev[key], amount: event.target.value },
+                                          }))}
+                                          inputProps={{ min: 1, max: 100000 }}
+                                          sx={{ width: 76 }}
+                                        />
+                                        <Typography fontSize={12}>회</Typography>
+                                      </Stack>
+                                    )}
+                                    sx={{ mr: 0.5 }}
+                                  />
+                                  <FormControlLabel value="unlimited" control={<Radio size="small" />} label={<Typography fontSize={12}>무제한</Typography>} />
+                                </RadioGroup>
+                              </FormControl>
+                            </Box>
+                          );
+                        })}
                         <TextField label="만료일" type="date" size="small" value={grantExpiresAt} onChange={(e) => setGrantExpiresAt(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
                         <Button variant="outlined" onClick={handleFeatureGrant} disabled={grantLoading} sx={{ fontWeight: 800 }}>
                           {grantLoading ? "지급 중..." : "횟수 지급"}
@@ -836,9 +892,8 @@ export default function AdminMemberPage() {
                       </Stack>
                       <Divider sx={{ my: 1.5 }} />
                       <Stack spacing={0.5}>
-                        {(["EVENT_CREATE", "VISION_SCAN", "DRAW_CREATE"] as const).map((feature) => {
+                        {GRANT_FEATURES.map(({ key: feature, label }) => {
                           const credit = editMember.feature_credits?.find((item) => item.feature === feature);
-                          const label = feature === "EVENT_CREATE" ? "리그·대회 생성" : feature === "VISION_SCAN" ? "클럽회원·참가자·대진표 사진 인식" : "추첨 생성";
                           return (
                             <Stack key={feature} direction="row" justifyContent="space-between">
                               <Typography sx={{ fontSize: 12, color: "#6B7280" }}>{label}</Typography>

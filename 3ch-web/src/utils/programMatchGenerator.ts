@@ -405,6 +405,13 @@ function completeAutomaticOpeningWalkover(
   return { ...match, status: "done", score_a: 0, score_b: 0 };
 }
 
+export function isAutomaticProgramWalkover(match: LeagueMatch): boolean {
+  return match.bracket === "upper"
+    && match.round_number === 1
+    && match.status === "done"
+    && Boolean(match.participant_a_id) !== Boolean(match.participant_b_id);
+}
+
 function buildTournamentMatches(
   leagueId: string,
   roundIndex: number,

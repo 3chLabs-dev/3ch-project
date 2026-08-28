@@ -52,6 +52,7 @@ import {
   applyProgramTournamentAdvancement,
   generateProgramRoundMatches,
   getStoredProgramOption,
+  isAutomaticProgramWalkover,
   saveProgramMatchPatch,
   storeProgramOption,
   withProgramRoundStandingsSnapshot,
@@ -142,8 +143,8 @@ function ParticipantRow({
             {division}
           </Box>
         )}
-        <Typography sx={{ fontWeight: 700, fontSize: 14, lineHeight: 1.25, whiteSpace: "normal", color: wins ? "#16A34A" : isMe ? "#2F80ED" : "#111827" }}>
-          {name ?? "?"}
+        <Typography sx={{ fontWeight: !name || name === "미정" ? 600 : 700, fontSize: 14, lineHeight: 1.25, whiteSpace: "normal", color: !name || name === "미정" ? "#9CA3AF" : wins ? "#16A34A" : isMe ? "#2F80ED" : "#111827" }}>
+          {name ?? "미정"}
         </Typography>
       </Stack>
 
@@ -195,6 +196,11 @@ function MatchCard({
   const autoCompleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestMatchRef = useRef(match);
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+  const isAutomaticWalkover = isAutomaticProgramWalkover(match);
+  const displayNameA = match.participant_a_name
+    ?? (isAutomaticWalkover && !match.participant_a_id ? "BYE" : "미정");
+  const displayNameB = match.participant_b_name
+    ?? (isAutomaticWalkover && !match.participant_b_id ? "BYE" : "미정");
 
   useEffect(() => {
     latestMatchRef.current = match;
@@ -293,8 +299,8 @@ function MatchCard({
     const title = match.match_label?.includes("3·4위전") || match.match_label?.includes("결승")
       ? match.match_label
       : `${index + 1}경기`;
-    return `${title}\n${aDiv}${match.participant_a_name ?? "?"} VS ${bDiv}${match.participant_b_name ?? "?"}`;
-  }, [match, index]);
+    return `${title}\n${aDiv}${displayNameA} VS ${bDiv}${displayNameB}`;
+  }, [match, index, displayNameA, displayNameB]);
 
   const handleScore = useCallback((side: "a" | "b", delta: number) => {
     const current = side === "a" ? (match.score_a ?? 0) : (match.score_b ?? 0);
@@ -429,7 +435,7 @@ function MatchCard({
         {/* 참가자 박스 (직선 테두리) */}
         <Box sx={{ border: "1.5px solid #E5E7EB", borderRadius: 0, overflow: "hidden" }}>
           <ParticipantRow
-            name={match.participant_a_name}
+            name={displayNameA}
             division={match.participant_a_division}
             seedLabel={seedA}
             orderLabel={orderA}
@@ -443,7 +449,7 @@ function MatchCard({
             <Typography sx={{ fontSize: 11, fontWeight: 700, color: "#C4C9D4" }}>vs</Typography>
           </Box>
           <ParticipantRow
-            name={match.participant_b_name}
+            name={displayNameB}
             division={match.participant_b_division}
             seedLabel={seedB}
             orderLabel={orderB}
@@ -606,6 +612,7 @@ export default function LeagueMatchOrder() {
     const hydratedMatches = generatedProgramMatches.map((match) => {
       const serverMatch = serverById.get(match.id);
       if (!serverMatch) return match;
+      const preserveWalkover = isAutomaticProgramWalkover(match);
       return {
         ...match,
         match_order: serverMatch.match_order,
@@ -617,10 +624,10 @@ export default function LeagueMatchOrder() {
         participant_b_division: serverMatch.participant_b_division ?? match.participant_b_division,
         // 서버에 동기화된 경기는 서버 결과가 최종값이다. 생성 경기의
         // 기본 0점/playing 상태가 저장된 결과를 덮어쓰지 않도록 한다.
-        score_a: serverMatch.score_a,
-        score_b: serverMatch.score_b,
+        score_a: preserveWalkover ? match.score_a : serverMatch.score_a,
+        score_b: preserveWalkover ? match.score_b : serverMatch.score_b,
         court: serverMatch.court,
-        status: serverMatch.status,
+        status: preserveWalkover ? match.status : serverMatch.status,
         match_rule: match.match_rule ?? serverMatch.match_rule,
       };
     });

@@ -29,7 +29,7 @@ import {
 } from "../../features/league/leagueApi";
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
 import { formatLeagueDate } from "../../utils/dateUtils";
-import { applyProgramMatchState, applyProgramTournamentAdvancement, generateProgramRoundMatches, getStoredProgramOption } from "../../utils/programMatchGenerator";
+import { applyProgramMatchState, applyProgramTournamentAdvancement, generateProgramRoundMatches, getStoredProgramOption, isAutomaticProgramWalkover } from "../../utils/programMatchGenerator";
 
 // ─── 단일 토너먼트 레이아웃 상수 ────────────────────────────────────────────
 // 단일 토너먼트(라운드로빈 등)에서 매치 박스를 좌→우 방향으로 나열할 때 사용
@@ -422,6 +422,8 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
   const nameB = m.participant_b_name;
   const isByeA = !nameA && isR1 && !manualSeeding;
   const isByeB = !nameB && isR1 && !manualSeeding;
+  const isUndecidedA = !nameA && !isByeA;
+  const isUndecidedB = !nameB && !isByeB;
 
   const swapSelA = actions?.swapFirstKey === `${m.id}:a`;
   const swapSelB = actions?.swapFirstKey === `${m.id}:b`;
@@ -479,10 +481,13 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
                 <Typography sx={{ fontSize: 9, fontWeight: 900, color: "#fff", lineHeight: 1.4 }}>등록</Typography>
               </Box>
             )}
+            {(!actions?.canRegister || actions.editMode) && (
+              <Typography sx={{ fontSize: 11, fontWeight: 400, color: "#9CA3AF", fontStyle: "italic" }}>미정</Typography>
+            )}
           </Box>
         ) : (
-          <Typography sx={{ fontSize: nameA?.includes(" · ") ? 9 : 11, fontWeight: isByeA ? 400 : 600, flex: 1, overflow: "hidden", whiteSpace: "normal", lineHeight: 1.1, color: winA ? "#16A34A" : isByeA ? "#9CA3AF" : "text.primary", fontStyle: isByeA ? "italic" : "normal" }}>
-            {nameA ?? (isByeA ? "BYE" : "")}
+          <Typography sx={{ fontSize: nameA?.includes(" · ") ? 9 : 11, fontWeight: isByeA || isUndecidedA ? 400 : 600, flex: 1, overflow: "hidden", whiteSpace: "normal", lineHeight: 1.1, color: winA ? "#16A34A" : isByeA || isUndecidedA ? "#9CA3AF" : "text.primary", fontStyle: isByeA || isUndecidedA ? "italic" : "normal" }}>
+            {nameA ?? (isByeA ? "BYE" : "미정")}
           </Typography>
         )}
         {m.score_a != null && <Typography sx={{ fontSize: 12, fontWeight: 800, color: winA ? "#16A34A" : "#6B7280", flexShrink: 0 }}>{m.score_a}</Typography>}
@@ -507,10 +512,13 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
                 <Typography sx={{ fontSize: 9, fontWeight: 900, color: "#fff", lineHeight: 1.4 }}>등록</Typography>
               </Box>
             )}
+            {(!actions?.canRegister || actions.editMode) && (
+              <Typography sx={{ fontSize: 11, fontWeight: 400, color: "#9CA3AF", fontStyle: "italic" }}>미정</Typography>
+            )}
           </Box>
         ) : (
-          <Typography sx={{ fontSize: nameB?.includes(" · ") ? 9 : 11, fontWeight: isByeB ? 400 : 600, flex: 1, overflow: "hidden", whiteSpace: "normal", lineHeight: 1.1, color: winB ? "#16A34A" : isByeB ? "#9CA3AF" : "text.primary", fontStyle: isByeB ? "italic" : "normal" }}>
-            {nameB ?? (isByeB ? "BYE" : "")}
+          <Typography sx={{ fontSize: nameB?.includes(" · ") ? 9 : 11, fontWeight: isByeB || isUndecidedB ? 400 : 600, flex: 1, overflow: "hidden", whiteSpace: "normal", lineHeight: 1.1, color: winB ? "#16A34A" : isByeB || isUndecidedB ? "#9CA3AF" : "text.primary", fontStyle: isByeB || isUndecidedB ? "italic" : "normal" }}>
+            {nameB ?? (isByeB ? "BYE" : "미정")}
           </Typography>
         )}
         {m.score_b != null && <Typography sx={{ fontSize: 12, fontWeight: 800, color: winB ? "#16A34A" : "#6B7280", flexShrink: 0 }}>{m.score_b}</Typography>}
@@ -546,6 +554,7 @@ function SingleSlotBox({ pos, slot, actions, manualSeeding = false }: { pos: Mat
   const score = slot === "a" ? m.score_a : m.score_b;
   const win = isWalkoverWinner(m, slot);
   const isBye = !name && isR1 && !manualSeeding;
+  const isUndecided = !name && !isBye;
   const division = slot === "a" ? m.participant_a_division : m.participant_b_division;
   const seed = actions?.seedMap?.get(m.id);
   const seedNum = slot === "a" ? seed?.a : seed?.b;
@@ -600,10 +609,13 @@ function SingleSlotBox({ pos, slot, actions, manualSeeding = false }: { pos: Mat
                 <Typography sx={{ fontSize: 9, fontWeight: 900, color: "#fff", lineHeight: 1.4 }}>등록</Typography>
               </Box>
             )}
+            {(!actions?.canRegister || actions.editMode) && (
+              <Typography sx={{ fontSize: 10, fontWeight: 400, color: "#9CA3AF", fontStyle: "italic" }}>미정</Typography>
+            )}
           </Box>
         ) : (
-          <Typography sx={{ fontSize: name?.includes(" · ") ? 9 : 11, fontWeight: isBye ? 400 : 700, flex: 1, overflow: "hidden", whiteSpace: "normal", lineHeight: 1.1, color: win ? "#16A34A" : isBye ? "#9CA3AF" : "#111827", fontStyle: isBye ? "italic" : "normal" }}>
-            {name ?? (isBye ? "BYE" : "")}
+          <Typography sx={{ fontSize: name?.includes(" · ") ? 9 : 11, fontWeight: isBye || isUndecided ? 400 : 700, flex: 1, overflow: "hidden", whiteSpace: "normal", lineHeight: 1.1, color: win ? "#16A34A" : isBye || isUndecided ? "#9CA3AF" : "#111827", fontStyle: isBye || isUndecided ? "italic" : "normal" }}>
+            {name ?? (isBye ? "BYE" : "미정")}
           </Typography>
         )}
       </Box>
@@ -941,6 +953,7 @@ export default function LeagueTournamentBracket() {
     const hydratedMatches = generatedMatches.map((match) => {
       const serverMatch = serverById.get(match.id);
       if (!serverMatch) return match;
+      const preserveWalkover = isAutomaticProgramWalkover(match);
       const manualRoundOneParticipants =
         isManualProgramSeeding && match.round_number === 1
           ? {
@@ -955,10 +968,10 @@ export default function LeagueTournamentBracket() {
       return {
         ...match,
         ...manualRoundOneParticipants,
-        score_a: serverMatch.score_a,
-        score_b: serverMatch.score_b,
+        score_a: preserveWalkover ? match.score_a : serverMatch.score_a,
+        score_b: preserveWalkover ? match.score_b : serverMatch.score_b,
         court: serverMatch.court,
-        status: serverMatch.status,
+        status: preserveWalkover ? match.status : serverMatch.status,
         match_rule: match.match_rule ?? serverMatch.match_rule,
       };
     });

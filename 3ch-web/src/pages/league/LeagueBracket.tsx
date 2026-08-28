@@ -39,6 +39,7 @@ import {
   applyProgramMatchState,
   generateProgramRoundMatches,
   getStoredProgramOption,
+  isAutomaticProgramWalkover,
   saveProgramMatchPatch,
   storeProgramOption,
   withProgramRoundStandingsSnapshot,
@@ -1054,13 +1055,14 @@ export default function LeagueBracket() {
       const hasSameParticipants =
         serverMatch?.participant_a_id === match.participant_a_id
         && serverMatch?.participant_b_id === match.participant_b_id;
+      const preserveWalkover = isAutomaticProgramWalkover(match);
       return serverMatch && (isProgramUnitRound || hasSameParticipants)
         ? {
             ...match,
-            score_a: serverMatch.score_a,
-            score_b: serverMatch.score_b,
+            score_a: preserveWalkover ? match.score_a : serverMatch.score_a,
+            score_b: preserveWalkover ? match.score_b : serverMatch.score_b,
             court: serverMatch.court,
-            status: serverMatch.status,
+            status: preserveWalkover ? match.status : serverMatch.status,
           }
         : match;
     });

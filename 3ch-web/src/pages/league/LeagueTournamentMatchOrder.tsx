@@ -172,6 +172,8 @@ function MatchCard({
   const winB = isWalkoverWinner(match, "b");
   const showByeA = isR1 && !manualSeeding && !nameA;
   const showByeB = isR1 && !manualSeeding && !nameB;
+  const displayNameA = nameA ?? (showByeA ? "BYE" : "미정");
+  const displayNameB = nameB ?? (showByeB ? "BYE" : "미정");
   const canScore = canManage && (isPlaying || (isDone && !!nameA && !!nameB));
 
   const handleScore = useCallback((slot: "a" | "b", delta: number) => {
@@ -190,14 +192,14 @@ function MatchCard({
 
   const handleStatus = useCallback(() => {
     if (isDone) return;
-    const nA = nameA ?? "?", nB = nameB ?? "?";
+    const nA = displayNameA, nB = displayNameB;
     const msg = isPlaying
       ? `${nA}(${sa}) VS (${sb})${nB}\n경기를 종료하겠습니까?`
       : `${nA} VS ${nB}\n경기를 시작하겠습니까?`;
     if (!window.confirm(msg)) return;
     if (!isPlaying) onMatchStarted?.(match.id);
     updateMatch({ leagueId, matchId: match.id, updates: { status: NEXT_STATUS[match.status], score_a: sa, score_b: sb } });
-  }, [match, isPlaying, isDone, nameA, nameB, leagueId, sa, sb, onMatchStarted, updateMatch]);
+  }, [match, isPlaying, isDone, displayNameA, displayNameB, leagueId, sa, sb, onMatchStarted, updateMatch]);
 
   const handleAppNotify = useCallback(async () => {
     setMenuAnchor(null);
@@ -208,7 +210,7 @@ function MatchCard({
     setMenuAnchor(null);
     const aDiv = match.participant_a_division ? `(${match.participant_a_division})` : "";
     const bDiv = match.participant_b_division ? `(${match.participant_b_division})` : "";
-    const text = `${matchIndex}경기\n${aDiv}${nameA ?? "?"} VS ${bDiv}${nameB ?? "?"}\n곧 경기 시작! 지금 입장해 주세요`;
+    const text = `${matchIndex}경기\n${aDiv}${displayNameA} VS ${bDiv}${displayNameB}\n곧 경기 시작! 지금 입장해 주세요`;
     const kakaoKey = import.meta.env.VITE_KAKAO_JS_KEY;
     const kakao = (window as unknown as { Kakao?: { init?: (key: string) => void; isInitialized?: () => boolean; Share?: { sendDefault: (o: unknown) => void } } }).Kakao;
     if (kakao && kakaoKey && !kakao.isInitialized?.()) {
@@ -219,7 +221,7 @@ function MatchCard({
     } else {
       navigator.clipboard?.writeText(text).then(() => alert("메시지가 복사되었습니다.\n카카오톡에 붙여넣기 해주세요."));
     }
-  }, [match, matchIndex, nameA, nameB]);
+  }, [match, matchIndex, displayNameA, displayNameB]);
 
   return (
     <Box sx={{

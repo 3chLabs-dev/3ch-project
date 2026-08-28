@@ -3295,6 +3295,10 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
       })
       .map((match, index) => {
         const isSingles = match.program_block_type === 'SINGLES';
+        const automaticWalkover = match.status === 'done'
+          && match.bracket === 'upper'
+          && Number(match.round_number) === 1
+          && Boolean(match.participant_a_id) !== Boolean(match.participant_b_id);
         const rosterIds = (value) => String(value ?? '')
           .split('+')
           .map((id) => id.trim())
@@ -3316,6 +3320,7 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
         match_rule: match.match_rule ?? null,
         participant_a_roster_ids: isSingles ? [] : rosterIds(match.participant_a_id),
         participant_b_roster_ids: isSingles ? [] : rosterIds(match.participant_b_id),
+        automatic_walkover: automaticWalkover,
       });
       });
 
@@ -3385,6 +3390,7 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
             previous.participant_b_id === match.participant_b_id
           )
         );
+        const shouldApplyAutomaticWalkover = match.automatic_walkover && !hasStartedState;
         values.push(
           match.id,
           leagueId,
@@ -3398,10 +3404,10 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
           match.next_slot,
           match.loser_next_match_id,
           match.loser_next_slot,
-          canPreserveState ? previous.score_a : null,
-          canPreserveState ? previous.score_b : null,
+          shouldApplyAutomaticWalkover ? 0 : (canPreserveState ? previous.score_a : null),
+          shouldApplyAutomaticWalkover ? 0 : (canPreserveState ? previous.score_b : null),
           canPreserveState ? previous.court : null,
-          canPreserveState ? previous.status : 'pending',
+          shouldApplyAutomaticWalkover ? 'done' : (canPreserveState ? previous.status : 'pending'),
           match.program_round,
           match.program_block_type,
           hasStartedState && match.program_block_type !== 'SINGLES'

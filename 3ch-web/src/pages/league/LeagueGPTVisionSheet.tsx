@@ -49,6 +49,7 @@ import {
   applyProgramMatchState,
   generateProgramRoundMatches,
   getStoredProgramOption,
+  isAutomaticProgramWalkover,
   saveProgramMatchPatch,
   storeProgramOption,
   withProgramRoundStandingsSnapshot,
@@ -1111,13 +1112,14 @@ export default function LeagueGPTVisionSheet() {
       const serverById = new Map(serverMatches.map((match) => [match.id, match]));
       const merged = generated.map((match) => {
         const serverMatch = serverById.get(match.id);
+        const preserveWalkover = isAutomaticProgramWalkover(match);
         return serverMatch
           ? {
               ...match,
-              score_a: serverMatch.score_a,
-              score_b: serverMatch.score_b,
+              score_a: preserveWalkover ? match.score_a : serverMatch.score_a,
+              score_b: preserveWalkover ? match.score_b : serverMatch.score_b,
               court: serverMatch.court,
-              status: serverMatch.status,
+              status: preserveWalkover ? match.status : serverMatch.status,
             }
           : match;
       });
@@ -1171,13 +1173,14 @@ export default function LeagueGPTVisionSheet() {
     const serverById = new Map(serverProgramMatchesAll.map((match) => [match.id, match]));
     return generatedProgramMatchesAll.map((match) => {
       const serverMatch = serverById.get(match.id);
+      const preserveWalkover = isAutomaticProgramWalkover(match);
       return serverMatch
         ? {
             ...match,
-            score_a: serverMatch.score_a,
-            score_b: serverMatch.score_b,
+            score_a: preserveWalkover ? match.score_a : serverMatch.score_a,
+            score_b: preserveWalkover ? match.score_b : serverMatch.score_b,
             court: serverMatch.court,
-            status: serverMatch.status,
+            status: preserveWalkover ? match.status : serverMatch.status,
             match_rule: match.match_rule ?? serverMatch.match_rule,
           }
         : match;

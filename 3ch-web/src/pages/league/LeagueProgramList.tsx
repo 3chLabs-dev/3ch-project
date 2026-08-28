@@ -298,6 +298,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
   const [isFormationStarting, setIsFormationStarting] = useState(false);
   const [formationStartingStep, setFormationStartingStep] = useState(0);
   const [formationProgress, setFormationProgress] = useState(0);
+  const [formationProgressTitle, setFormationProgressTitle] = useState("편성 적용 중");
   const [formationDraft, setFormationDraft] = useState<FormationPlayer[][]>([]);
   const [isFormationEditing, setIsFormationEditing] = useState(false);
   const [reshuffleConfirmOpen, setReshuffleConfirmOpen] = useState(false);
@@ -702,7 +703,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
     setPendingGroupStructureSizes([]);
   };
 
-  const runFormationProgress = async (operation: () => Promise<void>) => {
+  const runFormationProgress = async (operation: () => Promise<void>, title = "편성 적용 중") => {
     let currentProgress = 0;
     const animateProgressTo = (target: number, duration: number) => new Promise<void>((resolve) => {
       const startProgress = currentProgress;
@@ -723,6 +724,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
     });
 
     try {
+      setFormationProgressTitle(title);
       setIsFormationStarting(true);
       setFormationStartingStep(0);
       setFormationProgress(0);
@@ -790,7 +792,10 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
         : round),
     };
     const roundIndex = groupStructureRoundIndex;
-    await runFormationProgress(() => persistFormation(nextProgram, roundIndex, true));
+    await runFormationProgress(
+      () => persistFormation(nextProgram, roundIndex, true),
+      groupStructureMode === "team" ? "팀 편성 중" : "조 편성 중",
+    );
     setGroupStructureRoundIndex(null);
     setPendingGroupStructureSizes([]);
     setFormationDialog({ roundIndex, mode: groupStructureMode });
@@ -886,13 +891,14 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
       : { [key]: true };
     const nextBlocks = storedProgram.blocks.map((currentBlock, index) => index === roundIndex ? { ...currentBlock, ...formationUpdates } : currentBlock);
     const nextRounds = storedProgram.rounds?.map((round, index) => index === roundIndex ? { ...round, ...formationUpdates } : round);
-    await runFormationProgress(() =>
-      persistFormation(
+    await runFormationProgress(
+      () => persistFormation(
         { ...storedProgram, blocks: nextBlocks, ...(nextRounds ? { rounds: nextRounds } : {}) },
         roundIndex,
         false,
         true,
       ),
+      mode === "team" ? "팀 편성 중" : mode === "doubles" ? "복식 편성 중" : "조 편성 중",
     );
     setFormationDialog({ roundIndex, mode });
   };
@@ -1270,7 +1276,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
     setIsFormationEditing(false);
     setFormationDraft([]);
     const nextProgram = { ...storedProgram, blocks: nextBlocks, ...(nextRounds ? { rounds: nextRounds } : {}) };
-    await runFormationProgress(() => persistFormation(nextProgram, roundIndex, true));
+    await runFormationProgress(() => persistFormation(nextProgram, roundIndex, true), "재편성 중");
   };
 
   const handleDelete = async () => {
@@ -1592,7 +1598,9 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
         maxWidth="sm"
         slotProps={{ paper: { sx: { borderRadius: 2, mx: 2 } } }}
       >
-        <DialogTitle sx={{ fontWeight: 900, fontSize: 16 }}>{groupStructureMode === "team" ? "팀 편성하기" : "조 편성하기"}</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 900, fontSize: 16 }}>
+          {isFormationStarting ? formationProgressTitle : groupStructureMode === "team" ? "팀 편성하기" : "조 편성하기"}
+        </DialogTitle>
         <DialogContent dividers>
           {isFormationStarting ? (
             <Stack spacing={2} sx={{ py: 5, px: { xs: 1, sm: 3 } }}>
@@ -1915,7 +1923,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
         disableEscapeKeyDown
         slotProps={{ paper: { sx: { borderRadius: 2, mx: 2 } } }}
       >
-        <DialogTitle sx={{ fontWeight: 900, fontSize: 16 }}>편성 적용 중</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 900, fontSize: 16 }}>{formationProgressTitle}</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2} sx={{ py: 3, px: 1 }}>
             <Typography sx={{ fontSize: 15, fontWeight: 900 }}>

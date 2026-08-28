@@ -1,5 +1,4 @@
 import { Box, Button, Card, CardContent, Chip, Divider, Stack, Typography } from "@mui/material";
-import EastIcon from "@mui/icons-material/East";
 import EmojiEventsOutlinedIcon from "@mui/icons-material/EmojiEventsOutlined";
 import LeaderboardOutlinedIcon from "@mui/icons-material/LeaderboardOutlined";
 import LocationOnOutlinedIcon from "@mui/icons-material/LocationOnOutlined";
@@ -13,18 +12,21 @@ import Seo from "../../components/Seo";
 const sections = [
   { label: "리그 운영", href: "#league" },
   { label: "클럽 추천", href: "#club-recommend" },
-  { label: "OMR 기능", href: "#omr" },
-  { label: "랭킹·알림", href: "#ranking" },
+  { label: "AI 기능", href: "#AI" },
+  { label: "순위·알림", href: "#ranking" },
   { label: "추첨", href: "#draw" },
 ];
 
 const leagueCards = [
-  { title: "리그 생성", body: "단식, OMR, 단일리그+토너먼트, 상·하위 토너먼트 같은 형식을 선택해 빠르게 개설할 수 있습니다." },
-  { title: "참가 관리", body: "참가 신청, 참가자 명단, 부수 정렬, 현장 운영 상태를 한 흐름으로 이어서 관리합니다." },
-  { title: "경기 운영", body: "경기순서, 대진표, 결과 입력을 실제 운영 순서에 맞춰 자연스럽게 연결합니다." },
+  { title: "리그 생성", body: "AI가 자동으로 생성해주는 추천 프로그램을 통해 단식 / 복식 / 단체전을 선택할 수 있고, 단일리그, 조별리그, 토너먼트 등 다양한 형식으로 빠르게 생성할 수 있습니다." },
+  { title: "참가 관리", body: "참가 신청, 참가자 명단 정렬, 현장 운영 상태를 한 흐름으로 이어서 관리합니다." },
+  { title: "경기 운영", body: "경기 순서, 리그 대진표, 토너먼트 대진표, 경기 결과 입력 등 실제 리그 운영 순서에 맞춰 자연스럽게 연결합니다." },
 ];
 
-const tournamentCards = [
+const programCards = [
+  { title: "운영 조건 기반 추천", body: "진행 시간, 코트 수, 참가자 수를 함께 고려해 현장에 맞는 경기 프로그램을 자동으로 추천해 줍니다." },
+  { title: "다양한 경기 구성", body: "단식 / 복식 / 단체전과 예선·본선 리그를 조합해 참가자 모두가 즐길 수 있는 프로그램을 구성합니다." },
+  { title: "추천안 직접 수정", body: "추천받은 라운드와 경기 구성을 운영 상황에 맞게 확인하고 직접 수정할 수 있습니다." },
   { title: "단일리그 + 토너먼트", body: "예선 리그를 진행한 뒤 본선 토너먼트로 이어지는 혼합형 운영도 지원합니다." },
   { title: "상·하위 토너먼트", body: "예선 결과를 기준으로 상위부와 하위부 대진을 나눠 현장 운영에 맞게 확장할 수 있습니다." },
   { title: "대진표 시각화", body: "토너먼트 라운드별 흐름을 시각적으로 확인하고 경기 진행 현황까지 함께 볼 수 있습니다." },
@@ -36,48 +38,48 @@ const recommendCards = [
   { title: "AI 추천 클럽", body: "종목과 위치를 함께 고려해 사용자가 바로 둘러볼 수 있는 클럽 후보를 제안합니다." },
 ];
 
-const omrCards = [
-  { title: "4인 OMR 리그", body: "정확히 4명이 참가하는 리그에서 OMR 대진표와 점수 인식 흐름을 사용할 수 있습니다." },
-  { title: "이미지 분석 반영", body: "OMR 스캔 결과를 점수로 읽어들여 경기 기록에 반영하는 운영 흐름을 제공합니다." },
-  { title: "현장 운영 단축", body: "기록 입력 시간을 줄이고 종이 대진표 운영과 모바일 기록을 자연스럽게 연결합니다." },
+const aiCards = [
+  { title: "대진표·점수 사진 인식", body: "수기로 작성한 대진표를 촬영하면 AI가 대진과 점수를 읽습니다. 인식 결과를 검토한 뒤 경기 결과에 바로 반영할 수 있습니다." },
+  { title: "클럽 회원 사전등록", body: "외부 서비스의 회원 명단을 캡쳐한 사진을 업로드하면 AI가 이름을 인식해 여러 회원을 한 번에 사전등록할 수 있습니다." },
+  { title: "리그 참가자 사전등록", body: "외부 서비스의 참가자 명단을 캡쳐한 사진에서 AI가 이름과 부수를 읽어 리그 참가자 사전등록 목록을 빠르게 완성합니다." },
 ];
 
 const rankingCards = [
-  { title: "클럽 랭킹", body: "클럽 내부 포인트 랭킹과 전적 흐름을 멤버별로 확인할 수 있습니다." },
-  { title: "종목 랭킹", body: "종목 단위 랭킹 허브에서 상위 순위와 내 순위를 함께 확인할 수 있습니다." },
-  { title: "경기 알림", body: "브라우저 푸시 알림으로 경기 시작 시점이나 진행 상황을 확인할 수 있습니다." },
+  { title: "클럽 내 순위", body: "클럽 내 포인트로 계산된 순위와 전적 흐름을 확인할 수 있습니다." },
+  { title: "종목별 순위", body: "종목 단위 순위 허브에서 상위 순위와 내 순위를 함께 확인할 수 있습니다." },
+  { title: "경기 알림", body: "브라우저 푸시, 카카오톡 알림 기능으로 참가자에게 경기 시작을 알릴 수 있습니다." },
 ];
 
 const drawCards = [
-  { title: "추첨 회차 저장", body: "리그별 추첨을 회차 단위로 저장하고, 진행 전/후 상태를 구분해 관리할 수 있습니다." },
-  { title: "당첨 결과 공개", body: "상품별 당첨자와 부수를 카드형으로 정리해 결과를 확인하기 쉽게 제공합니다." },
-  { title: "재추첨 지원", body: "현장 진행 중에도 개별 상품 재추첨과 결과 저장 흐름을 이어서 사용할 수 있습니다." },
+  { title: "추첨 회차 저장", body: "리그별 추첨을 회차 단위로 저장하고, 추첨 예정과 완료 상태를 구분해 관리할 수 있습니다." },
+  { title: "당첨 결과 공개", body: "상품별 당첨자를 카드형으로 정리해 결과를 확인하기 쉽게 제공합니다." },
+  { title: "재추첨 지원", body: "개별 상품 재추첨과 결과 저장 흐름을 이어서 사용할 수 있습니다." },
 ];
 
 const flowSteps = [
-  "클럽을 만들고 멤버를 등록합니다.",
-  "리그 형식을 선택하고 참가자를 모집합니다.",
-  "경기순서, 대진표, OMR 또는 결과 입력으로 경기를 운영합니다.",
-  "랭킹 반영, 알림, 추첨 결과 공개까지 이어집니다.",
+  "클럽을 만들고 회원 명단을 직접 입력하거나 AI 사진 인식으로 등록합니다.",
+  "운영 조건에 맞는 추천 프로그램을 만들고 참가자를 등록합니다.",
+  "경기를 진행하고 대진표 사진을 AI로 인식해 경기 결과를 반영합니다.",
+  "순위 반영, 경기 알림, 추첨 결과 공개까지 이어집니다.",
 ];
 
 const matchItems = [
-  { order: "1경기", matchup: "김민수 vs 이도윤", court: "1번 코트", status: "진행 중" },
-  { order: "2경기", matchup: "박서준 vs 최하린", court: "2번 코트", status: "대기" },
+  { order: "1경기", matchup: "김민수 vs 이도윤", court: "1번 코트", status: "종료" },
+  { order: "2경기", matchup: "박서준 vs 최하린", court: "2번 코트", status: "진행 중" },
   { order: "3경기", matchup: "정지우 vs 한유진", court: "3번 코트", status: "예정" },
 ];
 
-const omrChecklist = [
-  "4인 참가자 조건 확인",
-  "OMR 마킹지 촬영 또는 업로드",
-  "점수 인식 결과 검토",
-  "경기 결과 자동 반영",
+const aiChecklist = [
+  "회원·참가자 명단 또는 대진표 촬영",
+  "AI가 이름, 부수, 대진과 점수를 자동 인식",
+  "인식 결과 확인 및 필요한 항목 수정",
+  "사전등록 목록 또는 경기 결과에 반영",
 ];
 
 const drawWinners = [
   { prize: "라켓", winner: "김민수", division: "1부" },
-  { prize: "러버 교환권", winner: "최하린", division: "2부" },
-  { prize: "음료 쿠폰", winner: "한유진", division: "3부" },
+  { prize: "케이스", winner: "최하린", division: "2부" },
+  { prize: "양말", winner: "한유진", division: "3부" },
 ];
 
 const sectionAnchorSx = {
@@ -135,7 +137,7 @@ function FeatureGrid({
 export default function DemoLandingPage() {
   return (
     <Box sx={{ minHeight: "100dvh", bgcolor: "#F9FAFB" }}>
-      <Seo title="우리리그 서비스 소개" description="리그 생성, 경기 운영, 클럽 랭킹과 추첨까지 우리리그의 주요 기능과 활용 방법을 소개합니다." path="/demo" />
+      <Seo title="우리리그 서비스 소개" description="추천 프로그램 생성과 AI 사진 인식부터 경기 운영, 랭킹, 추첨까지 우리리그의 주요 기능을 소개합니다." path="/demo" />
       <Box sx={{ position: "sticky", top: 0, zIndex: 10, bgcolor: "rgba(255,255,255,0.94)", backdropFilter: "blur(10px)", borderBottom: "1px solid #E5E7EB" }}>
         <Box sx={{ width: "min(1120px, calc(100% - 32px))", mx: "auto", py: 1.5, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
           <Box
@@ -160,7 +162,7 @@ export default function DemoLandingPage() {
           </Stack>
           <Stack direction="row" spacing={1}>
             <Button component={RouterLink} to="/login" variant="outlined" sx={{ borderRadius: 1, fontWeight: 700 }}>로그인</Button>
-            <Button component={RouterLink} to="/signup" variant="contained" disableElevation sx={{ borderRadius: 1, fontWeight: 800 }}>시작하기</Button>
+            <Button component={RouterLink} to="/signup" variant="contained" disableElevation sx={{ borderRadius: 1, fontWeight: 800 }}>회원가입</Button>
           </Stack>
         </Box>
       </Box>
@@ -172,21 +174,13 @@ export default function DemoLandingPage() {
               <Stack spacing={2.5}>
                 <Chip label="리그 운영 서비스" sx={{ alignSelf: "flex-start", bgcolor: "rgba(255,255,255,0.16)", color: "#FFFFFF", fontWeight: 800 }} />
                 <Typography sx={{ fontSize: { xs: 32, md: 56 }, lineHeight: { xs: 1.1, md: 1.03 }, fontWeight: 900, color: "#FFFFFF", maxWidth: { xs: "100%", md: 980, lg: 920 }, letterSpacing: "-0.02em", wordBreak: "keep-all" }}>
-                  <Box component="span" sx={{ display: "block" }}>리그 개설부터 경기 운영, 추첨 결과까지</Box>
+                  <Box component="span" sx={{ display: "block" }}>리그 생성부터 경기 운영, 추첨 결과까지</Box>
                   <Box component="span" sx={{ display: "block" }}>우리리그 안에서 자연스럽게 이어집니다</Box>
                 </Typography>
                 <Typography sx={{ fontSize: { xs: 16, md: 17 }, lineHeight: 1.85, color: "rgba(255,255,255,0.88)", maxWidth: { xs: "100%", md: 760 }, wordBreak: "keep-all" }}>
-                  우리리그는 리그 생성, 토너먼트 운영, 위치기반 클럽 추천, OMR 인식, 랭킹, 알림, 추첨 기능까지
-                  실제 현장 운영에 필요한 흐름을 하나의 서비스 안에서 이어서 제공합니다.
+                  우리리그는 위치기반 클럽 추천, 리그 추천 프로그램 생성, 대진표 사진 AI 자동 인식, 토너먼트 대진표 생성, 개인 순위 집계, 경기 알림 기능, 경품 추첨 진행 기능까지
+                  실제 현장 운영에 필요한 흐름을 하나의 서비스 안에서 모두 제공합니다.
                 </Typography>
-                <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
-                  <Button component="a" href="#league" variant="contained" disableElevation endIcon={<EastIcon />} sx={{ borderRadius: 1, bgcolor: "#FFFFFF", color: "#1464D2", fontWeight: 900, px: 2.5 }}>
-                    기능 살펴보기
-                  </Button>
-                  <Button component={RouterLink} to="/login" variant="outlined" sx={{ borderRadius: 1, borderColor: "rgba(255,255,255,0.35)", color: "#FFFFFF", fontWeight: 800 }}>
-                    로그인하기
-                  </Button>
-                </Stack>
               </Stack>
             </Box>
           </Box>
@@ -201,24 +195,24 @@ export default function DemoLandingPage() {
           <Card elevation={2} sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
             <CardContent sx={{ p: { xs: 2.5, md: 3 }, "&:last-child": { pb: { xs: 2.5, md: 3 } } }}>
               <Stack spacing={2.5}>
-                <Typography sx={{ fontSize: 24, fontWeight: 900, color: "#111827" }}>리그 예시 화면</Typography>
+                <Typography sx={{ fontSize: 24, fontWeight: 900, color: "#111827" }}>리그 진행 예시</Typography>
                 <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1.2fr 0.8fr" }, gap: 2 }}>
                   <Box sx={{ p: 2.5, borderRadius: 1, bgcolor: "#F8FAFC", border: "1px solid #E5E7EB" }}>
                     <Stack spacing={1.15}>
                       <Chip label="모집 중" size="small" sx={{ alignSelf: "flex-start", bgcolor: "#DBEAFE", color: "#1D4ED8", fontWeight: 800 }} />
-                      <Typography sx={{ fontSize: 26, fontWeight: 900, color: "#111827" }}>우리리그 오픈 랭킹전</Typography>
+                      <Typography sx={{ fontSize: 26, fontWeight: 900, color: "#111827" }}>우리리그 리그전</Typography>
                       <Typography sx={{ fontSize: 14, lineHeight: 1.75, color: "#6B7280" }}>
-                        서울 송파구 탄천 탁구장에서 진행되는 단식 개인전 예시입니다.
+                        서울 스포츠센터에서 진행되는 단식 리그전 예시입니다.
                         참가 신청부터 경기순서 확인, 경기 결과 반영까지 모바일에서 연결되는 운영 흐름을 보여줍니다.
                       </Typography>
                       <Divider sx={{ my: 0.8 }} />
-                      <Typography sx={{ fontSize: 14, fontWeight: 700, color: "#374151" }}>일정: 2026.05.24 10:00</Typography>
-                      <Typography sx={{ fontSize: 14, fontWeight: 700, color: "#374151" }}>장소: 탄천 탁구장</Typography>
+                      <Typography sx={{ fontSize: 14, fontWeight: 700, color: "#374151" }}>일정: 2026년 9월 1일 10:00~15:00</Typography>
+                      <Typography sx={{ fontSize: 14, fontWeight: 700, color: "#374151" }}>장소: 서울 스포츠센터</Typography>
                       <Typography sx={{ fontSize: 14, fontWeight: 700, color: "#374151" }}>모집: 24명</Typography>
                     </Stack>
                   </Box>
                   <Box sx={{ p: 2.5, borderRadius: 1, bgcolor: "#FFFFFF", border: "1px solid #E5E7EB" }}>
-                    <Typography sx={{ fontSize: 18, fontWeight: 900, color: "#111827", mb: 1.4 }}>경기순서 예시</Typography>
+                    <Typography sx={{ fontSize: 18, fontWeight: 900, color: "#111827", mb: 1.4 }}>경기 순서 예시</Typography>
                     <Stack spacing={1}>
                       {matchItems.map((match) => (
                         <Box key={match.order} sx={{ p: 1.4, borderRadius: 1, bgcolor: "#F8FAFC", border: "1px solid #E5E7EB" }}>
@@ -237,10 +231,10 @@ export default function DemoLandingPage() {
             </CardContent>
           </Card>
 
-          <Box>
-            <SectionTitle eyebrow="TOURNAMENT" title="토너먼트 운영" description="단일리그 이후 본선 토너먼트, 상·하위 토너먼트, 대진표 시각화 같은 운영 기능도 함께 사용할 수 있습니다." />
+          <Box id="program" sx={sectionAnchorSx}>
+            <SectionTitle eyebrow="PROGRAM RECOMMEND" title="추천 프로그램 자동 생성" description="참가자 수, 운영 시간, 코트 수를 기준으로 단식·복식·단체전과 토너먼트를 조합한 경기 프로그램을 추천합니다." />
             <Box sx={{ mt: 3 }}>
-              <FeatureGrid items={tournamentCards} icon={<ViewKanbanOutlinedIcon />} />
+              <FeatureGrid items={programCards} icon={<ViewKanbanOutlinedIcon />} />
             </Box>
           </Box>
 
@@ -271,22 +265,22 @@ export default function DemoLandingPage() {
             </CardContent>
           </Card>
 
-          <Box id="omr" sx={sectionAnchorSx}>
-            <SectionTitle eyebrow="OMR" title="4인 리그 OMR 인식" description="이번에 추가된 OMR 기능은 4인 리그 운영에서 점수 인식과 결과 반영을 더 빠르게 처리할 수 있도록 구성되어 있습니다." />
+          <Box id="AI" sx={sectionAnchorSx}>
+            <SectionTitle eyebrow="AI PHOTO RECOGNITION" title="AI 사진 인식" description="회원·참가자 명단부터 수기로 작성한 대진표까지 사진 한 장을 올리면 한 번에 결과를 등록하여 운영을 빠르게 이어갑니다." />
             <Box sx={{ mt: 3 }}>
-              <FeatureGrid items={omrCards} icon={<SportsScoreOutlinedIcon />} />
+              <FeatureGrid items={aiCards} icon={<SportsScoreOutlinedIcon />} />
             </Box>
           </Box>
 
           <Card elevation={2} sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
             <CardContent sx={{ p: { xs: 2.5, md: 3 }, "&:last-child": { pb: { xs: 2.5, md: 3 } } }}>
               <Stack spacing={2}>
-                <Typography sx={{ fontSize: 24, fontWeight: 900, color: "#111827" }}>OMR 운영 흐름</Typography>
+                <Typography sx={{ fontSize: 24, fontWeight: 900, color: "#111827" }}>AI 사진 인식 이용 흐름</Typography>
                 <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2 }}>
                   <Box sx={{ p: 2.5, borderRadius: 1, bgcolor: "#F8FAFC", border: "1px solid #E5E7EB" }}>
-                    <Typography sx={{ fontSize: 17, fontWeight: 900, color: "#111827", mb: 1.2 }}>사용 조건</Typography>
+                    <Typography sx={{ fontSize: 17, fontWeight: 900, color: "#111827", mb: 1.2 }}>이용 방법</Typography>
                     <Stack spacing={1}>
-                      {omrChecklist.map((item) => (
+                      {aiChecklist.map((item) => (
                         <Typography key={item} sx={{ fontSize: 14, fontWeight: 700, color: "#374151" }}>
                           • {item}
                         </Typography>
@@ -296,8 +290,8 @@ export default function DemoLandingPage() {
                   <Box sx={{ p: 2.5, borderRadius: 1, bgcolor: "#DBEAFE" }}>
                     <Typography sx={{ fontSize: 17, fontWeight: 900, color: "#111827", mb: 1.2 }}>기대 효과</Typography>
                     <Typography sx={{ fontSize: 14, lineHeight: 1.8, color: "#374151" }}>
-                      현장에서 수기로 결과를 다시 입력하는 시간을 줄이고, 종이 마킹지 운영과 모바일 기록 반영을 자연스럽게 이어줍니다.
-                      운영자는 스캔 결과를 검토한 뒤 바로 점수에 반영할 수 있습니다.
+                      참가자 명단과 경기 결과를 하나씩 입력해야 하는 번거로움을 줄이고, 수기로 작성한 대진표를 온라인으로 자연스럽게 등록합니다.
+                      운영자는 AI 인식 결과를 검토하고 필요한 부분만 수정한 뒤 바로 반영할 수 있습니다.
                     </Typography>
                   </Box>
                 </Box>
@@ -306,7 +300,7 @@ export default function DemoLandingPage() {
           </Card>
 
           <Box id="ranking" sx={sectionAnchorSx}>
-            <SectionTitle eyebrow="RANKING & NOTIFICATION" title="랭킹과 경기 알림" description="클럽 랭킹, 종목 랭킹, 경기 시작 알림 기능까지 함께 제공해 경기 이후 흐름도 끊기지 않게 구성했습니다." />
+            <SectionTitle eyebrow="RANKING & NOTIFICATION" title="순위와 경기 알림" description="클럽 내 순위, 종목별 순위, 경기 시작 알림 기능까지 함께 제공해 경기 흐름이 끊기지 않게 구성했습니다." />
             <Box sx={{ mt: 3 }}>
               <FeatureGrid items={rankingCards} icon={<LeaderboardOutlinedIcon />} />
             </Box>
@@ -315,12 +309,12 @@ export default function DemoLandingPage() {
           <Card elevation={2} sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
             <CardContent sx={{ p: { xs: 2.5, md: 3 }, "&:last-child": { pb: { xs: 2.5, md: 3 } } }}>
               <Stack spacing={2}>
-                <Typography sx={{ fontSize: 24, fontWeight: 900, color: "#111827" }}>랭킹 · 알림 예시</Typography>
+                <Typography sx={{ fontSize: 24, fontWeight: 900, color: "#111827" }}>순위·알림 예시</Typography>
                 <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2 }}>
                   <Box sx={{ p: 2.5, borderRadius: 1, bgcolor: "#F8FAFC", border: "1px solid #E5E7EB" }}>
-                    <Typography sx={{ fontSize: 17, fontWeight: 900, color: "#111827", mb: 1.1 }}>종목 랭킹</Typography>
+                    <Typography sx={{ fontSize: 17, fontWeight: 900, color: "#111827", mb: 1.1 }}>종목별 순위</Typography>
                     <Typography sx={{ fontSize: 14, lineHeight: 1.8, color: "#6B7280" }}>
-                      상위 랭킹, 내 순위, 레이팅, 최근 경기일까지 한 화면에서 확인하는 구조를 제공합니다.
+                      상위 순위, 내 순위, 레이팅, 최근 경기일까지 한 화면에서 확인하는 구조를 제공합니다.
                     </Typography>
                   </Box>
                   <Box sx={{ p: 2.5, borderRadius: 1, bgcolor: "#F8FAFC", border: "1px solid #E5E7EB" }}>
@@ -329,7 +323,7 @@ export default function DemoLandingPage() {
                       <Typography sx={{ fontSize: 17, fontWeight: 900, color: "#111827" }}>경기 시작 알림</Typography>
                     </Stack>
                     <Typography sx={{ fontSize: 14, lineHeight: 1.8, color: "#6B7280" }}>
-                      브라우저 푸시 알림 구독을 통해 경기 순서가 가까워졌을 때 참가자에게 알림을 전달할 수 있습니다.
+                      브라우저 푸시, 카카오톡 알림을 통해 경기 순서가 가까워졌을 때 참가자에게 알림을 전달할 수 있습니다.
                     </Typography>
                   </Box>
                 </Box>
@@ -362,7 +356,7 @@ export default function DemoLandingPage() {
           </Card>
 
           <Box>
-            <SectionTitle eyebrow="FLOW" title="서비스 이용 흐름" description="클럽 생성부터 리그 진행, OMR 반영, 랭킹 확인, 추첨 결과 공개까지 한 흐름으로 이어집니다." />
+            <SectionTitle eyebrow="FLOW" title="서비스 이용 흐름" description="클럽 생성부터 추천 프로그램 구성, AI 사진 인식, 랭킹 확인, 추첨 결과 공개까지 한 흐름으로 이어집니다." />
             <Box sx={{ mt: 3, display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(4, minmax(0, 1fr))" }, gap: 2 }}>
               {flowSteps.map((step, index) => (
                 <Box key={step} sx={{ p: 2.5, borderRadius: 1, bgcolor: "#FFFFFF", border: "1px solid #E5E7EB", boxShadow: "0 4px 12px rgba(0,0,0,0.06)" }}>
@@ -376,11 +370,11 @@ export default function DemoLandingPage() {
           <Box sx={{ borderRadius: 1, p: { xs: 3, md: 4 }, bgcolor: "#DBEAFE" }}>
             <Stack spacing={2.2} alignItems="flex-start">
               <Typography sx={{ fontSize: { xs: 28, md: 38 }, fontWeight: 900, lineHeight: 1.12, color: "#111827" }}>
-                실제 서비스 사용은 로그인 후 이어집니다
+                실제 서비스 사용은 회원 기반으로 이어집니다
               </Typography>
               <Typography sx={{ fontSize: 15, lineHeight: 1.8, color: "#374151", maxWidth: 760 }}>
-                클럽 운영, 리그 생성, 토너먼트 진행, OMR 반영, 랭킹 확인, 경기 알림, 추첨 결과 관리 기능은
-                우리리그 서비스 안에서 로그인 이후 계속 사용할 수 있습니다.
+                클럽 운영, 리그 생성, AI 사진 인식, 순위 확인, 경기 알림, 추첨 결과 관리 기능은
+                우리리그에 회원가입하면 모두 이용할 수 있습니다.
               </Typography>
               <Stack direction={{ xs: "column", sm: "row" }} spacing={1.2}>
                 <Button component={RouterLink} to="/login" variant="contained" disableElevation sx={{ borderRadius: 1, fontWeight: 900 }}>로그인</Button>

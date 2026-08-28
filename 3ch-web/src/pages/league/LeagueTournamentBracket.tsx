@@ -428,6 +428,8 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
   const swapSelA = actions?.swapFirstKey === `${m.id}:a`;
   const swapSelB = actions?.swapFirstKey === `${m.id}:b`;
   const seed = actions?.seedMap?.get(m.id);
+  const displaySeedA = isR1 ? seed?.a : m.participant_a_seed_label;
+  const displaySeedB = isR1 ? seed?.b : m.participant_b_seed_label;
 
   const handleSlotA = () => {
     if (!actions || !isR1) return;
@@ -475,7 +477,7 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
         )}
         {isR1 && !nameA && manualSeeding ? (
           <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 0.75 }}>
-            {seed?.a && <Typography sx={{ fontSize: 11, fontWeight: 800, color: "#94A3B8" }}>1-{seed.a}</Typography>}
+            {displaySeedA && <Typography sx={{ fontSize: 11, fontWeight: 800, color: "#94A3B8" }}>{isR1 ? `1-${displaySeedA}` : displaySeedA}</Typography>}
             {actions?.canRegister && !actions.editMode && (
               <Box sx={{ px: 0.8, py: 0.2, borderRadius: 0.6, bgcolor: "#2F80ED", display: "flex", alignItems: "center" }}>
                 <Typography sx={{ fontSize: 9, fontWeight: 900, color: "#fff", lineHeight: 1.4 }}>등록</Typography>
@@ -506,7 +508,7 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
         )}
         {isR1 && !nameB && manualSeeding ? (
           <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 0.75 }}>
-            {seed?.b && <Typography sx={{ fontSize: 11, fontWeight: 800, color: "#94A3B8" }}>1-{seed.b}</Typography>}
+            {displaySeedB && <Typography sx={{ fontSize: 11, fontWeight: 800, color: "#94A3B8" }}>{isR1 ? `1-${displaySeedB}` : displaySeedB}</Typography>}
             {actions?.canRegister && !actions.editMode && (
               <Box sx={{ px: 0.8, py: 0.2, borderRadius: 0.6, bgcolor: "#2F80ED", display: "flex", alignItems: "center" }}>
                 <Typography sx={{ fontSize: 9, fontWeight: 900, color: "#fff", lineHeight: 1.4 }}>등록</Typography>
@@ -558,6 +560,9 @@ function SingleSlotBox({ pos, slot, actions, manualSeeding = false }: { pos: Mat
   const division = slot === "a" ? m.participant_a_division : m.participant_b_division;
   const seed = actions?.seedMap?.get(m.id);
   const seedNum = slot === "a" ? seed?.a : seed?.b;
+  const displaySeed = isR1
+    ? seedNum
+    : slot === "a" ? m.participant_a_seed_label : m.participant_b_seed_label;
   const swapSel = actions?.swapFirstKey === `${m.id}:${slot}`;
 
   const handleClick = () => {
@@ -593,7 +598,7 @@ function SingleSlotBox({ pos, slot, actions, manualSeeding = false }: { pos: Mat
         flexShrink: 0,
       }}>
         <Typography sx={{ fontSize: 8, fontWeight: 700, color: m.bracket === "lower" ? "#7C3AED" : "#2563EB", lineHeight: 1 }}>
-          {isR1 && seedNum ? `1-${seedNum}` : (m.match_label ?? `R${m.round_number}`)}
+          {displaySeed ? (isR1 ? `1-${displaySeed}` : displaySeed) : (m.match_label ?? `R${m.round_number}`)}
         </Typography>
       </Box>
 

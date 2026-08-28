@@ -72,6 +72,12 @@ const NEXT_STATUS: Record<string, "pending" | "playing" | "done"> = {
   done: "done",
 };
 
+function getQualificationSeedLabel(name: string | null, seedLabel?: string | null): string | undefined {
+  if (seedLabel) return seedLabel;
+  const qualification = name?.match(/^(\d+)조\s*(\d+)위$/);
+  return qualification ? `${qualification[1]}-${qualification[2]}` : undefined;
+}
+
 interface RoundTab { key: string; label: string; roundNumber: number; bracket: "upper" | "lower" }
 
 function seededBracket(n: number): number[] {
@@ -224,11 +230,13 @@ function MatchCard({
           participant_a_id: nextMatch.participant_a_id,
           participant_a_name: nextMatch.participant_a_name,
           participant_a_division: nextMatch.participant_a_division,
+          participant_a_seed_label: nextMatch.participant_a_seed_label,
         }
       : {
           participant_a_id: nextMatch.participant_b_id,
           participant_a_name: nextMatch.participant_b_name,
           participant_a_division: nextMatch.participant_b_division,
+          participant_a_seed_label: nextMatch.participant_b_seed_label,
         };
   }, []);
 
@@ -248,6 +256,7 @@ function MatchCard({
                   participant_b_id: winnerPatch.participant_a_id,
                   participant_b_name: winnerPatch.participant_a_name,
                   participant_b_division: winnerPatch.participant_a_division,
+                  participant_b_seed_label: winnerPatch.participant_a_seed_label,
                 },
           );
         }
@@ -980,21 +989,29 @@ export default function LeagueMatchOrder() {
   }, [hasNextProgramRound, isProgramMode, leagueId, navigate, programRound]);
 
   const tournamentSeedMap = useMemo(() => {
-    if (!isTournamentProgramRound) return new Map<string, { a: string; b: string }>();
+    if (!isTournamentProgramRound) return new Map<string, { a?: string; b?: string }>();
     const firstRoundMatches = activeProgramMatches
       .filter((match) => match.bracket === "upper" && match.round_number === 1)
       .sort((a, b) => a.match_order - b.match_order);
     const bracketSize = firstRoundMatches.length * 2;
-    if (bracketSize < 2) return new Map<string, { a: string; b: string }>();
+    if (bracketSize < 2) return new Map<string, { a?: string; b?: string }>();
 
     const seeds = seededBracket(bracketSize);
-    const map = new Map<string, { a: string; b: string }>();
+    const map = new Map<string, { a?: string; b?: string }>();
     firstRoundMatches.forEach((match, index) => {
       map.set(match.id, {
-        a: match.participant_a_seed_label ?? `1-${seeds[index * 2]}`,
-        b: match.participant_b_seed_label ?? `1-${seeds[index * 2 + 1]}`,
+        a: getQualificationSeedLabel(match.participant_a_name, match.participant_a_seed_label) ?? `1-${seeds[index * 2]}`,
+        b: getQualificationSeedLabel(match.participant_b_name, match.participant_b_seed_label) ?? `1-${seeds[index * 2 + 1]}`,
       });
     });
+    activeProgramMatches
+      .filter((match) => (match.round_number ?? 0) > 1)
+      .forEach((match) => {
+        map.set(match.id, {
+          a: match.participant_a_id ? getQualificationSeedLabel(match.participant_a_name, match.participant_a_seed_label) : undefined,
+          b: match.participant_b_id ? getQualificationSeedLabel(match.participant_b_name, match.participant_b_seed_label) : undefined,
+        });
+      });
     return map;
   }, [activeProgramMatches, isTournamentProgramRound]);
 
@@ -1321,8 +1338,8 @@ export default function LeagueMatchOrder() {
                     leagueId={leagueId}
                     rules={match.match_rule ?? (isProgramMode ? currentProgramBlock?.matchRule : league?.rules)}
                     myName={myName ?? undefined}
-                    seedA={isTournamentProgramRound ? seed?.a : undefined}
-                    seedB={isTournamentProgramRound ? seed?.b : undefined}
+                    seedA={isTournamentProgramRound ? seed?.a ?? "" : undefined}
+                    seedB={isTournamentProgramRound ? seed?.b ?? "" : undefined}
                     orderA={!isTournamentProgramRound && match.participant_a_id
                       ? participantNumberMap.get(match.participant_a_id)
                       : undefined}

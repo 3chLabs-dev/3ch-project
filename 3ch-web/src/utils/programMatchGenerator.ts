@@ -17,9 +17,11 @@ export type ProgramMatchPatch = Partial<Pick<
   | "participant_a_id"
   | "participant_a_name"
   | "participant_a_division"
+  | "participant_a_seed_label"
   | "participant_b_id"
   | "participant_b_name"
   | "participant_b_division"
+  | "participant_b_seed_label"
 >>;
 
 type ProgramPlayer = {
@@ -971,6 +973,7 @@ export function buildProgramRoundStandingsSnapshot(
         id: match.participant_a_id,
         name: match.participant_a_name,
         division: match.participant_a_division,
+        seedLabel: match.participant_a_seed_label ?? undefined,
       });
     }
     if (match.participant_b_id && !match.participant_b_id.startsWith("placeholder-")) {
@@ -978,6 +981,7 @@ export function buildProgramRoundStandingsSnapshot(
         id: match.participant_b_id,
         name: match.participant_b_name,
         division: match.participant_b_division,
+        seedLabel: match.participant_b_seed_label ?? undefined,
       });
     }
   });
@@ -1455,11 +1459,13 @@ function getTournamentWinner(match: LeagueMatch) {
         id: match.participant_a_id,
         name: match.participant_a_name,
         division: match.participant_a_division,
+        seedLabel: match.participant_a_seed_label ?? undefined,
       }
     : {
         id: match.participant_b_id,
         name: match.participant_b_name,
         division: match.participant_b_division,
+        seedLabel: match.participant_b_seed_label ?? undefined,
       };
 }
 
@@ -1471,11 +1477,13 @@ function getTournamentLoser(match: LeagueMatch) {
         id: match.participant_b_id,
         name: match.participant_b_name,
         division: match.participant_b_division,
+        seedLabel: match.participant_b_seed_label ?? undefined,
       }
     : {
         id: match.participant_a_id,
         name: match.participant_a_name,
         division: match.participant_a_division,
+        seedLabel: match.participant_a_seed_label ?? undefined,
       };
 }
 
@@ -1491,10 +1499,12 @@ export function applyProgramTournamentAdvancement(matches: LeagueMatch[]): Leagu
         parent.participant_a_id = winner.id;
         parent.participant_a_name = winner.name;
         parent.participant_a_division = winner.division;
+        parent.participant_a_seed_label = winner.seedLabel;
       } else if (parent) {
         parent.participant_b_id = winner.id;
         parent.participant_b_name = winner.name;
         parent.participant_b_division = winner.division;
+        parent.participant_b_seed_label = winner.seedLabel;
       }
     }
 
@@ -1505,10 +1515,12 @@ export function applyProgramTournamentAdvancement(matches: LeagueMatch[]): Leagu
         parent.participant_a_id = loser.id;
         parent.participant_a_name = loser.name;
         parent.participant_a_division = loser.division;
+        parent.participant_a_seed_label = loser.seedLabel;
       } else if (parent) {
         parent.participant_b_id = loser.id;
         parent.participant_b_name = loser.name;
         parent.participant_b_division = loser.division;
+        parent.participant_b_seed_label = loser.seedLabel;
       }
     }
   });

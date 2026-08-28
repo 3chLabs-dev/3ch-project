@@ -93,7 +93,7 @@ function SlotRow({ slot, name, seed, division, score, isWin, isR1, canManage, ca
       {/* 왼쪽 시드 셀 */}
       <Box sx={{ width: 46, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", borderRight: "1.5px solid #E5E7EB" }}>
         <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#94A3B8" }}>
-          {isR1 && seed ? `1-${seed}` : ""}
+          {seed ? (isR1 ? `1-${seed}` : seed) : ""}
         </Typography>
       </Box>
 
@@ -427,6 +427,19 @@ export default function LeagueTournamentMatchOrder() {
     return map;
   }, [matches]);
 
+  const participantSeedMap = useMemo(() => {
+    const map = new Map<string, number>();
+    const firstRound = matches
+      .filter((match) => match.round_number === 1 && match.bracket !== "lower")
+      .sort((left, right) => left.match_order - right.match_order);
+    const positions = seededBracket(firstRound.length * 2);
+    firstRound.forEach((match, index) => {
+      if (match.participant_a_id) map.set(match.participant_a_id, positions[index * 2]);
+      if (match.participant_b_id) map.set(match.participant_b_id, positions[index * 2 + 1]);
+    });
+    return map;
+  }, [matches]);
+
   // ── 배정된 참가자 ID 집합 ─────────────────────────────────────────────────
   const assignedIds = useMemo(() => {
     const set = new Set<string>();
@@ -532,6 +545,8 @@ export default function LeagueTournamentMatchOrder() {
           </Box>
         ) : currentMatches.map((m, i) => {
           const seed = seedMap.get(m.id);
+          const seedA = isCurrentR1 ? seed?.a : m.participant_a_id ? participantSeedMap.get(m.participant_a_id) : undefined;
+          const seedB = isCurrentR1 ? seed?.b : m.participant_b_id ? participantSeedMap.get(m.participant_b_id) : undefined;
           return (
             <MatchCard
               key={m.id}
@@ -539,8 +554,8 @@ export default function LeagueTournamentMatchOrder() {
               matchIndex={i + 1}
               canManage={canManage}
               leagueId={id!}
-              seedA={seed?.a}
-              seedB={seed?.b}
+              seedA={seedA}
+              seedB={seedB}
               isR1={isCurrentR1}
               manualSeeding={manualSeeding}
               onMatchStarted={(matchId) => setStartedMatchIds((ids) => [matchId, ...ids.filter((id) => id !== matchId)])}

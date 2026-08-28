@@ -886,7 +886,14 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
       : { [key]: true };
     const nextBlocks = storedProgram.blocks.map((currentBlock, index) => index === roundIndex ? { ...currentBlock, ...formationUpdates } : currentBlock);
     const nextRounds = storedProgram.rounds?.map((round, index) => index === roundIndex ? { ...round, ...formationUpdates } : round);
-    await persistFormation({ ...storedProgram, blocks: nextBlocks, ...(nextRounds ? { rounds: nextRounds } : {}) }, roundIndex, false, true);
+    await runFormationProgress(() =>
+      persistFormation(
+        { ...storedProgram, blocks: nextBlocks, ...(nextRounds ? { rounds: nextRounds } : {}) },
+        roundIndex,
+        false,
+        true,
+      ),
+    );
     setFormationDialog({ roundIndex, mode });
   };
 

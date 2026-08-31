@@ -412,7 +412,13 @@ export default function LeagueStep5Participants() {
         </Box>
       )}
 
-      <Stack direction="row" spacing={2} sx={{ mt: 4 }}>
+      <Box sx={{ mt: 4, mb: 1.5, px: 1.5, py: 1.2, display: "flex", alignItems: "center", justifyContent: "center", gap: 0.8, bgcolor: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 1.5 }}>
+        <Box sx={{ width: 18, height: 18, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", bgcolor: "#3B82F6", color: "#fff", fontSize: 12, fontWeight: 900, fontFamily: "serif" }}>i</Box>
+        <Typography sx={{ fontSize: 13, fontWeight: 800, color: "#1D4ED8", lineHeight: 1.4, textAlign: "center" }}>
+          참가자 사전 등록 없이도 리그 생성이 가능합니다.
+        </Typography>
+      </Box>
+      <Stack direction="row" spacing={2}>
         <Button
           fullWidth
           variant="contained"

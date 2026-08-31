@@ -14,6 +14,8 @@ import { CSS } from "@dnd-kit/utilities";
 import DragHandleIcon from "@mui/icons-material/DragHandle";
 import EditIcon from "@mui/icons-material/Edit";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import { clearProgramMatchState, generateProgramRoundMatches } from '../../utils/programMatchGenerator';
 import { toUTCDate } from '../../utils/dateUtils';
 
@@ -1275,7 +1277,8 @@ const LeagueAlgorithmDemo = ({
   const shouldScrollToRecommendationRef = useRef(false);
   const completedCustomRoundSignatureRef = useRef<string | null>(null);
   const [selectedProgramOptionIndex, setSelectedProgramOptionIndex] = useState<number | null>(null);
-  const [expandedProgramOptionIndex, setExpandedProgramOptionIndex] = useState<number | null>(0);
+  const [expandedProgramOptionIndex, setExpandedProgramOptionIndex] = useState<number | null>(null);
+  const [showEditHint, setShowEditHint] = useState(true);
   const [customProgramOptions, setCustomProgramOptions] = useState<Record<number, ProgramOption>>({});
   const [editingOptionIndex, setEditingOptionIndex] = useState<number | null>(null);
   const [editingRounds, setEditingRounds] = useState<RoundConfig[]>([]);
@@ -2232,6 +2235,13 @@ const LeagueAlgorithmDemo = ({
   return "★☆☆☆☆";
 };
 
+  const getAverageMatches = (option: ProgramOption) => (
+    option.blocks.reduce((sum, block) => {
+      if (block.type === "DOUBLES") return sum + block.matchCount * 4;
+      return sum + block.matchCount * 2;
+    }, 0) / playerCount
+  ).toFixed(1);
+
   const groupStructureOption =
     groupStructureDialog !== null
       ? displayedProgramOptions[groupStructureDialog.optionIndex]
@@ -3113,15 +3123,19 @@ const LeagueAlgorithmDemo = ({
 {displayedProgramOptions.slice(0, 3).map((option, index) => (
   <div
     key={index}
-    onClick={() => setSelectedProgramOptionIndex(index)}
+    onClick={() => {
+      setSelectedProgramOptionIndex(index);
+      setExpandedProgramOptionIndex(index);
+      setShowEditHint(false);
+    }}
     style={{
       border:
         selectedProgramOptionIndex === index
           ? '2px solid rgb(47, 128, 237)'
           : '1px solid #ddd',
       borderRadius: '16px',
-      padding: '18px',
-      marginTop: '14px',
+      padding: expandedProgramOptionIndex === index ? '18px' : '13px 14px',
+      marginTop: '10px',
       backgroundColor:
         selectedProgramOptionIndex === index
           ? 'rgb(239, 246, 255)'
@@ -3138,7 +3152,7 @@ const LeagueAlgorithmDemo = ({
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'flex-start',
-        marginBottom: '8px',
+        marginBottom: expandedProgramOptionIndex === index ? '8px' : 0,
       }}
     >
       <div
@@ -3151,7 +3165,11 @@ const LeagueAlgorithmDemo = ({
       >
         <Radio
           checked={selectedProgramOptionIndex === index}
-          onChange={() => setSelectedProgramOptionIndex(index)}
+          onChange={() => {
+            setSelectedProgramOptionIndex(index);
+            setExpandedProgramOptionIndex(index);
+            setShowEditHint(false);
+          }}
           onClick={(event) => event.stopPropagation()}
           inputProps={{
             "aria-label": `${option.title} 선택`,
@@ -3187,18 +3205,27 @@ const LeagueAlgorithmDemo = ({
           {getStars(option.recommendationScore)}
         </div>
 
-        <IconButton
-          size="small"
-          aria-label="추천 프로그램 수정"
-          onClick={(event) => {
-            event.stopPropagation();
-            openProgramEditDialog(index);
-          }}
+        <Tooltip
+          title="구성을 일부 수정할 수 있어요"
+          placement="top"
+          arrow
+          open={index === 0 && showEditHint}
         >
-          <EditIcon fontSize="small" />
-        </IconButton>
+          <IconButton
+            size="small"
+            aria-label="추천 프로그램 수정"
+            onClick={(event) => {
+              event.stopPropagation();
+              setShowEditHint(false);
+              openProgramEditDialog(index);
+            }}
+          >
+            <EditIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
       </div>
     </div>
+  {expandedProgramOptionIndex === index ? (
   <div style={{ paddingLeft: '28px'}}>
     <div style={{ color: '#64748b', fontSize: '13px', lineHeight: 1.55, marginBottom: '14px' }}>
       {option.description}
@@ -3219,26 +3246,7 @@ const LeagueAlgorithmDemo = ({
         <div style={{ marginTop: '2px', fontSize: '10px', fontWeight: 700, color: '#64748b' }}>전체 경기</div>
       </div>
       <div style={{ padding: '11px 6px', textAlign: 'center', borderRight: '1px solid #e2e8f0' }}>
-        <div style={{ fontSize: '16px', fontWeight: 900, color: '#0f172a' }}>{(
-        option.blocks.reduce(
-          (sum, block) => {
-            if (block.type === "SINGLES") {
-              return sum + block.matchCount * 2;
-            }
-
-            if (block.type === "DOUBLES") {
-              return sum + block.matchCount * 4;
-            }
-
-            if (block.type === "TEAM") {
-              return sum + block.matchCount * 2;
-            }
-
-            return sum;
-          },
-          0
-        ) / playerCount
-      ).toFixed(1)}</div>
+        <div style={{ fontSize: '16px', fontWeight: 900, color: '#0f172a' }}>{getAverageMatches(option)}</div>
         <div style={{ marginTop: '2px', fontSize: '10px', fontWeight: 700, color: '#64748b' }}>1인 평균 경기</div>
       </div>
       <div style={{ padding: '11px 4px', textAlign: 'center' }}>
@@ -3275,29 +3283,6 @@ const LeagueAlgorithmDemo = ({
         ⚠️ 대관시간 초과
       </div>
     )}
-
-    <button
-      type="button"
-      onClick={(event) => {
-        event.stopPropagation();
-        setExpandedProgramOptionIndex((previous) => previous === index ? null : index);
-      }}
-      aria-expanded={expandedProgramOptionIndex === index}
-      style={{
-        width: '100%',
-        marginTop: '12px',
-        padding: '10px 0 2px',
-        border: 0,
-        borderTop: '1px solid #e2e8f0',
-        background: 'transparent',
-        color: '#334155',
-        fontSize: '13px',
-        fontWeight: 800,
-        cursor: 'pointer',
-      }}
-    >
-      {expandedProgramOptionIndex === index ? '상세 진행표 접기 ︿' : '상세 진행표 보기 ﹀'}
-    </button>
 
     {expandedProgramOptionIndex === index && (
     <div
@@ -3554,7 +3539,63 @@ const LeagueAlgorithmDemo = ({
       )}
     </div>
     )}
+    <button
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        setExpandedProgramOptionIndex(null);
+      }}
+      aria-expanded="true"
+      style={{
+        width: '100%', marginTop: '12px', padding: '11px 0 1px', border: 0,
+        borderTop: '1px solid #e2e8f0', background: 'transparent', color: '#334155',
+        fontSize: '13px', fontWeight: 800, cursor: 'pointer', display: 'flex',
+        alignItems: 'center', justifyContent: 'center', gap: '2px',
+      }}
+    >
+      <span>상세 진행표 접기</span>
+      <ExpandLessIcon sx={{ fontSize: 18 }} />
+    </button>
   </div>
+  ) : (
+    <div>
+      <div style={{ marginTop: '9px', marginLeft: '28px', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', border: '1px solid #E2E8F0', borderRadius: '10px', overflow: 'hidden', backgroundColor: selectedProgramOptionIndex === index ? '#FFFFFF' : '#F8FAFC' }}>
+        <div style={{ padding: '8px 3px', textAlign: 'center', borderRight: '1px solid #E2E8F0' }}>
+          <div style={{ fontSize: '15px', lineHeight: 1.2, fontWeight: 900, color: '#0F172A' }}>{option.totalBlockMatchCount}</div>
+          <div style={{ marginTop: '3px', fontSize: '9px', fontWeight: 700, color: '#64748B' }}>전체 경기</div>
+        </div>
+        <div style={{ padding: '8px 3px', textAlign: 'center', borderRight: '1px solid #E2E8F0' }}>
+          <div style={{ fontSize: '15px', lineHeight: 1.2, fontWeight: 900, color: '#0F172A' }}>{getAverageMatches(option)}</div>
+          <div style={{ marginTop: '3px', fontSize: '9px', fontWeight: 700, color: '#64748B' }}>1인 평균 경기</div>
+        </div>
+        <div style={{ padding: '8px 2px', textAlign: 'center' }}>
+          <div style={{ fontSize: '13px', lineHeight: 1.2, fontWeight: 900, color: '#0F172A', whiteSpace: 'nowrap' }}>
+            {Math.floor(option.totalProgramMinutes / 60) > 0 ? `${Math.floor(option.totalProgramMinutes / 60)}시간 ` : ''}{option.totalProgramMinutes % 60}분
+          </div>
+          <div style={{ marginTop: '3px', fontSize: '9px', fontWeight: 700, color: '#64748B' }}>예상 소요시간</div>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          setSelectedProgramOptionIndex(index);
+          setExpandedProgramOptionIndex(index);
+          setShowEditHint(false);
+        }}
+        aria-expanded="false"
+        style={{
+          width: '100%', marginTop: '8px', padding: '8px 0 0', border: 0,
+          borderTop: '1px solid #eef1f5', background: 'transparent', color: '#64748B',
+          fontSize: '12px', fontWeight: 800, cursor: 'pointer', display: 'flex',
+          alignItems: 'center', justifyContent: 'center', gap: '2px',
+        }}
+      >
+        <span>펼치기</span>
+        <ExpandMoreIcon sx={{ fontSize: 18 }} />
+      </button>
+    </div>
+  )}
     </div>
 ))}
 

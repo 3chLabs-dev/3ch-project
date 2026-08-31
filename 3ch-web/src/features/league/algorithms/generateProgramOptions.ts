@@ -218,11 +218,40 @@ function createRound(
     expanded: true,
     program,
     format,
-    option: id === 1 ? "PRELIM" : "NONE",
+    option: "NONE",
     matchRule,
     teamPlayerCount,
     teamMatchType,
   };
+}
+
+function normalizeRoundStages(rounds: RoundConfig[]): RoundConfig[] {
+  return rounds.map((round, index) => {
+    let previousSameProgramIndex = -1;
+    for (let previousIndex = index - 1; previousIndex >= 0; previousIndex -= 1) {
+      if (rounds[previousIndex].program === round.program) {
+        previousSameProgramIndex = previousIndex;
+        break;
+      }
+    }
+    const hasLaterSameProgram = rounds.slice(index + 1).some(
+      (candidate) => candidate.program === round.program,
+    );
+
+    if (previousSameProgramIndex < 0 && !hasLaterSameProgram) {
+      return { ...round, option: "NONE", sourceRoundId: undefined };
+    }
+    if (previousSameProgramIndex < 0) {
+      return { ...round, option: "PRELIM", sourceRoundId: undefined };
+    }
+    return {
+      ...round,
+      option: "FINAL",
+      sourceRoundId: rounds[previousSameProgramIndex].id,
+      finalAdvancementMode: round.finalAdvancementMode ?? "top-n",
+      advanceCount: round.advanceCount ?? 2,
+    };
+  });
 }
 
 function getLeagueUnitCount(
@@ -497,7 +526,7 @@ function buildRoundCandidates(
     );
 
     for (const candidate of sequenceCandidates) {
-      candidates.push(candidate);
+      candidates.push(normalizeRoundStages(candidate));
     }
   }
 

@@ -239,7 +239,7 @@ export default function LoadMembersDialog({
                             <Typography sx={{ fontSize: 12, color: "#6B7280", fontWeight: 900, textAlign: "center" }}>
                                 부수
                             </Typography>
-                            <Typography sx={{ fontSize: 12, color: "#6B7280", fontWeight: 900 }}>
+                            <Typography sx={{ fontSize: 12, color: "#6B7280", fontWeight: 900, textAlign: "center" }}>
                                 이름
                             </Typography>
                         </Box>
@@ -264,7 +264,7 @@ export default function LoadMembersDialog({
                                     <Typography sx={{ textAlign: "center", fontWeight: 800 }}>
                                         {r.division || "-"}
                                     </Typography>
-                                    <Typography sx={{ fontWeight: 800 }}>{r.name}</Typography>
+                                    <Typography sx={{ fontWeight: 800, textAlign: "center" }}>{r.name}</Typography>
                                 </Box>
                             ))}
 

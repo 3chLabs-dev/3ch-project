@@ -53,6 +53,14 @@ function splitIntoTwoGroups(count: number) {
   return [Math.ceil(count / 2), Math.floor(count / 2)];
 }
 
+function splitBalanced(count: number, preferredGroupCount: number) {
+  const groupCount = Math.max(1, Math.min(preferredGroupCount, Math.max(1, Math.floor(count / 2))));
+  return Array.from(
+    { length: groupCount },
+    (_, index) => Math.floor(count / groupCount) + (index < count % groupCount ? 1 : 0),
+  ).filter((size) => size > 0);
+}
+
 function calculateMultipleTournamentMatchCount(count: number, bracketCount = 1, thirdPlaceMatch = false) {
   const effectiveBracketCount = Math.min(Math.max(1, bracketCount), count);
   const baseMatchCount = Math.max(0, count - effectiveBracketCount);
@@ -122,6 +130,7 @@ export function generateProgramBlocks(
 
   const blocks: UnscheduledProgramBlock[] = [];
   const rounds = preferences.rounds ?? [];
+  const effectiveGroupSizesByRound: number[][] = [];
   for (const [roundIndex, configuredRound] of rounds.entries()) {
   const previousRound = roundIndex > 0 ? rounds[roundIndex - 1] : undefined;
   const round =
@@ -136,8 +145,24 @@ export function generateProgramBlocks(
           unitClubMode: previousRound.unitClubMode,
         }
       : configuredRound;
-  const roundGroupSizes =
-    round.groupSizes ?? groupSizes;
+  const configuredGroupSizes = round.groupSizes ?? groupSizes;
+  const sourceRoundIndex = round.option === "FINAL"
+    ? Math.max(0, (round.sourceRoundId ?? roundIndex) - 1)
+    : -1;
+  const sourceRound = sourceRoundIndex >= 0 ? rounds[sourceRoundIndex] : undefined;
+  const sourceGroupSizes = sourceRoundIndex >= 0
+    ? effectiveGroupSizesByRound[sourceRoundIndex] ?? sourceRound?.groupSizes ?? groupSizes
+    : [];
+  const isSinglesFinal = round.program === "SINGLES" && round.option === "FINAL" && sourceRound?.program === "SINGLES";
+  const finalSinglesCount = isSinglesFinal
+    ? sourceRound?.format === "GROUP"
+      ? sourceGroupSizes.reduce((sum, size) => sum + Math.min(size, Math.max(1, round.advanceCount ?? 2)), 0)
+      : Math.min(playerCount, Math.max(1, round.advanceCount ?? 2))
+    : playerCount;
+  const roundGroupSizes = isSinglesFinal && round.format === "GROUP"
+    ? splitBalanced(finalSinglesCount, configuredGroupSizes.length)
+    : configuredGroupSizes;
+  effectiveGroupSizesByRound.push(roundGroupSizes);
 
   if (round.program === "SINGLES") {
     let matchCount = 0;
@@ -145,7 +170,7 @@ export function generateProgramBlocks(
     if (round.format === "LEAGUE") {
       matchCount =
         calculateRoundRobinMatchCount(
-          playerCount
+          isSinglesFinal ? finalSinglesCount : playerCount
         );
     }
 
@@ -157,7 +182,7 @@ export function generateProgramBlocks(
     }
 
     if (round.format === "TOURNAMENT") {
-      matchCount = calculateMultipleTournamentMatchCount(playerCount, round.tournamentBracketCount, round.thirdPlaceMatch);
+      matchCount = calculateMultipleTournamentMatchCount(isSinglesFinal ? finalSinglesCount : playerCount, round.tournamentBracketCount, round.thirdPlaceMatch);
     }
 
   const duration =

@@ -6,12 +6,13 @@ const DEFAULT_POINT_RULES = Object.freeze({
     mode: "sets",
     winPoints: 3,
     eventTypes: { singles: true, doubles: true, team: true },
+    formats: { league: true, group: true, tournament: true },
   },
   rankings: {
-    league: { first: 30, second: 20, third: 15, fourth: 10 },
-    group: { first: 30, second: 20, third: 15, fourth: 10 },
-    tournamentUpper: { first: 50, second: 30, third: 20, fourth: 15 },
-    tournamentLower: { first: 20, second: 15, third: 10, fourth: 5 },
+    league: { enabled: true, first: 30, second: 20, third: 15, fourth: 10 },
+    group: { enabled: true, first: 30, second: 20, third: 15, fourth: 10 },
+    tournamentUpper: { enabled: true, first: 50, second: 30, third: 20, fourth: 15 },
+    tournamentLower: { enabled: true, first: 20, second: 15, third: 10, fourth: 5 },
   },
 });
 
@@ -25,6 +26,7 @@ function normalizePointRules(value) {
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
   };
   const normalizeRankRule = (rule, fallback) => ({
+    enabled: rule?.enabled !== false,
     first: numberOr(rule?.first, fallback.first),
     second: numberOr(rule?.second, fallback.second),
     third: numberOr(rule?.third, numberOr(rule?.thirdFourth, fallback.third)),
@@ -42,6 +44,11 @@ function normalizePointRules(value) {
         singles: matchPoints.eventTypes?.singles !== false,
         doubles: matchPoints.eventTypes?.doubles !== false,
         team: matchPoints.eventTypes?.team !== false,
+      },
+      formats: {
+        league: matchPoints.formats?.league !== false,
+        group: matchPoints.formats?.group !== false,
+        tournament: matchPoints.formats?.tournament !== false,
       },
     },
     rankings: {
@@ -117,6 +124,7 @@ function compareRanking(a, b) {
 }
 
 function awardBonus(row, rank, rule, divisor = 1) {
+  if (rule?.enabled === false) return;
   let points = 0;
   if (rank === 1) points = rule.first;
   else if (rank === 2) points = rule.second;
@@ -527,11 +535,16 @@ async function getPointRanking(groupId, year, scope, seasonId) {
 
   matchResult.rows.forEach((match) => {
     const entryType = getProgramEntryType(match);
-    if (!entryType || pointRules.matchPoints.eventTypes[entryType] !== true) return;
+    if (!entryType) return;
     const roundMeta = getProgramRoundMeta(match.program_data, match.program_round);
     const section = roundMeta.format === "TOURNAMENT" || match.bracket ? "tournament" : "league";
     match._rankingFormat = roundMeta.format
       ?? (String(match.format ?? "").includes("조별리그") ? "GROUP" : section === "tournament" ? "TOURNAMENT" : "LEAGUE");
+    const matchFormat = section === "tournament"
+      ? "tournament"
+      : match._rankingFormat === "GROUP" ? "group" : "league";
+    const includeMatchPoints = pointRules.matchPoints.eventTypes[entryType] === true
+      && pointRules.matchPoints.formats[matchFormat] === true;
     match._rankingOption = roundMeta.option;
     if (String(match.bracket ?? "").toLowerCase().includes("lower")
         || String(match.bracket ?? "").includes("하위")) {
@@ -574,24 +587,26 @@ async function getPointRanking(groupId, year, scope, seasonId) {
     const rowsB = rankingMemberBIds
       .map((memberId) => ensureRow(targetRows, memberId, baseMembers.get(memberId), section))
       .filter(Boolean);
-    [...rowsA, ...rowsB].forEach((row) => { row.matches_played += 1; });
-    if (pointRules.matchPoints.mode === "win") {
-      if (scoreA > scoreB) {
-        rowsA.forEach((row) => { row.score_points = roundPoint(row.score_points + pointRules.matchPoints.winPoints / memberAIds.length); });
-      } else if (scoreB > scoreA) {
-        rowsB.forEach((row) => { row.score_points = roundPoint(row.score_points + pointRules.matchPoints.winPoints / memberBIds.length); });
+    if (includeMatchPoints) {
+      [...rowsA, ...rowsB].forEach((row) => { row.matches_played += 1; });
+      if (pointRules.matchPoints.mode === "win") {
+        if (scoreA > scoreB) {
+          rowsA.forEach((row) => { row.score_points = roundPoint(row.score_points + pointRules.matchPoints.winPoints / memberAIds.length); });
+        } else if (scoreB > scoreA) {
+          rowsB.forEach((row) => { row.score_points = roundPoint(row.score_points + pointRules.matchPoints.winPoints / memberBIds.length); });
+        }
+      } else {
+        rowsA.forEach((row) => { row.score_points = roundPoint(row.score_points + scoreA / memberAIds.length); });
+        rowsB.forEach((row) => { row.score_points = roundPoint(row.score_points + scoreB / memberBIds.length); });
       }
-    } else {
-      rowsA.forEach((row) => { row.score_points = roundPoint(row.score_points + scoreA / memberAIds.length); });
-      rowsB.forEach((row) => { row.score_points = roundPoint(row.score_points + scoreB / memberBIds.length); });
-    }
 
-    if (scoreA > scoreB) {
-      rowsA.forEach((row) => { row.wins += 1; });
-      rowsB.forEach((row) => { row.losses += 1; });
-    } else if (scoreB > scoreA) {
-      rowsB.forEach((row) => { row.wins += 1; });
-      rowsA.forEach((row) => { row.losses += 1; });
+      if (scoreA > scoreB) {
+        rowsA.forEach((row) => { row.wins += 1; });
+        rowsB.forEach((row) => { row.losses += 1; });
+      } else if (scoreB > scoreA) {
+        rowsB.forEach((row) => { row.wins += 1; });
+        rowsA.forEach((row) => { row.losses += 1; });
+      }
     }
 
     if (scoreA === scoreB) return;

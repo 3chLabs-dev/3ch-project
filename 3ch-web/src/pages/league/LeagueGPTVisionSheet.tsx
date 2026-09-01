@@ -3141,7 +3141,10 @@ export default function LeagueGPTVisionSheet() {
                 <tr>
                   {previewColumns.map(({ participant: columnPlayer }) => (
                     <th key={columnPlayer.id} style={{ background: "#F9FAFB", fontSize: 12, fontWeight: 800, whiteSpace: "pre-line", lineHeight: 1.3 }}>
-                      {columnPlayer.name}
+                      <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="center" flexWrap="wrap">
+                        <DivBadge division={columnPlayer.division} aggregate={isProgramTeamRound} />
+                        <Box component="span">{columnPlayer.name}</Box>
+                      </Stack>
                     </th>
                   ))}
                 </tr>
@@ -3153,7 +3156,10 @@ export default function LeagueGPTVisionSheet() {
                       {rowIndex + 1}
                     </th>
                     <th className="preview-name-cell" style={{ background: "#F9FAFB", fontSize: 12, fontWeight: 800, whiteSpace: "pre-line", lineHeight: 1.3 }}>
-                      {rowPlayer.name}
+                      <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="center" flexWrap="wrap">
+                        <DivBadge division={rowPlayer.division} aggregate={isProgramTeamRound} />
+                        <Box component="span">{rowPlayer.name}</Box>
+                      </Stack>
                     </th>
                     {previewColumns.map(({ participant: columnPlayer, index: columnIndex }) => {
                       if (rowIndex === columnIndex) return <td key={columnPlayer.id} style={{ background: "#E5E7EB" }} />;

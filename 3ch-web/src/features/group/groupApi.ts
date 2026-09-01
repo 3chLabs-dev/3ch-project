@@ -330,12 +330,17 @@ export interface GroupRankingPointRules {
       doubles: boolean;
       team: boolean;
     };
+    formats: {
+      league: boolean;
+      group: boolean;
+      tournament: boolean;
+    };
   };
   rankings: {
-    league: { first: number; second: number; third: number; fourth: number; thirdFourth?: number };
-    group: { first: number; second: number; third: number; fourth: number; thirdFourth?: number };
-    tournamentUpper: { first: number; second: number; third: number; fourth: number; thirdFourth?: number };
-    tournamentLower: { first: number; second: number; third: number; fourth: number; thirdFourth?: number };
+    league: { enabled: boolean; first: number; second: number; third: number; fourth: number; thirdFourth?: number };
+    group: { enabled: boolean; first: number; second: number; third: number; fourth: number; thirdFourth?: number };
+    tournamentUpper: { enabled: boolean; first: number; second: number; third: number; fourth: number; thirdFourth?: number };
+    tournamentLower: { enabled: boolean; first: number; second: number; third: number; fourth: number; thirdFourth?: number };
   };
 }
 
@@ -366,12 +371,13 @@ const LOCAL_DEFAULT_POINT_RULES: GroupRankingPointRules = {
     mode: "sets",
     winPoints: 3,
     eventTypes: { singles: true, doubles: true, team: true },
+    formats: { league: true, group: true, tournament: true },
   },
   rankings: {
-    league: { first: 30, second: 20, third: 15, fourth: 10 },
-    group: { first: 30, second: 20, third: 15, fourth: 10 },
-    tournamentUpper: { first: 50, second: 30, third: 20, fourth: 15 },
-    tournamentLower: { first: 20, second: 15, third: 10, fourth: 5 },
+    league: { enabled: true, first: 30, second: 20, third: 15, fourth: 10 },
+    group: { enabled: true, first: 30, second: 20, third: 15, fourth: 10 },
+    tournamentUpper: { enabled: true, first: 50, second: 30, third: 20, fourth: 15 },
+    tournamentLower: { enabled: true, first: 20, second: 15, third: 10, fourth: 5 },
   },
 };
 

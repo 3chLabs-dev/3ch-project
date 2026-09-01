@@ -43,12 +43,13 @@ const DEFAULT_POINT_RULES: GroupRankingPointRules = {
     mode: "sets",
     winPoints: 3,
     eventTypes: { singles: true, doubles: true, team: true },
+    formats: { league: true, group: true, tournament: true },
   },
   rankings: {
-    league: { first: 30, second: 20, third: 15, fourth: 10 },
-    group: { first: 30, second: 20, third: 15, fourth: 10 },
-    tournamentUpper: { first: 50, second: 30, third: 20, fourth: 15 },
-    tournamentLower: { first: 20, second: 15, third: 10, fourth: 5 },
+    league: { enabled: true, first: 30, second: 20, third: 15, fourth: 10 },
+    group: { enabled: true, first: 30, second: 20, third: 15, fourth: 10 },
+    tournamentUpper: { enabled: true, first: 50, second: 30, third: 20, fourth: 15 },
+    tournamentLower: { enabled: true, first: 20, second: 15, third: 10, fourth: 5 },
   },
 };
 
@@ -63,6 +64,7 @@ const normalizeRankingRules = (
     const rule = saved?.[key];
     const legacyThirdFourth = rule?.thirdFourth;
     result[key] = {
+      enabled: rule?.enabled !== false,
       first: rule?.first ?? fallback.first,
       second: rule?.second ?? fallback.second,
       third: rule?.third ?? legacyThirdFourth ?? fallback.third,
@@ -110,6 +112,10 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
               eventTypes: {
                 ...DEFAULT_POINT_RULES.matchPoints.eventTypes,
                 ...savedRules.matchPoints?.eventTypes,
+              },
+              formats: {
+                ...DEFAULT_POINT_RULES.matchPoints.formats,
+                ...savedRules.matchPoints?.formats,
               },
             },
             rankings: normalizeRankingRules(savedRules.rankings),
@@ -159,6 +165,16 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
     }));
   };
 
+  const updateRankingEnabled = (key: RankingRuleKey, enabled: boolean) => {
+    setPointRules((previous) => ({
+      ...previous,
+      rankings: {
+        ...previous.rankings,
+        [key]: { ...previous.rankings[key], enabled },
+      },
+    }));
+  };
+
   const submit = async () => {
     if (!startDate || !endDate) return setError("시작일과 종료일을 모두 선택해 주세요.");
     if (endDate < startDate) return setError("종료일은 시작일보다 빠를 수 없습니다.");
@@ -200,7 +216,7 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
 
           <Divider />
 
-          <Typography sx={{ fontSize: 15, fontWeight: 900 }}>포인트 설정</Typography>
+          <Typography sx={{ fontSize: 15, fontWeight: 900 }}>기본 포인트 설정</Typography>
           <Stack spacing={1}>
             <PointRow label="리그 참석" value={pointRules.attendance.league} onChange={(value) => updateAttendance("league", value)} />
             <PointRow label="대회 참석" value={pointRules.attendance.tournament} onChange={(value) => updateAttendance("tournament", value)} />
@@ -240,7 +256,7 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
             </RadioGroup>
             <Divider sx={{ my: 1.25 }} />
             <Typography sx={{ fontSize: 12, fontWeight: 800, color: "text.secondary", mb: 0.25 }}>
-              반영 종목
+              반영 유형
             </Typography>
             <Stack direction="row" spacing={0.5} sx={{ mb: 0.5, pl: 0 }}>
               {([
@@ -268,6 +284,34 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
                     mr: 1,
                     "& .MuiCheckbox-root": { p: "9px" },
                   }}
+                />
+              ))}
+            </Stack>
+            <Typography sx={{ fontSize: 12, fontWeight: 800, color: "text.secondary", mb: 0.25 }}>
+              반영 경기 방식
+            </Typography>
+            <Stack direction="row" spacing={0.5} sx={{ mb: 0.5, pl: 0, flexWrap: "wrap" }}>
+              {([
+                ["league", "단일리그"],
+                ["group", "조별리그"],
+                ["tournament", "토너먼트"],
+              ] as const).map(([key, label]) => (
+                <FormControlLabel
+                  key={key}
+                  control={(
+                    <Checkbox
+                      size="small"
+                      checked={pointRules.matchPoints.formats[key]}
+                      onChange={(event) => updateMatchPoints({
+                        formats: {
+                          ...pointRules.matchPoints.formats,
+                          [key]: event.target.checked,
+                        },
+                      })}
+                    />
+                  )}
+                  label={<Typography sx={{ fontSize: 13 }}>{label}</Typography>}
+                  sx={{ m: 0, mr: 1, "& .MuiCheckbox-root": { p: "9px" } }}
                 />
               ))}
             </Stack>
@@ -304,11 +348,12 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
               </Box>
             )}
           </Box>
+          <Typography sx={{ fontSize: 15, fontWeight: 900 }}>입상자 포인트 설정</Typography>
           <Stack spacing={1.5}>
-            <RankingPointRow label="단일리그" values={pointRules.rankings.league} onChange={(rank, value) => updateRanking("league", rank, value)} />
-            <RankingPointRow label="조별리그" values={pointRules.rankings.group} onChange={(rank, value) => updateRanking("group", rank, value)} />
-            <RankingPointRow label="토너먼트(상위)" values={pointRules.rankings.tournamentUpper} onChange={(rank, value) => updateRanking("tournamentUpper", rank, value)} />
-            <RankingPointRow label="토너먼트(하위)" values={pointRules.rankings.tournamentLower} onChange={(rank, value) => updateRanking("tournamentLower", rank, value)} />
+            <RankingPointRow label="단일리그" values={pointRules.rankings.league} onEnabledChange={(enabled) => updateRankingEnabled("league", enabled)} onChange={(rank, value) => updateRanking("league", rank, value)} />
+            <RankingPointRow label="조별리그" values={pointRules.rankings.group} onEnabledChange={(enabled) => updateRankingEnabled("group", enabled)} onChange={(rank, value) => updateRanking("group", rank, value)} />
+            <RankingPointRow label="토너먼트(상위)" values={pointRules.rankings.tournamentUpper} onEnabledChange={(enabled) => updateRankingEnabled("tournamentUpper", enabled)} onChange={(rank, value) => updateRanking("tournamentUpper", rank, value)} />
+            <RankingPointRow label="토너먼트(하위)" values={pointRules.rankings.tournamentLower} onEnabledChange={(enabled) => updateRankingEnabled("tournamentLower", enabled)} onChange={(rank, value) => updateRanking("tournamentLower", rank, value)} />
           </Stack>
 
           {error && <Alert severity="warning">{error}</Alert>}
@@ -335,12 +380,13 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
   );
 }
 
-function PointInput({ value, onChange, ariaLabel }: { value: number; onChange: (value: number) => void; ariaLabel: string }) {
+function PointInput({ value, onChange, ariaLabel, disabled = false }: { value: number; onChange: (value: number) => void; ariaLabel: string; disabled?: boolean }) {
   return (
     <TextField
       size="small"
       type="number"
       value={value}
+      disabled={disabled}
       onChange={(event) => onChange(Math.max(0, Number(event.target.value) || 0))}
       inputProps={{ min: 0, max: 10000, inputMode: "numeric", "aria-label": ariaLabel }}
       sx={{ width: 70, "& input": { textAlign: "center", py: 0.8 } }}
@@ -403,14 +449,20 @@ function RankingPointRow({
   label,
   values,
   onChange,
+  onEnabledChange,
 }: {
   label: string;
   values: RankRule;
   onChange: (rank: "first" | "second" | "third" | "fourth", value: number) => void;
+  onEnabledChange: (enabled: boolean) => void;
 }) {
   return (
     <Box>
-      <Typography sx={{ fontSize: 13, fontWeight: 800, mb: 0.75 }}>{label}</Typography>
+      <FormControlLabel
+        control={<Checkbox size="small" checked={values.enabled} onChange={(event) => onEnabledChange(event.target.checked)} />}
+        label={<Typography sx={{ fontSize: 13, fontWeight: 800 }}>{label}</Typography>}
+        sx={{ m: 0, mb: 0.5 }}
+      />
       <Box sx={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 0.75 }}>
         {([
           ["first", "1위"],
@@ -422,6 +474,7 @@ function RankingPointRow({
             <Typography sx={{ fontSize: 12 }}>{rankLabel}</Typography>
             <PointInput
               value={values[key]}
+              disabled={!values.enabled}
               onChange={(value) => onChange(key, value)}
               ariaLabel={`${label} ${rankLabel} 포인트`}
             />

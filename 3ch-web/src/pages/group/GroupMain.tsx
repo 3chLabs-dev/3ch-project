@@ -330,9 +330,18 @@ function RecommendedGroupCard({ group }: { group: Omit<Group, "role"> & { id: st
             <CardContent sx={{ py: 1.6, px: 2, "&:last-child": { pb: 1.6 } }}>
                 <Stack direction="row" alignItems="center" spacing={1.5}>
                     <Typography sx={{ fontSize: 28, lineHeight: 1 }}>{emoji}</Typography>
-                    <Typography sx={{ fontWeight: 800, fontSize: 15, flex: 1, minWidth: 0, lineHeight: 1.4 }}>
-                        {group.name}
-                    </Typography>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography sx={{ fontWeight: 800, fontSize: 15, lineHeight: 1.4 }}>
+                            {group.name}
+                        </Typography>
+                        {group.is_pre_registered && (
+                            <Chip
+                                label="내 이름으로 사전등록"
+                                size="small"
+                                sx={{ mt: 0.45, height: 21, bgcolor: "#EAF2FF", color: "#2563EB", fontSize: 10.5, fontWeight: 800 }}
+                            />
+                        )}
+                    </Box>
                     {region && (
                         <Chip
                             label={region}
@@ -371,6 +380,11 @@ function NearbyGroupCard({ group }: { group: RecommendedClub }) {
                             {group.name}
                         </Typography>
                         <Stack direction="row" spacing={0.8} mt={0.3} flexWrap="wrap">
+                            {group.is_pre_registered && (
+                                <Typography sx={{ fontSize: 11, color: "#2563EB", fontWeight: 800 }}>
+                                    내 이름으로 사전등록
+                                </Typography>
+                            )}
                             {region && (
                                 <Typography sx={{ fontSize: 11, color: "#6B7280", fontWeight: 600 }}>{region}</Typography>
                             )}

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
   Divider, IconButton, List, ListItemButton, Radio, Stack, TextField, Typography,
@@ -13,14 +13,14 @@ import {
 } from "../../features/group/groupApi";
 import ParticipantImageImportDialog, { type ImportedParticipant } from "../league/ParticipantImageImportDialog";
 
-type Props = { open: boolean; onClose: () => void; groupId: string; manager?: boolean };
+type Props = { open: boolean; onClose: () => void; groupId: string; manager?: boolean; onChanged?: () => void | Promise<void> };
 
 const errorMessage = (error: unknown) => {
   const value = error as { data?: { message?: string } };
   return value?.data?.message || "처리 중 오류가 발생했습니다.";
 };
 
-export default function GroupPreMemberDialog({ open, onClose, groupId, manager = false }: Props) {
+export default function GroupPreMemberDialog({ open, onClose, groupId, manager = false, onChanged }: Props) {
   const { data, isFetching } = useGetGroupPreMembersQuery(groupId, { skip: !open || !groupId });
   const [createMember, { isLoading: isCreating }] = useCreateGroupPreMemberMutation();
   const [deleteMember] = useDeleteGroupPreMemberMutation();
@@ -31,12 +31,20 @@ export default function GroupPreMemberDialog({ open, onClose, groupId, manager =
   const [selectedId, setSelectedId] = useState("");
   const [imageImportOpen, setImageImportOpen] = useState(false);
   const divisionInputRef = useRef<HTMLInputElement>(null);
-  const members = data?.pre_members ?? [];
+  const members = useMemo(
+    () => [...(data?.pre_members ?? [])].sort((left, right) => {
+      const pendingDifference = Number(right.claim_status === "pending") - Number(left.claim_status === "pending");
+      if (pendingDifference !== 0) return pendingDifference;
+      return Date.parse(left.created_at) - Date.parse(right.created_at);
+    }),
+    [data?.pre_members],
+  );
 
   const addMember = async () => {
     if (!name.trim()) return;
     try {
       await createMember({ groupId, name: name.trim(), division: division.trim() }).unwrap();
+      await onChanged?.();
       setName(""); setDivision("");
       requestAnimationFrame(() => divisionInputRef.current?.focus());
     } catch (error) { window.alert(errorMessage(error)); }
@@ -66,6 +74,7 @@ export default function GroupPreMemberDialog({ open, onClose, groupId, manager =
     }
 
     const resultMessage = [`${added}명을 사전등록했습니다.`];
+    if (added > 0) await onChanged?.();
     if (skipped > 0) resultMessage.push(`이미 클럽 회원이거나 등록된 ${skipped}명은 제외했습니다.`);
     window.alert(resultMessage.join("\n"));
   };
@@ -79,7 +88,10 @@ export default function GroupPreMemberDialog({ open, onClose, groupId, manager =
   };
 
   const review = async (preMemberId: string, action: "approve" | "decline") => {
-    try { await reviewClaim({ groupId, preMemberId, action }).unwrap(); }
+    try {
+      await reviewClaim({ groupId, preMemberId, action }).unwrap();
+      await onChanged?.();
+    }
     catch (error) { window.alert(errorMessage(error)); }
   };
 
@@ -142,8 +154,10 @@ export default function GroupPreMemberDialog({ open, onClose, groupId, manager =
                   <IconButton size="small" color="error" onClick={async (e) => {
                     e.stopPropagation();
                     if (window.confirm(`${member.name} 님의 사전등록 정보를 삭제하시겠습니까?`)) {
-                      try { await deleteMember({ groupId, preMemberId: member.id }).unwrap(); }
-                      catch (error) { window.alert(errorMessage(error)); }
+                      try {
+                        await deleteMember({ groupId, preMemberId: member.id }).unwrap();
+                        await onChanged?.();
+                      } catch (error) { window.alert(errorMessage(error)); }
                     }
                   }}><DeleteOutlineIcon fontSize="small" /></IconButton>
                 ) : null}

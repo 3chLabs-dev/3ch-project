@@ -29,6 +29,7 @@ export interface Group {
   division?: string | null;
   display_order?: number | null;
   is_primary?: boolean;
+  is_pre_registered?: boolean;
 }
 
 export interface GetGroupsResponse {
@@ -75,6 +76,10 @@ export interface GroupMember {
   email?: string | null;
   is_pre_member?: boolean;
   external_aliases?: Array<{ id: string; alias: string; source: string }>;
+  claim_id?: string | null;
+  claim_status?: "pending" | "approved" | "declined" | null;
+  requested_by_id?: number | null;
+  requester_name?: string | null;
 }
 
 export interface GroupPreMember {
@@ -171,6 +176,7 @@ export interface RecommendedClub {
   address?: string;
   member_count: number;
   distance_km: number | null;
+  is_pre_registered?: boolean;
 }
 
 export interface RecommendGroupsRequest {
@@ -507,6 +513,10 @@ export const groupApi = baseApi.injectEndpoints({
                     name: member.name,
                     email: null,
                     is_pre_member: true,
+                    claim_id: member.claim_id,
+                    claim_status: member.claim_status,
+                    requested_by_id: member.requested_by_id,
+                    requester_name: member.requester_name,
                   })),
               ],
               myRole: isOwner ? "owner" : "",
@@ -606,6 +616,7 @@ export const groupApi = baseApi.injectEndpoints({
       invalidatesTags: (_r, _e, { groupId }) => [
         { type: "Group", id: `pre-members-${groupId}` },
         { type: "Group", id: groupId },
+        "Group",
       ],
     }),
 
@@ -630,6 +641,7 @@ export const groupApi = baseApi.injectEndpoints({
       invalidatesTags: (_r, _e, { groupId }) => [
         { type: "Group", id: `pre-members-${groupId}` },
         { type: "Group", id: groupId },
+        "Group",
       ],
     }),
 

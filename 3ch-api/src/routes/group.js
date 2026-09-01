@@ -422,14 +422,12 @@ router.get('/group/search', requireAuth, async (req, res) => {
     const { q, sport, region_city, region_district, limit = '20', sort_by_region, include_joined } = req.query;
 
     const conditions = [];
-    const params = [];
-    let paramIdx = 1;
+    const params = [userId];
+    let paramIdx = 2;
 
     // 일반 클럽 검색에서는 가입한 클럽을 제외하지만, 리그 초대 검색에서는 포함할 수 있다.
     if (include_joined !== 'true') {
-      conditions.push(`g.id NOT IN (SELECT group_id FROM group_members WHERE user_id = $${paramIdx})`);
-      params.push(userId);
-      paramIdx++;
+      conditions.push(`g.id NOT IN (SELECT group_id FROM group_members WHERE user_id = $1)`);
     }
 
     // 검색어가 있으면 필터링
@@ -463,17 +461,29 @@ router.get('/group/search', requireAuth, async (req, res) => {
       }
     }
 
-    params.push(Math.min(parseInt(limit, 10) || 20, 50));
-
     // 정렬: region_city가 제공되고 sort_by_region=true이면 일치하는 것 우선
     let orderBy = 'g.created_at DESC';
     if (useSortOnly && region_city && region_city.trim()) {
-      orderBy = `(CASE WHEN g.region_city = '${region_city.trim()}' THEN 0 ELSE 1 END), g.created_at DESC`;
+      orderBy = `(CASE WHEN g.region_city = $${paramIdx} THEN 0 ELSE 1 END), g.created_at DESC`;
+      params.push(region_city.trim());
+      paramIdx++;
     }
+    if (include_joined !== 'true') orderBy = `is_pre_registered DESC, ${orderBy}`;
+    params.push(Math.min(parseInt(limit, 10) || 20, 50));
 
     const result = await pool.query(
       `SELECT g.id, g.name, g.description, g.sport, g.region_city, g.region_district, g.created_at,
-              (SELECT COUNT(*) FROM group_members WHERE group_id = g.id)::int AS member_count
+              (SELECT COUNT(*) FROM group_members WHERE group_id = g.id)::int AS member_count,
+              EXISTS (
+                SELECT 1
+                FROM group_pre_members pm
+                JOIN users current_user ON current_user.id = $1
+                WHERE pm.group_id = g.id
+                  AND pm.status = 'active'
+                  AND BTRIM(COALESCE(current_user.name, '')) <> ''
+                  AND LOWER(REGEXP_REPLACE(BTRIM(pm.name), '\\s+', '', 'g'))
+                      = LOWER(REGEXP_REPLACE(BTRIM(current_user.name), '\\s+', '', 'g'))
+              ) AS is_pre_registered
        FROM groups g
        ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''}
        ORDER BY ${orderBy}
@@ -858,6 +868,7 @@ router.post('/group/recommend', requireAuth, async (req, res) => {
     const { rows: clubs } = await pool.query(
       `SELECT g.id, g.name, g.sport, g.region_city, g.region_district, g.address,
               (SELECT COUNT(*)::int FROM group_members WHERE group_id = g.id) AS member_count,
+              COALESCE(pre_registered.matched, false) AS is_pre_registered,
               CASE
                 WHEN g.lat IS NOT NULL AND g.lng IS NOT NULL THEN
                   6371 * acos(
@@ -867,14 +878,27 @@ router.post('/group/recommend', requireAuth, async (req, res) => {
                 ELSE NULL
               END AS distance_km
        FROM groups g
+       LEFT JOIN LATERAL (
+         SELECT true AS matched
+         FROM group_pre_members pm
+         JOIN users current_user ON current_user.id = $3
+         WHERE pm.group_id = g.id
+           AND pm.status = 'active'
+           AND BTRIM(COALESCE(current_user.name, '')) <> ''
+           AND LOWER(REGEXP_REPLACE(BTRIM(pm.name), '\\s+', '', 'g'))
+               = LOWER(REGEXP_REPLACE(BTRIM(current_user.name), '\\s+', '', 'g'))
+         LIMIT 1
+       ) pre_registered ON true
        WHERE g.id NOT IN (SELECT group_id FROM group_members WHERE user_id = $3)
          AND (
+           COALESCE(pre_registered.matched, false)
+           OR
            (g.lat IS NOT NULL AND g.lng IS NOT NULL)
            OR ($4::text IS NOT NULL AND g.region_city = $4)
            OR ($4::text IS NOT NULL AND g.region_district = $4)
          )
          ${sportCondition}
-       ORDER BY distance_km ASC NULLS LAST
+       ORDER BY is_pre_registered DESC, distance_km ASC NULLS LAST, g.created_at DESC
        LIMIT 8`,
       params
     );
@@ -951,7 +975,9 @@ router.get('/group/:id', requireAuth, async (req, res) => {
     const membersQuery = `
       SELECT member_rows.id, member_rows.role, member_rows.division,
              member_rows.joined_at, member_rows.user_id, member_rows.name,
-             member_rows.email, member_rows.is_pre_member, member_rows.external_aliases
+             member_rows.email, member_rows.is_pre_member, member_rows.external_aliases,
+             member_rows.claim_id, member_rows.claim_status,
+             member_rows.requested_by_id, member_rows.requester_name
       FROM (
         SELECT gm.id, gm.role, gm.division, gm.joined_at,
                u.id AS user_id, u.name,
@@ -963,17 +989,34 @@ router.get('/group/:id', requireAuth, async (req, res) => {
                  FROM user_external_aliases ua
                  WHERE ua.group_id = gm.group_id AND ua.user_id = gm.user_id
                ), '[]'::jsonb) AS external_aliases,
+               NULL::text AS claim_id, NULL::text AS claim_status,
+               NULL::integer AS requested_by_id, NULL::text AS requester_name,
                CASE gm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END AS role_order
         FROM group_members gm
         INNER JOIN users u ON gm.user_id = u.id
         WHERE gm.group_id = $1
+          AND NOT EXISTS (
+            SELECT 1
+            FROM group_member_claims pending_claim
+            JOIN group_pre_members pending_pm ON pending_pm.id = pending_claim.pre_member_id
+            WHERE pending_pm.group_id = gm.group_id
+              AND pending_pm.status = 'active'
+              AND pending_claim.requested_by_id = gm.user_id
+              AND pending_claim.status = 'pending'
+          )
 
         UNION ALL
 
         SELECT pm.id, 'pre_member'::text AS role, pm.division,
-               pm.created_at AS joined_at, NULL::integer AS user_id, pm.name,
-               NULL::text AS email, true AS is_pre_member, '[]'::jsonb AS external_aliases, 3 AS role_order
+               pm.created_at AS joined_at, pending_user.id AS user_id, pm.name,
+               NULL::text AS email, true AS is_pre_member, '[]'::jsonb AS external_aliases,
+               pending_claim.id::text AS claim_id, pending_claim.status AS claim_status,
+               pending_claim.requested_by_id, pending_user.name AS requester_name,
+               CASE WHEN pending_claim.status = 'pending' THEN 3 ELSE 4 END AS role_order
         FROM group_pre_members pm
+        LEFT JOIN group_member_claims pending_claim
+          ON pending_claim.pre_member_id = pm.id AND pending_claim.status = 'pending'
+        LEFT JOIN users pending_user ON pending_user.id = pending_claim.requested_by_id
         WHERE pm.group_id = $1
           AND (
             pm.status = 'active'
@@ -1147,7 +1190,9 @@ router.get('/group/:id/pre-members', requireAuth, async (req, res) => {
        WHERE pm.group_id = $1
          AND pm.status <> 'deleted'
          AND ($2::boolean OR pm.status = 'active')
-       ORDER BY pm.created_at ASC`,
+       ORDER BY CASE WHEN c.status = 'pending' THEN 0 ELSE 1 END,
+                c.requested_at ASC NULLS LAST,
+                pm.created_at ASC`,
       [id, canManage]
     );
     res.json({ pre_members: result.rows, myRole });

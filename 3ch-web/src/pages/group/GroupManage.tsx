@@ -1,5 +1,5 @@
 ﻿import { useParams, useNavigate } from "react-router-dom";
-import { useState, useRef } from "react";
+import { useMemo, useState, useRef } from "react";
 import {
     Box,
     Stack,
@@ -24,6 +24,9 @@ import {
     Collapse,
     Chip,
     CircularProgress,
+    Radio,
+    RadioGroup,
+    FormControlLabel,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import EditIcon from "@mui/icons-material/Edit";
@@ -32,6 +35,7 @@ import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import SmsOutlinedIcon from "@mui/icons-material/SmsOutlined";
 import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
 import EmojiEventsOutlinedIcon from "@mui/icons-material/EmojiEventsOutlined";
+import TuneIcon from "@mui/icons-material/Tune";
 import QRCode from "react-qr-code";
 import { useAppSelector } from "../../app/hooks";
 import {
@@ -44,6 +48,7 @@ import {
     useDeleteGroupMutation,
     useLeaveGroupMutation,
     useLazyGeocodeAddressQuery,
+    useReviewGroupMemberClaimMutation,
 } from "../../features/group/groupApi";
 import { useGetLeaguesQuery, useGetLeagueParticipantsQuery, useUpdateParticipantMutation } from "../../features/league/leagueApi";
 import type { LeagueParticipantItem } from "../../features/league/leagueApi";
@@ -69,6 +74,30 @@ type GroupLinkInput = {
     url: string;
 };
 
+type MemberSortOption = "division" | "name" | "joinedAt";
+
+const MEMBER_SORT_OPTIONS: Array<{ value: MemberSortOption; label: string }> = [
+    { value: "division", label: "부수 순" },
+    { value: "name", label: "이름 순" },
+    { value: "joinedAt", label: "가입일 순" },
+];
+
+const memberName = (member: { name?: string; email?: string | null }) =>
+    (member.name || member.email || "").trim();
+
+const compareMemberName = (
+    left: { name?: string; email?: string | null },
+    right: { name?: string; email?: string | null },
+) => memberName(left).localeCompare(memberName(right), "ko", { numeric: true, sensitivity: "base" });
+
+const divisionSortKey = (division?: string | null) => {
+    const normalized = division?.trim() ?? "";
+    if (!normalized) return { category: 2, number: Number.POSITIVE_INFINITY, text: "" };
+    const leadingNumber = normalized.match(/^\d+(?:\.\d+)?/)?.[0];
+    if (leadingNumber) return { category: 0, number: Number(leadingNumber), text: normalized };
+    return { category: 1, number: Number.POSITIVE_INFINITY, text: normalized };
+};
+
 export default function GroupManage() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
@@ -76,7 +105,7 @@ export default function GroupManage() {
     const authUser = useAppSelector((s) => s.auth.user);
     const isLoggedIn = !!token;
 
-    const { data, isLoading } = useGetGroupDetailQuery(id || "", {
+    const { data, isLoading, refetch: refetchGroupDetail } = useGetGroupDetailQuery(id || "", {
         skip: !isLoggedIn || !id,
         refetchOnMountOrArgChange: true,
         refetchOnFocus: true,
@@ -91,6 +120,7 @@ export default function GroupManage() {
     const [geocode] = useLazyGeocodeAddressQuery();
     const [deleteGroup, { isLoading: isDeleting }] = useDeleteGroupMutation();
     const [leaveGroup, { isLoading: isLeaving }] = useLeaveGroupMutation();
+    const [reviewMemberClaim, { isLoading: isReviewingMemberClaim }] = useReviewGroupMemberClaimMutation();
     const [editDialogOpen, setEditDialogOpen] = useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
@@ -110,6 +140,9 @@ export default function GroupManage() {
     const [previousOwnerAction, setPreviousOwnerAction] = useState<"" | "admin" | "member" | "leave">("");
     const [benefitsAction, setBenefitsAction] = useState<"" | "keep" | "transfer">("");
     const [ownerTransferError, setOwnerTransferError] = useState("");
+    const [memberSort, setMemberSort] = useState<MemberSortOption>("division");
+    const [pendingMemberSort, setPendingMemberSort] = useState<MemberSortOption>("division");
+    const [memberSortDialogOpen, setMemberSortDialogOpen] = useState(false);
 
     const leagueManagementRef = useRef<HTMLDivElement>(null);
 
@@ -155,6 +188,55 @@ export default function GroupManage() {
     const participants = participantData?.participants ?? [];
 
     const [updateParticipant] = useUpdateParticipantMutation();
+
+    const sortedMembers = useMemo(() => {
+        const memberCategory = (member: NonNullable<typeof data>["members"][number]) => {
+            if (member.role === "owner") return 0;
+            if (member.role === "admin") return 1;
+            if (!member.is_pre_member) return 2;
+            return member.claim_status === "pending" ? 3 : 4;
+        };
+        return [...(data?.members ?? [])].sort((left, right) => {
+            const roleDifference = memberCategory(left) - memberCategory(right);
+            if (roleDifference !== 0) return roleDifference;
+
+            if (memberSort === "name") return compareMemberName(left, right);
+            if (memberSort === "joinedAt") {
+                const leftTime = Date.parse(left.joined_at ?? "") || Number.MAX_SAFE_INTEGER;
+                const rightTime = Date.parse(right.joined_at ?? "") || Number.MAX_SAFE_INTEGER;
+                return leftTime - rightTime || compareMemberName(left, right);
+            }
+
+            const leftDivision = divisionSortKey(left.division);
+            const rightDivision = divisionSortKey(right.division);
+            if (leftDivision.category !== rightDivision.category) {
+                return leftDivision.category - rightDivision.category;
+            }
+            if (leftDivision.category === 0 && leftDivision.number !== rightDivision.number) {
+                return leftDivision.number - rightDivision.number;
+            }
+            if (leftDivision.category === 1) {
+                const textDifference = leftDivision.text.localeCompare(
+                    rightDivision.text,
+                    "ko",
+                    { numeric: true, sensitivity: "base" },
+                );
+                if (textDifference !== 0) return textDifference;
+            }
+            return compareMemberName(left, right);
+        });
+    }, [data?.members, memberSort]);
+
+    const approvePreMember = async (preMemberId: string) => {
+        if (!groupUuid) return;
+        try {
+            await reviewMemberClaim({ groupId: groupUuid, preMemberId, action: "approve" }).unwrap();
+            await refetchGroupDetail();
+        } catch (error) {
+            const message = (error as { data?: { message?: string } })?.data?.message;
+            window.alert(message || "회원 전환 승인에 실패했습니다.");
+        }
+    };
 
     if (!isLoggedIn) {
         return (
@@ -551,9 +633,21 @@ export default function GroupManage() {
             {/* 클럽 회원 섹션 */}
             <Box>
                 <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mb: 1.5 }}>
-                    <Typography variant="subtitle1" fontWeight={900} flex={1}>
+                    <Typography variant="subtitle1" fontWeight={900}>
                         클럽 회원 ({members.length}명)
                     </Typography>
+                    <IconButton
+                        size="small"
+                        aria-label="클럽 회원 순서"
+                        onClick={() => {
+                            setPendingMemberSort(memberSort);
+                            setMemberSortDialogOpen(true);
+                        }}
+                        sx={{ color: "#6B7280" }}
+                    >
+                        <TuneIcon fontSize="small" />
+                    </IconButton>
+                    <Box sx={{ flex: 1 }} />
                     {canManage && (
                         <Button size="small" variant="outlined" onClick={() => setPreMemberDialogOpen(true)} sx={{ borderRadius: 1, fontWeight: 700 }}>
                             회원 사전등록
@@ -599,7 +693,7 @@ export default function GroupManage() {
                             <Typography fontWeight={700} fontSize={14} sx={{ flex: 1, textAlign: "left" }}>부수</Typography>
                             <Typography fontWeight={700} fontSize={14} sx={{ flex: 1, textAlign: "left" }}>이름</Typography>
                         </ListItem>
-                        {members.map((member, idx) => (
+                        {sortedMembers.map((member, idx) => (
                             <Box key={member.id}>
                                 {idx > 0 && <Divider />}
                                 <ListItem
@@ -614,6 +708,18 @@ export default function GroupManage() {
                                     }}
                                     secondaryAction={
                                         <Stack direction="row" spacing={0.5} alignItems="center">
+                                            {canManage && member.is_pre_member && member.claim_status === "pending" && (
+                                                <Button
+                                                    size="small"
+                                                    variant="contained"
+                                                    disableElevation
+                                                    disabled={isReviewingMemberClaim}
+                                                    onClick={() => void approvePreMember(member.id)}
+                                                    sx={{ minWidth: 56, borderRadius: 1.5, fontWeight: 800 }}
+                                                >
+                                                    승인
+                                                </Button>
+                                            )}
                                             {canManage && !member.is_pre_member && member.user_id != null && (
                                                 <IconButton
                                                     size="small"
@@ -628,7 +734,9 @@ export default function GroupManage() {
                                     <ListItemText sx={{ flex: 1 }}
                                         primary={
                                             <Typography fontWeight={700} fontSize={14}>
-                                                {getRoleLabel(member.role)}
+                                                {member.is_pre_member && member.claim_status === "pending"
+                                                    ? "승인대기"
+                                                    : getRoleLabel(member.role)}
                                             </Typography>
                                         }
                                     />
@@ -683,11 +791,67 @@ export default function GroupManage() {
                 </Card>
             </Box>
 
+            <Dialog
+                open={memberSortDialogOpen}
+                onClose={() => setMemberSortDialogOpen(false)}
+                fullWidth
+                maxWidth="xs"
+                PaperProps={{ sx: { borderRadius: 2 } }}
+            >
+                <DialogTitle sx={{ fontWeight: 900, pr: 6 }}>클럽 회원 순서</DialogTitle>
+                <IconButton
+                    aria-label="닫기"
+                    onClick={() => setMemberSortDialogOpen(false)}
+                    sx={{ position: "absolute", right: 10, top: 10 }}
+                >
+                    <Typography component="span" sx={{ fontSize: 25, lineHeight: 1, color: "text.secondary" }}>×</Typography>
+                </IconButton>
+                <DialogContent dividers>
+                    <Typography sx={{ mb: 1, fontSize: 13, fontWeight: 800, color: "text.secondary" }}>
+                        정렬
+                    </Typography>
+                    <RadioGroup
+                        value={pendingMemberSort}
+                        onChange={(event) => setPendingMemberSort(event.target.value as MemberSortOption)}
+                    >
+                        {MEMBER_SORT_OPTIONS.map((option) => (
+                            <FormControlLabel
+                                key={option.value}
+                                value={option.value}
+                                control={<Radio />}
+                                label={<Typography sx={{ fontSize: 14, fontWeight: 700 }}>{option.label}</Typography>}
+                                sx={{ minHeight: 48, m: 0 }}
+                            />
+                        ))}
+                    </RadioGroup>
+                    {pendingMemberSort === "division" && (
+                        <Typography sx={{ mt: 1, fontSize: 12, color: "text.secondary", lineHeight: 1.6 }}>
+                            숫자 부수 → 텍스트 부수 → 부수 미입력 순으로 표시됩니다. 예: 3+는 3으로 정렬됩니다.
+                        </Typography>
+                    )}
+                </DialogContent>
+                <DialogActions sx={{ p: 2 }}>
+                    <Button
+                        fullWidth
+                        variant="contained"
+                        disableElevation
+                        onClick={() => {
+                            setMemberSort(pendingMemberSort);
+                            setMemberSortDialogOpen(false);
+                        }}
+                        sx={{ borderRadius: 1.5, fontWeight: 800 }}
+                    >
+                        완료
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
             <GroupPreMemberDialog
                 open={preMemberDialogOpen}
                 onClose={() => setPreMemberDialogOpen(false)}
                 groupId={group.id}
                 manager
+                onChanged={async () => { await refetchGroupDetail(); }}
             />
 
             {/* 리그 관리 섹션 */}

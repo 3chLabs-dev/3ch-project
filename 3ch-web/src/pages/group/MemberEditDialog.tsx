@@ -122,12 +122,12 @@ export default function MemberEditDialog({
 
           <Box>
             <Typography sx={{ fontSize: 14, fontWeight: 700, mb: 0.8, color: "#6B7280" }}>
-              부수
+              부수(등급)
             </Typography>
             <TextField
               value={division}
               onChange={(e) => setDivision(e.target.value)}
-              placeholder="예: 1부, 2부, A조 등"
+              placeholder="예: 1, A, 1.0, 초심 등"
               fullWidth
               size="small"
               sx={{

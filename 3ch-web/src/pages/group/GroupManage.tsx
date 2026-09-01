@@ -824,11 +824,6 @@ export default function GroupManage() {
                             />
                         ))}
                     </RadioGroup>
-                    {pendingMemberSort === "division" && (
-                        <Typography sx={{ mt: 1, fontSize: 12, color: "text.secondary", lineHeight: 1.6 }}>
-                            숫자 부수 → 텍스트 부수 → 부수 미입력 순으로 표시됩니다. 예: 3+는 3으로 정렬됩니다.
-                        </Typography>
-                    )}
                 </DialogContent>
                 <DialogActions sx={{ p: 2 }}>
                     <Button

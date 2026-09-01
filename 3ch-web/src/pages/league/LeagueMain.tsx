@@ -90,7 +90,8 @@ export default function LeagueMainBody() {
   const canCreate =
     isLoggedIn &&
     !!selectedGroup &&
-    (selectedGroup.role === "owner" || selectedGroup.role === "admin");
+    (selectedGroup.role === "owner"
+      || (selectedGroup.role === "admin" && selectedGroup.management_permissions?.league === true));
 
   const handleCreateNewLeague = () => {
     if (!canCreate || !selectedGroup) return;

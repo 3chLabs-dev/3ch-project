@@ -153,6 +153,7 @@ model GroupMember {
   joined_at DateTime @default(now())
   display_order Int?
   is_primary    Boolean  @default(false)
+  management_permissions Json @default("{\"members\":true,\"ranking\":true,\"league\":true,\"draw\":true}")
 
   group_id String
   group    Group  @relation(fields: [group_id], references: [id], onDelete: Cascade)

@@ -687,7 +687,7 @@ export default function LeagueOmrSheet() {
   const [updateLeague, { isLoading: isClosing }] = useUpdateLeagueMutation();
 
   const isCreator = !!authUser && league?.created_by_id === authUser.id;
-  const canManage = (!groupLoading && (groupData?.myRole === "owner" || groupData?.myRole === "admin")) || isCreator;
+  const canManage = (!groupLoading && (groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.league === true))) || isCreator;
   const canMark = canManage || league?.join_permission === "public" || (!groupLoading && !!groupData?.myRole);
   const isOmrProcessing = Boolean(omrProcessingMessage);
 

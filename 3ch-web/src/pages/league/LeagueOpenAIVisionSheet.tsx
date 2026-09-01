@@ -256,7 +256,7 @@ export default function LeagueOpenAIVisionSheet() {
   const [updateMatch, { isLoading: isSaving }] = useUpdateLeagueMatchMutation();
 
   const isCreator = !!authUser && league?.created_by_id === authUser.id;
-  const canManage = (!groupLoading && (groupData?.myRole === "owner" || groupData?.myRole === "admin")) || isCreator;
+  const canManage = (!groupLoading && (groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.league === true))) || isCreator;
   const participants = useMemo(
     () => [...(participantData?.participants ?? [])].sort((a, b) => {
       const orderA = a.sort_order ?? Number.MAX_SAFE_INTEGER;

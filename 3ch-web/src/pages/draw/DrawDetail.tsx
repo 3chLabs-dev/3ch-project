@@ -62,7 +62,7 @@ export default function DrawDetail() {
     league?.group_id ?? "",
     { skip: !league?.group_id },
   );
-  const canManage = groupData?.myRole === "owner" || groupData?.myRole === "admin";
+  const canManage = groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.draw === true);
 
   const myName = useAppSelector((s) => s.auth.user?.name ?? null);
 

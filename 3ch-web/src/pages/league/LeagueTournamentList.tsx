@@ -55,7 +55,7 @@ export default function LeagueTournamentList() {
   const advancementLabel = ADVANCEMENT_LABEL[league?.tournament_advancement ?? ""] ?? "";
   const seedingLabel = SEEDING_LABEL[league?.tournament_seeding ?? ""] ?? "";
 
-  const canManage = !groupLoading && (groupData?.myRole === "owner" || groupData?.myRole === "admin");
+  const canManage = !groupLoading && (groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.league === true));
 
   const handleDelete = async () => {
     setConfirmOpen(false);

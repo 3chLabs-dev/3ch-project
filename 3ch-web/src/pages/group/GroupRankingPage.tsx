@@ -41,7 +41,8 @@ export default function GroupRankingPage() {
       : data?.season_id
         ? `season:${data.season_id}`
         : `year:${activeYear}`;
-  const canManage = data?.myRole === "owner";
+  const canManage = data?.myRole === "owner"
+    || (data?.myRole === "admin" && data.myPermissions?.ranking === true);
 
   const handleOpenDetail = () => {
     const seasonId = selectedSeasonId ?? data?.season_id;

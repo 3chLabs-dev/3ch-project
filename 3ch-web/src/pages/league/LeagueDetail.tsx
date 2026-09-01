@@ -1,4 +1,4 @@
-﻿  import { useMemo, useState } from "react";
+  import { useMemo, useState } from "react";
   import { useRef } from "react";
   import { useNavigate, useParams } from "react-router-dom";
   import { useEffect } from "react";
@@ -261,7 +261,7 @@ import {
       setBankAccount(league.bank_account ?? "");
     }, [league?.id]);
     // groupLoading 중엔 판단 보류 (플리커 방지)
-    const canManage = !groupLoading && (groupData?.myRole === "owner" || groupData?.myRole === "admin");
+    const canManage = !groupLoading && (groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.league === true));
     const invitedMembership = myGroupsData?.groups.find((group) =>
       invitedGroupsData?.groups.some((invited) => invited.status === "accepted" && invited.group_id === group.id),
     );

@@ -248,7 +248,7 @@ router.post('/draw/:leagueId', requireAuth, async (req, res) => {
       `SELECT gm.role, COALESCE(l.billing_owner_id, l.created_by_id) AS billing_owner_id
        FROM leagues l
        INNER JOIN group_members gm ON gm.group_id = l.group_id
-       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+       WHERE l.id = $1 AND gm.user_id = $2 AND (gm.role = 'owner' OR (gm.role = 'admin' AND COALESCE((gm.management_permissions->>'draw')::boolean, false)))`,
       [leagueId, userId],
     );
     if (accessCheck.rowCount === 0) {
@@ -541,7 +541,7 @@ router.patch('/draw/:leagueId/:drawId', requireAuth, async (req, res) => {
     const accessCheck = await pool.query(
       `SELECT gm.role FROM leagues l
        INNER JOIN group_members gm ON gm.group_id = l.group_id
-       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+       WHERE l.id = $1 AND gm.user_id = $2 AND (gm.role = 'owner' OR (gm.role = 'admin' AND COALESCE((gm.management_permissions->>'draw')::boolean, false)))`,
       [leagueId, userId],
     );
     if (accessCheck.rowCount === 0) {
@@ -635,7 +635,7 @@ router.delete('/draw/:leagueId/:drawId', requireAuth, async (req, res) => {
     const accessCheck = await pool.query(
       `SELECT gm.role FROM leagues l
        INNER JOIN group_members gm ON gm.group_id = l.group_id
-       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+       WHERE l.id = $1 AND gm.user_id = $2 AND (gm.role = 'owner' OR (gm.role = 'admin' AND COALESCE((gm.management_permissions->>'draw')::boolean, false)))`,
       [leagueId, userId],
     );
     if (accessCheck.rowCount === 0) {
@@ -739,7 +739,7 @@ router.post('/draw/:leagueId/:drawId/run', requireAuth, async (req, res) => {
     const accessCheck = await pool.query(
       `SELECT gm.role FROM leagues l
        INNER JOIN group_members gm ON gm.group_id = l.group_id
-       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+       WHERE l.id = $1 AND gm.user_id = $2 AND (gm.role = 'owner' OR (gm.role = 'admin' AND COALESCE((gm.management_permissions->>'draw')::boolean, false)))`,
       [leagueId, userId],
     );
     if (accessCheck.rowCount === 0) {
@@ -872,7 +872,7 @@ router.post('/draw/:leagueId/:drawId/prizes/:prizeId/winners', requireAuth, asyn
     const accessCheck = await pool.query(
       `SELECT gm.role FROM leagues l
        INNER JOIN group_members gm ON gm.group_id = l.group_id
-       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+       WHERE l.id = $1 AND gm.user_id = $2 AND (gm.role = 'owner' OR (gm.role = 'admin' AND COALESCE((gm.management_permissions->>'draw')::boolean, false)))`,
       [leagueId, userId],
     );
     if (accessCheck.rowCount === 0) {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -13,6 +13,7 @@ import {
   Select,
   MenuItem,
   FormControl,
+  Switch,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import AddIcon from "@mui/icons-material/Add";
@@ -27,11 +28,26 @@ type Props = {
     role: "owner" | "admin" | "member";
     division?: string;
     externalAliases?: string[];
+    managementPermissions?: ManagementPermissions;
   };
   onClose: () => void;
-  onSave: (updated: { role: "owner" | "admin" | "member"; division: string; externalAliases: string[] }) => void;
+  onSave: (updated: { role: "owner" | "admin" | "member"; division: string; externalAliases: string[]; managementPermissions: ManagementPermissions }) => void;
   onRemove?: () => void;
   isOwner: boolean;
+};
+
+export type ManagementPermissions = {
+  members: boolean;
+  ranking: boolean;
+  league: boolean;
+  draw: boolean;
+};
+
+const DEFAULT_MANAGEMENT_PERMISSIONS: ManagementPermissions = {
+  members: true,
+  ranking: true,
+  league: true,
+  draw: true,
 };
 
 export default function MemberEditDialog({
@@ -45,12 +61,24 @@ export default function MemberEditDialog({
   const [role, setRole] = useState(member.role);
   const [division, setDivision] = useState(member.division || "");
   const [externalAliases, setExternalAliases] = useState<string[]>(member.externalAliases || []);
+  const [managementPermissions, setManagementPermissions] = useState<ManagementPermissions>(
+    member.managementPermissions || DEFAULT_MANAGEMENT_PERMISSIONS,
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    setRole(member.role);
+    setDivision(member.division || "");
+    setExternalAliases(member.externalAliases || []);
+    setManagementPermissions(member.managementPermissions || DEFAULT_MANAGEMENT_PERMISSIONS);
+  }, [member, open]);
 
   const handleSave = () => {
     onSave({
       role,
       division: division.trim(),
       externalAliases: externalAliases.map((value) => value.trim()).filter(Boolean),
+      managementPermissions,
     });
     handleClose();
   };
@@ -119,6 +147,35 @@ export default function MemberEditDialog({
               </Select>
             </FormControl>
           </Box>
+
+          {role === "admin" && (
+            <Box>
+              <Typography sx={{ fontSize: 14, fontWeight: 800, mb: 0.8, color: "#374151" }}>
+                클럽 관리 권한
+              </Typography>
+              <Stack spacing={0.2}>
+                {([
+                  ["members", "회원 관리"],
+                  ["ranking", "순위 관리"],
+                  ["league", "리그·대회 관리"],
+                  ["draw", "추첨 관리"],
+                ] as const).map(([key, label]) => (
+                  <Box key={key} sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", minHeight: 42 }}>
+                    <Typography sx={{ fontSize: 14, fontWeight: 700 }}>{label}</Typography>
+                    <Switch
+                      checked={managementPermissions[key]}
+                      onChange={(event) => setManagementPermissions((current) => ({
+                        ...current,
+                        [key]: event.target.checked,
+                      }))}
+                      disabled={!isOwner}
+                      size="small"
+                    />
+                  </Box>
+                ))}
+              </Stack>
+            </Box>
+          )}
 
           <Box>
             <Typography sx={{ fontSize: 14, fontWeight: 700, mb: 0.8, color: "#6B7280" }}>

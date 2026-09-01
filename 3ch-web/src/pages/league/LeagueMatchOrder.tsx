@@ -534,7 +534,7 @@ export default function LeagueMatchOrder() {
   const authUser = useAppSelector((s) => s.auth.user);
   const isCreator = !!authUser && league?.created_by_id === authUser?.id;
   const canManage =
-    (!groupLoading && (groupData?.myRole === "owner" || groupData?.myRole === "admin")) || isCreator;
+    (!groupLoading && (groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.league === true))) || isCreator;
   const canMember = (!groupLoading && !!groupData?.myRole) || isCreator || league?.join_permission === "public";
   const myName = groupData?.members?.find((m) => m.user_id === authUser?.id)?.name
     ?? authUser?.name

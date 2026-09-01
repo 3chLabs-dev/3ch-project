@@ -147,7 +147,8 @@ export default function DrawMain() {
   const canCreate =
     isLoggedIn &&
     !!selectedGroup &&
-    (selectedGroup.role === "owner" || selectedGroup.role === "admin");
+    (selectedGroup.role === "owner"
+      || (selectedGroup.role === "admin" && selectedGroup.management_permissions?.draw === true));
 
   const { data: leagueData } = useGetLeaguesQuery(
     effectiveSelectedGroupId ? { group_id: effectiveSelectedGroupId, limit: 50 } : undefined,

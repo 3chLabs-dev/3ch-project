@@ -1,9 +1,9 @@
-﻿const express = require('express');
+const express = require('express');
 const { z } = require('zod');
 const { randomUUID } = require('crypto');
 const pool = require('../db/pool');
 const { requireAuth } = require('../middlewares/auth');
-const { requireGroupAdmin, requireGroupOwner } = require('../middlewares/permissions');
+const { requireGroupOwner, requireGroupPermission } = require('../middlewares/permissions');
 const { generateClubCode } = require('../utils/clubCodeUtils');
 const {
   rebuildGroupRanking,
@@ -549,7 +549,7 @@ router.get('/group', requireAuth, async (req, res) => {
 
     const result = await pool.query(
       `SELECT g.id, g.name, g.description, g.sport, g.region_city, g.region_district, g.created_at,
-              g.club_code, gm.role, gm.division, gm.display_order, gm.is_primary,
+              g.club_code, gm.role, gm.division, gm.display_order, gm.is_primary, gm.management_permissions,
               u.name AS creator_name,
               (SELECT COUNT(*) FROM group_members WHERE group_id = g.id)::int AS member_count
        FROM groups g
@@ -944,10 +944,11 @@ router.get('/group/:id', requireAuth, async (req, res) => {
 
     // 해당 클럽에 속해있는지 확인 (없어도 기본 정보는 반환)
     const memberCheck = await pool.query(
-      `SELECT role FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      `SELECT role, management_permissions FROM group_members WHERE group_id = $1 AND user_id = $2`,
       [id, userId]
     );
     const myRole = memberCheck.rows.length > 0 ? memberCheck.rows[0].role : null;
+    const myPermissions = memberCheck.rows[0]?.management_permissions || {};
 
     const groupResult = await pool.query(
       `SELECT g.id, g.name, g.description, g.sport, g.region_city, g.region_district,
@@ -976,7 +977,7 @@ router.get('/group/:id', requireAuth, async (req, res) => {
       SELECT member_rows.id, member_rows.role, member_rows.division,
              member_rows.joined_at, member_rows.user_id, member_rows.name,
              member_rows.email, member_rows.is_pre_member, member_rows.external_aliases,
-             member_rows.claim_id, member_rows.claim_status,
+             member_rows.claim_id, member_rows.claim_status, member_rows.management_permissions,
              member_rows.requested_by_id, member_rows.requester_name
       FROM (
         SELECT gm.id, gm.role, gm.division, gm.joined_at,
@@ -989,7 +990,7 @@ router.get('/group/:id', requireAuth, async (req, res) => {
                  FROM user_external_aliases ua
                  WHERE ua.group_id = gm.group_id AND ua.user_id = gm.user_id
                ), '[]'::jsonb) AS external_aliases,
-               NULL::text AS claim_id, NULL::text AS claim_status,
+               NULL::text AS claim_id, NULL::text AS claim_status, gm.management_permissions,
                NULL::integer AS requested_by_id, NULL::text AS requester_name,
                CASE gm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END AS role_order
         FROM group_members gm
@@ -1010,7 +1011,7 @@ router.get('/group/:id', requireAuth, async (req, res) => {
         SELECT pm.id, 'pre_member'::text AS role, pm.division,
                pm.created_at AS joined_at, pending_user.id AS user_id, pm.name,
                NULL::text AS email, true AS is_pre_member, '[]'::jsonb AS external_aliases,
-               pending_claim.id::text AS claim_id, pending_claim.status AS claim_status,
+               pending_claim.id::text AS claim_id, pending_claim.status AS claim_status, '{}'::jsonb AS management_permissions,
                pending_claim.requested_by_id, pending_user.name AS requester_name,
                CASE WHEN pending_claim.status = 'pending' THEN 3 ELSE 4 END AS role_order
         FROM group_pre_members pm
@@ -1029,6 +1030,7 @@ router.get('/group/:id', requireAuth, async (req, res) => {
       links: linksResult.rows,
       members,
       myRole,
+      myPermissions,
     });
   } catch (error) {
     console.error('Error fetching group:', error);
@@ -1189,7 +1191,7 @@ router.get('/group/:id/pre-members', requireAuth, async (req, res) => {
   }
 });
 
-router.post('/group/:id/pre-members', requireAuth, requireGroupAdmin, async (req, res) => {
+router.post('/group/:id/pre-members', requireAuth, requireGroupPermission('members'), async (req, res) => {
   try {
     const name = String(req.body?.name || '').trim();
     const division = String(req.body?.division || '').trim() || null;
@@ -1213,7 +1215,7 @@ router.post('/group/:id/pre-members', requireAuth, requireGroupAdmin, async (req
   }
 });
 
-router.delete('/group/:id/pre-members/:preMemberId', requireAuth, requireGroupAdmin, async (req, res) => {
+router.delete('/group/:id/pre-members/:preMemberId', requireAuth, requireGroupPermission('members'), async (req, res) => {
   try {
     const result = await pool.query(
       `UPDATE group_pre_members SET status = 'deleted', updated_at = NOW()
@@ -1260,7 +1262,7 @@ router.post('/group/:id/pre-members/:preMemberId/claim-request', requireAuth, as
   }
 });
 
-router.patch('/group/:id/pre-members/:preMemberId/claim-request', requireAuth, requireGroupAdmin, async (req, res) => {
+router.patch('/group/:id/pre-members/:preMemberId/claim-request', requireAuth, requireGroupPermission('members'), async (req, res) => {
   const client = await pool.connect();
   try {
     const action = req.body?.action;
@@ -1375,7 +1377,7 @@ router.patch('/group/:id/pre-members/:preMemberId/claim-request', requireAuth, r
  *       500:
  *         description: 서버 오류
  */
-router.post('/group/:id/member', requireAuth, requireGroupAdmin, async (req, res) => {
+router.post('/group/:id/member', requireAuth, requireGroupPermission('members'), async (req, res) => {
   try {
     const { id } = req.params;
     const { user_id } = req.body;
@@ -1635,7 +1637,7 @@ router.delete('/group/:id/leave', requireAuth, async (req, res) => {
 router.patch('/group/:id/member/:userId/role', requireAuth, requireGroupOwner, async (req, res) => {
   try {
     const { id, userId: targetUserId } = req.params;
-    const { role } = req.body;
+    const { role, management_permissions: managementPermissions } = req.body;
 
     if (!role || !['member', 'admin'].includes(role)) {
       return res.status(400).json({ message: '유효하지 않은 권한입니다. member 또는 admin만 가능합니다' });
@@ -1649,13 +1651,29 @@ router.patch('/group/:id/member/:userId/role', requireAuth, requireGroupOwner, a
     if (targetCheck.rows.length === 0) {
       return res.status(404).json({ message: '해당 멤버를 찾을 수 없습니다' });
     }
+
+    const permissionKeys = ['members', 'ranking', 'league', 'draw'];
+    if (role === 'admin' && (
+      !managementPermissions
+      || permissionKeys.some((key) => typeof managementPermissions[key] !== 'boolean')
+    )) {
+      return res.status(400).json({ message: '운영진 관리 권한을 모두 설정해 주세요' });
+    }
     if (targetCheck.rows[0].role === 'owner') {
       return res.status(400).json({ message: '리더의 권한은 변경할 수 없습니다' });
     }
 
     await pool.query(
-      `UPDATE group_members SET role = $1 WHERE group_id = $2 AND user_id = $3`,
-      [role, id, targetUserId]
+      `UPDATE group_members
+       SET role = $1,
+           management_permissions = $2::jsonb
+       WHERE group_id = $3 AND user_id = $4`,
+      [
+        role,
+        JSON.stringify(role === 'admin' ? managementPermissions : { members: false, ranking: false, league: false, draw: false }),
+        id,
+        targetUserId,
+      ]
     );
 
     res.status(200).json({ message: '권한이 변경되었습니다' });
@@ -1936,7 +1954,7 @@ router.post('/group/:id/transfer-owner', requireAuth, requireGroupOwner, async (
  *       500:
  *         description: 서버 오류
  */
-router.patch('/group/:id/member/:userId', requireAuth, requireGroupAdmin, async (req, res) => {
+router.patch('/group/:id/member/:userId', requireAuth, requireGroupPermission('members'), async (req, res) => {
   const client = await pool.connect();
   try {
     const { id, userId: targetUserId } = req.params;
@@ -2299,7 +2317,7 @@ router.delete('/group/:id', requireAuth, requireGroupOwner, async (req, res) => 
  *       500:
  *         description: 서버 오류
  */
-router.delete('/group/:id/member/:userId', requireAuth, requireGroupAdmin, async (req, res) => {
+router.delete('/group/:id/member/:userId', requireAuth, requireGroupPermission('members'), async (req, res) => {
   try {
     const { id, userId: targetUserId } = req.params;
 
@@ -2364,7 +2382,7 @@ router.get('/group/:id/ranking/points', requireAuth, async (req, res) => {
     const scope = req.query.scope === 'national' ? 'national' : 'club';
 
     const accessCheck = await pool.query(
-      `SELECT role FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      `SELECT role, management_permissions FROM group_members WHERE group_id = $1 AND user_id = $2`,
       [groupId, userId],
     );
     if (accessCheck.rowCount === 0) {
@@ -2377,6 +2395,7 @@ router.get('/group/:id/ranking/points', requireAuth, async (req, res) => {
     return res.json({
       ...data,
       myRole: accessCheck.rows[0].role,
+      myPermissions: accessCheck.rows[0].management_permissions || {},
       currentUserId: userId,
     });
   } catch (error) {
@@ -2408,7 +2427,7 @@ router.get('/group/:id/ranking/seasons', requireAuth, async (req, res) => {
   }
 });
 
-router.post('/group/:id/ranking/seasons', requireAuth, requireGroupAdmin, async (req, res) => {
+router.post('/group/:id/ranking/seasons', requireAuth, requireGroupPermission('ranking'), async (req, res) => {
   try {
     const { id: groupId } = req.params;
     const userId = Number(req.user.sub);
@@ -2440,7 +2459,7 @@ router.post('/group/:id/ranking/seasons', requireAuth, requireGroupAdmin, async 
   }
 });
 
-router.put('/group/:id/ranking/seasons/:seasonId', requireAuth, requireGroupAdmin, async (req, res) => {
+router.put('/group/:id/ranking/seasons/:seasonId', requireAuth, requireGroupPermission('ranking'), async (req, res) => {
   try {
     const { id: groupId, seasonId } = req.params;
     const payload = rankingSeasonSchema.parse(req.body);
@@ -2478,7 +2497,7 @@ router.put('/group/:id/ranking/seasons/:seasonId', requireAuth, requireGroupAdmi
   }
 });
 
-router.delete('/group/:id/ranking/seasons/:seasonId', requireAuth, requireGroupAdmin, async (req, res) => {
+router.delete('/group/:id/ranking/seasons/:seasonId', requireAuth, requireGroupPermission('ranking'), async (req, res) => {
   try {
     const { id: groupId, seasonId } = req.params;
     const result = await pool.query(
@@ -2597,7 +2616,7 @@ router.get('/group/:id/ranking/:memberId', requireAuth, async (req, res) => {
  *       200:
  *         description: 재계산 성공
  */
-router.post('/group/:id/ranking/rebuild', requireAuth, requireGroupAdmin, async (req, res) => {
+router.post('/group/:id/ranking/rebuild', requireAuth, requireGroupPermission('ranking'), async (req, res) => {
   try {
     const { id: groupId } = req.params;
     const result = await rebuildGroupRanking(groupId);
@@ -2624,7 +2643,7 @@ router.post('/group/:id/ranking/rebuild', requireAuth, requireGroupAdmin, async 
  *       200:
  *         description: 설정 저장 성공
  */
-router.patch('/group/:id/ranking/settings', requireAuth, requireGroupAdmin, async (req, res) => {
+router.patch('/group/:id/ranking/settings', requireAuth, requireGroupPermission('ranking'), async (req, res) => {
   try {
     const { id: groupId } = req.params;
     const payload = rankingSettingsSchema.parse(req.body);

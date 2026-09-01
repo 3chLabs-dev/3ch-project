@@ -23,7 +23,7 @@ import CheckIcon from "@mui/icons-material/Check";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
-import DragHandleIcon from "@mui/icons-material/DragHandle";
+import MenuIcon from "@mui/icons-material/Menu";
 import AddIcon from "@mui/icons-material/Add";
 import RemoveIcon from "@mui/icons-material/Remove";
 import ScreenRotationIcon from "@mui/icons-material/ScreenRotation";
@@ -493,7 +493,7 @@ const SortableBracketRow = memo(function SortableBracketRow({
         bgcolor: isDragging ? "action.hover" : "inherit",
       }}
     >
-      {/* 시드 번호 셀: 편집 모드에서는 ↑↓ 버튼 + 드래그 핸들로 전환 */}
+      {/* 시드 번호 셀: 편집 모드에도 높이를 유지하고 번호 왼쪽에 드래그 핸들 표시 */}
       <NumberRowCell
         sx={{ p: 0.5, ...(canDrag && { cursor: "grab", touchAction: "none" }) }}
         {...(canDrag ? { ...attributes, ...listeners } : {})}
@@ -503,19 +503,20 @@ const SortableBracketRow = memo(function SortableBracketRow({
             <Box
               sx={{
                 display: "flex",
-                flexDirection: landscape ? "column" : "row",
+                flexDirection: "row",
                 alignItems: "center",
                 justifyContent: "center",
-                gap: 0.25,
+                gap: 0.4,
                 width: "100%",
                 height: "100%",
                 writingMode: "horizontal-tb",
               }}
             >
-              <DragHandleIcon
+              <MenuIcon
                 sx={{
                   color: "#9CA3AF",
-                  fontSize: 18,
+                  fontSize: 15,
+                  flexShrink: 0,
                 }}
               />
               <Typography
@@ -1203,6 +1204,17 @@ export default function LeagueBracket() {
 
   // 3. 선택된 조의 팀원만 필터링 (조가 없으면 전체)
   const targetParticipants = useMemo(() => {
+    const savedParticipantOrder =
+      currentProgramRound?.participantOrder ?? currentProgramBlock?.participantOrder;
+    const applySavedParticipantOrder = <T extends { id: string }>(participants: T[]) => {
+      if (!savedParticipantOrder?.length) return participants;
+      const orderById = new Map(savedParticipantOrder.map((participantId, index) => [participantId, index]));
+      return [...participants].sort(
+        (left, right) =>
+          (orderById.get(left.id) ?? Number.MAX_SAFE_INTEGER)
+          - (orderById.get(right.id) ?? Number.MAX_SAFE_INTEGER),
+      );
+    };
     const getSavedGroupAssignments = () => {
       const savedGroupAssignments =
         currentProgramRound?.groupAssignments ?? currentProgramBlock?.groupAssignments;
@@ -1218,15 +1230,8 @@ export default function LeagueBracket() {
     const buildSavedGroupParticipantList = <T extends { id: string; name: string; division?: string | null }>(
       participants: T[],
     ) => {
-      const savedParticipantOrder =
-        currentProgramRound?.participantOrder ?? currentProgramBlock?.participantOrder;
       if (savedParticipantOrder?.length) {
-        const orderById = new Map(savedParticipantOrder.map((participantId, index) => [participantId, index]));
-        return [...participants].sort(
-          (left, right) =>
-            (orderById.get(left.id) ?? Number.MAX_SAFE_INTEGER)
-            - (orderById.get(right.id) ?? Number.MAX_SAFE_INTEGER),
-        );
+        return applySavedParticipantOrder(participants);
       }
 
       const assignments = getSavedGroupAssignments();
@@ -1270,12 +1275,12 @@ export default function LeagueBracket() {
         const ids = new Set(
           selectedMatches.flatMap((match) => [match.participant_a_id, match.participant_b_id]).filter(Boolean) as string[],
         );
-        return sortByProgramSeed(
+        return applySavedParticipantOrder(sortByProgramSeed(
           programTeamParticipants.filter((participant) => ids.has(participant.id)),
           selectedMatches,
-        );
+        ));
       }
-      return sortByProgramSeed(programTeamParticipants, programMatchesAll);
+      return applySavedParticipantOrder(sortByProgramSeed(programTeamParticipants, programMatchesAll));
     }
     if (isProgramMode && groupNames.length > 0 && selectedGroup) {
       const selectedMatches = programMatchesAll.filter((match) => match.match_label === selectedGroup);
@@ -1287,10 +1292,10 @@ export default function LeagueBracket() {
       );
     }
     if (isProgramMode) {
-      return sortByProgramSeed(
+      return applySavedParticipantOrder(sortByProgramSeed(
         programSinglesParticipants,
         programMatchesAll,
-      );
+      ));
     }
     if (groupNames.length > 0 && selectedGroup) {
       return buildSavedGroupParticipantList(
@@ -1323,7 +1328,7 @@ export default function LeagueBracket() {
   const { data: groupData } = useGetGroupDetailQuery(league?.group_id ?? "", { skip: !league?.group_id });
   const authUser  = useAppSelector((s) => s.auth.user);
   const isCreator = !!authUser && league?.created_by_id === authUser.id;
-  const canManage = groupData?.myRole === "owner" || groupData?.myRole === "admin" || isCreator;
+  const canManage = groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.league === true) || isCreator;
   const canScore = canManage || league?.join_permission === "public";
   // 그룹 멤버 이름 우선, 없으면 계정 이름, 비로그인 게스트는 localStorage 저장 이름 사용
   const myName    = groupData?.members?.find((m) => m.user_id === authUser?.id)?.name
@@ -1338,7 +1343,7 @@ export default function LeagueBracket() {
 
   // ── 참가자 순서 상태 ──────────────────────────────────────────────────────
   // editOrder=null: 서버 데이터(rawParticipants) 그대로 사용
-  // editOrder≠null: 사용자가 순서를 변경한 로컬 상태 (서버에도 즉시 반영)
+  // editOrder≠null: 사용자가 순서를 변경한 로컬 상태 (저장 버튼으로 서버에 확정)
   const [editOrder, setEditOrder] = useState<LeagueParticipantItem[] | null>(null);
   const localOrder = editOrder ?? targetParticipants;
   const targetParticipantKey = targetParticipants.map((participant) => participant.id).join("|");
@@ -1433,7 +1438,7 @@ export default function LeagueBracket() {
     useSensor(TouchSensor,   { activationConstraint: { delay: 200, tolerance: 5 } }), // 터치: 200ms 롱프레스 후 드래그
   );
 
-  // 드래그 앤 드롭으로 임의 위치 이동 (arrayMove 후 서버에 전체 순서 저장)
+  // 드래그 중에는 화면 순서만 바꾸고, 저장 버튼을 눌렀을 때 서버에 확정한다.
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
@@ -1441,11 +1446,9 @@ export default function LeagueBracket() {
       const oldIdx = prev.findIndex((p) => p.id === active.id);
       const newIdx = prev.findIndex((p) => p.id === over.id);
       if (oldIdx === -1 || newIdx === -1) return prev;
-      const next = arrayMove(prev, oldIdx, newIdx);
-      reorderParticipants({ leagueId: id ?? "", order: next.map((p) => p.id) });
-      return next;
+      return arrayMove(prev, oldIdx, newIdx);
     });
-  }, [setLocalOrder, reorderParticipants, id]);
+  }, [setLocalOrder]);
 
   const finishEditing = useCallback(async () => {
     if (!editMode) {
@@ -1454,7 +1457,13 @@ export default function LeagueBracket() {
     }
 
     if (isProgramMode && id && programOption) {
-      const participantOrder = localOrder.map((participant) => participant.id);
+      const editedIds = new Set(localOrder.map((participant) => participant.id));
+      const savedParticipantOrder =
+        currentProgramRound?.participantOrder ?? currentProgramBlock?.participantOrder ?? [];
+      const participantOrder = [
+        ...savedParticipantOrder.filter((participantId) => !editedIds.has(participantId)),
+        ...localOrder.map((participant) => participant.id),
+      ];
       const nextProgram = {
         ...programOption,
         blocks: programOption.blocks.map((block, index) =>
@@ -1464,6 +1473,7 @@ export default function LeagueBracket() {
           index === programRound - 1 ? { ...round, participantOrder } : round
         ),
       };
+      storeProgramOption(id, nextProgram);
       await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
       const nextMatches = generateProgramRoundMatches(
         id,
@@ -1482,7 +1492,7 @@ export default function LeagueBracket() {
 
     setEditMode(false);
   }, [
-    editMode, id, isProgramMode, localOrder, programOption, programRound,
+    currentProgramBlock, currentProgramRound, editMode, id, isProgramMode, localOrder, programOption, programRound,
     programSourceMatches, rawParticipants, reorderParticipants,
     saveLeagueProgram, syncProgramMatches,
   ]);
@@ -1779,7 +1789,7 @@ export default function LeagueBracket() {
               "&:hover": { bgcolor: editMode ? "#059669" : "#1D4ED8", boxShadow: "none" },
             }}
           >
-            {editMode ? "완료" : "수정"}
+            {editMode ? "저장" : "수정"}
           </Button>
         )}
 

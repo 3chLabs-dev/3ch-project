@@ -1056,7 +1056,7 @@ export default function LeagueTournamentBracket() {
   ]);
 
   const isDoubleElim = matches.some((match) => match.bracket === "lower");
-  const canManage = groupData?.myRole === "owner" || groupData?.myRole === "admin";
+  const canManage = groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.league === true);
   const isCompleted = league?.status === "completed";
 
   const [assignParticipant, { isLoading: isAssigning }] = useAssignMatchParticipantMutation();

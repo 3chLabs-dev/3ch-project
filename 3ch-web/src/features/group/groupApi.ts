@@ -30,6 +30,7 @@ export interface Group {
   display_order?: number | null;
   is_primary?: boolean;
   is_pre_registered?: boolean;
+  management_permissions?: ManagementPermissions;
 }
 
 export interface GetGroupsResponse {
@@ -80,6 +81,14 @@ export interface GroupMember {
   claim_status?: "pending" | "approved" | "declined" | null;
   requested_by_id?: number | null;
   requester_name?: string | null;
+  management_permissions?: ManagementPermissions;
+}
+
+export interface ManagementPermissions {
+  members: boolean;
+  ranking: boolean;
+  league: boolean;
+  draw: boolean;
 }
 
 export interface GroupPreMember {
@@ -141,6 +150,7 @@ export interface GetGroupDetailResponse {
   };
   members: GroupMember[];
   myRole: string;
+  myPermissions?: ManagementPermissions;
   links?: GroupLink[];
 }
 
@@ -340,6 +350,7 @@ export interface GroupPointRankingResponse {
   no_active_season?: boolean;
   point_rules: GroupRankingPointRules;
   myRole: string;
+  myPermissions?: ManagementPermissions;
   currentUserId: number;
   league: {
     rankings: PointRankingRow[];
@@ -698,12 +709,12 @@ export const groupApi = baseApi.injectEndpoints({
 
     updateMemberRole: builder.mutation<
       { message: string },
-      { groupId: string; userId: string; role: "member" | "admin" }
+      { groupId: string; userId: string; role: "member" | "admin"; managementPermissions: ManagementPermissions }
     >({
-      query: ({ groupId, userId, role }) => ({
+      query: ({ groupId, userId, role, managementPermissions }) => ({
         url: `/group/${groupId}/member/${userId}/role`,
         method: "PATCH",
-        body: { role },
+        body: { role, management_permissions: managementPermissions },
       }),
       invalidatesTags: (_result, _error, { groupId }) => [
         { type: "Group", id: groupId },

@@ -53,7 +53,7 @@ import {
 import { useGetLeaguesQuery, useGetLeagueParticipantsQuery, useUpdateParticipantMutation } from "../../features/league/leagueApi";
 import type { LeagueParticipantItem } from "../../features/league/leagueApi";
 import ParticipantDetailDialog from "../league/ParticipantDetailDialog";
-import MemberEditDialog from "./MemberEditDialog";
+import MemberEditDialog, { type ManagementPermissions } from "./MemberEditDialog";
 import GroupPreMemberDialog from "./GroupPreMemberDialog";
 import type { Participant } from "../../features/league/leagueCreationSlice";
 import { getRoleLabel } from "../../utils/permissions";
@@ -131,10 +131,10 @@ export default function GroupManage() {
     const [selectedParticipant, setSelectedParticipant] = useState<{ leagueId: string; participant: LeagueParticipantItem } | null>(null);
     const [memberEditOpen, setMemberEditOpen] = useState(false);
     const [preMemberDialogOpen, setPreMemberDialogOpen] = useState(false);
-    const [selectedMember, setSelectedMember] = useState<{ id: string; name: string; email: string; role: "owner" | "admin" | "member"; division?: string; externalAliases?: string[] } | null>(null);
+    const [selectedMember, setSelectedMember] = useState<{ id: string; name: string; email: string; role: "owner" | "admin" | "member"; division?: string; externalAliases?: string[]; managementPermissions?: ManagementPermissions } | null>(null);
     const [pendingOwnerTransfer, setPendingOwnerTransfer] = useState<{
         member: NonNullable<typeof selectedMember>;
-        updated: { role: "owner" | "admin" | "member"; division: string; externalAliases: string[] };
+        updated: { role: "owner" | "admin" | "member"; division: string; externalAliases: string[]; managementPermissions: ManagementPermissions };
     } | null>(null);
     const [ownerTransferStep, setOwnerTransferStep] = useState<1 | 2>(1);
     const [previousOwnerAction, setPreviousOwnerAction] = useState<"" | "admin" | "member" | "leave">("");
@@ -262,8 +262,8 @@ export default function GroupManage() {
         );
     }
 
-    const { group, members, myRole, links = []  } = data;
-    const canManage = myRole === "owner" || myRole === "admin";
+    const { group, members, myRole, myPermissions, links = []  } = data;
+    const canManage = myRole === "owner" || (myRole === "admin" && myPermissions?.members === true);
     const canInvite = myRole === "owner" || myRole === "admin" || myRole === "member";
     const isOwner = myRole === "owner";
     const emoji = group.sport ? (SPORT_EMOJI[group.sport] ?? "🏓") : "🏓";
@@ -436,6 +436,7 @@ export default function GroupManage() {
             role: member.role as "owner" | "admin" | "member",
             division: member.division || "",
             externalAliases: (member.external_aliases || []).map((item) => item.alias),
+            managementPermissions: member.management_permissions,
         });
         setMemberEditOpen(true);
     };
@@ -445,7 +446,7 @@ export default function GroupManage() {
         setSelectedMember(null);
     };
 
-    const handleSaveMemberEdit = async (updated: { role: "owner" | "admin" | "member"; division: string; externalAliases: string[] }) => {
+    const handleSaveMemberEdit = async (updated: { role: "owner" | "admin" | "member"; division: string; externalAliases: string[]; managementPermissions: ManagementPermissions }) => {
         if (!selectedMember || !id) return;
         if (updated.role === "owner" && selectedMember.role !== "owner") {
             setPendingOwnerTransfer({ member: selectedMember, updated });
@@ -456,11 +457,12 @@ export default function GroupManage() {
             return;
         }
         try {
-            if (updated.role !== selectedMember.role && updated.role !== "owner" && selectedMember.role !== "owner") {
+            if (updated.role !== "owner" && selectedMember.role !== "owner") {
                 await updateMemberRole({
                     groupId: id,
                     userId: selectedMember.id,
                     role: updated.role as "member" | "admin",
+                    managementPermissions: updated.managementPermissions,
                 }).unwrap();
             }
 

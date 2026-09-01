@@ -266,7 +266,7 @@ export default function DemoLandingPage() {
           </Card>
 
           <Box id="AI" sx={sectionAnchorSx}>
-            <SectionTitle eyebrow="AI PHOTO RECOGNITION" title="AI 사진 인식" description="회원·참가자 명단부터 수기로 작성한 대진표까지 사진 한 장을 올리면 한 번에 결과를 등록하여 운영을 빠르게 이어갑니다." />
+            <SectionTitle eyebrow="AI PHOTO RECOGNITION" title="AI 사진 인식" description="회원·참가자 명단부터 수기로 작성한 대진표까지 사진 한 장만 올리면 GPT-5.6 Luna 엔진을 탑재한 AI가 사진을 인식하여 한 번에 결과를 등록할 수 있습니다." />
             <Box sx={{ mt: 3 }}>
               <FeatureGrid items={aiCards} icon={<SportsScoreOutlinedIcon />} />
             </Box>

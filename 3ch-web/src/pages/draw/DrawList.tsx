@@ -213,7 +213,7 @@ export default function DrawList() {
     league?.group_id ?? "",
     { skip: !league?.group_id },
   );
-  const canManage = !groupLoading && (groupData?.myRole === "owner" || groupData?.myRole === "admin");
+  const canManage = !groupLoading && (groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.draw === true));
 
   useEffect(() => {
     if( draftId ){

@@ -341,7 +341,7 @@ export default function LeagueTournamentMatchOrder() {
     { skip: !leagueData?.league?.group_id },
   );
   const isCreator = !!authUser && leagueData?.league?.created_by_id === authUser?.id;
-  const canManage = isCreator || groupData?.myRole === "owner" || groupData?.myRole === "admin";
+  const canManage = isCreator || groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.league === true);
   const manualSeeding = leagueData?.league?.tournament_seeding === "manual";
 
   const { data: participantsData } = useGetLeagueParticipantsQuery(id!, { skip: !canManage });

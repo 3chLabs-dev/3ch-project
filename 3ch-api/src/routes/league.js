@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const { z } = require('zod');
 const { randomUUID, randomBytes, createHash } = require('crypto');
 const multer = require('multer');
@@ -22,13 +22,15 @@ const makeGuestToken = () => randomBytes(24).toString('base64url');
 
 async function getLeagueManager(client, leagueId, userId) {
   const result = await client.query(
-    `SELECT gm.role
+    `SELECT gm.role, gm.management_permissions
        FROM leagues l
        JOIN group_members gm ON gm.group_id = l.group_id
       WHERE l.id = $1 AND gm.user_id = $2`,
     [leagueId, userId],
   );
-  return ['owner', 'admin'].includes(result.rows[0]?.role);
+  const member = result.rows[0];
+  return member?.role === 'owner'
+    || (member?.role === 'admin' && member.management_permissions?.league === true);
 }
 
 if (isWebPushConfigured) {
@@ -1363,11 +1365,15 @@ router.post('/league', requireAuth, async (req, res) => {
     const userId = req.user.sub;
 
     const roleCheck = await client.query(
-      `SELECT role FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      `SELECT role, management_permissions FROM group_members WHERE group_id = $1 AND user_id = $2`,
       [group_id, userId],
     );
 
-    if (roleCheck.rows.length === 0 || !['owner', 'admin'].includes(roleCheck.rows[0].role)) {
+    const creatorMembership = roleCheck.rows[0];
+    if (!creatorMembership || !(
+      creatorMembership.role === 'owner'
+      || (creatorMembership.role === 'admin' && creatorMembership.management_permissions?.league === true)
+    )) {
       return res.status(403).json({ message: '리그 생성 권한이 없습니다. 리더 또는 운영진만 가능합니다.' });
     }
 
@@ -1596,7 +1602,7 @@ router.get('/league/invitations/mine', requireAuth, async (req, res) => {
          JOIN groups g ON g.id = lig.group_id
          JOIN leagues l ON l.id = lig.league_id
          LEFT JOIN groups host ON host.id = l.group_id
-        WHERE lig.status = 'accepted' OR gm.role IN ('owner', 'admin')
+        WHERE lig.status = 'accepted' OR (gm.role = 'owner' OR (gm.role = 'admin' AND COALESCE((gm.management_permissions->>'league')::boolean, false)))
         ORDER BY l.start_date DESC`,
       [userId],
     );
@@ -1727,7 +1733,7 @@ router.patch('/league/invitations/:invitationId', requireAuth, async (req, res) 
           AND EXISTS (
             SELECT 1 FROM group_members gm
              WHERE gm.group_id = lig.group_id AND gm.user_id = $2
-               AND gm.role IN ('owner', 'admin')
+               AND (gm.role = 'owner' OR (gm.role = 'admin' AND COALESCE((gm.management_permissions->>'league')::boolean, false)))
           )
         RETURNING *`,
       [status, userId, req.params.invitationId],
@@ -2193,12 +2199,12 @@ router.post('/league/:leagueId/participants', optionalAuth, async (req, res) => 
     let participantSourceGroupId = null;
     if (userId) {
       const authCheck = await pool.query(
-        `SELECT gm.role, gm.group_id, true AS is_host
+        `SELECT gm.role, gm.group_id, gm.management_permissions, true AS is_host
            FROM leagues l
            JOIN group_members gm ON gm.group_id = l.group_id
           WHERE l.id = $1 AND gm.user_id = $2
          UNION ALL
-         SELECT gm.role, gm.group_id, false AS is_host
+         SELECT gm.role, gm.group_id, gm.management_permissions, false AS is_host
            FROM league_invited_groups lig
            JOIN group_members gm ON gm.group_id = lig.group_id
           WHERE lig.league_id = $1 AND lig.status = 'accepted' AND gm.user_id = $2
@@ -2206,7 +2212,10 @@ router.post('/league/:leagueId/participants', optionalAuth, async (req, res) => 
         [leagueId, userId],
       );
       const userRole = authCheck.rows[0]?.role ?? null;
-      isAdmin = authCheck.rows[0]?.is_host && (userRole === 'owner' || userRole === 'admin');
+      isAdmin = authCheck.rows[0]?.is_host && (
+        userRole === 'owner'
+        || (userRole === 'admin' && authCheck.rows[0]?.management_permissions?.league === true)
+      );
       isClubMember = authCheck.rowCount > 0;
       participantSourceGroupId = authCheck.rows[0]?.group_id ?? null;
     }
@@ -2568,7 +2577,7 @@ router.put('/league/:id', requireAuth, async (req, res) => {
       `SELECT l.premium_enabled, l.premium_started_at
        FROM leagues l
        INNER JOIN group_members gm ON gm.group_id = l.group_id
-       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+       WHERE l.id = $1 AND gm.user_id = $2 AND (gm.role = 'owner' OR (gm.role = 'admin' AND COALESCE((gm.management_permissions->>'league')::boolean, false)))`,
       [id, userId],
     );
     if (accessCheck.rowCount === 0) {
@@ -2832,7 +2841,7 @@ router.post('/league/:leagueId/participants/:participantId/replace', requireAuth
     const access = await client.query(
       `SELECT 1 FROM leagues l
        INNER JOIN group_members gm ON gm.group_id = l.group_id
-       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+       WHERE l.id = $1 AND gm.user_id = $2 AND (gm.role = 'owner' OR (gm.role = 'admin' AND COALESCE((gm.management_permissions->>'league')::boolean, false)))`,
       [leagueId, userId],
     );
     if (access.rowCount === 0) return res.status(403).json({ message: '참가자를 교체할 권한이 없습니다.' });
@@ -2982,7 +2991,7 @@ router.delete('/league/:leagueId/participants/:participantId', requireAuth, asyn
 
     // 권한 확인: owner/admin은 누구든 삭제 가능, member는 본인 항목만 삭제 가능
     const accessCheck = await pool.query(
-      `SELECT gm.role
+      `SELECT gm.role, gm.management_permissions
       FROM leagues l
       INNER JOIN group_members gm ON gm.group_id = l.group_id
       WHERE l.id = $1 AND gm.user_id = $2`,
@@ -2994,7 +3003,8 @@ router.delete('/league/:leagueId/participants/:participantId', requireAuth, asyn
     }
 
     const userRole = accessCheck.rows[0].role;
-    const isAdmin = userRole === 'owner' || userRole === 'admin';
+    const isAdmin = userRole === 'owner'
+      || (userRole === 'admin' && accessCheck.rows[0]?.management_permissions?.league === true);
 
     if (!isAdmin) {
       // 멤버는 본인 이름과 일치하는 참가자 항목만 삭제 가능
@@ -3117,7 +3127,7 @@ router.delete('/league/:leagueId', requireAuth, async (req, res) => {
       `SELECT 1
        FROM leagues l
        INNER JOIN group_members gm ON gm.group_id = l.group_id
-       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+       WHERE l.id = $1 AND gm.user_id = $2 AND (gm.role = 'owner' OR (gm.role = 'admin' AND COALESCE((gm.management_permissions->>'league')::boolean, false)))`,
       [leagueId, userId],
     );
 
@@ -3204,7 +3214,7 @@ router.put('/league/:id/program', requireAuth, async (req, res) => {
       `SELECT l.id
        FROM leagues l
        INNER JOIN group_members gm ON gm.group_id = l.group_id
-       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+       WHERE l.id = $1 AND gm.user_id = $2 AND (gm.role = 'owner' OR (gm.role = 'admin' AND COALESCE((gm.management_permissions->>'league')::boolean, false)))`,
       [leagueId, userId],
     );
 
@@ -3238,7 +3248,7 @@ router.delete('/league/:id/program', requireAuth, async (req, res) => {
       `SELECT l.id
        FROM leagues l
        INNER JOIN group_members gm ON gm.group_id = l.group_id
-       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+       WHERE l.id = $1 AND gm.user_id = $2 AND (gm.role = 'owner' OR (gm.role = 'admin' AND COALESCE((gm.management_permissions->>'league')::boolean, false)))`,
       [leagueId, userId],
     );
 
@@ -3269,7 +3279,7 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
       `SELECT l.id
        FROM leagues l
        INNER JOIN group_members gm ON gm.group_id = l.group_id
-       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+       WHERE l.id = $1 AND gm.user_id = $2 AND (gm.role = 'owner' OR (gm.role = 'admin' AND COALESCE((gm.management_permissions->>'league')::boolean, false)))`,
       [leagueId, userId],
     );
 
@@ -3691,7 +3701,7 @@ router.delete('/league/:id/matches', requireAuth, async (req, res) => {
        LEFT JOIN group_members gm
          ON gm.group_id = l.group_id
         AND gm.user_id = $2
-        AND gm.role IN ('owner', 'admin')
+        AND (gm.role = 'owner' OR (gm.role = 'admin' AND COALESCE((gm.management_permissions->>'league')::boolean, false)))
        WHERE l.id = $1
          AND (l.created_by_id = $2 OR gm.user_id IS NOT NULL)`,
       [leagueId, userId],
@@ -3759,7 +3769,7 @@ router.post('/league/:id/matches/init', requireAuth, async (req, res) => {
        LEFT JOIN group_members gm
          ON gm.group_id = l.group_id
         AND gm.user_id = $2
-        AND gm.role IN ('owner', 'admin')
+        AND (gm.role = 'owner' OR (gm.role = 'admin' AND COALESCE((gm.management_permissions->>'league')::boolean, false)))
        WHERE l.id = $1
          AND (l.created_by_id = $2 OR gm.user_id IS NOT NULL)`,
       [leagueId, userId],
@@ -3884,7 +3894,7 @@ router.post('/league/:id/matches/extend', requireAuth, async (req, res) => {
        INNER JOIN group_members gm ON gm.group_id = l.group_id
        WHERE l.id = $1
          AND gm.user_id = $2
-         AND gm.role IN ('owner', 'admin')`,
+         AND (gm.role = 'owner' OR (gm.role = 'admin' AND COALESCE((gm.management_permissions->>'league')::boolean, false)))`,
       [leagueId, userId],
     );
 
@@ -4079,7 +4089,7 @@ router.post('/league/:id/grouping', requireAuth, async (req, res) => {
     const access = await pool.query(
       `SELECT l.id FROM leagues l
        INNER JOIN group_members gm ON gm.group_id = l.group_id
-       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+       WHERE l.id = $1 AND gm.user_id = $2 AND (gm.role = 'owner' OR (gm.role = 'admin' AND COALESCE((gm.management_permissions->>'league')::boolean, false)))`,
       [leagueId, userId],
     );
     if (access.rowCount === 0) return res.status(403).json({ message: '권한이 없습니다.' });
@@ -4169,7 +4179,7 @@ router.patch('/league/:id/participants/reorder', requireAuth, async (req, res) =
     const access = await pool.query(
       `SELECT l.id FROM leagues l
        INNER JOIN group_members gm ON gm.group_id = l.group_id
-       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+       WHERE l.id = $1 AND gm.user_id = $2 AND (gm.role = 'owner' OR (gm.role = 'admin' AND COALESCE((gm.management_permissions->>'league')::boolean, false)))`,
       [leagueId, userId],
     );
     if (access.rowCount === 0) return res.status(403).json({ message: '권한이 없습니다.' });
@@ -4248,7 +4258,7 @@ router.patch('/league/:id/matches/reorder', requireAuth, async (req, res) => {
     const access = await pool.query(
       `SELECT l.id FROM leagues l
        INNER JOIN group_members gm ON gm.group_id = l.group_id
-       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+       WHERE l.id = $1 AND gm.user_id = $2 AND (gm.role = 'owner' OR (gm.role = 'admin' AND COALESCE((gm.management_permissions->>'league')::boolean, false)))`,
       [leagueId, userId],
     );
     if (access.rowCount === 0) return res.status(403).json({ message: '권한이 없습니다.' });
@@ -4366,7 +4376,7 @@ router.patch('/league/:id/matches/:matchId', optionalAuth, async (req, res) => {
       const userId = req.user ? Number(req.user.sub) : null;
       if (!userId) return res.status(401).json({ message: '로그인이 필요합니다.' });
       const ownerCheck = await pool.query(
-        `SELECT 1 FROM leagues l INNER JOIN group_members gm ON gm.group_id = l.group_id WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+        `SELECT 1 FROM leagues l INNER JOIN group_members gm ON gm.group_id = l.group_id WHERE l.id = $1 AND gm.user_id = $2 AND (gm.role = 'owner' OR (gm.role = 'admin' AND COALESCE((gm.management_permissions->>'league')::boolean, false)))`,
         [leagueId, userId],
       );
       if (ownerCheck.rowCount === 0) return res.status(403).json({ message: '권한이 없습니다.' });
@@ -4467,7 +4477,7 @@ router.delete('/league/:id/matches/:matchId', requireAuth, async (req, res) => {
     const access = await pool.query(
       `SELECT l.id FROM leagues l
        INNER JOIN group_members gm ON gm.group_id = l.group_id
-       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+       WHERE l.id = $1 AND gm.user_id = $2 AND (gm.role = 'owner' OR (gm.role = 'admin' AND COALESCE((gm.management_permissions->>'league')::boolean, false)))`,
       [leagueId, userId],
     );
     if (access.rowCount === 0) return res.status(403).json({ message: '권한이 없습니다.' });
@@ -4723,7 +4733,7 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
          LEFT JOIN group_members gm
            ON gm.group_id = l.group_id
           AND gm.user_id = $2
-          AND gm.role IN ('owner', 'admin')
+          AND (gm.role = 'owner' OR (gm.role = 'admin' AND COALESCE((gm.management_permissions->>'league')::boolean, false)))
         WHERE l.id = $1
           AND (l.created_by_id = $2 OR gm.user_id IS NOT NULL)`,
       [leagueId, userId],
@@ -5147,7 +5157,7 @@ router.post('/league/:id/matches/init-tournament', requireAuth, async (req, res)
       `SELECT l.tournament_seeding, l.tournament_advancement
        FROM leagues l
        INNER JOIN group_members gm ON gm.group_id = l.group_id
-       WHERE l.id = $1 AND gm.user_id = $2 AND gm.role IN ('owner', 'admin')`,
+       WHERE l.id = $1 AND gm.user_id = $2 AND (gm.role = 'owner' OR (gm.role = 'admin' AND COALESCE((gm.management_permissions->>'league')::boolean, false)))`,
       [leagueId, userId],
     );
     if (access.rowCount === 0) return res.status(403).json({ message: '권한이 없습니다.' });

@@ -321,7 +321,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
   const matches = matchesData?.matches ?? [];
   const participants = participantsData?.participants ?? [];
   const hasProgram = Boolean(storedProgram?.blocks?.length);
-  const canManage = !groupLoading && (groupData?.myRole === "owner" || groupData?.myRole === "admin");
+  const canManage = !groupLoading && (groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.league === true));
 
   const programRounds = storedProgram?.blocks?.length
     ? storedProgram.blocks.map((block, index) => {

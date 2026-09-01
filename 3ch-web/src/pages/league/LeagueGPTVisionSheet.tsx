@@ -23,7 +23,7 @@ import CheckIcon from "@mui/icons-material/Check";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
-import DragHandleIcon from "@mui/icons-material/DragHandle";
+import MenuIcon from "@mui/icons-material/Menu";
 import AddIcon from "@mui/icons-material/Add";
 import RemoveIcon from "@mui/icons-material/Remove";
 import ScreenRotationIcon from "@mui/icons-material/ScreenRotation";
@@ -533,7 +533,7 @@ const SortableBracketRow = memo(function SortableBracketRow({
         bgcolor: isDragging ? "action.hover" : "inherit",
       }}
     >
-      {/* 시드 번호 셀: 편집 모드에서는 ↑↓ 버튼 + 드래그 핸들로 전환 */}
+      {/* 시드 번호 셀: 편집 모드에도 높이를 유지하고 번호 왼쪽에 드래그 핸들 표시 */}
       <NumberRowCell
         sx={{ p: 0.5, ...(canDrag && { cursor: "grab", touchAction: "none" }) }}
         {...(canDrag ? { ...attributes, ...listeners } : {})}
@@ -543,19 +543,20 @@ const SortableBracketRow = memo(function SortableBracketRow({
             <Box
               sx={{
                 display: "flex",
-                flexDirection: landscape ? "column" : "row",
+                flexDirection: "row",
                 alignItems: "center",
                 justifyContent: "center",
-                gap: 0.25,
+                gap: 0.4,
                 width: "100%",
                 height: "100%",
                 writingMode: "horizontal-tb",
               }}
             >
-              <DragHandleIcon
+              <MenuIcon
                 sx={{
                   color: "#9CA3AF",
-                  fontSize: 18,
+                  fontSize: 15,
+                  flexShrink: 0,
                 }}
               />
               <Typography
@@ -1378,33 +1379,47 @@ export default function LeagueGPTVisionSheet() {
 
   // 3. 선택된 조의 팀원만 필터링 (조가 없으면 전체)
   const targetParticipants = useMemo(() => {
+    const savedParticipantOrder =
+      currentProgramRound?.participantOrder ?? currentProgramBlock?.participantOrder;
+    const applySavedParticipantOrder = <T extends { id: string }>(participants: T[]) => {
+      if (!savedParticipantOrder?.length) return participants;
+      const orderById = new Map(savedParticipantOrder.map((participantId, index) => [participantId, index]));
+      return [...participants].sort(
+        (left, right) =>
+          (orderById.get(left.id) ?? Number.MAX_SAFE_INTEGER)
+          - (orderById.get(right.id) ?? Number.MAX_SAFE_INTEGER),
+      );
+    };
+
     if (isProgramTeamRound) {
       if (groupNames.length > 0 && selectedGroup) {
         const selectedMatches = programMatchesAll.filter((match) => match.match_label === selectedGroup);
         const ids = new Set(
           selectedMatches.flatMap((match) => [match.participant_a_id, match.participant_b_id]).filter(Boolean) as string[],
         );
-        return programTeamParticipants.filter((participant) => ids.has(participant.id));
+        return applySavedParticipantOrder(
+          programTeamParticipants.filter((participant) => ids.has(participant.id)),
+        );
       }
-      return programTeamParticipants;
+      return applySavedParticipantOrder(programTeamParticipants);
     }
     if (isProgramMode && groupNames.length > 0 && selectedGroup) {
       const selectedMatches = programMatchesAll.filter((match) => match.match_label === selectedGroup);
       const ids = new Set(
         selectedMatches.flatMap((match) => [match.participant_a_id, match.participant_b_id]).filter(Boolean) as string[],
       );
-      return sortParticipantsByDivision(
+      return applySavedParticipantOrder(sortParticipantsByDivision(
         programDisplayParticipants.filter((participant) => ids.has(participant.id)),
-      );
+      ));
     }
     if (isProgramMode) {
-      return sortParticipantsByDivision(programDisplayParticipants);
+      return applySavedParticipantOrder(sortParticipantsByDivision(programDisplayParticipants));
     }
     if (groupNames.length > 0 && selectedGroup) {
-      return sortParticipantsByDivision(rawParticipants.filter(p => p.group_name === selectedGroup));
+      return rawParticipants.filter(p => p.group_name === selectedGroup);
     }
-    return sortParticipantsByDivision(rawParticipants);
-  }, [isProgramTeamRound, programTeamParticipants, programDisplayParticipants, isProgramMode, programMatchesAll, rawParticipants, groupNames, selectedGroup]);
+    return rawParticipants;
+  }, [currentProgramBlock, currentProgramRound, isProgramTeamRound, programTeamParticipants, programDisplayParticipants, isProgramMode, programMatchesAll, rawParticipants, groupNames, selectedGroup]);
 
   // 4. 선택된 조의 경기만 필터링
   const matches = useMemo(() => {
@@ -1464,7 +1479,7 @@ export default function LeagueGPTVisionSheet() {
     skip: !authToken || isLocalDevToken(authToken),
   });
   const isCreator = !!authUser && league?.created_by_id === authUser.id;
-  const canManage = groupData?.myRole === "owner" || groupData?.myRole === "admin" || isCreator;
+  const canManage = groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.league === true) || isCreator;
   const canScore = canManage || league?.join_permission === "public";
   // 그룹 멤버 이름 우선, 없으면 계정 이름, 비로그인 게스트는 localStorage 저장 이름 사용
   const myName    = groupData?.members?.find((m) => m.user_id === authUser?.id)?.name
@@ -1479,7 +1494,7 @@ export default function LeagueGPTVisionSheet() {
 
   // ── 참가자 순서 상태 ──────────────────────────────────────────────────────
   // editOrder=null: 서버 데이터(rawParticipants) 그대로 사용
-  // editOrder≠null: 사용자가 순서를 변경한 로컬 상태 (서버에도 즉시 반영)
+  // editOrder≠null: 사용자가 순서를 변경한 로컬 상태 (저장 버튼으로 서버에 확정)
   const [editOrder, setEditOrder] = useState<LeagueParticipantItem[] | null>(null);
   const localOrder = editOrder ?? targetParticipants;
   const targetParticipantKey = targetParticipants.map((participant) => participant.id).join("|");
@@ -1611,7 +1626,7 @@ export default function LeagueGPTVisionSheet() {
     useSensor(TouchSensor,   { activationConstraint: { delay: 200, tolerance: 5 } }), // 터치: 200ms 롱프레스 후 드래그
   );
 
-  // 드래그 앤 드롭으로 임의 위치 이동 (arrayMove 후 서버에 전체 순서 저장)
+  // 드래그 중에는 화면 순서만 바꾸고, 저장 버튼을 눌렀을 때 서버에 확정한다.
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
@@ -1619,11 +1634,9 @@ export default function LeagueGPTVisionSheet() {
       const oldIdx = prev.findIndex((p) => p.id === active.id);
       const newIdx = prev.findIndex((p) => p.id === over.id);
       if (oldIdx === -1 || newIdx === -1) return prev;
-      const next = arrayMove(prev, oldIdx, newIdx);
-      reorderParticipants({ leagueId: id ?? "", order: next.map((p) => p.id) });
-      return next;
+      return arrayMove(prev, oldIdx, newIdx);
     });
-  }, [setLocalOrder, reorderParticipants, id]);
+  }, [setLocalOrder]);
 
   const finishEditing = useCallback(async () => {
     if (!editMode) {
@@ -1632,7 +1645,13 @@ export default function LeagueGPTVisionSheet() {
     }
 
     if (isProgramMode && id && programOption) {
-      const participantOrder = localOrder.map((participant) => participant.id);
+      const editedIds = new Set(localOrder.map((participant) => participant.id));
+      const savedParticipantOrder =
+        currentProgramRound?.participantOrder ?? currentProgramBlock?.participantOrder ?? [];
+      const participantOrder = [
+        ...savedParticipantOrder.filter((participantId) => !editedIds.has(participantId)),
+        ...localOrder.map((participant) => participant.id),
+      ];
       const nextProgram = {
         ...programOption,
         blocks: programOption.blocks.map((block, index) =>
@@ -1642,6 +1661,7 @@ export default function LeagueGPTVisionSheet() {
           index === programRound - 1 ? { ...round, participantOrder } : round
         ),
       };
+      storeProgramOption(id, nextProgram);
       await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
       const nextMatches = generateProgramRoundMatches(
         id,
@@ -1661,7 +1681,7 @@ export default function LeagueGPTVisionSheet() {
 
     setEditMode(false);
   }, [
-    editMode, id, isProgramMode, localOrder, programOption, programRound,
+    currentProgramBlock, currentProgramRound, editMode, id, isProgramMode, localOrder, programOption, programRound,
     programSourceMatches, rawParticipants, refetchMatches, reorderParticipants,
     saveLeagueProgram, syncProgramMatches,
   ]);
@@ -2458,7 +2478,7 @@ export default function LeagueGPTVisionSheet() {
               "&:hover": { bgcolor: editMode ? "#059669" : "#1D4ED8", boxShadow: "none" },
             }}
           >
-            {editMode ? "완료" : "수정"}
+            {editMode ? "저장" : "수정"}
           </Button>
         )}
 
@@ -3095,11 +3115,46 @@ export default function LeagueGPTVisionSheet() {
                   textAlign: "center",
                   p: 0.5,
                 },
+                "& .preview-number-cell": {
+                  width: 48,
+                  minWidth: 48,
+                },
+                "& .preview-name-cell": {
+                  width: 132,
+                  minWidth: 132,
+                },
               }}
             >
+              <thead>
+                <tr>
+                  <th rowSpan={2} colSpan={2} style={{ background: "#F3F4F6", color: "#6B7280", fontSize: 11 }}>
+                    참가명단
+                  </th>
+                  {previewColumns.map(({ participant: columnPlayer, index: columnIndex }) => (
+                    <th key={columnPlayer.id} style={{ height: 38, background: "#F3F4F6" }}>
+                      <Box sx={{ width: 24, height: 24, mx: "auto", borderRadius: "50%", bgcolor: "#2563EB", color: "#fff", fontSize: 12, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        {columnIndex + 1}
+                      </Box>
+                    </th>
+                  ))}
+                </tr>
+                <tr>
+                  {previewColumns.map(({ participant: columnPlayer }) => (
+                    <th key={columnPlayer.id} style={{ background: "#F9FAFB", fontSize: 12, fontWeight: 800, whiteSpace: "pre-line", lineHeight: 1.3 }}>
+                      {columnPlayer.name}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
               <tbody>
                 {previewRows.map(({ participant: rowPlayer, index: rowIndex }) => (
                   <tr key={rowPlayer.id}>
+                    <th className="preview-number-cell" style={{ background: "#F3F4F6", fontSize: 13, fontWeight: 900 }}>
+                      {rowIndex + 1}
+                    </th>
+                    <th className="preview-name-cell" style={{ background: "#F9FAFB", fontSize: 12, fontWeight: 800, whiteSpace: "pre-line", lineHeight: 1.3 }}>
+                      {rowPlayer.name}
+                    </th>
                     {previewColumns.map(({ participant: columnPlayer, index: columnIndex }) => {
                       if (rowIndex === columnIndex) return <td key={columnPlayer.id} style={{ background: "#E5E7EB" }} />;
                       const match = matchLookup.get(`${rowPlayer.id}__${columnPlayer.id}`);

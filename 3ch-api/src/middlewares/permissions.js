@@ -65,9 +65,42 @@ const requireGroupOwner = requireGroupRole(['owner']);
  */
 const requireGroupAdmin = requireGroupRole(['owner', 'admin']);
 
+const GROUP_PERMISSION_KEYS = new Set(['members', 'ranking', 'league', 'draw']);
+
+const requireGroupPermission = (permission) => async (req, res, next) => {
+  if (!GROUP_PERMISSION_KEYS.has(permission)) {
+    return res.status(500).json({ message: '잘못된 클럽 관리 권한 설정입니다' });
+  }
+  try {
+    const groupId = req.params.groupId || req.params.id;
+    if (!groupId) return res.status(400).json({ message: '클럽 ID가 필요합니다' });
+
+    const result = await pool.query(
+      `SELECT role, management_permissions
+       FROM group_members
+       WHERE group_id = $1 AND user_id = $2`,
+      [groupId, req.user.sub],
+    );
+    if (!result.rowCount) return res.status(403).json({ message: '클럽에 속해있지 않습니다' });
+
+    const member = result.rows[0];
+    const allowed = member.role === 'owner'
+      || (member.role === 'admin' && member.management_permissions?.[permission] === true);
+    if (!allowed) return res.status(403).json({ message: '해당 클럽 관리 권한이 없습니다' });
+
+    req.groupRole = member.role;
+    req.groupPermissions = member.management_permissions || {};
+    return next();
+  } catch (error) {
+    console.error('Group permission check error:', error);
+    return res.status(500).json({ message: '권한 확인 중 오류가 발생했습니다' });
+  }
+};
+
 module.exports = {
   requireGroupRole,
   requireGroupOwner,
   requireGroupAdmin,
+  requireGroupPermission,
   requireAdmin,
 };

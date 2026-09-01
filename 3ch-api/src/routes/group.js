@@ -477,12 +477,12 @@ router.get('/group/search', requireAuth, async (req, res) => {
               EXISTS (
                 SELECT 1
                 FROM group_pre_members pm
-                JOIN users current_user ON current_user.id = $1
+                JOIN users matched_user ON matched_user.id = $1
                 WHERE pm.group_id = g.id
                   AND pm.status = 'active'
-                  AND BTRIM(COALESCE(current_user.name, '')) <> ''
+                  AND BTRIM(COALESCE(matched_user.name, '')) <> ''
                   AND LOWER(REGEXP_REPLACE(BTRIM(pm.name), '\\s+', '', 'g'))
-                      = LOWER(REGEXP_REPLACE(BTRIM(current_user.name), '\\s+', '', 'g'))
+                      = LOWER(REGEXP_REPLACE(BTRIM(matched_user.name), '\\s+', '', 'g'))
               ) AS is_pre_registered
        FROM groups g
        ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''}
@@ -881,12 +881,12 @@ router.post('/group/recommend', requireAuth, async (req, res) => {
        LEFT JOIN LATERAL (
          SELECT true AS matched
          FROM group_pre_members pm
-         JOIN users current_user ON current_user.id = $3
+         JOIN users matched_user ON matched_user.id = $3
          WHERE pm.group_id = g.id
            AND pm.status = 'active'
-           AND BTRIM(COALESCE(current_user.name, '')) <> ''
+           AND BTRIM(COALESCE(matched_user.name, '')) <> ''
            AND LOWER(REGEXP_REPLACE(BTRIM(pm.name), '\\s+', '', 'g'))
-               = LOWER(REGEXP_REPLACE(BTRIM(current_user.name), '\\s+', '', 'g'))
+               = LOWER(REGEXP_REPLACE(BTRIM(matched_user.name), '\\s+', '', 'g'))
          LIMIT 1
        ) pre_registered ON true
        WHERE g.id NOT IN (SELECT group_id FROM group_members WHERE user_id = $3)

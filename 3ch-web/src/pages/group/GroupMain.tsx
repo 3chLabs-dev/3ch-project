@@ -85,7 +85,12 @@ export default function GroupMain() {
         sort_by_region: !groupSearch && myRegionCity ? true : undefined,
     }), [groupSearch, myRegionCity, selectedFilter]);
 
-    const { data: searchData, isLoading: searchLoading } = useSearchGroupsQuery(
+    const {
+        data: searchData,
+        isLoading: searchLoading,
+        isError: searchError,
+        refetch: refetchSearch,
+    } = useSearchGroupsQuery(
         searchParams,
         { skip: !isLoggedIn, refetchOnMountOrArgChange: true },
     );
@@ -260,6 +265,23 @@ export default function GroupMain() {
 
                         {searchLoading ? (
                             <EmptyCard text="검색 중..." />
+                        ) : searchError ? (
+                            <Card elevation={0} sx={{ borderRadius: 1, border: "1px solid #FCA5A5", bgcolor: "#FEF2F2" }}>
+                                <CardContent sx={{ py: 2.5, textAlign: "center", "&:last-child": { pb: 2.5 } }}>
+                                    <Typography fontWeight={800} color="error.main">
+                                        추천 클럽을 불러오지 못했습니다.
+                                    </Typography>
+                                    <Button
+                                        variant="outlined"
+                                        color="error"
+                                        size="small"
+                                        sx={{ mt: 1.5 }}
+                                        onClick={() => void refetchSearch()}
+                                    >
+                                        다시 시도
+                                    </Button>
+                                </CardContent>
+                            </Card>
                         ) : recommendedGroups.length > 0 ? (
                             <Stack spacing={1}>
                                 {recommendedGroups.map((g) => (

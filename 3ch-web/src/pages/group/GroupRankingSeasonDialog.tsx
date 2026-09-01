@@ -298,6 +298,9 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
                 <Typography sx={{ mt: 0.4, fontSize: 11.5, color: "#1976D2", fontWeight: 700 }}>
                   계산된 개인 포인트는 소수점 첫째 자리까지 반올림합니다.
                 </Typography>
+                <Typography sx={{ mt: 0.2, fontSize: 11.5, color: "#1976D2", fontWeight: 700 }}>
+                  순위 포인트도 복식은 2명, 단체전은 실제 팀원 수로 나눠 반영합니다.
+                </Typography>
               </Box>
             )}
           </Box>

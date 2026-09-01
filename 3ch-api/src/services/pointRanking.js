@@ -116,14 +116,14 @@ function compareRanking(a, b) {
   return a.name.localeCompare(b.name, "ko");
 }
 
-function awardBonus(row, rank, rule) {
+function awardBonus(row, rank, rule, divisor = 1) {
   let points = 0;
   if (rank === 1) points = rule.first;
   else if (rank === 2) points = rule.second;
   else if (rank === 3) points = rule.third;
   else if (rank === 4) points = rule.fourth;
 
-  row.bonus_points += points;
+  row.bonus_points = roundPoint(row.bonus_points + points / Math.max(1, divisor));
   if (rank === 1) row.championships += 1;
 }
 
@@ -196,6 +196,18 @@ function getProgramEntryType(row) {
 
 function roundPoint(value) {
   return Math.round((Number(value) + Number.EPSILON) * 10) / 10;
+}
+
+function rankingUnitKey(memberIds) {
+  return [...memberIds].map(Number).filter(Number.isFinite).sort((a, b) => a - b).join(",");
+}
+
+function isThirdPlaceMatch(match) {
+  return String(match?.match_label ?? "").includes("3·4위전");
+}
+
+function isFinalMatch(match) {
+  return String(match?.match_label ?? "").includes("결승") && !isThirdPlaceMatch(match);
 }
 
 async function ensureAutoRenewedSeasons(groupId) {
@@ -539,6 +551,10 @@ async function getPointRanking(groupId, year, scope, seasonId) {
     const rankingMemberAIds = memberAIds.filter((memberId) => baseMembers.has(memberId));
     const rankingMemberBIds = memberBIds.filter((memberId) => baseMembers.has(memberId));
     if (rankingMemberAIds.length === 0 && rankingMemberBIds.length === 0) return;
+    match._memberAIds = memberAIds;
+    match._memberBIds = memberBIds;
+    match._rankingMemberAIds = rankingMemberAIds;
+    match._rankingMemberBIds = rankingMemberBIds;
 
     const attendanceSets = section === "tournament" ? tournamentParticipantSets : leagueParticipantSets;
     const attendanceKey = match.league_id;
@@ -578,19 +594,23 @@ async function getPointRanking(groupId, year, scope, seasonId) {
       rowsA.forEach((row) => { row.losses += 1; });
     }
 
-    if (entryType !== "singles" || scoreA === scoreB) return;
+    if (scoreA === scoreB) return;
     const leagueKey = match.league_id;
     if (section === "league") {
       const roundKey = `${leagueKey}:${match.program_round ?? 0}`;
+      const groupNameA = entryType === "singles" ? toKey(match.group_name_a) : toKey(match.match_label);
+      const groupNameB = entryType === "singles" ? toKey(match.group_name_b) : toKey(match.match_label);
+      match._rankingGroupA = groupNameA;
+      match._rankingGroupB = groupNameB;
       const divisionKey = match._rankingFormat === "GROUP"
-        ? `${roundKey}:${toKey(match.group_name_a)}`
+        ? `${roundKey}:${groupNameA}`
         : `${roundKey}:__all__`;
       const existing = leagueGroups.get(divisionKey) ?? [];
       existing.push(match);
       leagueGroups.set(divisionKey, existing);
 
-      if (match._rankingFormat === "GROUP" && toKey(match.group_name_b) !== toKey(match.group_name_a)) {
-        const otherKey = `${roundKey}:${toKey(match.group_name_b)}`;
+      if (match._rankingFormat === "GROUP" && groupNameB !== groupNameA) {
+        const otherKey = `${roundKey}:${groupNameB}`;
         const otherExisting = leagueGroups.get(otherKey) ?? [];
         otherExisting.push(match);
         leagueGroups.set(otherKey, otherExisting);
@@ -631,23 +651,23 @@ async function getPointRanking(groupId, year, scope, seasonId) {
 
     matches.forEach((match) => {
       const divisionKey = groupKey.split(":").at(-1);
-      const includeA = divisionKey === "__all__" || toKey(match.group_name_a) === divisionKey;
-      const includeB = divisionKey === "__all__" || toKey(match.group_name_b) === divisionKey;
+      const includeA = divisionKey === "__all__" || match._rankingGroupA === divisionKey;
+      const includeB = divisionKey === "__all__" || match._rankingGroupB === divisionKey;
       if (!includeA || !includeB) return;
 
-      const memberAId = Number(match.member_a_id);
-      const memberBId = Number(match.member_b_id);
-      const baseA = baseMembers.get(memberAId);
-      const baseB = baseMembers.get(memberBId);
-      if (!baseA || !baseB) return;
+      const memberAIds = match._memberAIds ?? [];
+      const memberBIds = match._memberBIds ?? [];
+      const keyA = rankingUnitKey(memberAIds);
+      const keyB = rankingUnitKey(memberBIds);
+      if (!keyA || !keyB) return;
 
-      if (!statMap.has(memberAId)) statMap.set(memberAId, { ...baseA, wins: 0, losses: 0, score_points: 0, lost_points: 0 });
-      if (!statMap.has(memberBId)) statMap.set(memberBId, { ...baseB, wins: 0, losses: 0, score_points: 0, lost_points: 0 });
+      if (!statMap.has(keyA)) statMap.set(keyA, { member_ids: memberAIds, name: keyA, wins: 0, losses: 0, score_points: 0, lost_points: 0 });
+      if (!statMap.has(keyB)) statMap.set(keyB, { member_ids: memberBIds, name: keyB, wins: 0, losses: 0, score_points: 0, lost_points: 0 });
 
       const scoreA = Number(match.score_a);
       const scoreB = Number(match.score_b);
-      const a = statMap.get(memberAId);
-      const b = statMap.get(memberBId);
+      const a = statMap.get(keyA);
+      const b = statMap.get(keyB);
       a.score_points += scoreA;
       a.lost_points += scoreB;
       b.score_points += scoreB;
@@ -664,8 +684,11 @@ async function getPointRanking(groupId, year, scope, seasonId) {
     const standings = Array.from(statMap.values()).sort(compareStanding);
     const bonusRule = getBonusRule(pointRules, "league", sample._rankingFormat, sample._rankingOption);
     standings.slice(0, 4).forEach((standing, index) => {
-      const row = leagueRows.get(Number(standing.member_id));
-      if (row) awardBonus(row, index + 1, bonusRule);
+      const divisor = standing.member_ids.length;
+      standing.member_ids.forEach((memberId) => {
+        const row = leagueRows.get(Number(memberId));
+        if (row) awardBonus(row, index + 1, bonusRule, divisor);
+      });
     });
   });
 
@@ -675,22 +698,24 @@ async function getPointRanking(groupId, year, scope, seasonId) {
     const statMap = new Map();
 
     matches.forEach((match) => {
-      const memberAId = Number(match.member_a_id);
-      const memberBId = Number(match.member_b_id);
-      const baseA = baseMembers.get(memberAId);
-      const baseB = baseMembers.get(memberBId);
-      if (!baseA || !baseB) return;
+      const memberAIds = match._memberAIds ?? [];
+      const memberBIds = match._memberBIds ?? [];
+      const keyA = rankingUnitKey(memberAIds);
+      const keyB = rankingUnitKey(memberBIds);
+      if (!keyA || !keyB) return;
 
-      if (!statMap.has(memberAId)) statMap.set(memberAId, {
-        ...baseA,
+      if (!statMap.has(keyA)) statMap.set(keyA, {
+        member_ids: memberAIds,
+        name: keyA,
         wins: 0,
         losses: 0,
         score_points: 0,
         lost_points: 0,
         max_round: Number(match.round_number) || 0,
       });
-      if (!statMap.has(memberBId)) statMap.set(memberBId, {
-        ...baseB,
+      if (!statMap.has(keyB)) statMap.set(keyB, {
+        member_ids: memberBIds,
+        name: keyB,
         wins: 0,
         losses: 0,
         score_points: 0,
@@ -702,8 +727,8 @@ async function getPointRanking(groupId, year, scope, seasonId) {
 
       const scoreA = Number(match.score_a);
       const scoreB = Number(match.score_b);
-      const a = statMap.get(memberAId);
-      const b = statMap.get(memberBId);
+      const a = statMap.get(keyA);
+      const b = statMap.get(keyB);
       a.score_points += scoreA;
       a.lost_points += scoreB;
       a.max_round = Math.max(a.max_round, Number(match.round_number) || 0);
@@ -721,32 +746,36 @@ async function getPointRanking(groupId, year, scope, seasonId) {
 
     const completedOutcome = (match) => {
       if (!match || match.status !== "done" || Number(match.score_a) === Number(match.score_b)) return null;
-      const aId = Number(match.member_a_id);
-      const bId = Number(match.member_b_id);
+      const aIds = match._memberAIds ?? [];
+      const bIds = match._memberBIds ?? [];
+      if (aIds.length === 0 || bIds.length === 0) return null;
       return Number(match.score_a) > Number(match.score_b)
-        ? { winnerId: aId, loserId: bId }
-        : { winnerId: bId, loserId: aId };
+        ? { winnerIds: aIds, loserIds: bIds }
+        : { winnerIds: bIds, loserIds: aIds };
     };
-    const awardMemberRank = (memberId, rank, rule) => {
-      const row = tournamentRows.get(Number(memberId));
-      if (row) awardBonus(row, rank, rule);
+    const awardMemberRank = (memberIds, rank, rule) => {
+      const divisor = memberIds.length;
+      memberIds.forEach((memberId) => {
+        const row = tournamentRows.get(Number(memberId));
+        if (row) awardBonus(row, rank, rule, divisor);
+      });
     };
     const bonusRule = getBonusRule(pointRules, "tournament", sample._rankingFormat, sample._rankingOption);
-    const finalMatch = matches.find((match) => match.match_label === "결승")
+    const finalMatch = matches.find(isFinalMatch)
       ?? [...matches]
-        .filter((match) => match.match_label !== "3·4위전")
+        .filter((match) => !isThirdPlaceMatch(match))
         .sort((a, b) => (Number(b.round_number) || 0) - (Number(a.round_number) || 0))[0];
     const finalOutcome = completedOutcome(finalMatch);
 
     if (finalMatch && finalOutcome) {
-      awardMemberRank(finalOutcome.winnerId, 1, bonusRule);
-      awardMemberRank(finalOutcome.loserId, 2, bonusRule);
+      awardMemberRank(finalOutcome.winnerIds, 1, bonusRule);
+      awardMemberRank(finalOutcome.loserIds, 2, bonusRule);
 
-      const thirdPlaceMatch = matches.find((match) => match.match_label === "3·4위전");
+      const thirdPlaceMatch = matches.find(isThirdPlaceMatch);
       const thirdPlaceOutcome = completedOutcome(thirdPlaceMatch);
       if (thirdPlaceOutcome) {
-        awardMemberRank(thirdPlaceOutcome.winnerId, 3, bonusRule);
-        awardMemberRank(thirdPlaceOutcome.loserId, 4, bonusRule);
+        awardMemberRank(thirdPlaceOutcome.winnerIds, 3, bonusRule);
+        awardMemberRank(thirdPlaceOutcome.loserIds, 4, bonusRule);
       } else if (!thirdPlaceMatch) {
         matches
           .filter(
@@ -756,7 +785,7 @@ async function getPointRanking(groupId, year, scope, seasonId) {
           )
           .map(completedOutcome)
           .filter(Boolean)
-          .forEach((outcome) => awardMemberRank(outcome.loserId, 3, bonusRule));
+          .forEach((outcome) => awardMemberRank(outcome.loserIds, 3, bonusRule));
       }
       return;
     }
@@ -766,8 +795,7 @@ async function getPointRanking(groupId, year, scope, seasonId) {
       return compareStanding(a, b);
     });
     standings.slice(0, 4).forEach((standing, index) => {
-      const row = tournamentRows.get(Number(standing.member_id));
-      if (row) awardBonus(row, index + 1, bonusRule);
+      awardMemberRank(standing.member_ids, index + 1, bonusRule);
     });
   });
 
@@ -799,4 +827,11 @@ async function getPointRanking(groupId, year, scope, seasonId) {
 
 module.exports = {
   getPointRanking,
+  _test: {
+    awardBonus,
+    getBonusRule,
+    isFinalMatch,
+    isThirdPlaceMatch,
+    rankingUnitKey,
+  },
 };

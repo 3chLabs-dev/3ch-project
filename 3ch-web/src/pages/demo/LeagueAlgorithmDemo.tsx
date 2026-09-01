@@ -3559,6 +3559,9 @@ const LeagueAlgorithmDemo = ({
   </div>
   ) : (
     <div>
+      <div style={{ marginTop: '8px', marginLeft: '28px', color: '#64748B', fontSize: '12px', lineHeight: 1.5, display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, overflow: 'hidden' }}>
+        {option.description}
+      </div>
       <div style={{ marginTop: '9px', marginLeft: '28px', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', border: '1px solid #E2E8F0', borderRadius: '10px', overflow: 'hidden', backgroundColor: selectedProgramOptionIndex === index ? '#FFFFFF' : '#F8FAFC' }}>
         <div style={{ padding: '8px 3px', textAlign: 'center', borderRight: '1px solid #E2E8F0' }}>
           <div style={{ fontSize: '15px', lineHeight: 1.2, fontWeight: 900, color: '#0F172A' }}>{option.totalBlockMatchCount}</div>

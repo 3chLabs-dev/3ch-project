@@ -72,6 +72,12 @@ function isWalkoverWinner(match: LeagueMatch, slot: "a" | "b") {
     : !!match.participant_b_id && !match.participant_a_id;
 }
 
+function shouldHighlightTournamentWinner(match: LeagueMatch, slot: "a" | "b") {
+  const isThreeSet = match.match_rule === "THREE_SET" || match.match_rule?.includes("3세트제");
+  const isPlayedMatch = Boolean(match.participant_a_id && match.participant_b_id);
+  return !(isThreeSet && isPlayedMatch) && isWalkoverWinner(match, slot);
+}
+
 // ─── 슬롯 행 ─────────────────────────────────────────────────────────────────
 function SlotRow({ slot, name, seed, division, score, isWin, isR1, canManage, canScore, matchId, onRegister, onScore, showBye }: {
   slot: "a" | "b";
@@ -168,8 +174,8 @@ function MatchCard({
   const isPlaying = match.status === "playing";
   const sa = match.score_a;
   const sb = match.score_b;
-  const winA = isWalkoverWinner(match, "a");
-  const winB = isWalkoverWinner(match, "b");
+  const winA = shouldHighlightTournamentWinner(match, "a");
+  const winB = shouldHighlightTournamentWinner(match, "b");
   const showByeA = isR1 && !manualSeeding && !nameA;
   const showByeB = isR1 && !manualSeeding && !nameB;
   const displayNameA = nameA ?? (showByeA ? "BYE" : "미정");

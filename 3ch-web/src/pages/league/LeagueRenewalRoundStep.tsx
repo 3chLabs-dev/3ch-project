@@ -773,6 +773,9 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
 
     return (
       <Stack spacing={2}>
+      {round.format === "TOURNAMENT" && round.tournamentMode === "upper-lower" && (
+        <Typography sx={{ fontWeight: 900, color: "#2563EB" }}>상위부 경기 규칙</Typography>
+      )}
       <FormControl fullWidth>
         <RadioGroup
           value={round.matchRule ?? ""}
@@ -794,12 +797,44 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
           <TextField select fullWidth size="small" label="규칙 전환 단계" value={round.ruleSwitchSize ?? ""}
             onChange={(event) => updateRound(index, { ruleSwitchSize: event.target.value ? Number(event.target.value) : undefined })}>
             <MenuItem value="">전환 없음</MenuItem>
-            {[64, 32, 16, 8, 4, 2].map((size) => <MenuItem key={size} value={size}>{size === 2 ? "결승부터" : `${size}강부터`}</MenuItem>)}
+            <MenuItem value={0}>처음부터</MenuItem>
+            {[128, 64, 32, 16, 8, 4, 2].map((size) => <MenuItem key={size} value={size}>{size === 2 ? "결승부터" : `${size}강부터`}</MenuItem>)}
           </TextField>
-          <TextField select fullWidth size="small" label="전환 후 규칙" disabled={!round.ruleSwitchSize} value={round.lateMatchRule ?? "BEST_OF_5"}
+          <TextField select fullWidth size="small" label="전환 후 규칙" disabled={round.ruleSwitchSize == null} value={round.lateMatchRule ?? "BEST_OF_5"}
             onChange={(event) => updateRound(index, { lateMatchRule: event.target.value as NonNullable<RenewalRoundConfig["lateMatchRule"]> })}>
             <MenuItem value="BEST_OF_3">3전 2선승제</MenuItem><MenuItem value="BEST_OF_5">5전 3선승제</MenuItem><MenuItem value="THREE_SET">3세트제</MenuItem>
           </TextField>
+        </Stack>
+      )}
+      {round.format === "TOURNAMENT" && round.tournamentMode === "upper-lower" && (
+        <Stack spacing={2} sx={{ mt: 1, p: 2, border: "1px solid #E2E8F0", borderRadius: 2, bgcolor: "#FAFAFF" }}>
+          <Typography sx={{ fontWeight: 900, color: "#7C3AED" }}>하위부 경기 규칙</Typography>
+          <FormControl fullWidth>
+            <RadioGroup
+              value={round.lowerMatchRule ?? round.matchRule ?? "BEST_OF_3"}
+              onChange={(event) => updateRound(index, {
+                lowerMatchRule: event.target.value as NonNullable<RenewalRoundConfig["lowerMatchRule"]>,
+              })}
+            >
+              <Stack spacing={1.5}>
+                <FormControlLabel value="BEST_OF_3" control={<Radio />} label="3전 2선승제" sx={optionCardSx} />
+                <FormControlLabel value="BEST_OF_5" control={<Radio />} label="5전 3선승제" sx={optionCardSx} />
+                <FormControlLabel value="THREE_SET" control={<Radio />} label="3세트제" sx={optionCardSx} />
+              </Stack>
+            </RadioGroup>
+          </FormControl>
+          <Stack direction="row" spacing={1.5}>
+            <TextField select fullWidth size="small" label="하위부 규칙 전환 단계" value={round.lowerRuleSwitchSize ?? ""}
+              onChange={(event) => updateRound(index, { lowerRuleSwitchSize: event.target.value ? Number(event.target.value) : undefined })}>
+              <MenuItem value="">전환 없음</MenuItem>
+              <MenuItem value={0}>처음부터</MenuItem>
+              {[128, 64, 32, 16, 8, 4, 2].map((size) => <MenuItem key={size} value={size}>{size === 2 ? "결승부터" : `${size}강부터`}</MenuItem>)}
+            </TextField>
+            <TextField select fullWidth size="small" label="하위부 전환 후 규칙" disabled={round.lowerRuleSwitchSize == null} value={round.lowerLateMatchRule ?? "BEST_OF_5"}
+              onChange={(event) => updateRound(index, { lowerLateMatchRule: event.target.value as NonNullable<RenewalRoundConfig["lowerLateMatchRule"]> })}>
+              <MenuItem value="BEST_OF_3">3전 2선승제</MenuItem><MenuItem value="BEST_OF_5">5전 3선승제</MenuItem><MenuItem value="THREE_SET">3세트제</MenuItem>
+            </TextField>
+          </Stack>
         </Stack>
       )}
       </Stack>

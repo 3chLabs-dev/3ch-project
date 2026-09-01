@@ -204,6 +204,9 @@ export function generateProgramBlocks(
     nextMatchRule: round.nextMatchRule ? getMatchRuleLabel(round.nextMatchRule) : undefined,
     ruleSwitchSize: round.ruleSwitchSize,
     lateMatchRule: round.lateMatchRule ? getMatchRuleLabel(round.lateMatchRule) : undefined,
+    lowerMatchRule: round.lowerMatchRule ? getMatchRuleLabel(round.lowerMatchRule) : undefined,
+    lowerRuleSwitchSize: round.lowerRuleSwitchSize,
+    lowerLateMatchRule: round.lowerLateMatchRule ? getMatchRuleLabel(round.lowerLateMatchRule) : undefined,
     format: round.format,
 
     expectedMinutes: duration,
@@ -260,6 +263,9 @@ export function generateProgramBlocks(
       nextMatchRule: round.nextMatchRule ? getMatchRuleLabel(round.nextMatchRule) : undefined,
       ruleSwitchSize: round.ruleSwitchSize,
       lateMatchRule: round.lateMatchRule ? getMatchRuleLabel(round.lateMatchRule) : undefined,
+      lowerMatchRule: round.lowerMatchRule ? getMatchRuleLabel(round.lowerMatchRule) : undefined,
+      lowerRuleSwitchSize: round.lowerRuleSwitchSize,
+      lowerLateMatchRule: round.lowerLateMatchRule ? getMatchRuleLabel(round.lowerLateMatchRule) : undefined,
       format: round.format,
 
       expectedMinutes: duration,
@@ -336,6 +342,9 @@ export function generateProgramBlocks(
       nextMatchRule: round.nextMatchRule ? getMatchRuleLabel(round.nextMatchRule) : undefined,
       ruleSwitchSize: round.ruleSwitchSize,
       lateMatchRule: round.lateMatchRule ? getMatchRuleLabel(round.lateMatchRule) : undefined,
+      lowerMatchRule: round.lowerMatchRule ? getMatchRuleLabel(round.lowerMatchRule) : undefined,
+      lowerRuleSwitchSize: round.lowerRuleSwitchSize,
+      lowerLateMatchRule: round.lowerLateMatchRule ? getMatchRuleLabel(round.lowerLateMatchRule) : undefined,
       format: round.format,
 
       expectedMinutes: duration,

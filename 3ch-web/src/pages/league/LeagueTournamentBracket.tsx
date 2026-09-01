@@ -151,6 +151,12 @@ function getMatchResultParticipant(match: LeagueMatch | undefined, winner: boole
   return { name, division: slot === "a" ? match.participant_a_division : match.participant_b_division };
 }
 
+function shouldHighlightTournamentWinner(match: LeagueMatch, slot: "a" | "b") {
+  const isThreeSet = match.match_rule === "THREE_SET" || match.match_rule?.includes("3세트제");
+  const isPlayedMatch = Boolean(match.participant_a_id && match.participant_b_id);
+  return !(isThreeSet && isPlayedMatch) && isWalkoverWinner(match, slot);
+}
+
 function RankingSummary({ title, rankings, rankLabels, color, borderColor, left, top }: {
   title: string; rankings: Array<RankedParticipant | null>; color: string;
   rankLabels?: number[]; borderColor: string; left: number; top: number;
@@ -416,8 +422,8 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
   const { x, y, match: m } = pos;
   const isLower = m.bracket === "lower";
   const isR1 = m.round_number === 1 && !isLower;
-  const winA = isWalkoverWinner(m, "a");
-  const winB = isWalkoverWinner(m, "b");
+  const winA = shouldHighlightTournamentWinner(m, "a");
+  const winB = shouldHighlightTournamentWinner(m, "b");
   const nameA = m.participant_a_name;
   const nameB = m.participant_b_name;
   const isByeA = !nameA && isR1 && !manualSeeding;
@@ -554,7 +560,7 @@ function SingleSlotBox({ pos, slot, actions, manualSeeding = false }: { pos: Mat
   const name = slot === "a" ? m.participant_a_name : m.participant_b_name;
   const participantId = slot === "a" ? m.participant_a_id : m.participant_b_id;
   const score = slot === "a" ? m.score_a : m.score_b;
-  const win = isWalkoverWinner(m, slot);
+  const win = shouldHighlightTournamentWinner(m, slot);
   const isBye = !name && isR1 && !manualSeeding;
   const isUndecided = !name && !isBye;
   const division = slot === "a" ? m.participant_a_division : m.participant_b_division;

@@ -2,6 +2,7 @@ import type { LeagueMatch, LeagueParticipantItem } from "../features/league/leag
 import { distributeSnake } from "../features/league/algorithms/distributeSnake";
 import type {
   FormationAssignmentPlayer,
+  MatchRule,
   ProgramBlock,
   ProgramOption,
   ProgramRoundStandingsSnapshot,
@@ -396,6 +397,16 @@ function getTournamentRoundLabel(bracketSize: number, bracketRound: number) {
   return roundSize <= 2 ? "결승" : `${roundSize}강`;
 }
 
+function resolveTournamentMatchRule(
+  baseRule: MatchRule,
+  lateRule: MatchRule | undefined,
+  switchSize: number | undefined,
+  stageSize: number,
+) {
+  const shouldSwitch = switchSize === 0 || (switchSize != null && stageSize <= switchSize);
+  return lateRule && shouldSwitch ? lateRule : baseRule;
+}
+
 function completeAutomaticOpeningWalkover(
   match: LeagueMatch,
   seeding?: "manual" | "seed" | "random",
@@ -504,9 +515,12 @@ function buildTournamentMatches(
     const stageSize = bracketSize / 2 ** ((match.round_number ?? 1) - 1);
     return {
       ...match,
-      match_rule: block.nextMatchRule ?? (block.lateMatchRule && block.ruleSwitchSize && stageSize <= block.ruleSwitchSize
-        ? block.lateMatchRule
-        : block.matchRule),
+      match_rule: block.nextMatchRule ?? resolveTournamentMatchRule(
+        block.matchRule,
+        block.lateMatchRule,
+        block.ruleSwitchSize,
+        stageSize,
+      ),
     };
   });
 }
@@ -638,11 +652,15 @@ function buildUpperLowerTournamentMatches(
     const stageSize = match.bracket === "lower"
       ? bracketSize / 2 ** (match.round_number ?? 1)
       : bracketSize / 2 ** ((match.round_number ?? 1) - 1);
+    const isLower = match.bracket === "lower";
     return {
       ...match,
-      match_rule: block.nextMatchRule ?? (block.lateMatchRule && block.ruleSwitchSize && stageSize <= block.ruleSwitchSize
-        ? block.lateMatchRule
-        : block.matchRule),
+      match_rule: block.nextMatchRule ?? resolveTournamentMatchRule(
+        isLower ? block.lowerMatchRule ?? block.matchRule : block.matchRule,
+        isLower ? block.lowerLateMatchRule : block.lateMatchRule,
+        isLower ? block.lowerRuleSwitchSize : block.ruleSwitchSize,
+        stageSize,
+      ),
     };
   });
 }

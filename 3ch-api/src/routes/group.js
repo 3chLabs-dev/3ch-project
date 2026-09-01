@@ -1018,18 +1018,7 @@ router.get('/group/:id', requireAuth, async (req, res) => {
           ON pending_claim.pre_member_id = pm.id AND pending_claim.status = 'pending'
         LEFT JOIN users pending_user ON pending_user.id = pending_claim.requested_by_id
         WHERE pm.group_id = $1
-          AND (
-            pm.status = 'active'
-            OR (
-              pm.status = 'linked'
-              AND NOT EXISTS (
-                SELECT 1
-                FROM group_members linked_gm
-                WHERE linked_gm.group_id = pm.group_id
-                  AND linked_gm.user_id = pm.linked_user_id
-              )
-            )
-          )
+          AND pm.status = 'active'
       ) AS member_rows
       ORDER BY member_rows.role_order, member_rows.joined_at ASC`;
     const membersResult = await pool.query(membersQuery, [id]);
@@ -1179,7 +1168,6 @@ router.get('/group/:id/pre-members', requireAuth, async (req, res) => {
       [id, userId]
     );
     const myRole = roleResult.rows[0]?.role || null;
-    const canManage = myRole === 'owner' || myRole === 'admin';
     const result = await pool.query(
       `SELECT pm.id, pm.name, pm.division, pm.status, pm.created_at,
               c.id AS claim_id, c.status AS claim_status, c.requested_by_id,
@@ -1188,12 +1176,11 @@ router.get('/group/:id/pre-members', requireAuth, async (req, res) => {
        LEFT JOIN group_member_claims c ON c.pre_member_id = pm.id
        LEFT JOIN users u ON u.id = c.requested_by_id
        WHERE pm.group_id = $1
-         AND pm.status <> 'deleted'
-         AND ($2::boolean OR pm.status = 'active')
+         AND pm.status = 'active'
        ORDER BY CASE WHEN c.status = 'pending' THEN 0 ELSE 1 END,
                 c.requested_at ASC NULLS LAST,
                 pm.created_at ASC`,
-      [id, canManage]
+      [id]
     );
     res.json({ pre_members: result.rows, myRole });
   } catch (error) {
@@ -1282,9 +1269,10 @@ router.patch('/group/:id/pre-members/:preMemberId/claim-request', requireAuth, r
     }
     await client.query('BEGIN');
     const claimResult = await client.query(
-      `SELECT c.id, c.requested_by_id, pm.name, pm.division
+      `SELECT c.id, c.requested_by_id, pm.name, pm.division, u.name AS requested_user_name
        FROM group_member_claims c
        JOIN group_pre_members pm ON pm.id = c.pre_member_id
+       JOIN users u ON u.id = c.requested_by_id
        WHERE pm.id = $1 AND pm.group_id = $2 AND pm.status = 'active' AND c.status = 'pending'
        FOR UPDATE`,
       [req.params.preMemberId, req.params.id]
@@ -1302,10 +1290,11 @@ router.patch('/group/:id/pre-members/:preMemberId/claim-request', requireAuth, r
       await client.query('COMMIT');
       return res.json({ message: '회원 전환 신청을 거절했습니다.' });
     }
-    await client.query(
+    const memberResult = await client.query(
       `INSERT INTO group_members (id, group_id, user_id, role, division)
        VALUES ($1, $2, $3, 'member', $4)
-       ON CONFLICT (group_id, user_id) DO UPDATE SET division = EXCLUDED.division`,
+       ON CONFLICT (group_id, user_id) DO UPDATE SET division = EXCLUDED.division
+       RETURNING id, group_id, user_id, role, division, joined_at`,
       [randomUUID(), req.params.id, claim.requested_by_id, claim.division]
     );
     await client.query(
@@ -1326,7 +1315,10 @@ router.patch('/group/:id/pre-members/:preMemberId/claim-request', requireAuth, r
       [Number(req.user.sub), claim.id]
     );
     await client.query('COMMIT');
-    res.json({ message: '회원 전환을 승인했습니다.' });
+    res.json({
+      message: '회원 전환을 승인했습니다.',
+      member: { ...memberResult.rows[0], name: claim.requested_user_name },
+    });
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Error reviewing group member claim:', error);

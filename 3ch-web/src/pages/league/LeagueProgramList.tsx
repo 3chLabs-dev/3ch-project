@@ -15,6 +15,7 @@ import {
   Tooltip,
   Typography,
   Chip,
+  TextField,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
@@ -295,6 +296,8 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
   const [groupStructureRoundIndex, setGroupStructureRoundIndex] = useState<number | null>(null);
   const [groupStructureMode, setGroupStructureMode] = useState<"group" | "team">("group");
   const [isStructuredReshuffle, setIsStructuredReshuffle] = useState(false);
+  const [isCustomStructureSelected, setIsCustomStructureSelected] = useState(false);
+  const [customStructureCount, setCustomStructureCount] = useState(1);
   const [pendingGroupStructureSizes, setPendingGroupStructureSizes] = useState<number[]>([]);
   const [isFormationStarting, setIsFormationStarting] = useState(false);
   const [formationStartingStep, setFormationStartingStep] = useState(0);
@@ -673,6 +676,13 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
     return programPlayers.length;
   };
   const groupStructureMemberCount = getGroupStructureUnitCount(groupStructureBlock);
+  const buildBalancedStructureSizes = (total: number, count: number) => {
+    const safeCount = Math.max(1, Math.min(total, Math.trunc(count)));
+    return Array.from(
+      { length: safeCount },
+      (_, index) => Math.floor(total / safeCount) + (index < total % safeCount ? 1 : 0),
+    );
+  };
   const groupStructureOptions = useMemo(
     () => {
       const options = generateGroupOptions(groupStructureMemberCount);
@@ -718,6 +728,8 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
         : generateGroupOptions(unitCount)[0]?.groups ?? [unitCount];
     setGroupStructureMode(mode);
     setIsStructuredReshuffle(reshuffle);
+    setIsCustomStructureSelected(false);
+    setCustomStructureCount(currentSizes.length);
     setPendingGroupStructureSizes(currentSizes);
     setGroupStructureRoundIndex(roundIndex);
   };
@@ -726,6 +738,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
     if (isFormationStarting) return;
     setGroupStructureRoundIndex(null);
     setIsStructuredReshuffle(false);
+    setIsCustomStructureSelected(false);
     setPendingGroupStructureSizes([]);
   };
 
@@ -824,6 +837,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
     );
     setGroupStructureRoundIndex(null);
     setIsStructuredReshuffle(false);
+    setIsCustomStructureSelected(false);
     setPendingGroupStructureSizes([]);
     setFormationDialog({ roundIndex, mode: groupStructureMode });
   };
@@ -1692,14 +1706,20 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
           )}
           <Stack spacing={1.25}>
             {groupStructureOptions.map((option) => {
-              const selected = option.groups.length === pendingGroupStructureSizes.length
+              const selected = !isCustomStructureSelected
+                && option.groups.length === pendingGroupStructureSizes.length
                 && option.groups.every((size, index) => size === pendingGroupStructureSizes[index]);
               return (
                 <Box
                   key={option.groups.join("-")}
                   role="button"
                   tabIndex={0}
-                  onClick={() => { if (!isGroupStructureReadOnly) setPendingGroupStructureSizes(option.groups); }}
+                  onClick={() => {
+                    if (!isGroupStructureReadOnly) {
+                      setIsCustomStructureSelected(false);
+                      setPendingGroupStructureSizes(option.groups);
+                    }
+                  }}
                   sx={{
                     border: selected ? "2px solid #3B82F6" : "1px solid #D1D5DB",
                     borderRadius: 1.5,
@@ -1716,6 +1736,44 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
                 </Box>
               );
             })}
+            {!isGroupStructureReadOnly && (
+              <Box
+                sx={{
+                  mt: 0.5,
+                  border: isCustomStructureSelected ? "2px solid #3B82F6" : "1px dashed #94A3B8",
+                  borderRadius: 1.5,
+                  p: 2,
+                  bgcolor: isCustomStructureSelected ? "#EFF6FF" : "#F8FAFC",
+                }}
+              >
+                <Typography sx={{ fontSize: 14, fontWeight: 900 }}>직접 설정</Typography>
+                <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mt: 1.25 }}>
+                  <TextField
+                    type="number"
+                    size="small"
+                    label={`${groupStructureMode === "team" ? "팀" : "조"} 개수`}
+                    value={customStructureCount}
+                    onChange={(event) => {
+                      const count = Math.max(1, Math.min(groupStructureMemberCount, Number(event.target.value) || 1));
+                      const sizes = buildBalancedStructureSizes(groupStructureMemberCount, count);
+                      setCustomStructureCount(count);
+                      setIsCustomStructureSelected(true);
+                      setPendingGroupStructureSizes(sizes);
+                    }}
+                    slotProps={{ htmlInput: { min: 1, max: groupStructureMemberCount, step: 1 } }}
+                    sx={{ width: 130 }}
+                  />
+                  <Typography sx={{ color: "#334155", fontSize: 14, fontWeight: 800 }}>
+                    {customStructureCount}개 {groupStructureMode === "team" ? "팀" : "조"}
+                  </Typography>
+                </Stack>
+                <Typography sx={{ mt: 1.25, color: "#64748B", fontSize: 13, lineHeight: 1.6 }}>
+                  {buildBalancedStructureSizes(groupStructureMemberCount, customStructureCount)
+                    .map((size) => `${size}${groupStructureMode === "group" && groupStructureBlock?.type !== "SINGLES" ? "팀" : "명"}`)
+                    .join(" / ")}
+                </Typography>
+              </Box>
+            )}
           </Stack>
           </>
           )}

@@ -15,6 +15,7 @@ import {
     Pagination,
     Stack,
     CircularProgress,
+    MenuItem,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import SearchIcon from "@mui/icons-material/Search";
@@ -27,6 +28,28 @@ export type MemberRow = {
     division: string;
     name: string;
     is_pre_member?: boolean;
+    role?: string;
+    claim_status?: string | null;
+    joined_at?: string | null;
+};
+
+type MemberSortOption = "division" | "name" | "joinedAt";
+
+const MEMBER_SORT_OPTIONS: Array<{ value: MemberSortOption; label: string }> = [
+    { value: "division", label: "부수 순" },
+    { value: "name", label: "이름 순" },
+    { value: "joinedAt", label: "가입일 순" },
+];
+
+const compareMemberName = (left: MemberRow, right: MemberRow) =>
+    left.name.localeCompare(right.name, "ko", { numeric: true, sensitivity: "base" });
+
+const divisionSortKey = (division?: string | null) => {
+    const normalized = division?.trim() ?? "";
+    if (!normalized) return { category: 2, number: Number.POSITIVE_INFINITY, text: "" };
+    const leadingNumber = normalized.match(/^\d+(?:\.\d+)?/)?.[0];
+    if (leadingNumber) return { category: 0, number: Number(leadingNumber), text: normalized };
+    return { category: 1, number: Number.POSITIVE_INFINITY, text: normalized };
 };
 
 type Props = {
@@ -55,6 +78,7 @@ export default function LoadMembersDialog({
     const [groupName, setGroupName] = useState("클럽 회원");
 
     const [q, setQ] = useState("");
+    const [memberSort, setMemberSort] = useState<MemberSortOption>("division");
     const [page, setPage] = useState(1);
     const [checked, setChecked] = useState<Record<string, boolean>>({});
 
@@ -87,6 +111,9 @@ export default function LoadMembersDialog({
                     division: (m.division ?? "").trim(),
                     name: (m.name ?? m.email ?? "").trim(),
                     is_pre_member: m.is_pre_member,
+                    role: m.role,
+                    claim_status: m.claim_status,
+                    joined_at: m.joined_at,
                 }));
 
                 setRows(memberRows);
@@ -103,11 +130,41 @@ export default function LoadMembersDialog({
 
     const filtered = useMemo(() => {
         const keyword = q.trim().toLowerCase();
-        if (!keyword) return rows;
-        return rows.filter((r) =>
+        const matchingRows = keyword ? rows.filter((r) =>
             `${r.name} ${r.division}`.toLowerCase().includes(keyword)
-        );
-    }, [q, rows]);
+        ) : rows;
+
+        const memberCategory = (member: MemberRow) => {
+            if (member.role === "owner") return 0;
+            if (member.role === "admin") return 1;
+            if (!member.is_pre_member) return 2;
+            return member.claim_status === "pending" ? 3 : 4;
+        };
+
+        return [...matchingRows].sort((left, right) => {
+            const roleDifference = memberCategory(left) - memberCategory(right);
+            if (roleDifference !== 0) return roleDifference;
+
+            if (memberSort === "name") return compareMemberName(left, right);
+            if (memberSort === "joinedAt") {
+                const leftTime = Date.parse(left.joined_at ?? "") || Number.MAX_SAFE_INTEGER;
+                const rightTime = Date.parse(right.joined_at ?? "") || Number.MAX_SAFE_INTEGER;
+                return leftTime - rightTime || compareMemberName(left, right);
+            }
+
+            const leftDivision = divisionSortKey(left.division);
+            const rightDivision = divisionSortKey(right.division);
+            if (leftDivision.category !== rightDivision.category) return leftDivision.category - rightDivision.category;
+            if (leftDivision.category === 0 && leftDivision.number !== rightDivision.number) {
+                return leftDivision.number - rightDivision.number;
+            }
+            if (leftDivision.category === 1) {
+                const textDifference = leftDivision.text.localeCompare(rightDivision.text, "ko", { numeric: true, sensitivity: "base" });
+                if (textDifference !== 0) return textDifference;
+            }
+            return compareMemberName(left, right);
+        });
+    }, [memberSort, q, rows]);
 
     const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
     const view = filtered.slice((page - 1) * pageSize, page * pageSize);
@@ -143,6 +200,7 @@ export default function LoadMembersDialog({
 
     const resetLocal = () => {
         setQ("");
+        setMemberSort("division");
         setPage(1);
         setChecked({});
     };
@@ -201,6 +259,29 @@ export default function LoadMembersDialog({
                         ),
                     }}
                 />
+
+                <TextField
+                    select
+                    label="정렬"
+                    value={memberSort}
+                    onChange={(event) => {
+                        setMemberSort(event.target.value as MemberSortOption);
+                        setPage(1);
+                    }}
+                    size="small"
+                    fullWidth
+                    disabled={loading}
+                    sx={{
+                        mt: 1,
+                        "& .MuiOutlinedInput-root": { borderRadius: 1, bgcolor: "#fff" },
+                    }}
+                >
+                    {MEMBER_SORT_OPTIONS.map((option) => (
+                        <MenuItem key={option.value} value={option.value}>
+                            {option.label}
+                        </MenuItem>
+                    ))}
+                </TextField>
             </DialogTitle>
 
             <Divider />

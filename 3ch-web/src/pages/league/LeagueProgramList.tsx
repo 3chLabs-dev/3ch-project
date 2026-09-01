@@ -100,7 +100,7 @@ type StoredProgramBlock = {
   startMinutes?: number;
   endMinutes?: number;
   advanceCount?: number;
-  finalAdvancementMode?: "top-n" | "upper-lower-groups" | "rank-groups";
+  finalAdvancementMode?: "top-n" | "all" | "upper-lower-groups" | "rank-groups";
 };
 
 type FormationPlayer = {
@@ -1618,7 +1618,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
                         </Stack>
                         {round.description && <Typography sx={{ mt: 0.8, fontSize: 12, color: "#64748B" }}>구성&nbsp;&nbsp;<Box component="span" sx={{ color: "#0F172A", fontWeight: 700 }}>{round.description}</Box></Typography>}
                         <Typography sx={{ mt: 0.8, fontSize: 12, color: "#94A3B8" }}>경기 수&nbsp;&nbsp;<Box component="span" sx={{ color: "#0F172A", fontWeight: 900 }}>{round.matchCount}경기</Box></Typography>
-                        {showAdvancement && <Typography sx={{ mt: 0.7, p: 0.7, borderRadius: 1, bgcolor: "#EFF6FF", color: "#1D4ED8", fontSize: 11, fontWeight: 800 }}>예선 {previousRound.format === "GROUP" ? "각 조 " : ""}상위 {round.advanceCount ?? 2}명 진출</Typography>}
+                        {showAdvancement && <Typography sx={{ mt: 0.7, p: 0.7, borderRadius: 1, bgcolor: "#EFF6FF", color: "#1D4ED8", fontSize: 11, fontWeight: 800 }}>{round.finalAdvancementMode === "all" ? "예선 참가자 모두 진출" : `예선 ${previousRound.format === "GROUP" ? "각 조 " : ""}상위 ${round.advanceCount ?? 2}명 진출`}</Typography>}
                         <Typography sx={{ mt: 0.45, fontSize: 12, color: "#94A3B8" }}>진행시간&nbsp;&nbsp;<Box component="span" sx={{ color: "#0F172A", fontWeight: 900 }}>{formatClockMinutes(roundStart)} ~ {formatClockMinutes(roundEnd)}</Box></Typography>
                       </Box>
                     );

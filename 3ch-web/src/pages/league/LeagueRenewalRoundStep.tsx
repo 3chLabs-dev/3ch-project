@@ -486,21 +486,36 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
     }
 
     if (round.format === "TOURNAMENT") {
+      const mode = round.finalAdvancementMode ?? "top-n";
       return (
         <>
-          <AdvancementCount
-            value={round.advanceCount ?? 2}
-            prefix={advancementPrefix}
-            onChange={(advanceCount) =>
+          <ToggleButtonGroup
+            exclusive
+            fullWidth
+            value={mode}
+            onChange={(_, value: FinalAdvancementMode | null) => {
+              if (!value) return;
               updateRound(index, {
-                advanceCount,
-                finalAdvancementMode: "top-n",
+                finalAdvancementMode: value,
                 sourceRoundId: rounds[index - 1].id,
-              })
-            }
-          />
+              });
+            }}
+            sx={{ mt: 2, "& .MuiToggleButton-root": { flex: 1 } }}
+          >
+            <ToggleButton value="top-n">상위 인원</ToggleButton>
+            <ToggleButton value="all">모두 진출</ToggleButton>
+          </ToggleButtonGroup>
+          {mode === "top-n" && (
+            <AdvancementCount
+              value={round.advanceCount ?? 2}
+              prefix={advancementPrefix}
+              onChange={(advanceCount) => updateRound(index, { advanceCount })}
+            />
+          )}
           <Typography sx={descriptionSx}>
-            {previousFormat === "GROUP"
+            {mode === "all"
+              ? "예선 참가자 모두가 본선에 진출하며, 전체 인원에 맞춰 토너먼트 시작 단계와 BYE를 자동으로 구성합니다."
+              : previousFormat === "GROUP"
               ? "각 조의 상위 순위 참가자가 진출하며, 총 진출 인원에 맞춰 토너먼트 시작 단계와 BYE를 자동으로 구성합니다."
               : "전체 순위의 상위 참가자가 진출하며, 진출 인원에 맞춰 토너먼트 시작 단계와 BYE를 자동으로 구성합니다."}
           </Typography>

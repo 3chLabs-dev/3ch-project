@@ -156,8 +156,12 @@ export function generateProgramBlocks(
   const isSinglesFinal = round.program === "SINGLES" && round.option === "FINAL" && sourceRound?.program === "SINGLES";
   const finalSinglesCount = isSinglesFinal
     ? sourceRound?.format === "GROUP"
-      ? sourceGroupSizes.reduce((sum, size) => sum + Math.min(size, Math.max(1, round.advanceCount ?? 2)), 0)
-      : Math.min(playerCount, Math.max(1, round.advanceCount ?? 2))
+      ? round.finalAdvancementMode === "all"
+        ? sourceGroupSizes.reduce((sum, size) => sum + size, 0)
+        : sourceGroupSizes.reduce((sum, size) => sum + Math.min(size, Math.max(1, round.advanceCount ?? 2)), 0)
+      : round.finalAdvancementMode === "all"
+        ? playerCount
+        : Math.min(playerCount, Math.max(1, round.advanceCount ?? 2))
     : playerCount;
   const roundGroupSizes = isSinglesFinal && round.format === "GROUP"
     ? splitBalanced(finalSinglesCount, configuredGroupSizes.length)

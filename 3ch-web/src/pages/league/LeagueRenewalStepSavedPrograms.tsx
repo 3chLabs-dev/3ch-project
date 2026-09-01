@@ -239,7 +239,7 @@ export default function LeagueRenewalStepSavedPrograms() {
                         )}
                         {round.option === "FINAL" && round.format === "LEAGUE" && (
                           <Typography sx={{ fontSize: 13, color: "#334155" }}>
-                            본선 진출: 이전 라운드 상위 {round.advanceCount ?? 2}명
+                            본선 진출: {round.finalAdvancementMode === "all" ? "모두 진출" : `이전 라운드 상위 ${round.advanceCount ?? 2}명`}
                           </Typography>
                         )}
                         {round.option === "FINAL" && round.format === "GROUP" && (
@@ -248,7 +248,14 @@ export default function LeagueRenewalStepSavedPrograms() {
                               ? "상·하위부"
                               : round.finalAdvancementMode === "rank-groups"
                                 ? "순위대로"
+                                : round.finalAdvancementMode === "all"
+                                  ? "모두 진출"
                                 : `상위 ${round.advanceCount ?? 2}명`}
+                          </Typography>
+                        )}
+                        {round.option === "FINAL" && round.format === "TOURNAMENT" && (
+                          <Typography sx={{ fontSize: 13, color: "#334155" }}>
+                            본선 진출: {round.finalAdvancementMode === "all" ? "모두 진출" : `이전 라운드 상위 ${round.advanceCount ?? 2}명`}
                           </Typography>
                         )}
                         {round.unitClubMode && (

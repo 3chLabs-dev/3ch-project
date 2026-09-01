@@ -1627,6 +1627,7 @@ export function generateProgramRoundMatches(
     : null;
   const finalMode = block.finalAdvancementMode ?? "top-n";
   const advanceCount = Math.max(1, block.advanceCount ?? 2);
+  const advancesEveryone = finalMode === "all";
   const tournamentBuilder = block.tournamentMode === "upper-lower"
     ? buildUpperLowerTournamentMatches
     : buildTournamentMatches;
@@ -1642,16 +1643,18 @@ export function generateProgramRoundMatches(
     : null;
   const finalPools = rankedPools ?? placeholderPools;
   const selectedFinalUnits = finalPools
-    ? Array.from({ length: advanceCount }, (_, rankIndex) => rankIndex)
-        .flatMap((rankIndex) =>
-          finalPools.flatMap((pool) => pool[rankIndex] ? [pool[rankIndex]] : [])
-        )
+    ? advancesEveryone
+      ? finalPools.flat()
+      : Array.from({ length: advanceCount }, (_, rankIndex) => rankIndex)
+          .flatMap((rankIndex) =>
+            finalPools.flatMap((pool) => pool[rankIndex] ? [pool[rankIndex]] : [])
+          )
     : [];
 
   if (block.format === "TOURNAMENT") {
     if (isFinalRound) {
       const bracketCount = block.tournamentBracketCount ?? 1;
-      const qualifiedPools = finalPools?.map((pool) => pool.slice(0, advanceCount));
+      const qualifiedPools = finalPools?.map((pool) => advancesEveryone ? pool : pool.slice(0, advanceCount));
       const crossGroupSeedOrder =
         bracketCount === 1 && qualifiedPools
           ? buildCrossGroupTournamentSeedOrder(qualifiedPools)

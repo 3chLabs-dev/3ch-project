@@ -194,6 +194,7 @@ export type TournamentMode =
 
 export type FinalAdvancementMode =
   | "top-n"
+  | "all"
   | "upper-lower-groups"
   | "rank-groups";
 

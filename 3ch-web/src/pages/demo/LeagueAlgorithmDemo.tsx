@@ -487,20 +487,35 @@ function RoundDivisionEditor({
 
       {roundIndex > 0 && round.option === "FINAL" && round.format === "TOURNAMENT" && (
         <>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "16px" }}>
-            <strong>{advancementPrefix}</strong>
-            <AdvancementStepper
-              value={round.advanceCount ?? 2}
-              onChange={(advanceCount) => update({
-                advanceCount,
-                finalAdvancementMode: "top-n",
+          <ToggleButtonGroup
+            exclusive
+            fullWidth
+            value={round.finalAdvancementMode ?? "top-n"}
+            onChange={(_, selectedValue: FinalAdvancementMode | null) => {
+              if (selectedValue) update({
+                finalAdvancementMode: selectedValue,
                 sourceRoundId: rounds[roundIndex - 1].id,
-              })}
-            />
-            <strong>명</strong>
-          </div>
+              });
+            }}
+            sx={{ mt: 2 }}
+          >
+            <ToggleButton value="top-n">상위 인원</ToggleButton>
+            <ToggleButton value="all">모두 진출</ToggleButton>
+          </ToggleButtonGroup>
+          {(round.finalAdvancementMode ?? "top-n") === "top-n" && (
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "12px" }}>
+              <strong>{advancementPrefix}</strong>
+              <AdvancementStepper
+                value={round.advanceCount ?? 2}
+                onChange={(advanceCount) => update({ advanceCount })}
+              />
+              <strong>명</strong>
+            </div>
+          )}
           <p style={helperStyle}>
-            {previousFormat === "GROUP"
+            {(round.finalAdvancementMode ?? "top-n") === "all"
+              ? "예선 참가자 모두가 본선에 진출하며, 전체 인원에 맞춰 토너먼트 시작 단계와 BYE를 자동으로 구성합니다."
+              : previousFormat === "GROUP"
               ? "각 조의 상위 순위 참가자가 진출하며, 총 진출 인원에 맞춰 토너먼트 시작 단계와 BYE를 자동으로 구성합니다."
               : "전체 순위의 상위 참가자가 진출하며, 진출 인원에 맞춰 토너먼트 시작 단계와 BYE를 자동으로 구성합니다."}
           </p>

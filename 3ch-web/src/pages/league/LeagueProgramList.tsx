@@ -683,6 +683,12 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
       (_, index) => Math.floor(total / safeCount) + (index < total % safeCount ? 1 : 0),
     );
   };
+  const selectCustomStructureCount = (count: number) => {
+    const safeCount = Math.max(1, Math.min(groupStructureMemberCount, Math.trunc(count)));
+    setCustomStructureCount(safeCount);
+    setIsCustomStructureSelected(true);
+    setPendingGroupStructureSizes(buildBalancedStructureSizes(groupStructureMemberCount, safeCount));
+  };
   const groupStructureOptions = useMemo(
     () => {
       const options = generateGroupOptions(groupStructureMemberCount);
@@ -1747,24 +1753,41 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
                 }}
               >
                 <Typography sx={{ fontSize: 14, fontWeight: 900 }}>직접 설정</Typography>
-                <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mt: 1.25 }}>
+                <Stack direction="row" spacing={0.7} alignItems="center" sx={{ mt: 1.25 }}>
+                  <IconButton
+                    aria-label={`${groupStructureMode === "team" ? "팀" : "조"} 개수 감소`}
+                    disabled={customStructureCount <= 1}
+                    onClick={() => selectCustomStructureCount(customStructureCount - 1)}
+                    sx={{ width: 36, height: 36, border: "1px solid #90CAF9", color: "#1976D2", fontSize: 21 }}
+                  >
+                    −
+                  </IconButton>
                   <TextField
-                    type="number"
+                    type="text"
                     size="small"
-                    label={`${groupStructureMode === "team" ? "팀" : "조"} 개수`}
                     value={customStructureCount}
+                    onFocus={(event) => event.currentTarget.select()}
                     onChange={(event) => {
-                      const count = Math.max(1, Math.min(groupStructureMemberCount, Number(event.target.value) || 1));
-                      const sizes = buildBalancedStructureSizes(groupStructureMemberCount, count);
-                      setCustomStructureCount(count);
-                      setIsCustomStructureSelected(true);
-                      setPendingGroupStructureSizes(sizes);
+                      const digits = event.target.value.replace(/\D/g, "");
+                      if (digits) selectCustomStructureCount(Number(digits));
                     }}
-                    slotProps={{ htmlInput: { min: 1, max: groupStructureMemberCount, step: 1 } }}
-                    sx={{ width: 130 }}
+                    slotProps={{ htmlInput: { inputMode: "numeric", "aria-label": `${groupStructureMode === "team" ? "팀" : "조"} 개수` } }}
+                    sx={{
+                      width: 66,
+                      "& .MuiInputBase-root": { height: 36, borderRadius: 1, bgcolor: "#FFF" },
+                      "& input": { p: 0, textAlign: "center", fontWeight: 800 },
+                    }}
                   />
-                  <Typography sx={{ color: "#334155", fontSize: 14, fontWeight: 800 }}>
-                    {customStructureCount}개 {groupStructureMode === "team" ? "팀" : "조"}
+                  <IconButton
+                    aria-label={`${groupStructureMode === "team" ? "팀" : "조"} 개수 증가`}
+                    disabled={customStructureCount >= groupStructureMemberCount}
+                    onClick={() => selectCustomStructureCount(customStructureCount + 1)}
+                    sx={{ width: 36, height: 36, border: "1px solid #90CAF9", color: "#1976D2", fontSize: 21 }}
+                  >
+                    +
+                  </IconButton>
+                  <Typography sx={{ ml: 0.5, color: "#334155", fontSize: 14, fontWeight: 800 }}>
+                    개 {groupStructureMode === "team" ? "팀" : "조"}
                   </Typography>
                 </Stack>
                 <Typography sx={{ mt: 1.25, color: "#64748B", fontSize: 13, lineHeight: 1.6 }}>

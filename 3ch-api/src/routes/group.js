@@ -1112,6 +1112,7 @@ const defaultRankingPointRules = {
 };
 
 const rankingSeasonSchema = z.object({
+  name: z.string().trim().max(50).optional().default(''),
   start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   auto_renew: z.boolean().optional().default(false),
@@ -2453,7 +2454,7 @@ router.post('/group/:id/ranking/seasons', requireAuth, requireGroupPermission('r
     if (overlap.rowCount > 0) {
       return res.status(409).json({ message: '기존 시즌과 기간이 겹칩니다.' });
     }
-    const name = `${payload.start_date.replaceAll('-', '.')} ~ ${payload.end_date.replaceAll('-', '.')}`;
+    const name = payload.name || `${payload.start_date.replaceAll('-', '.')} ~ ${payload.end_date.replaceAll('-', '.')}`;
     const result = await pool.query(
       `INSERT INTO group_ranking_seasons
          (group_id, name, start_date, end_date, auto_renew, point_rules, created_by_id)
@@ -2485,7 +2486,7 @@ router.put('/group/:id/ranking/seasons/:seasonId', requireAuth, requireGroupPerm
     if (overlap.rowCount > 0) {
       return res.status(409).json({ message: '기존 시즌과 기간이 겹칩니다.' });
     }
-    const name = `${payload.start_date.replaceAll('-', '.')} ~ ${payload.end_date.replaceAll('-', '.')}`;
+    const name = payload.name || `${payload.start_date.replaceAll('-', '.')} ~ ${payload.end_date.replaceAll('-', '.')}`;
     const result = await pool.query(
       `UPDATE group_ranking_seasons
           SET name = $1,

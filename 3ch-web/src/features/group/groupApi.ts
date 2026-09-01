@@ -915,8 +915,8 @@ export const groupApi = baseApi.injectEndpoints({
       providesTags: (_result, _error, groupId) => [{ type: "Group", id: `ranking-seasons-${groupId}` }],
     }),
 
-    createGroupRankingSeason: builder.mutation<{ message: string; season: GroupRankingSeason }, { groupId: string; startDate: string; endDate: string; autoRenew: boolean; pointRules: GroupRankingPointRules }>({
-      async queryFn({ groupId, startDate, endDate, autoRenew, pointRules }, api, _extraOptions, fetchWithBQ) {
+    createGroupRankingSeason: builder.mutation<{ message: string; season: GroupRankingSeason }, { groupId: string; name?: string; startDate: string; endDate: string; autoRenew: boolean; pointRules: GroupRankingPointRules }>({
+      async queryFn({ groupId, name, startDate, endDate, autoRenew, pointRules }, api, _extraOptions, fetchWithBQ) {
         const token = (api.getState() as RootState).auth?.token;
         const profile = getLocalDevProfileByToken(token);
         const group = findLocalDevGroup(groupId);
@@ -924,7 +924,7 @@ export const groupApi = baseApi.injectEndpoints({
           const seasons = readLocalRankingSeasons(group.id);
           const season: GroupRankingSeason = {
             id: `local-season-${Date.now()}`,
-            name: `${startDate.slice(0, 4)}년 시즌`,
+            name: name?.trim() || `${startDate.replaceAll("-", ".")} ~ ${endDate.replaceAll("-", ".")}`,
             start_date: startDate,
             end_date: endDate,
             auto_renew: autoRenew,
@@ -937,7 +937,7 @@ export const groupApi = baseApi.injectEndpoints({
         const result = await fetchWithBQ({
           url: `/group/${groupId}/ranking/seasons`,
           method: "POST",
-          body: { start_date: startDate, end_date: endDate, auto_renew: autoRenew, point_rules: pointRules },
+          body: { name: name?.trim() || "", start_date: startDate, end_date: endDate, auto_renew: autoRenew, point_rules: pointRules },
         });
         return result.error ? { error: result.error } : { data: result.data as { message: string; season: GroupRankingSeason } };
       },
@@ -975,8 +975,8 @@ export const groupApi = baseApi.injectEndpoints({
       ],
     }),
 
-    updateGroupRankingSeason: builder.mutation<{ message: string; season: GroupRankingSeason }, { groupId: string; seasonId: string; startDate: string; endDate: string; autoRenew: boolean; pointRules: GroupRankingPointRules }>({
-      async queryFn({ groupId, seasonId, startDate, endDate, autoRenew, pointRules }, api, _extraOptions, fetchWithBQ) {
+    updateGroupRankingSeason: builder.mutation<{ message: string; season: GroupRankingSeason }, { groupId: string; seasonId: string; name?: string; startDate: string; endDate: string; autoRenew: boolean; pointRules: GroupRankingPointRules }>({
+      async queryFn({ groupId, seasonId, name, startDate, endDate, autoRenew, pointRules }, api, _extraOptions, fetchWithBQ) {
         const token = (api.getState() as RootState).auth?.token;
         const profile = getLocalDevProfileByToken(token);
         const group = findLocalDevGroup(groupId);
@@ -986,6 +986,7 @@ export const groupApi = baseApi.injectEndpoints({
           if (index < 0) return { error: { status: 404, data: { message: "시즌을 찾을 수 없습니다." } } };
           const season = {
             ...seasons[index],
+            name: name?.trim() || `${startDate.replaceAll("-", ".")} ~ ${endDate.replaceAll("-", ".")}`,
             start_date: startDate,
             end_date: endDate,
             auto_renew: autoRenew,
@@ -998,7 +999,7 @@ export const groupApi = baseApi.injectEndpoints({
         const result = await fetchWithBQ({
           url: `/group/${groupId}/ranking/seasons/${seasonId}`,
           method: "PUT",
-          body: { start_date: startDate, end_date: endDate, auto_renew: autoRenew, point_rules: pointRules },
+          body: { name: name?.trim() || "", start_date: startDate, end_date: endDate, auto_renew: autoRenew, point_rules: pointRules },
         });
         return result.error ? { error: result.error } : { data: result.data as { message: string; season: GroupRankingSeason } };
       },

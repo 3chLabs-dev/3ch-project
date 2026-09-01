@@ -24,6 +24,7 @@ export default function GroupRankingPage() {
   const [selectedYear, setSelectedYear] = useState<number | undefined>(undefined);
   const [selectedSeasonId, setSelectedSeasonId] = useState<string | undefined>(undefined);
   const [seasonDialogOpen, setSeasonDialogOpen] = useState(false);
+  const [editingSeasonId, setEditingSeasonId] = useState<string | undefined>(undefined);
 
   const { data, isLoading } = useGetGroupPointRankingQuery(
     { groupId, year: selectedYear, seasonId: selectedSeasonId, scope: "club" },
@@ -102,7 +103,11 @@ export default function GroupRankingPage() {
         {canManage && (
           <IconButton
             size="small"
-            onClick={() => setSeasonDialogOpen(true)}
+            onClick={() => {
+              const [selectionKind, selectionId] = activeSelectValue.split(":");
+              setEditingSeasonId(selectionKind === "season" ? selectionId : undefined);
+              setSeasonDialogOpen(true);
+            }}
             aria-label="시즌 설정"
             title="시즌 설정"
             sx={{ border: "1px solid", borderColor: "#D1D5DB", borderRadius: 1 }}
@@ -120,8 +125,11 @@ export default function GroupRankingPage() {
       <GroupRankingSeasonDialog
         open={seasonDialogOpen}
         groupId={groupId}
-        seasonId={selectedSeasonId ?? data.season_id ?? undefined}
-        onClose={() => setSeasonDialogOpen(false)}
+        seasonId={editingSeasonId}
+        onClose={() => {
+          setSeasonDialogOpen(false);
+          setEditingSeasonId(undefined);
+        }}
         onCreated={(seasonId) => { setSelectedSeasonId(seasonId); setSelectedYear(undefined); }}
       />
     </Stack>

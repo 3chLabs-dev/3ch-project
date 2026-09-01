@@ -13,6 +13,8 @@ import {
   IconButton,
   Radio,
   RadioGroup,
+  MenuItem,
+  Select,
   Stack,
   TextField,
   Typography,
@@ -81,10 +83,15 @@ const dateOnly = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
+const periodSeasonName = (startDate: string, endDate: string) =>
+  `${startDate.replaceAll("-", ".")} ~ ${endDate.replaceAll("-", ".")}`;
+
 export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onClose, onCreated }: Props) {
   const today = useMemo(() => dateOnly(new Date()), []);
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState("");
+  const [seasonName, setSeasonName] = useState("");
+  const [dialogSeasonId, setDialogSeasonId] = useState("");
   const [autoRenew, setAutoRenew] = useState(false);
   const [pointRules, setPointRules] = useState<GroupRankingPointRules>(DEFAULT_POINT_RULES);
   const [error, setError] = useState("");
@@ -92,13 +99,20 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
   const [createSeason, { isLoading }] = useCreateGroupRankingSeasonMutation();
   const [updateSeason, { isLoading: isUpdating }] = useUpdateGroupRankingSeasonMutation();
   const [deleteSeason, { isLoading: isDeleting }] = useDeleteGroupRankingSeasonMutation();
-  const selectedSeason = data?.seasons.find((season) => season.id === seasonId);
+  const selectedSeason = data?.seasons.find((season) => season.id === dialogSeasonId);
+
+  useEffect(() => {
+    if (open) setDialogSeasonId(seasonId || "");
+  }, [open, seasonId]);
 
   useEffect(() => {
     if (!open) return;
     if (selectedSeason) {
       setStartDate(selectedSeason.start_date.slice(0, 10));
       setEndDate(selectedSeason.end_date.slice(0, 10));
+      const selectedStartDate = selectedSeason.start_date.slice(0, 10);
+      const selectedEndDate = selectedSeason.end_date.slice(0, 10);
+      setSeasonName(selectedSeason.name === periodSeasonName(selectedStartDate, selectedEndDate) ? "" : selectedSeason.name);
       setAutoRenew(Boolean(selectedSeason.auto_renew));
       const savedRules = selectedSeason.point_rules;
       setPointRules(savedRules
@@ -124,6 +138,7 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
     } else {
       setStartDate(today);
       setEndDate("");
+      setSeasonName("");
       setAutoRenew(false);
       setPointRules(DEFAULT_POINT_RULES);
     }
@@ -180,7 +195,7 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
     if (endDate < startDate) return setError("종료일은 시작일보다 빠를 수 없습니다.");
     try {
       setError("");
-      const payload = { groupId, startDate, endDate, autoRenew, pointRules };
+      const payload = { groupId, name: seasonName.trim(), startDate, endDate, autoRenew, pointRules };
       const result = selectedSeason
         ? await updateSeason({ ...payload, seasonId: selectedSeason.id }).unwrap()
         : await createSeason(payload).unwrap();
@@ -191,12 +206,44 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
     }
   };
 
+  const handleDeleteSeason = async (deletedSeasonId: string) => {
+    await deleteSeason({ groupId, seasonId: deletedSeasonId }).unwrap();
+    if (dialogSeasonId === deletedSeasonId) setDialogSeasonId("");
+  };
+
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs" PaperProps={{ sx: { borderRadius: 2 } }}>
-      <DialogTitle sx={{ fontWeight: 900, pr: 6 }}>시즌 설정</DialogTitle>
+      <DialogTitle sx={{ fontWeight: 900, pr: 6 }}>순위 시즌 설정</DialogTitle>
       <IconButton onClick={onClose} sx={{ position: "absolute", right: 10, top: 10 }}><CloseIcon /></IconButton>
       <DialogContent dividers>
         <Stack spacing={2.25}>
+          <Box>
+            <Typography sx={{ fontSize: 15, fontWeight: 900, mb: 1 }}>시즌 선택</Typography>
+            <Select
+              value={dialogSeasonId}
+              onChange={(event) => setDialogSeasonId(String(event.target.value))}
+              displayEmpty
+              size="small"
+              fullWidth
+              inputProps={{ "aria-label": "설정할 시즌 선택" }}
+            >
+              <MenuItem value="">새 시즌 설정</MenuItem>
+              {data?.seasons.map((season) => (
+                <MenuItem key={season.id} value={season.id}>{season.name}</MenuItem>
+              ))}
+            </Select>
+          </Box>
+          <Box>
+            <Typography sx={{ fontSize: 15, fontWeight: 900, mb: 1 }}>시즌명</Typography>
+            <TextField
+              value={seasonName}
+              onChange={(event) => setSeasonName(event.target.value)}
+              placeholder="미입력 시 기간으로 표시됩니다."
+              inputProps={{ maxLength: 50, "aria-label": "시즌명" }}
+              size="small"
+              fullWidth
+            />
+          </Box>
           <Typography sx={{ fontSize: 15, fontWeight: 900 }}>기간 설정</Typography>
           <Stack direction="row" spacing={1} alignItems="center">
             <TextField type="date" size="small" fullWidth value={startDate} onChange={(event) => setStartDate(event.target.value)} inputProps={{ "aria-label": "시작일" }} />
@@ -364,7 +411,7 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
                 {data?.seasons.map((season) => (
                   <Stack key={season.id} direction="row" alignItems="center" sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1, pl: 1.5, pr: 0.5, py: 0.5 }}>
                     <Box sx={{ flex: 1 }}><Typography sx={{ fontSize: 13 }}>{season.name}</Typography>{season.auto_renew && <Typography sx={{ fontSize: 11, color: "primary.main", fontWeight: 700 }}>자동 연장</Typography>}</Box>
-                    <IconButton size="small" color="error" disabled={isDeleting} onClick={() => deleteSeason({ groupId, seasonId: season.id })}><DeleteOutlineIcon fontSize="small" /></IconButton>
+                    <IconButton size="small" color="error" disabled={isDeleting} onClick={() => void handleDeleteSeason(season.id)}><DeleteOutlineIcon fontSize="small" /></IconButton>
                   </Stack>
                 ))}
               </Stack>

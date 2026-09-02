@@ -262,7 +262,14 @@ function TournamentResultDialog({ open, match, rule, leagueId, onClose }: {
   );
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs" PaperProps={{ sx: { borderRadius: 3 } }}>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      fullWidth
+      maxWidth="xs"
+      sx={{ zIndex: 11000 }}
+      PaperProps={{ sx: { borderRadius: 3 } }}
+    >
       <DialogContent sx={{ p: 2 }}>
         <Stack direction="row" alignItems="center" sx={{ mb: 1 }}>
           <Box sx={{ flex: 1 }}>

@@ -13,18 +13,14 @@ import {
   Typography,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import SettingsIcon from "@mui/icons-material/Settings";
 import type { PointRankingRow } from "../../features/group/groupApi";
 import { useGetGroupPointRankingQuery } from "../../features/group/groupApi";
-import GroupRankingSeasonDialog from "./GroupRankingSeasonDialog";
 
 export default function GroupRankingPage() {
   const { id: groupId = "" } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [selectedYear, setSelectedYear] = useState<number | undefined>(undefined);
   const [selectedSeasonId, setSelectedSeasonId] = useState<string | undefined>(undefined);
-  const [seasonDialogOpen, setSeasonDialogOpen] = useState(false);
-  const [editingSeasonId, setEditingSeasonId] = useState<string | undefined>(undefined);
 
   const { data, isLoading } = useGetGroupPointRankingQuery(
     { groupId, year: selectedYear, seasonId: selectedSeasonId, scope: "club" },
@@ -33,6 +29,9 @@ export default function GroupRankingPage() {
 
   const activeYear = selectedYear ?? data?.year ?? new Date().getFullYear();
   const yearOptions = data?.available_years?.length ? data.available_years : [activeYear];
+  const standaloneYearOptions = yearOptions.filter((year) => !data?.seasons.some(
+    (season) => season.is_default && season.start_date.startsWith(`${year}-`),
+  ));
   const activeSelectValue = selectedSeasonId
     ? `season:${selectedSeasonId}`
     : selectedYear
@@ -94,26 +93,23 @@ export default function GroupRankingPage() {
           {data.seasons.map((season) => (
             <MenuItem key={season.id} value={`season:${season.id}`} sx={{ fontSize: 13 }}>{season.name}</MenuItem>
           ))}
-          {yearOptions.map((year) => (
+          {standaloneYearOptions.map((year) => (
             <MenuItem key={year} value={`year:${year}`} sx={{ fontSize: 13 }}>
               {year}년
             </MenuItem>
           ))}
         </Select>
         {canManage && (
-          <IconButton
+          <Button
             size="small"
-            onClick={() => {
-              const [selectionKind, selectionId] = activeSelectValue.split(":");
-              setEditingSeasonId(selectionKind === "season" ? selectionId : undefined);
-              setSeasonDialogOpen(true);
-            }}
+            variant="outlined"
+            onClick={() => navigate(`/club/${groupId}/ranking/seasons`)}
             aria-label="시즌 설정"
             title="시즌 설정"
-            sx={{ border: "1px solid", borderColor: "#D1D5DB", borderRadius: 1 }}
+            sx={{ borderRadius: 1, minWidth: 0, px: 1.25, whiteSpace: "nowrap", fontWeight: 800 }}
           >
-            <SettingsIcon fontSize="small" />
-          </IconButton>
+            시즌 설정
+          </Button>
         )}
       </Stack>
 
@@ -122,16 +118,6 @@ export default function GroupRankingPage() {
 
       <SectionHeader title="대회" onOpenDetail={handleOpenDetail} />
       <PointRankingList rows={data.tournament.rankings} currentUserId={data.currentUserId} />
-      <GroupRankingSeasonDialog
-        open={seasonDialogOpen}
-        groupId={groupId}
-        seasonId={editingSeasonId}
-        onClose={() => {
-          setSeasonDialogOpen(false);
-          setEditingSeasonId(undefined);
-        }}
-        onCreated={(seasonId) => { setSelectedSeasonId(seasonId); setSelectedYear(undefined); }}
-      />
     </Stack>
   );
 }

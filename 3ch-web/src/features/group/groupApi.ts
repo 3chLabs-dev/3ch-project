@@ -313,6 +313,7 @@ export interface GroupRankingSeason {
   start_date: string;
   end_date: string;
   auto_renew?: boolean;
+  is_default?: boolean;
   point_rules?: GroupRankingPointRules;
   created_at?: string;
 }
@@ -393,10 +394,11 @@ function readLocalRankingSeasons(groupId: string): GroupRankingSeason[] {
   const year = new Date().getFullYear();
   return [{
     id: `local-season-${year}`,
-    name: `${year}년`,
+    name: `${year} 시즌`,
     start_date: `${year}-01-01`,
     end_date: `${year}-12-31`,
     auto_renew: false,
+    is_default: true,
     point_rules: LOCAL_DEFAULT_POINT_RULES,
     created_at: `${year}-01-01T00:00:00.000Z`,
   }];
@@ -924,10 +926,11 @@ export const groupApi = baseApi.injectEndpoints({
           const seasons = readLocalRankingSeasons(group.id);
           const season: GroupRankingSeason = {
             id: `local-season-${Date.now()}`,
-            name: name?.trim() || `${startDate.replaceAll("-", ".")} ~ ${endDate.replaceAll("-", ".")}`,
+            name: name?.trim() || `${startDate.replaceAll("-", ".")} ~ ${endDate.replaceAll("-", ".")} 시즌`,
             start_date: startDate,
             end_date: endDate,
             auto_renew: autoRenew,
+            is_default: false,
             point_rules: pointRules,
             created_at: new Date().toISOString(),
           };
@@ -986,7 +989,7 @@ export const groupApi = baseApi.injectEndpoints({
           if (index < 0) return { error: { status: 404, data: { message: "시즌을 찾을 수 없습니다." } } };
           const season = {
             ...seasons[index],
-            name: name?.trim() || `${startDate.replaceAll("-", ".")} ~ ${endDate.replaceAll("-", ".")}`,
+            name: name?.trim() || `${startDate.replaceAll("-", ".")} ~ ${endDate.replaceAll("-", ".")} 시즌`,
             start_date: startDate,
             end_date: endDate,
             auto_renew: autoRenew,

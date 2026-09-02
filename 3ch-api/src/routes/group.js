@@ -11,7 +11,7 @@ const {
   getGroupRankingDetail,
   updateGroupRankingSettings,
 } = require('../services/groupRanking');
-const { getPointRanking } = require('../services/pointRanking');
+const { getPointRanking, ensureDefaultRankingSeasons } = require('../services/pointRanking');
 
 const router = express.Router();
 
@@ -2424,11 +2424,12 @@ router.get('/group/:id/ranking/seasons', requireAuth, async (req, res) => {
       [groupId, userId],
     );
     if (accessCheck.rowCount === 0) return res.status(403).json({ message: '권한이 없습니다.' });
+    await ensureDefaultRankingSeasons(groupId);
     const result = await pool.query(
-      `SELECT id, name, start_date, end_date, auto_renew, point_rules, created_at
+      `SELECT id, name, start_date, end_date, auto_renew, is_default, point_rules, created_at
          FROM group_ranking_seasons
         WHERE group_id = $1
-        ORDER BY start_date DESC, created_at DESC`,
+        ORDER BY start_date DESC, is_default ASC, created_at DESC`,
       [groupId],
     );
     return res.json({ seasons: result.rows, myRole: accessCheck.rows[0].role });
@@ -2446,6 +2447,7 @@ router.post('/group/:id/ranking/seasons', requireAuth, requireGroupPermission('r
     const overlap = await pool.query(
       `SELECT 1 FROM group_ranking_seasons
         WHERE group_id = $1
+          AND is_default = false
           AND start_date <= $3::date
           AND end_date >= $2::date
         LIMIT 1`,
@@ -2454,12 +2456,12 @@ router.post('/group/:id/ranking/seasons', requireAuth, requireGroupPermission('r
     if (overlap.rowCount > 0) {
       return res.status(409).json({ message: '기존 시즌과 기간이 겹칩니다.' });
     }
-    const name = payload.name || `${payload.start_date.replaceAll('-', '.')} ~ ${payload.end_date.replaceAll('-', '.')}`;
+    const name = payload.name || `${payload.start_date.replaceAll('-', '.')} ~ ${payload.end_date.replaceAll('-', '.')} 시즌`;
     const result = await pool.query(
       `INSERT INTO group_ranking_seasons
          (group_id, name, start_date, end_date, auto_renew, point_rules, created_by_id)
        VALUES ($1, $2, $3::date, $4::date, $5, $6::jsonb, $7)
-       RETURNING id, name, start_date, end_date, auto_renew, point_rules, created_at`,
+       RETURNING id, name, start_date, end_date, auto_renew, is_default, point_rules, created_at`,
       [groupId, name, payload.start_date, payload.end_date, payload.auto_renew, JSON.stringify(payload.point_rules), userId],
     );
     return res.status(201).json({ message: '시즌 기간이 설정되었습니다.', season: result.rows[0] });
@@ -2474,29 +2476,40 @@ router.put('/group/:id/ranking/seasons/:seasonId', requireAuth, requireGroupPerm
   try {
     const { id: groupId, seasonId } = req.params;
     const payload = rankingSeasonSchema.parse(req.body);
-    const overlap = await pool.query(
-      `SELECT 1 FROM group_ranking_seasons
-        WHERE group_id = $1
-          AND id <> $2
-          AND start_date <= $4::date
-          AND end_date >= $3::date
-        LIMIT 1`,
-      [groupId, seasonId, payload.start_date, payload.end_date],
+    const existingSeason = await pool.query(
+      `SELECT is_default, start_date FROM group_ranking_seasons WHERE id = $1 AND group_id = $2`,
+      [seasonId, groupId],
     );
-    if (overlap.rowCount > 0) {
-      return res.status(409).json({ message: '기존 시즌과 기간이 겹칩니다.' });
+    if (!existingSeason.rowCount) return res.status(404).json({ message: '시즌을 찾을 수 없습니다.' });
+    const isDefaultSeason = Boolean(existingSeason.rows[0].is_default);
+    if (!isDefaultSeason) {
+      const overlap = await pool.query(
+        `SELECT 1 FROM group_ranking_seasons
+          WHERE group_id = $1
+            AND id <> $2
+            AND is_default = false
+            AND start_date <= $4::date
+            AND end_date >= $3::date
+          LIMIT 1`,
+        [groupId, seasonId, payload.start_date, payload.end_date],
+      );
+      if (overlap.rowCount > 0) {
+        return res.status(409).json({ message: '기존 시즌과 기간이 겹칩니다.' });
+      }
     }
-    const name = payload.name || `${payload.start_date.replaceAll('-', '.')} ~ ${payload.end_date.replaceAll('-', '.')}`;
+    const name = isDefaultSeason
+      ? `${String(existingSeason.rows[0].start_date).slice(0, 4)} 시즌`
+      : (payload.name || `${payload.start_date.replaceAll('-', '.')} ~ ${payload.end_date.replaceAll('-', '.')} 시즌`);
     const result = await pool.query(
       `UPDATE group_ranking_seasons
           SET name = $1,
-              start_date = $2::date,
-              end_date = $3::date,
-              auto_renew = $4,
+              start_date = CASE WHEN is_default THEN start_date ELSE $2::date END,
+              end_date = CASE WHEN is_default THEN end_date ELSE $3::date END,
+              auto_renew = CASE WHEN is_default THEN false ELSE $4 END,
               point_rules = $5::jsonb,
               updated_at = NOW()
         WHERE id = $6 AND group_id = $7
-        RETURNING id, name, start_date, end_date, auto_renew, point_rules, created_at`,
+        RETURNING id, name, start_date, end_date, auto_renew, is_default, point_rules, created_at`,
       [name, payload.start_date, payload.end_date, payload.auto_renew, JSON.stringify(payload.point_rules), seasonId, groupId],
     );
     if (result.rowCount === 0) return res.status(404).json({ message: '시즌을 찾을 수 없습니다.' });
@@ -2511,8 +2524,16 @@ router.put('/group/:id/ranking/seasons/:seasonId', requireAuth, requireGroupPerm
 router.delete('/group/:id/ranking/seasons/:seasonId', requireAuth, requireGroupPermission('ranking'), async (req, res) => {
   try {
     const { id: groupId, seasonId } = req.params;
+    const existing = await pool.query(
+      `SELECT is_default FROM group_ranking_seasons WHERE id = $1 AND group_id = $2`,
+      [seasonId, groupId],
+    );
+    if (!existing.rowCount) return res.status(404).json({ message: '시즌을 찾을 수 없습니다.' });
+    if (existing.rows[0].is_default) return res.status(400).json({ message: '기본 시즌은 삭제할 수 없습니다.' });
     const result = await pool.query(
-      `DELETE FROM group_ranking_seasons WHERE id = $1 AND group_id = $2 RETURNING id`,
+      `DELETE FROM group_ranking_seasons
+        WHERE id = $1 AND group_id = $2 AND is_default = false
+        RETURNING id`,
       [seasonId, groupId],
     );
     if (result.rowCount === 0) return res.status(404).json({ message: '시즌을 찾을 수 없습니다.' });

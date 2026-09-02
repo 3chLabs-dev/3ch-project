@@ -224,7 +224,7 @@ async function ensureAutoRenewedSeasons(groupId) {
     const latestResult = await pool.query(
       `SELECT id, start_date, end_date, auto_renew, point_rules, created_by_id
          FROM group_ranking_seasons
-        WHERE group_id = $1
+        WHERE group_id = $1 AND is_default = false
         ORDER BY end_date DESC, created_at DESC
         LIMIT 1`,
       [groupId],
@@ -239,7 +239,8 @@ async function ensureAutoRenewedSeasons(groupId) {
     const nextEnd = addUtcDays(nextStart, durationDays);
     const overlap = await pool.query(
       `SELECT 1 FROM group_ranking_seasons
-        WHERE group_id = $1 AND start_date <= $3::date AND end_date >= $2::date
+        WHERE group_id = $1 AND is_default = false
+          AND start_date <= $3::date AND end_date >= $2::date
         LIMIT 1`,
       [groupId, nextStart, nextEnd],
     );
@@ -254,6 +255,45 @@ async function ensureAutoRenewedSeasons(groupId) {
   }
 }
 
+async function ensureDefaultRankingSeasons(groupId) {
+  const groupResult = await pool.query(
+    `SELECT created_at, created_by_id FROM groups WHERE id = $1`,
+    [groupId],
+  );
+  const group = groupResult.rows[0];
+  if (!group) return;
+
+  const firstYear = new Date(group.created_at).getUTCFullYear();
+  const currentYear = new Date().getUTCFullYear();
+  let inheritedRules = DEFAULT_POINT_RULES;
+
+  for (let year = firstYear; year <= currentYear; year += 1) {
+    const existing = await pool.query(
+      `SELECT point_rules
+         FROM group_ranking_seasons
+        WHERE group_id = $1
+          AND is_default = true
+          AND EXTRACT(YEAR FROM start_date) = $2
+        LIMIT 1`,
+      [groupId, year],
+    );
+    if (existing.rowCount > 0) {
+      inheritedRules = normalizePointRules(existing.rows[0].point_rules);
+      continue;
+    }
+
+    const startDate = `${year}-01-01`;
+    const endDate = `${year}-12-31`;
+    await pool.query(
+      `INSERT INTO group_ranking_seasons
+         (group_id, name, start_date, end_date, auto_renew, is_default, point_rules, created_by_id)
+       VALUES ($1, $2, $3::date, $4::date, false, true, $5::jsonb, $6)
+       ON CONFLICT DO NOTHING`,
+      [groupId, `${year} 시즌`, startDate, endDate, JSON.stringify(inheritedRules), group.created_by_id],
+    );
+  }
+}
+
 async function getPointRanking(groupId, year, scope, seasonId) {
   const groupResult = await pool.query(
     `SELECT id, name, sport FROM groups WHERE id = $1`,
@@ -262,6 +302,7 @@ async function getPointRanking(groupId, year, scope, seasonId) {
   if (groupResult.rowCount === 0) return null;
 
   const group = groupResult.rows[0];
+  await ensureDefaultRankingSeasons(groupId);
   await ensureAutoRenewedSeasons(groupId);
   const normalizedScope = scope === "national" ? "national" : "club";
   const scopeValue = normalizedScope === "club"
@@ -278,10 +319,10 @@ async function getPointRanking(groupId, year, scope, seasonId) {
   const availableYears = getAvailableYears(yearSourceResult.rows);
   const seasonResult = normalizedScope === "club"
     ? await pool.query(
-      `SELECT id, name, start_date, end_date, auto_renew, point_rules
+      `SELECT id, name, start_date, end_date, auto_renew, is_default, point_rules
          FROM group_ranking_seasons
         WHERE group_id = $1
-        ORDER BY start_date DESC, created_at DESC`,
+        ORDER BY start_date DESC, is_default ASC, created_at DESC`,
       [groupId],
     )
     : { rows: [] };
@@ -291,6 +332,7 @@ async function getPointRanking(groupId, year, scope, seasonId) {
     start_date: toDateOnly(season.start_date),
     end_date: toDateOnly(season.end_date),
     auto_renew: Boolean(season.auto_renew),
+    is_default: Boolean(season.is_default),
     point_rules: normalizePointRules(season.point_rules),
   }));
   const today = new Date().toISOString().slice(0, 10);
@@ -842,6 +884,7 @@ async function getPointRanking(groupId, year, scope, seasonId) {
 
 module.exports = {
   getPointRanking,
+  ensureDefaultRankingSeasons,
   _test: {
     awardBonus,
     getBonusRule,

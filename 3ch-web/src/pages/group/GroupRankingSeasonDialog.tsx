@@ -112,7 +112,10 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
       setEndDate(selectedSeason.end_date.slice(0, 10));
       const selectedStartDate = selectedSeason.start_date.slice(0, 10);
       const selectedEndDate = selectedSeason.end_date.slice(0, 10);
-      setSeasonName(selectedSeason.name === periodSeasonName(selectedStartDate, selectedEndDate) ? "" : selectedSeason.name);
+      const generatedPeriodName = periodSeasonName(selectedStartDate, selectedEndDate);
+      const isGeneratedName = selectedSeason.name === generatedPeriodName
+        || selectedSeason.name === `${generatedPeriodName} 시즌`;
+      setSeasonName(isGeneratedName ? "" : selectedSeason.name);
       setAutoRenew(Boolean(selectedSeason.auto_renew));
       const savedRules = selectedSeason.point_rules;
       setPointRules(savedRules
@@ -242,21 +245,22 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
               inputProps={{ maxLength: 50, "aria-label": "시즌명" }}
               size="small"
               fullWidth
+              disabled={selectedSeason?.is_default}
             />
           </Box>
           <Typography sx={{ fontSize: 15, fontWeight: 900 }}>기간 설정</Typography>
           <Stack direction="row" spacing={1} alignItems="center">
-            <TextField type="date" size="small" fullWidth value={startDate} onChange={(event) => setStartDate(event.target.value)} inputProps={{ "aria-label": "시작일" }} />
+            <TextField type="date" size="small" fullWidth value={startDate} disabled={selectedSeason?.is_default} onChange={(event) => setStartDate(event.target.value)} inputProps={{ "aria-label": "시작일" }} />
             <Typography>~</Typography>
-            <TextField type="date" size="small" fullWidth value={endDate} onChange={(event) => setEndDate(event.target.value)} inputProps={{ "aria-label": "종료일" }} />
+            <TextField type="date" size="small" fullWidth value={endDate} disabled={selectedSeason?.is_default} onChange={(event) => setEndDate(event.target.value)} inputProps={{ "aria-label": "종료일" }} />
           </Stack>
           <Stack direction="row" spacing={0.7}>
             {[{ label: "1개월", months: 1 }, { label: "3개월", months: 3 }, { label: "6개월", months: 6 }, { label: "1년", months: 12 }].map((preset) => (
-              <Button key={preset.label} variant="outlined" size="small" onClick={() => setPreset(preset.months)} sx={{ flex: 1, minWidth: 0, color: "text.secondary", borderColor: "divider" }}>{preset.label}</Button>
+              <Button key={preset.label} variant="outlined" size="small" disabled={selectedSeason?.is_default} onClick={() => setPreset(preset.months)} sx={{ flex: 1, minWidth: 0, color: "text.secondary", borderColor: "divider" }}>{preset.label}</Button>
             ))}
           </Stack>
           <FormControlLabel
-            control={<Checkbox checked={autoRenew} onChange={(event) => setAutoRenew(event.target.checked)} />}
+            control={<Checkbox checked={autoRenew} disabled={selectedSeason?.is_default} onChange={(event) => setAutoRenew(event.target.checked)} />}
             label={<Box><Typography sx={{ fontSize: 14, fontWeight: 800 }}>시즌 자동 연장</Typography><Typography sx={{ fontSize: 12, color: "text.secondary" }}>시즌 종료 후 동일한 기간과 포인트로 다음 시즌을 생성합니다.</Typography></Box>}
             sx={{ alignItems: "flex-start", m: 0 }}
           />
@@ -411,7 +415,7 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
                 {data?.seasons.map((season) => (
                   <Stack key={season.id} direction="row" alignItems="center" sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1, pl: 1.5, pr: 0.5, py: 0.5 }}>
                     <Box sx={{ flex: 1 }}><Typography sx={{ fontSize: 13 }}>{season.name}</Typography>{season.auto_renew && <Typography sx={{ fontSize: 11, color: "primary.main", fontWeight: 700 }}>자동 연장</Typography>}</Box>
-                    <IconButton size="small" color="error" disabled={isDeleting} onClick={() => void handleDeleteSeason(season.id)}><DeleteOutlineIcon fontSize="small" /></IconButton>
+                    {!season.is_default && <IconButton size="small" color="error" disabled={isDeleting} onClick={() => void handleDeleteSeason(season.id)}><DeleteOutlineIcon fontSize="small" /></IconButton>}
                   </Stack>
                 ))}
               </Stack>

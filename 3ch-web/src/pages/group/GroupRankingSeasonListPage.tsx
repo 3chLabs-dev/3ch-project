@@ -18,6 +18,7 @@ import {
   useDeleteGroupRankingSeasonMutation,
   useGetGroupDetailQuery,
   useGetGroupRankingSeasonsQuery,
+  useSetGroupRankingDisplayDefaultMutation,
 } from "../../features/group/groupApi";
 import GroupRankingSeasonDialog from "./GroupRankingSeasonDialog";
 
@@ -36,6 +37,7 @@ export default function GroupRankingSeasonListPage() {
   const { data, isLoading } = useGetGroupRankingSeasonsQuery(groupId, { skip: !groupId });
   const { data: groupData } = useGetGroupDetailQuery(groupId, { skip: !groupId });
   const [deleteSeason, { isLoading: isDeleting }] = useDeleteGroupRankingSeasonMutation();
+  const [setDisplayDefault, { isLoading: isSettingDefault }] = useSetGroupRankingDisplayDefaultMutation();
   const canManage = groupData?.myRole === "owner"
     || (groupData?.myRole === "admin" && groupData.myPermissions?.ranking === true);
 
@@ -87,6 +89,7 @@ export default function GroupRankingSeasonListPage() {
                     <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 0.35 }}>
                       <Typography fontWeight={900} noWrap>● {season.name}</Typography>
                       {season.is_default && <Chip label="기본" size="small" color="primary" variant="outlined" />}
+                      {season.is_display_default && <Chip label="기본 노출" size="small" color="success" />}
                       <Chip label={status.label} size="small" color={status.color} />
                     </Stack>
                     <Typography sx={{ fontSize: 12.5, color: "text.secondary" }}>
@@ -107,6 +110,20 @@ export default function GroupRankingSeasonListPage() {
                     >
                       <DeleteOutlineIcon fontSize="small" />
                     </IconButton>
+                  )}
+                  {canManage && !season.is_display_default && (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      disabled={isSettingDefault}
+                      sx={{ minWidth: 0, px: 1, whiteSpace: "nowrap", fontSize: 11.5, fontWeight: 800 }}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void setDisplayDefault({ groupId, seasonId: season.id });
+                      }}
+                    >
+                      기본 노출
+                    </Button>
                   )}
                   <ChevronRightIcon sx={{ color: "text.disabled" }} />
                 </Stack>

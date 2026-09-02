@@ -587,6 +587,7 @@ model GroupRankingSeason {
   end_date      DateTime @db.Date
   auto_renew    Boolean  @default(false)
   is_default    Boolean  @default(false)
+  is_display_default Boolean @default(false)
   point_rules   Json?
   created_by_id Int
   created_at    DateTime @default(now())

@@ -2426,7 +2426,7 @@ router.get('/group/:id/ranking/seasons', requireAuth, async (req, res) => {
     if (accessCheck.rowCount === 0) return res.status(403).json({ message: '권한이 없습니다.' });
     await ensureDefaultRankingSeasons(groupId);
     const result = await pool.query(
-      `SELECT id, name, start_date, end_date, auto_renew, is_default, point_rules, created_at
+      `SELECT id, name, start_date, end_date, auto_renew, is_default, is_display_default, point_rules, created_at
          FROM group_ranking_seasons
         WHERE group_id = $1
         ORDER BY start_date DESC, is_default ASC, created_at DESC`,
@@ -2461,7 +2461,7 @@ router.post('/group/:id/ranking/seasons', requireAuth, requireGroupPermission('r
       `INSERT INTO group_ranking_seasons
          (group_id, name, start_date, end_date, auto_renew, point_rules, created_by_id)
        VALUES ($1, $2, $3::date, $4::date, $5, $6::jsonb, $7)
-       RETURNING id, name, start_date, end_date, auto_renew, is_default, point_rules, created_at`,
+       RETURNING id, name, start_date, end_date, auto_renew, is_default, is_display_default, point_rules, created_at`,
       [groupId, name, payload.start_date, payload.end_date, payload.auto_renew, JSON.stringify(payload.point_rules), userId],
     );
     return res.status(201).json({ message: '시즌 기간이 설정되었습니다.', season: result.rows[0] });
@@ -2509,7 +2509,7 @@ router.put('/group/:id/ranking/seasons/:seasonId', requireAuth, requireGroupPerm
               point_rules = $5::jsonb,
               updated_at = NOW()
         WHERE id = $6 AND group_id = $7
-        RETURNING id, name, start_date, end_date, auto_renew, is_default, point_rules, created_at`,
+        RETURNING id, name, start_date, end_date, auto_renew, is_default, is_display_default, point_rules, created_at`,
       [name, payload.start_date, payload.end_date, payload.auto_renew, JSON.stringify(payload.point_rules), seasonId, groupId],
     );
     if (result.rowCount === 0) return res.status(404).json({ message: '시즌을 찾을 수 없습니다.' });
@@ -2537,10 +2537,46 @@ router.delete('/group/:id/ranking/seasons/:seasonId', requireAuth, requireGroupP
       [seasonId, groupId],
     );
     if (result.rowCount === 0) return res.status(404).json({ message: '시즌을 찾을 수 없습니다.' });
+    await ensureDefaultRankingSeasons(groupId);
     return res.json({ message: '시즌이 삭제되었습니다.' });
   } catch (error) {
     console.error('Error deleting ranking season:', error);
     return res.status(500).json({ message: '서버 오류' });
+  }
+});
+
+router.put('/group/:id/ranking/seasons/:seasonId/display-default', requireAuth, requireGroupPermission('ranking'), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { id: groupId, seasonId } = req.params;
+    await client.query('BEGIN');
+    const season = await client.query(
+      `SELECT id FROM group_ranking_seasons WHERE id = $1 AND group_id = $2 FOR UPDATE`,
+      [seasonId, groupId],
+    );
+    if (!season.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: '시즌을 찾을 수 없습니다.' });
+    }
+    await client.query(
+      `UPDATE group_ranking_seasons SET is_display_default = false WHERE group_id = $1`,
+      [groupId],
+    );
+    const result = await client.query(
+      `UPDATE group_ranking_seasons
+          SET is_display_default = true, updated_at = NOW()
+        WHERE id = $1 AND group_id = $2
+        RETURNING id, name, is_display_default`,
+      [seasonId, groupId],
+    );
+    await client.query('COMMIT');
+    return res.json({ message: '기본 노출 시즌이 변경되었습니다.', season: result.rows[0] });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('Error updating display default ranking season:', error);
+    return res.status(500).json({ message: '기본 노출 시즌 변경에 실패했습니다.' });
+  } finally {
+    client.release();
   }
 });
 

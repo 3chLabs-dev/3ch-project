@@ -292,6 +292,24 @@ async function ensureDefaultRankingSeasons(groupId) {
       [groupId, `${year} 시즌`, startDate, endDate, JSON.stringify(inheritedRules), group.created_by_id],
     );
   }
+
+  await pool.query(
+    `UPDATE group_ranking_seasons
+        SET is_display_default = true, updated_at = NOW()
+      WHERE id = (
+        SELECT id
+        FROM group_ranking_seasons
+        WHERE group_id = $1
+          AND is_default = true
+          AND EXTRACT(YEAR FROM start_date) = $2
+        LIMIT 1
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM group_ranking_seasons
+        WHERE group_id = $1 AND is_display_default = true
+      )`,
+    [groupId, currentYear],
+  );
 }
 
 async function getPointRanking(groupId, year, scope, seasonId) {
@@ -319,7 +337,7 @@ async function getPointRanking(groupId, year, scope, seasonId) {
   const availableYears = getAvailableYears(yearSourceResult.rows);
   const seasonResult = normalizedScope === "club"
     ? await pool.query(
-      `SELECT id, name, start_date, end_date, auto_renew, is_default, point_rules
+      `SELECT id, name, start_date, end_date, auto_renew, is_default, is_display_default, point_rules
          FROM group_ranking_seasons
         WHERE group_id = $1
         ORDER BY start_date DESC, is_default ASC, created_at DESC`,
@@ -333,10 +351,12 @@ async function getPointRanking(groupId, year, scope, seasonId) {
     end_date: toDateOnly(season.end_date),
     auto_renew: Boolean(season.auto_renew),
     is_default: Boolean(season.is_default),
+    is_display_default: Boolean(season.is_display_default),
     point_rules: normalizePointRules(season.point_rules),
   }));
   const today = new Date().toISOString().slice(0, 10);
   const selectedSeason = seasons.find((season) => season.id === seasonId)
+    ?? (!year ? seasons.find((season) => season.is_display_default) : null)
     ?? (!year ? seasons.find((season) => season.start_date <= today && season.end_date >= today) : null)
     ?? null;
   const noActiveSeason = normalizedScope === "club" && seasons.length > 0 && !selectedSeason && !year;

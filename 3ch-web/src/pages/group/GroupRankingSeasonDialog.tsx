@@ -20,12 +20,10 @@ import {
   Typography,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import AddIcon from "@mui/icons-material/Add";
 import RemoveIcon from "@mui/icons-material/Remove";
 import {
   useCreateGroupRankingSeasonMutation,
-  useDeleteGroupRankingSeasonMutation,
   useGetGroupRankingSeasonsQuery,
   useUpdateGroupRankingSeasonMutation,
 } from "../../features/group/groupApi";
@@ -98,7 +96,6 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
   const { data } = useGetGroupRankingSeasonsQuery(groupId, { skip: !open || !groupId });
   const [createSeason, { isLoading }] = useCreateGroupRankingSeasonMutation();
   const [updateSeason, { isLoading: isUpdating }] = useUpdateGroupRankingSeasonMutation();
-  const [deleteSeason, { isLoading: isDeleting }] = useDeleteGroupRankingSeasonMutation();
   const selectedSeason = data?.seasons.find((season) => season.id === dialogSeasonId);
 
   useEffect(() => {
@@ -207,11 +204,6 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
     } catch (caught: any) {
       setError(caught?.data?.message ?? "시즌 설정을 저장하지 못했습니다.");
     }
-  };
-
-  const handleDeleteSeason = async (deletedSeasonId: string) => {
-    await deleteSeason({ groupId, seasonId: deletedSeasonId }).unwrap();
-    if (dialogSeasonId === deletedSeasonId) setDialogSeasonId("");
   };
 
   return (
@@ -408,19 +400,6 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
           </Stack>
 
           {error && <Alert severity="warning">{error}</Alert>}
-          {(data?.seasons.length ?? 0) > 0 && (
-            <Box>
-              <Typography sx={{ fontSize: 13, fontWeight: 800, mb: 1 }}>설정된 시즌</Typography>
-              <Stack spacing={0.75}>
-                {data?.seasons.map((season) => (
-                  <Stack key={season.id} direction="row" alignItems="center" sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1, pl: 1.5, pr: 0.5, py: 0.5 }}>
-                    <Box sx={{ flex: 1 }}><Typography sx={{ fontSize: 13 }}>{season.name}</Typography>{season.auto_renew && <Typography sx={{ fontSize: 11, color: "primary.main", fontWeight: 700 }}>자동 연장</Typography>}</Box>
-                    {!season.is_default && <IconButton size="small" color="error" disabled={isDeleting} onClick={() => void handleDeleteSeason(season.id)}><DeleteOutlineIcon fontSize="small" /></IconButton>}
-                  </Stack>
-                ))}
-              </Stack>
-            </Box>
-          )}
         </Stack>
       </DialogContent>
       <DialogActions sx={{ p: 2 }}>

@@ -314,6 +314,7 @@ export interface GroupRankingSeason {
   end_date: string;
   auto_renew?: boolean;
   is_default?: boolean;
+  is_display_default?: boolean;
   point_rules?: GroupRankingPointRules;
   created_at?: string;
 }
@@ -399,6 +400,7 @@ function readLocalRankingSeasons(groupId: string): GroupRankingSeason[] {
     end_date: `${year}-12-31`,
     auto_renew: false,
     is_default: true,
+    is_display_default: true,
     point_rules: LOCAL_DEFAULT_POINT_RULES,
     created_at: `${year}-01-01T00:00:00.000Z`,
   }];
@@ -1011,6 +1013,34 @@ export const groupApi = baseApi.injectEndpoints({
       ],
     }),
 
+    setGroupRankingDisplayDefault: builder.mutation<{ message: string; season: Pick<GroupRankingSeason, "id" | "name" | "is_display_default"> }, { groupId: string; seasonId: string }>({
+      async queryFn({ groupId, seasonId }, api, _extraOptions, fetchWithBQ) {
+        const token = (api.getState() as RootState).auth?.token;
+        const profile = getLocalDevProfileByToken(token);
+        const group = findLocalDevGroup(groupId);
+        if (profile && group) {
+          const seasons = readLocalRankingSeasons(group.id).map((season) => ({
+            ...season,
+            is_display_default: season.id === seasonId,
+          }));
+          writeLocalRankingSeasons(group.id, seasons);
+          const season = seasons.find((item) => item.id === seasonId);
+          if (!season) return { error: { status: 404, data: { message: "시즌을 찾을 수 없습니다." } } };
+          return { data: { message: "기본 노출 시즌이 변경되었습니다.", season } };
+        }
+        const result = await fetchWithBQ({
+          url: `/group/${groupId}/ranking/seasons/${seasonId}/display-default`,
+          method: "PUT",
+        });
+        return result.error
+          ? { error: result.error }
+          : { data: result.data as { message: string; season: Pick<GroupRankingSeason, "id" | "name" | "is_display_default"> } };
+      },
+      invalidatesTags: (_result, _error, { groupId }) => [
+        { type: "Group", id: `ranking-seasons-${groupId}` }, "Group",
+      ],
+    }),
+
     deleteGroupRankingSeason: builder.mutation<{ message: string }, { groupId: string; seasonId: string }>({
       async queryFn({ groupId, seasonId }, api, _extraOptions, fetchWithBQ) {
         const token = (api.getState() as RootState).auth?.token;
@@ -1080,6 +1110,7 @@ export const {
   useGetGroupRankingSeasonsQuery,
   useCreateGroupRankingSeasonMutation,
   useUpdateGroupRankingSeasonMutation,
+  useSetGroupRankingDisplayDefaultMutation,
   useDeleteGroupRankingSeasonMutation,
   useGetGroupRankingDetailQuery,
   useRebuildGroupRankingMutation,

@@ -1037,7 +1037,7 @@ export default function LeagueTournamentBracket() {
   );
 
   const league = leagueData?.league;
-  const { data: participantsData } = useGetLeagueParticipantsQuery(id!, { skip: !id || (!isProgramMode && false) });
+  const { data: participantsData, isLoading: isParticipantsLoading } = useGetLeagueParticipantsQuery(id!, { skip: !id });
   const { data: programData, isLoading: isProgramLoading } = useGetLeagueProgramQuery(id!, { skip: !isProgramMode || !id });
   const participants = useMemo(() => participantsData?.participants ?? [], [participantsData]);
   const programOption = useMemo(
@@ -1092,6 +1092,14 @@ export default function LeagueTournamentBracket() {
       id ?? "",
       programRound,
     );
+    // 새로고침 직후에는 프로그램 설정이나 참가자 쿼리가 경기 쿼리보다
+    // 늦게 도착할 수 있다. 이때 재생성 결과가 비었다고 해서 이미 서버에
+    // 저장된 프로그램 대진표까지 버리면 빈 대진표 화면으로 고정된다.
+    if (generatedMatches.length === 0) {
+      return applyProgramTournamentAdvancement(
+        serverProgramMatches.filter((match) => match.bracket),
+      );
+    }
     const serverById = new Map(serverProgramMatches.map((match) => [match.id, match]));
     const hydratedMatches = generatedMatches.map((match) => {
       const serverMatch = serverById.get(match.id);
@@ -1677,7 +1685,7 @@ export default function LeagueTournamentBracket() {
     return q ? participants.filter((p) => p.name.toLowerCase().includes(q) || (p.division ?? "").toLowerCase().includes(q)) : participants;
   }, [participants, participantSearch]);
 
-  if (isLoading || (isProgramMode && isProgramLoading)) {
+  if (isLoading || (isProgramMode && (isProgramLoading || isParticipantsLoading))) {
     return createPortal(
       <Box sx={{ bgcolor: "#fff", position: "fixed", inset: 0, zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <CircularProgress />

@@ -2342,7 +2342,7 @@ router.post('/league/:leagueId/participants', optionalAuth, async (req, res) => 
       [leagueId],
     );
 
-    if (!isLeagueActive && programBlocks.length > 0) {
+    if (!isLeagueActive && programBlocks.length > 0 && !botOnlyAddition) {
       const resetProgramData = {
         ...programData,
         blocks: programBlocks.map((block) => ({

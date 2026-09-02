@@ -50,6 +50,7 @@ import {
   useGetLeagueParticipantsQuery,
   useGetLeagueMatchesQuery,
   useGetLeagueProgramQuery,
+  useAddParticipantsMutation,
   useSaveLeagueProgramMutation,
   useSyncLeagueProgramMatchesMutation,
   useUpdateLeagueMatchMutation,
@@ -1432,6 +1433,7 @@ export default function LeagueBracket() {
 
   // ── DnD 순서 변경 ─────────────────────────────────────────────────────────
   const [reorderParticipants] = useReorderLeagueParticipantsMutation();
+  const [addParticipants, { isLoading: isAddingBot }] = useAddParticipantsMutation();
   const [saveLeagueProgram] = useSaveLeagueProgramMutation();
   const [syncProgramMatches] = useSyncLeagueProgramMatchesMutation();
   const sensors = useSensors(
@@ -1497,6 +1499,49 @@ export default function LeagueBracket() {
     programSourceMatches, rawParticipants, reorderParticipants,
     saveLeagueProgram, syncProgramMatches,
   ]);
+
+  const handleAddBot = useCallback(async () => {
+    if (!id || isAddingBot) return;
+    const botNumbers = rawParticipants
+      .filter((participant) => participant.is_bot || /^BOT\s+\d+$/.test(participant.name))
+      .map((participant) => Number.parseInt(participant.name.match(/\d+/)?.[0] ?? "0", 10));
+    const botName = `BOT ${Math.max(0, ...botNumbers) + 1}`;
+    try {
+      const result = await addParticipants({ leagueId: id, participants: [{ name: botName, division: "", member_id: null, is_bot: true }] }).unwrap();
+      const bot = result.participants[0];
+      if (!bot) return;
+      if (isProgramMode && programOption) {
+        const groupIndex = selectedGroup ? Math.max(0, Number.parseInt(selectedGroup, 10) - 1) : -1;
+        const updateRound = <T extends { groupAssignments?: Array<Array<{ name: string; level: number; sourceGroupId?: string | null }>>; groupSizes?: number[]; participantOrder?: string[] }>(round: T): T => {
+          const assignments = round.groupAssignments?.map((group) => [...group]);
+          if (assignments && groupIndex >= 0) {
+            while (assignments.length <= groupIndex) assignments.push([]);
+            assignments[groupIndex].push({ name: botName, level: 0, sourceGroupId: null });
+          }
+          return {
+            ...round,
+            groupAssignments: assignments ?? round.groupAssignments,
+            groupSizes: groupIndex >= 0 && round.groupSizes ? round.groupSizes.map((size, index) => index === groupIndex ? size + 1 : size) : round.groupSizes,
+            participantOrder: [...(round.participantOrder ?? localOrder.map((participant) => participant.id)), bot.id],
+          } as T;
+        };
+        const nextProgram = {
+          ...programOption,
+          blocks: programOption.blocks.map((block, index) => index === programRound - 1 ? updateRound(block) : block),
+          rounds: programOption.rounds?.map((round, index) => index === programRound - 1 ? updateRound(round) : round),
+        };
+        const nextMatches = generateProgramRoundMatches(id, nextProgram, [...rawParticipants, bot], programRound, programSourceMatches);
+        storeProgramOption(id, nextProgram);
+        await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
+        await syncProgramMatches({ leagueId: id, matches: nextMatches }).unwrap();
+      }
+      await Promise.all([refetchParticipants(), refetchMatches()]);
+      setEditOrder(null);
+    } catch (error: unknown) {
+      const message = (error as { data?: { message?: string } })?.data?.message;
+      window.alert(message ?? "BOT 추가에 실패했습니다.");
+    }
+  }, [addParticipants, currentProgramBlock, id, isAddingBot, isProgramMode, localOrder, programOption, programRound, programSourceMatches, rawParticipants, refetchMatches, refetchParticipants, saveLeagueProgram, selectedGroup, syncProgramMatches]);
 
   // 수동 새로고침: 리그·참가자·경기 3개 쿼리 동시 refetch
   const handleRefresh = useCallback(() => {
@@ -1728,7 +1773,6 @@ export default function LeagueBracket() {
   if (!league || rawParticipants.length === 0) return null;
 
   const n             = localOrder.length;
-  const leagueStarted = league.status === "completed"; // 완료 상태면 수정 버튼 숨김
   const date          = formatLeagueDate(league.start_date);
   const winScore      = getWinScore(currentRule);
   const headerSummary = isProgramMode && currentProgramBlock
@@ -1777,7 +1821,7 @@ export default function LeagueBracket() {
         </Box>
 
         {/* 수정 버튼: 리그 완료 전 + 관리 권한자에게만 표시 */}
-        {!leagueStarted && canManage && (
+        {canManage && (
           <Button
             size="small"
             variant="contained"
@@ -1970,6 +2014,16 @@ export default function LeagueBracket() {
                         onProgramMatchUpdate={isProgramMode ? updateProgramMatch : undefined}
                       />
                     ))}
+                    {editMode && canManage && (
+                      <TableRow>
+                        <TableCell colSpan={2} sx={{ p: 0.5, border: 0 }}>
+                          <Button fullWidth size="small" variant="outlined" startIcon={<AddIcon />} onClick={() => void handleAddBot()} disabled={isAddingBot} sx={{ minHeight: 34, borderStyle: "dashed", fontSize: 11, fontWeight: 900 }}>
+                            BOT 추가
+                          </Button>
+                        </TableCell>
+                        <TableCell colSpan={n + 3} sx={{ p: 0, border: 0 }} />
+                      </TableRow>
+                    )}
                   </TableBody>
                 </SortableContext>
               </Table>

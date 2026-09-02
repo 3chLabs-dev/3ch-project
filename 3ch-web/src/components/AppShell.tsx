@@ -64,8 +64,8 @@ export default function AppShell() {
     const usageItems = [
         { label: "리그 생성", balance: usageData?.usage.league_create },
         { label: "사진 인식", balance: usageData?.usage.vision_scan },
-        { label: "추첨 생성", balance: usageData?.usage.draw_create },
         { label: "시즌 생성", balance: usageData?.usage.ranking_season_create },
+        { label: "추첨 생성", balance: usageData?.usage.draw_create },
     ];
     const nearestUsageExpiry = usageItems
         .map(({ balance }) => balance?.expiresAt)

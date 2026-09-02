@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Box, Button, CircularProgress, IconButton, InputAdornment,
-  TextField, Tooltip, Typography, Tabs, Tab,
+  TextField, Tooltip, Typography, Tabs, Tab, Dialog, DialogContent, Stack,
 } from "@mui/material";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
@@ -18,6 +18,8 @@ import PrintIcon from "@mui/icons-material/Print";
 import SearchIcon from "@mui/icons-material/Search";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import AddIcon from "@mui/icons-material/Add";
+import RemoveIcon from "@mui/icons-material/Remove";
 import {
   useGetLeagueQuery,
   useGetLeagueMatchesQuery,
@@ -25,6 +27,7 @@ import {
   useGetLeagueProgramQuery,
   useAssignMatchParticipantMutation,
   useSyncLeagueProgramMatchesMutation,
+  useUpdateLeagueMatchMutation,
   type LeagueMatch,
 } from "../../features/league/leagueApi";
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
@@ -59,6 +62,7 @@ const SS_W = 96;          // 슬롯 박스 너비 (이름이 잘리지 않도록
 const SS_H = 76;          // 슬롯 박스 높이 (라벨 20 + 이름 영역 + 점수 영역 24)
 const SS_GAP = 22;        // A·B 슬롯 사이 간격 — "vs" 텍스트 표시 공간
 const CO_MATCH_W = SS_W * 2 + SS_GAP;  // 매치 1개 전체 너비 = 96*2 + 22 = 214px
+const AUTO_COMPLETE_DELAY_MS = 4000;
 
 function getProgramTypeLabel(type?: string) {
   if (type === "SINGLES") return "단식";
@@ -86,6 +90,18 @@ function getRuleDescription(rule?: string | null) {
   if (rule === "BEST_OF_5" || rule?.includes("5전 3선승")) return "다섯 번의 경기 중 세 번을 먼저 이기면 승리합니다.";
   if (rule === "THREE_SET" || rule?.includes("3세트")) return "세 번의 경기를 모두 진행하며, 양 선수의 세트스코어 합이 3이 되면 종료됩니다.";
   return "경기 규칙에 따라 세트스코어를 입력합니다.";
+}
+
+function getWinScore(rule?: string | null): number | null {
+  if (rule === "BEST_OF_3" || rule?.includes("3전 2선승")) return 2;
+  if (rule === "BEST_OF_5" || rule?.includes("5전 3선승")) return 3;
+  return null;
+}
+
+function hasReachedCompletion(rule: string | null | undefined, scoreA: number, scoreB: number) {
+  if (rule === "THREE_SET" || rule?.includes("3세트제")) return scoreA + scoreB === 3;
+  const winScore = getWinScore(rule);
+  return winScore !== null && (scoreA >= winScore || scoreB >= winScore);
 }
 
 // ─── 표준 토너먼트 시드 배치 ────────────────────────────────────────────────
@@ -176,6 +192,100 @@ function RankingSummary({ title, rankings, rankLabels, color, borderColor, left,
   );
 }
 
+function TournamentResultDialog({ open, match, rule, leagueId, onClose }: {
+  open: boolean;
+  match: LeagueMatch | null;
+  rule?: string | null;
+  leagueId: string;
+  onClose: () => void;
+}) {
+  const [updateMatch] = useUpdateLeagueMatchMutation();
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [scoreA, setScoreA] = useState(0);
+  const [scoreB, setScoreB] = useState(0);
+
+  useEffect(() => {
+    if (!match) return;
+    setScoreA(match.score_a ?? 0);
+    setScoreB(match.score_b ?? 0);
+  }, [match?.id, match?.score_a, match?.score_b]);
+
+  useEffect(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (!match || match.status !== "playing" || !hasReachedCompletion(rule, scoreA, scoreB)) return;
+    timerRef.current = setTimeout(() => {
+      updateMatch({ leagueId, matchId: match.id, updates: { status: "done", score_a: scoreA, score_b: scoreB } });
+      timerRef.current = null;
+    }, AUTO_COMPLETE_DELAY_MS);
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = null;
+    };
+  }, [leagueId, match, rule, scoreA, scoreB, updateMatch]);
+
+  if (!match) return null;
+  const isPlaying = match.status === "playing";
+  const isDone = match.status === "done";
+  const isThreeSet = rule === "THREE_SET" || rule?.includes("3세트제");
+  const winScore = getWinScore(rule);
+  const highlightA = !isThreeSet && isDone && winScore !== null && scoreA === winScore;
+  const highlightB = !isThreeSet && isDone && winScore !== null && scoreB === winScore;
+  const canScore = isPlaying || isDone;
+
+  const changeScore = (slot: "a" | "b", delta: number) => {
+    const current = slot === "a" ? scoreA : scoreB;
+    const next = Math.max(0, current + delta);
+    if (slot === "a") setScoreA(next); else setScoreB(next);
+    updateMatch({
+      leagueId,
+      matchId: match.id,
+      updates: slot === "a" ? { score_a: next } : { score_b: next },
+    });
+  };
+
+  const changeStatus = () => {
+    if (match.status === "pending") {
+      updateMatch({ leagueId, matchId: match.id, updates: { status: "playing", score_a: scoreA, score_b: scoreB } });
+    } else if (match.status === "playing") {
+      updateMatch({ leagueId, matchId: match.id, updates: { status: "done", score_a: scoreA, score_b: scoreB } });
+    }
+  };
+
+  const row = (slot: "a" | "b", name: string | null, division: string | null, score: number, highlight: boolean) => (
+    <Stack direction="row" alignItems="center" sx={{ minHeight: 58, px: 1.5, gap: 0.75 }}>
+      {division && <Box sx={{ minWidth: 23, height: 23, px: 0.35, borderRadius: "50%", bgcolor: "#FAAA47", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 900 }}>{division}</Box>}
+      <Typography sx={{ flex: 1, fontSize: 15, fontWeight: 800, color: highlight ? "#16A34A" : "#111827" }}>{name ?? "미정"}</Typography>
+      <IconButton size="small" disabled={!canScore} onClick={() => changeScore(slot, -1)} sx={{ border: "1px solid #E2E8F0" }}><RemoveIcon sx={{ fontSize: 16 }} /></IconButton>
+      <Typography sx={{ width: 34, textAlign: "center", fontSize: 20, fontWeight: 900, color: highlight ? "#16A34A" : "#111827" }}>{score}</Typography>
+      <IconButton size="small" disabled={!canScore} onClick={() => changeScore(slot, 1)} sx={{ border: "1px solid #E2E8F0", color: "#2F80ED" }}><AddIcon sx={{ fontSize: 16 }} /></IconButton>
+    </Stack>
+  );
+
+  return (
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs" PaperProps={{ sx: { borderRadius: 3 } }}>
+      <DialogContent sx={{ p: 2 }}>
+        <Stack direction="row" alignItems="center" sx={{ mb: 1 }}>
+          <Box sx={{ flex: 1 }}>
+            <Typography sx={{ fontSize: 18, fontWeight: 900 }}>{match.match_label ?? "경기 결과 등록"}</Typography>
+            <Typography sx={{ mt: 0.25, fontSize: 12, color: "#64748B" }}>{getProgramRuleLabel(rule)}</Typography>
+          </Box>
+          <IconButton onClick={onClose}><CloseIcon /></IconButton>
+        </Stack>
+        <Box sx={{ border: "1px solid #E2E8F0" }}>
+          {row("a", match.participant_a_name, match.participant_a_division, scoreA, highlightA)}
+          <Box sx={{ py: 0.45, textAlign: "center", borderTop: "1px solid #E2E8F0", borderBottom: "1px solid #E2E8F0", bgcolor: "#FAFAFA" }}>
+            <Typography sx={{ fontSize: 11, fontWeight: 800, color: "#CBD5E1" }}>vs</Typography>
+          </Box>
+          {row("b", match.participant_b_name, match.participant_b_division, scoreB, highlightB)}
+        </Box>
+        <Button fullWidth variant="contained" disabled={isDone} onClick={changeStatus} sx={{ mt: 1.5, height: 44, borderRadius: 1.5, fontWeight: 900, bgcolor: isPlaying ? "#2F80ED" : "#fff", color: isPlaying ? "#fff" : "#374151", border: isPlaying ? 0 : "1px solid #D1D5DB", boxShadow: "none" }}>
+          {isDone ? "종료" : isPlaying ? "종료" : "시작"}
+        </Button>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── 슬롯 액션 타입 ──────────────────────────────────────────────────────────
 interface SlotActions {
   canManage: boolean;
@@ -185,6 +295,7 @@ interface SlotActions {
   seedMap: Map<string, { a: number; b: number }>;
   onRegister: (matchId: string, slot: "a" | "b") => void;
   onSwapSelect: (matchId: string, slot: "a" | "b", participantId: string | null, name: string | null) => void;
+  onOpenResult: (matchId: string) => void;
 }
 
 // ─── 단일 토너먼트 위치 계산 (좌→우) ────────────────────────────────────────
@@ -457,6 +568,7 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
 
   const slotACursor = isR1 && (actions?.canRegister && !nameA) || (actions?.canManage && actions.editMode) ? "pointer" : "default";
   const slotBCursor = isR1 && (actions?.canRegister && !nameB) || (actions?.canManage && actions.editMode) ? "pointer" : "default";
+  const canOpenResult = Boolean(actions?.canManage && !actions.editMode && m.participant_a_id && m.participant_b_id);
 
   return (
     <Box sx={{
@@ -467,9 +579,10 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
       borderRadius: "6px",
       overflow: "hidden",
       boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
-    }}>
+      cursor: canOpenResult ? "pointer" : "default",
+    }} onClick={() => canOpenResult && actions?.onOpenResult(m.id)}>
       <Box
-        onClick={handleSlotA}
+        onClick={(event) => { event.stopPropagation(); handleSlotA(); if (canOpenResult) actions?.onOpenResult(m.id); }}
         sx={{
           height: MH / 2, display: "flex", alignItems: "center", px: 1, gap: 0.5,
           borderBottom: `1px solid ${isLower ? "#EDE9FE" : "#F1F5F9"}`,
@@ -501,7 +614,7 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
         {m.score_a != null && <Typography sx={{ fontSize: 12, fontWeight: 800, color: winA ? "#16A34A" : "#6B7280", flexShrink: 0 }}>{m.score_a}</Typography>}
       </Box>
       <Box
-        onClick={handleSlotB}
+        onClick={(event) => { event.stopPropagation(); handleSlotB(); if (canOpenResult) actions?.onOpenResult(m.id); }}
         sx={{
           height: MH / 2, display: "flex", alignItems: "center", px: 1, gap: 0.5,
           bgcolor: swapSelB ? "#DBEAFE" : winB ? "#F0FDF4" : "transparent",
@@ -580,7 +693,8 @@ function SingleSlotBox({ pos, slot, actions, manualSeeding = false }: { pos: Mat
     }
   };
 
-  const cursor = isR1 && ((actions?.canRegister && !name) || (actions?.canManage && actions.editMode)) ? "pointer" : "default";
+  const canOpenResult = Boolean(actions?.canManage && !actions.editMode && m.participant_a_id && m.participant_b_id);
+  const cursor = canOpenResult || (isR1 && ((actions?.canRegister && !name) || (actions?.canManage && actions.editMode))) ? "pointer" : "default";
 
   return (
     <Box sx={{
@@ -594,7 +708,7 @@ function SingleSlotBox({ pos, slot, actions, manualSeeding = false }: { pos: Mat
       display: "flex", flexDirection: "column",
       cursor,
       outline: swapSel ? "2px solid #3B82F6" : "none",
-    }} onClick={handleClick}>
+    }} onClick={() => { handleClick(); if (canOpenResult) actions?.onOpenResult(m.id); }}>
 
       {/* 라운드/시드 레이블 */}
       <Box sx={{
@@ -883,6 +997,8 @@ export default function LeagueTournamentBracket() {
   const programRound = Number.parseInt(searchParams.get("round") ?? "1", 10) || 1;
   const [zoom, setZoom] = useState(1);
   const [editMode, setEditMode] = useState(false);
+  const [resultMatchId, setResultMatchId] = useState<string | null>(null);
+  const [resultDialogOpen, setResultDialogOpen] = useState(false);
   const exportRef = useRef<HTMLDivElement | null>(null);
 
   // 참가자 등록 팝업
@@ -1008,6 +1124,10 @@ export default function LeagueTournamentBracket() {
   const matches = useMemo(
     () => isProgramMode ? programMatches : matchesData?.matches ?? [],
     [isProgramMode, programMatches, matchesData],
+  );
+  const resultMatch = useMemo(
+    () => matches.find((match) => match.id === resultMatchId) ?? null,
+    [matches, resultMatchId],
   );
   const [syncLeagueProgramMatches, { isLoading: isSyncingProgramMatches }] =
     useSyncLeagueProgramMatchesMutation();
@@ -1267,6 +1387,10 @@ export default function LeagueTournamentBracket() {
     seedMap,
     onRegister: handleRegister,
     onSwapSelect: handleSwapSelect,
+    onOpenResult: (matchId) => {
+      setResultMatchId(matchId);
+      setResultDialogOpen(true);
+    },
   };
 
   const positions = useMemo(
@@ -1557,7 +1681,13 @@ export default function LeagueTournamentBracket() {
                       width: SS_GAP,
                       textAlign: "center",
                       fontSize: 11, fontWeight: 900, color: "#94A3B8", lineHeight: 1,
-                      pointerEvents: "none", bgcolor: "#F1F5F9", zIndex: 2,
+                      pointerEvents: visibleSlotActions?.canManage && !visibleSlotActions.editMode && pos.match.participant_a_id && pos.match.participant_b_id ? "auto" : "none",
+                      cursor: visibleSlotActions?.canManage && !visibleSlotActions.editMode && pos.match.participant_a_id && pos.match.participant_b_id ? "pointer" : "default",
+                      bgcolor: "#F1F5F9", zIndex: 2,
+                    }} onClick={() => {
+                      if (visibleSlotActions?.canManage && !visibleSlotActions.editMode && pos.match.participant_a_id && pos.match.participant_b_id) {
+                        visibleSlotActions.onOpenResult(pos.match.id);
+                      }
                     }}>vs</Typography>
                     <SingleSlotBox pos={pos} slot="b" actions={visibleSlotActions} manualSeeding={manualSeeding} />
                   </React.Fragment>
@@ -1691,6 +1821,14 @@ export default function LeagueTournamentBracket() {
           </IconButton>
         </Tooltip>
       </Box>
+
+      <TournamentResultDialog
+        open={resultDialogOpen}
+        match={resultMatch}
+        rule={resultMatch?.match_rule ?? headerRule}
+        leagueId={id!}
+        onClose={() => setResultDialogOpen(false)}
+      />
 
       {/* ── 참가자 등록 팝업 (우측 패널) ── */}
       {registerTarget && (

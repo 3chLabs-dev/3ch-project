@@ -28,8 +28,8 @@ const FEATURES = [
   { value: "TOURNAMENT_CREATE", label: "대회 생성" },
   { value: "EVENT_JOIN", label: "리그·대회 참가" },
   { value: "VISION_SCAN", label: "클럽회원·참가자·대진표 사진 인식" },
-  { value: "DRAW_CREATE", label: "추첨 생성" },
   { value: "RANKING_SEASON_CREATE", label: "시즌 생성" },
+  { value: "DRAW_CREATE", label: "추첨 생성" },
   { value: "PREMIUM_PROMOTION", label: "프리미엄 노출" },
 ];
 const ACTION_LABEL: Record<string, string> = {

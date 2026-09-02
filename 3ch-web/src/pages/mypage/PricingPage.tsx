@@ -30,6 +30,7 @@ const PLANS = [
       "클럽 가입 무제한",
       "리그 생성 1회",
       "리그·대회 참가 무제한",
+      "시즌 생성 1회",
       "추첨 생성 1회",
       "추첨 결과 확인 무제한",
     ],
@@ -55,6 +56,7 @@ const PLANS = [
       "클럽 생성 무제한",
       "리그 생성 월 3회",
         "클럽회원·참가자·대진표 사진 인식 월 3회",
+      "시즌 생성 월 3회",
       "추첨 생성 월 3회",
     ],
     inheritFrom: "STARTER 혜택",
@@ -78,6 +80,7 @@ const PLANS = [
     features: [
       "리그 생성 무제한",
         "클럽회원·참가자·대진표 사진 인식 월 20회",
+      "시즌 생성 무제한",
       "추첨 생성 무제한",
     ],
     inheritFrom: "BASIC 혜택",
@@ -296,8 +299,8 @@ const FEATURE_LABELS: Array<[string, string]> = [
   ["tournament_create", "대회 생성"],
   ["event_join", "리그·대회 참가"],
   ["vision_scan", "클럽회원·참가자·대진표 사진 인식"],
-  ["draw_create", "추첨 생성"],
   ["ranking_season_create", "시즌 생성"],
+  ["draw_create", "추첨 생성"],
 ];
 const featureLimitLabels = (limits?: Record<string, number | null>) =>
   limits && Object.keys(limits).length > 0

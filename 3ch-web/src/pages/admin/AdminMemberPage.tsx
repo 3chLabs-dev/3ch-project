@@ -101,15 +101,15 @@ const PLAN_CHIP_STYLES: Record<string, { bgcolor: string; color: string }> = {
 const GRANT_FEATURES: Array<{ key: GrantFeature; label: string }> = [
   { key: "LEAGUE_CREATE", label: "리그·대회 생성" },
   { key: "VISION_SCAN", label: "클럽회원·참가자·대진표 사진 인식" },
-  { key: "DRAW_CREATE", label: "추첨 생성" },
   { key: "RANKING_SEASON_CREATE", label: "시즌 생성" },
+  { key: "DRAW_CREATE", label: "추첨 생성" },
   { key: "PREMIUM_PROMOTION", label: "프리미엄 노출" },
 ];
 const emptyGrantValues = (): Record<GrantFeature, GrantValue> => ({
   LEAGUE_CREATE: { amount: "0", unlimited: false },
   VISION_SCAN: { amount: "0", unlimited: false },
-  DRAW_CREATE: { amount: "0", unlimited: false },
   RANKING_SEASON_CREATE: { amount: "0", unlimited: false },
+  DRAW_CREATE: { amount: "0", unlimited: false },
   PREMIUM_PROMOTION: { amount: "0", unlimited: false },
 });
 const formatSubscriptionDate = (value: string) =>

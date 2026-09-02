@@ -1006,6 +1006,7 @@ export default function LeagueTournamentBracket() {
   const [editMode, setEditMode] = useState(false);
   const [resultMatchId, setResultMatchId] = useState<string | null>(null);
   const [resultDialogOpen, setResultDialogOpen] = useState(false);
+  const [deleteSlotDialogOpen, setDeleteSlotDialogOpen] = useState(false);
   const exportRef = useRef<HTMLDivElement | null>(null);
 
   // 참가자 등록 팝업
@@ -1187,6 +1188,7 @@ export default function LeagueTournamentBracket() {
   const isCompleted = league?.status === "completed";
 
   const [assignParticipant, { isLoading: isAssigning }] = useAssignMatchParticipantMutation();
+  const [updateTournamentMatch] = useUpdateLeagueMatchMutation();
 
   const handleRefresh = () => {
     refetchLeague();
@@ -1296,6 +1298,11 @@ export default function LeagueTournamentBracket() {
             next.participant_b_name = participant.name;
             next.participant_b_division = participant.division ?? null;
           }
+          if (next.participant_a_id && next.participant_b_id) {
+            next.status = "pending";
+            next.score_a = null;
+            next.score_b = null;
+          }
         }
 
         return next;
@@ -1339,6 +1346,65 @@ export default function LeagueTournamentBracket() {
     // 스왑 실행
     const first = swapFirst;
     setSwapFirst(null);
+
+    if (isProgramMode && programBlock) {
+      const firstMatch = allProgramMatches.find((match) => match.id === first.matchId);
+      const secondMatch = allProgramMatches.find((match) => match.id === matchId);
+      if (!firstMatch || !secondMatch) return;
+
+      const readSlot = (match: LeagueMatch, targetSlot: "a" | "b") => targetSlot === "a"
+        ? {
+            id: match.participant_a_id,
+            name: match.participant_a_name,
+            division: match.participant_a_division,
+            seedLabel: match.participant_a_seed_label,
+            roster: match.participant_a_roster,
+            rosterDetails: match.participant_a_roster_details,
+          }
+        : {
+            id: match.participant_b_id,
+            name: match.participant_b_name,
+            division: match.participant_b_division,
+            seedLabel: match.participant_b_seed_label,
+            roster: match.participant_b_roster,
+            rosterDetails: match.participant_b_roster_details,
+          };
+      const firstValue = readSlot(firstMatch, first.slot);
+      const secondValue = readSlot(secondMatch, slot);
+      const writeSlot = (target: LeagueMatch, targetSlot: "a" | "b", value: ReturnType<typeof readSlot>) => {
+        if (targetSlot === "a") {
+          target.participant_a_id = value.id;
+          target.participant_a_name = value.name;
+          target.participant_a_division = value.division;
+          target.participant_a_seed_label = value.seedLabel;
+          target.participant_a_roster = value.roster;
+          target.participant_a_roster_details = value.rosterDetails;
+        } else {
+          target.participant_b_id = value.id;
+          target.participant_b_name = value.name;
+          target.participant_b_division = value.division;
+          target.participant_b_seed_label = value.seedLabel;
+          target.participant_b_roster = value.roster;
+          target.participant_b_roster_details = value.rosterDetails;
+        }
+      };
+      const nextMatches = allProgramMatches.map((match) => {
+        const next = { ...match };
+        if (match.id === first.matchId) writeSlot(next, first.slot, secondValue);
+        if (match.id === matchId) writeSlot(next, slot, firstValue);
+        return next;
+      });
+      await syncLeagueProgramMatches({
+        leagueId: id!,
+        matches: nextMatches.map((match) => ({
+          ...match,
+          program_round: programRound,
+          program_block_type: programBlock.type,
+        })),
+      }).unwrap();
+      await refetchMatches();
+      return;
+    }
 
     if (first.matchId === matchId) {
       // 같은 매치 내 A↔B 스왑 → 한 번에 처리
@@ -1398,6 +1464,68 @@ export default function LeagueTournamentBracket() {
       setResultMatchId(matchId);
       setResultDialogOpen(true);
     },
+  };
+
+  const handleDeleteSelectedSlot = async () => {
+    if (!swapFirst) return;
+    const selected = swapFirst;
+
+    if (isProgramMode && programBlock) {
+      const nextMatches = allProgramMatches.map((match) => {
+        if (match.id !== selected.matchId) return match;
+        const next = { ...match };
+        if (selected.slot === "a") {
+          next.participant_a_id = null;
+          next.participant_a_name = null;
+          next.participant_a_division = null;
+          next.participant_a_seed_label = null;
+          next.participant_a_roster = [];
+          next.participant_a_roster_details = [];
+        } else {
+          next.participant_b_id = null;
+          next.participant_b_name = null;
+          next.participant_b_division = null;
+          next.participant_b_seed_label = null;
+          next.participant_b_roster = [];
+          next.participant_b_roster_details = [];
+        }
+        if (Boolean(next.participant_a_id) !== Boolean(next.participant_b_id)) {
+          next.status = "done";
+          next.score_a = 0;
+          next.score_b = 0;
+        }
+        return next;
+      });
+      await syncLeagueProgramMatches({
+        leagueId: id!,
+        matches: nextMatches.map((match) => ({
+          ...match,
+          program_round: programRound,
+          program_block_type: programBlock.type,
+        })),
+      }).unwrap();
+    } else {
+      const selectedMatch = matches.find((match) => match.id === selected.matchId);
+      await assignParticipant({
+        leagueId: id!,
+        matchId: selected.matchId,
+        ...(selected.slot === "a" ? { participant_a_id: null } : { participant_b_id: null }),
+      }).unwrap();
+      const remainingParticipantId = selected.slot === "a"
+        ? selectedMatch?.participant_b_id
+        : selectedMatch?.participant_a_id;
+      if (remainingParticipantId) {
+        await updateTournamentMatch({
+          leagueId: id!,
+          matchId: selected.matchId,
+          updates: { status: "done", score_a: 0, score_b: 0 },
+        }).unwrap();
+      }
+    }
+
+    await refetchMatches();
+    setSwapFirst(null);
+    setDeleteSlotDialogOpen(false);
   };
 
   const positions = useMemo(
@@ -1563,6 +1691,16 @@ export default function LeagueTournamentBracket() {
             <Typography sx={{ fontSize: 10, fontWeight: 700, color: "#3B82F6" }}>
               {swapFirst.name ?? "BYE"} 선택됨
             </Typography>
+            {swapFirst.participantId && (
+              <Button
+                size="small"
+                color="error"
+                onClick={() => setDeleteSlotDialogOpen(true)}
+                sx={{ minWidth: 0, px: 0.8, py: 0.1, fontSize: 10, fontWeight: 900, lineHeight: 1.5 }}
+              >
+                삭제
+              </Button>
+            )}
           </Box>
         )}
 
@@ -1579,7 +1717,7 @@ export default function LeagueTournamentBracket() {
               "&:hover": { bgcolor: editMode ? "#059669" : "#1D4ED8", boxShadow: "none" },
             }}
           >
-            {editMode ? "완료" : "수정"}
+            {editMode ? "저장" : "수정"}
           </Button>
         )}
 
@@ -1836,6 +1974,29 @@ export default function LeagueTournamentBracket() {
         leagueId={id!}
         onClose={() => setResultDialogOpen(false)}
       />
+
+      <Dialog
+        open={deleteSlotDialogOpen}
+        onClose={() => setDeleteSlotDialogOpen(false)}
+        fullWidth
+        maxWidth="xs"
+        sx={{ zIndex: 11000 }}
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogContent sx={{ p: 2.5 }}>
+          <Typography sx={{ fontSize: 19, fontWeight: 900 }}>참가자 삭제</Typography>
+          <Typography sx={{ mt: 1.2, fontSize: 14, color: "#475569", lineHeight: 1.6 }}>
+            {swapFirst?.name ?? "선택한 참가자"}을(를) 대진표에서 삭제하시겠습니까?
+          </Typography>
+          <Typography sx={{ mt: 0.5, fontSize: 12, color: "#94A3B8" }}>
+            삭제한 슬롯에는 다른 참가자를 다시 등록할 수 있습니다.
+          </Typography>
+          <Stack direction="row" spacing={1} sx={{ mt: 2.5 }}>
+            <Button fullWidth variant="outlined" onClick={() => setDeleteSlotDialogOpen(false)} sx={{ height: 42, borderRadius: 1.5, fontWeight: 800 }}>취소</Button>
+            <Button fullWidth variant="contained" color="error" onClick={handleDeleteSelectedSlot} sx={{ height: 42, borderRadius: 1.5, fontWeight: 900, boxShadow: "none" }}>삭제</Button>
+          </Stack>
+        </DialogContent>
+      </Dialog>
 
       {/* ── 참가자 등록 팝업 (우측 패널) ── */}
       {registerTarget && (

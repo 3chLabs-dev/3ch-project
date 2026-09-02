@@ -622,15 +622,16 @@ export default function LeagueMatchOrder() {
       const serverMatch = serverById.get(match.id);
       if (!serverMatch) return match;
       const preserveWalkover = isAutomaticProgramWalkover(match);
+      const useExactServerSlots = currentProgramBlock?.tournamentSeeding === "manual" && match.round_number === 1;
       return {
         ...match,
         match_order: serverMatch.match_order,
-        participant_a_id: serverMatch.participant_a_id ?? match.participant_a_id,
-        participant_a_name: serverMatch.participant_a_name ?? match.participant_a_name,
-        participant_a_division: serverMatch.participant_a_division ?? match.participant_a_division,
-        participant_b_id: serverMatch.participant_b_id ?? match.participant_b_id,
-        participant_b_name: serverMatch.participant_b_name ?? match.participant_b_name,
-        participant_b_division: serverMatch.participant_b_division ?? match.participant_b_division,
+        participant_a_id: useExactServerSlots ? serverMatch.participant_a_id : serverMatch.participant_a_id ?? match.participant_a_id,
+        participant_a_name: useExactServerSlots ? serverMatch.participant_a_name : serverMatch.participant_a_name ?? match.participant_a_name,
+        participant_a_division: useExactServerSlots ? serverMatch.participant_a_division : serverMatch.participant_a_division ?? match.participant_a_division,
+        participant_b_id: useExactServerSlots ? serverMatch.participant_b_id : serverMatch.participant_b_id ?? match.participant_b_id,
+        participant_b_name: useExactServerSlots ? serverMatch.participant_b_name : serverMatch.participant_b_name ?? match.participant_b_name,
+        participant_b_division: useExactServerSlots ? serverMatch.participant_b_division : serverMatch.participant_b_division ?? match.participant_b_division,
         // 서버에 동기화된 경기는 서버 결과가 최종값이다. 생성 경기의
         // 기본 0점/playing 상태가 저장된 결과를 덮어쓰지 않도록 한다.
         score_a: preserveWalkover ? match.score_a : serverMatch.score_a,
@@ -642,7 +643,7 @@ export default function LeagueMatchOrder() {
     });
     return applyProgramTournamentAdvancement(hydratedMatches)
       .sort((left, right) => left.match_order - right.match_order);
-  }, [generatedProgramMatches, serverProgramMatches]);
+  }, [currentProgramBlock?.tournamentSeeding, generatedProgramMatches, serverProgramMatches]);
 
   useEffect(() => {
     if (!isProgramMode || !leagueId || !programOption || programMatches.length === 0) return;

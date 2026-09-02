@@ -176,8 +176,9 @@ function MatchCard({
   const sb = match.score_b;
   const winA = shouldHighlightTournamentWinner(match, "a");
   const winB = shouldHighlightTournamentWinner(match, "b");
-  const showByeA = isR1 && !manualSeeding && !nameA;
-  const showByeB = isR1 && !manualSeeding && !nameB;
+  const isAutomaticWalkover = isDone && Boolean(match.participant_a_id) !== Boolean(match.participant_b_id);
+  const showByeA = isR1 && !nameA && (!manualSeeding || isAutomaticWalkover);
+  const showByeB = isR1 && !nameB && (!manualSeeding || isAutomaticWalkover);
   const displayNameA = nameA ?? (showByeA ? "BYE" : "미정");
   const displayNameB = nameB ?? (showByeB ? "BYE" : "미정");
   const canScore = canManage && (isPlaying || (isDone && !!nameA && !!nameB));
@@ -346,6 +347,7 @@ export default function LeagueTournamentMatchOrder() {
 
   const { data: participantsData } = useGetLeagueParticipantsQuery(id!, { skip: !canManage });
   const [assignParticipant] = useAssignMatchParticipantMutation();
+  const [resetRegisteredMatch] = useUpdateLeagueMatchMutation();
 
   // bracket=null인 리그 단계 경기 제외 (단일리그+토너먼트 혼합 포맷 지원)
   const matches = useMemo(() => (matchesData?.matches ?? []).filter((m) => !!m.bracket), [matchesData]);
@@ -465,10 +467,21 @@ export default function LeagueTournamentMatchOrder() {
 
   const handleAssign = async (participantId: string) => {
     if (!registerTarget) return;
+    const targetMatch = matches.find((match) => match.id === registerTarget.matchId);
     const body = registerTarget.slot === "a"
       ? { participant_a_id: participantId }
       : { participant_b_id: participantId };
-    await assignParticipant({ leagueId: id!, matchId: registerTarget.matchId, ...body });
+    await assignParticipant({ leagueId: id!, matchId: registerTarget.matchId, ...body }).unwrap();
+    const otherParticipantId = registerTarget.slot === "a"
+      ? targetMatch?.participant_b_id
+      : targetMatch?.participant_a_id;
+    if (otherParticipantId) {
+      await resetRegisteredMatch({
+        leagueId: id!,
+        matchId: registerTarget.matchId,
+        updates: { status: "pending", score_a: null, score_b: null },
+      }).unwrap();
+    }
     setRegisterTarget(null);
   };
 

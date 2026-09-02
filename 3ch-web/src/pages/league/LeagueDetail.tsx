@@ -207,6 +207,8 @@ import {
     const [joinFormationMembers, setJoinFormationMembers] = useState<Array<{ name: string; division: string; member_id?: number | null }>>([]);
     const [tournamentPlacementOpen, setTournamentPlacementOpen] = useState(false);
     const [selectedTournamentPlacement, setSelectedTournamentPlacement] = useState<{ program_round: number; match_id: string; slot: "a" | "b" } | null>(null);
+    const [botPlacementOpen, setBotPlacementOpen] = useState(false);
+    const [selectedBotId, setSelectedBotId] = useState("");
     const [participantClaimOpen, setParticipantClaimOpen] = useState(false);
     const [invitedGroupsOpen, setInvitedGroupsOpen] = useState(false);
     const [teamBuilderOpen, setTeamBuilderOpen] = useState(false);
@@ -317,6 +319,7 @@ import {
     };
 
     const rawParticipants = participantData?.participants ?? [];
+    const actualParticipantCount = rawParticipants.filter((participant) => !participant.is_bot).length;
 
     useEffect(() => {
       if (!id || !authUser) return;
@@ -351,6 +354,7 @@ import {
         doublesAssignments?: Array<Array<{ name: string; level: number }>>;
         doublesAssignmentModes?: Array<"manual" | "auto">;
         doublesAssignmentLocks?: boolean[];
+        participantOrder?: string[];
       }>;
       rounds?: Array<Record<string, unknown>>;
     } | null;
@@ -394,10 +398,14 @@ import {
     const canAddUnassignedFormationParticipant = useMemo(() => {
       if (!hasEventProgram || league?.status !== "active") return false;
       const data = programData?.program?.program_data as {
-        blocks?: Array<{ type?: string }>;
+        blocks?: Array<{ type?: string; format?: string }>;
       } | null;
       return Boolean(data?.blocks?.length)
-        && data!.blocks!.every((block) => block.type === "DOUBLES" || block.type === "TEAM");
+        && data!.blocks!.every((block) =>
+          block.type === "DOUBLES"
+          || block.type === "TEAM"
+          || (block.type === "SINGLES" && block.format === "GROUP")
+        );
     }, [hasEventProgram, league?.status, programData?.program?.program_data]);
 
     const confirmParticipantChange = (changeType: "add" | "edit" | "delete") => {
@@ -405,7 +413,7 @@ import {
       if (!canAddParticipantToProgram) {
         if (canAddUnassignedFormationParticipant && changeType === "add") {
           return window.confirm(
-            "참가자를 미편성 상태로 추가합니다. 기존 경기와 편성은 유지되며, 추가 후 편성 결과에서 복식·팀을 구성해 주세요.",
+            "참가자를 미편성 상태로 추가합니다. 기존 경기와 편성은 유지되며, 추가 후 편성 결과에서 조·복식·팀 위치를 선택해 주세요.",
           );
         }
         setAlertSeverity("warning");
@@ -424,7 +432,7 @@ import {
     const handleJoin = async (name?: string, division?: string, companions: Array<{ name: string; division: string; member_id?: number | null }> = []) => {
       if (!id) return;
       const recruitLimit = league?.recruit_count ?? 0;
-      const isFull = recruitLimit > 0 && rawParticipants.length >= recruitLimit;
+      const isFull = recruitLimit > 0 && actualParticipantCount >= recruitLimit;
       if (isFull) {
         setAlertSeverity("warning");
         setAlertMsg(`모집 인원(${league!.recruit_count}명)이 마감되었습니다.`);
@@ -443,7 +451,7 @@ import {
           leagueId: id,
           participants: [{ division: participantDivision, name: participantName }, ...companions],
         }).unwrap();
-        await resetProgramForParticipantCount(rawParticipants.length + 1 + companions.length);
+        await resetProgramForParticipantCount(actualParticipantCount + 1 + companions.length);
         setAlertSeverity("success");
         setAlertMsg("참가 신청이 완료되었습니다.");
         // 비로그인 게스트 하이라이트용: 입력한 이름을 리그별로 저장
@@ -468,7 +476,7 @@ import {
       if (!confirmParticipantChange("delete")) return;
       try {
         await deleteParticipant({ leagueId: id, participantId: myParticipant.id }).unwrap();
-        await resetProgramForParticipantCount(Math.max(0, rawParticipants.length - 1));
+        await resetProgramForParticipantCount(Math.max(0, actualParticipantCount - 1));
         setCancelJoinConfirm(false);
         setAlertSeverity("success");
         setAlertMsg("리그 참가 신청이 취소되었습니다.");
@@ -482,7 +490,7 @@ import {
     // 참가자 목록은 항상 부수 오름차순 + 이름 ㄱㄴㄷ 고정
     // (대진 순서는 대진표 생성 시 별도 사용)
     const participants = useMemo(() => {
-      return [...(participantData?.participants ?? [])].sort((a, b) => {
+      return [...(participantData?.participants ?? [])].filter((participant) => !participant.is_bot).sort((a, b) => {
         const numA = parseInt(a.division ?? "", 10);
         const numB = parseInt(b.division ?? "", 10);
         const aNum = isNaN(numA) ? 9999 : numA;
@@ -642,7 +650,7 @@ import {
     const submitAddedParticipant = async (placement?: { program_round: number; match_id: string; slot: "a" | "b" }) => {
       if (!id || !inputName.trim()) return;
       try {
-        await addParticipants({
+        const addResult = await addParticipants({
           leagueId: id,
           participants: [{
             division: inputDivision.trim(),
@@ -651,7 +659,36 @@ import {
           }],
           placement: placement ? { kind: "tournament", ...placement } : undefined,
         }).unwrap();
-        await resetProgramForParticipantCount(rawParticipants.length + 1);
+        const addedParticipantId = addResult.participants[0]?.id;
+        const botIds = new Set(rawParticipants.filter((participant) => participant.is_bot).map((participant) => participant.id));
+        const isActiveSingleLeague = league?.status === "active"
+          && teamProgram?.blocks?.every((block) => block.type === "SINGLES" && block.format === "LEAGUE");
+        if (addedParticipantId && botIds.size > 0 && isActiveSingleLeague && teamProgram?.blocks) {
+          const insertBeforeBot = <T extends { participantOrder?: string[] }>(round: T) => {
+            const baseOrder = round.participantOrder?.length
+              ? round.participantOrder
+              : rawParticipants.map((participant) => participant.id);
+            const withoutNew = baseOrder.filter((participantId) => participantId !== addedParticipantId);
+            const firstBotIndex = withoutNew.findIndex((participantId) => botIds.has(participantId));
+            const insertIndex = firstBotIndex < 0 ? withoutNew.length : firstBotIndex;
+            return {
+              ...round,
+              participantOrder: [
+                ...withoutNew.slice(0, insertIndex),
+                addedParticipantId,
+                ...withoutNew.slice(insertIndex),
+              ],
+            };
+          };
+          const nextProgram = {
+            ...teamProgram,
+            blocks: teamProgram.blocks.map(insertBeforeBot),
+            rounds: teamProgram.rounds?.map((round) => insertBeforeBot(round)),
+          };
+          await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
+          localStorage.setItem(`league-program-${id}`, JSON.stringify(nextProgram));
+        }
+        await resetProgramForParticipantCount(actualParticipantCount + 1);
         setInputDivision("");
         setInputName("");
         setTournamentPlacementOpen(false);
@@ -682,7 +719,7 @@ import {
       }
       const recruitLimit = league?.recruit_count ?? 0;
       const remaining = recruitLimit > 0
-        ? recruitLimit - rawParticipants.length
+        ? recruitLimit - actualParticipantCount
         : Infinity;
       if (selected.length > remaining) {
         setAlertSeverity("warning");
@@ -695,7 +732,7 @@ import {
           leagueId: id,
           participants: selected.map((m) => ({ division: m.division, name: m.name, member_id: m.member_id })),
         }).unwrap();
-        await resetProgramForParticipantCount(rawParticipants.length + selected.length);
+        await resetProgramForParticipantCount(actualParticipantCount + selected.length);
       } catch {
         setAlertSeverity("error");
         setAlertMsg("불러오기에 실패했습니다.");
@@ -706,7 +743,7 @@ import {
     const handleImageParticipants = async (recognized: Array<{ division: string; name: string; member_id?: number | null; source_group_id?: string | null }>) => {
       if (!id || recognized.length === 0) return;
       const recruitLimit = league?.recruit_count ?? 0;
-      const remaining = recruitLimit > 0 ? recruitLimit - rawParticipants.length : Infinity;
+      const remaining = recruitLimit > 0 ? recruitLimit - actualParticipantCount : Infinity;
       if (recognized.length > remaining) {
         setAlertSeverity("warning");
         setAlertMsg(`모집 인원(${league!.recruit_count}명)을 초과합니다. 최대 ${remaining}명 추가 가능합니다.`);
@@ -727,7 +764,7 @@ import {
           source_group_id: participant.source_group_id ?? (showParticipantGroups ? inputSourceGroupId || null : undefined),
         })),
       }).unwrap();
-      await resetProgramForParticipantCount(rawParticipants.length + recognized.length);
+      await resetProgramForParticipantCount(actualParticipantCount + recognized.length);
       setAlertSeverity("success");
       setAlertMsg(`${recognized.length}명의 참가자를 등록했습니다.`);
     };
@@ -761,6 +798,12 @@ import {
 
     const handleAddParticipant = async () => {
       if (!id || !inputName.trim()) return;
+      const availableBots = rawParticipants.filter((participant) => participant.is_bot);
+      if (hasEventProgram && league?.status === "active" && availableBots.length > 0) {
+        setSelectedBotId(availableBots[0].id);
+        setBotPlacementOpen(true);
+        return;
+      }
       if (hasEventProgram && !canAddParticipantToProgram && !canAddUnassignedFormationParticipant) {
         if (tournamentByeSlots.length > 0) {
           setSelectedTournamentPlacement(tournamentByeSlots[0]);
@@ -773,6 +816,41 @@ import {
       }
       if (!confirmParticipantChange("add")) return;
       await submitAddedParticipant();
+    };
+
+    const replaceBotWithAddedParticipant = async () => {
+      if (!id || !selectedBotId || !inputName.trim()) return;
+      try {
+        await replaceParticipant({
+          leagueId: id,
+          participantId: selectedBotId,
+          division: inputDivision.trim(),
+          name: inputName.trim(),
+          member_id: null,
+        }).unwrap();
+        setInputDivision("");
+        setInputName("");
+        setSelectedBotId("");
+        setBotPlacementOpen(false);
+        await Promise.all([refetchParticipants(), refetchLeague()]);
+        setAlertSeverity("success");
+        setAlertMsg("새 참가자를 BOT 자리에 배치했습니다. 기존 대진 위치는 유지됩니다.");
+      } catch (error: unknown) {
+        const message = (error as { data?: { message?: string } })?.data?.message;
+        setAlertSeverity("error");
+        setAlertMsg(message ?? "BOT 대체에 실패했습니다.");
+      }
+    };
+
+    const addParticipantBesideBot = async () => {
+      setBotPlacementOpen(false);
+      setSelectedBotId("");
+      if (!confirmParticipantChange("add")) return;
+      const added = await submitAddedParticipant();
+      if (added) {
+        setAlertSeverity("success");
+        setAlertMsg("새 참가자를 추가했습니다. 조·팀 편성이 필요한 경우 편성 결과에서 위치를 선택해 주세요.");
+      }
     };
 
     const handleToggle = (
@@ -799,10 +877,10 @@ import {
         : league?.type === "단식" && league?.format === "단일리그";
       if (
         isLimitedSingleLeague
-        && rawParticipants.length > SINGLE_ROUND_SINGLES_LEAGUE_MAX_PARTICIPANTS
+        && actualParticipantCount > SINGLE_ROUND_SINGLES_LEAGUE_MAX_PARTICIPANTS
       ) {
         setAlertSeverity("warning");
-        setAlertMsg(getSingleLeagueParticipantLimitMessage(rawParticipants.length));
+        setAlertMsg(getSingleLeagueParticipantLimitMessage(actualParticipantCount));
         return;
       }
       if (league?.status !== "active") {
@@ -953,7 +1031,7 @@ import {
       if (!id || !deleteParticipantTarget) return;
       try {
         await deleteParticipant({ leagueId: id, participantId: deleteParticipantTarget.id }).unwrap();
-        await resetProgramForParticipantCount(Math.max(0, rawParticipants.length - 1));
+        await resetProgramForParticipantCount(Math.max(0, actualParticipantCount - 1));
         setDeleteParticipantTarget(null);
       } catch {
         setAlertSeverity("error");
@@ -2077,6 +2155,42 @@ const handleSaveEdit = async () => {
         </Dialog>
 
         <Dialog
+          open={botPlacementOpen}
+          onClose={() => setBotPlacementOpen(false)}
+          maxWidth="xs"
+          fullWidth
+          slotProps={{ paper: { sx: { borderRadius: 2, mx: 2 } } }}
+        >
+          <DialogTitle sx={{ fontWeight: 900, fontSize: 17 }}>참가자 배치 방법</DialogTitle>
+          <DialogContent>
+            <Typography sx={{ mb: 2, fontSize: 14, lineHeight: 1.6 }}>
+              새 참가자를 BOT 자리에 배치하시겠습니까?<br />새 참가자로 마지막에 추가하시겠습니까?
+            </Typography>
+            {rawParticipants.filter((participant) => participant.is_bot).length > 1 && (
+              <Select
+                fullWidth
+                size="small"
+                value={selectedBotId}
+                onChange={(event) => setSelectedBotId(String(event.target.value))}
+              >
+                {rawParticipants.filter((participant) => participant.is_bot).map((bot) => (
+                  <MenuItem key={bot.id} value={bot.id}>{bot.name}</MenuItem>
+                ))}
+              </Select>
+            )}
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
+            <Button onClick={() => setBotPlacementOpen(false)}>취소</Button>
+            <Button variant="outlined" onClick={() => void replaceBotWithAddedParticipant()} disabled={!selectedBotId}>
+              BOT 대체
+            </Button>
+            <Button variant="contained" disableElevation onClick={() => void addParticipantBesideBot()}>
+              새 참가자
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog
           open={tournamentPlacementOpen}
           onClose={() => setTournamentPlacementOpen(false)}
           maxWidth="xs"
@@ -2738,7 +2852,7 @@ const handleSaveEdit = async () => {
             );
           }
           const recruitLimit = league?.recruit_count ?? 0;
-          const isFull = recruitLimit > 0 && rawParticipants.length >= recruitLimit;
+          const isFull = recruitLimit > 0 && actualParticipantCount >= recruitLimit;
           return (
             <Box sx={floatingBoxSx}>
               <Button fullWidth variant="contained" disableElevation disabled={isFull}
@@ -2790,7 +2904,7 @@ const handleSaveEdit = async () => {
             );
           }
           const recruitLimit = league?.recruit_count ?? 0;
-          const isFull = recruitLimit > 0 && rawParticipants.length >= recruitLimit;
+          const isFull = recruitLimit > 0 && actualParticipantCount >= recruitLimit;
           return (
             <Box sx={floatingBoxSx}>
               <Button

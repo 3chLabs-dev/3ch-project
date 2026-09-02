@@ -1,0 +1,3 @@
+ALTER TABLE "league_participants"
+ADD COLUMN IF NOT EXISTS "is_bot" BOOLEAN NOT NULL DEFAULT FALSE;
+

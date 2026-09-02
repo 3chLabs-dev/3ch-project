@@ -146,6 +146,7 @@ export interface LeagueParticipantItem {
   sort_order?: number | null;
   created_at: string;
   group_name?: string | null;
+  is_bot?: boolean;
   status?: "active" | "withdrawn";
 }
 
@@ -437,7 +438,7 @@ export interface ScanOcrResponse {
 
 export interface AddParticipantsRequest {
   leagueId: string;
-  participants: { division: string; name: string; member_id?: number | null; source_group_id?: string | null }[];
+  participants: { division: string; name: string; member_id?: number | null; source_group_id?: string | null; is_bot?: boolean }[];
   placement?: {
     kind: "tournament";
     program_round: number;

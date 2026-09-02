@@ -228,10 +228,11 @@ export function addLocalDevParticipants({ leagueId, participants }: AddParticipa
       sort_order: current.length + index + 1,
       created_at: now,
       group_name: groupName,
+      is_bot: participant.is_bot ?? false,
     })),
   ];
   saveLocalDevParticipants(leagueId, nextParticipants);
-  updateLeagueParticipantCount(leagueId, nextParticipants.length);
+  updateLeagueParticipantCount(leagueId, nextParticipants.filter((participant) => !participant.is_bot).length);
   return nextParticipants;
 }
 

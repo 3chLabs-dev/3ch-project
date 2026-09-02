@@ -546,6 +546,7 @@ model LeagueParticipant {
   sort_order   Int?
   group_name   String?
   is_leader    Boolean   @default(false)
+  is_bot       Boolean   @default(false)
   status       String    @default("active")
   withdrawn_at DateTime?
   created_at   DateTime  @default(now())

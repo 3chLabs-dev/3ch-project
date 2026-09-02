@@ -986,7 +986,7 @@ export function buildProgramRoundStandingsSnapshot(
 
   const unitById = new Map<string, MatchUnit>();
   roundMatches.forEach((match) => {
-    if (match.participant_a_id && !match.participant_a_id.startsWith("placeholder-")) {
+    if (match.participant_a_id && !match.participant_a_id.startsWith("placeholder-") && !/^BOT\s+\d+$/.test(match.participant_a_name ?? "")) {
       unitById.set(match.participant_a_id, {
         id: match.participant_a_id,
         name: match.participant_a_name,
@@ -994,7 +994,7 @@ export function buildProgramRoundStandingsSnapshot(
         seedLabel: match.participant_a_seed_label ?? undefined,
       });
     }
-    if (match.participant_b_id && !match.participant_b_id.startsWith("placeholder-")) {
+    if (match.participant_b_id && !match.participant_b_id.startsWith("placeholder-") && !/^BOT\s+\d+$/.test(match.participant_b_name ?? "")) {
       unitById.set(match.participant_b_id, {
         id: match.participant_b_id,
         name: match.participant_b_name,

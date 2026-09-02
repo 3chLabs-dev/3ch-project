@@ -2117,7 +2117,7 @@ router.get('/league/:id/participants', optionalAuth, async (req, res) => {
     const result = await pool.query(
       `SELECT lp.id, lp.league_id, lp.division, lp.name, lp.member_id, lp.source_group_id,
               sg.name AS source_group_name, lp.paid, lp.arrived, lp."after", lp.sort_order,
-              lp.status, lp.created_at, ${groupNameSelect}, ${isLeaderSelect}
+              lp.status, lp.created_at, lp.is_bot, ${groupNameSelect}, ${isLeaderSelect}
        FROM league_participants lp
        LEFT JOIN groups sg ON sg.id = lp.source_group_id
        WHERE lp.league_id = $1 AND lp.status = 'active'
@@ -2245,8 +2245,12 @@ router.post('/league/:leagueId/participants', optionalAuth, async (req, res) => 
       name: z.string().min(1, '이름은 필수입니다.'),
       member_id: z.number().int().nullable().optional(),
       source_group_id: z.string().uuid().nullable().optional(),
+      is_bot: z.boolean().optional().default(false),
     }));
     const participants = addSchema.parse(rawParticipants);
+    if (participants.some((participant) => participant.is_bot) && !isAdmin) {
+      return res.status(403).json({ message: 'BOT은 리그 관리자만 추가할 수 있습니다.' });
+    }
     const allowedSourceGroups = new Set([leaguePermRow.rows[0].group_id]);
     if (isAdmin) {
       const acceptedGroups = await pool.query(
@@ -2282,9 +2286,13 @@ router.post('/league/:leagueId/participants', optionalAuth, async (req, res) => 
       placementBlock?.type === 'SINGLES' && placementBlock?.format === 'TOURNAMENT';
     const validUnassignedFormationJoin = !placement && programBlocks.length > 0 &&
       programBlocks.every((block) => block?.type === 'DOUBLES' || block?.type === 'TEAM');
-    if (isLeagueActive && programBlocks.length > 0 &&
+    const validUnassignedGroupJoin = isAdmin && !placement && programBlocks.length > 0 &&
+      programBlocks.every((block) => block?.type === 'SINGLES' && block?.format === 'GROUP');
+    const botOnlyAddition = isAdmin && participants.every((participant) => participant.is_bot);
+    if (isLeagueActive && programBlocks.length > 0 && !botOnlyAddition &&
         !programBlocks.every((block) => block?.type === 'SINGLES' && block?.format === 'LEAGUE') &&
         !validUnassignedFormationJoin &&
+        !validUnassignedGroupJoin &&
         !validTournamentPlacement) {
       return res.status(409).json({
         message: '해당 프로그램에서는 참가자를 추가할 위치를 먼저 선택해야 합니다.',
@@ -2293,7 +2301,7 @@ router.post('/league/:leagueId/participants', optionalAuth, async (req, res) => 
 
     // 정원 초과 체크
     const leagueInfo = await pool.query(
-      `SELECT recruit_count, (SELECT COUNT(*) FROM league_participants WHERE league_id = $1 AND status = 'active') AS current_count
+      `SELECT recruit_count, (SELECT COUNT(*) FROM league_participants WHERE league_id = $1 AND status = 'active' AND is_bot = FALSE) AS current_count
        FROM leagues WHERE id = $1`,
       [leagueId],
     );
@@ -2301,7 +2309,8 @@ router.post('/league/:leagueId/participants', optionalAuth, async (req, res) => 
       return res.status(404).json({ message: '리그를 찾을 수 없습니다.' });
     }
     const { recruit_count, current_count } = leagueInfo.rows[0];
-    if (recruit_count && Number(current_count) + participants.length > recruit_count) {
+    const realParticipantCount = participants.filter((participant) => !participant.is_bot).length;
+    if (recruit_count && Number(current_count) + realParticipantCount > recruit_count) {
       return res.status(400).json({ message: `모집 인원(${recruit_count}명)을 초과할 수 없습니다.` });
     }
 
@@ -2309,10 +2318,10 @@ router.post('/league/:leagueId/participants', optionalAuth, async (req, res) => 
     let guestClaimToken = null;
     for (const p of participants) {
       const result = await pool.query(
-        `INSERT INTO league_participants (id, league_id, division, name, member_id, source_group_id, paid, arrived, "after")
-         VALUES ($1, $2, $3, $4, $5, $6, false, false, false)
-         RETURNING id, league_id, division, name, member_id, source_group_id, paid, arrived, "after", created_at`,
-        [randomUUID(), leagueId, p.division, p.name, isAdmin ? (p.member_id ?? null) : userId, isAdmin ? (p.source_group_id ?? (p.member_id ? leaguePermRow.rows[0].group_id : null)) : participantSourceGroupId],
+        `INSERT INTO league_participants (id, league_id, division, name, member_id, source_group_id, paid, arrived, "after", is_bot)
+         VALUES ($1, $2, $3, $4, $5, $6, false, false, false, $7)
+         RETURNING id, league_id, division, name, member_id, source_group_id, paid, arrived, "after", is_bot, created_at`,
+        [randomUUID(), leagueId, p.division, p.name, p.is_bot ? null : (isAdmin ? (p.member_id ?? null) : userId), p.is_bot ? null : (isAdmin ? (p.source_group_id ?? (p.member_id ? leaguePermRow.rows[0].group_id : null)) : participantSourceGroupId), p.is_bot],
       );
       inserted.push(result.rows[0]);
       if (!userId) {
@@ -2328,7 +2337,7 @@ router.post('/league/:leagueId/participants', optionalAuth, async (req, res) => 
     // participant_count 실수 기반으로 갱신
     await pool.query(
       `UPDATE leagues SET participant_count = (
-         SELECT COUNT(*) FROM league_participants WHERE league_id = $1 AND status = 'active'
+         SELECT COUNT(*) FROM league_participants WHERE league_id = $1 AND status = 'active' AND is_bot = FALSE
        ), updated_at = NOW() WHERE id = $1`,
       [leagueId],
     );
@@ -2366,7 +2375,7 @@ router.post('/league/:leagueId/participants', optionalAuth, async (req, res) => 
         await pool.query(`DELETE FROM league_participants WHERE id = $1 AND league_id = $2`, [inserted[0].id, leagueId]);
         await pool.query(
           `UPDATE leagues SET participant_count = (
-             SELECT COUNT(*) FROM league_participants WHERE league_id = $1 AND status = 'active'
+             SELECT COUNT(*) FROM league_participants WHERE league_id = $1 AND status = 'active' AND is_bot = FALSE
            ), updated_at = NOW() WHERE id = $1`,
           [leagueId],
         );
@@ -2862,7 +2871,7 @@ router.post('/league/:leagueId/participants/:participantId/replace', requireAuth
 
     await client.query('BEGIN');
     const current = await client.query(
-      `SELECT id, member_id, name, division, ${hasStatus ? 'status' : "'active'::text AS status"}
+      `SELECT id, member_id, name, division, is_bot, ${hasStatus ? 'status' : "'active'::text AS status"}
        FROM league_participants
        WHERE id = $1 AND league_id = $2
        FOR UPDATE`,
@@ -2899,11 +2908,41 @@ router.post('/league/:leagueId/participants/:participantId/replace', requireAuth
 
     const updated = await client.query(
       `UPDATE league_participants
-       SET member_id = $1, name = $2, division = $3${hasStatus ? ", status = 'active', withdrawn_at = NULL" : ''}
+       SET member_id = $1, name = $2, division = $3, is_bot = FALSE${hasStatus ? ", status = 'active', withdrawn_at = NULL" : ''}
        WHERE id = $4 AND league_id = $5
        RETURNING id, league_id, division, name, member_id, paid, arrived, "after", ${hasStatus ? 'status' : "'active'::text AS status"}, created_at`,
       [replacement.member_id ?? null, replacement.name, replacement.division, participantId, leagueId],
     );
+    if (previous.is_bot) {
+      const programResult = await client.query(
+        `SELECT program_data FROM league_programs WHERE league_id = $1 FOR UPDATE`,
+        [leagueId],
+      );
+      const programData = programResult.rows[0]?.program_data;
+      const replaceBotAssignment = (value) => {
+        if (Array.isArray(value)) return value.map(replaceBotAssignment);
+        if (!value || typeof value !== 'object') return value;
+        const next = Object.fromEntries(Object.entries(value).map(([key, child]) => [key, replaceBotAssignment(child)]));
+        if (value.name === previous.name && (value.level === 0 || value.level == null)) {
+          next.name = replacement.name;
+          next.level = Number.parseInt(replacement.division, 10) || 0;
+          delete next.isBot;
+        }
+        return next;
+      };
+      if (programData) {
+        await client.query(
+          `UPDATE league_programs SET program_data = $2::jsonb, updated_at = NOW() WHERE league_id = $1`,
+          [leagueId, JSON.stringify(replaceBotAssignment(programData))],
+        );
+      }
+      await client.query(
+        `UPDATE leagues SET participant_count = (
+           SELECT COUNT(*) FROM league_participants WHERE league_id = $1 AND status = 'active' AND is_bot = FALSE
+         ), updated_at = NOW() WHERE id = $1`,
+        [leagueId],
+      );
+    }
     await client.query('COMMIT');
     await triggerRankingRebuildByLeagueId(leagueId);
     return res.json({ message: '참가자가 교체되었습니다.', participant: updated.rows[0] });
@@ -3075,7 +3114,7 @@ router.delete('/league/:leagueId/participants/:participantId', requireAuth, asyn
     // participant_count 실수 기반으로 갱신
     await pool.query(
       `UPDATE leagues SET participant_count = (
-         SELECT COUNT(*) FROM league_participants WHERE league_id = $1 AND status = 'active'
+         SELECT COUNT(*) FROM league_participants WHERE league_id = $1 AND status = 'active' AND is_bot = FALSE
        ), updated_at = NOW() WHERE id = $1`,
       [leagueId],
     );
@@ -3645,6 +3684,7 @@ router.get('/league/:id/matches', optionalAuth, async (req, res) => {
       `SELECT
          m.id, m.match_order, m.score_a, m.score_b, m.court, m.status, m.match_rule,
          m.participant_a_id, m.participant_b_id,
+         m.participant_a_roster_ids, m.participant_b_roster_ids,
          m.is_program, m.program_round, m.program_block_type,
          m.bracket, m.round_number, m.match_label,
          m.next_match_id, m.next_slot, m.loser_next_match_id, m.loser_next_slot,
@@ -3657,7 +3697,54 @@ router.get('/league/:id/matches', optionalAuth, async (req, res) => {
        ORDER BY m.match_order ASC`,
       [leagueId],
     );
-    return res.json({ matches: result.rows });
+    const rosterParticipantIds = [...new Set(result.rows.flatMap((match) => [
+      ...(Array.isArray(match.participant_a_roster_ids) ? match.participant_a_roster_ids : []),
+      ...(Array.isArray(match.participant_b_roster_ids) ? match.participant_b_roster_ids : []),
+    ]).filter(Boolean))];
+    let rosterParticipantById = new Map();
+    if (rosterParticipantIds.length > 0) {
+      const rosterParticipants = await pool.query(
+        `SELECT id, name, division FROM league_participants WHERE league_id = $1 AND id = ANY($2::uuid[])`,
+        [leagueId, rosterParticipantIds],
+      );
+      rosterParticipantById = new Map(rosterParticipants.rows.map((participant) => [participant.id, participant]));
+    }
+    const resolveRoster = (ids, fallbackId, fallbackName, fallbackDivision) => {
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return { id: fallbackId, name: fallbackName, division: fallbackDivision, roster: undefined, details: undefined };
+      }
+      const roster = ids.map((participantId) => rosterParticipantById.get(participantId)).filter(Boolean);
+      if (roster.length === 0) return { id: null, name: null, division: null, roster: [], details: [] };
+      const divisionTotal = roster.reduce((sum, participant) => {
+        const division = Number.parseInt(String(participant.division ?? ''), 10);
+        return sum + (Number.isFinite(division) ? division : 0);
+      }, 0);
+      return {
+        id: ids.join('+'),
+        name: roster.map((participant) => participant.name).join(' · '),
+        division: String(divisionTotal),
+        roster: roster.map((participant) => participant.name),
+        details: roster.map((participant) => ({ name: participant.name, division: participant.division ?? null })),
+      };
+    };
+    const hydratedMatches = result.rows.map((match) => {
+      const sideA = resolveRoster(match.participant_a_roster_ids, match.participant_a_id, match.participant_a_name, match.participant_a_division);
+      const sideB = resolveRoster(match.participant_b_roster_ids, match.participant_b_id, match.participant_b_name, match.participant_b_division);
+      return {
+        ...match,
+        participant_a_id: sideA.id,
+        participant_a_name: sideA.name,
+        participant_a_division: sideA.division,
+        participant_b_id: sideB.id,
+        participant_b_name: sideB.name,
+        participant_b_division: sideB.division,
+        participant_a_roster: sideA.roster,
+        participant_b_roster: sideB.roster,
+        participant_a_roster_details: sideA.details,
+        participant_b_roster_details: sideB.details,
+      };
+    });
+    return res.json({ matches: hydratedMatches });
   } catch (err) {
     console.error('Error fetching matches:', err);
     return res.status(500).json({ message: '서버 오류' });

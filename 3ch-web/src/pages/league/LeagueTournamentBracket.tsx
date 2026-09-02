@@ -552,8 +552,13 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
   const swapSelA = actions?.swapFirstKey === `${m.id}:a`;
   const swapSelB = actions?.swapFirstKey === `${m.id}:b`;
   const seed = actions?.seedMap?.get(m.id);
-  const displaySeedA = isR1 ? seed?.a : m.participant_a_seed_label;
-  const displaySeedB = isR1 ? seed?.b : m.participant_b_seed_label;
+  // 예선 조별리그에서 진출한 참가자는 생성 시 저장된 "조-순위"를
+  // 그대로 표시한다. 일반 토너먼트처럼 출처 라벨이 없는 참가자만
+  // 브래킷의 표준 1회전 슬롯 번호(1-N)를 사용한다.
+  const displaySeedA = m.participant_a_seed_label ??
+    (isR1 && m.participant_a_id && seed?.a ? `1-${seed.a}` : undefined);
+  const displaySeedB = m.participant_b_seed_label ??
+    (isR1 && m.participant_b_id && seed?.b ? `1-${seed.b}` : undefined);
 
   const handleSlotA = () => {
     if (!actions || !isR1) return;
@@ -603,7 +608,7 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
         )}
         {isR1 && !nameA && manualSeeding ? (
           <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 0.75 }}>
-            {displaySeedA && <Typography sx={{ fontSize: 11, fontWeight: 800, color: "#94A3B8" }}>{isR1 ? `1-${displaySeedA}` : displaySeedA}</Typography>}
+            {displaySeedA && <Typography sx={{ fontSize: 11, fontWeight: 800, color: "#94A3B8" }}>{displaySeedA}</Typography>}
             {actions?.canRegister && !actions.editMode && (
               <Box sx={{ px: 0.8, py: 0.2, borderRadius: 0.6, bgcolor: "#2F80ED", display: "flex", alignItems: "center" }}>
                 <Typography sx={{ fontSize: 9, fontWeight: 900, color: "#fff", lineHeight: 1.4 }}>등록</Typography>
@@ -634,7 +639,7 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
         )}
         {isR1 && !nameB && manualSeeding ? (
           <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 0.75 }}>
-            {displaySeedB && <Typography sx={{ fontSize: 11, fontWeight: 800, color: "#94A3B8" }}>{isR1 ? `1-${displaySeedB}` : displaySeedB}</Typography>}
+            {displaySeedB && <Typography sx={{ fontSize: 11, fontWeight: 800, color: "#94A3B8" }}>{displaySeedB}</Typography>}
             {actions?.canRegister && !actions.editMode && (
               <Box sx={{ px: 0.8, py: 0.2, borderRadius: 0.6, bgcolor: "#2F80ED", display: "flex", alignItems: "center" }}>
                 <Typography sx={{ fontSize: 9, fontWeight: 900, color: "#fff", lineHeight: 1.4 }}>등록</Typography>
@@ -686,9 +691,11 @@ function SingleSlotBox({ pos, slot, actions, manualSeeding = false }: { pos: Mat
   const division = slot === "a" ? m.participant_a_division : m.participant_b_division;
   const seed = actions?.seedMap?.get(m.id);
   const seedNum = slot === "a" ? seed?.a : seed?.b;
-  const displaySeed = isR1
-    ? seedNum
-    : slot === "a" ? m.participant_a_seed_label : m.participant_b_seed_label;
+  const participantSeedLabel = slot === "a"
+    ? m.participant_a_seed_label
+    : m.participant_b_seed_label;
+  const displaySeed = participantSeedLabel ??
+    (isR1 && participantId && seedNum ? `1-${seedNum}` : undefined);
   const swapSel = actions?.swapFirstKey === `${m.id}:${slot}`;
 
   const handleClick = () => {
@@ -725,7 +732,7 @@ function SingleSlotBox({ pos, slot, actions, manualSeeding = false }: { pos: Mat
         flexShrink: 0,
       }}>
         <Typography sx={{ fontSize: 8, fontWeight: 700, color: m.bracket === "lower" ? "#7C3AED" : "#2563EB", lineHeight: 1 }}>
-          {displaySeed ? (isR1 ? `1-${displaySeed}` : displaySeed) : (m.match_label ?? `R${m.round_number}`)}
+          {displaySeed ?? (m.match_label ?? `R${m.round_number}`)}
         </Typography>
       </Box>
 
@@ -1000,8 +1007,9 @@ export default function LeagueTournamentBracket() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const isProgramMode = searchParams.get("program") === "1";
-  const programRound = Number.parseInt(searchParams.get("round") ?? "1", 10) || 1;
+  const isProgramMode = searchParams.get("program") === "1" || window.location.pathname.includes("/program/");
+  const storedProgramRound = id ? localStorage.getItem(`league-program-active-round-${id}`) : null;
+  const programRound = Number.parseInt(searchParams.get("round") ?? storedProgramRound ?? "1", 10) || 1;
   const [zoom, setZoom] = useState(1);
   const [editMode, setEditMode] = useState(false);
   const [resultMatchId, setResultMatchId] = useState<string | null>(null);

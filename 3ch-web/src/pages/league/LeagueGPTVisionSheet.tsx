@@ -500,6 +500,7 @@ interface BracketRowProps {
   leagueId: string;
   winScore: number | null;
   isMe: boolean;        // 현재 로그인 유저와 동일 여부 (하이라이트 용)
+  isBot?: boolean;
   rules?: string;
   onProgramMatchUpdate?: (matchId: string, updates: ProgramMatchPatch) => void;
 }
@@ -516,7 +517,7 @@ interface BracketRowProps {
  */
 const SortableBracketRow = memo(function SortableBracketRow({
   participant, teamRoster, aggregateDivision = false, rowIdx, n, localOrder, editMode, canManage, canScore, landscape,
-  matchLookup, wins, losses, setTotal, rank, tieSetDiff, hasPlayed, leagueId, winScore, isMe, rules, onProgramMatchUpdate,
+  matchLookup, wins, losses, setTotal, rank, tieSetDiff, hasPlayed, leagueId, winScore, isMe, isBot, rules, onProgramMatchUpdate,
 }: BracketRowProps) {
   const canDrag = editMode && canManage;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -640,7 +641,7 @@ const SortableBracketRow = memo(function SortableBracketRow({
       )}
       {/* 1위는 빨간 볼드로 강조 */}
       <StyledTableCell sx={{ color: rank === 1 && hasPlayed ? COLOR.loss : "inherit", fontWeight: rank === 1 && hasPlayed ? 700 : 400 }}>
-        {hasPlayed ? rank : ""}
+        {!isBot && hasPlayed ? rank : ""}
       </StyledTableCell>
       {/* 동점자 직접 대결 득실 (동점이 없으면 빈 칸) */}
       <StyledTableCell>{tieSetDiff || ""}</StyledTableCell>
@@ -2659,6 +2660,7 @@ export default function LeagueGPTVisionSheet() {
                         leagueId={id ?? ""}
                         winScore={winScore}
                         isMe={!!myName && rowPlayer.name === myName}
+                        isBot={rowPlayer.is_bot}
                         rules={getProgramRuleLabel(currentRule ?? "")}
                         onProgramMatchUpdate={isProgramMode ? updateProgramMatch : undefined}
                       />

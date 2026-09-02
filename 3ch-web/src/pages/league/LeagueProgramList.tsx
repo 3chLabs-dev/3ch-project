@@ -34,6 +34,7 @@ import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } 
 import { CSS } from "@dnd-kit/utilities";
 import {
   useDeleteAllLeagueMatchesMutation,
+  useAddParticipantsMutation,
   useDeleteLeagueProgramMutation,
   useGetLeagueProgramQuery,
   useGetLeagueMatchesQuery,
@@ -108,6 +109,7 @@ type FormationPlayer = {
   name: string;
   level: number;
   roster?: FormationPlayer[];
+  isBot?: boolean;
 };
 
 const FORMATION_COLORS = [
@@ -157,7 +159,7 @@ function SortableFormationPlayer({ player, locked = false }: { player: Formation
   );
 }
 
-function FormationEditCard({ players, index, label, locked = false, teamMode }: { players: FormationPlayer[]; index: number; label: string; locked?: boolean; teamMode?: "manual" | "auto" }) {
+function FormationEditCard({ players, index, label, locked = false, teamMode, onAddBot, onAddWaiting, hasWaitingPlayer }: { players: FormationPlayer[]; index: number; label: string; locked?: boolean; teamMode?: "manual" | "auto"; onAddBot: (index: number) => void; onAddWaiting: (index: number) => void; hasWaitingPlayer: boolean }) {
   const { setNodeRef, isOver } = useDroppable({ id: `formation-group-${index}`, disabled: locked });
   const accent = FORMATION_COLORS[index % FORMATION_COLORS.length];
 
@@ -175,6 +177,26 @@ function FormationEditCard({ players, index, label, locked = false, teamMode }: 
         <SortableContext items={players.map(formationPlayerId)} strategy={verticalListSortingStrategy} disabled={locked}>
           {players.map((player) => <SortableFormationPlayer key={formationPlayerId(player)} player={player} locked={locked} />)}
         </SortableContext>
+        <Button
+          size="small"
+          startIcon={<AddIcon />}
+          onClick={() => onAddBot(index)}
+          disabled={locked}
+          sx={{ mt: 0.5, width: "100%", minHeight: 30, border: "1px dashed #94A3B8", color: "#475569", fontSize: 11, fontWeight: 800 }}
+        >
+          BOT 추가
+        </Button>
+        {hasWaitingPlayer && (
+          <Button
+            size="small"
+            startIcon={<AddIcon />}
+            onClick={() => onAddWaiting(index)}
+            disabled={locked}
+            sx={{ mt: 0.5, width: "100%", minHeight: 30, bgcolor: "#EFF6FF", color: "#1D4ED8", fontSize: 11, fontWeight: 800 }}
+          >
+            여기에 추가
+          </Button>
+        )}
       </Box>
       <Box sx={{ borderTop: "1px solid #E5E7EB", px: 1.25, py: 0.8 }}>
         <Typography sx={{ fontSize: 12, color: "text.secondary", fontWeight: 700 }}>
@@ -279,7 +301,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
   const navigate = useNavigate();
   const { data: leagueData, isLoading: leagueLoading } = useGetLeagueQuery(id!);
   const { data: matchesData, isLoading: matchesLoading } = useGetLeagueMatchesQuery(id!);
-  const { data: participantsData, isLoading: participantsLoading } = useGetLeagueParticipantsQuery(id!, { skip: !id });
+  const { data: participantsData, isLoading: participantsLoading, refetch: refetchParticipants } = useGetLeagueParticipantsQuery(id!, { skip: !id });
   const { data: programData, isLoading: programLoading } = useGetLeagueProgramQuery(id!, { skip: !id });
   const { data: groupData, isLoading: groupLoading } = useGetGroupDetailQuery(
     leagueData?.league?.group_id ?? "",
@@ -289,6 +311,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
   const [deleteLeagueProgram] = useDeleteLeagueProgramMutation();
   const [saveLeagueProgram, { isLoading: isSavingFormation }] = useSaveLeagueProgramMutation();
   const [syncLeagueProgramMatches] = useSyncLeagueProgramMatchesMutation();
+  const [addParticipants] = useAddParticipantsMutation();
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [storedProgram, setStoredProgram] = useState<StoredProgramOption | null>(null);
@@ -429,6 +452,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
         return {
           name: participant.name,
           level: Number.isNaN(level) ? 0 : level,
+          isBot: participant.is_bot,
         };
       })
       .sort((a, b) => (a.level || Number.MAX_SAFE_INTEGER) - (b.level || Number.MAX_SAFE_INTEGER) || a.name.localeCompare(b.name));
@@ -859,7 +883,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
     nextProgram: StoredProgramOption,
     roundIndex: number,
     resetMatches: boolean,
-    syncMatches = resetMatches,
+    syncMatches = true,
   ) => {
     if (!id || !canManage) return;
     setStoredProgram(nextProgram);
@@ -950,6 +974,37 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
     setFormationDialog({ roundIndex, mode });
   };
 
+  const addBotToFormationDraft = (groupIndex: number) => {
+    const usedNumbers = [...participants, ...formationDraft.flat()]
+      .filter((participant) =>
+        ("is_bot" in participant && participant.is_bot)
+        || ("isBot" in participant && participant.isBot)
+        || /^BOT\s+\d+$/.test(participant.name)
+      )
+      .map((participant) => Number.parseInt(participant.name.match(/\d+/)?.[0] ?? "0", 10));
+    const nextNumber = Math.max(0, ...usedNumbers) + 1;
+    setFormationDraft((previous) => previous.map((group, index) =>
+      index === groupIndex ? [...group, { name: `BOT ${nextNumber}`, level: 0, isBot: true }] : group
+    ));
+  };
+
+  const waitingFormationPlayers = useMemo(() => {
+    const remaining = [...programPlayers];
+    formationDraft.flat().forEach((assigned) => {
+      const index = remaining.findIndex((candidate) => formationPlayerId(candidate) === formationPlayerId(assigned));
+      if (index >= 0) remaining.splice(index, 1);
+    });
+    return remaining;
+  }, [formationDraft, programPlayers]);
+
+  const addWaitingPlayerToFormationDraft = (groupIndex: number) => {
+    const waiting = waitingFormationPlayers[0];
+    if (!waiting) return;
+    setFormationDraft((previous) => previous.map((group, index) =>
+      index === groupIndex ? [...group, waiting] : group
+    ));
+  };
+
   const toggleTeamLock = async (teamIndex: number) => {
     if (!formationDialog || formationDialog.mode !== "team" || !storedProgram?.blocks) return;
     const { roundIndex } = formationDialog;
@@ -1036,23 +1091,36 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
     if (!formationDialog || !storedProgram?.blocks) return;
     const { roundIndex, mode } = formationDialog;
     if (mode === "doubles" && formationDraft.some((group) => group.length !== 2)) return;
+    let savedFormationDraft = formationDraft;
+    const unsavedBots = formationDraft.flat().filter(
+      (player) => player.isBot && !participants.some((participant) => participant.name === player.name && participant.is_bot),
+    );
+    if (unsavedBots.length > 0) {
+      await addParticipants({
+        leagueId: id!,
+        participants: unsavedBots.map((bot) => ({ name: bot.name, division: "", member_id: null, is_bot: true })),
+      }).unwrap();
+      await refetchParticipants();
+      savedFormationDraft = formationDraft.map((group) => group.map((player) => ({ ...player, isBot: undefined })));
+    }
     // Editing changes members only. A team's manual/automatic identity is decided
     // when it is created, and must not change merely because an operator adjusts it.
-    const mixedTeamAssignments = formationDraft;
+    const mixedTeamAssignments = savedFormationDraft;
     const teamAssignmentModes = mode === "team"
-      ? formationDraft.map((_, index) => teamFormationMode(index))
+      ? savedFormationDraft.map((_, index) => teamFormationMode(index))
       : undefined;
     const teamAssignmentLocks = mode === "team"
-      ? formationDraft.map((_, index) => isTeamLocked(index))
+      ? savedFormationDraft.map((_, index) => isTeamLocked(index))
       : undefined;
     const doublesAssignmentModes = mode === "doubles"
-      ? formationDraft.map((_, index) => doublesFormationMode(index))
+      ? savedFormationDraft.map((_, index) => doublesFormationMode(index))
       : undefined;
     const doublesAssignmentLocks = mode === "doubles"
-      ? formationDraft.map((_, index) => isDoublesLocked(index))
+      ? savedFormationDraft.map((_, index) => isDoublesLocked(index))
       : undefined;
-    const remainingParticipants = [...participants];
-    const participantOrder = formationDraft.flatMap((group) =>
+    const latestParticipants = (await refetchParticipants()).data?.participants ?? participants;
+    const remainingParticipants = [...latestParticipants];
+    const participantOrder = savedFormationDraft.flatMap((group) =>
       group.flatMap((player) => {
         let participantIndex = remainingParticipants.findIndex((participant) => {
           const division = Number.parseInt(String(participant.division ?? "").replace(/[^0-9]/g, ""), 10);
@@ -1103,15 +1171,15 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
         };
       }
       if (mode === "doubles") {
-        return { ...block, doublesAssignments: formationDraft, doublesAssignmentModes, doublesAssignmentLocks };
+        return { ...block, doublesAssignments: savedFormationDraft, doublesAssignmentModes, doublesAssignmentLocks };
       }
       return {
         ...block,
-        groupAssignments: formationDraft,
+        groupAssignments: savedFormationDraft,
         participantOrder,
         ...(block.type === "TEAM"
-          ? { teamGroupSizes: formationDraft.map((group) => group.length) }
-          : { groupSizes: formationDraft.map((group) => group.length) }),
+          ? { teamGroupSizes: savedFormationDraft.map((group) => group.length) }
+          : { groupSizes: savedFormationDraft.map((group) => group.length) }),
       };
     });
     propagateTeamFormation = false;
@@ -1150,15 +1218,15 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
         };
       }
       if (mode === "doubles") {
-        return { ...round, doublesAssignments: formationDraft, doublesAssignmentModes, doublesAssignmentLocks };
+        return { ...round, doublesAssignments: savedFormationDraft, doublesAssignmentModes, doublesAssignmentLocks };
       }
       return {
         ...round,
-        groupAssignments: formationDraft,
+        groupAssignments: savedFormationDraft,
         participantOrder,
         ...(activeFormationBlock?.type === "TEAM"
-          ? { teamGroupSizes: formationDraft.map((group) => group.length) }
-          : { groupSizes: formationDraft.map((group) => group.length) }),
+          ? { teamGroupSizes: savedFormationDraft.map((group) => group.length) }
+          : { groupSizes: savedFormationDraft.map((group) => group.length) }),
       };
     });
     requestFormationSave(
@@ -1846,6 +1914,9 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
                     label={formationDialog?.mode === "team" || formationDialog?.mode === "doubles" ? `${String.fromCharCode(65 + index)}팀` : `${index + 1}조`}
                     locked={formationDialog?.mode === "team" ? isTeamLocked(index) : formationDialog?.mode === "doubles" ? isDoublesLocked(index) : false}
                     teamMode={formationDialog?.mode === "team" ? teamFormationMode(index) : formationDialog?.mode === "doubles" ? doublesFormationMode(index) : undefined}
+                    onAddBot={addBotToFormationDraft}
+                    onAddWaiting={addWaitingPlayerToFormationDraft}
+                    hasWaitingPlayer={waitingFormationPlayers.length > 0}
                   />
                 ))}
               </Box>

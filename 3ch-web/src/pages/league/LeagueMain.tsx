@@ -12,6 +12,7 @@ import {
 import TuneIcon from "@mui/icons-material/Tune";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import MailOutlineIcon from "@mui/icons-material/MailOutline";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { formatLeagueDateTime } from "../../utils/dateUtils";
 import AdFitBanner from "../../components/AdFitBanner";
 import LeagueFilterDialog from "../../components/LeagueFilterDialog.tsx";
@@ -38,6 +39,7 @@ export default function LeagueMainBody() {
     "scheduled",
     "active",
   ]);
+  const [visibleLeagueCounts, setVisibleLeagueCounts] = useState<Record<string, number>>({});
 
   const { data } = useGetMyGroupsQuery(undefined, {
     skip: !isLoggedIn,
@@ -143,6 +145,7 @@ export default function LeagueMainBody() {
   const scheduleGroupIds = useMemo(() => myGroups.map((group) => group.id), [myGroups]);
 
   const toggleScheduleGroup = (groupId: string) => {
+    setVisibleLeagueCounts({});
     setSelectedScheduleGroupIds((current) => {
       if (current.length === 0) return [groupId];
       const next = current.includes(groupId)
@@ -245,7 +248,10 @@ export default function LeagueMainBody() {
         <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
           <Chip
             label="전체 클럽"
-            onClick={() => setSelectedScheduleGroupIds([])}
+            onClick={() => {
+              setSelectedScheduleGroupIds([]);
+              setVisibleLeagueCounts({});
+            }}
             color={selectedScheduleGroupIds.length === 0 ? "primary" : "default"}
             variant={selectedScheduleGroupIds.length === 0 ? "filled" : "outlined"}
             sx={{ fontWeight: 800 }}
@@ -287,6 +293,8 @@ export default function LeagueMainBody() {
           <Stack spacing={2}>
             {leaguesByGroup.map(({ group, leagues: groupLeagues }) => {
               const color = getLeagueClubColor(group.id, scheduleGroupIds);
+              const visibleCount = visibleLeagueCounts[group.id] ?? 5;
+              const hasMore = visibleCount < groupLeagues.length;
               return (
                 <Stack key={group.id} spacing={1}>
                   <Stack direction="row" spacing={1} alignItems="center">
@@ -295,18 +303,60 @@ export default function LeagueMainBody() {
                     <Typography fontSize={12} color="text.secondary">{groupLeagues.length}개</Typography>
                     <Divider sx={{ flex: 1 }} />
                   </Stack>
-                  {groupLeagues.map((league) => (
+                  {groupLeagues.slice(0, visibleCount).map((league) => (
                     <LeagueCard key={league.id} league={league} color={color} />
                   ))}
+                  {hasMore && (
+                    <Button
+                      variant="text"
+                      endIcon={<ExpandMoreIcon sx={{ fontSize: 19 }} />}
+                      onClick={() => setVisibleLeagueCounts((current) => ({
+                        ...current,
+                        [group.id]: visibleCount + 5,
+                      }))}
+                      sx={{
+                        alignSelf: "center",
+                        minWidth: 112,
+                        color: "#475569",
+                        fontWeight: 800,
+                        "& .MuiButton-endIcon": { ml: 0.25 },
+                      }}
+                    >
+                      더보기
+                    </Button>
+                  )}
                 </Stack>
               );
             })}
           </Stack>
         ) : (
           <SoftCard>
-            <Typography textAlign="center" color="text.secondary" fontWeight={700}>
-              조건에 맞는 리그가 없습니다.
-            </Typography>
+            <Stack alignItems="center" spacing={1.5}>
+              <Typography textAlign="center" color="text.secondary" fontWeight={700}>
+                조건에 맞는 리그가 없습니다.
+              </Typography>
+              <Button
+                variant="outlined"
+                onClick={() => {
+                  setLeagueFilterStatus(["completed"]);
+                  setVisibleLeagueCounts({});
+                }}
+                sx={{
+                  minWidth: 148,
+                  bgcolor: "#FFFFFF",
+                  borderColor: "#2F80ED",
+                  color: "#2F80ED",
+                  borderRadius: 1.5,
+                  fontWeight: 800,
+                  "&:hover": {
+                    bgcolor: "#F5F9FF",
+                    borderColor: "#1D6FDB",
+                  },
+                }}
+              >
+                종료된 리그 보기
+              </Button>
+            </Stack>
           </SoftCard>
         )
       ) : (
@@ -340,6 +390,7 @@ export default function LeagueMainBody() {
           setLeagueFilterStart(startDate);
           setLeagueFilterEnd(endDate);
           setLeagueFilterStatus(status);
+          setVisibleLeagueCounts({});
         }}
       />
       <LeagueCalendarDialog

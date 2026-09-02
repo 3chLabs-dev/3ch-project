@@ -167,10 +167,9 @@ const handleQuickRange = (range: QuickRange) => {
             maxWidth="xs"
             PaperProps={{
                 sx: {
-                    borderRadius: 0,
-                    m: 0,
-                    width: "100%",
-                    maxWidth: 420,
+                    borderRadius: 1,
+                    overflow: "hidden",
+                    maxWidth: 430,
                 },
             }}
         >
@@ -250,17 +249,17 @@ const handleQuickRange = (range: QuickRange) => {
 
                             <Stack direction="row" spacing={0.8} flexWrap="wrap">
                                 <Button
-                                    sx={chipButtonSx(localStatus.includes("active"))}
-                                    onClick={() => toggleStatus("active")}
-                                >
-                                    진행중
-                                </Button>
-
-                                <Button
                                     sx={chipButtonSx(localStatus.includes("scheduled"))}
                                     onClick={() => toggleStatus("scheduled")}
                                 >
                                     예정
+                                </Button>
+
+                                <Button
+                                    sx={chipButtonSx(localStatus.includes("active"))}
+                                    onClick={() => toggleStatus("active")}
+                                >
+                                    진행 중
                                 </Button>
 
                                 <Button

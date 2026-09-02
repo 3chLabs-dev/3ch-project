@@ -308,7 +308,7 @@ export default function LeagueMainBody() {
                   ))}
                   {hasMore && (
                     <Button
-                      variant="text"
+                      variant="outlined"
                       endIcon={<ExpandMoreIcon sx={{ fontSize: 19 }} />}
                       onClick={() => setVisibleLeagueCounts((current) => ({
                         ...current,
@@ -316,10 +316,17 @@ export default function LeagueMainBody() {
                       }))}
                       sx={{
                         alignSelf: "center",
-                        minWidth: 112,
-                        color: "#475569",
+                        minWidth: 124,
+                        bgcolor: "#FFFFFF",
+                        borderColor: "#2F80ED",
+                        color: "#2F80ED",
+                        borderRadius: 1.5,
                         fontWeight: 800,
                         "& .MuiButton-endIcon": { ml: 0.25 },
+                        "&:hover": {
+                          bgcolor: "#F5F9FF",
+                          borderColor: "#1D6FDB",
+                        },
                       }}
                     >
                       더보기
@@ -338,7 +345,7 @@ export default function LeagueMainBody() {
               <Button
                 variant="outlined"
                 onClick={() => {
-                  setLeagueFilterStatus(["completed"]);
+                  setLeagueFilterStatus(["scheduled", "active", "completed"]);
                   setVisibleLeagueCounts({});
                 }}
                 sx={{

@@ -1030,7 +1030,7 @@ export default function LeagueTournamentBracket() {
 
   const league = leagueData?.league;
   const { data: participantsData } = useGetLeagueParticipantsQuery(id!, { skip: !id || (!isProgramMode && false) });
-  const { data: programData } = useGetLeagueProgramQuery(id!, { skip: !isProgramMode || !id });
+  const { data: programData, isLoading: isProgramLoading } = useGetLeagueProgramQuery(id!, { skip: !isProgramMode || !id });
   const participants = useMemo(() => participantsData?.participants ?? [], [participantsData]);
   const programOption = useMemo(
     () => (isProgramMode && id ? (programData?.program?.program_data as ReturnType<typeof getStoredProgramOption> | undefined) ?? getStoredProgramOption(id) : null),
@@ -1392,6 +1392,23 @@ export default function LeagueTournamentBracket() {
         const next = { ...match };
         if (match.id === first.matchId) writeSlot(next, first.slot, secondValue);
         if (match.id === matchId) writeSlot(next, slot, firstValue);
+        if (match.id === first.matchId || match.id === matchId) {
+          const hasA = Boolean(next.participant_a_id);
+          const hasB = Boolean(next.participant_b_id);
+          if (hasA && hasB) {
+            next.status = "pending";
+            next.score_a = null;
+            next.score_b = null;
+          } else if (hasA !== hasB) {
+            next.status = "done";
+            next.score_a = 0;
+            next.score_b = 0;
+          } else {
+            next.status = "pending";
+            next.score_a = null;
+            next.score_b = null;
+          }
+        }
         return next;
       });
       await syncLeagueProgramMatches({
@@ -1416,6 +1433,8 @@ export default function LeagueTournamentBracket() {
       });
     } else {
       // 다른 매치 간 스왑 → 순차 처리
+      const firstMatch = matches.find((candidate) => candidate.id === first.matchId);
+      const secondMatch = matches.find((candidate) => candidate.id === matchId);
       const bodyFirst = first.slot === "a"
         ? { participant_a_id: participantId }
         : { participant_b_id: participantId };
@@ -1424,6 +1443,28 @@ export default function LeagueTournamentBracket() {
         : { participant_b_id: first.participantId };
       await assignParticipant({ leagueId: id!, matchId: first.matchId, ...bodyFirst });
       await assignParticipant({ leagueId: id!, matchId, ...bodySecond });
+      const updateState = async (targetId: string, participantAId: string | null, participantBId: string | null) => {
+        const isBye = Boolean(participantAId) !== Boolean(participantBId);
+        await updateTournamentMatch({
+          leagueId: id!,
+          matchId: targetId,
+          updates: isBye
+            ? { status: "done", score_a: 0, score_b: 0 }
+            : { status: "pending", score_a: null, score_b: null },
+        }).unwrap();
+      };
+      if (firstMatch && secondMatch) {
+        await updateState(
+          first.matchId,
+          first.slot === "a" ? participantId : firstMatch.participant_a_id,
+          first.slot === "b" ? participantId : firstMatch.participant_b_id,
+        );
+        await updateState(
+          matchId,
+          slot === "a" ? first.participantId : secondMatch.participant_a_id,
+          slot === "b" ? first.participantId : secondMatch.participant_b_id,
+        );
+      }
     }
   };
 
@@ -1628,7 +1669,7 @@ export default function LeagueTournamentBracket() {
     return q ? participants.filter((p) => p.name.toLowerCase().includes(q) || (p.division ?? "").toLowerCase().includes(q)) : participants;
   }, [participants, participantSearch]);
 
-  if (isLoading) {
+  if (isLoading || (isProgramMode && isProgramLoading)) {
     return createPortal(
       <Box sx={{ bgcolor: "#fff", position: "fixed", inset: 0, zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <CircularProgress />

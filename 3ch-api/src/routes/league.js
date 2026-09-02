@@ -3298,10 +3298,12 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
       .filter((match) => {
         if (!match || !match.id || !validBlockTypes.has(match.program_block_type)) return false;
         if (match.program_block_type !== 'SINGLES') return true;
-        return (
-          (participantIds.has(match.participant_a_id) && participantIds.has(match.participant_b_id)) ||
-          (match.bracket && Number(match.round_number) > 1)
-        );
+        if (match.bracket) {
+          const validA = !match.participant_a_id || participantIds.has(match.participant_a_id);
+          const validB = !match.participant_b_id || participantIds.has(match.participant_b_id);
+          return validA && validB;
+        }
+        return participantIds.has(match.participant_a_id) && participantIds.has(match.participant_b_id);
       })
       .map((match, index) => {
         const isSingles = match.program_block_type === 'SINGLES';
@@ -3352,7 +3354,7 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
     };
     if (targetProgramRounds.length > 0) {
       const existingRows = await pool.query(
-        `SELECT id, participant_a_id, participant_b_id, program_round, program_block_type,
+        `SELECT id, participant_a_id, participant_b_id, bracket, round_number, program_round, program_block_type,
                 participant_a_roster_ids, participant_b_roster_ids,
                 score_a, score_b, court, status, match_rule
          FROM league_matches
@@ -3391,7 +3393,13 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
           previous.status === 'playing' || previous.status === 'done' ||
           previous.score_a != null || previous.score_b != null
         );
-        const canPreserveState = !resetResults && previous && (
+        const previousHasA = Boolean(previous?.participant_a_id) || (previous?.participant_a_roster_ids?.length ?? 0) > 0;
+        const previousHasB = Boolean(previous?.participant_b_id) || (previous?.participant_b_roster_ids?.length ?? 0) > 0;
+        const previousIsAutomaticWalkover = previous?.status === 'done'
+          && Number(previous?.round_number) === 1
+          && previousHasA !== previousHasB;
+        const canPreserveStartedState = hasStartedState && !previousIsAutomaticWalkover;
+        const canPreserveState = !resetResults && previous && !previousIsAutomaticWalkover && (
           hasStartedState ||
           match.program_block_type !== 'SINGLES' ||
           (
@@ -3405,8 +3413,8 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
           match.id,
           leagueId,
           match.match_order,
-          hasStartedState ? previous.participant_a_id : match.participant_a_id,
-          hasStartedState ? previous.participant_b_id : match.participant_b_id,
+          canPreserveStartedState ? previous.participant_a_id : match.participant_a_id,
+          canPreserveStartedState ? previous.participant_b_id : match.participant_b_id,
           match.bracket,
           match.round_number,
           match.match_label,
@@ -3420,10 +3428,10 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
           shouldApplyAutomaticWalkover ? 'done' : (canPreserveState ? previous.status : 'pending'),
           match.program_round,
           match.program_block_type,
-          hasStartedState && match.program_block_type !== 'SINGLES'
+          canPreserveStartedState && match.program_block_type !== 'SINGLES'
             ? previous.participant_a_roster_ids
             : match.participant_a_roster_ids,
-          hasStartedState && match.program_block_type !== 'SINGLES'
+          canPreserveStartedState && match.program_block_type !== 'SINGLES'
             ? previous.participant_b_roster_ids
             : match.participant_b_roster_ids,
           match.match_rule ?? (canPreserveState ? previous.match_rule : null),

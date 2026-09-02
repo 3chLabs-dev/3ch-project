@@ -297,6 +297,7 @@ const FEATURE_LABELS: Array<[string, string]> = [
   ["event_join", "리그·대회 참가"],
   ["vision_scan", "클럽회원·참가자·대진표 사진 인식"],
   ["draw_create", "추첨 생성"],
+  ["ranking_season_create", "시즌 생성"],
 ];
 const featureLimitLabels = (limits?: Record<string, number | null>) =>
   limits && Object.keys(limits).length > 0

@@ -13,8 +13,6 @@ import {
   IconButton,
   Radio,
   RadioGroup,
-  MenuItem,
-  Select,
   Stack,
   TextField,
   Typography,
@@ -25,6 +23,7 @@ import RemoveIcon from "@mui/icons-material/Remove";
 import {
   useCreateGroupRankingSeasonMutation,
   useGetGroupRankingSeasonsQuery,
+  useSetGroupRankingDisplayDefaultMutation,
   useUpdateGroupRankingSeasonMutation,
 } from "../../features/group/groupApi";
 import type { GroupRankingPointRules } from "../../features/group/groupApi";
@@ -89,18 +88,19 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState("");
   const [seasonName, setSeasonName] = useState("");
-  const [dialogSeasonId, setDialogSeasonId] = useState("");
+  const [isDisplayDefault, setIsDisplayDefault] = useState(false);
   const [autoRenew, setAutoRenew] = useState(false);
   const [pointRules, setPointRules] = useState<GroupRankingPointRules>(DEFAULT_POINT_RULES);
   const [error, setError] = useState("");
   const { data } = useGetGroupRankingSeasonsQuery(groupId, { skip: !open || !groupId });
   const [createSeason, { isLoading }] = useCreateGroupRankingSeasonMutation();
   const [updateSeason, { isLoading: isUpdating }] = useUpdateGroupRankingSeasonMutation();
-  const selectedSeason = data?.seasons.find((season) => season.id === dialogSeasonId);
-
-  useEffect(() => {
-    if (open) setDialogSeasonId(seasonId || "");
-  }, [open, seasonId]);
+  const [setDisplayDefault, { isLoading: isSettingDefault }] = useSetGroupRankingDisplayDefaultMutation();
+  const selectedSeason = data?.seasons.find((season) => season.id === seasonId);
+  const isCurrentSystemDefault = Boolean(
+    selectedSeason?.is_default
+    && selectedSeason.start_date.startsWith(`${new Date().getFullYear()}-`),
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -114,6 +114,7 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
         || selectedSeason.name === `${generatedPeriodName} 시즌`;
       setSeasonName(isGeneratedName ? "" : selectedSeason.name);
       setAutoRenew(Boolean(selectedSeason.auto_renew));
+      setIsDisplayDefault(Boolean(selectedSeason.is_display_default));
       const savedRules = selectedSeason.point_rules;
       setPointRules(savedRules
         ? {
@@ -140,6 +141,7 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
       setEndDate("");
       setSeasonName("");
       setAutoRenew(false);
+      setIsDisplayDefault(false);
       setPointRules(DEFAULT_POINT_RULES);
     }
     setError("");
@@ -199,6 +201,17 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
       const result = selectedSeason
         ? await updateSeason({ ...payload, seasonId: selectedSeason.id }).unwrap()
         : await createSeason(payload).unwrap();
+      if (isDisplayDefault && !result.season.is_display_default) {
+        await setDisplayDefault({ groupId, seasonId: result.season.id }).unwrap();
+      } else if (!isDisplayDefault && selectedSeason?.is_display_default) {
+        const currentYear = new Date().getFullYear();
+        const fallbackSeason = data?.seasons.find((season) =>
+          season.is_default && season.start_date.startsWith(`${currentYear}-`),
+        ) ?? data?.seasons.find((season) => season.is_default && season.id !== selectedSeason.id);
+        if (fallbackSeason) {
+          await setDisplayDefault({ groupId, seasonId: fallbackSeason.id }).unwrap();
+        }
+      }
       onCreated(result.season.id);
       onClose();
     } catch (caught: any) {
@@ -212,22 +225,11 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
       <IconButton onClick={onClose} sx={{ position: "absolute", right: 10, top: 10 }}><CloseIcon /></IconButton>
       <DialogContent dividers>
         <Stack spacing={2.25}>
-          <Box>
-            <Typography sx={{ fontSize: 15, fontWeight: 900, mb: 1 }}>시즌 선택</Typography>
-            <Select
-              value={dialogSeasonId}
-              onChange={(event) => setDialogSeasonId(String(event.target.value))}
-              displayEmpty
-              size="small"
-              fullWidth
-              inputProps={{ "aria-label": "설정할 시즌 선택" }}
-            >
-              <MenuItem value="">새 시즌 설정</MenuItem>
-              {data?.seasons.map((season) => (
-                <MenuItem key={season.id} value={season.id}>{season.name}</MenuItem>
-              ))}
-            </Select>
-          </Box>
+          <FormControlLabel
+            control={<Checkbox checked={isDisplayDefault} disabled={isCurrentSystemDefault && isDisplayDefault} onChange={(event) => setIsDisplayDefault(event.target.checked)} />}
+            label={<Typography sx={{ fontSize: 14, fontWeight: 800 }}>기본으로 설정</Typography>}
+            sx={{ m: 0 }}
+          />
           <Box>
             <Typography sx={{ fontSize: 15, fontWeight: 900, mb: 1 }}>시즌명</Typography>
             <TextField
@@ -404,7 +406,7 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
       </DialogContent>
       <DialogActions sx={{ p: 2 }}>
         <Button onClick={onClose} sx={{ color: "text.secondary" }}>취소</Button>
-        <Button variant="contained" disableElevation onClick={submit} disabled={isLoading || isUpdating}>완료</Button>
+        <Button variant="contained" disableElevation onClick={submit} disabled={isLoading || isUpdating || isSettingDefault}>완료</Button>
       </DialogActions>
     </Dialog>
   );

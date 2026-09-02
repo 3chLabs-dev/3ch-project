@@ -12,6 +12,7 @@ const {
   updateGroupRankingSettings,
 } = require('../services/groupRanking');
 const { getPointRanking, ensureDefaultRankingSeasons } = require('../services/pointRanking');
+const { FEATURES, consumeFeatureCredit, refundFeatureCredit } = require('../services/featureUsageService');
 
 const router = express.Router();
 
@@ -2440,6 +2441,9 @@ router.get('/group/:id/ranking/seasons', requireAuth, async (req, res) => {
 });
 
 router.post('/group/:id/ranking/seasons', requireAuth, requireGroupPermission('ranking'), async (req, res) => {
+  let quotaUserId = null;
+  let quotaRequestKey = null;
+  let quotaConsumed = false;
   try {
     const { id: groupId } = req.params;
     const userId = Number(req.user.sub);
@@ -2456,6 +2460,38 @@ router.post('/group/:id/ranking/seasons', requireAuth, requireGroupPermission('r
     if (overlap.rowCount > 0) {
       return res.status(409).json({ message: '기존 시즌과 기간이 겹칩니다.' });
     }
+    const billingOwner = await pool.query(
+      `SELECT created_by_id AS billing_owner_id FROM groups WHERE id = $1`,
+      [groupId],
+    );
+    quotaUserId = Number(billingOwner.rows[0]?.billing_owner_id);
+    if (!Number.isFinite(quotaUserId) || quotaUserId <= 0) {
+      return res.status(409).json({ message: '사용량을 차감할 계정을 확인할 수 없습니다.', code: 'BILLING_OWNER_NOT_FOUND' });
+    }
+    const clientRequestKey = String(req.get('Idempotency-Key') || req.body?.idempotency_key || randomUUID())
+      .trim()
+      .slice(0, 48);
+    quotaRequestKey = `ranking-season-create:${quotaUserId}:${groupId}:${clientRequestKey}`;
+    const quota = await consumeFeatureCredit({
+      userId: quotaUserId,
+      feature: FEATURES.RANKING_SEASON_CREATE,
+      requestKey: quotaRequestKey,
+      referenceType: 'GROUP',
+      referenceId: groupId,
+      metadata: { createdById: userId },
+    });
+    if (!quota.allowed) {
+      return res.status(402).json({
+        message: '시즌 생성 가능 횟수가 부족합니다.',
+        code: 'RANKING_SEASON_CREATE_QUOTA_EXHAUSTED',
+        remaining: 0,
+        pricingPath: '/mypage/pricing',
+      });
+    }
+    if (quota.duplicate) {
+      return res.status(409).json({ message: '이미 처리된 시즌 생성 요청입니다.', code: 'DUPLICATE_REQUEST' });
+    }
+    quotaConsumed = true;
     const name = payload.name || `${payload.start_date.replaceAll('-', '.')} ~ ${payload.end_date.replaceAll('-', '.')} 시즌`;
     const result = await pool.query(
       `INSERT INTO group_ranking_seasons
@@ -2467,6 +2503,14 @@ router.post('/group/:id/ranking/seasons', requireAuth, requireGroupPermission('r
     return res.status(201).json({ message: '시즌 기간이 설정되었습니다.', season: result.rows[0] });
   } catch (error) {
     if (error instanceof z.ZodError) return res.status(400).json({ errors: error.errors });
+    if (quotaConsumed && quotaRequestKey && quotaUserId) {
+      await refundFeatureCredit({
+        userId: quotaUserId,
+        feature: FEATURES.RANKING_SEASON_CREATE,
+        requestKey: quotaRequestKey,
+        reason: 'RANKING_SEASON_CREATE_FAILED',
+      }).catch((refundError) => console.error('Ranking season creation quota refund failed:', refundError));
+    }
     console.error('Error creating ranking season:', error);
     return res.status(500).json({ message: '서버 오류' });
   }

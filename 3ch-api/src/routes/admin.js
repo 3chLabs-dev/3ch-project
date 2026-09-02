@@ -21,6 +21,7 @@ const QUOTA_FEATURES = new Set([
   "EVENT_JOIN",
   "VISION_SCAN",
   "DRAW_CREATE",
+  "RANKING_SEASON_CREATE",
   "PREMIUM_PROMOTION",
 ]);
 const PRICING_FEATURE_KEYS = [
@@ -31,6 +32,7 @@ const PRICING_FEATURE_KEYS = [
   "event_join",
   "vision_scan",
   "draw_create",
+  "ranking_season_create",
   "premium_promotion",
 ];
 

@@ -15,6 +15,7 @@ const FEATURE_OPTIONS = [
   { key: "event_join", label: "리그·대회 참가" },
   { key: "vision_scan", label: "클럽회원·참가자·대진표 사진 인식" },
   { key: "draw_create", label: "추첨 생성" },
+  { key: "ranking_season_create", label: "시즌 생성" },
   { key: "premium_promotion", label: "프리미엄 노출" },
 ] as const;
 type FeatureKey = typeof FEATURE_OPTIONS[number]["key"];
@@ -27,6 +28,7 @@ const DEFAULT_FEATURE_LIMITS: FeatureLimits = {
   event_join: null,
   vision_scan: 0,
   draw_create: 1,
+  ranking_season_create: 1,
   premium_promotion: 0,
 };
 type Plan = {
@@ -212,7 +214,7 @@ export default function AdminPricingPlanPage() {
                     key={key}
                     sx={{
                       display: "grid",
-                      gridTemplateColumns: { xs: "1fr", sm: "180px 1fr" },
+                      gridTemplateColumns: { xs: "1fr", sm: "minmax(260px, 1fr) auto" },
                       alignItems: "center",
                       minHeight: 48,
                       px: 1.5,
@@ -221,8 +223,8 @@ export default function AdminPricingPlanPage() {
                       borderRadius: 1,
                     }}
                   >
-                    <Typography fontSize={14} fontWeight={800}>{label}</Typography>
-                    <FormControl>
+                    <Typography fontSize={14} fontWeight={800} sx={{ whiteSpace: "nowrap", pr: 2 }}>{label}</Typography>
+                    <FormControl sx={{ justifySelf: { sm: "end" } }}>
                       <RadioGroup
                         row
                         value={limit === null ? "unlimited" : limit === 0 ? "none" : "monthly"}

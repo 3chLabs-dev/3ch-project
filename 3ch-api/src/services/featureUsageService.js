@@ -9,6 +9,7 @@ const FEATURES = Object.freeze({
   EVENT_JOIN: "EVENT_JOIN",
   VISION_SCAN: "VISION_SCAN",
   DRAW_CREATE: "DRAW_CREATE",
+  RANKING_SEASON_CREATE: "RANKING_SEASON_CREATE",
   PREMIUM_PROMOTION: "PREMIUM_PROMOTION",
 });
 
@@ -17,24 +18,28 @@ const PLAN_LIMITS = Object.freeze({
     [FEATURES.CLUB_CREATE]: null, [FEATURES.CLUB_JOIN]: null,
     [FEATURES.LEAGUE_CREATE]: 1, [FEATURES.TOURNAMENT_CREATE]: 0,
     [FEATURES.EVENT_JOIN]: null, [FEATURES.VISION_SCAN]: 0, [FEATURES.DRAW_CREATE]: 1,
+    [FEATURES.RANKING_SEASON_CREATE]: 1,
     [FEATURES.PREMIUM_PROMOTION]: 0,
   },
   basic: {
     [FEATURES.CLUB_CREATE]: null, [FEATURES.CLUB_JOIN]: null,
     [FEATURES.LEAGUE_CREATE]: 3, [FEATURES.TOURNAMENT_CREATE]: 0,
     [FEATURES.EVENT_JOIN]: null, [FEATURES.VISION_SCAN]: 3, [FEATURES.DRAW_CREATE]: 3,
+    [FEATURES.RANKING_SEASON_CREATE]: 3,
     [FEATURES.PREMIUM_PROMOTION]: 0,
   },
   pro: {
     [FEATURES.CLUB_CREATE]: null, [FEATURES.CLUB_JOIN]: null,
     [FEATURES.LEAGUE_CREATE]: null, [FEATURES.TOURNAMENT_CREATE]: 0,
     [FEATURES.EVENT_JOIN]: null, [FEATURES.VISION_SCAN]: 20, [FEATURES.DRAW_CREATE]: null,
+    [FEATURES.RANKING_SEASON_CREATE]: null,
     [FEATURES.PREMIUM_PROMOTION]: 0,
   },
   premium: {
     [FEATURES.CLUB_CREATE]: null, [FEATURES.CLUB_JOIN]: null,
     [FEATURES.LEAGUE_CREATE]: null, [FEATURES.TOURNAMENT_CREATE]: null,
     [FEATURES.EVENT_JOIN]: null, [FEATURES.VISION_SCAN]: null, [FEATURES.DRAW_CREATE]: null,
+    [FEATURES.RANKING_SEASON_CREATE]: null,
     [FEATURES.PREMIUM_PROMOTION]: null,
   },
 });
@@ -47,6 +52,7 @@ const FEATURE_LIMIT_KEYS = Object.freeze({
   [FEATURES.EVENT_JOIN]: "event_join",
   [FEATURES.VISION_SCAN]: "vision_scan",
   [FEATURES.DRAW_CREATE]: "draw_create",
+  [FEATURES.RANKING_SEASON_CREATE]: "ranking_season_create",
   [FEATURES.PREMIUM_PROMOTION]: "premium_promotion",
 });
 
@@ -71,6 +77,7 @@ async function ensurePurchaseCredits(userId, client = pool) {
          WHEN 'event_join' THEN 'EVENT_JOIN'
          WHEN 'vision_scan' THEN 'VISION_SCAN'
          WHEN 'draw_create' THEN 'DRAW_CREATE'
+         WHEN 'ranking_season_create' THEN 'RANKING_SEASON_CREATE'
          WHEN 'premium_promotion' THEN 'PREMIUM_PROMOTION'
        END,
        'PURCHASE',
@@ -90,6 +97,7 @@ async function ensurePurchaseCredits(userId, client = pool) {
        AND credit.key IN (
          'club_create', 'club_join', 'league_create', 'event_create',
          'tournament_create', 'event_join', 'vision_scan', 'draw_create',
+         'ranking_season_create',
          'premium_promotion'
        )
        AND credit.value ~ '^[0-9]+$'

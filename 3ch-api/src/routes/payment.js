@@ -52,6 +52,7 @@ const TOKEN_CREDIT_KEY_MAP = {
   event_join: FEATURES.EVENT_JOIN,
   vision_scan: FEATURES.VISION_SCAN,
   draw_create: FEATURES.DRAW_CREATE,
+  ranking_season_create: FEATURES.RANKING_SEASON_CREATE,
   premium_promotion: FEATURES.PREMIUM_PROMOTION,
 };
 
@@ -621,6 +622,7 @@ router.get("/payment/usage/me", requireAuth, async (req, res) => {
       ["event_join", FEATURES.EVENT_JOIN],
       ["vision_scan", FEATURES.VISION_SCAN],
       ["draw_create", FEATURES.DRAW_CREATE],
+      ["ranking_season_create", FEATURES.RANKING_SEASON_CREATE],
       ["premium_promotion", FEATURES.PREMIUM_PROMOTION],
     ];
     const balances = await Promise.all(

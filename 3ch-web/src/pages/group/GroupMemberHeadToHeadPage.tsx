@@ -46,7 +46,9 @@ export default function GroupMemberHeadToHeadPage() {
       <Card elevation={2} sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
         <CardContent sx={{ py: 2.2, px: 2.3, "&:last-child": { pb: 2.2 } }}>
           <Typography fontWeight={900} fontSize={17}>
-            {data.requester.name} <Box component="span" sx={{ color: "text.secondary", mx: 0.5 }}>vs</Box> {data.opponent.name}
+            <Box component="span" sx={{ color: "#2563EB" }}>{data.requester.name}</Box>
+            <Box component="span" sx={{ color: "text.secondary", mx: 0.7 }}>vs</Box>
+            <Box component="span">{data.opponent.name}</Box>
           </Typography>
           <Stack direction="row" spacing={1} sx={{ mt: 1.2 }}>
             <Chip label={`${data.summary.matches_played}경기`} sx={{ fontWeight: 800 }} />
@@ -77,6 +79,13 @@ export default function GroupMemberHeadToHeadPage() {
                       <Typography sx={{ mt: 0.35, fontSize: 12, color: "text.secondary", fontWeight: 600 }}>
                         {formatDate(match.match_date)}
                       </Typography>
+                      <MatchScoreLine
+                        requesterName={data.requester.name}
+                        opponentName={data.opponent.name}
+                        requesterScore={match.requester_score}
+                        opponentScore={match.opponent_score}
+                        requesterWon={requesterWon}
+                      />
                       <Box sx={{ mt: 1, p: 1, border: "1px solid #E5E7EB", borderRadius: 1.5, bgcolor: "#F9FAFB" }}>
                         <Stack direction="row" alignItems="center" spacing={0.6} useFlexGap flexWrap="wrap">
                           {match.round_label && (
@@ -84,17 +93,13 @@ export default function GroupMemberHeadToHeadPage() {
                               {match.round_label}
                             </Typography>
                           )}
-                          <ProgramMetaChip label={match.stage} tone="stage" />
+                          {match.stage !== "리그" && <ProgramMetaChip label={match.stage} tone="stage" />}
                           <ProgramMetaChip label={match.event_type} tone="event" />
                           <ProgramMetaChip label={match.format} tone="format" />
                           <ProgramMetaChip label={match.match_rule} tone="rule" />
                         </Stack>
                       </Box>
                     </Box>
-                    <Stack spacing={0.45} sx={{ minWidth: 104 }}>
-                      <ScoreRow name={data.requester.name} score={match.requester_score} winner={requesterWon} />
-                      <ScoreRow name={data.opponent.name} score={match.opponent_score} winner={!requesterWon} />
-                    </Stack>
                   </Stack>
                 </CardContent>
               </Card>
@@ -131,24 +136,47 @@ function ProgramMetaChip({ label, tone }: { label: string; tone: keyof typeof me
   );
 }
 
-function ScoreRow({ name, score, winner }: { name: string; score: number; winner: boolean }) {
+function MatchScoreLine({
+  requesterName,
+  opponentName,
+  requesterScore,
+  opponentScore,
+  requesterWon,
+}: {
+  requesterName: string;
+  opponentName: string;
+  requesterScore: number;
+  opponentScore: number;
+  requesterWon: boolean;
+}) {
   return (
     <Stack
       direction="row"
       alignItems="center"
-      spacing={1}
+      justifyContent="center"
+      spacing={1.1}
       sx={{
-        px: 1,
-        py: 0.65,
-        borderRadius: 1,
-        bgcolor: winner ? "#E8F5E9" : "#F9FAFB",
-        color: winner ? "#1B5E20" : "#4B5563",
+        mt: 1.15,
+        px: 1.25,
+        py: 1,
+        borderRadius: 1.5,
+        bgcolor: "#F9FAFB",
+        border: "1px solid #E5E7EB",
       }}
     >
-      <Typography noWrap sx={{ flex: 1, minWidth: 0, maxWidth: 65, fontSize: 12, fontWeight: winner ? 900 : 700 }}>
-        {name}
+      <Typography noWrap sx={{ flex: 1, minWidth: 0, textAlign: "right", fontSize: 13, fontWeight: 900, color: requesterWon ? "#15803D" : "#374151" }}>
+        {requesterName}
       </Typography>
-      <Typography fontSize={18} fontWeight={900}>{score}</Typography>
+      <Typography sx={{ minWidth: 20, textAlign: "center", fontSize: 21, lineHeight: 1, fontWeight: 900, color: requesterWon ? "#15803D" : "#111827" }}>
+        {requesterScore}
+      </Typography>
+      <Typography sx={{ fontSize: 12, fontWeight: 800, color: "#94A3B8" }}>vs</Typography>
+      <Typography sx={{ minWidth: 20, textAlign: "center", fontSize: 21, lineHeight: 1, fontWeight: 900, color: requesterWon ? "#111827" : "#15803D" }}>
+        {opponentScore}
+      </Typography>
+      <Typography noWrap sx={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 900, color: requesterWon ? "#374151" : "#15803D" }}>
+        {opponentName}
+      </Typography>
     </Stack>
   );
 }

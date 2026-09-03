@@ -346,12 +346,25 @@ export default function Home() {
                             </Button>
                         </Stack>
                         <Divider sx={{ my: 1.4 }} />
-                        {isClubRankingLoading ? (
-                            <Typography sx={{ fontSize: 11.5, color: "text.secondary" }}>
-                                클럽 레이팅을 불러오는 중...
-                            </Typography>
-                        ) : (
-                            <Stack spacing={0.7}>
+                        <Box
+                            role="button"
+                            tabIndex={0}
+                            aria-label="통합 순위 보기"
+                            onClick={() => navigate("/ranking")}
+                            onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                    event.preventDefault();
+                                    navigate("/ranking");
+                                }
+                            }}
+                            sx={{ mx: -1, px: 1, py: 0.35, borderRadius: 1, cursor: "pointer", "&:hover": { bgcolor: "#F9FAFB" } }}
+                        >
+                            {isClubRankingLoading ? (
+                                <Typography sx={{ fontSize: 11.5, color: "text.secondary" }}>
+                                    클럽 레이팅을 불러오는 중...
+                                </Typography>
+                            ) : (
+                              <Stack spacing={0.7}>
                                 <Typography sx={{ fontSize: 11.5, color: "text.secondary", fontWeight: 600 }}>
                                     {myClubRanking?.rank
                                         ? `내 순위 ${myClubRanking.rank}위 · 레이팅 ${myClubRanking.rating}`
@@ -380,8 +393,9 @@ export default function Home() {
                                         ))}
                                     </Stack>
                                 )}
-                            </Stack>
-                        )}
+                              </Stack>
+                            )}
+                        </Box>
                     </CardContent>
                 </Card>
             ) : (

@@ -127,7 +127,7 @@ export default function GroupLeagueManage() {
           <ArrowBackIcon />
         </IconButton>
         <Typography variant="h6" fontWeight={900} flex={1}>
-          리그 관리
+          리그·대회 개최내역
         </Typography>
       </Stack>
 
@@ -141,17 +141,22 @@ export default function GroupLeagueManage() {
                   sx={{ px: 2.5, py: 1.8, cursor: "pointer", "&:hover": { bgcolor: "#F9FAFB" } }}
                 >
                   <Stack direction="row" justifyContent="space-between" alignItems="center">
-                    <Box flex={1}>
+                    <Box flex={1} minWidth={0}>
                       <Typography fontWeight={700} fontSize={15}>
-                        {formatLeagueDate(league.start_date)}
+                        {league.name}
                       </Typography>
                       <Typography fontSize={12} color="text.secondary" fontWeight={600}>
-                        {league.type} · {league.participant_count} / {league.recruit_count}명
+                        {formatLeagueDate(league.start_date)}
                       </Typography>
                     </Box>
-                    <IconButton size="small">
-                      {expandedLeagueId === league.id ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                    </IconButton>
+                    <Stack direction="row" alignItems="center" spacing={0.7} sx={{ ml: 1.5, flexShrink: 0 }}>
+                      <Typography fontSize={13} color="text.secondary" fontWeight={800}>
+                        {league.participant_count} / {league.recruit_count}명
+                      </Typography>
+                      <IconButton size="small">
+                        {expandedLeagueId === league.id ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                      </IconButton>
+                    </Stack>
                   </Stack>
                 </Box>
 

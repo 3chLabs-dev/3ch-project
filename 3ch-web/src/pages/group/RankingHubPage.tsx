@@ -66,7 +66,7 @@ export default function RankingHubPage() {
           <ArrowBackIcon />
         </IconButton>
         <Typography variant="h6" fontWeight={900} flex={1}>
-          순위
+          통합 순위
         </Typography>
       </Stack>
 

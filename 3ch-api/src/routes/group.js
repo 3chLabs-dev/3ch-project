@@ -3281,6 +3281,15 @@ router.get('/group/:id/member/:userId/head-to-head', requireAuth, async (req, re
        SELECT DISTINCT ON (m.id)
          m.id AS match_id, m.score_a, m.score_b, m.match_rule, m.match_label,
          m.round_number, m.program_round, m.program_block_type, m.bracket, m.is_program,
+         (SELECT COUNT(*)::int
+            FROM league_matches earlier
+           WHERE earlier.league_id = m.league_id
+             AND COALESCE(earlier.group_name, '') = COALESCE(m.group_name, '')
+             AND earlier.match_order <= m.match_order) AS group_match_order,
+         (SELECT COUNT(*)::int
+            FROM league_participants member_count
+           WHERE member_count.league_id = m.league_id
+             AND (m.group_name IS NULL OR member_count.group_name = m.group_name)) AS round_participant_count,
          m.participant_a_id, m.participant_b_id,
          rp.id AS requester_participant_id, op.id AS opponent_participant_id,
          l.id AS league_id, l.name AS league_name, l.start_date::text AS match_date,
@@ -3331,6 +3340,10 @@ router.get('/group/:id/member/:userId/head-to-head', requireAuth, async (req, re
       const opponentScore = Number(requesterIsA ? row.score_b : row.score_a);
       const requesterWon = requesterScore > opponentScore;
       const rawRule = row.match_rule || block?.matchRule || round?.matchRule || row.league_rules;
+      const matchesPerRound = Math.floor(Number(row.round_participant_count) / 2);
+      const inferredRound = matchesPerRound > 0
+        ? Math.ceil(Number(row.group_match_order) / matchesPerRound)
+        : null;
 
       return [{
         source_type: 'league',
@@ -3346,7 +3359,9 @@ router.get('/group/:id/member/:userId/head-to-head', requireAuth, async (req, re
           ? `${row.program_round}라운드`
           : row.round_number
             ? `${row.round_number}라운드`
-            : row.match_label || null,
+            : inferredRound
+              ? `${inferredRound}라운드`
+              : row.match_label || null,
         requester_score: requesterScore,
         opponent_score: opponentScore,
         winner: requesterWon ? 'requester' : 'opponent',

@@ -3,7 +3,6 @@ import {
   Box,
   Card,
   CardContent,
-  Chip,
   CircularProgress,
   IconButton,
   Stack,
@@ -16,22 +15,6 @@ import { useGetGroupMemberLeagueHistoryQuery } from "../../features/group/groupA
 function formatDate(value?: string | null) {
   if (!value) return "-";
   return value.slice(0, 10);
-}
-
-function getStageLabel(item: {
-  has_league_stage: boolean;
-  has_tournament_stage: boolean;
-}) {
-  if (item.has_league_stage && item.has_tournament_stage) return "리그 + 대회";
-  if (item.has_tournament_stage) return "대회";
-  return "리그";
-}
-
-function getStatusLabel(status?: string | null) {
-  if (status === "active") return "진행중";
-  if (status === "completed") return "종료";
-  if (status === "draft") return "준비중";
-  return status ?? "-";
 }
 
 export default function GroupMemberLeagueHistoryPage() {
@@ -106,30 +89,16 @@ export default function GroupMemberLeagueHistoryPage() {
               <CardContent sx={{ py: 1.7, px: 1.9, "&:last-child": { pb: 1.7 } }}>
                 <Stack direction="row" alignItems="center" spacing={1.2}>
                   <Box flex={1} minWidth={0}>
-                    <Stack direction="row" alignItems="center" spacing={0.8} sx={{ mb: 0.5, flexWrap: "wrap" }}>
-                      <Typography fontWeight={900} fontSize={15} noWrap>
-                        {item.league_name}
-                      </Typography>
-                      <Chip
-                        size="small"
-                        label={getStageLabel(item)}
-                        sx={{
-                          height: 22,
-                          fontSize: 11,
-                          fontWeight: 800,
-                          bgcolor: "#EEF2FF",
-                          color: "#4338CA",
-                        }}
-                      />
-                    </Stack>
+                    <Typography fontWeight={900} fontSize={15} noWrap sx={{ mb: 0.5 }}>
+                      {item.league_name}
+                    </Typography>
 
                     <Typography sx={{ fontSize: 12, color: "text.secondary", fontWeight: 600 }}>
-                      {formatDate(item.start_date)} · {item.format || item.type || "-"} · {getStatusLabel(item.status)}
+                      {formatDate(item.start_date)}
                     </Typography>
 
                     <Typography sx={{ mt: 0.45, fontSize: 12, color: "#374151", fontWeight: 700 }}>
-                      {item.matches_played}경기 · {item.wins}승 {item.losses}패
-                      {item.division ? ` · ${item.division}` : ""}
+                      {item.wins}승 {item.losses}패
                     </Typography>
                   </Box>
 

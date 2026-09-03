@@ -509,7 +509,7 @@ export default function LeagueTournamentMatchOrder() {
         <Button
           size="small"
           startIcon={<AccountTreeIcon sx={{ fontSize: 14 }} />}
-          onClick={() => navigate(`/league/${id}/tournament/bracket`, { state: { backTo: `${location.pathname}${location.search}` } })}
+          onClick={() => navigate(`/league/${id}/tournament/bracket`, { state: { backSource: "match-order", backTo: `${location.pathname}${location.search}` } })}
           sx={{ fontSize: 11, fontWeight: 700, textTransform: "none", color: "#2563EB", flexShrink: 0 }}
         >
           대진표 보기

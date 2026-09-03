@@ -1069,12 +1069,14 @@ export default function LeagueGPTVisionSheet() {
   const [searchParams] = useSearchParams();
   const isProgramMode = searchParams.get("program") === "1";
   const programRound = Number.parseInt(searchParams.get("round") ?? "1", 10) || 1;
-  const requestedBackTo = (location.state as { backTo?: string } | null)?.backTo;
-  const backTo = requestedBackTo?.startsWith(`/league/${id}`)
-    ? requestedBackTo
-    : window.location.pathname.includes("/program/")
-      ? `/league/${id}/program`
-      : `/league/${id}`;
+  const backState = location.state as { backSource?: string; backTo?: string } | null;
+  const backTo = backState?.backSource === "league-detail"
+    ? `/league/${id}`
+    : backState?.backSource === "match-order" && backState.backTo?.startsWith(`/league/${id}/`)
+      ? backState.backTo
+      : window.location.pathname.includes("/program/")
+        ? `/league/${id}/program`
+        : `/league/${id}`;
 
   // ── 데이터 페칭 ──────────────────────────────────────────────────────────
   // 참가자·경기는 15초마다 자동 갱신 (실시간 점수 반영)

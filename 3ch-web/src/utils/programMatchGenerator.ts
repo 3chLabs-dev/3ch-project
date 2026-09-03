@@ -352,7 +352,7 @@ function buildUnitRoundRobinMatches(
   });
 }
 
-function buildTournamentSlots(
+export function buildTournamentSlots(
   leagueId: string,
   roundIndex: number,
   block: ProgramBlock,
@@ -1288,11 +1288,16 @@ function scoreCrossGroupSeedOrder(
   }));
   let score = 0;
 
-  for (let leftIndex = 0; leftIndex < placed.length; leftIndex += 1) {
-    const left = placed[leftIndex];
-    for (let rightIndex = leftIndex + 1; rightIndex < placed.length; rightIndex += 1) {
-      const right = placed[rightIndex];
-      if (left.poolIndex !== right.poolIndex) continue;
+  // 같은 조끼리만 비교하면 되므로 전체 참가자 O(n²) 비교를 피한다.
+  const placedByPool = new Map<number, typeof placed>();
+  placed.forEach((entry) => {
+    placedByPool.set(entry.poolIndex, [...(placedByPool.get(entry.poolIndex) ?? []), entry]);
+  });
+  for (const poolEntries of placedByPool.values()) {
+    for (let leftIndex = 0; leftIndex < poolEntries.length; leftIndex += 1) {
+      const left = poolEntries[leftIndex];
+      for (let rightIndex = leftIndex + 1; rightIndex < poolEntries.length; rightIndex += 1) {
+        const right = poolEntries[rightIndex];
       const meetingRound = tournamentMeetingRound(left.slot, right.slot, bracketSize);
       if (meetingRound === 1) score += 1_000_000;
       score += (Math.log2(bracketSize) - meetingRound + 1) * 5_000;
@@ -1300,11 +1305,13 @@ function scoreCrossGroupSeedOrder(
         score += (Math.log2(bracketSize) - meetingRound + 1) * 10_000;
       }
     }
+    }
   }
 
+  const placedBySlot = new Map(placed.map((entry) => [entry.slot, entry]));
   for (let slotIndex = 0; slotIndex < bracketSize; slotIndex += 2) {
-    const left = placed.find((entry) => entry.slot === slotIndex);
-    const right = placed.find((entry) => entry.slot === slotIndex + 1);
+    const left = placedBySlot.get(slotIndex);
+    const right = placedBySlot.get(slotIndex + 1);
     if (!left || !right) continue;
     if (left.rankIndex === 0 && right.rankIndex === 0) score += 500_000;
     score += Math.abs((left.rankIndex + 1) + (right.rankIndex + 1) - (maxRank + 1)) * 100;
@@ -1314,7 +1321,7 @@ function scoreCrossGroupSeedOrder(
   if (byeCount > 0) {
     placed.forEach((entry) => {
       const pairedSlot = entry.slot % 2 === 0 ? entry.slot + 1 : entry.slot - 1;
-      const hasOpponent = placed.some((candidate) => candidate.slot === pairedSlot);
+      const hasOpponent = placedBySlot.has(pairedSlot);
       if (!hasOpponent) {
         score += entry.rankIndex * 20_000;
       }
@@ -1324,7 +1331,7 @@ function scoreCrossGroupSeedOrder(
   return score;
 }
 
-function buildCrossGroupTournamentSeedOrder(rankedPools: MatchUnit[][]): MatchUnit[] {
+export function buildCrossGroupTournamentSeedOrder(rankedPools: MatchUnit[][]): MatchUnit[] {
   // 참가자의 토너먼트 시드 순서와 예선 출처 표시는 서로 다른 값이다.
   // 교차 시드 순서를 계산하기 전에 각 참가자에게 원래의 "조-순위"
   // 라벨을 붙여 두어야 재배열 후에도 1-1, 2-3, 3-2처럼 표시된다.

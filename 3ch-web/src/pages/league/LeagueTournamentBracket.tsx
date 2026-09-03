@@ -1009,9 +1009,9 @@ export default function LeagueTournamentBracket() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const isProgramMode = searchParams.get("program") === "1" || window.location.pathname.includes("/program/");
-  const requestedBackTo = (location.state as { backTo?: string } | null)?.backTo;
-  const backTo = requestedBackTo?.startsWith(`/league/${id}`)
-    ? requestedBackTo
+  const backState = location.state as { backSource?: string; backTo?: string } | null;
+  const backTo = backState?.backSource === "match-order" && backState.backTo?.startsWith(`/league/${id}/`)
+    ? backState.backTo
     : isProgramMode
       ? `/league/${id}/program`
       : `/league/${id}/tournament`;

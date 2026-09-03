@@ -1165,7 +1165,7 @@ export default function LeagueMatchOrder() {
                 : league?.format === "GPT 인식"
                   ? `/league/${leagueId}/gpt-vision`
                   : `/league/${leagueId}/bracket`,
-              { state: { backTo: `${location.pathname}${location.search}` } },
+              { state: { backSource: "match-order", backTo: `${location.pathname}${location.search}` } },
             )
           }
           sx={{

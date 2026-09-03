@@ -1912,7 +1912,7 @@ const handleSaveEdit = async () => {
                 <Button
                   fullWidth variant="outlined" disableElevation
                   sx={{ borderRadius: 1, height: 40, fontWeight: 700, bgcolor: "#87B8FF", color: "#FFF", "&:hover": { borderColor: "#79AEFF", bgcolor: "#EFF6FF" } }}
-                  onClick={() => navigate(`/league/${id}/bracket`, { state: { backTo: `/league/${id}` } })}
+                  onClick={() => navigate(`/league/${id}/bracket`, { state: { backSource: "league-detail" } })}
                 >
                   {canManage && league.status === "draft" ? "단일리그 대진표 생성" : "단일리그 대진표 보기"}
                 </Button>
@@ -1932,9 +1932,9 @@ const handleSaveEdit = async () => {
                   if (league.format?.includes("토너먼트")) {
                     navigate(`/league/${id}/tournament`);
                   } else if (league.format === "GPT 인식") {
-                    navigate(`/league/${id}/gpt-vision`, { state: { backTo: `/league/${id}` } });
+                    navigate(`/league/${id}/gpt-vision`, { state: { backSource: "league-detail" } });
                   } else {
-                    navigate(`/league/${id}/bracket`, { state: { backTo: `/league/${id}` } });
+                    navigate(`/league/${id}/bracket`, { state: { backSource: "league-detail" } });
                   }
                 }}
               >

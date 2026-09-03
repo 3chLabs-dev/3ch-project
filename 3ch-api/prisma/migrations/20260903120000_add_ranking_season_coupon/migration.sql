@@ -1,0 +1,6 @@
+ALTER TABLE "coupons" DROP CONSTRAINT IF EXISTS "coupons_type_check";
+ALTER TABLE "coupons" ADD CONSTRAINT "coupons_type_check"
+  CHECK ("type" IN (
+    'FREE_MONTHS', 'PERCENT_DISCOUNT', 'LEAGUE_CREATE',
+    'VISION_SCAN', 'RANKING_SEASON_CREATE', 'DRAW_CREATE'
+  ));

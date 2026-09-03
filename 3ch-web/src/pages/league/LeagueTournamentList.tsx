@@ -68,9 +68,10 @@ export default function LeagueTournamentList() {
   // 비관리자 + 대진표 있음 → 바로 브래킷으로 이동
   useEffect(() => {
     if (!isLoading && !canManage && hasTournament) {
-      navigate(`/league/${id}/tournament/bracket`, { replace: true, state: location.state });
+      const back = new URLSearchParams(location.search).get("back");
+      navigate(`/league/${id}/tournament/bracket${back ? `?back=${back}` : ""}`, { replace: true });
     }
-  }, [isLoading, canManage, hasTournament, id, location.state, navigate]);
+  }, [isLoading, canManage, hasTournament, id, location.search, navigate]);
 
   if (isLoading || (!canManage && hasTournament)) {
     return (
@@ -216,7 +217,7 @@ export default function LeagueTournamentList() {
                     variant="contained"
                     disableElevation
                     endIcon={<ChevronRightIcon sx={{ fontSize: 16 }} />}
-                    onClick={() => navigate(`/league/${id}/tournament/bracket`, { state: { backSource: "tournament-list" } })}
+                    onClick={() => navigate(`/league/${id}/tournament/bracket?back=tournament`)}
                     sx={{
                       flex: 1, height: 42, fontWeight: 700, fontSize: 13,
                       borderRadius: 1.5, textTransform: "none", boxShadow: "none", whiteSpace: "nowrap",

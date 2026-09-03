@@ -723,6 +723,8 @@ model LeagueMatch {
   participant_b            LeagueParticipant? @relation("MatchParticipantB", fields: [participant_b_id], references: [id], onDelete: SetNull)
   participant_a_roster_ids String[]           @default([])
   participant_b_roster_ids String[]           @default([])
+  participant_a_seed_label String?
+  participant_b_seed_label String?
   bracket                  String?
   round_number             Int?
   match_label              String?

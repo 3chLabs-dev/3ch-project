@@ -15,7 +15,7 @@ import {
   Tooltip, Typography, Stack,
 } from "@mui/material";
 import { styled } from "@mui/material/styles";
-import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import CloseIcon from "@mui/icons-material/Close";
 import EditIcon from "@mui/icons-material/Edit";
@@ -1065,15 +1065,16 @@ function getErrorMessage(error: unknown, fallback: string) {
 export default function LeagueGPTVisionSheet() {
   const { id }   = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const location = useLocation();
   const [searchParams] = useSearchParams();
   const isProgramMode = searchParams.get("program") === "1";
   const programRound = Number.parseInt(searchParams.get("round") ?? "1", 10) || 1;
-  const backState = location.state as { backSource?: string; backTo?: string } | null;
-  const backTo = backState?.backSource === "league-detail"
+  const backMode = searchParams.get("back");
+  const backTo = backMode === "detail"
     ? `/league/${id}`
-    : backState?.backSource === "match-order" && backState.backTo?.startsWith(`/league/${id}/`)
-      ? backState.backTo
+    : backMode === "matches"
+      ? isProgramMode
+        ? `/league/${id}/program/matches?program=1&round=${programRound}`
+        : `/league/${id}/matches`
       : window.location.pathname.includes("/program/")
         ? `/league/${id}/program`
         : `/league/${id}`;

@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Box, Button, CircularProgress, IconButton, InputAdornment,
   TextField, Tooltip, Typography, Tabs, Tab, Dialog, DialogContent, Stack,
@@ -1006,14 +1006,15 @@ function CenterOutConnectors({ positions }: { positions: MatchPos[] }) {
 export default function LeagueTournamentBracket() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const location = useLocation();
   const [searchParams] = useSearchParams();
   const isProgramMode = searchParams.get("program") === "1" || window.location.pathname.includes("/program/");
-  const backState = location.state as { backSource?: string; backTo?: string } | null;
-  const backTo = backState?.backSource === "league-detail"
+  const backMode = searchParams.get("back");
+  const backTo = backMode === "detail"
     ? `/league/${id}`
-    : backState?.backSource === "match-order" && backState.backTo?.startsWith(`/league/${id}/`)
-      ? backState.backTo
+    : backMode === "matches"
+      ? `/league/${id}/tournament/matches`
+      : backMode === "tournament"
+        ? `/league/${id}/tournament`
       : isProgramMode
         ? `/league/${id}/program`
         : `/league/${id}/tournament`;
@@ -1039,7 +1040,7 @@ export default function LeagueTournamentBracket() {
   } | null>(null);
 
   const { data: leagueData, refetch: refetchLeague } = useGetLeagueQuery(id!);
-  const { data: matchesData, isLoading, refetch: refetchMatches } =
+  const { data: matchesData, isLoading, isFetching: isMatchesFetching, refetch: refetchMatches } =
     useGetLeagueMatchesQuery(id!, { pollingInterval: 15000 });
   const { data: groupData } = useGetGroupDetailQuery(
     leagueData?.league?.group_id ?? "",
@@ -1047,8 +1048,8 @@ export default function LeagueTournamentBracket() {
   );
 
   const league = leagueData?.league;
-  const { data: participantsData, isLoading: isParticipantsLoading } = useGetLeagueParticipantsQuery(id!, { skip: !id });
-  const { data: programData, isLoading: isProgramLoading } = useGetLeagueProgramQuery(id!, { skip: !isProgramMode || !id });
+  const { data: participantsData, isLoading: isParticipantsLoading, isFetching: isParticipantsFetching } = useGetLeagueParticipantsQuery(id!, { skip: !id });
+  const { data: programData, isLoading: isProgramLoading, isFetching: isProgramFetching } = useGetLeagueProgramQuery(id!, { skip: !isProgramMode || !id });
   const participants = useMemo(() => participantsData?.participants ?? [], [participantsData]);
   const programOption = useMemo(
     () => (isProgramMode && id ? (programData?.program?.program_data as ReturnType<typeof getStoredProgramOption> | undefined) ?? getStoredProgramOption(id) : null),
@@ -1182,10 +1183,10 @@ export default function LeagueTournamentBracket() {
     ) return;
 
     const generatedKey = allProgramMatches
-      .map((match) => `${match.id}:${match.participant_a_id ?? ""}:${match.participant_b_id ?? ""}:${match.match_rule ?? ""}`)
+      .map((match) => `${match.id}:${match.participant_a_id ?? ""}:${match.participant_a_seed_label ?? ""}:${match.participant_b_id ?? ""}:${match.participant_b_seed_label ?? ""}:${match.match_rule ?? ""}`)
       .join("|");
     const serverKey = serverProgramMatches
-      .map((match) => `${match.id}:${match.participant_a_id ?? ""}:${match.participant_b_id ?? ""}:${match.match_rule ?? ""}`)
+      .map((match) => `${match.id}:${match.participant_a_id ?? ""}:${match.participant_a_seed_label ?? ""}:${match.participant_b_id ?? ""}:${match.participant_b_seed_label ?? ""}:${match.match_rule ?? ""}`)
       .join("|");
     if (serverProgramMatches.length === allProgramMatches.length && generatedKey === serverKey) return;
     if (programSyncKeyRef.current === generatedKey) return;
@@ -1714,7 +1715,14 @@ export default function LeagueTournamentBracket() {
     return q ? participants.filter((p) => p.name.toLowerCase().includes(q) || (p.division ?? "").toLowerCase().includes(q)) : participants;
   }, [participants, participantSearch]);
 
-  if (isLoading || (isProgramMode && (isProgramLoading || isParticipantsLoading))) {
+  if (
+    isLoading ||
+    (isProgramMode && (
+      isProgramLoading || isProgramFetching ||
+      isParticipantsLoading || isParticipantsFetching ||
+      (isMatchesFetching && !matchesData)
+    ))
+  ) {
     return createPortal(
       <Box sx={{ bgcolor: "#fff", position: "fixed", inset: 0, zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <CircularProgress />
@@ -1724,6 +1732,16 @@ export default function LeagueTournamentBracket() {
   }
 
   if (!positions.length) {
+    if (isProgramMode) {
+      return createPortal(
+        <Box sx={{ bgcolor: "#fff", position: "fixed", inset: 0, zIndex: 9999, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1.5 }}>
+          <CircularProgress size={32} />
+          <Typography color="text.secondary">저장된 대진표와 예선 순위를 불러오는 중입니다.</Typography>
+          <Button variant="outlined" onClick={handleRefresh}>다시 불러오기</Button>
+        </Box>,
+        document.body,
+      );
+    }
     return createPortal(
       <Box sx={{ bgcolor: "#fff", position: "fixed", inset: 0, zIndex: 9999, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
         <Typography color="text.secondary" mb={2}>생성된 대진표가 없습니다.</Typography>

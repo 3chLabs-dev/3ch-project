@@ -3371,6 +3371,8 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
         match_rule: match.match_rule ?? null,
         participant_a_roster_ids: isSingles ? [] : rosterIds(match.participant_a_id),
         participant_b_roster_ids: isSingles ? [] : rosterIds(match.participant_b_id),
+        participant_a_seed_label: match.participant_a_seed_label ?? null,
+        participant_b_seed_label: match.participant_b_seed_label ?? null,
         automatic_walkover: automaticWalkover,
       });
       });
@@ -3395,7 +3397,8 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
       const existingRows = await pool.query(
         `SELECT id, participant_a_id, participant_b_id, bracket, round_number, program_round, program_block_type,
                 participant_a_roster_ids, participant_b_roster_ids,
-                score_a, score_b, court, status, match_rule
+                score_a, score_b, court, status, match_rule,
+                participant_a_seed_label, participant_b_seed_label
          FROM league_matches
          WHERE league_id = $1 AND is_program = TRUE AND program_round = ANY($2::int[])`,
         [leagueId, targetProgramRounds],
@@ -3417,7 +3420,7 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
     if (validMatches.length > 0) {
       const values = [];
       const placeholders = validMatches.map((match, index) => {
-        const base = index * 21;
+        const base = index * 23;
         // Generated round-robin IDs contain a group/order index. If participant
         // ordering changes after a deploy, retain an already-started match by its
         // actual pairing instead of treating it as a new match.
@@ -3437,7 +3440,10 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
         const previousIsAutomaticWalkover = previous?.status === 'done'
           && Number(previous?.round_number) === 1
           && previousHasA !== previousHasB;
-        const canPreserveStartedState = hasStartedState && !previousIsAutomaticWalkover;
+        // 대진표 표준 재배치(resetResults=true)는 점수뿐 아니라 기존의
+        // 수동 참가자 위치도 초기화해야 한다. 기존에는 시작된 경기의
+        // 참가자를 무조건 보존해 재배치 직후 예전 배열로 되돌아갔다.
+        const canPreserveStartedState = !resetResults && hasStartedState && !previousIsAutomaticWalkover;
         const canPreserveState = !resetResults && previous && !previousIsAutomaticWalkover && (
           hasStartedState ||
           match.program_block_type !== 'SINGLES' ||
@@ -3473,16 +3479,19 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
           canPreserveStartedState && match.program_block_type !== 'SINGLES'
             ? previous.participant_b_roster_ids
             : match.participant_b_roster_ids,
+          match.participant_a_seed_label,
+          match.participant_b_seed_label,
           match.match_rule ?? (canPreserveState ? previous.match_rule : null),
         );
-        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9}, $${base + 10}, $${base + 11}, $${base + 12}, $${base + 13}, $${base + 14}, $${base + 15}, $${base + 16}, TRUE, $${base + 17}, $${base + 18}, $${base + 19}::text[], $${base + 20}::text[], $${base + 21})`;
+        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9}, $${base + 10}, $${base + 11}, $${base + 12}, $${base + 13}, $${base + 14}, $${base + 15}, $${base + 16}, TRUE, $${base + 17}, $${base + 18}, $${base + 19}::text[], $${base + 20}::text[], $${base + 21}, $${base + 22}, $${base + 23})`;
       });
 
       await pool.query(
         `INSERT INTO league_matches
          (id, league_id, match_order, participant_a_id, participant_b_id, bracket, round_number, match_label,
           next_match_id, next_slot, loser_next_match_id, loser_next_slot, score_a, score_b, court, status,
-          is_program, program_round, program_block_type, participant_a_roster_ids, participant_b_roster_ids, match_rule)
+          is_program, program_round, program_block_type, participant_a_roster_ids, participant_b_roster_ids,
+          participant_a_seed_label, participant_b_seed_label, match_rule)
          VALUES ${placeholders.join(', ')}`,
         values,
       );
@@ -3685,6 +3694,7 @@ router.get('/league/:id/matches', optionalAuth, async (req, res) => {
          m.id, m.match_order, m.score_a, m.score_b, m.court, m.status, m.match_rule,
          m.participant_a_id, m.participant_b_id,
          m.participant_a_roster_ids, m.participant_b_roster_ids,
+         m.participant_a_seed_label, m.participant_b_seed_label,
          m.is_program, m.program_round, m.program_block_type,
          m.bracket, m.round_number, m.match_label,
          m.next_match_id, m.next_slot, m.loser_next_match_id, m.loser_next_slot,
@@ -4510,6 +4520,7 @@ router.patch('/league/:id/matches/:matchId', optionalAuth, async (req, res) => {
       `SELECT
          m.id, m.match_order, m.score_a, m.score_b, m.court, m.status, m.match_rule,
          m.participant_a_id, m.participant_b_id,
+         m.participant_a_seed_label, m.participant_b_seed_label,
          m.is_program, m.program_round, m.program_block_type,
          m.bracket, m.round_number, m.match_label,
          m.next_match_id, m.next_slot, m.loser_next_match_id, m.loser_next_slot,

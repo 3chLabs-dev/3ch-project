@@ -31,7 +31,6 @@ export default function AppShell() {
     const navigate = useNavigate();
     const token = useSelector((s: RootState) => s.auth.token);
     const preferredGroupId = useSelector((s: RootState) => s.leagueCreation.preferredGroupId);
-    const currentStep = useSelector((s: RootState) => s.leagueCreation.currentStep);
     const isHome = location.pathname === "/";
     const isMyPage = location.pathname === "/mypage";
     const isLeagueSheet = /^\/league\/[^/]+\/(omr|openai-vision|gpt-vision)$/.test(location.pathname);
@@ -160,7 +159,7 @@ export default function AppShell() {
 
                         {/* 클럽 셀렉트 — 리그·대회 및 추첨 메인에서 표시 */}
                         {token && groups.length > 1 && (
-                            (location.pathname === "/league" && currentStep === 0)
+                            location.pathname === "/league"
                             || location.pathname === "/draw"
                         ) && (
                             <Select

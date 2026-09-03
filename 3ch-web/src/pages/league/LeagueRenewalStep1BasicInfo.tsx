@@ -121,7 +121,8 @@ export default function LeagueRenewalStep1BasicInfo() {
   const [venueRegionDistrict, setVenueRegionDistrict] = useState(existing?.venueRegionDistrict ?? "");
   const [placeDialogOpen, setPlaceDialogOpen] = useState(false);
   const [placeQuery, setPlaceQuery] = useState("");
-  const [searchVenues, { data: placeData, isFetching: placeSearching }] = useLazySearchLeagueVenuesQuery();
+  const [placeSearched, setPlaceSearched] = useState(false);
+  const [searchVenues, { data: placeData, isFetching: placeSearching, isError: placeSearchError, reset: resetPlaceSearch }] = useLazySearchLeagueVenuesQuery();
   const [participantCount, setParticipantCount] = useState<number | "">(existing?.participantCount ?? "");
   const [courtCount, setCourtCount] = useState<number | "">(existing?.courtCount ?? "");
   const [joinPermission, setJoinPermission] = useState<"public" | "club_only">(existing?.joinPermission ?? "club_only");
@@ -143,6 +144,34 @@ export default function LeagueRenewalStep1BasicInfo() {
   const [startHour, startMinute] = startTime ? startTime.split(":") : ["", ""];
   const [endHour, endMinute] = endTime ? endTime.split(":") : ["", ""];
   const canNext = useMemo(() => Boolean(title && date && startTime), [date, startTime, title]);
+
+  const runPlaceSearch = (query: string) => {
+    const trimmedQuery = query.trim();
+    if (trimmedQuery.length < 2) return;
+    setPlaceSearched(true);
+    void searchVenues(trimmedQuery);
+  };
+
+  const openPlaceSearch = () => {
+    const query = location.trim();
+    setPlaceQuery(query);
+    setPlaceSearched(false);
+    resetPlaceSearch();
+    setPlaceDialogOpen(true);
+    runPlaceSearch(query);
+  };
+
+  const useDirectPlaceInput = () => {
+    const directLocation = placeQuery.trim();
+    if (!directLocation) return;
+    setLocation(directLocation);
+    setVenueAddress("");
+    setVenueLat(null);
+    setVenueLng(null);
+    setVenueRegionCity("");
+    setVenueRegionDistrict("");
+    setPlaceDialogOpen(false);
+  };
 
   const saveAndNext = () => {
     if (!canNext) return;
@@ -178,7 +207,7 @@ export default function LeagueRenewalStep1BasicInfo() {
         <Box>
           <Stack direction="row" spacing={0.8}>
             <TextField value={location} onChange={(event) => { setLocation(event.target.value); setVenueLat(null); setVenueLng(null); }} sx={{ ...fieldSx, flex: 1 }} placeholder="장소명 또는 주소" />
-            <Button variant="outlined" size="small" startIcon={<SearchIcon />} onClick={() => { setPlaceQuery(location); setPlaceDialogOpen(true); }} sx={{ whiteSpace: "nowrap", fontWeight: 800 }}>주소 검색</Button>
+            <Button variant="outlined" size="small" startIcon={<SearchIcon />} onClick={openPlaceSearch} sx={{ whiteSpace: "nowrap", fontWeight: 800 }}>주소 검색</Button>
           </Stack>
           {venueAddress && <Typography fontSize={11.5} color="text.secondary" sx={{ mt: 0.6 }}>{venueAddress} · {venueRegionCity} {venueRegionDistrict}</Typography>}
         </Box>
@@ -261,11 +290,11 @@ export default function LeagueRenewalStep1BasicInfo() {
       <DialogTitle sx={{ fontWeight: 900 }}>주소 검색</DialogTitle>
       <DialogContent>
         <Stack direction="row" spacing={1} sx={{ mt: 0.5, mb: 2 }}>
-          <TextField fullWidth size="small" autoFocus value={placeQuery} onChange={(event) => setPlaceQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && placeQuery.trim().length >= 2) void searchVenues(placeQuery.trim()); }} placeholder="탁구장, 체육관 또는 주소" />
-          <Button variant="contained" disabled={placeQuery.trim().length < 2 || placeSearching} onClick={() => void searchVenues(placeQuery.trim())}>{placeSearching ? <CircularProgress size={18} color="inherit" /> : "검색"}</Button>
+          <TextField fullWidth size="small" autoFocus value={placeQuery} onChange={(event) => { setPlaceQuery(event.target.value); setPlaceSearched(false); }} onKeyDown={(event) => { if (event.key === "Enter") runPlaceSearch(placeQuery); }} placeholder="탁구장, 체육관 또는 주소" />
+          <Button variant="contained" disabled={placeQuery.trim().length < 2 || placeSearching} onClick={() => runPlaceSearch(placeQuery)}>{placeSearching ? <CircularProgress size={18} color="inherit" /> : "검색"}</Button>
         </Stack>
         <Stack spacing={1}>
-          {(placeData?.places ?? []).map((place) => (
+          {!placeSearching && (placeData?.places ?? []).map((place) => (
             <Button
               key={place.id}
               variant="outlined"
@@ -284,7 +313,16 @@ export default function LeagueRenewalStep1BasicInfo() {
               <Typography fontSize={11.5} color="text.secondary">{place.address}</Typography>
             </Button>
           ))}
-          {!placeSearching && placeData && placeData.places.length === 0 && <Typography textAlign="center" color="text.secondary" sx={{ py: 3 }}>검색 결과가 없습니다.</Typography>}
+          {!placeSearching && placeSearched && (placeSearchError || !placeData || placeData.places.length === 0) && (
+            <Stack spacing={1.5} sx={{ py: 2 }}>
+              <Typography textAlign="center" color="text.secondary" sx={{ py: 1 }}>
+                {placeSearchError ? "장소 검색에 연결하지 못했습니다." : "검색 결과가 없습니다."}
+              </Typography>
+              <Button fullWidth variant="outlined" onClick={useDirectPlaceInput} sx={{ bgcolor: "#fff", borderColor: "#2F80ED", color: "#2F80ED", fontWeight: 900, borderRadius: 1.2 }}>
+                직접 입력
+              </Button>
+            </Stack>
+          )}
         </Stack>
       </DialogContent>
       <DialogActions><Button onClick={() => setPlaceDialogOpen(false)}>닫기</Button></DialogActions>

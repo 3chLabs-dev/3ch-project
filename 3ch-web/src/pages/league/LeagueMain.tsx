@@ -1,13 +1,13 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link as RouterLink, useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { setPreferredGroupId } from "../../features/league/leagueCreationSlice";
 import { resetRenewalLeagueCreation, setRenewalGroupId, setRenewalStep } from "../../features/league/leagueRenewalCreationSlice";
-import { useGetMyGroupsQuery } from "../../features/group/groupApi";
+import { useGetGroupRankingSeasonsQuery, useGetMyGroupsQuery } from "../../features/group/groupApi";
 import { useGetDiscoverLeaguesQuery, useGetMyGroupLeaguesQuery, useGetMyLeagueInvitationsQuery, useRespondLeagueInvitationMutation } from "../../features/league/leagueApi";
 import type { LeagueListItem } from "../../features/league/leagueApi";
 import {
-  Stack, Typography, Card, CardContent, Button, IconButton, Box, Chip, Divider
+  Stack, Typography, Card, CardContent, Button, IconButton, Box, Chip, Divider, MenuItem, TextField
 } from "@mui/material";
 import TuneIcon from "@mui/icons-material/Tune";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
@@ -33,6 +33,7 @@ export default function LeagueMainBody() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [selectedScheduleGroupIds, setSelectedScheduleGroupIds] = useState<string[]>([]);
+  const [selectedScheduleSeasonId, setSelectedScheduleSeasonId] = useState("");
   const [leagueFilterStart, setLeagueFilterStart] = useState("");
   const [leagueFilterEnd, setLeagueFilterEnd] = useState("");
   const [leagueFilterStatus, setLeagueFilterStatus] = useState<LeagueStatus[]>([
@@ -61,6 +62,28 @@ export default function LeagueMainBody() {
   const selectedGroup = effectiveGroupId
     ? myGroups.find((g) => g.id === effectiveGroupId) ?? null
     : null;
+
+  const singleScheduleGroupId = selectedScheduleGroupIds.length === 1
+    ? selectedScheduleGroupIds[0]
+    : "";
+  const { data: scheduleSeasonData } = useGetGroupRankingSeasonsQuery(singleScheduleGroupId, {
+    skip: !singleScheduleGroupId,
+  });
+  const scheduleSeasons = scheduleSeasonData?.seasons ?? [];
+  const selectedScheduleSeason = useMemo(() => {
+    if (!singleScheduleGroupId || scheduleSeasons.length === 0) return null;
+    return scheduleSeasons.find((season) => season.id === selectedScheduleSeasonId)
+      ?? scheduleSeasons.find((season) => season.is_display_default)
+      ?? scheduleSeasons.find((season) => {
+        const today = new Date().toISOString().slice(0, 10);
+        return season.start_date <= today && season.end_date >= today;
+      })
+      ?? scheduleSeasons[0];
+  }, [scheduleSeasons, selectedScheduleSeasonId, singleScheduleGroupId]);
+
+  useEffect(() => {
+    if (selectedScheduleGroupIds.length !== 1) setSelectedScheduleSeasonId("");
+  }, [selectedScheduleGroupIds]);
 
   const { data: leagueData, isLoading: leagueLoading } = useGetMyGroupLeaguesQuery(
     undefined,
@@ -114,6 +137,12 @@ export default function LeagueMainBody() {
       if (!league.start_date) return false;
       if (selectedScheduleGroupIds.length > 0 && (!league.group_id || !selectedScheduleGroupIds.includes(league.group_id))) return false;
 
+      if (selectedScheduleSeason) {
+        const leagueStart = league.start_date.slice(0, 10);
+        const leagueEnd = (league.end_date || league.start_date).slice(0, 10);
+        if (leagueStart > selectedScheduleSeason.end_date || leagueEnd < selectedScheduleSeason.start_date) return false;
+      }
+
       const startAt = new Date(league.start_date);
       const dateOnly = league.start_date.slice(0, 10);
 
@@ -135,7 +164,7 @@ export default function LeagueMainBody() {
       if (startDifference !== 0) return startDifference;
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
-  }, [leagueData, leagueFilterStart, leagueFilterEnd, leagueFilterStatus, selectedScheduleGroupIds]);
+  }, [leagueData, leagueFilterStart, leagueFilterEnd, leagueFilterStatus, selectedScheduleGroupIds, selectedScheduleSeason]);
 
   const leaguesByGroup = useMemo(() => myGroups.map((group) => ({
     group,
@@ -245,7 +274,8 @@ export default function LeagueMainBody() {
       )}
 
       {isLoggedIn && myGroups.length > 0 && leagues.length > 0 && (
-        <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
+        <Stack spacing={1}>
+          <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
           <Chip
             label="전체 클럽"
             onClick={() => {
@@ -275,6 +305,26 @@ export default function LeagueMainBody() {
               />
             );
           })}
+          </Stack>
+          {singleScheduleGroupId && scheduleSeasons.length > 0 && selectedScheduleSeason && (
+            <TextField
+              select
+              size="small"
+              label="시즌"
+              value={selectedScheduleSeason.id}
+              onChange={(event) => {
+                setSelectedScheduleSeasonId(event.target.value);
+                setVisibleLeagueCounts({});
+              }}
+              sx={{ width: "100%", maxWidth: 260, "& .MuiOutlinedInput-root": { borderRadius: 1.5 } }}
+            >
+              {scheduleSeasons.map((season) => (
+                <MenuItem key={season.id} value={season.id}>
+                  {season.name}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
         </Stack>
       )}
 

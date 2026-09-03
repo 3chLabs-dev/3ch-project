@@ -7,11 +7,14 @@ import {
   CircularProgress,
   Divider,
   IconButton,
+  MenuItem,
   Stack,
+  TextField,
   Typography,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import { useState } from "react";
 import { useGetGroupMemberDetailQuery } from "../../features/group/groupApi";
 import { getRoleLabel } from "../../utils/permissions";
 
@@ -24,9 +27,10 @@ function maskEmail(email: string): string {
 export default function ClubMemberDetail() {
   const { id: groupId, userId } = useParams<{ id: string; userId: string }>();
   const navigate = useNavigate();
+  const [selectedSeasonId, setSelectedSeasonId] = useState("");
 
   const { data, isLoading } = useGetGroupMemberDetailQuery(
-    { groupId: groupId ?? "", userId: Number(userId) },
+    { groupId: groupId ?? "", userId: Number(userId), seasonId: selectedSeasonId || undefined },
     { skip: !groupId || !userId },
   );
 
@@ -108,9 +112,23 @@ export default function ClubMemberDetail() {
 
       <Card elevation={2} sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
         <CardContent sx={{ py: 2.5, px: 2.5, "&:last-child": { pb: 2.5 } }}>
-          <Typography fontWeight={900} fontSize={16} sx={{ mb: 1.6 }}>
-            {stats.year}년 현황
-          </Typography>
+          <Stack direction="row" alignItems="center" spacing={1.2} sx={{ mb: 1.6 }}>
+            <Typography fontWeight={900} fontSize={16} sx={{ flexShrink: 0 }}>
+              시즌 현황
+            </Typography>
+            <TextField
+              select
+              size="small"
+              value={selectedSeasonId || data.selected_season_id || ""}
+              onChange={(event) => setSelectedSeasonId(event.target.value)}
+              inputProps={{ "aria-label": "현황 시즌 선택" }}
+              sx={{ flex: 1, minWidth: 0, maxWidth: 220, ml: "auto !important", "& .MuiOutlinedInput-root": { borderRadius: 1.5 } }}
+            >
+              {data.seasons.map((season) => (
+                <MenuItem key={season.id} value={season.id}>{season.name}</MenuItem>
+              ))}
+            </TextField>
+          </Stack>
           <Stack direction="row" spacing={1}>
             <MetricCard label="리그참석" value={stats.league_attendance} />
             <MetricCard label="대회참석" value={stats.tournament_attendance} />

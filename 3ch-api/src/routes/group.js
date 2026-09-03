@@ -2872,17 +2872,34 @@ router.get('/group/:id/member/:userId', requireAuth, async (req, res) => {
     if (memberResult.rowCount === 0) return res.status(404).json({ message: '회원을 찾을 수 없습니다.' });
 
     const member = memberResult.rows[0];
-    const year = new Date().getFullYear();
+    await ensureDefaultRankingSeasons(groupId);
+    const seasonsResult = await pool.query(
+      `SELECT id, name, start_date::text, end_date::text, is_default, is_display_default
+         FROM group_ranking_seasons
+        WHERE group_id = $1
+        ORDER BY start_date DESC, is_default ASC, created_at DESC`,
+      [groupId],
+    );
+    const today = new Date().toISOString().slice(0, 10);
+    const requestedSeasonId = String(req.query.season_id || '');
+    const selectedSeason = seasonsResult.rows.find((season) => season.id === requestedSeasonId)
+      || seasonsResult.rows.find((season) => season.is_display_default)
+      || seasonsResult.rows.find((season) => season.start_date <= today && season.end_date >= today)
+      || seasonsResult.rows[0];
+    const rangeStart = selectedSeason?.start_date || `${new Date().getFullYear()}-01-01`;
+    const rangeEnd = selectedSeason?.end_date || `${new Date().getFullYear()}-12-31`;
+    const year = Number(rangeStart.slice(0, 4));
 
-    // 올해 리그/대회 통계
+    // 선택한 시즌의 리그/대회 통계
     const statsResult = await pool.query(
       `WITH member_participants AS (
          SELECT DISTINCT lp.id AS participant_id, lp.league_id
          FROM league_participants lp
          JOIN leagues l ON l.id = lp.league_id
-         JOIN group_members ug ON ug.group_id = l.group_id AND ug.user_id = $1
-         WHERE (lp.member_id = $1 OR (lp.member_id IS NULL AND lp.name = $2))
-           AND EXTRACT(YEAR FROM l.start_date) = $3
+         WHERE l.group_id = $1
+           AND (lp.member_id = $2 OR (lp.member_id IS NULL AND lp.name = $3))
+           AND l.start_date::date <= $5::date
+           AND COALESCE(l.end_date::date, l.start_date::date) >= $4::date
        ),
        league_attendance AS (
          SELECT COUNT(DISTINCT mp.league_id)::int AS count
@@ -2918,18 +2935,19 @@ router.get('/group/:id/member/:userId', requireAuth, async (req, res) => {
          COALESCE((SELECT count FROM tournament_attendance), 0) AS tournament_attendance,
          COALESCE((SELECT wins FROM match_stats), 0) AS wins,
          COALESCE((SELECT losses FROM match_stats), 0) AS losses`,
-      [targetUserId, member.name, year],
+      [groupId, targetUserId, member.name, rangeStart, rangeEnd],
     );
 
-    // 올해 우승 수: 참가 리그 내 최다 승리 횟수 기준
+    // 선택한 시즌 우승 수: 참가 리그 내 최다 승리 횟수 기준
     const championResult = await pool.query(
       `WITH member_participants AS (
          SELECT DISTINCT lp.id AS participant_id, lp.league_id
          FROM league_participants lp
          JOIN leagues l ON l.id = lp.league_id
-         JOIN group_members ug ON ug.group_id = l.group_id AND ug.user_id = $1
-         WHERE (lp.member_id = $1 OR (lp.member_id IS NULL AND lp.name = $2))
-           AND EXTRACT(YEAR FROM l.start_date) = $3
+         WHERE l.group_id = $1
+           AND (lp.member_id = $2 OR (lp.member_id IS NULL AND lp.name = $3))
+           AND l.start_date::date <= $5::date
+           AND COALESCE(l.end_date::date, l.start_date::date) >= $4::date
        ),
        all_wins AS (
          SELECT lp.id AS participant_id, lp.league_id,
@@ -2954,7 +2972,7 @@ router.get('/group/:id/member/:userId', requireAuth, async (req, res) => {
        FROM member_wins mw
        JOIN league_max lm ON lm.league_id = mw.league_id
        WHERE mw.wins = lm.max_wins AND mw.wins > 0`,
-      [targetUserId, member.name, year],
+      [groupId, targetUserId, member.name, rangeStart, rangeEnd],
     );
 
     const rankingSummaryResult = await pool.query(
@@ -2993,6 +3011,8 @@ router.get('/group/:id/member/:userId', requireAuth, async (req, res) => {
         losses: Number(stats.losses) || 0,
         championships: Number(championResult.rows[0].championships) || 0,
       },
+      seasons: seasonsResult.rows,
+      selected_season_id: selectedSeason?.id || null,
       ranking_summary: rankingSummaryResult.rows[0]
         ? {
             rank: rankingSummaryResult.rows[0].rank == null ? null : Number(rankingSummaryResult.rows[0].rank),

@@ -230,6 +230,8 @@ export interface GroupMemberDetailResponse {
     last_match_at?: string | null;
   } | null;
   clubs: { id: string; name: string; sport?: string | null; role: string }[];
+  seasons: Array<Pick<GroupRankingSeason, "id" | "name" | "start_date" | "end_date" | "is_default" | "is_display_default">>;
+  selected_season_id: string | null;
 }
 
 export interface GroupRankingRow {
@@ -802,8 +804,11 @@ export const groupApi = baseApi.injectEndpoints({
       }),
     }),
 
-    getGroupMemberDetail: builder.query<GroupMemberDetailResponse, { groupId: string; userId: number }>({
-      query: ({ groupId, userId }) => `/group/${groupId}/member/${userId}`,
+    getGroupMemberDetail: builder.query<GroupMemberDetailResponse, { groupId: string; userId: number; seasonId?: string }>({
+      query: ({ groupId, userId, seasonId }) => ({
+        url: `/group/${groupId}/member/${userId}`,
+        params: seasonId ? { season_id: seasonId } : undefined,
+      }),
       providesTags: (_result, _error, { groupId, userId }) => [{ type: "Group", id: `member-${groupId}-${userId}` }],
     }),
 

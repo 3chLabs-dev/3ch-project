@@ -32,7 +32,7 @@ import {
 } from "../../features/league/leagueApi";
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
 import { formatLeagueDate } from "../../utils/dateUtils";
-import { applyProgramMatchState, applyProgramTournamentAdvancement, generateProgramRoundMatches, getStoredProgramOption, isAutomaticProgramWalkover } from "../../utils/programMatchGenerator";
+import { applyProgramMatchState, applyProgramTournamentAdvancement, clearProgramMatchState, generateProgramRoundMatches, getStoredProgramOption, isAutomaticProgramWalkover } from "../../utils/programMatchGenerator";
 
 // ─── 단일 토너먼트 레이아웃 상수 ────────────────────────────────────────────
 // 단일 토너먼트(라운드로빈 등)에서 매치 박스를 좌→우 방향으로 나열할 때 사용
@@ -1010,11 +1010,13 @@ export default function LeagueTournamentBracket() {
   const [searchParams] = useSearchParams();
   const isProgramMode = searchParams.get("program") === "1" || window.location.pathname.includes("/program/");
   const backState = location.state as { backSource?: string; backTo?: string } | null;
-  const backTo = backState?.backSource === "match-order" && backState.backTo?.startsWith(`/league/${id}/`)
-    ? backState.backTo
-    : isProgramMode
-      ? `/league/${id}/program`
-      : `/league/${id}/tournament`;
+  const backTo = backState?.backSource === "league-detail"
+    ? `/league/${id}`
+    : backState?.backSource === "match-order" && backState.backTo?.startsWith(`/league/${id}/`)
+      ? backState.backTo
+      : isProgramMode
+        ? `/league/${id}/program`
+        : `/league/${id}/tournament`;
   const storedProgramRound = id ? localStorage.getItem(`league-program-active-round-${id}`) : null;
   const programRound = Number.parseInt(searchParams.get("round") ?? storedProgramRound ?? "1", 10) || 1;
   const [zoom, setZoom] = useState(1);
@@ -1022,6 +1024,7 @@ export default function LeagueTournamentBracket() {
   const [resultMatchId, setResultMatchId] = useState<string | null>(null);
   const [resultDialogOpen, setResultDialogOpen] = useState(false);
   const [deleteSlotDialogOpen, setDeleteSlotDialogOpen] = useState(false);
+  const [reseedDialogOpen, setReseedDialogOpen] = useState(false);
   const exportRef = useRef<HTMLDivElement | null>(null);
 
   // 참가자 등록 팝업
@@ -1092,13 +1095,15 @@ export default function LeagueTournamentBracket() {
     () => (matchesData?.matches ?? []).filter((match) => match.is_program && match.program_round === programRound),
     [matchesData?.matches, programRound],
   );
+  const canonicalProgramMatches = useMemo(
+    () => isProgramMode
+      ? generateProgramRoundMatches(id ?? "", programOption, participants, programRound, programSourceMatches)
+      : [],
+    [id, isProgramMode, participants, programOption, programRound, programSourceMatches],
+  );
   const allProgramMatches = useMemo(() => {
     if (!isProgramMode) return [];
-    const generatedMatches = applyProgramMatchState(
-      generateProgramRoundMatches(id ?? "", programOption, participants, programRound, programSourceMatches),
-      id ?? "",
-      programRound,
-    );
+    const generatedMatches = applyProgramMatchState(canonicalProgramMatches, id ?? "", programRound);
     // 새로고침 직후에는 프로그램 설정이나 참가자 쿼리가 경기 쿼리보다
     // 늦게 도착할 수 있다. 이때 재생성 결과가 비었다고 해서 이미 서버에
     // 저장된 프로그램 대진표까지 버리면 빈 대진표 화면으로 고정된다.
@@ -1137,10 +1142,8 @@ export default function LeagueTournamentBracket() {
   }, [
     isProgramMode,
     id,
-    programOption,
-    participants,
+    canonicalProgramMatches,
     programRound,
-    programSourceMatches,
     serverProgramMatches,
     isManualProgramSeeding,
   ]);
@@ -1216,6 +1219,25 @@ export default function LeagueTournamentBracket() {
   const handleRefresh = () => {
     refetchLeague();
     if (!isProgramMode) refetchMatches();
+  };
+
+  const handleReseedProgramBracket = async () => {
+    if (!id || !programBlock || canonicalProgramMatches.length === 0) return;
+    clearProgramMatchState(id, programRound);
+    await syncLeagueProgramMatches({
+      leagueId: id,
+      matches: canonicalProgramMatches.map((match) => ({
+        ...match,
+        program_round: programRound,
+        program_block_type: programBlock.type,
+      })),
+      resetResults: true,
+    }).unwrap();
+    programSyncKeyRef.current = null;
+    await refetchMatches();
+    setSwapFirst(null);
+    setEditMode(false);
+    setReseedDialogOpen(false);
   };
 
   const handleSaveImage = useCallback(async () => {
@@ -1768,6 +1790,19 @@ export default function LeagueTournamentBracket() {
           </Box>
         )}
 
+        {isProgramMode && canManage && !isCompleted && (
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<RefreshIcon sx={{ fontSize: 14 }} />}
+            disabled={isSyncingProgramMatches || canonicalProgramMatches.length === 0}
+            onClick={() => setReseedDialogOpen(true)}
+            sx={{ borderRadius: "20px", fontSize: 11, fontWeight: 800, px: 1.3, py: 0.4, textTransform: "none", flexShrink: 0, minWidth: "auto" }}
+          >
+            표준 재배치
+          </Button>
+        )}
+
         {!isCompleted && canManage && (!isProgramMode || manualSeeding) && (
           <Button
             size="small"
@@ -2038,6 +2073,29 @@ export default function LeagueTournamentBracket() {
         leagueId={id!}
         onClose={() => setResultDialogOpen(false)}
       />
+
+      <Dialog
+        open={reseedDialogOpen}
+        onClose={() => setReseedDialogOpen(false)}
+        fullWidth
+        maxWidth="xs"
+        sx={{ zIndex: 11000 }}
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogContent sx={{ p: 2.5 }}>
+          <Typography sx={{ fontSize: 19, fontWeight: 900 }}>대진표 표준 재배치</Typography>
+          <Typography sx={{ mt: 1.2, fontSize: 14, color: "#475569", lineHeight: 1.6 }}>
+            저장된 수동 이동·삭제 내역을 지우고 예선 조별 순위 기준의 표준 토너먼트 대진표로 다시 배치합니다.
+          </Typography>
+          <Typography sx={{ mt: 0.7, fontSize: 12, fontWeight: 700, color: "#DC2626", lineHeight: 1.5 }}>
+            이 라운드에 입력된 경기 점수와 진행 상태도 초기화됩니다.
+          </Typography>
+          <Stack direction="row" spacing={1} sx={{ mt: 2.5 }}>
+            <Button fullWidth variant="outlined" onClick={() => setReseedDialogOpen(false)} sx={{ height: 42, borderRadius: 1.5, fontWeight: 800 }}>취소</Button>
+            <Button fullWidth variant="contained" onClick={handleReseedProgramBracket} disabled={isSyncingProgramMatches} sx={{ height: 42, borderRadius: 1.5, fontWeight: 900, boxShadow: "none" }}>재배치</Button>
+          </Stack>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={deleteSlotDialogOpen}

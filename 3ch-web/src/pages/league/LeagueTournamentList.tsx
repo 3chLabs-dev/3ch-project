@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   Box, Button, CircularProgress, Dialog, DialogActions, DialogContent,
   DialogContentText, DialogTitle, IconButton, Stack, Typography, Chip,
@@ -36,6 +36,7 @@ function getBracketSizeLabel(matchLabel: string | null | undefined): string {
 export default function LeagueTournamentList() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { data: leagueData, isLoading: leagueLoading } = useGetLeagueQuery(id!);
   const { data: matchesData, isLoading: matchesLoading } = useGetLeagueMatchesQuery(id!);
   const { data: groupData, isLoading: groupLoading } = useGetGroupDetailQuery(
@@ -67,9 +68,9 @@ export default function LeagueTournamentList() {
   // 비관리자 + 대진표 있음 → 바로 브래킷으로 이동
   useEffect(() => {
     if (!isLoading && !canManage && hasTournament) {
-      navigate(`/league/${id}/tournament/bracket`, { replace: true });
+      navigate(`/league/${id}/tournament/bracket`, { replace: true, state: location.state });
     }
-  }, [isLoading, canManage, hasTournament, id, navigate]);
+  }, [isLoading, canManage, hasTournament, id, location.state, navigate]);
 
   if (isLoading || (!canManage && hasTournament)) {
     return (
@@ -215,7 +216,7 @@ export default function LeagueTournamentList() {
                     variant="contained"
                     disableElevation
                     endIcon={<ChevronRightIcon sx={{ fontSize: 16 }} />}
-                    onClick={() => navigate(`/league/${id}/tournament/bracket`)}
+                    onClick={() => navigate(`/league/${id}/tournament/bracket`, { state: { backSource: "tournament-list" } })}
                     sx={{
                       flex: 1, height: 42, fontWeight: 700, fontSize: 13,
                       borderRadius: 1.5, textTransform: "none", boxShadow: "none", whiteSpace: "nowrap",

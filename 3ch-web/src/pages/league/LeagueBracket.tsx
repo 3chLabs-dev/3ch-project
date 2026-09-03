@@ -1791,7 +1791,7 @@ export default function LeagueBracket() {
 
       {/* ===== 헤더 바 ===== */}
       <Box sx={{ display: "flex", alignItems: "center", px: 1, py: 0.75, borderBottom: "1px solid #E5E7EB", gap: 0.5 }}>
-        <IconButton size="small" onClick={() => navigate(isProgramMode ? `/league/${id}/program` : `/league/${id}`)} sx={{ flexShrink: 0 }}>
+        <IconButton size="small" onClick={() => navigate(window.location.pathname.includes("/program/") ? `/league/${id}/program` : `/league/${id}`)} sx={{ flexShrink: 0 }}>
           <ChevronLeftIcon />
         </IconButton>
 
@@ -1839,7 +1839,7 @@ export default function LeagueBracket() {
         )}
 
         {/* 닫기 (뒤로 이동) */}
-        <IconButton size="small" onClick={() => navigate(isProgramMode ? `/league/${id}/program` : `/league/${id}`)} sx={{ flexShrink: 0 }}>
+        <IconButton size="small" onClick={() => navigate(window.location.pathname.includes("/program/") ? `/league/${id}/program` : `/league/${id}`)} sx={{ flexShrink: 0 }}>
           <CloseIcon sx={{ fontSize: 20 }} />
         </IconButton>
       </Box>

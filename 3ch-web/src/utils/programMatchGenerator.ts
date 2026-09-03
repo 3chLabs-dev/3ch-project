@@ -1185,6 +1185,49 @@ function buildFourGroupSixteenSeedOrder(rankedPools: MatchUnit[][]): MatchUnit[]
   return seedOrder;
 }
 
+function buildThreeGroupEightRankSeedOrder(rankedPools: MatchUnit[][]): MatchUnit[] | null {
+  if (rankedPools.length !== 3 || rankedPools.some((pool) => pool.length !== 8)) {
+    return null;
+  }
+
+  const unit = (groupIndex: number, rankIndex: number): MatchUnit => ({
+    ...rankedPools[groupIndex][rankIndex],
+    seedLabel: `${groupIndex + 1}-${rankIndex + 1}`,
+  });
+  const bye = (): MatchUnit => ({ id: null, name: null, division: null });
+
+  // 3개 조 × 조별 8명 진출용 표준 32강 대진표의 실제 슬롯 순서.
+  // 두 항목씩 한 경기이며, 참고 대진표의 좌측 위→아래 다음 우측
+  // 위→아래 순서를 그대로 사용한다.
+  const bracketSlots: MatchUnit[] = [
+    unit(0, 0), bye(),
+    unit(1, 5), unit(2, 5),
+    unit(1, 2), unit(0, 7),
+    bye(), unit(0, 2),
+    unit(2, 1), bye(),
+    unit(2, 6), unit(0, 4),
+    unit(2, 3), unit(1, 6),
+    bye(), unit(1, 1),
+    unit(1, 0), bye(),
+    unit(0, 6), unit(2, 4),
+    unit(1, 3), unit(2, 7),
+    bye(), unit(0, 1),
+    unit(2, 2), bye(),
+    unit(1, 7), unit(0, 3),
+    unit(1, 4), unit(0, 5),
+    bye(), unit(2, 0),
+  ];
+
+  // buildTournamentSlots는 입력 배열을 시드 순서로 받은 뒤 다시 실제
+  // 슬롯에 배치하므로, 위의 실제 슬롯 배열을 시드 순서로 역변환한다.
+  const seedAtSlot = seededBracket(32);
+  const seedOrder = Array<MatchUnit>(32);
+  bracketSlots.forEach((entry, slotIndex) => {
+    seedOrder[seedAtSlot[slotIndex] - 1] = entry;
+  });
+  return seedOrder;
+}
+
 type RankedSeedUnit = {
   unit: MatchUnit;
   poolIndex: number;
@@ -1282,13 +1325,26 @@ function scoreCrossGroupSeedOrder(
 }
 
 function buildCrossGroupTournamentSeedOrder(rankedPools: MatchUnit[][]): MatchUnit[] {
-  const exactFourGroupOrder = buildFourGroupSixteenSeedOrder(rankedPools);
+  // 참가자의 토너먼트 시드 순서와 예선 출처 표시는 서로 다른 값이다.
+  // 교차 시드 순서를 계산하기 전에 각 참가자에게 원래의 "조-순위"
+  // 라벨을 붙여 두어야 재배열 후에도 1-1, 2-3, 3-2처럼 표시된다.
+  const labeledPools = rankedPools.map((pool, poolIndex) =>
+    pool.map((unit, rankIndex) => ({
+      ...unit,
+      seedLabel: `${poolIndex + 1}-${rankIndex + 1}`,
+    })),
+  );
+
+  const exactFourGroupOrder = buildFourGroupSixteenSeedOrder(labeledPools);
   if (exactFourGroupOrder) return exactFourGroupOrder;
 
+  const exactThreeGroupOrder = buildThreeGroupEightRankSeedOrder(labeledPools);
+  if (exactThreeGroupOrder) return exactThreeGroupOrder;
+
   const rankedTiers = Array.from(
-    { length: Math.max(...rankedPools.map((pool) => pool.length)) },
+    { length: Math.max(...labeledPools.map((pool) => pool.length)) },
     (_, rankIndex) =>
-      rankedPools.flatMap((pool, poolIndex) => {
+      labeledPools.flatMap((pool, poolIndex) => {
         const unit = pool[rankIndex];
         return unit ? [{ unit, poolIndex, rankIndex }] : [];
       }),

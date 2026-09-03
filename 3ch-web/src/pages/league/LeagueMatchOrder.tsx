@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors,
 } from "@dnd-kit/core";
@@ -519,6 +519,7 @@ function MatchCard({
 export default function LeagueMatchOrder() {
   const { id: leagueId = "" } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const isProgramMode = searchParams.get("program") === "1";
   const programRound = Number.parseInt(searchParams.get("round") ?? "1", 10) || 1;
@@ -1163,7 +1164,8 @@ export default function LeagueMatchOrder() {
                 ? `/league/${leagueId}/program/${bracketPath}?program=1&round=${programRound}&format=${currentProgramBlock?.format ?? ""}`
                 : league?.format === "GPT 인식"
                   ? `/league/${leagueId}/gpt-vision`
-                  : `/league/${leagueId}/bracket`
+                  : `/league/${leagueId}/bracket`,
+              { state: { backTo: `${location.pathname}${location.search}` } },
             )
           }
           sx={{

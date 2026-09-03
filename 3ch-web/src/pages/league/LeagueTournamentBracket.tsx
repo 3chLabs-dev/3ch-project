@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Box, Button, CircularProgress, IconButton, InputAdornment,
   TextField, Tooltip, Typography, Tabs, Tab, Dialog, DialogContent, Stack,
@@ -1006,8 +1006,15 @@ function CenterOutConnectors({ positions }: { positions: MatchPos[] }) {
 export default function LeagueTournamentBracket() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const isProgramMode = searchParams.get("program") === "1" || window.location.pathname.includes("/program/");
+  const requestedBackTo = (location.state as { backTo?: string } | null)?.backTo;
+  const backTo = requestedBackTo?.startsWith(`/league/${id}`)
+    ? requestedBackTo
+    : isProgramMode
+      ? `/league/${id}/program`
+      : `/league/${id}/tournament`;
   const storedProgramRound = id ? localStorage.getItem(`league-program-active-round-${id}`) : null;
   const programRound = Number.parseInt(searchParams.get("round") ?? storedProgramRound ?? "1", 10) || 1;
   const [zoom, setZoom] = useState(1);
@@ -1711,7 +1718,7 @@ export default function LeagueTournamentBracket() {
 
       {/* ── 헤더 ── */}
       <Box sx={{ display: "flex", alignItems: "center", px: 1, py: 0.75, borderBottom: "1px solid #E5E7EB", gap: 0.5, flexShrink: 0 }}>
-        <IconButton size="small" onClick={() => navigate(isProgramMode ? `/league/${id}/program` : `/league/${id}/tournament`)} sx={{ flexShrink: 0 }}>
+        <IconButton size="small" onClick={() => navigate(backTo)} sx={{ flexShrink: 0 }}>
           <ChevronLeftIcon />
         </IconButton>
 
@@ -1778,7 +1785,7 @@ export default function LeagueTournamentBracket() {
           </Button>
         )}
 
-        <IconButton size="small" onClick={() => navigate(isProgramMode ? `/league/${id}/program` : `/league/${id}/tournament`)} sx={{ flexShrink: 0 }}>
+        <IconButton size="small" onClick={() => navigate(backTo)} sx={{ flexShrink: 0 }}>
           <CloseIcon sx={{ fontSize: 20 }} />
         </IconButton>
       </Box>

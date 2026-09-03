@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   Box, Button, CircularProgress, Dialog, DialogContent, DialogTitle,
   IconButton, InputAdornment, List, ListItemButton, ListItemIcon, ListItemText,
@@ -325,6 +325,7 @@ function MatchCard({
 export default function LeagueTournamentMatchOrder() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const authUser = useAppSelector((s) => s.auth.user);
 
   const { state: pushState, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe } = usePushNotification();
@@ -508,7 +509,7 @@ export default function LeagueTournamentMatchOrder() {
         <Button
           size="small"
           startIcon={<AccountTreeIcon sx={{ fontSize: 14 }} />}
-          onClick={() => navigate(`/league/${id}/tournament/bracket`)}
+          onClick={() => navigate(`/league/${id}/tournament/bracket`, { state: { backTo: `${location.pathname}${location.search}` } })}
           sx={{ fontSize: 11, fontWeight: 700, textTransform: "none", color: "#2563EB", flexShrink: 0 }}
         >
           대진표 보기

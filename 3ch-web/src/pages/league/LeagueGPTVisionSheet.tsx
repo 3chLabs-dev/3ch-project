@@ -15,7 +15,7 @@ import {
   Tooltip, Typography, Stack,
 } from "@mui/material";
 import { styled } from "@mui/material/styles";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import CloseIcon from "@mui/icons-material/Close";
 import EditIcon from "@mui/icons-material/Edit";
@@ -1065,9 +1065,16 @@ function getErrorMessage(error: unknown, fallback: string) {
 export default function LeagueGPTVisionSheet() {
   const { id }   = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const isProgramMode = searchParams.get("program") === "1";
   const programRound = Number.parseInt(searchParams.get("round") ?? "1", 10) || 1;
+  const requestedBackTo = (location.state as { backTo?: string } | null)?.backTo;
+  const backTo = requestedBackTo?.startsWith(`/league/${id}`)
+    ? requestedBackTo
+    : window.location.pathname.includes("/program/")
+      ? `/league/${id}/program`
+      : `/league/${id}`;
 
   // ── 데이터 페칭 ──────────────────────────────────────────────────────────
   // 참가자·경기는 15초마다 자동 갱신 (실시간 점수 반영)
@@ -2492,7 +2499,7 @@ export default function LeagueGPTVisionSheet() {
 
       {/* ===== 헤더 바 ===== */}
       <Box sx={{ display: "flex", alignItems: "center", px: 1, py: 0.75, borderBottom: "1px solid #E5E7EB", gap: 0.5 }}>
-        <IconButton size="small" onClick={() => navigate(isProgramMode ? `/league/${id}/program` : `/league/${id}`)} sx={{ flexShrink: 0 }}>
+        <IconButton size="small" onClick={() => navigate(backTo)} sx={{ flexShrink: 0 }}>
           <ChevronLeftIcon />
         </IconButton>
 
@@ -2536,7 +2543,7 @@ export default function LeagueGPTVisionSheet() {
         )}
 
         {/* 닫기 (뒤로 이동) */}
-        <IconButton size="small" onClick={() => navigate(isProgramMode ? `/league/${id}/program` : `/league/${id}`)} sx={{ flexShrink: 0 }}>
+        <IconButton size="small" onClick={() => navigate(backTo)} sx={{ flexShrink: 0 }}>
           <CloseIcon sx={{ fontSize: 20 }} />
         </IconButton>
       </Box>

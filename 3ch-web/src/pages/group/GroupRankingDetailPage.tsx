@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Box,
@@ -15,36 +15,20 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import type { PointRankingRow } from "../../features/group/groupApi";
 import { useGetGroupPointRankingQuery } from "../../features/group/groupApi";
 
-function parseYearParam(value: string | null) {
-  if (!value) return undefined;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : undefined;
-}
-
 export default function GroupRankingDetailPage() {
   const { id: groupId = "" } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialYear = useMemo(() => parseYearParam(searchParams.get("year")), [searchParams]);
-  const [selectedYear, setSelectedYear] = useState<number | undefined>(initialYear);
   const [selectedSeasonId, setSelectedSeasonId] = useState<string | undefined>(searchParams.get("season") ?? undefined);
 
   const { data, isLoading } = useGetGroupPointRankingQuery(
-    { groupId, year: selectedYear, seasonId: selectedSeasonId, scope: "club" },
+    { groupId, seasonId: selectedSeasonId, scope: "club" },
     { skip: !groupId },
   );
 
-  const activeYear = selectedYear ?? data?.year ?? new Date().getFullYear();
-  const yearOptions = data?.available_years?.length ? data.available_years : [activeYear];
   const activeSelectValue = selectedSeasonId
     ? `season:${selectedSeasonId}`
-    : selectedYear ? `year:${selectedYear}` : data?.no_active_season ? "inactive" : data?.season_id ? `season:${data.season_id}` : `year:${activeYear}`;
-
-  const handleYearChange = (value: number) => {
-    setSelectedYear(value);
-    setSelectedSeasonId(undefined);
-    setSearchParams({ year: String(value) });
-  };
+    : data?.no_active_season ? "inactive" : data?.season_id ? `season:${data.season_id}` : "inactive";
 
   if (isLoading) {
     return (
@@ -78,20 +62,14 @@ export default function GroupRankingDetailPage() {
             const [kind, value] = String(event.target.value).split(":");
             if (kind === "season") {
               setSelectedSeasonId(value);
-              setSelectedYear(undefined);
-              setSearchParams({ season: value });
-            } else handleYearChange(Number(value));
+              setSearchParams({ season: value }, { replace: true });
+            }
           }}
           sx={{ minWidth: 118, fontSize: 13, fontWeight: 700 }}
         >
           {data.no_active_season && <MenuItem value="inactive" disabled sx={{ fontSize: 13 }}>현재 시즌 없음</MenuItem>}
           {data.seasons.map((season) => (
             <MenuItem key={season.id} value={`season:${season.id}`} sx={{ fontSize: 13 }}>{season.name}</MenuItem>
-          ))}
-          {yearOptions.map((year) => (
-            <MenuItem key={year} value={`year:${year}`} sx={{ fontSize: 13 }}>
-              {year}년
-            </MenuItem>
           ))}
         </Select>
       </Stack>

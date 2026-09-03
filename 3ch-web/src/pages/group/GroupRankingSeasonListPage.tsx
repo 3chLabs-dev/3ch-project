@@ -87,7 +87,7 @@ export default function GroupRankingSeasonListPage() {
                     <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 0.35 }}>
                       <Typography fontWeight={900} noWrap>● {season.name}</Typography>
                       <Chip label={status.label} size="small" color={status.color} />
-                      {season.is_display_default && <Chip label="기본" size="small" color="success" />}
+                      {season.is_display_default && <Chip label="기본" size="small" color="primary" variant="outlined" sx={{ bgcolor: "#fff" }} />}
                     </Stack>
                     <Typography sx={{ fontSize: 12.5, color: "text.secondary" }}>
                       {season.start_date} ~ {season.end_date}

@@ -134,17 +134,7 @@ export default function LoadMembersDialog({
             `${r.name} ${r.division}`.toLowerCase().includes(keyword)
         ) : rows;
 
-        const memberCategory = (member: MemberRow) => {
-            if (member.role === "owner") return 0;
-            if (member.role === "admin") return 1;
-            if (!member.is_pre_member) return 2;
-            return member.claim_status === "pending" ? 3 : 4;
-        };
-
         return [...matchingRows].sort((left, right) => {
-            const roleDifference = memberCategory(left) - memberCategory(right);
-            if (roleDifference !== 0) return roleDifference;
-
             if (memberSort === "name") return compareMemberName(left, right);
             if (memberSort === "joinedAt") {
                 const leftTime = Date.parse(left.joined_at ?? "") || Number.MAX_SAFE_INTEGER;

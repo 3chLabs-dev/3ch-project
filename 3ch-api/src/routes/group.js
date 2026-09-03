@@ -3232,4 +3232,138 @@ router.get('/group/:id/member/:userId/leagues', requireAuth, async (req, res) =>
   }
 });
 
+// GET /group/:id/member/:userId/head-to-head - 로그인 회원과 대상 회원의 단식 리그 맞대결
+router.get('/group/:id/member/:userId/head-to-head', requireAuth, async (req, res) => {
+  try {
+    const requesterId = Number(req.user.sub);
+    const targetUserId = Number(req.params.userId);
+    const groupId = req.params.id;
+
+    if (!Number.isInteger(targetUserId)) {
+      return res.status(400).json({ message: '올바른 회원 ID가 아닙니다.' });
+    }
+
+    const membersResult = await pool.query(
+      `SELECT gm.user_id, u.name
+         FROM group_members gm
+         JOIN users u ON u.id = gm.user_id
+        WHERE gm.group_id = $1 AND gm.user_id = ANY($2::int[])`,
+      [groupId, [requesterId, targetUserId]],
+    );
+    const requester = membersResult.rows.find((row) => Number(row.user_id) === requesterId);
+    const opponent = membersResult.rows.find((row) => Number(row.user_id) === targetUserId);
+    if (!requester) return res.status(403).json({ message: '권한이 없습니다.' });
+    if (!opponent) return res.status(404).json({ message: '회원을 찾을 수 없습니다.' });
+
+    if (requesterId === targetUserId) {
+      return res.json({
+        requester: { user_id: requesterId, name: requester.name },
+        opponent: { user_id: targetUserId, name: opponent.name },
+        summary: { wins: 0, losses: 0, matches_played: 0 },
+        matches: [],
+      });
+    }
+
+    const matchesResult = await pool.query(
+      `WITH requester_participants AS (
+         SELECT lp.id, lp.league_id
+           FROM league_participants lp
+           JOIN leagues l ON l.id = lp.league_id
+          WHERE l.group_id = $1
+            AND (lp.member_id = $2 OR (lp.member_id IS NULL AND lp.name = $4))
+       ), opponent_participants AS (
+         SELECT lp.id, lp.league_id
+           FROM league_participants lp
+           JOIN leagues l ON l.id = lp.league_id
+          WHERE l.group_id = $1
+            AND (lp.member_id = $3 OR (lp.member_id IS NULL AND lp.name = $5))
+       )
+       SELECT DISTINCT ON (m.id)
+         m.id AS match_id, m.score_a, m.score_b, m.match_rule, m.match_label,
+         m.round_number, m.program_round, m.program_block_type, m.bracket, m.is_program,
+         m.participant_a_id, m.participant_b_id,
+         rp.id AS requester_participant_id, op.id AS opponent_participant_id,
+         l.id AS league_id, l.name AS league_name, l.start_date::text AS match_date,
+         l.type AS league_type, l.format AS league_format, l.rules AS league_rules,
+         prog.program_data
+       FROM requester_participants rp
+       JOIN opponent_participants op ON op.league_id = rp.league_id
+       JOIN league_matches m ON m.league_id = rp.league_id
+        AND ((m.participant_a_id = rp.id AND m.participant_b_id = op.id)
+          OR (m.participant_a_id = op.id AND m.participant_b_id = rp.id))
+       JOIN leagues l ON l.id = m.league_id
+       LEFT JOIN league_programs prog ON prog.league_id = l.id
+       WHERE m.status = 'done'
+         AND m.score_a IS NOT NULL AND m.score_b IS NOT NULL
+         AND m.score_a <> m.score_b
+       ORDER BY m.id, l.start_date DESC, m.match_order DESC`,
+      [groupId, requesterId, targetUserId, requester.name, opponent.name],
+    );
+
+    const optionLabels = { PRELIM: '예선', FINAL: '본선', UPPER: '상위부', LOWER: '하위부' };
+    const formatLabels = { LEAGUE: '단일리그', GROUP: '조별리그', TOURNAMENT: '토너먼트' };
+    const ruleLabels = {
+      BEST_OF_3: '3전 2선승제',
+      THREE_SET: '3세트제',
+      BEST_OF_5: '5전 3선승제',
+      THREE_SET_GAME: '3세트제',
+      'best-of-3': '3전 2선승제',
+      'best-of-5': '5전 3선승제',
+      '3-sets': '3세트제',
+    };
+
+    const matches = matchesResult.rows.flatMap((row) => {
+      const roundIndex = Math.max(0, Number(row.program_round || 1) - 1);
+      const block = Array.isArray(row.program_data?.blocks) ? row.program_data.blocks[roundIndex] : null;
+      const round = Array.isArray(row.program_data?.rounds) ? row.program_data.rounds[roundIndex] : null;
+      const eventType = row.is_program
+        ? (row.program_block_type || block?.type || round?.program)
+        : String(row.league_type || '').trim() === '단식' ? 'SINGLES' : null;
+      if (eventType !== 'SINGLES') return [];
+
+      const rawFormat = block?.format || round?.format
+        || (row.bracket ? 'TOURNAMENT' : String(row.league_format || '').includes('조별') ? 'GROUP' : 'LEAGUE');
+      if (!formatLabels[rawFormat]) return [];
+
+      const rawOption = round?.option || block?.roundOption || block?.option || 'NONE';
+      const requesterIsA = row.participant_a_id === row.requester_participant_id;
+      const requesterScore = Number(requesterIsA ? row.score_a : row.score_b);
+      const opponentScore = Number(requesterIsA ? row.score_b : row.score_a);
+      const requesterWon = requesterScore > opponentScore;
+      const rawRule = row.match_rule || block?.matchRule || round?.matchRule || row.league_rules;
+
+      return [{
+        source_type: 'league',
+        match_id: row.match_id,
+        league_id: row.league_id,
+        league_name: row.league_name,
+        match_date: row.match_date,
+        stage: optionLabels[rawOption] || (row.bracket ? '본선' : '리그'),
+        event_type: '단식',
+        format: formatLabels[rawFormat],
+        match_rule: ruleLabels[rawRule] || rawRule || '-',
+        round_label: row.program_round
+          ? `${row.program_round}라운드`
+          : row.round_number
+            ? `${row.round_number}라운드`
+            : row.match_label || null,
+        requester_score: requesterScore,
+        opponent_score: opponentScore,
+        winner: requesterWon ? 'requester' : 'opponent',
+      }];
+    }).sort((a, b) => String(b.match_date).localeCompare(String(a.match_date)));
+
+    const wins = matches.filter((match) => match.winner === 'requester').length;
+    return res.json({
+      requester: { user_id: requesterId, name: requester.name },
+      opponent: { user_id: targetUserId, name: opponent.name },
+      summary: { wins, losses: matches.length - wins, matches_played: matches.length },
+      matches,
+    });
+  } catch (error) {
+    console.error('Error fetching member head-to-head:', error);
+    return res.status(500).json({ message: '서버 오류' });
+  }
+});
+
 module.exports = router;

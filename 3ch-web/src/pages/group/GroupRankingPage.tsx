@@ -114,10 +114,18 @@ export default function GroupRankingPage() {
       </Stack>
 
       <SectionHeader title="리그" onOpenDetail={handleOpenDetail} />
-      <PointRankingList rows={data.league.rankings} currentUserId={data.currentUserId} />
+      <PointRankingList
+        rows={data.league.rankings}
+        currentUserId={data.currentUserId}
+        onSelect={(memberId) => navigate(`/club/${groupId}/member/${memberId}`)}
+      />
 
       <SectionHeader title="대회" onOpenDetail={handleOpenDetail} />
-      <PointRankingList rows={data.tournament.rankings} currentUserId={data.currentUserId} />
+      <PointRankingList
+        rows={data.tournament.rankings}
+        currentUserId={data.currentUserId}
+        onSelect={(memberId) => navigate(`/club/${groupId}/member/${memberId}`)}
+      />
     </Stack>
   );
 }
@@ -157,9 +165,11 @@ function SectionHeader({
 function PointRankingList({
   rows,
   currentUserId,
+  onSelect,
 }: {
   rows: PointRankingRow[];
   currentUserId: number;
+  onSelect: (memberId: number) => void;
 }) {
   if (rows.length === 0) {
     return <EmptyRankingCard />;
@@ -180,10 +190,13 @@ function PointRankingList({
           <Card
             key={row.member_id}
             elevation={2}
+            onClick={() => onSelect(row.member_id)}
             sx={{
               borderRadius: 0.85,
               boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
               bgcolor: isMine ? "#EEF2FF" : "#FFF",
+              cursor: "pointer",
+              "&:hover": { bgcolor: isMine ? "#E0E7FF" : "#F9FAFB" },
             }}
           >
             <CardContent sx={{ py: 0.95, px: 1.3, "&:last-child": { pb: 0.95 } }}>

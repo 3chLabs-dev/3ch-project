@@ -216,6 +216,34 @@ export default function LeagueMainBody() {
         title="리그 일정"
         onFilterClick={leagueData && leagueData.leagues.length > 0 ? () => setFilterOpen(true) : undefined}
         onCalendarClick={leagues.length > 0 || (discoverData?.leagues.length ?? 0) > 0 ? () => setCalendarOpen(true) : undefined}
+        seasonControl={singleScheduleGroupId && scheduleSeasons.length > 0 && selectedScheduleSeason ? (
+          <TextField
+            select
+            size="small"
+            value={selectedScheduleSeason.id}
+            onChange={(event) => {
+              setSelectedScheduleSeasonId(event.target.value);
+              setVisibleLeagueCounts({});
+            }}
+            inputProps={{ "aria-label": "리그 일정 시즌 선택" }}
+            SelectProps={{
+              renderValue: (value) => {
+                const season = scheduleSeasons.find((item) => item.id === value);
+                return <Box component="span" sx={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{season?.name ?? "시즌 선택"}</Box>;
+              },
+            }}
+            sx={{
+              width: { xs: 142, sm: 190 },
+              minWidth: 0,
+              "& .MuiOutlinedInput-root": { height: 36, borderRadius: 1.5, fontSize: 13, fontWeight: 800 },
+              "& .MuiSelect-select": { minWidth: 0, pr: "30px !important" },
+            }}
+          >
+            {scheduleSeasons.map((season) => (
+              <MenuItem key={season.id} value={season.id}>{season.name}</MenuItem>
+            ))}
+          </TextField>
+        ) : undefined}
       />
 
       {isLoggedIn && visibleInvitations.length > 0 && (
@@ -306,25 +334,6 @@ export default function LeagueMainBody() {
             );
           })}
           </Stack>
-          {singleScheduleGroupId && scheduleSeasons.length > 0 && selectedScheduleSeason && (
-            <TextField
-              select
-              size="small"
-              label="시즌"
-              value={selectedScheduleSeason.id}
-              onChange={(event) => {
-                setSelectedScheduleSeasonId(event.target.value);
-                setVisibleLeagueCounts({});
-              }}
-              sx={{ width: "100%", maxWidth: 260, "& .MuiOutlinedInput-root": { borderRadius: 1.5 } }}
-            >
-              {scheduleSeasons.map((season) => (
-                <MenuItem key={season.id} value={season.id}>
-                  {season.name}
-                </MenuItem>
-              ))}
-            </TextField>
-          )}
         </Stack>
       )}
 
@@ -507,15 +516,17 @@ type LeagueSectionHeaderProps = {
   title: string;
   onFilterClick?: () => void;
   onCalendarClick?: () => void;
+  seasonControl?: React.ReactNode;
 };
 
-function LeagueSectionHeader({ title, onFilterClick, onCalendarClick }: LeagueSectionHeaderProps) {
+function LeagueSectionHeader({ title, onFilterClick, onCalendarClick, seasonControl }: LeagueSectionHeaderProps) {
   return (
     <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 0.5 }}>
       <Typography variant="subtitle1" fontWeight={900}>
         {title}
       </Typography>
-      <Stack direction="row" spacing={0.25}>
+      <Stack direction="row" spacing={0.5} alignItems="center" sx={{ minWidth: 0 }}>
+        {seasonControl}
         {onCalendarClick && <IconButton size="small" onClick={onCalendarClick} aria-label="달력으로 보기" sx={{ width: 32, height: 32 }}><CalendarMonthIcon fontSize="small" /></IconButton>}
         {onFilterClick && <IconButton size="small" onClick={onFilterClick} aria-label="일정 필터" sx={{ width: 32, height: 32 }}><TuneIcon fontSize="small" /></IconButton>}
         {!onCalendarClick && !onFilterClick && <Box sx={{ width: 32, height: 32 }} />}

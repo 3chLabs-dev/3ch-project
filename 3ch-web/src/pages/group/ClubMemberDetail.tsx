@@ -142,6 +142,21 @@ export default function ClubMemberDetail() {
       <Card
         elevation={2}
         sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)", cursor: "pointer", "&:hover": { bgcolor: "#F9FAFB" } }}
+        onClick={() => navigate(`/club/${groupId}/member/${userId}/head-to-head`)}
+      >
+        <CardContent sx={{ py: 2, px: 2.5, "&:last-child": { pb: 2 } }}>
+          <Stack direction="row" alignItems="center">
+            <Typography fontWeight={700} fontSize={15} flex={1}>
+              상대전적 보기
+            </Typography>
+            <ChevronRightIcon sx={{ color: "text.secondary" }} />
+          </Stack>
+        </CardContent>
+      </Card>
+
+      <Card
+        elevation={2}
+        sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)", cursor: "pointer", "&:hover": { bgcolor: "#F9FAFB" } }}
         onClick={() => navigate(`/club/${groupId}/member/${userId}/leagues`)}
       >
         <CardContent sx={{ py: 2, px: 2.5, "&:last-child": { pb: 2 } }}>

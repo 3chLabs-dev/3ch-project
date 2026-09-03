@@ -467,6 +467,27 @@ export interface GroupMemberLeagueHistoryResponse {
   }>;
 }
 
+export interface GroupMemberHeadToHeadResponse {
+  requester: { user_id: number; name: string };
+  opponent: { user_id: number; name: string };
+  summary: { wins: number; losses: number; matches_played: number };
+  matches: Array<{
+    source_type: "league";
+    match_id: string;
+    league_id: string;
+    league_name: string;
+    match_date?: string | null;
+    stage: string;
+    event_type: "단식";
+    format: "단일리그" | "조별리그" | "토너먼트";
+    match_rule: string;
+    round_label?: string | null;
+    requester_score: number;
+    opponent_score: number;
+    winner: "requester" | "opponent";
+  }>;
+}
+
 export const groupApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     getMyGroups: builder.query<GetGroupsResponse, void>({
@@ -861,6 +882,11 @@ export const groupApi = baseApi.injectEndpoints({
       providesTags: (_result, _error, { groupId }) => [{ type: "Group", id: `ranking-${groupId}` }],
     }),
 
+    getGroupMemberHeadToHead: builder.query<GroupMemberHeadToHeadResponse, { groupId: string; userId: number }>({
+      query: ({ groupId, userId }) => `/group/${groupId}/member/${userId}/head-to-head`,
+      providesTags: (_result, _error, { groupId, userId }) => [{ type: "Group", id: `member-head-to-head-${groupId}-${userId}` }],
+    }),
+
     searchLeagueVenues: builder.query<{ ok: boolean; places: LeagueVenuePlace[] }, string>({
       query: (query) => `/group/place-search?q=${encodeURIComponent(query)}`,
     }),
@@ -1110,6 +1136,7 @@ export const {
   useRecommendGroupsMutation,
   useGetGroupMemberDetailQuery,
   useGetGroupMemberLeagueHistoryQuery,
+  useGetGroupMemberHeadToHeadQuery,
   useGetGroupRankingQuery,
   useGetGroupPointRankingQuery,
   useGetGroupRankingSeasonsQuery,

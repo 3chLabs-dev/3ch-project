@@ -26,7 +26,7 @@ import { useGetPreferencesQuery, useGetHomeSummaryQuery } from "../features/user
 import type { MyGroupItem, MyMatchItem, MyWinItem } from "../features/user/userApi";
 import { useGetLeaguesQuery } from "../features/league/leagueApi";
 import type { LeagueListItem } from "../features/league/leagueApi";
-import { useGetMyGroupsQuery, useUpdateMyGroupPreferencesMutation } from "../features/group/groupApi";
+import { useGetGroupRankingQuery, useGetMyGroupsQuery, useUpdateMyGroupPreferencesMutation } from "../features/group/groupApi";
 import { setPreferredGroupId } from "../features/league/leagueCreationSlice";
 import LeagueFilterDialog from "../components/LeagueFilterDialog.tsx";
 import AdFitBanner from "../components/AdFitBanner";
@@ -113,6 +113,14 @@ export default function Home() {
     const selectedGroup = effectiveSelectedGroupId
         ? groups.find((g) => g.id === effectiveSelectedGroupId) ?? null
         : null;
+    const { data: clubRankingData, isLoading: isClubRankingLoading } = useGetGroupRankingQuery(
+        { groupId: effectiveSelectedGroupId ?? "" },
+        { skip: !isLoggedIn || !effectiveSelectedGroupId, refetchOnMountOrArgChange: true },
+    );
+    const myClubRanking = clubRankingData?.rankings.find((row) => row.member_id === Number(user?.id));
+    const clubTop3 = clubRankingData?.rankings
+        .filter((row) => row.rank != null && row.rank <= 3)
+        .slice(0, 3) ?? [];
 
     useEffect(() => {
         if (!effectiveSelectedGroupId) return;
@@ -337,6 +345,43 @@ export default function Home() {
                                 자세히보기
                             </Button>
                         </Stack>
+                        <Divider sx={{ my: 1.4 }} />
+                        {isClubRankingLoading ? (
+                            <Typography sx={{ fontSize: 11.5, color: "text.secondary" }}>
+                                클럽 레이팅을 불러오는 중...
+                            </Typography>
+                        ) : (
+                            <Stack spacing={0.7}>
+                                <Typography sx={{ fontSize: 11.5, color: "text.secondary", fontWeight: 600 }}>
+                                    {myClubRanking?.rank
+                                        ? `내 순위 ${myClubRanking.rank}위 · 레이팅 ${myClubRanking.rating}`
+                                        : "아직 클럽 순위가 없습니다."}
+                                </Typography>
+                                {clubTop3.length > 0 && (
+                                    <Stack direction="row" spacing={0.55} useFlexGap flexWrap="wrap">
+                                        {clubTop3.map((row) => (
+                                            <Box
+                                                key={row.member_id}
+                                                sx={{
+                                                    display: "inline-flex",
+                                                    alignItems: "center",
+                                                    gap: 0.35,
+                                                    px: 0.65,
+                                                    py: 0.25,
+                                                    borderRadius: 999,
+                                                    bgcolor: "#F9FAFB",
+                                                }}
+                                            >
+                                                <EmojiEventsOutlinedIcon sx={{ fontSize: 11.5, color: "#F59E0B" }} />
+                                                <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: "#374151" }}>
+                                                    {row.rank}위 {row.name}
+                                                </Typography>
+                                            </Box>
+                                        ))}
+                                    </Stack>
+                                )}
+                            </Stack>
+                        )}
                     </CardContent>
                 </Card>
             ) : (

@@ -219,9 +219,14 @@ export default function GroupDetail() {
               <Box key={member.id}>
                 {idx > 0 && <Divider />}
                 <ListItem
+                  onClick={() => {
+                    if (member.user_id != null) navigate(`/club/${id}/member/${member.user_id}`);
+                  }}
                   sx={{
                     py: 1.5,
                     px: 2.5,
+                    cursor: member.user_id != null ? "pointer" : "default",
+                    "&:hover": member.user_id != null ? { bgcolor: "#F9FAFB" } : undefined,
                     bgcolor:
                       member.role === "owner"
                         ? "rgba(255, 193, 7, 0.08)"

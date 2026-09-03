@@ -9,7 +9,7 @@ export default function SupportCenterPage() {
         <Box sx={{ width: "100%", mx: "auto", mt: "-4px" }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
                 <IconButton
-                    onClick={() => navigate(-1)}
+                    onClick={() => navigate("/mypage")}
                     disableRipple
                     sx={{ p: 0, "&:hover": { background: "transparent" } }}
                 >

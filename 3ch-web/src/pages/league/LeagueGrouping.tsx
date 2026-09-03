@@ -231,7 +231,7 @@ export default function LeagueGrouping() {
     try {
       await saveGrouping({ leagueId: id ?? "", groupings: payload }).unwrap();
       alert("조 편성이 성공적으로 갱신되었습니다!");
-      navigate(-1); // 저장 후엔 이전 화면으로
+      navigate(`/league/${id}`); // 저장 후엔 리그 상세로
     } catch (error) {
       console.error("저장 실패 상세 원인:", error);
       alert("저장에 실패했습니다.");
@@ -265,7 +265,7 @@ export default function LeagueGrouping() {
   const renderResult = () => (
     <Box>
       <Box mb={2}>
-        <IconButton onClick={() => navigate(-1)} sx={{ ml: -1, mb: 0.5, color: "text.primary" }}><ChevronLeftIcon /></IconButton>
+        <IconButton onClick={() => navigate(`/league/${id}`)} sx={{ ml: -1, mb: 0.5, color: "text.primary" }}><ChevronLeftIcon /></IconButton>
         <Typography variant="h5" fontWeight="800" color={COLOR.darkCard}>조 편성</Typography>
         <Typography variant="body2" color="text.secondary" mt={0.5} fontWeight="500">드래그하여 인원과 대표(첫 번째 자리)를 변경하세요.</Typography>
       </Box>

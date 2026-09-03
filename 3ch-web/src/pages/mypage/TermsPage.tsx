@@ -53,7 +53,7 @@ export default function TermsPage() {
             <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", pb: 1 }}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
                     <IconButton
-                        onClick={() => navigate(-1)}
+                        onClick={() => navigate("/mypage")}
                         disableRipple
                         sx={{ p: 0, "&:hover": { background: "transparent" } }}
                     >

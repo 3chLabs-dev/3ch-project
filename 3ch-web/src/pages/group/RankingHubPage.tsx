@@ -62,7 +62,7 @@ export default function RankingHubPage() {
   return (
     <Stack spacing={2} sx={{ pb: 2.5 }}>
       <Stack direction="row" alignItems="center" spacing={1.5}>
-        <IconButton onClick={() => navigate(-1)} size="small">
+        <IconButton onClick={() => navigate("/")} size="small">
           <ArrowBackIcon />
         </IconButton>
         <Typography variant="h6" fontWeight={900} flex={1}>

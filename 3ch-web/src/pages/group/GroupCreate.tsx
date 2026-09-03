@@ -306,7 +306,7 @@ export default function GroupCreate() {
         <Box sx={{ pb: 9 }}>
             {/* 헤더 */}
             <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 3 }}>
-                <IconButton onClick={() => navigate(-1)} size="small">
+                <IconButton onClick={() => navigate("/club")} size="small">
                     <ArrowBackIcon />
                 </IconButton>
                 <Typography sx={{ fontSize: 20, fontWeight: 900 }}>

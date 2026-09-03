@@ -608,7 +608,7 @@ export default function PricingPage() {
 
       {/* 헤더 */}
       <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
-        <IconButton onClick={() => navigate(-1)} size="small">
+        <IconButton onClick={() => navigate("/mypage")} size="small">
           <ChevronLeftIcon />
         </IconButton>
         <Typography variant="h6" fontWeight={900} flex={1}>요금제</Typography>

@@ -344,7 +344,7 @@ export default function LeagueOcrSheet() {
       />
 
       <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mb: 1.5, flexWrap: "wrap", rowGap: 0.75, "@media print": { display: "none" } }}>
-        <IconButton size="small" onClick={() => navigate(-1)}>
+        <IconButton size="small" onClick={() => navigate(`/league/${id}`)}>
           <ArrowBackIcon fontSize="small" />
         </IconButton>
         <Typography sx={{ flex: 1, fontWeight: 900, fontSize: 18 }}>OCR 점수 입력지</Typography>
@@ -422,7 +422,7 @@ export default function LeagueOcrSheet() {
                 variant="contained"
                 size="small"
                 startIcon={<ArrowBackIcon fontSize="small" />}
-                onClick={() => navigate(-1)}
+                onClick={() => navigate(`/league/${id}`)}
                 sx={{ borderRadius: 999, fontWeight: 900, minWidth: 62, px: 1.3, bgcolor: "#6B7280", "&:hover": { bgcolor: "#4B5563" } }}
               >
                 뒤로

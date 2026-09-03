@@ -1259,7 +1259,7 @@ const handleSaveEdit = async () => {
       <Box sx={{ pb: 4 }}>
         {/* 헤더 */}
         <Stack direction="row" alignItems="center" sx={{ mb: 2 }}>
-          <IconButton onClick={() => navigate(-1)} size="small" sx={{ mr: 0.5 }}>
+          <IconButton onClick={() => navigate("/league")} size="small" sx={{ mr: 0.5 }}>
             <ArrowBackIcon />
           </IconButton>
           <Typography fontWeight={900} fontSize={18} sx={{ flex: 1 }}>
@@ -2347,7 +2347,7 @@ const handleSaveEdit = async () => {
                 setDeleteConfirm(false);
                 try {
                   await deleteLeague({ leagueId: id }).unwrap();
-                  navigate(-1);
+                  navigate("/league");
                 } catch {
                   setAlertSeverity("error");
                   setAlertMsg("리그 삭제에 실패했습니다.");

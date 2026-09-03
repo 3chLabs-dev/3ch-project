@@ -132,7 +132,7 @@ export default function MemberCheckPage() {
                 >
                     {/* 헤더 */}
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: "-4px" }}>
-                        <IconButton onClick={() => navigate(-1)} sx={{ p: 0 }}>
+                        <IconButton onClick={() => navigate("/mypage")} sx={{ p: 0 }}>
                             <ChevronLeftIcon sx={{ fontSize: 28 }} />
                         </IconButton>
                         <Typography sx={{ fontSize: 18, fontWeight: 900 }}>회원정보 수정</Typography>

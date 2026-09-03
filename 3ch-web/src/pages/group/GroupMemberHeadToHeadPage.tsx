@@ -39,7 +39,7 @@ export default function GroupMemberHeadToHeadPage() {
   return (
     <Stack spacing={2.5} sx={{ pb: 3 }}>
       <Stack direction="row" alignItems="center" spacing={1.5}>
-        <IconButton onClick={() => navigate(-1)} size="small"><ArrowBackIcon /></IconButton>
+        <IconButton onClick={() => navigate(`/club/${groupId}/member/${userId}`)} size="small"><ArrowBackIcon /></IconButton>
         <Typography variant="h6" fontWeight={900} flex={1}>상대전적</Typography>
       </Stack>
 

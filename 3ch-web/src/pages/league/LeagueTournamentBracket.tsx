@@ -1711,7 +1711,7 @@ export default function LeagueTournamentBracket() {
 
       {/* ── 헤더 ── */}
       <Box sx={{ display: "flex", alignItems: "center", px: 1, py: 0.75, borderBottom: "1px solid #E5E7EB", gap: 0.5, flexShrink: 0 }}>
-        <IconButton size="small" onClick={() => navigate(-1)} sx={{ flexShrink: 0 }}>
+        <IconButton size="small" onClick={() => navigate(isProgramMode ? `/league/${id}/program` : `/league/${id}/tournament`)} sx={{ flexShrink: 0 }}>
           <ChevronLeftIcon />
         </IconButton>
 
@@ -1778,7 +1778,7 @@ export default function LeagueTournamentBracket() {
           </Button>
         )}
 
-        <IconButton size="small" onClick={() => navigate(-1)} sx={{ flexShrink: 0 }}>
+        <IconButton size="small" onClick={() => navigate(isProgramMode ? `/league/${id}/program` : `/league/${id}/tournament`)} sx={{ flexShrink: 0 }}>
           <CloseIcon sx={{ fontSize: 20 }} />
         </IconButton>
       </Box>

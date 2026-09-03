@@ -126,7 +126,7 @@ export default function LeagueTournamentGenerate() {
       <Stack direction="row" alignItems="center" sx={{ px: 1, pt: 1, pb: 0.5 }}>
         <Button
           startIcon={<ChevronLeftIcon />}
-          onClick={() => navigate(-1)}
+          onClick={() => navigate(`/league/${id}/tournament`)}
           sx={{ color: "text.primary", fontWeight: 700, minWidth: 0, px: 0.5 }}
         >
           토너먼트 대진표 생성

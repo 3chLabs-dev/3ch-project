@@ -538,7 +538,7 @@ export default function LeagueOpenAIVisionSheet() {
       }} />
 
       <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mb: 1.5, flexWrap: "wrap", rowGap: 0.75, "@media print": { display: "none" } }}>
-        <IconButton size="small" onClick={() => navigate(-1)}><ArrowBackIcon fontSize="small" /></IconButton>
+        <IconButton size="small" onClick={() => navigate(`/league/${id}`)}><ArrowBackIcon fontSize="small" /></IconButton>
         <Typography sx={{ flex: 1, fontWeight: 900, fontSize: 18 }}>OpenAI Vision 대진표</Typography>
         <Button variant="contained" size="small" startIcon={<PrintIcon />} onClick={() => window.print()} sx={{ borderRadius: 1, fontWeight: 900 }}>출력</Button>
         <Button variant="contained" size="small" startIcon={<CameraAltIcon />} onClick={() => setResultDialogOpen(true)} disabled={!matches.length || isBusy || isIniting} sx={{ borderRadius: 1, fontWeight: 900, bgcolor: "#16A34A", "&:hover": { bgcolor: "#15803D" } }}>사진 인식</Button>
@@ -561,7 +561,7 @@ export default function LeagueOpenAIVisionSheet() {
               <Typography sx={{ mt: 0.35, color: "#2563EB", fontSize: 11, fontWeight: 800 }}>각 셀에는 행 참가자가 획득한 세트 수 하나만 적어 주세요.</Typography>
             </Box>
             <Stack direction="row" spacing={0.7} sx={{ flexShrink: 0, "@media print": { display: "none" } }}>
-              <Button variant="contained" size="small" startIcon={<ArrowBackIcon fontSize="small" />} onClick={() => navigate(-1)} sx={{ borderRadius: 999, fontWeight: 900, minWidth: 62, px: 1.3, bgcolor: "#6B7280", "&:hover": { bgcolor: "#4B5563" } }}>뒤로</Button>
+              <Button variant="contained" size="small" startIcon={<ArrowBackIcon fontSize="small" />} onClick={() => navigate(`/league/${id}`)} sx={{ borderRadius: 999, fontWeight: 900, minWidth: 62, px: 1.3, bgcolor: "#6B7280", "&:hover": { bgcolor: "#4B5563" } }}>뒤로</Button>
               <Button variant="contained" size="small" onClick={() => navigate(`/league/${id}`)} sx={{ borderRadius: 999, fontWeight: 900, minWidth: 50, px: 1.3, bgcolor: "#60A5FA", "&:hover": { bgcolor: "#3B82F6" } }}>수정</Button>
               <Button variant="contained" size="small" onClick={() => setResultDialogOpen(true)} disabled={!matches.length || isBusy || isIniting} sx={{ borderRadius: 999, fontWeight: 900, minWidth: 72, px: 1.3, bgcolor: "#22C55E", "&:hover": { bgcolor: "#16A34A" } }}>결과 등록</Button>
             </Stack>

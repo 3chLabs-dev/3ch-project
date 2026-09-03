@@ -23,7 +23,7 @@ export default function SettingsPage() {
         <Stack spacing={2.5} sx={{ width: "100%", mx: "auto", mt: "-4px" }}>
             {/* 헤더 */}
             <Stack direction="row" alignItems="center" spacing={1.5}>
-                <IconButton onClick={() => navigate(-1)} size="small">
+                <IconButton onClick={() => navigate("/mypage")} size="small">
                     <ChevronLeftIcon />
                 </IconButton>
                 <Typography variant="h6" fontWeight={900} flex={1}>설정</Typography>

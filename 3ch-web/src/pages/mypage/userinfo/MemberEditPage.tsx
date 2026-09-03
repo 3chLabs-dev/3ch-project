@@ -310,7 +310,7 @@ export default function MemberEditPage() {
         <Box sx={{ mx: "auto", mt: "-4px" }}>
             {/* 헤더 */}
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <IconButton onClick={() => navigate(-1)} sx={{ p: 0 }}>
+                <IconButton onClick={() => navigate("/mypage")} sx={{ p: 0 }}>
                     <ChevronLeftIcon sx={{ fontSize: 28 }} />
                 </IconButton>
                 <Typography sx={{ fontSize: 20, fontWeight: 900 }}>회원정보 수정</Typography>

@@ -1038,7 +1038,7 @@ export default function DrawList() {
   return (
     <Stack spacing={2.2}>
       <Stack direction="row" alignItems="center" spacing={1}>
-        <IconButton onClick={() => navigate(-1)} size="small">
+        <IconButton onClick={() => navigate("/draw")} size="small">
           <ArrowBackIcon />
         </IconButton>
         <Typography fontWeight={900} fontSize={20} sx={{ flex: 1 }}>경품 추첨</Typography>

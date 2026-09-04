@@ -113,7 +113,7 @@ export default function RankingHubPage() {
                 key={group.id}
                 group={group}
                 currentUserId={user?.id}
-                onClick={() => navigate(`/club/${group.club_code ?? group.id}/ranking`)}
+                onClick={() => navigate(`/club/${group.club_code ?? group.id}/ranking?back=ranking`)}
               />
             ))}
           </Stack>

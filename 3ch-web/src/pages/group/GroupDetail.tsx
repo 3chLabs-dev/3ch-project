@@ -186,7 +186,7 @@ export default function GroupDetail() {
           {isAlreadyMember && (
             <IconButton
               size="small"
-              onClick={() => navigate(`/club/${id}/ranking`)}
+              onClick={() => navigate(`/club/${id}/ranking?back=detail`)}
               sx={{ color: "#D97706" }}
             >
               <EmojiEventsOutlinedIcon />

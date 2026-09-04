@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Box,
   Button,
@@ -19,6 +19,13 @@ import { useGetGroupPointRankingQuery } from "../../features/group/groupApi";
 export default function GroupRankingPage() {
   const { id: groupId = "" } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const backMode = searchParams.get("back");
+  const backTo = backMode === "manage"
+    ? `/club/${groupId}/manage`
+    : backMode === "ranking"
+      ? "/ranking"
+      : `/club/${groupId}`;
   const [selectedYear, setSelectedYear] = useState<number | undefined>(undefined);
   const [selectedSeasonId, setSelectedSeasonId] = useState<string | undefined>(undefined);
 
@@ -68,7 +75,7 @@ export default function GroupRankingPage() {
   return (
     <Stack spacing={2.5} sx={{ pb: 3 }}>
       <Stack direction="row" alignItems="center" spacing={1.5}>
-        <IconButton onClick={() => navigate(`/club/${groupId}`)} size="small">
+        <IconButton onClick={() => navigate(backTo)} size="small">
           <ArrowBackIcon />
         </IconButton>
         <Typography variant="h6" fontWeight={900} flex={1}>
@@ -178,7 +185,9 @@ function PointRankingList({
   return (
     <Stack spacing={0.8}>
       {rows.map((row) => {
-        const isMine = row.member_id === currentUserId;
+        const memberId = row.member_id;
+        const isMine = memberId != null && memberId === currentUserId;
+        const canOpenMember = memberId != null;
         const rankBadgeBg =
           row.rank === 1 ? "#F4C542" :
           row.rank === 2 ? "#D9DEE7" :
@@ -188,15 +197,15 @@ function PointRankingList({
 
         return (
           <Card
-            key={row.member_id}
+            key={row.member_id ?? `pre-${row.pre_member_id}`}
             elevation={2}
-            onClick={() => onSelect(row.member_id)}
+            onClick={() => { if (memberId != null) onSelect(memberId); }}
             sx={{
               borderRadius: 0.85,
               boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
               bgcolor: isMine ? "#EEF2FF" : "#FFF",
-              cursor: "pointer",
-              "&:hover": { bgcolor: isMine ? "#E0E7FF" : "#F9FAFB" },
+              cursor: canOpenMember ? "pointer" : "default",
+              "&:hover": canOpenMember ? { bgcolor: isMine ? "#E0E7FF" : "#F9FAFB" } : undefined,
             }}
           >
             <CardContent sx={{ py: 0.95, px: 1.3, "&:last-child": { pb: 0.95 } }}>
@@ -255,6 +264,11 @@ function PointRankingList({
                     >
                       {row.name}
                     </Typography>
+                    {row.is_pre_registered && (
+                      <Typography sx={{ fontSize: 9, fontWeight: 800, color: "#6B7280", whiteSpace: "nowrap" }}>
+                        사전등록
+                      </Typography>
+                    )}
                   </Stack>
                 </Box>
 

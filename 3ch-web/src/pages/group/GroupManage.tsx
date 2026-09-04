@@ -659,7 +659,7 @@ export default function GroupManage() {
                         size="small"
                         variant="outlined"
                         startIcon={<EmojiEventsOutlinedIcon fontSize="small" />}
-                        onClick={() => navigate(`/club/${id}/ranking`)}
+                        onClick={() => navigate(`/club/${id}/ranking?back=manage`)}
                         sx={{
                             borderRadius: 1,
                             fontWeight: 700,

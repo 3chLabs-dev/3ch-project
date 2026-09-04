@@ -32,7 +32,7 @@ import {
 } from "../../features/league/leagueApi";
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
 import { formatLeagueDate } from "../../utils/dateUtils";
-import { applyProgramMatchState, applyProgramTournamentAdvancement, clearProgramMatchState, generateProgramRoundMatches, getStoredProgramOption, isAutomaticProgramWalkover } from "../../utils/programMatchGenerator";
+import { applyProgramMatchState, applyProgramTournamentAdvancement, clearProgramMatchState, generateProgramRoundMatches, getStoredProgramOption, isAutomaticProgramWalkover, saveProgramMatchPatch } from "../../utils/programMatchGenerator";
 
 // ─── 단일 토너먼트 레이아웃 상수 ────────────────────────────────────────────
 // 단일 토너먼트(라운드로빈 등)에서 매치 박스를 좌→우 방향으로 나열할 때 사용
@@ -573,7 +573,7 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
     (isR1 && m.participant_b_id && seed?.b ? `1-${seed.b}` : undefined);
 
   const handleSlotA = () => {
-    if (!actions || !isR1) return;
+    if (!actions) return;
     if (actions.editMode) {
       actions.onSwapSelect(m.id, "a", m.participant_a_id, nameA ?? null);
     } else if (actions.canRegister && !nameA) {
@@ -582,7 +582,7 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
   };
 
   const handleSlotB = () => {
-    if (!actions || !isR1) return;
+    if (!actions) return;
     if (actions.editMode) {
       actions.onSwapSelect(m.id, "b", m.participant_b_id, nameB ?? null);
     } else if (actions.canRegister && !nameB) {
@@ -590,8 +590,8 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
     }
   };
 
-  const slotACursor = isR1 && (actions?.canRegister && !nameA) || (actions?.canManage && actions.editMode) ? "pointer" : "default";
-  const slotBCursor = isR1 && (actions?.canRegister && !nameB) || (actions?.canManage && actions.editMode) ? "pointer" : "default";
+  const slotACursor = (isR1 && actions?.canRegister && !nameA) || (actions?.canManage && actions.editMode) ? "pointer" : "default";
+  const slotBCursor = (isR1 && actions?.canRegister && !nameB) || (actions?.canManage && actions.editMode) ? "pointer" : "default";
   const canOpenResult = Boolean(actions?.canManage && !actions.editMode && m.participant_a_id && m.participant_b_id);
 
   return (
@@ -711,7 +711,7 @@ function SingleSlotBox({ pos, slot, actions, manualSeeding = false }: { pos: Mat
   const swapSel = actions?.swapFirstKey === `${m.id}:${slot}`;
 
   const handleClick = () => {
-    if (!actions || !isR1) return;
+    if (!actions) return;
     if (actions.editMode) {
       actions.onSwapSelect(m.id, slot, participantId, name ?? null);
     } else if (actions.canRegister && !name) {
@@ -720,7 +720,7 @@ function SingleSlotBox({ pos, slot, actions, manualSeeding = false }: { pos: Mat
   };
 
   const canOpenResult = Boolean(actions?.canManage && !actions.editMode && m.participant_a_id && m.participant_b_id);
-  const cursor = canOpenResult || (isR1 && ((actions?.canRegister && !name) || (actions?.canManage && actions.editMode))) ? "pointer" : "default";
+  const cursor = canOpenResult || (isR1 && actions?.canRegister && !name) || (actions?.canManage && actions.editMode) ? "pointer" : "default";
 
   return (
     <Box sx={{
@@ -1429,6 +1429,7 @@ export default function LeagueTournamentBracket() {
           };
       const firstValue = readSlot(firstMatch, first.slot);
       const secondValue = readSlot(secondMatch, slot);
+      const copyIntoEmptySlot = Boolean(firstValue.id) && !secondValue.id;
       const writeSlot = (target: LeagueMatch, targetSlot: "a" | "b", value: ReturnType<typeof readSlot>) => {
         if (targetSlot === "a") {
           target.participant_a_id = value.id;
@@ -1448,9 +1449,9 @@ export default function LeagueTournamentBracket() {
       };
       const nextMatches = allProgramMatches.map((match) => {
         const next = { ...match };
-        if (match.id === first.matchId) writeSlot(next, first.slot, secondValue);
+        if (match.id === first.matchId && !copyIntoEmptySlot) writeSlot(next, first.slot, secondValue);
         if (match.id === matchId) writeSlot(next, slot, firstValue);
-        if (match.id === first.matchId || match.id === matchId) {
+        if ((!copyIntoEmptySlot && match.id === first.matchId) || match.id === matchId) {
           const hasA = Boolean(next.participant_a_id);
           const hasB = Boolean(next.participant_b_id);
           if (hasA && hasB) {
@@ -1469,6 +1470,11 @@ export default function LeagueTournamentBracket() {
         }
         return next;
       });
+      if (copyIntoEmptySlot) {
+        saveProgramMatchPatch(id!, programRound, matchId, slot === "a"
+          ? { participant_a_id: firstValue.id, participant_a_name: firstValue.name, participant_a_division: firstValue.division, participant_a_seed_label: firstValue.seedLabel }
+          : { participant_b_id: firstValue.id, participant_b_name: firstValue.name, participant_b_division: firstValue.division, participant_b_seed_label: firstValue.seedLabel });
+      }
       await syncLeagueProgramMatches({
         leagueId: id!,
         matches: nextMatches.map((match) => ({
@@ -1481,7 +1487,13 @@ export default function LeagueTournamentBracket() {
       return;
     }
 
-    if (first.matchId === matchId) {
+    const copyIntoEmptySlot = Boolean(first.participantId) && !participantId;
+    if (copyIntoEmptySlot) {
+      const targetMatch = matches.find((candidate) => candidate.id === matchId);
+      await assignParticipant({ leagueId: id!, matchId, ...(slot === "a" ? { participant_a_id: first.participantId } : { participant_b_id: first.participantId }) });
+      const otherParticipantId = slot === "a" ? targetMatch?.participant_b_id : targetMatch?.participant_a_id;
+      await updateTournamentMatch({ leagueId: id!, matchId, updates: otherParticipantId ? { status: "pending", score_a: null, score_b: null } : { status: "done", score_a: 0, score_b: 0 } }).unwrap();
+    } else if (first.matchId === matchId) {
       // 같은 매치 내 A↔B 스왑 → 한 번에 처리
       await assignParticipant({
         leagueId: id!,
@@ -1966,13 +1978,17 @@ export default function LeagueTournamentBracket() {
                 return (
                   <React.Fragment key={pos.id}>
                     <SingleSlotBox pos={pos} slot="a" actions={visibleSlotActions} manualSeeding={manualSeeding} />
-                    <Typography sx={{
+                    <Box sx={{
                       position: "absolute",
                       left: pos.x + SS_W,
-                      top: pos.y + SS_H / 2 - 8,
+                      top: pos.y + SS_H / 2 - 18,
                       width: SS_GAP,
+                      height: 36,
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "center",
                       textAlign: "center",
-                      fontSize: 11, fontWeight: 900, color: "#94A3B8", lineHeight: 1,
                       pointerEvents: visibleSlotActions?.canManage && !visibleSlotActions.editMode && pos.match.participant_a_id && pos.match.participant_b_id ? "auto" : "none",
                       cursor: visibleSlotActions?.canManage && !visibleSlotActions.editMode && pos.match.participant_a_id && pos.match.participant_b_id ? "pointer" : "default",
                       bgcolor: "#F1F5F9", zIndex: 2,
@@ -1980,7 +1996,15 @@ export default function LeagueTournamentBracket() {
                       if (visibleSlotActions?.canManage && !visibleSlotActions.editMode && pos.match.participant_a_id && pos.match.participant_b_id) {
                         visibleSlotActions.onOpenResult(pos.match.id);
                       }
-                    }}>vs</Typography>
+                    }}>
+                      <Typography sx={{ fontSize: 7, fontWeight: 900, color: pos.match.bracket === "lower" ? "#7C3AED" : "#2563EB", lineHeight: 1 }}>
+                        {pos.match.bracket === "lower" ? "하위" : "상위"}
+                      </Typography>
+                      <Typography sx={{ my: 0.25, fontSize: 9, fontWeight: 900, color: "#94A3B8", lineHeight: 1 }}>vs</Typography>
+                      <Typography sx={{ fontSize: 7, fontWeight: 900, color: "#64748B", lineHeight: 1, whiteSpace: "nowrap" }}>
+                        {(pos.match.match_label ?? "경기").replace(/^상위\s*|^하위\s*/, "")}
+                      </Typography>
+                    </Box>
                     <SingleSlotBox pos={pos} slot="b" actions={visibleSlotActions} manualSeeding={manualSeeding} />
                   </React.Fragment>
                 );

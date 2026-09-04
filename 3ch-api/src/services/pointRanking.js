@@ -184,6 +184,15 @@ function getProgramRoundMeta(programData, programRound) {
   };
 }
 
+function getMatchPhaseSection(match) {
+  const roundMeta = getProgramRoundMeta(match.program_data, match.program_round);
+  return roundMeta.format === "TOURNAMENT" || match.bracket ? "tournament" : "league";
+}
+
+function getRankingSection(match, leagueHasRegularPhase) {
+  return leagueHasRegularPhase.has(match.league_id) ? "league" : "tournament";
+}
+
 function isSinglesEntry(row) {
   if (row.is_program) {
     return row.program_block_type === "SINGLES"
@@ -590,7 +599,14 @@ async function getPointRanking(groupId, year, scope, seasonId) {
 
   const leagueGroups = new Map();
   const tournamentGroups = new Map();
-  const leagueHasRegularPhase = new Set();
+  // A league that has a regular/group phase remains a "league" ranking entry
+  // even when its finals are played as a tournament. Only tournament-only
+  // events belong in the separate tournament ranking section.
+  const leagueHasRegularPhase = new Set(
+    matchResult.rows
+      .filter((match) => getMatchPhaseSection(match) === "league")
+      .map((match) => match.league_id),
+  );
   const participantMembers = new Map(
     participantResult.rows.map((row) => [String(row.participant_id), Number(row.member_id)]),
   );
@@ -599,10 +615,11 @@ async function getPointRanking(groupId, year, scope, seasonId) {
     const entryType = getProgramEntryType(match);
     if (!entryType) return;
     const roundMeta = getProgramRoundMeta(match.program_data, match.program_round);
-    const section = roundMeta.format === "TOURNAMENT" || match.bracket ? "tournament" : "league";
+    const phaseSection = getMatchPhaseSection(match);
+    const section = getRankingSection(match, leagueHasRegularPhase);
     match._rankingFormat = roundMeta.format
-      ?? (String(match.format ?? "").includes("조별리그") ? "GROUP" : section === "tournament" ? "TOURNAMENT" : "LEAGUE");
-    const matchFormat = section === "tournament"
+      ?? (String(match.format ?? "").includes("조별리그") ? "GROUP" : phaseSection === "tournament" ? "TOURNAMENT" : "LEAGUE");
+    const matchFormat = phaseSection === "tournament"
       ? "tournament"
       : match._rankingFormat === "GROUP" ? "group" : "league";
     const includeMatchPoints = pointRules.matchPoints.eventTypes[entryType] === true
@@ -612,9 +629,7 @@ async function getPointRanking(groupId, year, scope, seasonId) {
         || String(match.bracket ?? "").includes("하위")) {
       match._rankingOption = "LOWER";
     }
-    if (!match.bracket) {
-      leagueHasRegularPhase.add(match.league_id);
-    }
+    match._rankingSection = section;
 
     const memberAIds = entryType === "singles"
       ? [Number(match.member_a_id)].filter(Number.isFinite)
@@ -673,7 +688,7 @@ async function getPointRanking(groupId, year, scope, seasonId) {
 
     if (scoreA === scoreB) return;
     const leagueKey = match.league_id;
-    if (section === "league") {
+    if (phaseSection === "league") {
       const roundKey = `${leagueKey}:${match.program_round ?? 0}`;
       const groupNameA = entryType === "singles" ? toKey(match.group_name_a) : toKey(match.match_label);
       const groupNameB = entryType === "singles" ? toKey(match.group_name_b) : toKey(match.match_label);
@@ -833,7 +848,8 @@ async function getPointRanking(groupId, year, scope, seasonId) {
     const awardMemberRank = (memberIds, rank, rule) => {
       const divisor = memberIds.length;
       memberIds.forEach((memberId) => {
-        const row = tournamentRows.get(Number(memberId));
+        const targetRows = sample._rankingSection === "league" ? leagueRows : tournamentRows;
+        const row = targetRows.get(Number(memberId));
         if (row) awardBonus(row, rank, rule, divisor);
       });
     };
@@ -908,6 +924,8 @@ module.exports = {
   _test: {
     awardBonus,
     getBonusRule,
+    getMatchPhaseSection,
+    getRankingSection,
     isFinalMatch,
     isThirdPlaceMatch,
     rankingUnitKey,

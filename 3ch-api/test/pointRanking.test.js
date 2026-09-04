@@ -37,3 +37,24 @@ test('팀원 순서와 무관하게 같은 순위 집계 단위로 묶는다', (
   assert.equal(_test.rankingUnitKey([12, 3, 8]), '3,8,12');
   assert.equal(_test.rankingUnitKey([8, 12, 3]), '3,8,12');
 });
+
+test('예선 뒤 본선 토너먼트 경기는 리그 순위에 계속 합산한다', () => {
+  const leagueId = 'mixed-league';
+  const regularMatch = {
+    league_id: leagueId,
+    program_round: 1,
+    program_data: { blocks: [{ format: 'GROUP' }, { format: 'TOURNAMENT' }] },
+    bracket: null,
+  };
+  const finalsMatch = {
+    league_id: leagueId,
+    program_round: 2,
+    program_data: regularMatch.program_data,
+    bracket: 'upper',
+  };
+  const leagueHasRegularPhase = new Set([leagueId]);
+
+  assert.equal(_test.getMatchPhaseSection(regularMatch), 'league');
+  assert.equal(_test.getMatchPhaseSection(finalsMatch), 'tournament');
+  assert.equal(_test.getRankingSection(finalsMatch, leagueHasRegularPhase), 'league');
+});

@@ -58,6 +58,27 @@ for (let groupCount = 2; groupCount <= 16; groupCount += 1) {
 
     if (groupCount === 3 && advanceCount === 8) {
       assert.deepEqual(slots.map((unit) => unit?.seedLabel ?? null), referenceThreeByEight);
+
+      const poolsWithBots = pools.map((pool, poolIndex) =>
+        pool.map((unit, rankIndex) =>
+          rankIndex === 7 && (poolIndex === 1 || poolIndex === 2)
+            ? { id: null, name: null }
+            : unit
+        )
+      );
+      const botOrdered = buildCrossGroupTournamentSeedOrder(poolsWithBots);
+      const botSlots = buildTournamentSlots(
+        "validation-bots",
+        1,
+        { tournamentSeeding: "seed" } as never,
+        botOrdered,
+        "seed",
+      ) as Array<Unit | null>;
+      const botExpected = referenceThreeByEight.map((label) =>
+        label === "2-8" || label === "3-8" ? null : label
+      );
+      assert.deepEqual(botSlots.map((unit) => unit?.seedLabel ?? null), botExpected);
+      assert.equal(botSlots.filter((unit) => !unit?.id).length, 10, "3조×8명 BOT 2명 BYE count");
     }
     checked += 1;
   }

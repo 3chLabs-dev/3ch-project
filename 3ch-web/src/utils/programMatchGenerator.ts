@@ -32,6 +32,7 @@ type ProgramPlayer = {
   level: number;
   seedLabel?: string;
   sourceGroupId?: string | null;
+  isBot?: boolean;
 };
 
 type MatchUnit = {
@@ -43,6 +44,7 @@ type MatchUnit = {
   rosterDetails?: Array<{ name: string; division: string | null }>;
   seedLabel?: string;
   sourceGroupIds?: string[];
+  isBot?: boolean;
 };
 
 function toProgramPlayers(participants: LeagueParticipantItem[]): ProgramPlayer[] {
@@ -55,6 +57,7 @@ function toProgramPlayers(participants: LeagueParticipantItem[]): ProgramPlayer[
         division: participant.division ?? null,
         level: Number.isNaN(level) ? 0 : level,
         sourceGroupId: participant.source_group_id ?? null,
+        isBot: participant.is_bot === true || /^BOT\s+\d+$/i.test(participant.name),
       };
     })
     .sort((a, b) => (a.level || Number.MAX_SAFE_INTEGER) - (b.level || Number.MAX_SAFE_INTEGER) || a.name.localeCompare(b.name));
@@ -986,20 +989,22 @@ export function buildProgramRoundStandingsSnapshot(
 
   const unitById = new Map<string, MatchUnit>();
   roundMatches.forEach((match) => {
-    if (match.participant_a_id && !match.participant_a_id.startsWith("placeholder-") && !/^BOT\s+\d+$/.test(match.participant_a_name ?? "")) {
+    if (match.participant_a_id && !match.participant_a_id.startsWith("placeholder-")) {
       unitById.set(match.participant_a_id, {
         id: match.participant_a_id,
         name: match.participant_a_name,
         division: match.participant_a_division,
         seedLabel: match.participant_a_seed_label ?? undefined,
+        isBot: /^BOT\s+\d+$/i.test(match.participant_a_name ?? ""),
       });
     }
-    if (match.participant_b_id && !match.participant_b_id.startsWith("placeholder-") && !/^BOT\s+\d+$/.test(match.participant_b_name ?? "")) {
+    if (match.participant_b_id && !match.participant_b_id.startsWith("placeholder-")) {
       unitById.set(match.participant_b_id, {
         id: match.participant_b_id,
         name: match.participant_b_name,
         division: match.participant_b_division,
         seedLabel: match.participant_b_seed_label ?? undefined,
+        isBot: /^BOT\s+\d+$/i.test(match.participant_b_name ?? ""),
       });
     }
   });
@@ -1192,7 +1197,9 @@ function buildThreeGroupEightRankSeedOrder(rankedPools: MatchUnit[][]): MatchUni
 
   const unit = (groupIndex: number, rankIndex: number): MatchUnit => ({
     ...rankedPools[groupIndex][rankIndex],
-    seedLabel: `${groupIndex + 1}-${rankIndex + 1}`,
+    ...(rankedPools[groupIndex][rankIndex].id
+      ? { seedLabel: `${groupIndex + 1}-${rankIndex + 1}` }
+      : { seedLabel: undefined }),
   });
   const bye = (): MatchUnit => ({ id: null, name: null, division: null });
 
@@ -1338,7 +1345,7 @@ export function buildCrossGroupTournamentSeedOrder(rankedPools: MatchUnit[][]): 
   const labeledPools = rankedPools.map((pool, poolIndex) =>
     pool.map((unit, rankIndex) => ({
       ...unit,
-      seedLabel: `${poolIndex + 1}-${rankIndex + 1}`,
+      seedLabel: unit.id ? `${poolIndex + 1}-${rankIndex + 1}` : undefined,
     })),
   );
 
@@ -1735,7 +1742,13 @@ export function generateProgramRoundMatches(
   if (block.format === "TOURNAMENT") {
     if (isFinalRound) {
       const bracketCount = block.tournamentBracketCount ?? 1;
-      const qualifiedPools = finalPools?.map((pool) => advancesEveryone ? pool : pool.slice(0, advanceCount));
+      const qualifiedPools = finalPools?.map((pool) =>
+        (advancesEveryone ? pool : pool.slice(0, advanceCount)).map((unit) =>
+          unit.isBot
+            ? { id: null, name: null, division: null, isBot: true }
+            : unit
+        )
+      );
       const crossGroupSeedOrder =
         bracketCount === 1 && qualifiedPools
           ? buildCrossGroupTournamentSeedOrder(qualifiedPools)

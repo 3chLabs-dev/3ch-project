@@ -246,7 +246,7 @@ export const createRenewalLeague = createAsyncThunk.withTypes<{ state: RootState
     if (isLocalDevToken(token)) {
       const league = createLocalDevLeague(requestBody);
       saveLocalDevProgram(league.id, programData);
-      return { leagueId: league.id };
+      return { leagueId: league.league_code ?? league.id };
     }
 
     try {
@@ -288,7 +288,9 @@ export const createRenewalLeague = createAsyncThunk.withTypes<{ state: RootState
           console.error("프로그램 경기 초기 동기화 실패", syncError);
         }
       }
-      return { leagueId };
+      return {
+        leagueId: response.data.league.league_code ?? leagueId,
+      };
     } catch (error) {
       if (
         axios.isAxiosError(error) &&

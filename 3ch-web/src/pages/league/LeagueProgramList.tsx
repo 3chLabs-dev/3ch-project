@@ -1531,7 +1531,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
                         variant="contained"
                         disableElevation
                         endIcon={<ChevronRightIcon sx={{ fontSize: 16 }} />}
-                        onClick={() => navigate(`/league/${id}/program/${round.bracketPath}?program=1&round=${round.round}&format=${round.format}`)}
+                        onClick={() => navigate(`/league/${id}/program/${round.bracketPath}?program=1&round=${round.round}&format=${round.format}${embedded ? "&back=detail" : ""}`)}
                         sx={{ flex: 1, height: 38, fontWeight: 700, fontSize: 12, borderRadius: 1.5, textTransform: "none", boxShadow: "none", whiteSpace: "nowrap", bgcolor: "#2563EB", "&:hover": { bgcolor: "#1D4ED8" } }}
                       >
                         {round.bracketLabel}

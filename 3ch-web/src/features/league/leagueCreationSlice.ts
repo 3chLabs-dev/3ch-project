@@ -245,7 +245,7 @@ export const createLeague = createAsyncThunk.withTypes<{ state: RootState }>()(
       thunkApi.dispatch(
         baseApi.util.invalidateTags([{ type: "League", id: "LIST" }])
       );
-      return { leagueId: league.id };
+      return { leagueId: league.league_code ?? league.id };
     }
 
     const response = await axios.post(
@@ -263,7 +263,9 @@ export const createLeague = createAsyncThunk.withTypes<{ state: RootState }>()(
       baseApi.util.invalidateTags([{ type: "League", id: "LIST" }])
     );
 
-    return { leagueId: response.data.league.id };
+    return {
+      leagueId: response.data.league.league_code ?? response.data.league.id,
+    };
   }
 );
 

@@ -1578,11 +1578,29 @@ function getTournamentLoser(match: LeagueMatch) {
 export function applyProgramTournamentAdvancement(matches: LeagueMatch[]): LeagueMatch[] {
   const matchMap = new Map(matches.map((match) => [match.id, { ...match }]));
   const orderedMatches = [...matchMap.values()].sort((a, b) => (a.round_number ?? 0) - (b.round_number ?? 0));
+  const inboundSourceIds = new Map<string, string[]>();
+  matches.forEach((source) => {
+    [source.next_match_id, source.loser_next_match_id].forEach((targetId) => {
+      if (!targetId) return;
+      inboundSourceIds.set(targetId, [...(inboundSourceIds.get(targetId) ?? []), source.id]);
+    });
+  });
 
   orderedMatches.forEach((orderedMatch) => {
     // Earlier matches can populate this match's slots while advancement is
     // being applied. Always read the latest copy instead of the stale sorted snapshot.
     const match = matchMap.get(orderedMatch.id) ?? orderedMatch;
+    const hasOnlyOneParticipant = Boolean(match.participant_a_id) !== Boolean(match.participant_b_id);
+    const sources = inboundSourceIds.get(match.id) ?? [];
+    const allSourcesResolved = sources.length > 0
+      && sources.every((sourceId) => matchMap.get(sourceId)?.status === "done");
+    // A BYE can emerge only after upper-bracket losers have been propagated.
+    // Complete it once every feeder match is resolved, then advance its participant.
+    if (match.status !== "done" && hasOnlyOneParticipant && allSourcesResolved) {
+      match.status = "done";
+      match.score_a = match.participant_a_id ? 0 : null;
+      match.score_b = match.participant_b_id ? 0 : null;
+    }
     const winner = getTournamentWinner(match);
     if (winner && match.next_match_id && match.next_slot) {
       const parent = matchMap.get(match.next_match_id);

@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Box, Button, CircularProgress, IconButton, InputAdornment,
-  TextField, Tooltip, Typography, Tabs, Tab, Dialog, DialogContent, Stack,
+  TextField, Tooltip, Typography, Tabs, Tab, Dialog, DialogContent, Stack, Snackbar,
 } from "@mui/material";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
@@ -192,17 +192,19 @@ function RankingSummary({ title, rankings, rankLabels, color, borderColor, left,
   );
 }
 
-function TournamentResultDialog({ open, match, rule, leagueId, onClose }: {
+function TournamentResultDialog({ open, match, rule, leagueId, splitBracket, onClose }: {
   open: boolean;
   match: LeagueMatch | null;
   rule?: string | null;
   leagueId: string;
+  splitBracket: boolean;
   onClose: () => void;
 }) {
   const [updateMatch] = useUpdateLeagueMatchMutation();
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [scoreA, setScoreA] = useState(0);
   const [scoreB, setScoreB] = useState(0);
+  const [startToast, setStartToast] = useState("");
 
   useEffect(() => {
     if (!match) return;
@@ -246,6 +248,13 @@ function TournamentResultDialog({ open, match, rule, leagueId, onClose }: {
   const changeStatus = () => {
     if (match.status === "pending") {
       updateMatch({ leagueId, matchId: match.id, updates: { status: "playing", score_a: scoreA, score_b: scoreB } });
+      const rawStage = match.match_label ?? "경기";
+      const stage = splitBracket && !rawStage.startsWith("상위") && !rawStage.startsWith("하위")
+        ? `${match.bracket === "lower" ? "하위" : "상위"} ${rawStage}`
+        : rawStage;
+      const aDiv = match.participant_a_division ? `(${match.participant_a_division}) ` : "";
+      const bDiv = match.participant_b_division ? `(${match.participant_b_division}) ` : "";
+      setStartToast(`${stage} ${aDiv}${match.participant_a_name ?? "미정"} vs ${bDiv}${match.participant_b_name ?? "미정"} 경기 시작!`);
     } else if (match.status === "playing") {
       updateMatch({ leagueId, matchId: match.id, updates: { status: "done", score_a: scoreA, score_b: scoreB } });
     }
@@ -262,6 +271,7 @@ function TournamentResultDialog({ open, match, rule, leagueId, onClose }: {
   );
 
   return (
+    <>
     <Dialog
       open={open}
       onClose={onClose}
@@ -290,6 +300,8 @@ function TournamentResultDialog({ open, match, rule, leagueId, onClose }: {
         </Button>
       </DialogContent>
     </Dialog>
+    <Snackbar open={Boolean(startToast)} autoHideDuration={3000} onClose={() => setStartToast("")} message={startToast} anchorOrigin={{ vertical: "bottom", horizontal: "center" }} sx={{ zIndex: 12000 }} />
+    </>
   );
 }
 
@@ -1649,8 +1661,8 @@ export default function LeagueTournamentBracket() {
   }, [isDoubleElim, matches, positions]);
 
   // 상위/하위 우승자 계산
-  const { upperWinner, lowerWinner, upperFinalPos, lowerFinalPos, upperRankings, lowerRankings } = useMemo(() => {
-    if (!isDoubleElim) return { upperWinner: null, lowerWinner: null, upperFinalPos: null, lowerFinalPos: null, upperRankings: [], lowerRankings: [] };
+  const { upperWinner, lowerWinner, upperFinalPos, lowerFinalPos, upperRankings, lowerRankings, upperRankLabels, lowerRankLabels } = useMemo(() => {
+    if (!isDoubleElim) return { upperWinner: null, lowerWinner: null, upperFinalPos: null, lowerFinalPos: null, upperRankings: [], lowerRankings: [], upperRankLabels: [], lowerRankLabels: [] };
     const posMap = new Map(positions.map((p) => [p.id, p]));
     const upperMatches = matches.filter((m) => !m.bracket || m.bracket === "upper");
     const lowerMatches = matches.filter((m) => m.bracket === "lower");
@@ -1660,6 +1672,22 @@ export default function LeagueTournamentBracket() {
     const lowerFinal = lowerMatches.find((m) => m.round_number === maxLowerRound && !m.match_label?.includes("3·4위전"));
     const upperThird = upperMatches.find((m) => m.match_label?.includes("3·4위전"));
     const lowerThird = lowerMatches.find((m) => m.match_label?.includes("3·4위전"));
+    const rankings = (finalMatch?: LeagueMatch, thirdPlaceMatch?: LeagueMatch) => {
+      const semifinalLosers = finalMatch && !thirdPlaceMatch
+        ? matches
+            .filter((match) => match.bracket === finalMatch.bracket && match.next_match_id === finalMatch.id)
+            .sort((left, right) => left.match_order - right.match_order)
+            .map((match) => getMatchResultParticipant(match, false))
+            .slice(0, 2)
+        : [];
+      return [
+        getMatchResultParticipant(finalMatch, true),
+        getMatchResultParticipant(finalMatch, false),
+        ...(thirdPlaceMatch
+          ? [getMatchResultParticipant(thirdPlaceMatch, true), getMatchResultParticipant(thirdPlaceMatch, false)]
+          : semifinalLosers),
+      ];
+    };
     const getWinner = (m?: LeagueMatch) => {
       if (!m || m.status !== "done") return null;
       if (isWalkoverWinner(m, "a")) {
@@ -1675,8 +1703,10 @@ export default function LeagueTournamentBracket() {
       lowerWinner: getWinner(lowerFinal),
       upperFinalPos: upperFinal ? posMap.get(upperFinal.id) ?? null : null,
       lowerFinalPos: lowerFinal ? posMap.get(lowerFinal.id) ?? null : null,
-      upperRankings: [getMatchResultParticipant(upperFinal, true), getMatchResultParticipant(upperFinal, false), getMatchResultParticipant(upperThird, true), getMatchResultParticipant(upperThird, false)],
-      lowerRankings: [getMatchResultParticipant(lowerFinal, true), getMatchResultParticipant(lowerFinal, false), getMatchResultParticipant(lowerThird, true), getMatchResultParticipant(lowerThird, false)],
+      upperRankings: rankings(upperFinal, upperThird),
+      lowerRankings: rankings(lowerFinal, lowerThird),
+      upperRankLabels: upperThird ? [1, 2, 3, 4] : [1, 2, 3, 3],
+      lowerRankLabels: lowerThird ? [1, 2, 3, 4] : [1, 2, 3, 3],
     };
   }, [isDoubleElim, matches, positions]);
 
@@ -1963,7 +1993,7 @@ export default function LeagueTournamentBracket() {
                 const by = upperFinalPos.y - CO_WINNER_H - 16;
                 return (
                   <React.Fragment key="upper-winner">
-                  <RankingSummary title="상위 최종 순위" rankings={upperRankings} color="#2563EB" borderColor="#BFDBFE" left={bx - 162} top={by} />
+                  <RankingSummary title="상위 최종 순위" rankings={upperRankings} rankLabels={upperRankLabels} color="#2563EB" borderColor="#BFDBFE" left={bx - 162} top={by} />
                   <Box sx={{
                     position: "absolute", left: bx, top: by,
                     width: CO_WINNER_W, height: CO_WINNER_H,
@@ -2000,7 +2030,7 @@ export default function LeagueTournamentBracket() {
                 const by = lowerFinalPos.y + SS_H + 16;
                 return (
                   <React.Fragment key="lower-winner">
-                  <RankingSummary title="하위 최종 순위" rankings={lowerRankings} color="#7C3AED" borderColor="#DDD6FE" left={bx - 162} top={by} />
+                  <RankingSummary title="하위 최종 순위" rankings={lowerRankings} rankLabels={lowerRankLabels} color="#7C3AED" borderColor="#DDD6FE" left={bx - 162} top={by} />
                   <Box sx={{
                     position: "absolute", left: bx, top: by,
                     width: CO_WINNER_W, height: CO_WINNER_H,
@@ -2089,6 +2119,7 @@ export default function LeagueTournamentBracket() {
         match={resultMatch}
         rule={resultMatch?.match_rule ?? headerRule}
         leagueId={id!}
+        splitBracket={isDoubleElim}
         onClose={() => setResultDialogOpen(false)}
       />
 

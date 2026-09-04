@@ -12,7 +12,7 @@ import {
   Box, Button, Card, CardContent, CircularProgress,
   Dialog, DialogActions, DialogContent, DialogTitle,
   Divider, IconButton, InputAdornment, ListItemIcon, ListItemText,
-  Menu, MenuItem, Stack, Tab, Tabs, TextField, Typography, Tooltip,
+  Menu, MenuItem, Stack, Tab, Tabs, TextField, Typography, Tooltip, Snackbar,
 } from "@mui/material";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import NotificationsIcon from "@mui/icons-material/Notifications";
@@ -202,6 +202,7 @@ function MatchCard({
   const autoCompleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestMatchRef = useRef(match);
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+  const [startToast, setStartToast] = useState("");
   const isAutomaticWalkover = isAutomaticProgramWalkover(match);
   const displayNameA = match.participant_a_name
     ?? (isAutomaticWalkover && !match.participant_a_id ? "BYE" : "미정");
@@ -329,13 +330,18 @@ function MatchCard({
     const sa = match.score_a ?? 0;
     const sb = match.score_b ?? 0;
     if (match.status === "pending") {
-      if (!window.confirm(`${matchLabel()}\n시작하겠습니까?`)) return;
       onMatchStarted?.(match.id);
+      const title = match.match_label?.includes("3·4위전") || match.match_label?.includes("결승")
+        ? match.match_label
+        : `${index + 1}경기`;
+      const aDiv = match.participant_a_division ? `(${match.participant_a_division}) ` : "";
+      const bDiv = match.participant_b_division ? `(${match.participant_b_division}) ` : "";
+      setStartToast(`${title} ${aDiv}${displayNameA} vs ${bDiv}${displayNameB} 경기 시작!`);
     } else if (match.status === "playing") {
       if (!window.confirm(`${matchLabel()}\n종료되었습니까?`)) return;
     }
     updateCurrentMatch({ status: NEXT_STATUS[match.status], score_a: sa, score_b: sb });
-  }, [match, matchLabel, onMatchStarted, updateCurrentMatch]);
+  }, [match, matchLabel, onMatchStarted, updateCurrentMatch, index, displayNameA, displayNameB]);
 
   const handleDelete = useCallback(() => {
     setMenuAnchor(null);
@@ -382,6 +388,7 @@ function MatchCard({
     && (isPlaying || isDone);
 
   return (
+    <>
     <Card
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}
@@ -512,6 +519,8 @@ function MatchCard({
         </Stack>
       </CardContent>
     </Card>
+    <Snackbar open={Boolean(startToast)} autoHideDuration={3000} onClose={() => setStartToast("")} message={startToast} anchorOrigin={{ vertical: "bottom", horizontal: "center" }} />
+    </>
   );
 }
 

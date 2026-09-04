@@ -1579,7 +1579,10 @@ export function applyProgramTournamentAdvancement(matches: LeagueMatch[]): Leagu
   const matchMap = new Map(matches.map((match) => [match.id, { ...match }]));
   const orderedMatches = [...matchMap.values()].sort((a, b) => (a.round_number ?? 0) - (b.round_number ?? 0));
 
-  orderedMatches.forEach((match) => {
+  orderedMatches.forEach((orderedMatch) => {
+    // Earlier matches can populate this match's slots while advancement is
+    // being applied. Always read the latest copy instead of the stale sorted snapshot.
+    const match = matchMap.get(orderedMatch.id) ?? orderedMatch;
     const winner = getTournamentWinner(match);
     if (winner && match.next_match_id && match.next_slot) {
       const parent = matchMap.get(match.next_match_id);

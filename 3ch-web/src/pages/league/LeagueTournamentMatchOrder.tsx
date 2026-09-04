@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   Box, Button, CircularProgress, Dialog, DialogContent, DialogTitle,
   IconButton, InputAdornment, List, ListItemButton, ListItemIcon, ListItemText,
-  Menu, MenuItem, Stack, Tab, Tabs, TextField, Tooltip, Typography,
+  Menu, MenuItem, Stack, Tab, Tabs, TextField, Tooltip, Typography, Snackbar,
 } from "@mui/material";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import EditIcon from "@mui/icons-material/Edit";
@@ -167,6 +167,7 @@ function MatchCard({
   const [notifyMatch] = useNotifyLeagueMatchMutation();
   const courtRef = useRef<HTMLInputElement>(null);
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+  const [startToast, setStartToast] = useState("");
 
   const nameA = match.participant_a_name;
   const nameB = match.participant_b_name;
@@ -200,13 +201,15 @@ function MatchCard({
   const handleStatus = useCallback(() => {
     if (isDone) return;
     const nA = displayNameA, nB = displayNameB;
-    const msg = isPlaying
-      ? `${nA}(${sa}) VS (${sb})${nB}\n경기를 종료하겠습니까?`
-      : `${nA} VS ${nB}\n경기를 시작하겠습니까?`;
-    if (!window.confirm(msg)) return;
-    if (!isPlaying) onMatchStarted?.(match.id);
+    if (isPlaying && !window.confirm(`${nA}(${sa}) VS (${sb})${nB}\n경기를 종료하겠습니까?`)) return;
+    if (!isPlaying) {
+      onMatchStarted?.(match.id);
+      const aDiv = match.participant_a_division ? `(${match.participant_a_division}) ` : "";
+      const bDiv = match.participant_b_division ? `(${match.participant_b_division}) ` : "";
+      setStartToast(`${matchIndex}경기 ${aDiv}${nA} vs ${bDiv}${nB} 경기 시작!`);
+    }
     updateMatch({ leagueId, matchId: match.id, updates: { status: NEXT_STATUS[match.status], score_a: sa, score_b: sb } });
-  }, [match, isPlaying, isDone, displayNameA, displayNameB, leagueId, sa, sb, onMatchStarted, updateMatch]);
+  }, [match, matchIndex, isPlaying, isDone, displayNameA, displayNameB, leagueId, sa, sb, onMatchStarted, updateMatch]);
 
   const handleAppNotify = useCallback(async () => {
     setMenuAnchor(null);
@@ -231,6 +234,7 @@ function MatchCard({
   }, [match, matchIndex, displayNameA, displayNameB]);
 
   return (
+    <>
     <Box sx={{
       bgcolor: isPlaying ? "#EFF6FF" : isDone ? "#F9FAFB" : "#fff",
       border: `1.5px solid ${isPlaying ? "#93C5FD" : isDone ? "#D1D5DB" : "#E2E8F0"}`,
@@ -318,6 +322,8 @@ function MatchCard({
         </Button>
       </Stack>
     </Box>
+    <Snackbar open={Boolean(startToast)} autoHideDuration={3000} onClose={() => setStartToast("")} message={startToast} anchorOrigin={{ vertical: "bottom", horizontal: "center" }} />
+    </>
   );
 }
 

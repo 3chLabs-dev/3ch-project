@@ -1997,11 +1997,11 @@ export default function LeagueTournamentBracket() {
                         visibleSlotActions.onOpenResult(pos.match.id);
                       }
                     }}>
-                      <Typography sx={{ fontSize: 7, fontWeight: 900, color: pos.match.bracket === "lower" ? "#7C3AED" : "#2563EB", lineHeight: 1 }}>
+                      <Typography sx={{ fontSize: 7, fontWeight: 900, color: pos.match.bracket === "lower" ? "#2563EB" : "#DC2626", lineHeight: 1 }}>
                         {pos.match.bracket === "lower" ? "하위" : "상위"}
                       </Typography>
                       <Typography sx={{ my: 0.25, fontSize: 9, fontWeight: 900, color: "#94A3B8", lineHeight: 1 }}>vs</Typography>
-                      <Typography sx={{ fontSize: 7, fontWeight: 900, color: "#64748B", lineHeight: 1, whiteSpace: "nowrap" }}>
+                      <Typography sx={{ fontSize: 7, fontWeight: 900, color: "#7C3AED", lineHeight: 1, whiteSpace: "nowrap" }}>
                         {(pos.match.match_label ?? "경기").replace(/^상위\s*|^하위\s*/, "")}
                       </Typography>
                     </Box>

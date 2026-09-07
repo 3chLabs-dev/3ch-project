@@ -21,8 +21,8 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import OutputOutlinedIcon from "@mui/icons-material/OutputOutlined";
 import SmsOutlinedIcon from "@mui/icons-material/SmsOutlined";
+import CurvedShareIcon from "../../components/CurvedShareIcon";
 import type { PointRankingRow } from "../../features/group/groupApi";
 import { useGetGroupPointRankingQuery } from "../../features/group/groupApi";
 
@@ -209,7 +209,7 @@ function SectionHeader({
       </Typography>
       <Stack direction="row" spacing={0.5} alignItems="center">
         {onDownload && <IconButton size="small" disabled={isDownloading} onClick={onDownload} aria-label="순위 이미지 다운로드" sx={{ border: "1px solid #D1D5DB", borderRadius: 1 }}><DownloadOutlinedIcon sx={{ fontSize: 18 }} /></IconButton>}
-        {onShare && <IconButton size="small" onClick={onShare} aria-label="순위 공유" sx={{ border: "1px solid #D1D5DB", borderRadius: 1 }}><OutputOutlinedIcon sx={{ fontSize: 19 }} /></IconButton>}
+        {onShare && <IconButton size="small" onClick={onShare} aria-label="순위 공유" sx={{ border: "1px solid #D1D5DB", borderRadius: 1 }}><CurvedShareIcon sx={{ fontSize: 19 }} /></IconButton>}
         <Button
           size="small"
           variant="outlined"
@@ -259,6 +259,7 @@ function PointRankingList({
             elevation={2}
             onClick={() => { if (memberId != null) onSelect(memberId); }}
             sx={{
+              order: showPinnedMine && row === myRow ? 3 : 1,
               borderRadius: 0.85,
               boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
               bgcolor: isMine ? "#EEF2FF" : "#FFF",
@@ -349,7 +350,7 @@ function PointRankingList({
           variant="outlined"
           onClick={() => setVisibleCount((count) => Math.min(count + 10, rows.length))}
           endIcon={<ExpandMoreIcon />}
-          sx={{ bgcolor: "#FFF", borderColor: "#1976D2", color: "#1976D2", fontWeight: 900, py: 0.8 }}
+          sx={{ order: 2, bgcolor: "#FFF", borderColor: "#1976D2", color: "#1976D2", fontWeight: 900, py: 0.8 }}
         >
           더보기
         </Button>

@@ -1606,12 +1606,12 @@ export function applyProgramTournamentAdvancement(matches: LeagueMatch[]): Leagu
     const winner = getTournamentWinner(match);
     if (winner && match.next_match_id && match.next_slot) {
       const parent = matchMap.get(match.next_match_id);
-      if (parent && match.next_slot === "a") {
+      if (parent && match.next_slot === "a" && !parent.participant_a_name) {
         parent.participant_a_id = winner.id;
         parent.participant_a_name = winner.name;
         parent.participant_a_division = winner.division;
         parent.participant_a_seed_label = winner.seedLabel;
-      } else if (parent) {
+      } else if (parent && !parent.participant_b_name) {
         parent.participant_b_id = winner.id;
         parent.participant_b_name = winner.name;
         parent.participant_b_division = winner.division;
@@ -1622,12 +1622,12 @@ export function applyProgramTournamentAdvancement(matches: LeagueMatch[]): Leagu
     const loser = getTournamentLoser(match);
     if (loser && match.loser_next_match_id && match.loser_next_slot) {
       const parent = matchMap.get(match.loser_next_match_id);
-      if (parent && match.loser_next_slot === "a") {
+      if (parent && match.loser_next_slot === "a" && !parent.participant_a_name) {
         parent.participant_a_id = loser.id;
         parent.participant_a_name = loser.name;
         parent.participant_a_division = loser.division;
         parent.participant_a_seed_label = loser.seedLabel;
-      } else if (parent) {
+      } else if (parent && !parent.participant_b_name) {
         parent.participant_b_id = loser.id;
         parent.participant_b_name = loser.name;
         parent.participant_b_division = loser.division;

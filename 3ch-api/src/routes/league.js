@@ -3441,6 +3441,7 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
         const previousHasB = Boolean(previous?.participant_b_id) || (previous?.participant_b_roster_ids?.length ?? 0) > 0;
         const previousIsAutomaticWalkover = previous?.status === 'done'
           && Number(previous?.round_number) === 1
+          && (!previous?.bracket || previous.bracket === 'upper')
           && previousHasA !== previousHasB;
         // 대진표 표준 재배치(resetResults=true)는 점수뿐 아니라 기존의
         // 수동 참가자 위치도 초기화해야 한다. 기존에는 시작된 경기의

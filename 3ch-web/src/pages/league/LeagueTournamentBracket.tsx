@@ -1613,10 +1613,10 @@ export default function LeagueTournamentBracket() {
         || match.participant_a_name === swapFirst.name || match.participant_b_name === swapFirst.name),
     );
     const directTargetId = source.loser_next_match_id ?? byeFeeder?.loser_next_match_id;
-    let target = (source.round_number ?? 1) > 1 && closestLowerMatch
-      ? closestLowerMatch
-      : directTargetId
-        ? sourceMatches.find((match) => match.id === directTargetId)
+    let target = directTargetId
+      ? sourceMatches.find((match) => match.id === directTargetId)
+      : closestLowerMatch
+        ? closestLowerMatch
         : lowerPeers[(source.round_number ?? 1) === 1 ? Math.floor(sourceIndex / 2) : sourceIndex];
     let targetSlot = source.loser_next_match_id
       ? source.loser_next_slot

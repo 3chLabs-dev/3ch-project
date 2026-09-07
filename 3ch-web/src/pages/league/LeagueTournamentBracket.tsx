@@ -314,6 +314,8 @@ interface SlotActions {
   seedMap: Map<string, { a: number; b: number }>;
   onRegister: (matchId: string, slot: "a" | "b") => void;
   onSwapSelect: (matchId: string, slot: "a" | "b", participantId: string | null, name: string | null) => void;
+  onMoveToLower: () => void;
+  onDeleteSelected: () => void;
   onOpenResult: (matchId: string) => void;
 }
 
@@ -723,6 +725,7 @@ function SingleSlotBox({ pos, slot, actions, manualSeeding = false }: { pos: Mat
   const cursor = canOpenResult || (isR1 && actions?.canRegister && !name) || (actions?.canManage && actions.editMode) ? "pointer" : "default";
 
   return (
+    <>
     <Box sx={{
       position: "absolute", left: x, top: y,
       width: SS_W, height: SS_H,
@@ -785,6 +788,13 @@ function SingleSlotBox({ pos, slot, actions, manualSeeding = false }: { pos: Mat
         ) : null}
       </Box>
     </Box>
+    {swapSel && participantId && m.bracket !== "lower" && (
+      <Stack spacing={0.4} sx={{ position: "absolute", left: slot === "a" ? x - 72 : x + SS_W + 4, top: y + 8, width: 68, zIndex: 20 }}>
+        <Button size="small" variant="contained" onClick={(event) => { event.stopPropagation(); actions?.onMoveToLower(); }} sx={{ minWidth: 0, px: 0.4, py: 0.35, fontSize: 8, fontWeight: 900, lineHeight: 1.15 }}>하위부로 이동</Button>
+        <Button size="small" color="error" variant="outlined" onClick={(event) => { event.stopPropagation(); actions?.onDeleteSelected(); }} sx={{ minWidth: 0, px: 0.4, py: 0.25, fontSize: 8, fontWeight: 900, lineHeight: 1.15 }}>삭제</Button>
+      </Stack>
+    )}
+    </>
   );
 }
 
@@ -1563,6 +1573,39 @@ export default function LeagueTournamentBracket() {
     return map;
   }, [matches, seedMap]);
 
+  const handleMoveSelectedToLower = async () => {
+    if (!swapFirst?.participantId) return;
+    const sourceMatches = isProgramMode ? allProgramMatches : matches;
+    const source = sourceMatches.find((match) => match.id === swapFirst.matchId);
+    if (!source || source.bracket === "lower") return;
+    const upperPeers = sourceMatches.filter((match) => match.bracket !== "lower" && match.round_number === source.round_number && !match.match_label?.includes("3·4위전")).sort((a, b) => a.match_order - b.match_order);
+    const sourceIndex = upperPeers.findIndex((match) => match.id === source.id);
+    const lowerPeers = sourceMatches.filter((match) => match.bracket === "lower" && match.round_number === Math.max(1, (source.round_number ?? 1) - 1) && !match.match_label?.includes("3·4위전")).sort((a, b) => a.match_order - b.match_order);
+    const target = lowerPeers[sourceIndex];
+    const targetSlot = target && !target.participant_a_id ? "a" : target && !target.participant_b_id ? "b" : null;
+    if (!target || !targetSlot) {
+      window.alert("대응하는 하위부 경기에서 배치 가능한 미정 슬롯을 찾지 못했습니다.");
+      return;
+    }
+    const sourceName = swapFirst.slot === "a" ? source.participant_a_name : source.participant_b_name;
+    const sourceDivision = swapFirst.slot === "a" ? source.participant_a_division : source.participant_b_division;
+    const sourceSeedLabel = swapFirst.slot === "a" ? source.participant_a_seed_label : source.participant_b_seed_label;
+    const participantPatch = targetSlot === "a"
+      ? { participant_a_id: swapFirst.participantId, participant_a_name: sourceName, participant_a_division: sourceDivision, participant_a_seed_label: sourceSeedLabel }
+      : { participant_b_id: swapFirst.participantId, participant_b_name: sourceName, participant_b_division: sourceDivision, participant_b_seed_label: sourceSeedLabel };
+    if (isProgramMode && programBlock) {
+      const statePatch = { ...participantPatch, status: "pending" as const, score_a: null, score_b: null };
+      saveProgramMatchPatch(id!, programRound, target.id, statePatch);
+      const nextMatches = allProgramMatches.map((match) => match.id === target.id ? { ...match, ...statePatch } : match);
+      await syncLeagueProgramMatches({ leagueId: id!, matches: nextMatches.map((match) => ({ ...match, program_round: programRound, program_block_type: programBlock.type })) }).unwrap();
+    } else {
+      await assignParticipant({ leagueId: id!, matchId: target.id, ...(targetSlot === "a" ? { participant_a_id: swapFirst.participantId } : { participant_b_id: swapFirst.participantId }) }).unwrap();
+      await updateTournamentMatch({ leagueId: id!, matchId: target.id, updates: { status: "pending", score_a: null, score_b: null } }).unwrap();
+    }
+    setSwapFirst(null);
+    await refetchMatches();
+  };
+
   const slotActions: SlotActions = {
     canManage,
     canRegister: canManage,
@@ -1571,6 +1614,8 @@ export default function LeagueTournamentBracket() {
     seedMap,
     onRegister: handleRegister,
     onSwapSelect: handleSwapSelect,
+    onMoveToLower: handleMoveSelectedToLower,
+    onDeleteSelected: () => setDeleteSlotDialogOpen(true),
     onOpenResult: (matchId) => {
       setResultMatchId(matchId);
       setResultDialogOpen(true);

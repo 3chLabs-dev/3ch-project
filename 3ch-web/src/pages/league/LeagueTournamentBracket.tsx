@@ -1586,7 +1586,8 @@ export default function LeagueTournamentBracket() {
     const byeFeeder = sourceMatches.find((match) =>
       match.next_match_id === source.id
       && Boolean(match.loser_next_match_id)
-      && (match.participant_a_id === swapFirst.participantId || match.participant_b_id === swapFirst.participantId),
+      && (match.participant_a_id === swapFirst.participantId || match.participant_b_id === swapFirst.participantId
+        || match.participant_a_name === swapFirst.name || match.participant_b_name === swapFirst.name),
     );
     const directTargetId = source.loser_next_match_id ?? byeFeeder?.loser_next_match_id;
     let target = directTargetId
@@ -1615,10 +1616,30 @@ export default function LeagueTournamentBracket() {
       : targetSlot === "b" && !target.participant_a_name
         ? { participant_a_id: null, participant_a_name: null, participant_a_division: null, participant_a_seed_label: null }
         : {};
+    const downstream = target.next_match_id ? sourceMatches.find((match) => match.id === target.next_match_id) : undefined;
+    const downstreamSlot = target.next_slot;
+    const previousWalkoverParticipantId = target.participant_a_name && !target.participant_b_name
+      ? target.participant_a_id
+      : target.participant_b_name && !target.participant_a_name
+        ? target.participant_b_id
+        : null;
+    const shouldUndoPrematureAdvance = Boolean(
+      downstream && downstreamSlot && previousWalkoverParticipantId
+      && (downstreamSlot === "a" ? downstream.participant_a_id : downstream.participant_b_id) === previousWalkoverParticipantId
+      && downstream.status !== "done",
+    );
     if (isProgramMode && programBlock) {
       const statePatch = { ...clearPlaceholderPatch, ...participantPatch, status: "pending" as const, score_a: null, score_b: null };
       saveProgramMatchPatch(id!, programRound, target.id, statePatch);
-      const nextMatches = allProgramMatches.map((match) => match.id === target.id ? { ...match, ...statePatch } : match);
+      const downstreamPatch = shouldUndoPrematureAdvance && downstreamSlot === "a"
+        ? { participant_a_id: null, participant_a_name: null, participant_a_division: null, participant_a_seed_label: null, status: "pending" as const, score_a: null, score_b: null }
+        : shouldUndoPrematureAdvance && downstreamSlot === "b"
+          ? { participant_b_id: null, participant_b_name: null, participant_b_division: null, participant_b_seed_label: null, status: "pending" as const, score_a: null, score_b: null }
+          : null;
+      if (downstream && downstreamPatch) saveProgramMatchPatch(id!, programRound, downstream.id, downstreamPatch);
+      const nextMatches = allProgramMatches.map((match) => match.id === target.id
+        ? { ...match, ...statePatch }
+        : downstream && downstreamPatch && match.id === downstream.id ? { ...match, ...downstreamPatch } : match);
       await syncLeagueProgramMatches({ leagueId: id!, matches: nextMatches.map((match) => ({ ...match, program_round: programRound, program_block_type: programBlock.type })) }).unwrap();
     } else {
       const clearPlaceholderIds = targetSlot === "a" && !target.participant_b_name
@@ -1628,6 +1649,10 @@ export default function LeagueTournamentBracket() {
           : {};
       await assignParticipant({ leagueId: id!, matchId: target.id, ...clearPlaceholderIds, ...(targetSlot === "a" ? { participant_a_id: swapFirst.participantId } : { participant_b_id: swapFirst.participantId }) }).unwrap();
       await updateTournamentMatch({ leagueId: id!, matchId: target.id, updates: { status: "pending", score_a: null, score_b: null } }).unwrap();
+      if (downstream && downstreamSlot && shouldUndoPrematureAdvance) {
+        await assignParticipant({ leagueId: id!, matchId: downstream.id, ...(downstreamSlot === "a" ? { participant_a_id: null } : { participant_b_id: null }) }).unwrap();
+        await updateTournamentMatch({ leagueId: id!, matchId: downstream.id, updates: { status: "pending", score_a: null, score_b: null } }).unwrap();
+      }
     }
     setSwapFirst(null);
     await refetchMatches();

@@ -29,8 +29,20 @@ test('복식·단체전 순위 점수는 실제 팀원 수로 나눠 개인에�
   _test.awardBonus(rowB, 1, rule, 2);
   assert.equal(rowA.bonus_points, 25);
   assert.equal(rowB.bonus_points, 25);
-  assert.equal(rowA.championships, 1);
-  assert.equal(rowB.championships, 1);
+  assert.equal(rowA.championships, 0);
+  assert.equal(rowB.championships, 0);
+});
+
+test('우승 횟수는 입상자 포인트와 별개로 팀의 실제 구성원 모두에게 적립한다', () => {
+  const rows = new Map([
+    ['member:1', { championships: 0 }],
+    ['member:2', { championships: 0 }],
+  ]);
+
+  _test.awardChampionship(rows, ['member:1', 'member:2']);
+
+  assert.equal(rows.get('member:1').championships, 1);
+  assert.equal(rows.get('member:2').championships, 1);
 });
 
 test('팀원 순서와 무관하게 같은 순위 집계 단위로 묶는다', () => {

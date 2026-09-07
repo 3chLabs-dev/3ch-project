@@ -134,7 +134,13 @@ function awardBonus(row, rank, rule, divisor = 1) {
   else if (rank === 4) points = rule.fourth;
 
   row.bonus_points = roundPoint(row.bonus_points + points / Math.max(1, divisor));
-  if (rank === 1) row.championships += 1;
+}
+
+function awardChampionship(sectionRows, memberIds) {
+  [...new Set(memberIds)].forEach((memberId) => {
+    const row = sectionRows.get(String(memberId));
+    if (row) row.championships += 1;
+  });
 }
 
 function applyMatchPoints(rowsA, rowsB, scoreA, scoreB, pointRules, memberACount, memberBCount) {
@@ -205,6 +211,8 @@ function getProgramRoundMeta(programData, programRound) {
     type: block?.type ?? round?.program ?? null,
     format: block?.format ?? round?.format ?? null,
     option: round?.option ?? block?.option ?? "NONE",
+    finalAdvancementMode: block?.finalAdvancementMode ?? round?.finalAdvancementMode ?? null,
+    tournamentMode: block?.tournamentMode ?? round?.tournamentMode ?? null,
   };
 }
 
@@ -673,6 +681,7 @@ async function getPointRanking(groupId, year, scope, seasonId) {
 
   const leagueGroups = new Map();
   const tournamentGroups = new Map();
+  const standingWinners = new Map();
   // A league that has a regular/group phase remains a "league" ranking entry
   // even when its finals are played as a tournament. Only tournament-only
   // events belong in the separate tournament ranking section.
@@ -836,6 +845,7 @@ async function getPointRanking(groupId, year, scope, seasonId) {
     });
 
     const standings = Array.from(statMap.values()).sort(compareStanding);
+    if (standings[0]) standingWinners.set(groupKey, standings[0].member_ids);
     const bonusRule = getBonusRule(pointRules, "league", sample._rankingFormat, sample._rankingOption);
     standings.slice(0, 4).forEach((standing, index) => {
       const divisor = standing.member_ids.length;
@@ -954,6 +964,62 @@ async function getPointRanking(groupId, year, scope, seasonId) {
     });
   });
 
+  const matchesByLeague = new Map();
+  matchResult.rows.forEach((match) => {
+    const matches = matchesByLeague.get(match.league_id) ?? [];
+    matches.push(match);
+    matchesByLeague.set(match.league_id, matches);
+  });
+
+  matchesByLeague.forEach((leagueMatches, leagueId) => {
+    const programData = leagueMatches.find((match) => match.program_data)?.program_data ?? null;
+    const configuredRoundCount = Math.max(
+      Array.isArray(programData?.blocks) ? programData.blocks.length : 0,
+      Array.isArray(programData?.rounds) ? programData.rounds.length : 0,
+    );
+    const lastRound = configuredRoundCount || Math.max(1, ...leagueMatches.map((match) => Number(match.program_round) || 1));
+    const lastRoundMatches = leagueMatches.filter((match) => (Number(match.program_round) || 1) === lastRound);
+    const meta = getProgramRoundMeta(programData, lastRound);
+    const storedFormat = String(lastRoundMatches[0]?.format ?? "");
+    const lastFormat = meta.format
+      ?? (storedFormat.includes("토너먼트") ? "TOURNAMENT" : storedFormat.includes("조별리그") ? "GROUP" : "LEAGUE");
+    const sectionRows = leagueHasRegularPhase.has(leagueId) ? leagueRows : tournamentRows;
+
+    if (lastFormat === "TOURNAMENT") {
+      const upperMatches = lastRoundMatches.filter((match) => {
+        const bracket = String(match.bracket ?? "").toLowerCase();
+        return match._rankingOption !== "LOWER"
+          && !bracket.includes("lower")
+          && !bracket.includes("하위")
+          && Number(match.tournament_bracket_index ?? 1) === 1;
+      });
+      const finalMatch = upperMatches.find(isFinalMatch)
+        ?? [...upperMatches]
+          .filter((match) => !isThirdPlaceMatch(match))
+          .sort((a, b) => (Number(b.round_number) || 0) - (Number(a.round_number) || 0))[0];
+      if (finalMatch?.status !== "done" || Number(finalMatch.score_a) === Number(finalMatch.score_b)) return;
+      const winnerIds = Number(finalMatch.score_a) > Number(finalMatch.score_b)
+        ? (finalMatch._memberAIds ?? [])
+        : (finalMatch._memberBIds ?? []);
+      awardChampionship(sectionRows, winnerIds);
+      return;
+    }
+
+    if (lastFormat === "LEAGUE") {
+      awardChampionship(sectionRows, standingWinners.get(`${leagueId}:${lastRound}:__all__`) ?? []);
+      return;
+    }
+
+    if (lastFormat === "GROUP") {
+      const championshipGroup = meta.finalAdvancementMode === "upper-lower-groups"
+        ? "상위부"
+        : meta.finalAdvancementMode === "rank-groups" ? "1위조" : null;
+      if (championshipGroup) {
+        awardChampionship(sectionRows, standingWinners.get(`${leagueId}:${lastRound}:${championshipGroup}`) ?? []);
+      }
+    }
+  });
+
   const leagueRankings = finalizeRows(leagueRows, pointRules);
   const tournamentRankings = finalizeRows(tournamentRows, pointRules);
 
@@ -985,6 +1051,7 @@ module.exports = {
   ensureDefaultRankingSeasons,
   _test: {
     awardBonus,
+    awardChampionship,
     applyMatchPoints,
     getBonusRule,
     getMatchPhaseSection,

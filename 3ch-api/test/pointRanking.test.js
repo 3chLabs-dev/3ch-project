@@ -63,3 +63,15 @@ test('예선 뒤 본선 토너먼트 경기는 리그 순위에 계속 합산한
   assert.equal(_test.getMatchPhaseSection(finalsMatch), 'tournament');
   assert.equal(_test.getRankingSection(finalsMatch, leagueHasRegularPhase), 'league');
 });
+
+test('상대가 순위 대상이 아니어도 식별된 회원의 획득 세트는 반영한다', () => {
+  const member = { matches_played: 0, score_points: 0, wins: 0, losses: 0 };
+  const rules = { matchPoints: { mode: 'sets', winPoints: 3 } };
+
+  _test.applyMatchPoints([member], [], 3, 1, rules, 1, 0);
+
+  assert.equal(member.matches_played, 1);
+  assert.equal(member.score_points, 3);
+  assert.equal(member.wins, 1);
+  assert.equal(member.losses, 0);
+});

@@ -137,6 +137,28 @@ function awardBonus(row, rank, rule, divisor = 1) {
   if (rank === 1) row.championships += 1;
 }
 
+function applyMatchPoints(rowsA, rowsB, scoreA, scoreB, pointRules, memberACount, memberBCount) {
+  [...rowsA, ...rowsB].forEach((row) => { row.matches_played += 1; });
+  if (pointRules.matchPoints.mode === "win") {
+    if (scoreA > scoreB) {
+      rowsA.forEach((row) => { row.score_points = roundPoint(row.score_points + pointRules.matchPoints.winPoints / Math.max(1, memberACount)); });
+    } else if (scoreB > scoreA) {
+      rowsB.forEach((row) => { row.score_points = roundPoint(row.score_points + pointRules.matchPoints.winPoints / Math.max(1, memberBCount)); });
+    }
+  } else {
+    rowsA.forEach((row) => { row.score_points = roundPoint(row.score_points + scoreA / Math.max(1, memberACount)); });
+    rowsB.forEach((row) => { row.score_points = roundPoint(row.score_points + scoreB / Math.max(1, memberBCount)); });
+  }
+
+  if (scoreA > scoreB) {
+    rowsA.forEach((row) => { row.wins += 1; });
+    rowsB.forEach((row) => { row.losses += 1; });
+  } else if (scoreB > scoreA) {
+    rowsB.forEach((row) => { row.wins += 1; });
+    rowsA.forEach((row) => { row.losses += 1; });
+  }
+}
+
 function finalizeRows(sectionMap, pointRules) {
   const rows = Array.from(sectionMap.values());
   rows.forEach((row) => {
@@ -691,7 +713,6 @@ async function getPointRanking(groupId, year, scope, seasonId) {
     const memberBIds = entryType === "singles"
       ? [participantMembers.get(String(match.participant_b_id))].filter(Boolean)
       : (match.participant_b_roster_ids ?? []).map((id) => participantMembers.get(String(id))).filter(Boolean);
-    if (memberAIds.length === 0 || memberBIds.length === 0) return;
     const rankingMemberAIds = memberAIds.filter((memberId) => baseMembers.has(memberId));
     const rankingMemberBIds = memberBIds.filter((memberId) => baseMembers.has(memberId));
     if (rankingMemberAIds.length === 0 && rankingMemberBIds.length === 0) return;
@@ -719,28 +740,14 @@ async function getPointRanking(groupId, year, scope, seasonId) {
       .map((memberId) => ensureRow(targetRows, memberId, baseMembers.get(memberId), section))
       .filter(Boolean);
     if (includeMatchPoints) {
-      [...rowsA, ...rowsB].forEach((row) => { row.matches_played += 1; });
-      if (pointRules.matchPoints.mode === "win") {
-        if (scoreA > scoreB) {
-          rowsA.forEach((row) => { row.score_points = roundPoint(row.score_points + pointRules.matchPoints.winPoints / memberAIds.length); });
-        } else if (scoreB > scoreA) {
-          rowsB.forEach((row) => { row.score_points = roundPoint(row.score_points + pointRules.matchPoints.winPoints / memberBIds.length); });
-        }
-      } else {
-        rowsA.forEach((row) => { row.score_points = roundPoint(row.score_points + scoreA / memberAIds.length); });
-        rowsB.forEach((row) => { row.score_points = roundPoint(row.score_points + scoreB / memberBIds.length); });
-      }
-
-      if (scoreA > scoreB) {
-        rowsA.forEach((row) => { row.wins += 1; });
-        rowsB.forEach((row) => { row.losses += 1; });
-      } else if (scoreB > scoreA) {
-        rowsB.forEach((row) => { row.wins += 1; });
-        rowsA.forEach((row) => { row.losses += 1; });
-      }
+      applyMatchPoints(rowsA, rowsB, scoreA, scoreB, pointRules, memberAIds.length, memberBIds.length);
     }
 
     if (scoreA === scoreB) return;
+    // An identified club member's score still counts when the opponent is an
+    // external/unlinked participant. Both identities are only required for
+    // head-to-head standings and placement bonus calculations below.
+    if (memberAIds.length === 0 || memberBIds.length === 0) return;
     const leagueKey = match.league_id;
     if (phaseSection === "league") {
       const roundKey = `${leagueKey}:${match.program_round ?? 0}`;
@@ -978,6 +985,7 @@ module.exports = {
   ensureDefaultRankingSeasons,
   _test: {
     awardBonus,
+    applyMatchPoints,
     getBonusRule,
     getMatchPhaseSection,
     getRankingSection,

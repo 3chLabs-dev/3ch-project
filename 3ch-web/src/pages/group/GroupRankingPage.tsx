@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Box,
@@ -6,13 +6,23 @@ import {
   Card,
   CardContent,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   IconButton,
   MenuItem,
   Select,
   Stack,
+  TextField,
   Typography,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
+import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import ShareOutlinedIcon from "@mui/icons-material/ShareOutlined";
+import SmsOutlinedIcon from "@mui/icons-material/SmsOutlined";
 import type { PointRankingRow } from "../../features/group/groupApi";
 import { useGetGroupPointRankingQuery } from "../../features/group/groupApi";
 
@@ -27,7 +37,10 @@ export default function GroupRankingPage() {
       ? "/ranking"
       : `/club/${groupId}`;
   const [selectedYear, setSelectedYear] = useState<number | undefined>(undefined);
-  const [selectedSeasonId, setSelectedSeasonId] = useState<string | undefined>(undefined);
+  const [selectedSeasonId, setSelectedSeasonId] = useState<string | undefined>(searchParams.get("season") ?? undefined);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const exportRef = useRef<HTMLDivElement>(null);
 
   const { data, isLoading } = useGetGroupPointRankingQuery(
     { groupId, year: selectedYear, seasonId: selectedSeasonId, scope: "club" },
@@ -54,6 +67,23 @@ export default function GroupRankingPage() {
   const handleOpenDetail = () => {
     const seasonId = selectedSeasonId ?? data?.season_id;
     navigate(`/club/${groupId}/ranking/detail?${seasonId ? `season=${seasonId}` : `year=${activeYear}`}`);
+  };
+
+  const rankingShareUrl = `${window.location.origin}/club/${groupId}/ranking${data?.season_id ? `?season=${encodeURIComponent(selectedSeasonId ?? data.season_id)}` : ""}`;
+
+  const handleDownloadRanking = async () => {
+    if (!exportRef.current || isDownloading) return;
+    setIsDownloading(true);
+    try {
+      const html2canvas = (await import("html2canvas")).default;
+      const canvas = await html2canvas(exportRef.current, { scale: 2, useCORS: true, backgroundColor: "#FFFFFF" });
+      const link = document.createElement("a");
+      link.href = canvas.toDataURL("image/png");
+      link.download = `클럽순위_${data?.group.name ?? "클럽"}_${data?.season?.name ?? activeYear}.png`;
+      link.click();
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   if (isLoading) {
@@ -120,7 +150,13 @@ export default function GroupRankingPage() {
         )}
       </Stack>
 
-      <SectionHeader title="리그" onOpenDetail={handleOpenDetail} />
+      <SectionHeader
+        title="리그"
+        onOpenDetail={handleOpenDetail}
+        onDownload={handleDownloadRanking}
+        onShare={() => setShareDialogOpen(true)}
+        isDownloading={isDownloading}
+      />
       <PointRankingList
         rows={data.league.rankings}
         currentUserId={data.currentUserId}
@@ -133,6 +169,22 @@ export default function GroupRankingPage() {
         currentUserId={data.currentUserId}
         onSelect={(memberId) => navigate(`/club/${groupId}/member/${memberId}`)}
       />
+
+      <Box ref={exportRef} sx={{ position: "fixed", left: -10000, top: 0, width: 430, bgcolor: "#FFF", p: 2.5, zIndex: -1 }}>
+        <Typography sx={{ fontSize: 22, fontWeight: 900 }}>{data.group.name} 클럽 순위</Typography>
+        <Typography sx={{ mt: 0.4, mb: 2, color: "#6B7280", fontSize: 13, fontWeight: 700 }}>
+          {data.season?.name ?? `${activeYear}년`}
+        </Typography>
+        <PointRankingList rows={data.league.rankings} currentUserId={data.currentUserId} onSelect={() => undefined} showAll />
+      </Box>
+
+      <RankingShareDialog
+        open={shareDialogOpen}
+        onClose={() => setShareDialogOpen(false)}
+        link={rankingShareUrl}
+        clubName={data.group.name}
+        seasonName={data.season?.name ?? `${activeYear}년`}
+      />
     </Stack>
   );
 }
@@ -140,31 +192,33 @@ export default function GroupRankingPage() {
 function SectionHeader({
   title,
   onOpenDetail,
+  onDownload,
+  onShare,
+  isDownloading = false,
 }: {
   title: string;
   onOpenDetail: () => void;
+  onDownload?: () => void;
+  onShare?: () => void;
+  isDownloading?: boolean;
 }) {
   return (
     <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
       <Typography fontWeight={900} fontSize={18}>
         {title}
       </Typography>
-      <Button
-        size="small"
-        variant="outlined"
-        onClick={onOpenDetail}
-        sx={{
-          minWidth: "auto",
-          px: 1.5,
-          py: 0.5,
-          borderColor: "#D1D5DB",
-          color: "#111827",
-          fontSize: 12,
-          fontWeight: 800,
-        }}
-      >
-        자세히 보기
-      </Button>
+      <Stack direction="row" spacing={0.5} alignItems="center">
+        <Button
+          size="small"
+          variant="outlined"
+          onClick={onOpenDetail}
+          sx={{ minWidth: "auto", px: 1.5, py: 0.5, borderColor: "#D1D5DB", color: "#111827", fontSize: 12, fontWeight: 800 }}
+        >
+          자세히 보기
+        </Button>
+        {onDownload && <IconButton size="small" disabled={isDownloading} onClick={onDownload} aria-label="순위 이미지 다운로드" sx={{ border: "1px solid #D1D5DB", borderRadius: 1 }}><DownloadOutlinedIcon sx={{ fontSize: 18 }} /></IconButton>}
+        {onShare && <IconButton size="small" onClick={onShare} aria-label="순위 공유" sx={{ border: "1px solid #D1D5DB", borderRadius: 1 }}><ShareOutlinedIcon sx={{ fontSize: 18 }} /></IconButton>}
+      </Stack>
     </Stack>
   );
 }
@@ -173,27 +227,31 @@ function PointRankingList({
   rows,
   currentUserId,
   onSelect,
+  showAll = false,
 }: {
   rows: PointRankingRow[];
   currentUserId: number;
   onSelect: (memberId: number) => void;
+  showAll?: boolean;
 }) {
+  const [visibleCount, setVisibleCount] = useState(10);
   if (rows.length === 0) {
     return <EmptyRankingCard />;
   }
 
+  const visibleRows = showAll ? rows : rows.slice(0, visibleCount);
+  const myRow = rows.find((row) => row.member_id === currentUserId);
+  const showPinnedMine = !showAll && myRow && !visibleRows.includes(myRow);
+  const displayRows = showPinnedMine ? [...visibleRows, myRow] : visibleRows;
+
   return (
     <Stack spacing={0.8}>
-      {rows.map((row) => {
+      {displayRows.map((row) => {
         const memberId = row.member_id;
         const isMine = memberId != null && memberId === currentUserId;
         const canOpenMember = memberId != null;
-        const rankBadgeBg =
-          row.rank === 1 ? "#F4C542" :
-          row.rank === 2 ? "#D9DEE7" :
-          row.rank === 3 ? "#D89A5B" :
-          "#F3F4F6";
-        const rankBadgeColor = row.rank && row.rank <= 3 ? "#111827" : "#6B7280";
+        const rankBadgeBg = row.rank === 1 ? "#E9C23B" : row.rank === 2 ? "#D1D5DB" : row.rank === 3 ? "#D6A348" : "#F3F4F6";
+        const rankBadgeColor = row.rank && row.rank <= 3 ? "#FFF" : "#374151";
 
         return (
           <Card
@@ -212,15 +270,16 @@ function PointRankingList({
               <Stack direction="row" alignItems="center" spacing={0.75}>
                 <Box
                   sx={{
-                    minWidth: 28,
-                    height: 28,
-                    borderRadius: 999,
+                    width: 42,
+                    height: 30,
+                    borderRadius: "5px 0 0 5px",
+                    clipPath: "polygon(0 0, 100% 0, 82% 100%, 0 100%)",
                     bgcolor: rankBadgeBg,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     fontWeight: 900,
-                    fontSize: 11,
+                    fontSize: 13,
                     color: rankBadgeColor,
                     flexShrink: 0,
                   }}
@@ -285,6 +344,70 @@ function PointRankingList({
           </Card>
         );
       })}
+      {!showAll && visibleCount < rows.length && (
+        <Button
+          variant="outlined"
+          onClick={() => setVisibleCount((count) => Math.min(count + 10, rows.length))}
+          endIcon={<ExpandMoreIcon />}
+          sx={{ bgcolor: "#FFF", borderColor: "#1976D2", color: "#1976D2", fontWeight: 900, py: 0.8 }}
+        >
+          더보기
+        </Button>
+      )}
+    </Stack>
+  );
+}
+
+function RankingShareDialog({ open, onClose, link, clubName, seasonName }: { open: boolean; onClose: () => void; link: string; clubName: string; seasonName: string }) {
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(link);
+      window.alert("링크가 복사되었습니다.");
+      onClose();
+    } catch {
+      window.alert("링크 복사에 실패했습니다.");
+    }
+  };
+  const shareKakao = () => {
+    const kakaoKey = import.meta.env.VITE_KAKAO_JS_KEY;
+    if (window.Kakao && kakaoKey && !window.Kakao.isInitialized()) window.Kakao.init(kakaoKey);
+    if (window.Kakao?.Share) {
+      window.Kakao.Share.sendDefault({
+        objectType: "feed",
+        content: { title: `${clubName} 클럽 순위`, description: seasonName, imageUrl: `${window.location.origin}/og-image.png`, link: { mobileWebUrl: link, webUrl: link } },
+        buttons: [{ title: "순위 보기", link: { mobileWebUrl: link, webUrl: link } }],
+      });
+    } else {
+      void copyLink();
+    }
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth slotProps={{ paper: { sx: { borderRadius: 1, mx: 2 } } }}>
+      <DialogTitle sx={{ fontWeight: 900 }}>클럽 순위 공유</DialogTitle>
+      <DialogContent>
+        <Stack spacing={3} sx={{ pt: 1 }}>
+          <Box>
+            <Typography fontSize={12} color="text.secondary" fontWeight={700} sx={{ mb: 0.6 }}>공유 링크</Typography>
+            <TextField value={link} fullWidth size="small" slotProps={{ input: { readOnly: true } }} />
+          </Box>
+          <Stack direction="row" justifyContent="space-around">
+            <ShareAction label="카카오톡" bgcolor="#FFEB3A" onClick={shareKakao}><Box component="img" src="/kakao-logo.png" alt="카카오톡" sx={{ width: 38, height: 38 }} /></ShareAction>
+            <ShareAction label="문자" bgcolor="#4CAF50" color="#FFF" onClick={() => { window.location.href = `sms:?body=${encodeURIComponent(`${clubName} 클럽 순위 (${seasonName}) ${link}`)}`; }}><SmsOutlinedIcon /></ShareAction>
+            <ShareAction label="링크 복사" bgcolor="#E5E7EB" color="#374151" onClick={() => { void copyLink(); }}><ContentCopyOutlinedIcon /></ShareAction>
+          </Stack>
+        </Stack>
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 2.5 }}><Button variant="contained" onClick={onClose} sx={{ fontWeight: 800 }}>닫기</Button></DialogActions>
+    </Dialog>
+  );
+}
+
+function ShareAction({ label, bgcolor, color, onClick, children }: { label: string; bgcolor: string; color?: string; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <Stack alignItems="center" spacing={0.7}>
+      <IconButton onClick={onClick} sx={{ width: 56, height: 56, bgcolor, color, "&:hover": { bgcolor } }}>{children}</IconButton>
+      <Typography fontSize={11} fontWeight={700} color="text.secondary">{label}</Typography>
     </Stack>
   );
 }

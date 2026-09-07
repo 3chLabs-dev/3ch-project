@@ -1293,10 +1293,30 @@ const LeagueAlgorithmDemo = ({
   const completedCustomRoundSignatureRef = useRef<string | null>(null);
   const [selectedProgramOptionIndex, setSelectedProgramOptionIndex] = useState<number | null>(null);
   const [expandedProgramOptionIndex, setExpandedProgramOptionIndex] = useState<number | null>(null);
+  const programOptionRefs = useRef<Array<HTMLDivElement | null>>([]);
   const [showEditHint, setShowEditHint] = useState(true);
   const [customProgramOptions, setCustomProgramOptions] = useState<Record<number, ProgramOption>>({});
   const [editingOptionIndex, setEditingOptionIndex] = useState<number | null>(null);
   const [editingRounds, setEditingRounds] = useState<RoundConfig[]>([]);
+
+  useEffect(() => {
+    if (expandedProgramOptionIndex === null || window.innerWidth > 600) return;
+
+    let secondFrame = 0;
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        programOptionRefs.current[expandedProgramOptionIndex]?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      if (secondFrame) window.cancelAnimationFrame(secondFrame);
+    };
+  }, [expandedProgramOptionIndex]);
   const [groupStructureDialog, setGroupStructureDialog] = useState<{
     optionIndex: number;
     blockIndex: number;
@@ -3138,6 +3158,7 @@ const LeagueAlgorithmDemo = ({
 {displayedProgramOptions.slice(0, 3).map((option, index) => (
   <div
     key={index}
+    ref={(element) => { programOptionRefs.current[index] = element; }}
     onClick={() => {
       setSelectedProgramOptionIndex(index);
       setExpandedProgramOptionIndex(index);
@@ -3160,6 +3181,8 @@ const LeagueAlgorithmDemo = ({
         ? '0 10px 28px rgba(47, 128, 237, 0.12)'
         : '0 4px 16px rgba(15, 23, 42, 0.06)',
       transition: 'border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease',
+      scrollMarginTop: '76px',
+      scrollMarginBottom: '96px',
     }}
   >
     <div

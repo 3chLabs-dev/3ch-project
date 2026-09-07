@@ -38,6 +38,11 @@ test('팀원 순서와 무관하게 같은 순위 집계 단위로 묶는다', (
   assert.equal(_test.rankingUnitKey([8, 12, 3]), '3,8,12');
 });
 
+test('일반 회원과 사전등록 회원을 서로 다른 순위 식별자로 구분한다', () => {
+  assert.equal(_test.rankingMemberKey({ member_id: 17 }), 'member:17');
+  assert.equal(_test.rankingMemberKey({ member_id: null, pre_member_id: 'pre-17' }), 'pre:pre-17');
+});
+
 test('예선 뒤 본선 토너먼트 경기는 리그 순위에 계속 합산한다', () => {
   const leagueId = 'mixed-league';
   const regularMatch = {

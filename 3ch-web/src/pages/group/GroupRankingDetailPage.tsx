@@ -134,11 +134,13 @@ function ClubRankingTable({
         </Box>
 
         {rows.map((row) => {
-          const isMine = row.member_id === currentUserId;
+          const memberId = row.member_id;
+          const isMine = memberId != null && memberId === currentUserId;
+          const canOpenMember = memberId != null;
           return (
             <Box
-              key={row.member_id}
-              onClick={() => onSelect(row.member_id)}
+              key={row.member_id ?? `pre-${row.pre_member_id}`}
+              onClick={() => { if (memberId != null) onSelect(memberId); }}
               sx={{
                 display: "grid",
                 gridTemplateColumns: "44px minmax(82px,1fr) 36px 36px 40px 32px 32px 48px",
@@ -148,7 +150,7 @@ function ClubRankingTable({
                 alignItems: "center",
                 borderBottom: "1px solid #F3F4F6",
                 bgcolor: isMine ? "#EEF4FF" : "#FFF",
-                cursor: "pointer",
+                cursor: canOpenMember ? "pointer" : "default",
               }}
             >
               <Typography sx={{ fontSize: 12, fontWeight: 900, textAlign: "center" }}>{row.rank ?? "-"}</Typography>
@@ -165,6 +167,11 @@ function ClubRankingTable({
                 >
                   {row.name}
                 </Typography>
+                {row.is_pre_registered && (
+                  <Typography sx={{ fontSize: 9, fontWeight: 800, color: "#6B7280", whiteSpace: "nowrap" }}>
+                    사전등록
+                  </Typography>
+                )}
               </Stack>
               <CellValue value={row.attendance_count} />
               <CellValue value={row.championships} />

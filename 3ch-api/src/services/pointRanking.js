@@ -77,7 +77,9 @@ function getBonusRule(pointRules, section, format, option) {
 
 function createSectionRow(base) {
   return {
-    member_id: Number(base.member_id),
+    member_id: base.member_id == null ? null : Number(base.member_id),
+    pre_member_id: base.pre_member_id ?? null,
+    is_pre_registered: Boolean(base.pre_member_id),
     name: base.name,
     division: base.division || null,
     attendance_count: 0,
@@ -97,7 +99,7 @@ function createSectionRow(base) {
 
 function ensureRow(sectionMap, memberId, baseInfo, section) {
   if (!baseInfo) return null;
-  const key = Number(memberId);
+  const key = String(memberId);
   if (!sectionMap.has(key)) {
     const row = createSectionRow(baseInfo);
     row.section = section;
@@ -216,7 +218,18 @@ function roundPoint(value) {
 }
 
 function rankingUnitKey(memberIds) {
-  return [...memberIds].map(Number).filter(Number.isFinite).sort((a, b) => a - b).join(",");
+  return [...memberIds].map(String).filter(Boolean).sort((a, b) => {
+    const numericA = Number(a);
+    const numericB = Number(b);
+    if (Number.isFinite(numericA) && Number.isFinite(numericB)) return numericA - numericB;
+    return a.localeCompare(b);
+  }).join(",");
+}
+
+function rankingMemberKey(row) {
+  if (row.member_id != null && Number.isFinite(Number(row.member_id))) return `member:${Number(row.member_id)}`;
+  if (row.pre_member_id) return `pre:${row.pre_member_id}`;
+  return null;
 }
 
 function isThirdPlaceMatch(match) {
@@ -385,17 +398,30 @@ async function getPointRanking(groupId, year, scope, seasonId) {
     ? await pool.query(
       `SELECT
          gm.user_id AS member_id,
+         NULL::text AS pre_member_id,
          COALESCE(gm.division, '') AS division,
-         COALESCE(u.name, u.email) AS name
+         COALESCE(u.name, u.email) AS name,
+         gm.joined_at AS sort_date
        FROM group_members gm
        JOIN users u ON u.id = gm.user_id
       WHERE gm.group_id = $1
-      ORDER BY gm.joined_at ASC, gm.user_id ASC`,
+      UNION ALL
+      SELECT
+         NULL::integer AS member_id,
+         pm.id AS pre_member_id,
+         COALESCE(pm.division, '') AS division,
+         pm.name,
+         pm.created_at AS sort_date
+        FROM group_pre_members pm
+       WHERE pm.group_id = $1
+         AND pm.status = 'active'
+      ORDER BY sort_date ASC, member_id ASC NULLS LAST`,
       [groupId],
     )
     : await pool.query(
       `SELECT DISTINCT
          COALESCE(lp.member_id, CASE WHEN matched.matched_count = 1 THEN matched.user_id ELSE NULL END) AS member_id,
+         NULL::text AS pre_member_id,
          COALESCE(lp.division, CASE WHEN matched.matched_count = 1 THEN matched.division ELSE '' END, '') AS division,
          COALESCE(u.name, u.email, CASE WHEN matched.matched_count = 1 THEN matched.name ELSE NULL END, lp.name) AS name
        FROM league_participants lp
@@ -422,8 +448,11 @@ async function getPointRanking(groupId, year, scope, seasonId) {
 
   const baseMembers = new Map();
   memberResult.rows.forEach((row) => {
-    baseMembers.set(Number(row.member_id), {
-      member_id: Number(row.member_id),
+    const key = rankingMemberKey(row);
+    if (!key) return;
+    baseMembers.set(key, {
+      member_id: row.member_id == null ? null : Number(row.member_id),
+      pre_member_id: row.pre_member_id ?? null,
       division: row.division || null,
       name: row.name,
     });
@@ -439,8 +468,15 @@ async function getPointRanking(groupId, year, scope, seasonId) {
        prog.program_data,
        lp.id AS participant_id,
        COALESCE(lp.member_id, CASE WHEN matched.matched_count = 1 THEN matched.user_id ELSE NULL END) AS member_id,
-       COALESCE(lp.division, CASE WHEN matched.matched_count = 1 THEN matched.division ELSE '' END, '') AS division,
-       COALESCE(u.name, u.email, CASE WHEN matched.matched_count = 1 THEN matched.name ELSE NULL END, lp.name) AS name
+       CASE
+         WHEN COALESCE(lp.member_id, CASE WHEN matched.matched_count = 1 THEN matched.user_id ELSE NULL END) IS NULL
+           AND matched_pre.matched_count = 1 THEN matched_pre.pre_member_id
+         ELSE NULL
+       END AS pre_member_id,
+       COALESCE(lp.division, CASE WHEN matched.matched_count = 1 THEN matched.division ELSE NULL END,
+                CASE WHEN matched_pre.matched_count = 1 THEN matched_pre.division ELSE '' END, '') AS division,
+       COALESCE(u.name, u.email, CASE WHEN matched.matched_count = 1 THEN matched.name ELSE NULL END,
+                CASE WHEN matched_pre.matched_count = 1 THEN matched_pre.name ELSE NULL END, lp.name) AS name
      FROM leagues l
      JOIN league_participants lp ON lp.league_id = l.id
      LEFT JOIN league_programs prog ON prog.league_id = l.id
@@ -457,9 +493,23 @@ async function getPointRanking(groupId, year, scope, seasonId) {
          AND u2.name IS NOT NULL
          AND u2.name = lp.name
      ) matched ON lp.member_id IS NULL
+     LEFT JOIN LATERAL (
+       SELECT
+         MIN(pm.id::text) AS pre_member_id,
+         MIN(COALESCE(pm.division, '')) AS division,
+         MIN(pm.name) AS name,
+         COUNT(*)::int AS matched_count
+       FROM group_pre_members pm
+       WHERE pm.group_id = l.group_id
+         AND pm.status = 'active'
+         AND pm.name = lp.name
+     ) matched_pre ON lp.member_id IS NULL
      WHERE ${leagueFilterSql}
        AND ${scopedDateSql}
-       AND COALESCE(lp.member_id, CASE WHEN matched.matched_count = 1 THEN matched.user_id ELSE NULL END) IS NOT NULL
+       AND (
+         COALESCE(lp.member_id, CASE WHEN matched.matched_count = 1 THEN matched.user_id ELSE NULL END) IS NOT NULL
+         OR matched_pre.matched_count = 1
+       )
      ORDER BY l.start_date ASC, lp.created_at ASC`,
     [scopeValue, rangeStart, rangeEnd],
   );
@@ -571,10 +621,12 @@ async function getPointRanking(groupId, year, scope, seasonId) {
   const participantsByLeague = new Map();
 
   participantResult.rows.forEach((row) => {
-    const memberId = Number(row.member_id);
+    const memberId = rankingMemberKey(row);
+    if (!memberId) return;
     if (!baseMembers.has(memberId)) {
       baseMembers.set(memberId, {
-        member_id: memberId,
+        member_id: row.member_id == null ? null : Number(row.member_id),
+        pre_member_id: row.pre_member_id ?? null,
         division: row.division || null,
         name: row.name,
       });
@@ -608,7 +660,9 @@ async function getPointRanking(groupId, year, scope, seasonId) {
       .map((match) => match.league_id),
   );
   const participantMembers = new Map(
-    participantResult.rows.map((row) => [String(row.participant_id), Number(row.member_id)]),
+    participantResult.rows
+      .map((row) => [String(row.participant_id), rankingMemberKey(row)])
+      .filter(([, memberId]) => Boolean(memberId)),
   );
 
   matchResult.rows.forEach((match) => {
@@ -632,11 +686,11 @@ async function getPointRanking(groupId, year, scope, seasonId) {
     match._rankingSection = section;
 
     const memberAIds = entryType === "singles"
-      ? [Number(match.member_a_id)].filter(Number.isFinite)
-      : (match.participant_a_roster_ids ?? []).map((id) => participantMembers.get(String(id))).filter(Number.isFinite);
+      ? [participantMembers.get(String(match.participant_a_id))].filter(Boolean)
+      : (match.participant_a_roster_ids ?? []).map((id) => participantMembers.get(String(id))).filter(Boolean);
     const memberBIds = entryType === "singles"
-      ? [Number(match.member_b_id)].filter(Number.isFinite)
-      : (match.participant_b_roster_ids ?? []).map((id) => participantMembers.get(String(id))).filter(Number.isFinite);
+      ? [participantMembers.get(String(match.participant_b_id))].filter(Boolean)
+      : (match.participant_b_roster_ids ?? []).map((id) => participantMembers.get(String(id))).filter(Boolean);
     if (memberAIds.length === 0 || memberBIds.length === 0) return;
     const rankingMemberAIds = memberAIds.filter((memberId) => baseMembers.has(memberId));
     const rankingMemberBIds = memberBIds.filter((memberId) => baseMembers.has(memberId));
@@ -717,7 +771,8 @@ async function getPointRanking(groupId, year, scope, seasonId) {
 
   participantResult.rows.forEach((row) => {
     if (row.program_data || String(row.league_type ?? "").trim() !== "단식") return;
-    const memberId = Number(row.member_id);
+    const memberId = rankingMemberKey(row);
+    if (!memberId) return;
     const format = String(row.format ?? "");
     const hasLeaguePhase = format !== "상·하위 토너먼트"
       && (leagueHasRegularPhase.has(row.league_id) || !format.includes("토너먼트"));
@@ -778,7 +833,7 @@ async function getPointRanking(groupId, year, scope, seasonId) {
     standings.slice(0, 4).forEach((standing, index) => {
       const divisor = standing.member_ids.length;
       standing.member_ids.forEach((memberId) => {
-        const row = leagueRows.get(Number(memberId));
+        const row = leagueRows.get(String(memberId));
         if (row) awardBonus(row, index + 1, bonusRule, divisor);
       });
     });
@@ -849,7 +904,7 @@ async function getPointRanking(groupId, year, scope, seasonId) {
       const divisor = memberIds.length;
       memberIds.forEach((memberId) => {
         const targetRows = sample._rankingSection === "league" ? leagueRows : tournamentRows;
-        const row = targetRows.get(Number(memberId));
+        const row = targetRows.get(String(memberId));
         if (row) awardBonus(row, rank, rule, divisor);
       });
     };
@@ -928,6 +983,7 @@ module.exports = {
     getRankingSection,
     isFinalMatch,
     isThirdPlaceMatch,
+    rankingMemberKey,
     rankingUnitKey,
   },
 };

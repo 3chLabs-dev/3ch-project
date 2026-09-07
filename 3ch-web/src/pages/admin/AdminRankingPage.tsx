@@ -486,7 +486,7 @@ function PointRankingSection({ title, rows }: { title: string; rows: PointRankin
               </TableRow>
             ) : (
               rows.map((row) => (
-                <TableRow key={`${title}-${row.member_id}`} hover>
+                <TableRow key={`${title}-${row.member_id ?? `pre-${row.pre_member_id}`}`} hover>
                   <TableCell sx={{ fontSize: 12, fontWeight: 800 }}>{row.rank ?? "-"}</TableCell>
                   <TableCell sx={{ fontSize: 12, fontWeight: 700 }}>{row.name}</TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{row.division ?? "-"}</TableCell>

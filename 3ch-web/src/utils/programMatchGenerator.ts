@@ -1596,7 +1596,7 @@ export function applyProgramTournamentAdvancement(matches: LeagueMatch[]): Leagu
       && sources.every((sourceId) => matchMap.get(sourceId)?.status === "done");
     // A BYE can emerge only after upper-bracket losers have been propagated.
     // Complete it once every feeder match is resolved, then advance its participant.
-    if (match.status !== "done" && hasOnlyOneParticipant && allSourcesResolved) {
+    if (match.bracket !== "lower" && match.status !== "done" && hasOnlyOneParticipant && allSourcesResolved) {
       if (!match.participant_a_name) match.participant_a_id = null;
       if (!match.participant_b_name) match.participant_b_id = null;
       match.status = "done";

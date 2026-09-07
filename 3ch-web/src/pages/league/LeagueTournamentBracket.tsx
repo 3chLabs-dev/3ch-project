@@ -316,6 +316,7 @@ interface SlotActions {
   onSwapSelect: (matchId: string, slot: "a" | "b", participantId: string | null, name: string | null) => void;
   onMoveToLower: () => void;
   onDeleteSelected: () => void;
+  onAdvanceWalkover: (matchId: string) => void;
   onOpenResult: (matchId: string) => void;
 }
 
@@ -723,6 +724,9 @@ function SingleSlotBox({ pos, slot, actions, manualSeeding = false }: { pos: Mat
 
   const canOpenResult = Boolean(actions?.canManage && !actions.editMode && m.participant_a_id && m.participant_b_id);
   const cursor = canOpenResult || (isR1 && actions?.canRegister && !name) || (actions?.canManage && actions.editMode) ? "pointer" : "default";
+  const isPendingLowerWalkover = m.bracket === "lower" && m.status !== "done"
+    && Boolean(m.participant_a_name) !== Boolean(m.participant_b_name)
+    && Boolean(name);
 
   return (
     <>
@@ -771,6 +775,16 @@ function SingleSlotBox({ pos, slot, actions, manualSeeding = false }: { pos: Mat
           <Typography sx={{ fontSize: name?.includes(" · ") ? 9 : 11, fontWeight: isBye || isUndecided ? 400 : 700, flex: 1, overflow: "hidden", whiteSpace: "normal", lineHeight: 1.1, color: win ? "#16A34A" : isBye || isUndecided ? "#9CA3AF" : "#111827", fontStyle: isBye || isUndecided ? "italic" : "normal" }}>
             {name ?? (isBye ? "BYE" : "미정")}
           </Typography>
+        )}
+        {isPendingLowerWalkover && actions?.canManage && !actions.editMode && (
+          <IconButton
+            size="small"
+            title="부전승으로 다음 단계 진출"
+            onClick={(event) => { event.stopPropagation(); actions.onAdvanceWalkover(m.id); }}
+            sx={{ width: 20, height: 20, p: 0, color: "#16A34A", border: "1px solid #86EFAC", bgcolor: "#F0FDF4" }}
+          >
+            <Typography sx={{ fontSize: 11, fontWeight: 900, lineHeight: 1 }}>∨</Typography>
+          </IconButton>
         )}
       </Box>
 
@@ -1581,6 +1595,15 @@ export default function LeagueTournamentBracket() {
     const upperPeers = sourceMatches.filter((match) => match.bracket !== "lower" && match.round_number === source.round_number && !match.match_label?.includes("3·4위전")).sort((a, b) => a.match_order - b.match_order);
     const sourceIndex = upperPeers.findIndex((match) => match.id === source.id);
     const lowerPeers = sourceMatches.filter((match) => match.bracket === "lower" && match.round_number === Math.max(1, (source.round_number ?? 1) - 1) && !match.match_label?.includes("3·4위전")).sort((a, b) => a.match_order - b.match_order);
+    const layoutPositions = calcCenterOutPositions(sourceMatches);
+    const sourcePosition = layoutPositions.find((position) => position.id === source.id);
+    const closestLowerMatch = sourcePosition
+      ? lowerPeers
+          .filter((match) => !match.participant_a_name || !match.participant_b_name)
+          .map((match) => ({ match, position: layoutPositions.find((position) => position.id === match.id) }))
+          .filter((entry) => entry.position)
+          .sort((left, right) => Math.abs(left.position!.x - sourcePosition.x) - Math.abs(right.position!.x - sourcePosition.x))[0]?.match
+      : undefined;
     // If this participant reached the current match through an opening-round BYE,
     // reuse that feeder's originally reserved loser slot in the lower bracket.
     const byeFeeder = sourceMatches.find((match) =>
@@ -1590,9 +1613,11 @@ export default function LeagueTournamentBracket() {
         || match.participant_a_name === swapFirst.name || match.participant_b_name === swapFirst.name),
     );
     const directTargetId = source.loser_next_match_id ?? byeFeeder?.loser_next_match_id;
-    let target = directTargetId
-      ? sourceMatches.find((match) => match.id === directTargetId)
-      : lowerPeers[(source.round_number ?? 1) === 1 ? Math.floor(sourceIndex / 2) : sourceIndex];
+    let target = (source.round_number ?? 1) > 1 && closestLowerMatch
+      ? closestLowerMatch
+      : directTargetId
+        ? sourceMatches.find((match) => match.id === directTargetId)
+        : lowerPeers[(source.round_number ?? 1) === 1 ? Math.floor(sourceIndex / 2) : sourceIndex];
     let targetSlot = source.loser_next_match_id
       ? source.loser_next_slot
       : byeFeeder?.loser_next_slot;
@@ -1628,6 +1653,7 @@ export default function LeagueTournamentBracket() {
       && (downstreamSlot === "a" ? downstream.participant_a_id : downstream.participant_b_id) === previousWalkoverParticipantId
       && downstream.status !== "done",
     );
+    try {
     if (isProgramMode && programBlock) {
       const statePatch = { ...clearPlaceholderPatch, ...participantPatch, status: "pending" as const, score_a: null, score_b: null };
       saveProgramMatchPatch(id!, programRound, target.id, statePatch);
@@ -1656,6 +1682,11 @@ export default function LeagueTournamentBracket() {
     }
     setSwapFirst(null);
     await refetchMatches();
+    window.alert(`${swapFirst.name ?? "선택한 참가자"} 선수를 하위부에 배치했습니다.`);
+    } catch (error) {
+      console.error("Failed to move participant to lower bracket", error);
+      window.alert("하위부 배치 저장에 실패했습니다. 잠시 후 다시 시도해주세요.");
+    }
   };
 
   const slotActions: SlotActions = {
@@ -1668,6 +1699,12 @@ export default function LeagueTournamentBracket() {
     onSwapSelect: handleSwapSelect,
     onMoveToLower: handleMoveSelectedToLower,
     onDeleteSelected: () => setDeleteSlotDialogOpen(true),
+    onAdvanceWalkover: async (matchId) => {
+      if (!id) return;
+      if (isProgramMode) saveProgramMatchPatch(id, programRound, matchId, { status: "done", score_a: 0, score_b: 0 });
+      await updateTournamentMatch({ leagueId: id, matchId, updates: { status: "done", score_a: 0, score_b: 0 } }).unwrap();
+      await refetchMatches();
+    },
     onOpenResult: (matchId) => {
       setResultMatchId(matchId);
       setResultDialogOpen(true);

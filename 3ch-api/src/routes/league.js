@@ -735,7 +735,9 @@ async function reconcileTournamentMatches(db, leagueId, options = {}) {
         ((aState.kind === 'participant' && bState.kind === 'impossible') ||
           (bState.kind === 'participant' && aState.kind === 'impossible'));
 
-      if (isWalkover && match.status !== 'done') {
+      // 하위부는 뒤늦게 강제 배치할 참가자가 있을 수 있으므로 운영진이
+      // 명시적으로 확정하기 전에는 한 명만 있어도 자동 종료하지 않는다.
+      if (isWalkover && match.status !== 'done' && isUpperRoundOne(match)) {
         match.status = 'done';
         if (match.score_a !== null) match.score_a = null;
         if (match.score_b !== null) match.score_b = null;

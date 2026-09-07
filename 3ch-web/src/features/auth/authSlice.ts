@@ -14,9 +14,20 @@ type AuthState = {
   user: AuthUser | null;
 };
 
+function readStoredUser(): AuthUser | null {
+  if (typeof window === "undefined") return null;
+  const stored = window.localStorage.getItem("user");
+  if (!stored) return null;
+  try {
+    return JSON.parse(stored) as AuthUser;
+  } catch {
+    return null;
+  }
+}
+
 const initialState: AuthState = {
-  token: null,
-  user: null,
+  token: typeof window === "undefined" ? null : window.localStorage.getItem("token"),
+  user: readStoredUser(),
 };
 
 const authSlice = createSlice({

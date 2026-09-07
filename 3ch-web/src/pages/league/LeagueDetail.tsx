@@ -30,7 +30,7 @@ import {
   import QRCode from "react-qr-code";
   import ArrowBackIcon from "@mui/icons-material/ArrowBack";
   // import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
-  import IosShareIcon from "@mui/icons-material/IosShare";
+  import OutputOutlinedIcon from "@mui/icons-material/OutputOutlined";
   import SearchIcon from "@mui/icons-material/Search";
   import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
   import SmsOutlinedIcon from "@mui/icons-material/SmsOutlined";
@@ -1270,7 +1270,7 @@ const handleSaveEdit = async () => {
 
             {canInteract && (
               <IconButton size="small" onClick={() => setShareDialogOpen(true)}>
-                <IosShareIcon fontSize="small" />
+                <OutputOutlinedIcon fontSize="small" />
               </IconButton>
             )}
           </>

@@ -21,7 +21,7 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import ShareOutlinedIcon from "@mui/icons-material/ShareOutlined";
+import OutputOutlinedIcon from "@mui/icons-material/OutputOutlined";
 import SmsOutlinedIcon from "@mui/icons-material/SmsOutlined";
 import type { PointRankingRow } from "../../features/group/groupApi";
 import { useGetGroupPointRankingQuery } from "../../features/group/groupApi";
@@ -208,6 +208,8 @@ function SectionHeader({
         {title}
       </Typography>
       <Stack direction="row" spacing={0.5} alignItems="center">
+        {onDownload && <IconButton size="small" disabled={isDownloading} onClick={onDownload} aria-label="순위 이미지 다운로드" sx={{ border: "1px solid #D1D5DB", borderRadius: 1 }}><DownloadOutlinedIcon sx={{ fontSize: 18 }} /></IconButton>}
+        {onShare && <IconButton size="small" onClick={onShare} aria-label="순위 공유" sx={{ border: "1px solid #D1D5DB", borderRadius: 1 }}><OutputOutlinedIcon sx={{ fontSize: 19 }} /></IconButton>}
         <Button
           size="small"
           variant="outlined"
@@ -216,8 +218,6 @@ function SectionHeader({
         >
           자세히 보기
         </Button>
-        {onDownload && <IconButton size="small" disabled={isDownloading} onClick={onDownload} aria-label="순위 이미지 다운로드" sx={{ border: "1px solid #D1D5DB", borderRadius: 1 }}><DownloadOutlinedIcon sx={{ fontSize: 18 }} /></IconButton>}
-        {onShare && <IconButton size="small" onClick={onShare} aria-label="순위 공유" sx={{ border: "1px solid #D1D5DB", borderRadius: 1 }}><ShareOutlinedIcon sx={{ fontSize: 18 }} /></IconButton>}
       </Stack>
     </Stack>
   );

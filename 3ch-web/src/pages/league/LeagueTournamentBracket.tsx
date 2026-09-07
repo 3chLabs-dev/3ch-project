@@ -1581,8 +1581,25 @@ export default function LeagueTournamentBracket() {
     const upperPeers = sourceMatches.filter((match) => match.bracket !== "lower" && match.round_number === source.round_number && !match.match_label?.includes("3·4위전")).sort((a, b) => a.match_order - b.match_order);
     const sourceIndex = upperPeers.findIndex((match) => match.id === source.id);
     const lowerPeers = sourceMatches.filter((match) => match.bracket === "lower" && match.round_number === Math.max(1, (source.round_number ?? 1) - 1) && !match.match_label?.includes("3·4위전")).sort((a, b) => a.match_order - b.match_order);
-    const target = lowerPeers[sourceIndex];
-    const targetSlot = target && !target.participant_a_id ? "a" : target && !target.participant_b_id ? "b" : null;
+    // If this participant reached the current match through an opening-round BYE,
+    // reuse that feeder's originally reserved loser slot in the lower bracket.
+    const byeFeeder = sourceMatches.find((match) =>
+      match.next_match_id === source.id
+      && Boolean(match.loser_next_match_id)
+      && (match.participant_a_id === swapFirst.participantId || match.participant_b_id === swapFirst.participantId),
+    );
+    const directTargetId = source.loser_next_match_id ?? byeFeeder?.loser_next_match_id;
+    let target = directTargetId
+      ? sourceMatches.find((match) => match.id === directTargetId)
+      : lowerPeers[(source.round_number ?? 1) === 1 ? Math.floor(sourceIndex / 2) : sourceIndex];
+    let targetSlot = source.loser_next_match_id
+      ? source.loser_next_slot
+      : byeFeeder?.loser_next_slot;
+    if (targetSlot && target) {
+      const occupied = targetSlot === "a" ? target.participant_a_name : target.participant_b_name;
+      if (occupied) targetSlot = null;
+    }
+    targetSlot ??= target && !target.participant_a_name ? "a" : target && !target.participant_b_name ? "b" : null;
     if (!target || !targetSlot) {
       window.alert("대응하는 하위부 경기에서 배치 가능한 미정 슬롯을 찾지 못했습니다.");
       return;
@@ -1593,13 +1610,23 @@ export default function LeagueTournamentBracket() {
     const participantPatch = targetSlot === "a"
       ? { participant_a_id: swapFirst.participantId, participant_a_name: sourceName, participant_a_division: sourceDivision, participant_a_seed_label: sourceSeedLabel }
       : { participant_b_id: swapFirst.participantId, participant_b_name: sourceName, participant_b_division: sourceDivision, participant_b_seed_label: sourceSeedLabel };
+    const clearPlaceholderPatch = targetSlot === "a" && !target.participant_b_name
+      ? { participant_b_id: null, participant_b_name: null, participant_b_division: null, participant_b_seed_label: null }
+      : targetSlot === "b" && !target.participant_a_name
+        ? { participant_a_id: null, participant_a_name: null, participant_a_division: null, participant_a_seed_label: null }
+        : {};
     if (isProgramMode && programBlock) {
-      const statePatch = { ...participantPatch, status: "pending" as const, score_a: null, score_b: null };
+      const statePatch = { ...clearPlaceholderPatch, ...participantPatch, status: "pending" as const, score_a: null, score_b: null };
       saveProgramMatchPatch(id!, programRound, target.id, statePatch);
       const nextMatches = allProgramMatches.map((match) => match.id === target.id ? { ...match, ...statePatch } : match);
       await syncLeagueProgramMatches({ leagueId: id!, matches: nextMatches.map((match) => ({ ...match, program_round: programRound, program_block_type: programBlock.type })) }).unwrap();
     } else {
-      await assignParticipant({ leagueId: id!, matchId: target.id, ...(targetSlot === "a" ? { participant_a_id: swapFirst.participantId } : { participant_b_id: swapFirst.participantId }) }).unwrap();
+      const clearPlaceholderIds = targetSlot === "a" && !target.participant_b_name
+        ? { participant_b_id: null }
+        : targetSlot === "b" && !target.participant_a_name
+          ? { participant_a_id: null }
+          : {};
+      await assignParticipant({ leagueId: id!, matchId: target.id, ...clearPlaceholderIds, ...(targetSlot === "a" ? { participant_a_id: swapFirst.participantId } : { participant_b_id: swapFirst.participantId }) }).unwrap();
       await updateTournamentMatch({ leagueId: id!, matchId: target.id, updates: { status: "pending", score_a: null, score_b: null } }).unwrap();
     }
     setSwapFirst(null);

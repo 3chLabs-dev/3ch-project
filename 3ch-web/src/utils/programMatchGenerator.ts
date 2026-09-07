@@ -1590,13 +1590,15 @@ export function applyProgramTournamentAdvancement(matches: LeagueMatch[]): Leagu
     // Earlier matches can populate this match's slots while advancement is
     // being applied. Always read the latest copy instead of the stale sorted snapshot.
     const match = matchMap.get(orderedMatch.id) ?? orderedMatch;
-    const hasOnlyOneParticipant = Boolean(match.participant_a_id) !== Boolean(match.participant_b_id);
+    const hasOnlyOneParticipant = Boolean(match.participant_a_name) !== Boolean(match.participant_b_name);
     const sources = inboundSourceIds.get(match.id) ?? [];
     const allSourcesResolved = sources.length > 0
       && sources.every((sourceId) => matchMap.get(sourceId)?.status === "done");
     // A BYE can emerge only after upper-bracket losers have been propagated.
     // Complete it once every feeder match is resolved, then advance its participant.
     if (match.status !== "done" && hasOnlyOneParticipant && allSourcesResolved) {
+      if (!match.participant_a_name) match.participant_a_id = null;
+      if (!match.participant_b_name) match.participant_b_id = null;
       match.status = "done";
       match.score_a = match.participant_a_id ? 0 : null;
       match.score_b = match.participant_b_id ? 0 : null;

@@ -457,7 +457,12 @@ export default function GroupManage() {
             return;
         }
         try {
-            if (updated.role !== "owner" && selectedMember.role !== "owner") {
+            const currentPermissions = selectedMember.managementPermissions;
+            const permissionsChanged = updated.role === "admin" && (["members", "ranking", "league", "draw"] as const)
+                .some((key) => updated.managementPermissions[key] !== currentPermissions?.[key]);
+            const roleSettingsChanged = updated.role !== selectedMember.role || permissionsChanged;
+
+            if (isOwner && roleSettingsChanged && updated.role !== "owner" && selectedMember.role !== "owner") {
                 await updateMemberRole({
                     groupId: id,
                     userId: selectedMember.id,

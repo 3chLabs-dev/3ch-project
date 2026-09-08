@@ -544,16 +544,6 @@ function RankingPointRow({
           label={<Typography sx={{ fontSize: 13, fontWeight: 800 }}>{label}</Typography>}
           sx={{ m: 0 }}
         />
-        {onEliminationChange && nextRound && (
-          <Button
-            size="small"
-            startIcon={<AddIcon />}
-            onClick={() => onEliminationChange(nextRound, 0)}
-            sx={{ ml: "auto", minWidth: 0, px: 0.75, fontSize: 12, fontWeight: 800 }}
-          >
-            추가
-          </Button>
-        )}
       </Stack>
       <Box sx={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 0.75 }}>
         {([
@@ -583,6 +573,26 @@ function RankingPointRow({
             />
           </Stack>
         ))}
+        {onEliminationChange && nextRound && (
+          <Button
+            variant="outlined"
+            startIcon={<AddIcon />}
+            onClick={() => onEliminationChange(nextRound, 0)}
+            sx={{
+              gridColumn: "1 / -1",
+              mt: 0.25,
+              minHeight: 36,
+              borderRadius: 2,
+              bgcolor: "#fff",
+              borderColor: "#1976D2",
+              color: "#1976D2",
+              fontSize: 13,
+              fontWeight: 800,
+            }}
+          >
+            {nextRound}강 포인트 추가
+          </Button>
+        )}
       </Box>
     </Box>
   );

@@ -29,9 +29,10 @@ type Props = {
     division?: string;
     externalAliases?: string[];
     managementPermissions?: ManagementPermissions;
+    isPreMember?: boolean;
   };
   onClose: () => void;
-  onSave: (updated: { role: "owner" | "admin" | "member"; division: string; externalAliases: string[]; managementPermissions: ManagementPermissions }) => void;
+  onSave: (updated: { name: string; role: "owner" | "admin" | "member"; division: string; externalAliases: string[]; managementPermissions: ManagementPermissions }) => void;
   onRemove?: () => void;
   isOwner: boolean;
 };
@@ -59,6 +60,7 @@ export default function MemberEditDialog({
   isOwner,
 }: Props) {
   const [role, setRole] = useState(member.role);
+  const [name, setName] = useState(member.name);
   const [division, setDivision] = useState(member.division || "");
   const [externalAliases, setExternalAliases] = useState<string[]>(member.externalAliases || []);
   const [managementPermissions, setManagementPermissions] = useState<ManagementPermissions>(
@@ -68,6 +70,7 @@ export default function MemberEditDialog({
   useEffect(() => {
     if (!open) return;
     setRole(member.role);
+    setName(member.name);
     setDivision(member.division || "");
     setExternalAliases(member.externalAliases || []);
     setManagementPermissions(member.managementPermissions || DEFAULT_MANAGEMENT_PERMISSIONS);
@@ -76,6 +79,7 @@ export default function MemberEditDialog({
   const handleSave = () => {
     onSave({
       role,
+      name: name.trim(),
       division: division.trim(),
       externalAliases: externalAliases.map((value) => value.trim()).filter(Boolean),
       managementPermissions,
@@ -117,8 +121,9 @@ export default function MemberEditDialog({
               이름
             </Typography>
             <TextField
-              value={member.name || member.email}
-              disabled
+              value={name || member.email}
+              onChange={(event) => setName(event.target.value)}
+              disabled={!member.isPreMember}
               fullWidth
               size="small"
               sx={{
@@ -135,7 +140,7 @@ export default function MemberEditDialog({
               <Select
                 value={role}
                 onChange={(e) => setRole(e.target.value as "owner" | "admin" | "member")}
-                disabled={!isOwner || member.role === "owner"}
+                disabled={member.isPreMember || !isOwner || member.role === "owner"}
                 sx={{
                   borderRadius: 1,
                   bgcolor: !isOwner || member.role === "owner" ? "#F9FAFB" : "#fff",
@@ -143,12 +148,12 @@ export default function MemberEditDialog({
               >
                 <MenuItem value="owner">리더</MenuItem>
                 <MenuItem value="admin">운영진</MenuItem>
-                <MenuItem value="member">회원</MenuItem>
+                <MenuItem value="member">{member.isPreMember ? "사전등록" : "회원"}</MenuItem>
               </Select>
             </FormControl>
           </Box>
 
-          {role === "admin" && (
+          {!member.isPreMember && role === "admin" && (
             <Box>
               <Typography sx={{ fontSize: 14, fontWeight: 800, mb: 0.8, color: "#374151" }}>
                 클럽 관리 권한
@@ -252,7 +257,7 @@ export default function MemberEditDialog({
                   },
                 }}
               >
-                클럽 회원 내보내기
+                {member.isPreMember ? "사전등록 회원 내보내기" : "클럽 회원 내보내기"}
               </Button>
             </Box>
           )}

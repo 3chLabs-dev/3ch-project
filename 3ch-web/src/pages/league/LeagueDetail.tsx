@@ -40,6 +40,8 @@ import {
   import LanguageIcon from "@mui/icons-material/Language";
   import DownloadIcon from "@mui/icons-material/Download";
   import PrintIcon from "@mui/icons-material/Print";
+  import EmojiEventsOutlinedIcon from "@mui/icons-material/EmojiEventsOutlined";
+  import CardGiftcardOutlinedIcon from "@mui/icons-material/CardGiftcardOutlined";
   import {
     useGetLeagueQuery,
     useGetLeagueProgramQuery,
@@ -1873,10 +1875,42 @@ const handleSaveEdit = async () => {
             showGroupName={showParticipantGroups}
           />
 
+          <Button
+            fullWidth
+            variant="outlined"
+            disableElevation
+            startIcon={<EmojiEventsOutlinedIcon fontSize="small" />}
+            onClick={() => navigate(`/league/${id}/ranking`)}
+            sx={{
+              mt: 1.5,
+              borderRadius: 1,
+              height: 40,
+              fontWeight: 700,
+              color: "#9A4D00",
+              borderColor: "#F59E0B",
+              bgcolor: "#FFF7D6",
+              "&:hover": { borderColor: "#D97706", bgcolor: "#FFEDAD" },
+              "& .MuiSvgIcon-root": { color: "#F59E0B" },
+            }}
+          >
+            순위
+          </Button>
+
           {canInteract && (
             <Button
               fullWidth variant="outlined" disableElevation
-              sx={{ mt: 1.5, borderRadius: 1, height: 40, fontWeight: 700 }}
+              startIcon={<CardGiftcardOutlinedIcon fontSize="small" />}
+              sx={{
+                mt: 1,
+                borderRadius: 1,
+                height: 40,
+                fontWeight: 700,
+                color: "#7C3AED",
+                borderColor: "#A78BFA",
+                bgcolor: "#F5F3FF",
+                "&:hover": { borderColor: "#7C3AED", bgcolor: "#EDE9FE" },
+                "& .MuiSvgIcon-root": { color: "#8B5CF6" },
+              }}
               onClick={() => navigate(`/draw/${id}`)}
             >
               경품 추첨

@@ -49,6 +49,8 @@ import {
     useLeaveGroupMutation,
     useLazyGeocodeAddressQuery,
     useReviewGroupMemberClaimMutation,
+    useUpdateGroupPreMemberMutation,
+    useDeleteGroupPreMemberMutation,
 } from "../../features/group/groupApi";
 import { useGetLeaguesQuery, useGetLeagueParticipantsQuery, useUpdateParticipantMutation } from "../../features/league/leagueApi";
 import type { LeagueParticipantItem } from "../../features/league/leagueApi";
@@ -131,10 +133,10 @@ export default function GroupManage() {
     const [selectedParticipant, setSelectedParticipant] = useState<{ leagueId: string; participant: LeagueParticipantItem } | null>(null);
     const [memberEditOpen, setMemberEditOpen] = useState(false);
     const [preMemberDialogOpen, setPreMemberDialogOpen] = useState(false);
-    const [selectedMember, setSelectedMember] = useState<{ id: string; name: string; email: string; role: "owner" | "admin" | "member"; division?: string; externalAliases?: string[]; managementPermissions?: ManagementPermissions } | null>(null);
+    const [selectedMember, setSelectedMember] = useState<{ id: string; name: string; email: string; role: "owner" | "admin" | "member"; division?: string; externalAliases?: string[]; managementPermissions?: ManagementPermissions; isPreMember?: boolean } | null>(null);
     const [pendingOwnerTransfer, setPendingOwnerTransfer] = useState<{
         member: NonNullable<typeof selectedMember>;
-        updated: { role: "owner" | "admin" | "member"; division: string; externalAliases: string[]; managementPermissions: ManagementPermissions };
+        updated: { name: string; role: "owner" | "admin" | "member"; division: string; externalAliases: string[]; managementPermissions: ManagementPermissions };
     } | null>(null);
     const [ownerTransferStep, setOwnerTransferStep] = useState<1 | 2>(1);
     const [previousOwnerAction, setPreviousOwnerAction] = useState<"" | "admin" | "member" | "leave">("");
@@ -143,6 +145,8 @@ export default function GroupManage() {
     const [memberSort, setMemberSort] = useState<MemberSortOption>("division");
     const [pendingMemberSort, setPendingMemberSort] = useState<MemberSortOption>("division");
     const [memberSortDialogOpen, setMemberSortDialogOpen] = useState(false);
+    const [updatePreMember] = useUpdateGroupPreMemberMutation();
+    const [deletePreMember] = useDeleteGroupPreMemberMutation();
 
     const leagueManagementRef = useRef<HTMLDivElement>(null);
 
@@ -428,15 +432,16 @@ export default function GroupManage() {
     };
 
     const handleOpenMemberEdit = (member: typeof members[0]) => {
-        if (member.is_pre_member || member.user_id == null) return;
+        if (!member.is_pre_member && member.user_id == null) return;
         setSelectedMember({
-            id: String(member.user_id),
+            id: String(member.is_pre_member ? member.id : member.user_id),
             name: member.name || member.email || "",
             email: member.email || "",
-            role: member.role as "owner" | "admin" | "member",
+            role: member.is_pre_member ? "member" : member.role as "owner" | "admin" | "member",
             division: member.division || "",
             externalAliases: (member.external_aliases || []).map((item) => item.alias),
             managementPermissions: member.management_permissions,
+            isPreMember: member.is_pre_member,
         });
         setMemberEditOpen(true);
     };
@@ -446,8 +451,15 @@ export default function GroupManage() {
         setSelectedMember(null);
     };
 
-    const handleSaveMemberEdit = async (updated: { role: "owner" | "admin" | "member"; division: string; externalAliases: string[]; managementPermissions: ManagementPermissions }) => {
+    const handleSaveMemberEdit = async (updated: { name: string; role: "owner" | "admin" | "member"; division: string; externalAliases: string[]; managementPermissions: ManagementPermissions }) => {
         if (!selectedMember || !id) return;
+        if (selectedMember.isPreMember) {
+            try {
+                await updatePreMember({ groupId: id, preMemberId: selectedMember.id, name: updated.name, division: updated.division.trim(), externalAliases: updated.externalAliases }).unwrap();
+                handleCloseMemberEdit();
+            } catch (error) { console.error("Failed to update pre-member:", error); }
+            return;
+        }
         if (updated.role === "owner" && selectedMember.role !== "owner") {
             setPendingOwnerTransfer({ member: selectedMember, updated });
             setOwnerTransferStep(1);
@@ -510,6 +522,11 @@ export default function GroupManage() {
             return;
         }
         try {
+            if (selectedMember.isPreMember) {
+                await deletePreMember({ groupId: id, preMemberId: selectedMember.id }).unwrap();
+                handleCloseMemberEdit();
+                return;
+            }
             await removeMember({ groupId: id, userId: selectedMember.id }).unwrap();
             handleCloseMemberEdit();
         } catch (error) {
@@ -727,7 +744,7 @@ export default function GroupManage() {
                                                     승인
                                                 </Button>
                                             )}
-                                            {canManage && !member.is_pre_member && member.user_id != null && (
+                                            {canManage && (member.is_pre_member || member.user_id != null) && (
                                                 <IconButton
                                                     size="small"
                                                     onClick={() => handleOpenMemberEdit(member)}

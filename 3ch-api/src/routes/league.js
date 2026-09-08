@@ -11,6 +11,7 @@ const { rebuildSportRankingByLeagueId } = require('../services/sportRanking');
 const { scanOmrImageWithPython } = require('../services/omrScanner');
 const { scanLeagueSheetWithOpenAIVision, scanParticipantNamesWithOpenAIVision } = require('../services/openaiVisionScanner');
 const { FEATURES, consumeFeatureCredit, refundFeatureCredit } = require('../services/featureUsageService');
+const { getPointRanking, ensureDefaultRankingSeasons, normalizePointRules } = require('../services/pointRanking');
 
 const isWebPushConfigured = Boolean(
   process.env.VAPID_MAILTO && process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY,
@@ -31,6 +32,15 @@ async function getLeagueManager(client, leagueId, userId) {
   const member = result.rows[0];
   return member?.role === 'owner'
     || (member?.role === 'admin' && member.management_permissions?.league === true);
+}
+
+async function getLeagueRankingManager(client, leagueId, userId) {
+  const result = await client.query(
+    `SELECT gm.role, gm.management_permissions FROM leagues l JOIN group_members gm ON gm.group_id = l.group_id WHERE l.id = $1 AND gm.user_id = $2`,
+    [leagueId, userId],
+  );
+  const member = result.rows[0];
+  return member?.role === 'owner' || (member?.role === 'admin' && member.management_permissions?.ranking === true);
 }
 
 if (isWebPushConfigured) {
@@ -2482,6 +2492,53 @@ router.post('/league/:leagueId/participants', optionalAuth, async (req, res) => 
  *       500:
  *         description: 서버 오류
  */
+router.get('/league/:id/point-ranking', optionalAuth, async (req, res) => {
+  try {
+    const found = await pool.query(`SELECT id, group_id, start_date, name FROM leagues WHERE id=$1`, [req.params.id]);
+    const league = found.rows[0];
+    if (!league?.group_id) return res.status(404).json({ message: '클럽 리그를 찾을 수 없습니다.' });
+    await ensureDefaultRankingSeasons(league.group_id);
+    const seasonRows = await pool.query(`SELECT id,name,start_date,end_date,is_default,is_display_default,point_rules FROM group_ranking_seasons WHERE group_id=$1 AND $2::date BETWEEN start_date AND end_date ORDER BY is_display_default DESC,is_default ASC,start_date DESC`, [league.group_id, league.start_date]);
+    const season = seasonRows.rows.find((row) => row.id === String(req.query.season_id || '')) ?? seasonRows.rows[0];
+    if (!season) return res.status(404).json({ message: '적용할 시즌이 없습니다.' });
+    const saved = await pool.query(`SELECT enabled,point_rules FROM league_point_ranking_overrides WHERE league_id=$1 AND season_id=$2`, [league.id, season.id]).catch(() => ({ rows: [] }));
+    const adjustments = await pool.query(`SELECT participant_id,league_points::float,tournament_points::float,championships FROM league_point_ranking_adjustments WHERE league_id=$1 AND season_id=$2`, [league.id, season.id]).catch(() => ({ rows: [] }));
+    const participants = await pool.query(`SELECT id,member_id,name,division FROM league_participants WHERE league_id=$1 AND status='active' ORDER BY sort_order NULLS LAST,created_at`, [league.id]);
+    const ranking = await getPointRanking(league.group_id, undefined, 'club', season.id, league.id);
+    return res.json({ ...ranking, league_info: league, seasons: seasonRows.rows, season,
+      override_enabled: saved.rows[0]?.enabled === true,
+      point_rules: normalizePointRules(saved.rows[0]?.enabled ? saved.rows[0].point_rules : season.point_rules),
+      adjustments: adjustments.rows, participants: participants.rows,
+      can_manage: req.user ? await getLeagueRankingManager(pool, league.id, req.user.sub) : false });
+  } catch (error) { console.error('리그 순위 조회 실패:', error); return res.status(500).json({ message: '리그 순위를 불러오지 못했습니다.' }); }
+});
+
+router.put('/league/:id/point-ranking/settings', requireAuth, async (req, res) => {
+  try {
+    if (!await getLeagueRankingManager(pool, req.params.id, req.user.sub)) return res.status(403).json({ message: '순위 관리 권한이 없습니다.' });
+    const seasonId = String(req.body?.season_id || '');
+    const valid = await pool.query(`SELECT 1 FROM leagues l JOIN group_ranking_seasons s ON s.group_id=l.group_id AND l.start_date::date BETWEEN s.start_date AND s.end_date WHERE l.id=$1 AND s.id=$2`, [req.params.id, seasonId]);
+    if (!valid.rowCount) return res.status(400).json({ message: '적용할 수 없는 시즌입니다.' });
+    const rules = normalizePointRules(req.body?.point_rules);
+    await pool.query(`INSERT INTO league_point_ranking_overrides (league_id,season_id,enabled,point_rules,updated_by_id) VALUES ($1,$2,$3,$4::jsonb,$5) ON CONFLICT (league_id,season_id) DO UPDATE SET enabled=EXCLUDED.enabled,point_rules=EXCLUDED.point_rules,updated_by_id=EXCLUDED.updated_by_id,updated_at=CURRENT_TIMESTAMP`, [req.params.id, seasonId, req.body?.enabled === true, JSON.stringify(rules), req.user.sub]);
+    return res.json({ message: '저장되었습니다.' });
+  } catch (error) { console.error(error); return res.status(500).json({ message: '설정 저장에 실패했습니다.' }); }
+});
+
+router.put('/league/:id/point-ranking/adjustments', requireAuth, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    if (!await getLeagueRankingManager(client, req.params.id, req.user.sub)) return res.status(403).json({ message: '순위 관리 권한이 없습니다.' });
+    const seasonId = String(req.body?.season_id || '');
+    const items = z.array(z.object({ participant_id:z.string(), league_points:z.number().min(-10000).max(10000), tournament_points:z.number().min(-10000).max(10000), championships:z.number().int().min(-100).max(100) })).parse(req.body?.adjustments ?? []);
+    await client.query('BEGIN');
+    await client.query(`DELETE FROM league_point_ranking_adjustments WHERE league_id=$1 AND season_id=$2`, [req.params.id, seasonId]);
+    for (const item of items) await client.query(`INSERT INTO league_point_ranking_adjustments (league_id,season_id,participant_id,league_points,tournament_points,championships,updated_by_id) SELECT $1,$2,lp.id,$4,$5,$6,$7 FROM league_participants lp WHERE lp.id=$3 AND lp.league_id=$1`, [req.params.id,seasonId,item.participant_id,item.league_points,item.tournament_points,item.championships,req.user.sub]);
+    await client.query('COMMIT'); return res.json({ message: '저장되었습니다.' });
+  } catch (error) { await client.query('ROLLBACK').catch(() => {}); console.error(error); return res.status(400).json({ message: '포인트 저장에 실패했습니다.' }); }
+  finally { client.release(); }
+});
+
 router.get('/league/:id', optionalAuth, async (req, res) => {
   try {
     const { id } = req.params;

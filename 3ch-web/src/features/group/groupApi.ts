@@ -95,6 +95,7 @@ export interface GroupPreMember {
   id: string;
   name: string;
   division?: string | null;
+  external_aliases?: string[];
   status: "active" | "linked" | "deleted";
   created_at: string;
   claim_id?: string | null;
@@ -703,6 +704,11 @@ export const groupApi = baseApi.injectEndpoints({
       ],
     }),
 
+    updateGroupPreMember: builder.mutation<{ message: string; pre_member: GroupPreMember }, { groupId: string; preMemberId: string; name: string; division: string; externalAliases: string[] }>({
+      query: ({ groupId, preMemberId, name, division, externalAliases }) => ({ url: `/group/${groupId}/pre-members/${preMemberId}`, method: "PATCH", body: { name, division, external_aliases: externalAliases } }),
+      invalidatesTags: (_r, _e, { groupId }) => [{ type: "Group", id: groupId }, { type: "Group", id: `pre-members-${groupId}` }, "Group"],
+    }),
+
     requestGroupMemberClaim: builder.mutation<{ message: string }, { groupId: string; preMemberId: string }>({
       async queryFn({ groupId, preMemberId }, api, _extraOptions, fetchWithBQ) {
         const token = (api.getState() as RootState).auth?.token;
@@ -1136,6 +1142,7 @@ export const {
   useGetGroupPreMembersQuery,
   useCreateGroupPreMemberMutation,
   useDeleteGroupPreMemberMutation,
+  useUpdateGroupPreMemberMutation,
   useRequestGroupMemberClaimMutation,
   useReviewGroupMemberClaimMutation,
   useUpdateMemberRoleMutation,

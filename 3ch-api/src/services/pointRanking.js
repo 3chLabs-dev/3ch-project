@@ -189,10 +189,9 @@ function applyMatchPoints(rowsA, rowsB, scoreA, scoreB, pointRules, memberACount
   }
 }
 
-function finalizeRows(sectionMap, pointRules) {
+function finalizeRows(sectionMap) {
   const rows = Array.from(sectionMap.values());
   rows.forEach((row) => {
-    row.attendance_points = row.attendance_count * pointRules.attendance[row.section];
     row.score_points = roundPoint(row.score_points);
     row.total_points = roundPoint(row.attendance_points + row.score_points + row.bonus_points);
     row.win_rate = row.matches_played > 0
@@ -388,7 +387,7 @@ async function ensureDefaultRankingSeasons(groupId) {
   );
 }
 
-async function getPointRanking(groupId, year, scope, seasonId) {
+async function getPointRanking(groupId, year, scope, seasonId, onlyLeagueId = null) {
   const groupResult = await pool.query(
     `SELECT id, name, sport FROM groups WHERE id = $1`,
     [groupId],
@@ -442,6 +441,12 @@ async function getPointRanking(groupId, year, scope, seasonId) {
   const rangeStart = noActiveSeason ? "0001-01-01" : (selectedSeason?.start_date ?? `${targetYear}-01-01`);
   const rangeEnd = noActiveSeason ? "0001-01-01" : (selectedSeason?.end_date ?? `${targetYear}-12-31`);
   const pointRules = normalizePointRules(selectedSeason?.point_rules);
+  const overrideResult = selectedSeason ? await pool.query(
+    `SELECT league_id, point_rules FROM league_point_ranking_overrides WHERE season_id = $1 AND enabled = true`,
+    [selectedSeason.id],
+  ).catch(() => ({ rows: [] })) : { rows: [] };
+  const leagueRuleOverrides = new Map(overrideResult.rows.map((row) => [String(row.league_id), normalizePointRules(row.point_rules)]));
+  const rulesForLeague = (leagueId) => leagueRuleOverrides.get(String(leagueId)) ?? pointRules;
 
   const leagueFilterSql = normalizedScope === "club"
     ? `l.group_id = $1::text`
@@ -556,16 +561,17 @@ async function getPointRanking(groupId, year, scope, seasonId) {
        FROM group_pre_members pm
        WHERE pm.group_id = l.group_id
          AND pm.status = 'active'
-         AND pm.name = lp.name
+         AND (pm.name = lp.name OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(pm.external_aliases) alias_value WHERE alias_value = lp.name))
      ) matched_pre ON lp.member_id IS NULL
      WHERE ${leagueFilterSql}
        AND ${scopedDateSql}
+       AND ($4::text IS NULL OR l.id = $4::text)
        AND (
          COALESCE(lp.member_id, CASE WHEN matched.matched_count = 1 THEN matched.user_id ELSE NULL END) IS NOT NULL
          OR matched_pre.matched_count = 1
        )
      ORDER BY l.start_date ASC, lp.created_at ASC`,
-    [scopeValue, rangeStart, rangeEnd],
+    [scopeValue, rangeStart, rangeEnd, onlyLeagueId],
   );
 
   const matchColumnResult = await pool.query(
@@ -655,8 +661,9 @@ async function getPointRanking(groupId, year, scope, seasonId) {
      ) matched_b ON pb.member_id IS NULL
      WHERE ${leagueFilterSql}
        AND ${scopedDateSql}
+       AND ($4::text IS NULL OR l.id = $4::text)
      ORDER BY l.start_date ASC, m.created_at ASC, m.match_order ASC`,
-    [scopeValue, rangeStart, rangeEnd],
+    [scopeValue, rangeStart, rangeEnd, onlyLeagueId],
   );
 
   const leagueRows = new Map();
@@ -781,7 +788,7 @@ async function getPointRanking(groupId, year, scope, seasonId) {
       .map((memberId) => ensureRow(targetRows, memberId, baseMembers.get(memberId), section))
       .filter(Boolean);
     if (includeMatchPoints) {
-      applyMatchPoints(rowsA, rowsB, scoreA, scoreB, pointRules, memberAIds.length, memberBIds.length);
+      applyMatchPoints(rowsA, rowsB, scoreA, scoreB, rulesForLeague(match.league_id), memberAIds.length, memberBIds.length);
     }
 
     if (scoreA === scoreB) return;
@@ -833,10 +840,12 @@ async function getPointRanking(groupId, year, scope, seasonId) {
   leagueParticipantSets.forEach((set, memberId) => {
     const row = ensureRow(leagueRows, memberId, baseMembers.get(memberId), "league");
     row.attendance_count = set.size;
+    row.attendance_points = roundPoint([...set].reduce((sum, leagueId) => sum + rulesForLeague(leagueId).attendance.league, 0));
   });
   tournamentParticipantSets.forEach((set, memberId) => {
     const row = ensureRow(tournamentRows, memberId, baseMembers.get(memberId), "tournament");
     row.attendance_count = set.size;
+    row.attendance_points = roundPoint([...set].reduce((sum, leagueId) => sum + rulesForLeague(leagueId).attendance.tournament, 0));
   });
 
   leagueGroups.forEach((matches, groupKey) => {
@@ -878,7 +887,7 @@ async function getPointRanking(groupId, year, scope, seasonId) {
 
     const standings = Array.from(statMap.values()).sort(compareStanding);
     if (standings[0]) standingWinners.set(groupKey, standings[0].member_ids);
-    const bonusRule = getBonusRule(pointRules, "league", sample._rankingFormat, sample._rankingOption);
+    const bonusRule = getBonusRule(rulesForLeague(sample.league_id), "league", sample._rankingFormat, sample._rankingOption);
     standings.slice(0, 4).forEach((standing, index) => {
       const divisor = standing.member_ids.length;
       standing.member_ids.forEach((memberId) => {
@@ -892,7 +901,8 @@ async function getPointRanking(groupId, year, scope, seasonId) {
     if (matches.length === 0) return;
     const sample = matches[0];
     const lowerMembers = lowerTournamentMembers.get(`${sample.league_id}:${sample.program_round ?? 0}`) ?? new Set();
-    const excludeUpperPoints = pointRules.rankings.tournamentLower.excludeUpperPointsOnLowerAdvance === true;
+    const leagueRules = rulesForLeague(sample.league_id);
+    const excludeUpperPoints = leagueRules.rankings.tournamentLower.excludeUpperPointsOnLowerAdvance === true;
     const eligibleBonusIds = (memberIds) => eligibleTournamentBonusMemberIds(
       memberIds,
       sample._rankingOption,
@@ -965,7 +975,7 @@ async function getPointRanking(groupId, year, scope, seasonId) {
         if (row) awardBonus(row, rank, rule, divisor);
       });
     };
-    const bonusRule = getBonusRule(pointRules, "tournament", sample._rankingFormat, sample._rankingOption);
+    const bonusRule = getBonusRule(leagueRules, "tournament", sample._rankingFormat, sample._rankingOption);
     if (bonusRule.enabled !== false) {
       matches.forEach((match) => {
         const eliminationRound = tournamentEliminationRound(match);
@@ -1072,8 +1082,27 @@ async function getPointRanking(groupId, year, scope, seasonId) {
     }
   });
 
-  const leagueRankings = finalizeRows(leagueRows, pointRules);
-  const tournamentRankings = finalizeRows(tournamentRows, pointRules);
+  if (selectedSeason) {
+    const adjustments = await pool.query(
+      `SELECT participant_id, league_points, tournament_points, championships
+         FROM league_point_ranking_adjustments
+        WHERE season_id = $1 AND ($2::text IS NULL OR league_id = $2::text)`,
+      [selectedSeason.id, onlyLeagueId],
+    ).catch(() => ({ rows: [] }));
+    adjustments.rows.forEach((adjustment) => {
+      const memberId = participantMembers.get(String(adjustment.participant_id));
+      if (!memberId) return;
+      const leagueRow = leagueRows.get(String(memberId));
+      const tournamentRow = tournamentRows.get(String(memberId));
+      if (leagueRow) leagueRow.bonus_points = roundPoint(leagueRow.bonus_points + Number(adjustment.league_points || 0));
+      if (tournamentRow) {
+        tournamentRow.bonus_points = roundPoint(tournamentRow.bonus_points + Number(adjustment.tournament_points || 0));
+        tournamentRow.championships += Number(adjustment.championships || 0);
+      }
+    });
+  }
+  const leagueRankings = finalizeRows(leagueRows);
+  const tournamentRankings = finalizeRows(tournamentRows);
 
   return {
     group: {
@@ -1101,6 +1130,7 @@ async function getPointRanking(groupId, year, scope, seasonId) {
 module.exports = {
   getPointRanking,
   ensureDefaultRankingSeasons,
+  normalizePointRules,
   _test: {
     awardBonus,
     awardChampionship,

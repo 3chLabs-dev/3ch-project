@@ -2,6 +2,7 @@ import { baseApi } from "../api/baseApi";
 import type { RootState } from "../../app/store";
 import { getLocalDevProfileByToken, isLocalDevToken } from "../../utils/localDevAuth";
 import type { RoundConfig } from "./types/tournament.types";
+import type { GroupRankingPointRules, PointRankingRow } from "../group/groupApi";
 import {
   addLocalDevParticipants,
   deleteLocalDevProgram,
@@ -162,6 +163,19 @@ export interface GetLeaguesParams {
   group_id?: string;
   my_groups?: boolean;
   user_id?: number;
+}
+
+export interface LeaguePointRankingResponse {
+  league_info: { id: string; name: string; group_id: string };
+  season: { id: string; name: string };
+  seasons: Array<{ id: string; name: string }>;
+  override_enabled: boolean;
+  point_rules: GroupRankingPointRules;
+  can_manage: boolean;
+  league: { rankings: PointRankingRow[] };
+  tournament: { rankings: PointRankingRow[] };
+  participants: Array<{ id: string; member_id?: number | null; name: string; division?: string | null }>;
+  adjustments: Array<{ participant_id: string; league_points: number; tournament_points: number; championships: number }>;
 }
 
 export interface GetMyGroupLeaguesParams {
@@ -657,6 +671,19 @@ export const leagueApi = baseApi.injectEndpoints({
         return result.error ? { error: result.error } : { data: result.data as GetLeagueParticipantsResponse };
       },
       providesTags: (_result, _error, id) => [{ type: "League", id }],
+    }),
+
+    getLeaguePointRanking: builder.query<LeaguePointRankingResponse, { leagueId: string; seasonId?: string }>({
+      query: ({ leagueId, seasonId }) => ({ url: `/league/${leagueId}/point-ranking`, params: seasonId ? { season_id: seasonId } : undefined }),
+      providesTags: (_r, _e, { leagueId }) => [{ type: "League", id: `point-ranking-${leagueId}` }],
+    }),
+    updateLeaguePointRankingSettings: builder.mutation<void, { leagueId: string; seasonId: string; enabled: boolean; pointRules: GroupRankingPointRules }>({
+      query: ({ leagueId, seasonId, enabled, pointRules }) => ({ url: `/league/${leagueId}/point-ranking/settings`, method: "PUT", body: { season_id: seasonId, enabled, point_rules: pointRules } }),
+      invalidatesTags: (_r, _e, { leagueId }) => [{ type: "League", id: `point-ranking-${leagueId}` }],
+    }),
+    updateLeaguePointRankingAdjustments: builder.mutation<void, { leagueId: string; seasonId: string; adjustments: Array<{ participant_id: string; league_points: number; tournament_points: number; championships: number }> }>({
+      query: ({ leagueId, seasonId, adjustments }) => ({ url: `/league/${leagueId}/point-ranking/adjustments`, method: "PUT", body: { season_id: seasonId, adjustments } }),
+      invalidatesTags: (_r, _e, { leagueId }) => [{ type: "League", id: `point-ranking-${leagueId}` }],
     }),
 
     getMyLeagueInvitations: builder.query<{ invitations: LeagueInvitationItem[] }, void>({
@@ -1300,6 +1327,9 @@ export const {
   useCreateLeagueMutation,
   useGetLeagueQuery,
   useGetLeagueParticipantsQuery,
+  useGetLeaguePointRankingQuery,
+  useUpdateLeaguePointRankingSettingsMutation,
+  useUpdateLeaguePointRankingAdjustmentsMutation,
   useGetMyLeagueInvitationsQuery,
   useGetLeagueInvitedGroupsQuery,
   useInviteGroupsToLeagueMutation,

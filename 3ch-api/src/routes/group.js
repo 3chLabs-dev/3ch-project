@@ -1011,7 +1011,8 @@ router.get('/group/:id', requireAuth, async (req, res) => {
 
         SELECT pm.id, 'pre_member'::text AS role, pm.division,
                pm.created_at AS joined_at, pending_user.id AS user_id, pm.name,
-               NULL::text AS email, true AS is_pre_member, '[]'::jsonb AS external_aliases,
+               NULL::text AS email, true AS is_pre_member,
+               COALESCE((SELECT jsonb_agg(jsonb_build_object('id', alias_value, 'alias', alias_value, 'source', 'external')) FROM jsonb_array_elements_text(pm.external_aliases) alias_value), '[]'::jsonb) AS external_aliases,
                pending_claim.id::text AS claim_id, pending_claim.status AS claim_status, '{}'::jsonb AS management_permissions,
                pending_claim.requested_by_id, pending_user.name AS requester_name,
                CASE WHEN pending_claim.status = 'pending' THEN 3 ELSE 4 END AS role_order
@@ -1198,7 +1199,7 @@ router.get('/group/:id/pre-members', requireAuth, async (req, res) => {
     );
     const myRole = roleResult.rows[0]?.role || null;
     const result = await pool.query(
-      `SELECT pm.id, pm.name, pm.division, pm.status, pm.created_at,
+      `SELECT pm.id, pm.name, pm.division, pm.external_aliases, pm.status, pm.created_at,
               c.id AS claim_id, c.status AS claim_status, c.requested_by_id,
               c.requested_at, u.name AS requester_name
        FROM group_pre_members pm
@@ -1240,6 +1241,26 @@ router.post('/group/:id/pre-members', requireAuth, requireGroupPermission('membe
     console.error('Error creating group pre-member:', error);
     res.status(500).json({ message: '회원 사전등록에 실패했습니다.' });
   }
+});
+
+router.patch('/group/:id/pre-members/:preMemberId', requireAuth, requireGroupPermission('members'), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const name = String(req.body?.name || '').normalize('NFKC').trim();
+    const division = String(req.body?.division || '').trim() || null;
+    const aliases = [...new Map((Array.isArray(req.body?.external_aliases) ? req.body.external_aliases : []).map((value) => String(value || '').normalize('NFKC').trim()).filter((value) => value && value.length <= 60).map((value) => [value.replace(/\s+/g, '').toLocaleLowerCase('ko-KR'), value])).values()];
+    if (!name) return res.status(400).json({ message: '이름을 입력해 주세요.' });
+    if (aliases.length > 20) return res.status(400).json({ message: '외부 닉네임은 최대 20개까지 등록할 수 있습니다.' });
+    await client.query('BEGIN');
+    const current = await client.query(`SELECT name FROM group_pre_members WHERE id=$1 AND group_id=$2 AND status='active' FOR UPDATE`, [req.params.preMemberId, req.params.id]);
+    if (!current.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ message: '사전등록 회원을 찾을 수 없습니다.' }); }
+    const duplicate = await client.query(`SELECT 1 FROM group_pre_members WHERE group_id=$1 AND status='active' AND name=$2 AND id<>$3`, [req.params.id, name, req.params.preMemberId]);
+    if (duplicate.rowCount) { await client.query('ROLLBACK'); return res.status(409).json({ message: '같은 이름의 사전등록 회원이 있습니다.' }); }
+    const updated = await client.query(`UPDATE group_pre_members SET name=$1,division=$2,external_aliases=$3::jsonb,updated_at=NOW() WHERE id=$4 RETURNING id,name,division,external_aliases,status,created_at`, [name,division,JSON.stringify(aliases),req.params.preMemberId]);
+    await client.query(`UPDATE league_participants lp SET name=$1,division=$2 FROM leagues l WHERE lp.league_id=l.id AND lp.member_id IS NULL AND (l.group_id=$3 OR lp.source_group_id=$3) AND lp.name=$4`, [name,division,req.params.id,current.rows[0].name]);
+    await client.query('COMMIT'); return res.json({ message: '사전등록 회원을 수정했습니다.', pre_member: updated.rows[0] });
+  } catch (error) { await client.query('ROLLBACK').catch(() => {}); console.error(error); return res.status(500).json({ message: '사전등록 회원 수정에 실패했습니다.' }); }
+  finally { client.release(); }
 });
 
 router.delete('/group/:id/pre-members/:preMemberId', requireAuth, requireGroupPermission('members'), async (req, res) => {

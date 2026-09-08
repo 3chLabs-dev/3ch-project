@@ -46,6 +46,7 @@ import GroupRankingDetailPage from "../pages/group/GroupRankingDetailPage";
 import GroupMemberRankingDetailPage from "../pages/group/GroupMemberRankingDetailPage";
 import DrawMain from "../pages/draw/DrawMain";
 import LeagueDetail from "../pages/league/LeagueDetail";
+import LeaguePointRankingPage from "../pages/league/LeaguePointRankingPage";
 import LeagueGrouping from "../pages/league/LeagueGrouping";
 import LeagueOmrSheet from "../pages/league/LeagueOmrSheet";
 import LeagueOcrSheet from "../pages/league/LeagueOcrSheet";
@@ -106,6 +107,7 @@ export const router = createBrowserRouter([
       { path: "/league/new", element: <LeagueRenewalCreationWizard /> },
       { path: "/league/renewal", element: <LeagueRenewalCreationWizard /> },
       { path: "/league/:id", element: <LeagueDetail /> },
+      { path: "/league/:id/ranking", element: <LeaguePointRankingPage /> },
       { path: "/league/:id/bracket", element: <LeagueGPTVisionSheet /> },
       { path: "/league/:id/grouping", element: <LeagueGrouping /> },
       { path: "/league/:id/omr", element: <LeagueOmrSheet /> },

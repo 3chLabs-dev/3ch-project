@@ -16,6 +16,8 @@ import {
   Typography,
   Chip,
   TextField,
+  Checkbox,
+  FormControlLabel,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
@@ -319,6 +321,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
   const [groupStructureRoundIndex, setGroupStructureRoundIndex] = useState<number | null>(null);
   const [groupStructureMode, setGroupStructureMode] = useState<"group" | "team">("group");
   const [isStructuredReshuffle, setIsStructuredReshuffle] = useState(false);
+  const [inheritPreviousTeamFormation, setInheritPreviousTeamFormation] = useState(false);
   const [isCustomStructureSelected, setIsCustomStructureSelected] = useState(false);
   const [customStructureCount, setCustomStructureCount] = useState(1);
   const [pendingGroupStructureSizes, setPendingGroupStructureSizes] = useState<number[]>([]);
@@ -560,6 +563,8 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
       teamFormationSizes: previousBlock.teamFormationSizes,
       teamShuffleSeed: previousBlock.teamShuffleSeed,
       teamAssignments: previousBlock.teamAssignments,
+      teamAssignmentModes: previousBlock.teamAssignmentModes,
+      teamAssignmentLocks: previousBlock.teamAssignmentLocks,
     };
   };
   const activeFormationBlock = formationDialog
@@ -700,6 +705,17 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
     return programPlayers.length;
   };
   const groupStructureMemberCount = getGroupStructureUnitCount(groupStructureBlock);
+  const previousTeamFormationBlock = groupStructureRoundIndex !== null && groupStructureRoundIndex > 0
+    ? resolveFormationBlock(groupStructureRoundIndex - 1)
+    : undefined;
+  const canInheritPreviousTeamFormation = groupStructureMode === "team"
+    && groupStructureRoundIndex !== null
+    && groupStructureRoundIndex > 0
+    && previousTeamFormationBlock?.type === "TEAM"
+    && Boolean(
+      storedProgram?.rounds?.[groupStructureRoundIndex - 1]?.teamFormationPublished
+      || storedProgram?.blocks?.[groupStructureRoundIndex - 1]?.teamFormationPublished,
+    );
   const buildBalancedStructureSizes = (total: number, count: number) => {
     const safeCount = Math.max(1, Math.min(total, Math.trunc(count)));
     return Array.from(
@@ -758,6 +774,11 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
         : generateGroupOptions(unitCount)[0]?.groups ?? [unitCount];
     setGroupStructureMode(mode);
     setIsStructuredReshuffle(reshuffle);
+    setInheritPreviousTeamFormation(
+      mode === "team"
+      && roundIndex > 0
+      && Boolean(storedProgram?.rounds?.[roundIndex]?.inheritPreviousTeamFormation ?? block?.inheritPreviousTeamFormation),
+    );
     setIsCustomStructureSelected(false);
     setCustomStructureCount(currentSizes.length);
     setPendingGroupStructureSizes(currentSizes);
@@ -768,6 +789,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
     if (isFormationStarting) return;
     setGroupStructureRoundIndex(null);
     setIsStructuredReshuffle(false);
+    setInheritPreviousTeamFormation(false);
     setIsCustomStructureSelected(false);
     setPendingGroupStructureSizes([]);
   };
@@ -814,6 +836,21 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
     if (groupStructureRoundIndex == null || !storedProgram || pendingGroupStructureSizes.length === 0) return;
     const block = storedProgram.blocks?.[groupStructureRoundIndex];
     if (!block) return;
+    const inheritPreviousTeam = groupStructureMode === "team"
+      && inheritPreviousTeamFormation
+      && canInheritPreviousTeamFormation
+      && previousTeamFormationBlock?.type === "TEAM";
+    const inheritedTeamValues = inheritPreviousTeam
+      ? {
+          inheritPreviousTeamFormation: true,
+          teamFormationSizes: previousTeamFormationBlock.teamFormationSizes,
+          teamPlayerCount: previousTeamFormationBlock.teamPlayerCount,
+          teamAssignments: previousTeamFormationBlock.teamAssignments,
+          teamAssignmentModes: previousTeamFormationBlock.teamAssignmentModes,
+          teamAssignmentLocks: previousTeamFormationBlock.teamAssignmentLocks,
+          teamShuffleSeed: previousTeamFormationBlock.teamShuffleSeed,
+        }
+      : undefined;
     const publishedKey = groupStructureMode === "team" ? "teamFormationPublished" : "groupFormationPublished";
     const nextProgram: StoredProgramOption = {
       ...storedProgram,
@@ -821,42 +858,50 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
         ? {
             ...currentBlock,
             [publishedKey]: true,
+            ...(inheritedTeamValues ?? {}),
             ...(isGroupStructureReadOnly
               ? {}
               : groupStructureMode === "team"
-              ? {
-                  teamFormationSizes: pendingGroupStructureSizes,
-                  teamPlayerCount: pendingGroupStructureSizes[0],
-                  teamAssignments: undefined,
-                  teamAssignmentModes: undefined,
-                  teamAssignmentLocks: undefined,
-                  teamShuffleSeed: (currentBlock.teamShuffleSeed ?? (index + 1) * 1000 + 101) + 1,
-                }
-              : {
-                  groupSizes: pendingGroupStructureSizes,
-                  groupAssignments: undefined,
-                  groupShuffleSeed: (currentBlock.groupShuffleSeed ?? (index + 1) * 1000 + 503) + 1,
-                }),
+                ? inheritPreviousTeam
+                  ? {}
+                  : {
+                      inheritPreviousTeamFormation: false,
+                      teamFormationSizes: pendingGroupStructureSizes,
+                      teamPlayerCount: pendingGroupStructureSizes[0],
+                      teamAssignments: undefined,
+                      teamAssignmentModes: undefined,
+                      teamAssignmentLocks: undefined,
+                      teamShuffleSeed: (currentBlock.teamShuffleSeed ?? (index + 1) * 1000 + 101) + 1,
+                    }
+                : {
+                    groupSizes: pendingGroupStructureSizes,
+                    groupAssignments: undefined,
+                    groupShuffleSeed: (currentBlock.groupShuffleSeed ?? (index + 1) * 1000 + 503) + 1,
+                  }),
           }
         : currentBlock),
       rounds: storedProgram.rounds?.map((round, index) => index === groupStructureRoundIndex
         ? {
             ...round,
             [publishedKey]: true,
+            ...(inheritedTeamValues ?? {}),
             ...(isGroupStructureReadOnly
               ? {}
               : groupStructureMode === "team"
-              ? {
-                  teamFormationSizes: pendingGroupStructureSizes,
-                  teamPlayerCount: pendingGroupStructureSizes[0],
-                  teamAssignments: undefined,
-                  teamAssignmentModes: undefined,
-                  teamAssignmentLocks: undefined,
-                }
-              : {
-                  groupSizes: pendingGroupStructureSizes,
-                  groupAssignments: undefined,
-                }),
+                ? inheritPreviousTeam
+                  ? {}
+                  : {
+                      inheritPreviousTeamFormation: false,
+                      teamFormationSizes: pendingGroupStructureSizes,
+                      teamPlayerCount: pendingGroupStructureSizes[0],
+                      teamAssignments: undefined,
+                      teamAssignmentModes: undefined,
+                      teamAssignmentLocks: undefined,
+                    }
+                : {
+                    groupSizes: pendingGroupStructureSizes,
+                    groupAssignments: undefined,
+                  }),
           }
         : round),
     };
@@ -867,6 +912,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
     );
     setGroupStructureRoundIndex(null);
     setIsStructuredReshuffle(false);
+    setInheritPreviousTeamFormation(false);
     setIsCustomStructureSelected(false);
     setPendingGroupStructureSizes([]);
     setFormationDialog({ roundIndex, mode: groupStructureMode });
@@ -1765,6 +1811,20 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
             </Stack>
           ) : (
           <>
+          {canInheritPreviousTeamFormation && (
+            <FormControlLabel
+              control={(
+                <Checkbox
+                  checked={inheritPreviousTeamFormation}
+                  onChange={(event) => setInheritPreviousTeamFormation(event.target.checked)}
+                />
+              )}
+              label="이전 라운드와 동일한 팀 편성하기"
+              sx={{ m: 0, mb: inheritPreviousTeamFormation ? 0 : 1.25, "& .MuiFormControlLabel-label": { fontSize: 14, fontWeight: 900 } }}
+            />
+          )}
+          {!inheritPreviousTeamFormation && (
+          <>
           <Typography sx={{ mb: 1.25, color: "#374151", fontSize: 13, fontWeight: 800 }}>
             현재 참가자 {groupStructureMemberCount}명
           </Typography>
@@ -1866,6 +1926,8 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
               </Box>
             )}
           </Stack>
+          </>
+          )}
           </>
           )}
         </DialogContent>

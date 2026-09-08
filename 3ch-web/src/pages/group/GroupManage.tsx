@@ -47,7 +47,6 @@ import {
     useUpdateGroupMutation,
     useDeleteGroupMutation,
     useLeaveGroupMutation,
-    useLazyGeocodeAddressQuery,
     useReviewGroupMemberClaimMutation,
     useUpdateGroupPreMemberMutation,
     useDeleteGroupPreMemberMutation,
@@ -59,8 +58,9 @@ import MemberEditDialog, { type ManagementPermissions } from "./MemberEditDialog
 import GroupPreMemberDialog from "./GroupPreMemberDialog";
 import type { Participant } from "../../features/league/leagueCreationSlice";
 import { getRoleLabel } from "../../utils/permissions";
-import { REGION_DATA } from "./regionData";
+import { CITY_ALIAS_MAP, REGION_DATA } from "./regionData";
 import { formatLeagueDate } from "../../utils/dateUtils";
+import PlaceSearchDialog from "../../components/PlaceSearchDialog";
 
 const kakaoIcon = "/카카오톡_원모양.png";
 
@@ -119,7 +119,6 @@ export default function GroupManage() {
     const [updateMember] = useUpdateMemberMutation();
     const [removeMember] = useRemoveMemberMutation();
     const [updateGroup, { isLoading: isUpdating }] = useUpdateGroupMutation();
-    const [geocode] = useLazyGeocodeAddressQuery();
     const [deleteGroup, { isLoading: isDeleting }] = useDeleteGroupMutation();
     const [leaveGroup, { isLoading: isLeaving }] = useLeaveGroupMutation();
     const [reviewMemberClaim, { isLoading: isReviewingMemberClaim }] = useReviewGroupMemberClaimMutation();
@@ -161,6 +160,7 @@ export default function GroupManage() {
         lat: undefined as number | undefined,
         lng: undefined as number | undefined,
     });
+    const [placeDialogOpen, setPlaceDialogOpen] = useState(false);
 
     const [editLinks, setEditLinks] = useState<GroupLinkInput[]>([
         { label: "", url: "" },
@@ -272,32 +272,8 @@ export default function GroupManage() {
     const isOwner = myRole === "owner";
     const emoji = group.sport ? (SPORT_EMOJI[group.sport] ?? "🏓") : "🏓";
 
-    type DaumWindow = Window & { daum?: { Postcode: new (opts: { oncomplete: (d: { address: string; roadAddress: string }) => void }) => { open: () => void } } };
-
     const handleAddressSearch = () => {
-        const w = window as DaumWindow;
-        const open = () => {
-            new w.daum!.Postcode({
-                oncomplete: async (data) => {
-                    const selected = data.roadAddress || data.address;
-                    setFormData((prev) => ({ ...prev, address: selected, lat: undefined, lng: undefined }));
-                    try {
-                        const result = await geocode(selected).unwrap();
-                        if (result.ok && result.lat !== undefined && result.lng !== undefined) {
-                            setFormData((prev) => ({ ...prev, lat: result.lat, lng: result.lng }));
-                        }
-                    } catch { /* 좌표 없어도 주소는 저장 */ }
-                },
-            }).open();
-        };
-        if (w.daum?.Postcode) {
-            open();
-        } else {
-            const script = document.createElement("script");
-            script.src = "https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js";
-            script.onload = open;
-            document.head.appendChild(script);
-        }
+        setPlaceDialogOpen(true);
     };
 
     const handleAddLink = () => {
@@ -1316,6 +1292,14 @@ export default function GroupManage() {
                     </Button>
                 </DialogActions>
             </Dialog>
+
+            <PlaceSearchDialog open={placeDialogOpen} initialQuery={formData.address} onClose={() => setPlaceDialogOpen(false)} onSelect={(place) => {
+                const [rawCity = "", rawDistrict = ""] = place.address.trim().split(/\s+/);
+                const city = CITY_ALIAS_MAP[rawCity] ?? "";
+                const district = city === "세종특별자치시" ? "세종시" : ((REGION_DATA[city] ?? []).includes(rawDistrict) ? rawDistrict : "");
+                setFormData((prev) => ({ ...prev, address: place.address, lat: place.lat, lng: place.lng, region_city: city, region_district: district }));
+                setPlaceDialogOpen(false);
+            }} />
 
             {/* 클럽 탈퇴 확인 다이얼로그 */}
             <Dialog

@@ -13,14 +13,13 @@ import {
   TextField,
   Typography,
   Divider,
-  CircularProgress,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { setRenewalBasicInfo, setRenewalStep } from "../../features/league/leagueRenewalCreationSlice";
 import LeagueInvitedGroupsPicker from "./LeagueInvitedGroupsPicker";
 import { useGetMyFeatureUsageQuery } from "../../features/payment/usageApi";
-import { useLazySearchLeagueVenuesQuery } from "../../features/group/groupApi";
+import PlaceSearchDialog from "../../components/PlaceSearchDialog";
 
 const rowSx = { display: "grid", gridTemplateColumns: "72px 1fr", alignItems: "center", gap: 2, py: 1.2, borderBottom: "1px solid #D9DDE6" };
 const fieldSx = { "& .MuiOutlinedInput-root": { borderRadius: 0.6, bgcolor: "#fff", height: 32 }, "& .MuiOutlinedInput-input": { py: 0.5, fontSize: "0.95rem" } };
@@ -120,9 +119,6 @@ export default function LeagueRenewalStep1BasicInfo() {
   const [venueRegionCity, setVenueRegionCity] = useState(existing?.venueRegionCity ?? "");
   const [venueRegionDistrict, setVenueRegionDistrict] = useState(existing?.venueRegionDistrict ?? "");
   const [placeDialogOpen, setPlaceDialogOpen] = useState(false);
-  const [placeQuery, setPlaceQuery] = useState("");
-  const [placeSearched, setPlaceSearched] = useState(false);
-  const [searchVenues, { data: placeData, isFetching: placeSearching, isError: placeSearchError, reset: resetPlaceSearch }] = useLazySearchLeagueVenuesQuery();
   const [participantCount, setParticipantCount] = useState<number | "">(existing?.participantCount ?? "");
   const [courtCount, setCourtCount] = useState<number | "">(existing?.courtCount ?? "");
   const [joinPermission, setJoinPermission] = useState<"public" | "club_only">(existing?.joinPermission ?? "club_only");
@@ -145,24 +141,11 @@ export default function LeagueRenewalStep1BasicInfo() {
   const [endHour, endMinute] = endTime ? endTime.split(":") : ["", ""];
   const canNext = useMemo(() => Boolean(title && date && startTime), [date, startTime, title]);
 
-  const runPlaceSearch = (query: string) => {
-    const trimmedQuery = query.trim();
-    if (trimmedQuery.length < 2) return;
-    setPlaceSearched(true);
-    void searchVenues(trimmedQuery);
-  };
-
   const openPlaceSearch = () => {
-    const query = location.trim();
-    setPlaceQuery(query);
-    setPlaceSearched(false);
-    resetPlaceSearch();
     setPlaceDialogOpen(true);
-    runPlaceSearch(query);
   };
 
-  const useDirectPlaceInput = () => {
-    const directLocation = placeQuery.trim();
+  const useDirectPlaceInput = (directLocation: string) => {
     if (!directLocation) return;
     setLocation(directLocation);
     setVenueAddress("");
@@ -286,46 +269,14 @@ export default function LeagueRenewalStep1BasicInfo() {
         </Button>
       </DialogActions>
     </Dialog>
-    <Dialog open={placeDialogOpen} onClose={() => setPlaceDialogOpen(false)} fullWidth maxWidth="sm">
-      <DialogTitle sx={{ fontWeight: 900 }}>주소 검색</DialogTitle>
-      <DialogContent>
-        <Stack direction="row" spacing={1} sx={{ mt: 0.5, mb: 2 }}>
-          <TextField fullWidth size="small" autoFocus value={placeQuery} onChange={(event) => { setPlaceQuery(event.target.value); setPlaceSearched(false); }} onKeyDown={(event) => { if (event.key === "Enter") runPlaceSearch(placeQuery); }} placeholder="탁구장, 체육관 또는 주소" />
-          <Button variant="contained" disabled={placeQuery.trim().length < 2 || placeSearching} onClick={() => runPlaceSearch(placeQuery)}>{placeSearching ? <CircularProgress size={18} color="inherit" /> : "검색"}</Button>
-        </Stack>
-        <Stack spacing={1}>
-          {!placeSearching && (placeData?.places ?? []).map((place) => (
-            <Button
-              key={place.id}
-              variant="outlined"
-              onClick={() => {
-                setLocation(place.name);
-                setVenueAddress(place.address);
-                setVenueLat(place.lat);
-                setVenueLng(place.lng);
-                setVenueRegionCity(place.region_city ?? "");
-                setVenueRegionDistrict(place.region_district ?? "");
-                setPlaceDialogOpen(false);
-              }}
-              sx={{ display: "block", textAlign: "left", px: 1.5, py: 1.1, color: "text.primary" }}
-            >
-              <Typography fontWeight={900} fontSize={14}>{place.name}</Typography>
-              <Typography fontSize={11.5} color="text.secondary">{place.address}</Typography>
-            </Button>
-          ))}
-          {!placeSearching && placeSearched && (placeSearchError || !placeData || placeData.places.length === 0) && (
-            <Stack spacing={1.5} sx={{ py: 2 }}>
-              <Typography textAlign="center" color="text.secondary" sx={{ py: 1 }}>
-                {placeSearchError ? "장소 검색에 연결하지 못했습니다." : "검색 결과가 없습니다."}
-              </Typography>
-              <Button fullWidth variant="outlined" onClick={useDirectPlaceInput} sx={{ bgcolor: "#fff", borderColor: "#2F80ED", color: "#2F80ED", fontWeight: 900, borderRadius: 1.2 }}>
-                직접 입력
-              </Button>
-            </Stack>
-          )}
-        </Stack>
-      </DialogContent>
-      <DialogActions><Button onClick={() => setPlaceDialogOpen(false)}>닫기</Button></DialogActions>
-    </Dialog>
+    <PlaceSearchDialog open={placeDialogOpen} initialQuery={location} onClose={() => setPlaceDialogOpen(false)} allowDirectInput onDirectInput={useDirectPlaceInput} onSelect={(place) => {
+      setLocation(place.name);
+      setVenueAddress(place.address);
+      setVenueLat(place.lat);
+      setVenueLng(place.lng);
+      setVenueRegionCity(place.region_city ?? "");
+      setVenueRegionDistrict(place.region_district ?? "");
+      setPlaceDialogOpen(false);
+    }} />
   </Box>;
 }

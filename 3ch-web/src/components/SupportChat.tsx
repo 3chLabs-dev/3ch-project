@@ -49,6 +49,7 @@ export default function SupportChat() {
   );
   const [open, setOpen] = useState(false);
   const [buttonExpanded, setButtonExpanded] = useState(false);
+  const [hasFloatingAction, setHasFloatingAction] = useState(false);
   const [message, setMessage] = useState("");
   const [room, setRoom] = useState<ChatRoom | null>(null);
   const [items, setItems] = useState<ChatMessage[]>([]);
@@ -97,6 +98,16 @@ export default function SupportChat() {
 
   useEffect(() => {
     setButtonExpanded(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const updateFloatingAction = () => {
+      setHasFloatingAction(Boolean(document.querySelector('[data-support-chat-offset="floating-action"]')));
+    };
+    updateFloatingAction();
+    const observer = new MutationObserver(updateFloatingAction);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
   }, [location.pathname]);
 
   useEffect(() => {
@@ -149,8 +160,6 @@ export default function SupportChat() {
   const isLeagueDetail = !isLeagueCreationPage && /^\/league\/[^/]+\/?$/.test(location.pathname);
   const isClubFloatingActionPage = location.pathname === "/club/create"
     || /^\/club\/[^/]+(?:\/manage)?\/?$/.test(location.pathname);
-  const isRecommendedProgramPage = location.pathname === "/demo/league-algorithm"
-    || /^\/league\/[^/]+\/program\/new\/?$/.test(location.pathname);
 
   return (
     <>
@@ -169,7 +178,7 @@ export default function SupportChat() {
           left: 14,
           bottom: isProgramMatchOrder
             ? "calc(132px + env(safe-area-inset-bottom))"
-            : isLeagueDetail || isClubFloatingActionPage || isRecommendedProgramPage
+            : isLeagueDetail || isClubFloatingActionPage || hasFloatingAction
               ? "calc(124px + env(safe-area-inset-bottom))"
               : "calc(68px + env(safe-area-inset-bottom))",
           minWidth: 0,

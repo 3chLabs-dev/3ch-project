@@ -807,22 +807,37 @@ router.get('/group/place-search', requireAuth, async (req, res) => {
     if (query.length < 2) return res.status(400).json({ ok: false, error: 'QUERY_REQUIRED' });
     const key = process.env.KAKAO_REST_API_KEY;
     if (!key) return res.status(500).json({ ok: false, error: 'KAKAO_KEY_NOT_SET' });
-    const url = `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}&size=10`;
-    const response = await fetch(url, { headers: { Authorization: `KakaoAK ${key}` } });
-    const data = await response.json();
-    const places = (data.documents || []).map((place) => {
+    const queryVariants = [
+      query,
+      query.replace(/(탁구장|탁구클럽|체육관|스포츠센터|문화센터)$/u, ' $1'),
+    ].map((value) => value.replace(/\s+/g, ' ').trim()).filter((value, index, values) => value.length >= 2 && values.indexOf(value) === index);
+    const headers = { Authorization: `KakaoAK ${key}` };
+    const requests = [
+      ...queryVariants.map((value) => fetch(`https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(value)}&size=15`, { headers }).then(async (response) => ({ response, data: await response.json(), source: 'keyword' }))),
+      fetch(`https://dapi.kakao.com/v2/local/search/address.json?query=${encodeURIComponent(query)}&size=10`, { headers }).then(async (response) => ({ response, data: await response.json(), source: 'address' })),
+    ];
+    const results = await Promise.all(requests);
+    const failed = results.find(({ response }) => !response.ok);
+    if (failed) {
+      console.error('Kakao place search failed:', failed.response.status, failed.data);
+      return res.status(502).json({ ok: false, error: 'KAKAO_SEARCH_FAILED' });
+    }
+    const documents = results.flatMap(({ data, source }) => (data.documents || []).map((place) => ({ ...place, _source: source })));
+    const seen = new Set();
+    const places = documents.map((place) => {
       const address = place.road_address_name || place.address_name || '';
       const parts = address.split(/\s+/).filter(Boolean);
       return {
-        id: place.id,
-        name: place.place_name,
+        id: String(place.id || `${place.x}-${place.y}`),
+        name: place.place_name || address,
         address,
+        source: place._source,
         region_city: parts[0] || null,
         region_district: parts[1] || null,
         lat: Number(place.y),
         lng: Number(place.x),
       };
-    });
+    }).filter((place) => place.address && !seen.has(place.id) && seen.add(place.id)).slice(0, 20);
     return res.json({ ok: true, places });
   } catch (error) {
     console.error('Place search error:', error);

@@ -306,6 +306,7 @@ export interface LeagueVenuePlace {
   id: string;
   name: string;
   address: string;
+  source?: "keyword" | "address";
   region_city: string | null;
   region_district: string | null;
   lat: number;

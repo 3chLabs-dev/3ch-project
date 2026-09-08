@@ -1662,8 +1662,12 @@ export function generateProgramRoundMatches(
     ...storedBlock,
     groupSizes: currentRound?.groupSizes ?? storedBlock.groupSizes,
     teamGroupSizes: currentRound?.teamGroupSizes ?? storedBlock.teamGroupSizes,
-    teamPlayerCount: currentRound?.teamPlayerCount ?? storedBlock.teamPlayerCount,
-    teamFormationSizes: currentRound?.teamFormationSizes ?? storedBlock.teamFormationSizes,
+    teamPlayerCount: inheritsPreviousTeamFormation
+      ? previousRound?.teamPlayerCount ?? previousTeamBlock?.teamPlayerCount
+      : currentRound?.teamPlayerCount ?? storedBlock.teamPlayerCount,
+    teamFormationSizes: inheritsPreviousTeamFormation
+      ? previousRound?.teamFormationSizes ?? previousTeamBlock?.teamFormationSizes
+      : currentRound?.teamFormationSizes ?? storedBlock.teamFormationSizes,
     groupShuffleSeed: currentRound?.groupShuffleSeed ?? storedBlock.groupShuffleSeed,
     groupAssignments: currentRound?.groupAssignments ?? storedBlock.groupAssignments,
     teamAssignments: inheritsPreviousTeamFormation

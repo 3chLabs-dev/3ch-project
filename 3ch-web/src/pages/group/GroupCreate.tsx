@@ -17,9 +17,10 @@ import {
 import confetti from "canvas-confetti";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import type { SelectChangeEvent } from "@mui/material";
-import { useCreateGroupMutation, useLazyCheckGroupNameQuery, useLazyGeocodeAddressQuery } from "../../features/group/groupApi";
+import { useCreateGroupMutation, useLazyCheckGroupNameQuery } from "../../features/group/groupApi";
 import { REGION_DATA, CITY_ALIAS_MAP } from "./regionData";
 import confettiImg from "../../assets/128_축포.png";
+import PlaceSearchDialog from "../../components/PlaceSearchDialog";
 
 type GroupLinkInput = {
     id?: string;
@@ -32,8 +33,6 @@ export default function GroupCreate() {
     const [createGroup, { isLoading: creating }] = useCreateGroupMutation();
     const [checkName] = useLazyCheckGroupNameQuery();
 
-    const [geocode] = useLazyGeocodeAddressQuery();
-
     const [sport, setSport] = useState("");
     // const [groupType, setGroupType] = useState("");
     const [regionCity, setRegionCity] = useState("");
@@ -44,6 +43,7 @@ export default function GroupCreate() {
     const [addressDetail, setAddressDetail] = useState("");
     const [lat, setLat] = useState<number | undefined>();
     const [lng, setLng] = useState<number | undefined>();
+    const [placeDialogOpen, setPlaceDialogOpen] = useState(false);
 
     const [links, setLinks] = useState<GroupLinkInput[]>([
         { label: "", url: "" },
@@ -129,28 +129,6 @@ export default function GroupCreate() {
     };
 
 
-    type DaumWindow = Window & { daum?: { Postcode: new (opts: { oncomplete: (d: { address: string; roadAddress: string }) => void }) => { open: () => void } } };
-
-    const openPostcode = () => {
-        const w = window as DaumWindow;
-        new w.daum!.Postcode({
-            oncomplete: async (data) => {
-                const selected = data.roadAddress || data.address;
-                setAddress(selected);
-                syncRegionFromAddress(selected);
-                setLat(undefined);
-                setLng(undefined);
-                try {
-                    const result = await geocode(selected).unwrap();
-                    if (result.ok && result.lat !== undefined && result.lng !== undefined) {
-                        setLat(result.lat);
-                        setLng(result.lng);
-                    }
-                } catch { /* 좌표 없어도 주소는 저장 */ }
-            },
-        }).open();
-    };
-
     //주소 입력시 단어 보고 매칭
     const syncRegionFromAddress = (rawAddress: string) => {
     const tokens = rawAddress.trim().split(/\s+/);
@@ -176,15 +154,7 @@ export default function GroupCreate() {
 };
 
     const handleAddressSearch = () => {
-        const w = window as DaumWindow;
-        if (w.daum?.Postcode) {
-            openPostcode();
-        } else {
-            const script = document.createElement("script");
-            script.src = "https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js";
-            script.onload = openPostcode;
-            document.head.appendChild(script);
-        }
+        setPlaceDialogOpen(true);
     };
 
     const handleSubmit = () => {
@@ -364,10 +334,10 @@ export default function GroupCreate() {
 
                 {/* 주소 */}
                 <Box>
-                    <Typography sx={{ fontWeight: 900, mb: 1 }}>주소 <Typography component="span" sx={{ fontSize: 11, fontWeight: 500, color: "#9CA3AF" }}>(선택)</Typography></Typography>
+                    <Typography sx={{ fontWeight: 900, mb: 1 }}>활동 장소 <Typography component="span" sx={{ fontSize: 11, fontWeight: 500, color: "#9CA3AF" }}>(선택)</Typography></Typography>
                     <Stack direction="row" spacing={1} mb={1}>
                         <TextField
-                            placeholder="도로명 주소"
+                            placeholder="도로명 주소 또는 장소명"
                             size="small"
                             value={address}
                             InputProps={{ readOnly: true }}
@@ -393,6 +363,14 @@ export default function GroupCreate() {
                         />
                     )}
                 </Box>
+
+                <PlaceSearchDialog open={placeDialogOpen} initialQuery={address} onClose={() => setPlaceDialogOpen(false)} onSelect={(place) => {
+                    setAddress(place.address);
+                    syncRegionFromAddress(place.address);
+                    setLat(place.lat);
+                    setLng(place.lng);
+                    setPlaceDialogOpen(false);
+                }} />
 
                 {/* 지역 */}
                 <Box>

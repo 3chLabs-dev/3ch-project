@@ -601,7 +601,7 @@ export default function AdminClubPage() {
               </FormControl>
             </AddFormRow>
 
-            <AddFormRow label="주소">
+            <AddFormRow label="활동 장소">
               <Stack spacing={0.8}>
                 <Stack direction="row" spacing={0.8}>
                   <TextField size="small" sx={{ flex: 1 }} placeholder="도로명 주소"
@@ -735,7 +735,7 @@ export default function AdminClubPage() {
                 </FormControl>
               </AddFormRow>
 
-              <AddFormRow label="주소">
+              <AddFormRow label="활동 장소">
                 <Stack spacing={0.8}>
                   <Stack direction="row" spacing={0.8}>
                     <TextField size="small" sx={{ flex: 1 }} placeholder="도로명 주소"

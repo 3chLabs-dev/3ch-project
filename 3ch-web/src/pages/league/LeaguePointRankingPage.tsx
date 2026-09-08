@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Box, Button, Checkbox, CircularProgress, FormControlLabel, MenuItem, Select, Stack, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, Card, CardContent, Checkbox, CircularProgress, FormControlLabel, MenuItem, Select, Stack, TextField, Typography } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useGetLeaguePointRankingQuery, useUpdateLeaguePointRankingAdjustmentsMutation, useUpdateLeaguePointRankingSettingsMutation } from "../../features/league/leagueApi";
@@ -61,5 +61,22 @@ function NumberField({label,value,onChange,disabled=false}:{label:string;value:n
 type LeagueRankingListRow = { rank:number|null; name:string; division?:string|null; total_points:number; is_pre_registered?:boolean };
 function RankingSection({ title, rows, visibleCount, onMore }: { title:string; rows:LeagueRankingListRow[]; visibleCount:number; onMore:()=>void }) {
   const ranked = rows.filter((row) => row.total_points > 0 || row.rank != null).slice(0, visibleCount);
-  return <Box sx={{ mb:3 }}><Typography fontWeight={900} fontSize={19} sx={{ mb:1.2 }}>{title}</Typography><Stack spacing={0.8}>{ranked.map((row) => <Stack key={`${row.rank}-${row.name}`} direction="row" alignItems="center" sx={{ minHeight:54, px:1.2, bgcolor:"#fff", borderRadius:2, boxShadow:"0 3px 12px rgba(15,23,42,.08)" }}><Box sx={{ width:44, height:32, clipPath:"polygon(0 0,100% 0,82% 100%,0 100%)", bgcolor:row.rank===1?"#F3C83B":row.rank===2?"#D9DDE2":row.rank===3?"#DCA84F":"#F3F4F6", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900 }}>{row.rank}</Box><Box sx={{ minWidth:36, height:36, mx:1, px:.8, borderRadius:"50%", bgcolor:"#FFB547", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:900 }}>{row.division || "-"}</Box><Typography fontWeight={900} sx={{ flex:1 }}>{row.name}{row.is_pre_registered && <Typography component="span" sx={{ ml:.5, fontSize:10, color:"text.secondary" }}>사전등록</Typography>}</Typography><Box sx={{ textAlign:"right" }}><Typography sx={{ color:"#1747E5", fontWeight:900, fontSize:24, lineHeight:1 }}>{row.total_points}</Typography><Typography sx={{ fontSize:10 }}>포인트</Typography></Box></Stack>)}</Stack>{rows.length > visibleCount && <Button fullWidth variant="outlined" onClick={onMore} sx={{ mt:1, height:40, borderRadius:2, fontWeight:900 }}>더보기⌄</Button>}</Box>;
+  return <Box sx={{ mb:3 }}>
+    <Typography fontWeight={900} fontSize={18} sx={{ mb:1.2 }}>{title}</Typography>
+    <Stack spacing={0.8}>{ranked.map((row) => {
+      const rankBadgeBg = row.rank === 1 ? "#E9C23B" : row.rank === 2 ? "#D1D5DB" : row.rank === 3 ? "#D6A348" : "#F3F4F6";
+      const rankBadgeColor = row.rank && row.rank <= 3 ? "#FFF" : "#374151";
+      return <Card key={`${row.rank}-${row.name}`} elevation={2} sx={{ borderRadius:0.85, boxShadow:"0 4px 12px rgba(0,0,0,0.08)", bgcolor:"#FFF" }}>
+        <CardContent sx={{ py:0.95, px:1.3, "&:last-child":{ pb:0.95 } }}>
+          <Stack direction="row" alignItems="center" spacing={0.75}>
+            <Box sx={{ width:42, height:30, borderRadius:"5px 0 0 5px", clipPath:"polygon(0 0,100% 0,82% 100%,0 100%)", bgcolor:rankBadgeBg, display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, fontSize:13, color:rankBadgeColor, flexShrink:0 }}>{row.rank ?? "-"}</Box>
+            {row.division && <Box sx={{ minWidth:28, height:28, px:0.55, borderRadius:999, bgcolor:"#FDBA4D", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, fontSize:10, color:"#111827", flexShrink:0 }}>{row.division}</Box>}
+            <Box sx={{ flex:1, minWidth:0 }}><Stack direction="row" alignItems="center" spacing={0.5}><Typography sx={{ minWidth:0, fontSize:13.5, fontWeight:900, color:"#111827", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{row.name}</Typography>{row.is_pre_registered && <Typography sx={{ fontSize:9, fontWeight:800, color:"#6B7280", whiteSpace:"nowrap" }}>사전등록</Typography>}</Stack></Box>
+            <Box sx={{ textAlign:"right", minWidth:52 }}><Typography sx={{ fontSize:24, fontWeight:900, color:"#1D4ED8", lineHeight:1 }}>{row.total_points}</Typography><Typography sx={{ fontSize:10, color:"text.secondary", fontWeight:700, lineHeight:1.1 }}>포인트</Typography></Box>
+          </Stack>
+        </CardContent>
+      </Card>;
+    })}</Stack>
+    {rows.length > visibleCount && <Button fullWidth variant="outlined" onClick={onMore} sx={{ mt:1, height:40, borderRadius:2, fontWeight:900 }}>더보기⌄</Button>}
+  </Box>;
 }

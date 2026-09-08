@@ -149,7 +149,8 @@ export default function SupportChat() {
   const isLeagueDetail = !isLeagueCreationPage && /^\/league\/[^/]+\/?$/.test(location.pathname);
   const isClubFloatingActionPage = location.pathname === "/club/create"
     || /^\/club\/[^/]+(?:\/manage)?\/?$/.test(location.pathname);
-  const isRecommendedProgramPage = location.pathname === "/demo/league-algorithm";
+  const isRecommendedProgramPage = location.pathname === "/demo/league-algorithm"
+    || /^\/league\/[^/]+\/program\/new\/?$/.test(location.pathname);
 
   return (
     <>

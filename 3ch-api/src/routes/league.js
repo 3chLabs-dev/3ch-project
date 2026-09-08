@@ -43,6 +43,51 @@ async function getLeagueRankingManager(client, leagueId, userId) {
   return member?.role === 'owner' || (member?.role === 'admin' && member.management_permissions?.ranking === true);
 }
 
+function canCombineProgramRoundPoints(programData) {
+  const blocks = Array.isArray(programData?.blocks) ? programData.blocks : [];
+  const rounds = Array.isArray(programData?.rounds) ? programData.rounds : [];
+  const lastIndexByType = new Map();
+  for (let index = 0; index < blocks.length; index += 1) {
+    const type = blocks[index]?.type ?? rounds[index]?.program;
+    if (!['SINGLES', 'DOUBLES', 'TEAM'].includes(type)) continue;
+    const previousIndex = lastIndexByType.get(type);
+    if (previousIndex != null && type !== 'SINGLES') {
+      const inherits = rounds[index]?.inheritPreviousTeamFormation ?? blocks[index]?.inheritPreviousTeamFormation;
+      if (index !== previousIndex + 1 || inherits !== true) return false;
+    }
+    lastIndexByType.set(type, index);
+  }
+  return [...lastIndexByType.values()].length > 0;
+}
+
+async function getProgramUnitRankings(leagueId, programData, rules) {
+  const result = await pool.query(`SELECT m.program_round,m.program_block_type,m.bracket,m.status,m.score_a,m.score_b,m.participant_a_id,m.participant_b_id,m.participant_a_roster_ids,m.participant_b_roster_ids FROM league_matches m WHERE m.league_id=$1 AND m.is_program=true ORDER BY m.program_round,m.match_order`, [leagueId]);
+  const participantResult = await pool.query(`SELECT id,name,division FROM league_participants WHERE league_id=$1`, [leagueId]);
+  const participantMap = new Map(participantResult.rows.map((row) => [String(row.id), row]));
+  const groups = new Map();
+  const unit = (ids) => {
+    const sorted = ids.map(String).filter(Boolean).sort();
+    return { key:sorted.join('+'), name:sorted.map((id) => participantMap.get(id)?.name).filter(Boolean).join(' · '), members:sorted.map((id) => participantMap.get(id)).filter(Boolean) };
+  };
+  result.rows.forEach((match) => {
+    if (match.status !== 'done') return;
+    const roundIndex = Math.max(0, Number(match.program_round || 1)-1);
+    const type = match.program_block_type ?? programData?.blocks?.[roundIndex]?.type ?? programData?.rounds?.[roundIndex]?.program;
+    if (!['SINGLES','DOUBLES','TEAM'].includes(type)) return;
+    const a=unit(type==='SINGLES'?[match.participant_a_id]:(match.participant_a_roster_ids||[])); const b=unit(type==='SINGLES'?[match.participant_b_id]:(match.participant_b_roster_ids||[]));
+    if (!a.key || !b.key) return;
+    const groupKey=`${type}:${match.program_round}`; const map=groups.get(groupKey)??new Map(); groups.set(groupKey,map);
+    [a,b].forEach((side) => { if(!map.has(side.key)) map.set(side.key,{ unit_key:side.key,name:side.name,members:side.members,matches_played:0,wins:0,losses:0,score_points:0,attendance_points:0,bonus_points:0,total_points:0 }); });
+    const ar=map.get(a.key),br=map.get(b.key),sa=Number(match.score_a||0),sb=Number(match.score_b||0); ar.matches_played++;br.matches_played++;
+    if(rules.matchPoints.mode==='win'){if(sa>sb)ar.score_points+=rules.matchPoints.winPoints;if(sb>sa)br.score_points+=rules.matchPoints.winPoints;}else{ar.score_points+=sa;br.score_points+=sb;}
+    if(sa>sb){ar.wins++;br.losses++;}else if(sb>sa){br.wins++;ar.losses++;}
+  });
+  const sections=[];
+  groups.forEach((map,key) => { const [type,roundText]=key.split(':'); const round=Number(roundText); const block=programData?.blocks?.[round-1]??{}; const rows=[...map.values()].sort((a,b)=>b.wins-a.wins||b.score_points-a.score_points||a.name.localeCompare(b.name,'ko')); const attendance=block.format==='TOURNAMENT'?rules.attendance.tournament:rules.attendance.league; const rankRule=block.format==='GROUP'?rules.rankings.group:block.format==='TOURNAMENT'?(String(block.option).includes('LOWER')?rules.rankings.tournamentLower:rules.rankings.tournamentUpper):rules.rankings.league; rows.forEach((row,index)=>{row.rank=index+1;row.attendance_points=attendance;row.bonus_points=rankRule.enabled===false?0:[rankRule.first,rankRule.second,rankRule.third,rankRule.fourth][index]||0;row.total_points=row.attendance_points+row.score_points+row.bonus_points;}); sections.push({type,round,title:`${round}라운드 ${type==='SINGLES'?'단식 개인':type==='DOUBLES'?'복식 팀':'단체전 팀'} 순위`,rows}); });
+  if(!rules.combineAllRounds)return sections.sort((a,b)=>['SINGLES','DOUBLES','TEAM'].indexOf(a.type)-['SINGLES','DOUBLES','TEAM'].indexOf(b.type)||a.round-b.round);
+  return ['SINGLES','DOUBLES','TEAM'].flatMap((type)=>{const targets=sections.filter((s)=>s.type===type);if(!targets.length)return[];const merged=new Map();targets.flatMap((s)=>s.rows).forEach((row)=>{const current=merged.get(row.unit_key)??{...row,matches_played:0,wins:0,losses:0,score_points:0,attendance_points:0,bonus_points:0,total_points:0};['matches_played','wins','losses','score_points','attendance_points','bonus_points','total_points'].forEach((field)=>{current[field]+=row[field]});merged.set(row.unit_key,current);});const rows=[...merged.values()].sort((a,b)=>b.total_points-a.total_points||b.wins-a.wins||a.name.localeCompare(b.name,'ko'));rows.forEach((row,index)=>{row.rank=index+1});return[{type,round:0,title:`전체 라운드 ${type==='SINGLES'?'단식 개인':type==='DOUBLES'?'복식 팀':'단체전 팀'} 순위`,rows}];});
+}
+
 if (isWebPushConfigured) {
   webpush.setVapidDetails(
     process.env.VAPID_MAILTO,
@@ -2502,13 +2547,17 @@ router.get('/league/:id/point-ranking', optionalAuth, async (req, res) => {
     const season = seasonRows.rows.find((row) => row.id === String(req.query.season_id || '')) ?? seasonRows.rows[0];
     if (!season) return res.status(404).json({ message: '적용할 시즌이 없습니다.' });
     const saved = await pool.query(`SELECT enabled,point_rules FROM league_point_ranking_overrides WHERE league_id=$1 AND season_id=$2`, [league.id, season.id]).catch(() => ({ rows: [] }));
+    const programResult = await pool.query(`SELECT program_data FROM league_programs WHERE league_id=$1`, [league.id]);
+    const canCombineAllRounds = canCombineProgramRoundPoints(programResult.rows[0]?.program_data);
     const adjustments = await pool.query(`SELECT participant_id,league_points::float,tournament_points::float,championships FROM league_point_ranking_adjustments WHERE league_id=$1 AND season_id=$2`, [league.id, season.id]).catch(() => ({ rows: [] }));
     const participants = await pool.query(`SELECT id,member_id,name,division FROM league_participants WHERE league_id=$1 AND status='active' ORDER BY sort_order NULLS LAST,created_at`, [league.id]);
     const ranking = await getPointRanking(league.group_id, undefined, 'club', season.id, league.id);
+    const effectiveRules = normalizePointRules(saved.rows[0]?.enabled ? saved.rows[0].point_rules : season.point_rules);
+    const unitRankings = await getProgramUnitRankings(league.id, programResult.rows[0]?.program_data, effectiveRules);
     return res.json({ ...ranking, league_info: league, seasons: seasonRows.rows, season,
       override_enabled: saved.rows[0]?.enabled === true,
-      point_rules: normalizePointRules(saved.rows[0]?.enabled ? saved.rows[0].point_rules : season.point_rules),
-      adjustments: adjustments.rows, participants: participants.rows,
+      point_rules: effectiveRules, unit_rankings: unitRankings,
+      adjustments: adjustments.rows, participants: participants.rows, can_combine_all_rounds: canCombineAllRounds,
       can_manage: req.user ? await getLeagueRankingManager(pool, league.id, req.user.sub) : false });
   } catch (error) { console.error('리그 순위 조회 실패:', error); return res.status(500).json({ message: '리그 순위를 불러오지 못했습니다.' }); }
 });
@@ -2520,6 +2569,10 @@ router.put('/league/:id/point-ranking/settings', requireAuth, async (req, res) =
     const valid = await pool.query(`SELECT 1 FROM leagues l JOIN group_ranking_seasons s ON s.group_id=l.group_id AND l.start_date::date BETWEEN s.start_date AND s.end_date WHERE l.id=$1 AND s.id=$2`, [req.params.id, seasonId]);
     if (!valid.rowCount) return res.status(400).json({ message: '적용할 수 없는 시즌입니다.' });
     const rules = normalizePointRules(req.body?.point_rules);
+    if (rules.combineAllRounds) {
+      const programResult = await pool.query(`SELECT program_data FROM league_programs WHERE league_id=$1`, [req.params.id]);
+      if (!canCombineProgramRoundPoints(programResult.rows[0]?.program_data)) return res.status(400).json({ message: '복식·단체전 팀 편성이 라운드마다 동일하지 않아 합산할 수 없습니다.' });
+    }
     await pool.query(`INSERT INTO league_point_ranking_overrides (league_id,season_id,enabled,point_rules,updated_by_id) VALUES ($1,$2,$3,$4::jsonb,$5) ON CONFLICT (league_id,season_id) DO UPDATE SET enabled=EXCLUDED.enabled,point_rules=EXCLUDED.point_rules,updated_by_id=EXCLUDED.updated_by_id,updated_at=CURRENT_TIMESTAMP`, [req.params.id, seasonId, req.body?.enabled === true, JSON.stringify(rules), req.user.sub]);
     return res.json({ message: '저장되었습니다.' });
   } catch (error) { console.error(error); return res.status(500).json({ message: '설정 저장에 실패했습니다.' }); }

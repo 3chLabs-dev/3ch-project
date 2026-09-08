@@ -2499,7 +2499,6 @@ const LeagueAlgorithmDemo = ({
           <ArrowBackIcon fontSize="small" />
         </IconButton>
         <div
-          data-support-chat-offset="floating-action"
           style={{
             fontSize: "17px",
             fontWeight: 900,
@@ -4024,6 +4023,7 @@ const LeagueAlgorithmDemo = ({
 
       {isProgramGenerated && !isGeneratingProgram && (
         <div
+          data-support-chat-offset="floating-action"
           style={{
             position: "fixed",
             left: "50%",

@@ -37,6 +37,7 @@ type Props = {
 };
 
 const DEFAULT_POINT_RULES: GroupRankingPointRules = {
+  combineAllRounds: false,
   attendance: { league: 10, tournament: 20 },
   matchPoints: {
     mode: "sets",

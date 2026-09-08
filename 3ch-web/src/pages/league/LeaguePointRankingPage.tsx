@@ -34,14 +34,20 @@ export default function LeaguePointRankingPage() {
         <Select size="small" value={data.season.id} onChange={(e) => changeSeason(String(e.target.value))} sx={{ minWidth:116, borderRadius:2 }}>{data.seasons.map((s) => <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>)}</Select>
         {data.can_manage && <Button variant="outlined" onClick={() => setSearchParams({ settings:"1", season:data.season.id })} sx={{ whiteSpace:"nowrap", borderRadius:2, fontWeight:800 }}>순위 설정</Button>}
       </Stack>
-      <RankingSection title="리그" rows={data.league.rankings} visibleCount={visibleCount} onMore={() => setVisibleCount((count) => count+10)} />
-      {data.tournament.rankings.some((row) => row.total_points > 0 || row.matches_played > 0) && <RankingSection title="대회" rows={data.tournament.rankings} visibleCount={visibleCount} onMore={() => setVisibleCount((count) => count+10)} />}
+      {data.unit_rankings.length > 0 ? data.unit_rankings.map((section) => <RankingSection key={`${section.type}-${section.round}`} title={section.title} rows={section.rows} visibleCount={visibleCount} onMore={() => setVisibleCount((count) => count+10)} />) : <>
+        <RankingSection title="리그" rows={data.league.rankings} visibleCount={visibleCount} onMore={() => setVisibleCount((count) => count+10)} />
+        {data.tournament.rankings.some((row) => row.total_points > 0 || row.matches_played > 0) && <RankingSection title="대회" rows={data.tournament.rankings} visibleCount={visibleCount} onMore={() => setVisibleCount((count) => count+10)} />}
+      </>}
     </Box>;
   }
   return <Box sx={{ maxWidth:720, mx:"auto", p:2, pb:8 }}>
     <Stack direction="row" alignItems="center" spacing={1} sx={{ mb:2 }}><Button onClick={() => setSearchParams({ season:data.season.id })} sx={{ minWidth:36 }}><ArrowBackIcon /></Button><Typography variant="h6" fontWeight={900} sx={{ flex:1 }}>{data.league_info.name} 순위 설정</Typography><Select size="small" value={data.season.id} onChange={(e) => changeSeason(String(e.target.value))}>{data.seasons.map((s) => <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>)}</Select></Stack>
     {data.can_manage && <FormControlLabel control={<Checkbox checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />} label={<Typography fontWeight={800}>이번 리그만 별도 적용</Typography>} />}
     <Box sx={{ opacity:enabled ? 1 : .62, pointerEvents:enabled ? "auto" : "none" }}>
+      <FormControlLabel
+        control={<Checkbox checked={rules.combineAllRounds === true} disabled={!data.can_combine_all_rounds} onChange={(e) => setRules({ ...rules, combineAllRounds:e.target.checked })} />}
+        label={<Box><Typography fontWeight={800}>모든 라운드 포인트 합계</Typography>{!data.can_combine_all_rounds && <Typography fontSize={11} color="text.secondary">복식·단체전의 동일 팀 편성 조건을 만족하지 않습니다.</Typography>}</Box>}
+      />
       <Typography fontWeight={900} sx={{ mt:2, mb:1 }}>기본 포인트</Typography>
       <Stack direction="row" spacing={1}><NumberField label="리그 참석" value={rules.attendance.league} onChange={(v) => setRules({ ...rules, attendance:{ ...rules.attendance, league:v } })} /><NumberField label="대회 참석" value={rules.attendance.tournament} onChange={(v) => setRules({ ...rules, attendance:{ ...rules.attendance, tournament:v } })} /></Stack>
       <Typography fontWeight={900} sx={{ mt:2, mb:1 }}>경기당 포인트</Typography>

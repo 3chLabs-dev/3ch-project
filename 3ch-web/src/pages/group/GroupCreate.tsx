@@ -340,7 +340,11 @@ export default function GroupCreate() {
                             placeholder="도로명 주소 또는 장소명"
                             size="small"
                             value={address}
-                            InputProps={{ readOnly: true }}
+                            onChange={(e) => {
+                                setAddress(e.target.value);
+                                setLat(undefined);
+                                setLng(undefined);
+                            }}
                             sx={{ ...inputSx, flex: 1 }}
                         />
                         <Button
@@ -364,8 +368,17 @@ export default function GroupCreate() {
                     )}
                 </Box>
 
-                <PlaceSearchDialog open={placeDialogOpen} initialQuery={address} onClose={() => setPlaceDialogOpen(false)} onSelect={(place) => {
+                <PlaceSearchDialog open={placeDialogOpen} initialQuery={address} onClose={() => setPlaceDialogOpen(false)} allowDirectInput onDirectInput={(value) => {
+                    setAddress(value);
+                    setAddressDetail("");
+                    setLat(undefined);
+                    setLng(undefined);
+                    setRegionCity("");
+                    setRegionDistrict("");
+                    setPlaceDialogOpen(false);
+                }} onSelect={(place) => {
                     setAddress(place.address);
+                    setAddressDetail(place.name);
                     syncRegionFromAddress(place.address);
                     setLat(place.lat);
                     setLng(place.lng);

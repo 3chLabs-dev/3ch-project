@@ -1059,7 +1059,7 @@ export default function GroupManage() {
                             <TextField
                                 label="주소"
                                 value={formData.address}
-                                slotProps={{ input: { readOnly: true } }}
+                                onChange={(e) => setFormData((prev) => ({ ...prev, address: e.target.value, lat: undefined, lng: undefined }))}
                                 fullWidth
                                 size="small"
                                 sx={{ "& .MuiInputBase-input": { fontSize: 14 } }}
@@ -1293,11 +1293,14 @@ export default function GroupManage() {
                 </DialogActions>
             </Dialog>
 
-            <PlaceSearchDialog open={placeDialogOpen} initialQuery={formData.address} onClose={() => setPlaceDialogOpen(false)} onSelect={(place) => {
+            <PlaceSearchDialog open={placeDialogOpen} initialQuery={formData.address} onClose={() => setPlaceDialogOpen(false)} allowDirectInput onDirectInput={(value) => {
+                setFormData((prev) => ({ ...prev, address: value, address_detail: "", lat: undefined, lng: undefined, region_city: "", region_district: "" }));
+                setPlaceDialogOpen(false);
+            }} onSelect={(place) => {
                 const [rawCity = "", rawDistrict = ""] = place.address.trim().split(/\s+/);
                 const city = CITY_ALIAS_MAP[rawCity] ?? "";
                 const district = city === "세종특별자치시" ? "세종시" : ((REGION_DATA[city] ?? []).includes(rawDistrict) ? rawDistrict : "");
-                setFormData((prev) => ({ ...prev, address: place.address, lat: place.lat, lng: place.lng, region_city: city, region_district: district }));
+                setFormData((prev) => ({ ...prev, address: place.address, address_detail: place.name, lat: place.lat, lng: place.lng, region_city: city, region_district: district }));
                 setPlaceDialogOpen(false);
             }} />
 

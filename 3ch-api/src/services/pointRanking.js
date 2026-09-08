@@ -39,6 +39,7 @@ function normalizePointRules(value) {
     excludeUpperPointsOnLowerAdvance: rule?.excludeUpperPointsOnLowerAdvance === true,
   });
   return {
+    combineAllRounds: input.combineAllRounds === true,
     attendance: {
       league: numberOr(attendance.league, DEFAULT_POINT_RULES.attendance.league),
       tournament: numberOr(attendance.tournament, DEFAULT_POINT_RULES.attendance.tournament),

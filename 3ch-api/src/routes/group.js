@@ -810,6 +810,9 @@ router.get('/group/place-search', requireAuth, async (req, res) => {
     const queryVariants = [
       query,
       query.replace(/(탁구장|탁구클럽|체육관|스포츠센터|문화센터)$/u, ' $1'),
+      query.replace(/(탁구|배드민턴|테니스)(클럽|장)$/u, ' $1 $2'),
+      query.replace(/(클럽|체육관|스포츠센터|문화센터)$/u, ''),
+      query.replace(/(탁구|배드민턴|테니스)(클럽|장)$/u, ' $1'),
     ].map((value) => value.replace(/\s+/g, ' ').trim()).filter((value, index, values) => value.length >= 2 && values.indexOf(value) === index);
     const headers = { Authorization: `KakaoAK ${key}` };
     const requests = [
@@ -1134,6 +1137,7 @@ const rankingSeasonSchema = z.object({
   end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   auto_renew: z.boolean().optional().default(false),
   point_rules: z.object({
+    combineAllRounds: z.boolean().optional().default(false),
     attendance: z.object({
       league: z.number().int().min(0).max(1000),
       tournament: z.number().int().min(0).max(1000),

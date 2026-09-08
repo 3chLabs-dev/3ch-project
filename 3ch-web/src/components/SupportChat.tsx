@@ -144,7 +144,9 @@ export default function SupportChat() {
 
   if (location.pathname === "/mypage/inquiry") return null;
   const isProgramMatchOrder = location.pathname.endsWith("/program/matches");
-  const isLeagueDetail = /^\/league\/[^/]+\/?$/.test(location.pathname);
+  const isLeagueCreationPage = location.pathname === "/league/new"
+    || location.pathname === "/league/renewal";
+  const isLeagueDetail = !isLeagueCreationPage && /^\/league\/[^/]+\/?$/.test(location.pathname);
   const isClubFloatingActionPage = location.pathname === "/club/create"
     || /^\/club\/[^/]+(?:\/manage)?\/?$/.test(location.pathname);
 

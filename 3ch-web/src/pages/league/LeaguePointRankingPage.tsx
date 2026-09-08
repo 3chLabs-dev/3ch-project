@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Box, Button, Checkbox, CircularProgress, FormControlLabel, MenuItem, Select, Stack, TextField, Typography } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useGetLeaguePointRankingQuery, useUpdateLeaguePointRankingAdjustmentsMutation, useUpdateLeaguePointRankingSettingsMutation } from "../../features/league/leagueApi";
 import type { GroupRankingPointRules } from "../../features/group/groupApi";
 
@@ -10,7 +10,10 @@ const rankLabels = { first: "1위", second: "2위", third: "3위", fourth: "4위
 
 export default function LeaguePointRankingPage() {
   const { id = "" } = useParams(); const navigate = useNavigate();
-  const [seasonId, setSeasonId] = useState<string>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const settingsMode = searchParams.get("settings") === "1";
+  const [seasonId, setSeasonId] = useState<string | undefined>(() => searchParams.get("season") || undefined);
+  const [visibleCount, setVisibleCount] = useState(10);
   const { data, isLoading, error } = useGetLeaguePointRankingQuery({ leagueId: id, seasonId }, { skip: !id });
   const [saveSettings, settingsState] = useUpdateLeaguePointRankingSettingsMutation();
   const [saveAdjustments, adjustmentsState] = useUpdateLeaguePointRankingAdjustmentsMutation();
@@ -22,8 +25,21 @@ export default function LeaguePointRankingPage() {
   const save = async () => { if (!data || !rules) return; await saveSettings({ leagueId:id, seasonId:data.season.id, enabled, pointRules:rules }).unwrap(); await saveAdjustments({ leagueId:id, seasonId:data.season.id, adjustments:data.participants.map((p) => ({ participant_id:p.id, ...(adjustments[p.id] ?? { league_points:0,tournament_points:0,championships:0 }) })) }).unwrap(); };
   if (isLoading) return <Box sx={{ p:3, textAlign:"center" }}><CircularProgress /></Box>;
   if (error || !data || !rules) return <Box sx={{ p:2 }}><Alert severity="error">리그 순위를 불러오지 못했습니다.</Alert></Box>;
+  const changeSeason = (value: string) => { setSeasonId(value); setVisibleCount(10); setSearchParams(settingsMode ? { settings:"1",season:value } : { season:value }); };
+  if (!settingsMode) {
+    return <Box sx={{ maxWidth:720, mx:"auto", p:2, pb:8 }}>
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb:2 }}>
+        <Button onClick={() => navigate(`/league/${id}`)} sx={{ minWidth:36 }}><ArrowBackIcon /></Button>
+        <Typography variant="h6" fontWeight={900} sx={{ flex:1 }}>순위</Typography>
+        <Select size="small" value={data.season.id} onChange={(e) => changeSeason(String(e.target.value))} sx={{ minWidth:116, borderRadius:2 }}>{data.seasons.map((s) => <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>)}</Select>
+        {data.can_manage && <Button variant="outlined" onClick={() => setSearchParams({ settings:"1", season:data.season.id })} sx={{ whiteSpace:"nowrap", borderRadius:2, fontWeight:800 }}>순위 설정</Button>}
+      </Stack>
+      <RankingSection title="리그" rows={data.league.rankings} visibleCount={visibleCount} onMore={() => setVisibleCount((count) => count+10)} />
+      {data.tournament.rankings.some((row) => row.total_points > 0 || row.matches_played > 0) && <RankingSection title="대회" rows={data.tournament.rankings} visibleCount={visibleCount} onMore={() => setVisibleCount((count) => count+10)} />}
+    </Box>;
+  }
   return <Box sx={{ maxWidth:720, mx:"auto", p:2, pb:8 }}>
-    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb:2 }}><Button onClick={() => navigate(-1)} sx={{ minWidth:36 }}><ArrowBackIcon /></Button><Typography variant="h6" fontWeight={900} sx={{ flex:1 }}>{data.league_info.name} 순위</Typography><Select size="small" value={data.season.id} onChange={(e) => setSeasonId(String(e.target.value))}>{data.seasons.map((s) => <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>)}</Select></Stack>
+    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb:2 }}><Button onClick={() => setSearchParams({ season:data.season.id })} sx={{ minWidth:36 }}><ArrowBackIcon /></Button><Typography variant="h6" fontWeight={900} sx={{ flex:1 }}>{data.league_info.name} 순위 설정</Typography><Select size="small" value={data.season.id} onChange={(e) => changeSeason(String(e.target.value))}>{data.seasons.map((s) => <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>)}</Select></Stack>
     {data.can_manage && <FormControlLabel control={<Checkbox checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />} label={<Typography fontWeight={800}>이번 리그만 별도 적용</Typography>} />}
     <Box sx={{ opacity:enabled ? 1 : .62, pointerEvents:enabled ? "auto" : "none" }}>
       <Typography fontWeight={900} sx={{ mt:2, mb:1 }}>기본 포인트</Typography>
@@ -41,3 +57,9 @@ export default function LeaguePointRankingPage() {
   </Box>;
 }
 function NumberField({label,value,onChange,disabled=false}:{label:string;value:number;onChange:(v:number)=>void;disabled?:boolean}) { return <TextField type="number" size="small" fullWidth label={label} value={value} disabled={disabled} onChange={(e)=>onChange(Number(e.target.value)||0)} inputProps={{ step:1 }} />; }
+
+type LeagueRankingListRow = { rank:number|null; name:string; division?:string|null; total_points:number; is_pre_registered?:boolean };
+function RankingSection({ title, rows, visibleCount, onMore }: { title:string; rows:LeagueRankingListRow[]; visibleCount:number; onMore:()=>void }) {
+  const ranked = rows.filter((row) => row.total_points > 0 || row.rank != null).slice(0, visibleCount);
+  return <Box sx={{ mb:3 }}><Typography fontWeight={900} fontSize={19} sx={{ mb:1.2 }}>{title}</Typography><Stack spacing={0.8}>{ranked.map((row) => <Stack key={`${row.rank}-${row.name}`} direction="row" alignItems="center" sx={{ minHeight:54, px:1.2, bgcolor:"#fff", borderRadius:2, boxShadow:"0 3px 12px rgba(15,23,42,.08)" }}><Box sx={{ width:44, height:32, clipPath:"polygon(0 0,100% 0,82% 100%,0 100%)", bgcolor:row.rank===1?"#F3C83B":row.rank===2?"#D9DDE2":row.rank===3?"#DCA84F":"#F3F4F6", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900 }}>{row.rank}</Box><Box sx={{ minWidth:36, height:36, mx:1, px:.8, borderRadius:"50%", bgcolor:"#FFB547", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:900 }}>{row.division || "-"}</Box><Typography fontWeight={900} sx={{ flex:1 }}>{row.name}{row.is_pre_registered && <Typography component="span" sx={{ ml:.5, fontSize:10, color:"text.secondary" }}>사전등록</Typography>}</Typography><Box sx={{ textAlign:"right" }}><Typography sx={{ color:"#1747E5", fontWeight:900, fontSize:24, lineHeight:1 }}>{row.total_points}</Typography><Typography sx={{ fontSize:10 }}>포인트</Typography></Box></Stack>)}</Stack>{rows.length > visibleCount && <Button fullWidth variant="outlined" onClick={onMore} sx={{ mt:1, height:40, borderRadius:2, fontWeight:900 }}>더보기⌄</Button>}</Box>;
+}

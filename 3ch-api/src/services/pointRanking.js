@@ -666,6 +666,13 @@ async function getPointRanking(groupId, year, scope, seasonId, onlyLeagueId = nu
     [scopeValue, rangeStart, rangeEnd, onlyLeagueId],
   );
 
+  if (onlyLeagueId) {
+    const participatingMemberIds = new Set(participantResult.rows.map(rankingMemberKey).filter(Boolean));
+    [...baseMembers.keys()].forEach((memberId) => {
+      if (!participatingMemberIds.has(memberId)) baseMembers.delete(memberId);
+    });
+  }
+
   const leagueRows = new Map();
   const tournamentRows = new Map();
   baseMembers.forEach((base, memberId) => {

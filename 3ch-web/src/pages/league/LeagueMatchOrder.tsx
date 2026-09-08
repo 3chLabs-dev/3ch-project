@@ -1158,7 +1158,7 @@ export default function LeagueMatchOrder() {
   
   return (
     <Stack spacing={0} sx={{ height: "100%", minHeight: 0 }}>
-      <Stack spacing={2} sx={{ flexShrink: 0, pb: 2 }}>
+      <Stack spacing={0.75} sx={{ flexShrink: 0, pb: 1 }}>
       {/* 상단 헤더 */}
       <Stack direction="row" alignItems="center" spacing={1}>
         <IconButton size="small" onClick={() => navigate(`/league/${leagueId}`)} sx={{ p: 0.5, color: "#374151" }}>
@@ -1249,7 +1249,7 @@ export default function LeagueMatchOrder() {
       )}
 
       {!isTournamentProgramRound && groupNames.length > 0 && (
-        <Box sx={{ px: 0, pt: 1, pb: 0.5 }}>
+        <Box sx={{ px: 0, pt: 0.25, pb: 0 }}>
           <Stack direction="row" spacing={1} sx={{ overflowX: "auto", '&::-webkit-scrollbar': { display: 'none' } }}>
             {groupNames.map(gName => (
               <Button

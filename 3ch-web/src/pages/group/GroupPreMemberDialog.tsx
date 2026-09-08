@@ -112,7 +112,7 @@ export default function GroupPreMemberDialog({ open, onClose, groupId, manager =
               onClick={() => setImageImportOpen(true)}
               sx={{ height: 40, fontWeight: 800 }}
             >
-              이미지로 불러오기
+              이미지로 등록하기
             </Button>
             <Stack direction="row" spacing={1} component="form" onSubmit={(e) => { e.preventDefault(); void addMember(); }}>
               <TextField inputRef={divisionInputRef} size="small" label="부수" value={division} onChange={(e) => setDivision(e.target.value)} sx={{ width: 92 }} />

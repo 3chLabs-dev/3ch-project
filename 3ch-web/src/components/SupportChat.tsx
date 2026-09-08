@@ -149,6 +149,7 @@ export default function SupportChat() {
   const isLeagueDetail = !isLeagueCreationPage && /^\/league\/[^/]+\/?$/.test(location.pathname);
   const isClubFloatingActionPage = location.pathname === "/club/create"
     || /^\/club\/[^/]+(?:\/manage)?\/?$/.test(location.pathname);
+  const isRecommendedProgramPage = location.pathname === "/demo/league-algorithm";
 
   return (
     <>
@@ -167,7 +168,7 @@ export default function SupportChat() {
           left: 14,
           bottom: isProgramMatchOrder
             ? "calc(132px + env(safe-area-inset-bottom))"
-            : isLeagueDetail || isClubFloatingActionPage
+            : isLeagueDetail || isClubFloatingActionPage || isRecommendedProgramPage
               ? "calc(124px + env(safe-area-inset-bottom))"
               : "calc(68px + env(safe-area-inset-bottom))",
           minWidth: 0,

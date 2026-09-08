@@ -9,7 +9,7 @@ import BottomTab from "./BottomTab";
 import AppFooter from "./AppFooter";
 import SupportChat from "./SupportChat";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import type { RootState } from "../app/store";
 import { setToken, setUser } from "../features/auth/authSlice";
@@ -19,6 +19,7 @@ import { useGetMyFeatureUsageQuery } from "../features/payment/usageApi";
 import { getLocalDevProfileByToken } from "../utils/localDevAuth";
 import logo from "../assets/512_우리리그 로고.svg";
 import SettingsIcon from "@mui/icons-material/Settings";
+import RefreshIcon from "@mui/icons-material/Refresh";
 import homeHeaderBg from "../assets/메인 배너_900x700_버튼X.png"
 import ClubSelectionDialog from "./ClubSelectionDialog";
 // import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
@@ -34,12 +35,20 @@ export default function AppShell() {
     const isHome = location.pathname === "/";
     const isMyPage = location.pathname === "/mypage";
     const isLeagueSheet = /^\/league\/[^/]+\/(omr|openai-vision|gpt-vision)$/.test(location.pathname);
+    const isMatchOrderPage = /^\/league\/[^/]+\/(?:program\/matches|tournament\/matches|matches)$/.test(location.pathname);
 
     const contentRef = useRef<HTMLDivElement>(null);
     const bannerRef = useRef<HTMLDivElement>(null);
     const [showHomeBar, setShowHomeBar] = useState(false);
     const [usageOpen, setUsageOpen] = useState(false);
     const [clubSelectionOpen, setClubSelectionOpen] = useState(false);
+
+    // 앱의 실제 스크롤 영역은 window가 아니라 contentRef이므로,
+    // 라우트가 바뀔 때마다 이전 페이지의 스크롤 위치를 초기화한다.
+    useEffect(() => {
+        contentRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+        window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    }, [location.key]);
 
     useEffect(() => {
         const stored = localStorage.getItem("token");
@@ -102,12 +111,12 @@ export default function AppShell() {
         return () => el.removeEventListener("scroll", handleScroll);
     }, [isHome]);
 
-    const scrollToTop = () => {
+    const scrollToTop = useCallback((behavior: ScrollBehavior = "smooth") => {
         contentRef.current?.scrollTo({
         top: 0,
-        behavior: "smooth",
+        behavior,
         });
-    };
+    }, []);
 
     // 비홈: 항상 보임 / 홈: 스크롤 후에만 보임
     const appBarVisible = !isHome || showHomeBar;
@@ -156,6 +165,17 @@ export default function AppShell() {
                         >
                             <img src={logo} alt="우리리그" style={{ height: 32 }} />
                         </Box>
+
+                        {isMatchOrderPage && (
+                            <IconButton
+                                aria-label="경기 순서 새로고침"
+                                size="small"
+                                onClick={() => window.dispatchEvent(new Event("refresh-match-order"))}
+                                sx={{ ml: "auto", color: "#6B7280" }}
+                            >
+                                <RefreshIcon />
+                            </IconButton>
+                        )}
 
                         {/* 클럽 셀렉트 — 리그·대회 및 추첨 메인에서 표시 */}
                         {token && groups.length > 1 && (
@@ -256,7 +276,7 @@ export default function AppShell() {
                     ref={contentRef}
                     sx={{
                         flex: 1,
-                        overflowY: "auto",
+                        overflowY: isMatchOrderPage ? "hidden" : "auto",
                         WebkitOverflowScrolling: "touch",
                         pt: isHome || isLeagueSheet ? 0 : `${APP_BAR_H}px`,
                     }}
@@ -341,9 +361,13 @@ export default function AppShell() {
                         </Box>
                     )}
 
-                    <Box sx={{ p: isLeagueSheet ? 0 : 2, pb: isLeagueSheet ? 0 : `calc(8px + env(safe-area-inset-bottom))` }}>
+                    <Box sx={{
+                        p: isLeagueSheet ? 0 : 2,
+                        pb: isLeagueSheet ? 0 : `calc(8px + env(safe-area-inset-bottom))`,
+                        ...(isMatchOrderPage && { height: "100%", minHeight: 0, boxSizing: "border-box", overflow: "hidden" }),
+                    }}>
                         <Outlet context={{ scrollToTop }} />
-                        {!isLeagueSheet && <AppFooter />}
+                        {!isLeagueSheet && !isMatchOrderPage && <AppFooter />}
                     </Box>
                 </Box>
 

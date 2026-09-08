@@ -343,12 +343,24 @@ export interface GroupRankingPointRules {
     };
   };
   rankings: {
-    league: { enabled: boolean; first: number; second: number; third: number; fourth: number; thirdFourth?: number };
-    group: { enabled: boolean; first: number; second: number; third: number; fourth: number; thirdFourth?: number };
-    tournamentUpper: { enabled: boolean; first: number; second: number; third: number; fourth: number; thirdFourth?: number };
-    tournamentLower: { enabled: boolean; first: number; second: number; third: number; fourth: number; thirdFourth?: number };
+    league: RankingPointRule;
+    group: RankingPointRule;
+    tournamentUpper: RankingPointRule;
+    tournamentLower: RankingPointRule;
   };
 }
+
+export type TournamentEliminationRound = "8" | "16" | "32" | "64" | "128";
+export type RankingPointRule = {
+  enabled: boolean;
+  first: number;
+  second: number;
+  third: number;
+  fourth: number;
+  thirdFourth?: number;
+  eliminationRounds?: Partial<Record<TournamentEliminationRound, number>>;
+  excludeUpperPointsOnLowerAdvance?: boolean;
+};
 
 export interface GroupPointRankingResponse {
   group: { id: string; name: string; sport?: string | null };

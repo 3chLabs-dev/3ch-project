@@ -105,7 +105,7 @@ export default function LeagueRenewalStep5Participants() {
         onClick={() => setOpenImageImport(true)}
         sx={{ borderRadius: 1, minWidth: 0, height: 38, px: 0.8, fontWeight: 900, fontSize: 12, whiteSpace: "nowrap" }}
       >
-        이미지로 불러오기
+        이미지로 등록하기
       </Button>
       <Button
         variant="contained"

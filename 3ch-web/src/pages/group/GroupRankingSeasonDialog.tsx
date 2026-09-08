@@ -26,7 +26,7 @@ import {
   useSetGroupRankingDisplayDefaultMutation,
   useUpdateGroupRankingSeasonMutation,
 } from "../../features/group/groupApi";
-import type { GroupRankingPointRules } from "../../features/group/groupApi";
+import type { GroupRankingPointRules, TournamentEliminationRound } from "../../features/group/groupApi";
 
 type Props = {
   open: boolean;
@@ -53,6 +53,7 @@ const DEFAULT_POINT_RULES: GroupRankingPointRules = {
 };
 
 type RankingRuleKey = keyof GroupRankingPointRules["rankings"];
+const TOURNAMENT_ELIMINATION_ROUNDS: TournamentEliminationRound[] = ["8", "16", "32", "64", "128"];
 
 const normalizeRankingRules = (
   saved: Partial<GroupRankingPointRules["rankings"]> | undefined,
@@ -68,6 +69,8 @@ const normalizeRankingRules = (
       second: rule?.second ?? fallback.second,
       third: rule?.third ?? legacyThirdFourth ?? fallback.third,
       fourth: rule?.fourth ?? legacyThirdFourth ?? fallback.fourth,
+      eliminationRounds: { ...rule?.eliminationRounds },
+      excludeUpperPointsOnLowerAdvance: rule?.excludeUpperPointsOnLowerAdvance === true,
     };
     return result;
   }, {} as GroupRankingPointRules["rankings"]);
@@ -188,6 +191,36 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
       rankings: {
         ...previous.rankings,
         [key]: { ...previous.rankings[key], enabled },
+      },
+    }));
+  };
+
+  const updateEliminationRound = (
+    key: "tournamentUpper" | "tournamentLower",
+    round: TournamentEliminationRound,
+    value: number,
+  ) => {
+    setPointRules((previous) => ({
+      ...previous,
+      rankings: {
+        ...previous.rankings,
+        [key]: {
+          ...previous.rankings[key],
+          eliminationRounds: { ...previous.rankings[key].eliminationRounds, [round]: value },
+        },
+      },
+    }));
+  };
+
+  const updateExcludeUpperPointsOnLowerAdvance = (checked: boolean) => {
+    setPointRules((previous) => ({
+      ...previous,
+      rankings: {
+        ...previous.rankings,
+        tournamentLower: {
+          ...previous.rankings.tournamentLower,
+          excludeUpperPointsOnLowerAdvance: checked,
+        },
       },
     }));
   };
@@ -397,8 +430,19 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
           <Stack spacing={1.5}>
             <RankingPointRow label="단일리그" values={pointRules.rankings.league} onEnabledChange={(enabled) => updateRankingEnabled("league", enabled)} onChange={(rank, value) => updateRanking("league", rank, value)} />
             <RankingPointRow label="조별리그" values={pointRules.rankings.group} onEnabledChange={(enabled) => updateRankingEnabled("group", enabled)} onChange={(rank, value) => updateRanking("group", rank, value)} />
-            <RankingPointRow label="토너먼트(상위)" values={pointRules.rankings.tournamentUpper} onEnabledChange={(enabled) => updateRankingEnabled("tournamentUpper", enabled)} onChange={(rank, value) => updateRanking("tournamentUpper", rank, value)} />
-            <RankingPointRow label="토너먼트(하위)" values={pointRules.rankings.tournamentLower} onEnabledChange={(enabled) => updateRankingEnabled("tournamentLower", enabled)} onChange={(rank, value) => updateRanking("tournamentLower", rank, value)} />
+            <RankingPointRow label="토너먼트(상위)" values={pointRules.rankings.tournamentUpper} onEnabledChange={(enabled) => updateRankingEnabled("tournamentUpper", enabled)} onChange={(rank, value) => updateRanking("tournamentUpper", rank, value)} onEliminationChange={(round, value) => updateEliminationRound("tournamentUpper", round, value)} />
+            <RankingPointRow label="토너먼트(하위)" values={pointRules.rankings.tournamentLower} onEnabledChange={(enabled) => updateRankingEnabled("tournamentLower", enabled)} onChange={(rank, value) => updateRanking("tournamentLower", rank, value)} onEliminationChange={(round, value) => updateEliminationRound("tournamentLower", round, value)} />
+            <FormControlLabel
+              control={(
+                <Checkbox
+                  size="small"
+                  checked={pointRules.rankings.tournamentLower.excludeUpperPointsOnLowerAdvance === true}
+                  onChange={(event) => updateExcludeUpperPointsOnLowerAdvance(event.target.checked)}
+                />
+              )}
+              label={<Typography sx={{ fontSize: 13, fontWeight: 700 }}>토너먼트 하위부 진출 시, 상위부 포인트 제외</Typography>}
+              sx={{ mt: -0.75, ml: 0 }}
+            />
           </Stack>
 
           {error && <Alert severity="warning">{error}</Alert>}
@@ -482,19 +526,35 @@ function RankingPointRow({
   values,
   onChange,
   onEnabledChange,
+  onEliminationChange,
 }: {
   label: string;
   values: RankRule;
   onChange: (rank: "first" | "second" | "third" | "fourth", value: number) => void;
   onEnabledChange: (enabled: boolean) => void;
+  onEliminationChange?: (round: TournamentEliminationRound, value: number) => void;
 }) {
+  const configuredRounds = TOURNAMENT_ELIMINATION_ROUNDS.filter((round) => values.eliminationRounds?.[round] != null);
+  const nextRound = TOURNAMENT_ELIMINATION_ROUNDS.find((round) => values.eliminationRounds?.[round] == null);
   return (
     <Box>
-      <FormControlLabel
-        control={<Checkbox size="small" checked={values.enabled} onChange={(event) => onEnabledChange(event.target.checked)} />}
-        label={<Typography sx={{ fontSize: 13, fontWeight: 800 }}>{label}</Typography>}
-        sx={{ m: 0, mb: 0.5 }}
-      />
+      <Stack direction="row" alignItems="center" sx={{ mb: 0.5 }}>
+        <FormControlLabel
+          control={<Checkbox size="small" checked={values.enabled} onChange={(event) => onEnabledChange(event.target.checked)} />}
+          label={<Typography sx={{ fontSize: 13, fontWeight: 800 }}>{label}</Typography>}
+          sx={{ m: 0 }}
+        />
+        {onEliminationChange && nextRound && (
+          <Button
+            size="small"
+            startIcon={<AddIcon />}
+            onClick={() => onEliminationChange(nextRound, 0)}
+            sx={{ ml: "auto", minWidth: 0, px: 0.75, fontSize: 12, fontWeight: 800 }}
+          >
+            추가
+          </Button>
+        )}
+      </Stack>
       <Box sx={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 0.75 }}>
         {([
           ["first", "1위"],
@@ -509,6 +569,17 @@ function RankingPointRow({
               disabled={!values.enabled}
               onChange={(value) => onChange(key, value)}
               ariaLabel={`${label} ${rankLabel} 포인트`}
+            />
+          </Stack>
+        ))}
+        {configuredRounds.map((round) => (
+          <Stack key={round} spacing={0.35} alignItems="flex-start">
+            <Typography sx={{ fontSize: 12 }}>{round}강</Typography>
+            <PointInput
+              value={values.eliminationRounds?.[round] ?? 0}
+              disabled={!values.enabled}
+              onChange={(value) => onEliminationChange?.(round, value)}
+              ariaLabel={`${label} ${round}강 탈락 포인트`}
             />
           </Stack>
         ))}

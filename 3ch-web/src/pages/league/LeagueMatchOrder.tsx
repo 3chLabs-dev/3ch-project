@@ -18,7 +18,6 @@ import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import NotificationsOffIcon from "@mui/icons-material/NotificationsOff";
 import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
-import RefreshIcon from "@mui/icons-material/Refresh";
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import DragHandleIcon from "@mui/icons-material/DragHandle";
@@ -45,7 +44,6 @@ import {
 } from "../../features/league/leagueApi";
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
 import { useAppSelector } from "../../app/hooks";
-import { useOutletContext } from "react-router-dom";
 import { usePushNotification } from "../../hooks/usePushNotification";
 import {
   applyProgramMatchState,
@@ -532,7 +530,7 @@ export default function LeagueMatchOrder() {
   const isProgramMode = searchParams.get("program") === "1";
   const programRound = Number.parseInt(searchParams.get("round") ?? "1", 10) || 1;
   const { state: pushState, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe } = usePushNotification();
-  const { scrollToTop } = useOutletContext<{ scrollToTop: () => void }>();
+  const matchListRef = useRef<HTMLDivElement>(null);
 
   const { data: leagueData } = useGetLeagueQuery(leagueId, { skip: !leagueId });
   const league = leagueData?.league;
@@ -552,7 +550,7 @@ export default function LeagueMatchOrder() {
 
   const { data: matchData, isLoading: matchLoading, refetch: refetchMatches } = useGetLeagueMatchesQuery(leagueId, { skip: !leagueId, refetchOnMountOrArgChange: true });
   const { data: participantData } = useGetLeagueParticipantsQuery(leagueId, { skip: !leagueId, refetchOnMountOrArgChange: true, });
-  const { data: programData } = useGetLeagueProgramQuery(leagueId, { skip: !isProgramMode || !leagueId });
+  const { data: programData, refetch: refetchProgram } = useGetLeagueProgramQuery(leagueId, { skip: !isProgramMode || !leagueId });
   const [updateMatch] = useUpdateLeagueMatchMutation();
   const [saveLeagueProgram] = useSaveLeagueProgramMutation();
   const [search, setSearch] = useState("");
@@ -1083,9 +1081,15 @@ export default function LeagueMatchOrder() {
 
   const handleRefresh = useCallback(() => {
     setLocalOrder(null);
-    if (isProgramMode) return;
-    refetchMatches();
-  }, [isProgramMode, refetchMatches]);
+    void refetchMatches();
+    if (isProgramMode) void refetchProgram();
+  }, [isProgramMode, refetchMatches, refetchProgram]);
+
+  useEffect(() => {
+    const refresh = () => handleRefresh();
+    window.addEventListener("refresh-match-order", refresh);
+    return () => window.removeEventListener("refresh-match-order", refresh);
+  }, [handleRefresh]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -1153,7 +1157,8 @@ export default function LeagueMatchOrder() {
   }
   
   return (
-    <Stack spacing={2}>
+    <Stack spacing={0} sx={{ height: "100%", minHeight: 0 }}>
+      <Stack spacing={2} sx={{ flexShrink: 0, pb: 2 }}>
       {/* 상단 헤더 */}
       <Stack direction="row" alignItems="center" spacing={1}>
         <IconButton size="small" onClick={() => navigate(`/league/${leagueId}`)} sx={{ p: 0.5, color: "#374151" }}>
@@ -1308,8 +1313,13 @@ export default function LeagueMatchOrder() {
           "& .MuiOutlinedInput-root": { borderRadius: 2, bgcolor: "#F9FAFB", fontSize: 14 },
         }}
       />
+      </Stack>
 
       {/* 생성 중 / 경기 없을 때 */}
+      <Box
+        ref={matchListRef}
+        sx={{ flex: 1, minHeight: 0, overflowY: "auto", mx: -2, px: 2, pb: 12, WebkitOverflowScrolling: "touch" }}
+      >
       {displayedMatches.length === 0 ? (
         <Box display="flex" justifyContent="center" pt={4}>
           {!isProgramMode && isIniting ? (
@@ -1366,6 +1376,7 @@ export default function LeagueMatchOrder() {
       )}
         </DndContext>
       )}
+      </Box>
 
       {hasNextProgramRound && (
         <Box
@@ -1399,14 +1410,8 @@ export default function LeagueMatchOrder() {
       )}
 
       <Tooltip title="상단으로">
-        <IconButton onClick={scrollToTop} sx={{ position: "absolute", bottom: "calc(202px + env(safe-area-inset-bottom))", right: 14, zIndex: 10, bgcolor: "#fff", color: "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: "#F3F4F6" } }}>
+        <IconButton onClick={() => matchListRef.current?.scrollTo({ top: 0, behavior: "smooth" })} sx={{ position: "absolute", bottom: isProgramMode ? "calc(132px + env(safe-area-inset-bottom))" : "calc(68px + env(safe-area-inset-bottom))", left: "50%", transform: "translateX(-50%)", zIndex: 21, bgcolor: "#fff", color: "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: "#F3F4F6" } }}>
           <ArrowUpwardIcon sx={{ fontSize: 18 }} />
-        </IconButton>
-      </Tooltip>
-
-      <Tooltip title="새로고침">
-        <IconButton onClick={handleRefresh} sx={{ position: "absolute", bottom: "calc(252px + env(safe-area-inset-bottom))", right: 14, zIndex: 10, bgcolor: "#fff", color: "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: "#F3F4F6" } }}>
-          <RefreshIcon sx={{ fontSize: 18 }} />
         </IconButton>
       </Tooltip>
 

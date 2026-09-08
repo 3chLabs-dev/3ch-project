@@ -31,25 +31,6 @@ type ChatMessage = {
   created_at: string;
 };
 
-function PaddleIcon() {
-  return (
-    <Box
-      component="svg"
-      viewBox="0 0 40 40"
-      aria-hidden="true"
-      sx={{ width: 31, height: 31, display: "block" }}
-    >
-      <circle cx="27.8" cy="9.5" r="4.4" fill="#FFD34E" />
-      <path
-        d="M11.4 8.7c5.1-5.1 13.5-5.1 18.6 0 5.1 5.1 5.1 13.5 0 18.6-4.2 4.2-10.5 4.9-15.4 2.1l-3.2 3.2-4-4 3.2-3.2c-2.8-4.9-2.1-11.2.8-16.7Z"
-        fill="#FFFFFF"
-      />
-      <path d="m8.2 29.2 3.2 3.2-3.9 3.9a2.3 2.3 0 0 1-3.2-3.2l3.9-3.9Z" fill="#FFD8E9" />
-      <path d="M12.2 9.5c4.7-4.7 12.2-4.7 16.9 0" fill="none" stroke="#FFD8E9" strokeWidth="2.2" strokeLinecap="round" />
-    </Box>
-  );
-}
-
 function formatTime(value: string | null) {
   if (!value) return "";
   return new Intl.DateTimeFormat("ko-KR", {
@@ -67,6 +48,7 @@ export default function SupportChat() {
     () => localStorage.getItem(GUEST_TOKEN_STORAGE_KEY) ?? "",
   );
   const [open, setOpen] = useState(false);
+  const [buttonExpanded, setButtonExpanded] = useState(false);
   const [message, setMessage] = useState("");
   const [room, setRoom] = useState<ChatRoom | null>(null);
   const [items, setItems] = useState<ChatMessage[]>([]);
@@ -114,6 +96,16 @@ export default function SupportChat() {
   }, []);
 
   useEffect(() => {
+    setButtonExpanded(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!buttonExpanded || open) return;
+    const timeoutId = window.setTimeout(() => setButtonExpanded(false), 5000);
+    return () => window.clearTimeout(timeoutId);
+  }, [buttonExpanded, open]);
+
+  useEffect(() => {
     if (!loading) messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [items, loading]);
 
@@ -159,32 +151,43 @@ export default function SupportChat() {
   return (
     <>
       <Button
-        aria-label="채팅 문의 열기"
-        onClick={() => setOpen(true)}
+        aria-label={buttonExpanded ? "채팅 문의 열기" : "채팅 문의 버튼 펼치기"}
+        onClick={() => {
+          if (!buttonExpanded) {
+            setButtonExpanded(true);
+            return;
+          }
+          setOpen(true);
+        }}
         sx={{
           position: "absolute",
           zIndex: 21,
-          right: 14,
+          left: 14,
           bottom: isProgramMatchOrder
             ? "calc(132px + env(safe-area-inset-bottom))"
             : isLeagueDetail || isClubFloatingActionPage
               ? "calc(124px + env(safe-area-inset-bottom))"
               : "calc(68px + env(safe-area-inset-bottom))",
           minWidth: 0,
-          height: 54,
-          px: 1.2,
+          width: buttonExpanded ? 112 : 52,
+          height: 52,
+          px: buttonExpanded ? 1.2 : 0,
           borderRadius: 999,
-          bgcolor: "#EC4899",
+          bgcolor: "#5B6472",
           color: "#fff",
-          boxShadow: "0 6px 18px rgba(190, 24, 93, 0.32)",
+          boxShadow: "0 6px 18px rgba(55, 65, 81, 0.24)",
           border: "2px solid rgba(255,255,255,0.9)",
-          "&:hover": { bgcolor: "#DB2777" },
+          overflow: "hidden",
+          transition: "width 180ms ease, padding 180ms ease, background-color 180ms ease",
+          "&:hover": { bgcolor: "#424B57" },
         }}
       >
-        <PaddleIcon />
-        <Typography sx={{ ml: 0.5, mr: 0.3, fontSize: 12, fontWeight: 900, whiteSpace: "nowrap" }}>
-          채팅 문의
-        </Typography>
+        <SupportAgentRoundedIcon sx={{ fontSize: 28 }} />
+        {buttonExpanded && (
+          <Typography sx={{ ml: 0.5, mr: 0.3, fontSize: 12, fontWeight: 900, whiteSpace: "nowrap" }}>
+            채팅 문의
+          </Typography>
+        )}
       </Button>
 
       <Dialog
@@ -218,12 +221,12 @@ export default function SupportChat() {
                 width: 40,
                 height: 40,
                 borderRadius: "50%",
-                bgcolor: "#FCE7F3",
+                bgcolor: "#E5E7EB",
                 display: "grid",
                 placeItems: "center",
               }}
             >
-              <SupportAgentRoundedIcon sx={{ color: "#DB2777", fontSize: 24 }} />
+              <SupportAgentRoundedIcon sx={{ color: "#5B6472", fontSize: 24 }} />
             </Box>
             <Box sx={{ flex: 1 }}>
               <Typography fontSize={16} fontWeight={900}>우리리그 채팅 문의</Typography>

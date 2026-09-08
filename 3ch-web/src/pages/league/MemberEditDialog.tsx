@@ -142,7 +142,7 @@ export default function MemberEditDialog({
 
           <Stack direction="row" spacing={0.6}>
             <Button variant="outlined" disableElevation size="small" onClick={() => setOpenImageImport(true)} sx={{ borderRadius: 1, height: 28, px: 1, fontWeight: 900, fontSize: 11 }}>
-              이미지로 불러오기
+              이미지로 등록하기
             </Button>
             <Button variant="contained" disableElevation size="small" onClick={onOpenLoadMembers} sx={{ borderRadius: 1, height: 28, px: 1.2, fontWeight: 900, fontSize: 11, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#79AEFF" } }}>
               클럽회원 불러오기

@@ -1294,18 +1294,21 @@ const LeagueAlgorithmDemo = ({
   const [selectedProgramOptionIndex, setSelectedProgramOptionIndex] = useState<number | null>(null);
   const [expandedProgramOptionIndex, setExpandedProgramOptionIndex] = useState<number | null>(null);
   const programOptionRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const collapsedProgramOptionScrollRef = useRef<number | null>(null);
   const [showEditHint, setShowEditHint] = useState(true);
   const [customProgramOptions, setCustomProgramOptions] = useState<Record<number, ProgramOption>>({});
   const [editingOptionIndex, setEditingOptionIndex] = useState<number | null>(null);
   const [editingRounds, setEditingRounds] = useState<RoundConfig[]>([]);
 
   useEffect(() => {
-    if (expandedProgramOptionIndex === null || window.innerWidth > 600) return;
+    const targetIndex = expandedProgramOptionIndex ?? collapsedProgramOptionScrollRef.current;
+    if (targetIndex === null || window.innerWidth > 600) return;
+    collapsedProgramOptionScrollRef.current = null;
 
     let secondFrame = 0;
     const firstFrame = window.requestAnimationFrame(() => {
       secondFrame = window.requestAnimationFrame(() => {
-        programOptionRefs.current[expandedProgramOptionIndex]?.scrollIntoView({
+        programOptionRefs.current[targetIndex]?.scrollIntoView({
           behavior: "smooth",
           block: "start",
         });
@@ -3581,6 +3584,7 @@ const LeagueAlgorithmDemo = ({
       type="button"
       onClick={(event) => {
         event.stopPropagation();
+        collapsedProgramOptionScrollRef.current = index;
         setExpandedProgramOptionIndex(null);
       }}
       aria-expanded="true"

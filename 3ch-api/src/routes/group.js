@@ -1157,6 +1157,13 @@ const rankingSeasonSchema = z.object({
         second: z.number().int().min(0).max(10000),
         third: z.number().int().min(0).max(10000),
         fourth: z.number().int().min(0).max(10000),
+        eliminationRounds: z.object({
+          '8': z.number().int().min(0).max(10000).optional(),
+          '16': z.number().int().min(0).max(10000).optional(),
+          '32': z.number().int().min(0).max(10000).optional(),
+          '64': z.number().int().min(0).max(10000).optional(),
+          '128': z.number().int().min(0).max(10000).optional(),
+        }).optional().default({}),
       }),
       tournamentLower: z.object({
         enabled: z.boolean().optional().default(true),
@@ -1164,6 +1171,14 @@ const rankingSeasonSchema = z.object({
         second: z.number().int().min(0).max(10000),
         third: z.number().int().min(0).max(10000),
         fourth: z.number().int().min(0).max(10000),
+        eliminationRounds: z.object({
+          '8': z.number().int().min(0).max(10000).optional(),
+          '16': z.number().int().min(0).max(10000).optional(),
+          '32': z.number().int().min(0).max(10000).optional(),
+          '64': z.number().int().min(0).max(10000).optional(),
+          '128': z.number().int().min(0).max(10000).optional(),
+        }).optional().default({}),
+        excludeUpperPointsOnLowerAdvance: z.boolean().optional().default(false),
       }),
     }),
   }).optional().default(defaultRankingPointRules),

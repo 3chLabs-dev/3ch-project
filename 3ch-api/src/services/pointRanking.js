@@ -31,6 +31,12 @@ function normalizePointRules(value) {
     second: numberOr(rule?.second, fallback.second),
     third: numberOr(rule?.third, numberOr(rule?.thirdFourth, fallback.third)),
     fourth: numberOr(rule?.fourth, numberOr(rule?.thirdFourth, fallback.fourth)),
+    eliminationRounds: Object.fromEntries(
+      [8, 16, 32, 64, 128]
+        .filter((round) => rule?.eliminationRounds?.[round] != null)
+        .map((round) => [round, numberOr(rule.eliminationRounds[round], 0)]),
+    ),
+    excludeUpperPointsOnLowerAdvance: rule?.excludeUpperPointsOnLowerAdvance === true,
   });
   return {
     attendance: {
@@ -141,6 +147,24 @@ function awardChampionship(sectionRows, memberIds) {
     const row = sectionRows.get(String(memberId));
     if (row) row.championships += 1;
   });
+}
+
+function tournamentEliminationRound(match) {
+  const matched = String(match?.match_label ?? "").match(/(?:^|\s)(8|16|32|64|128)강(?:$|\s)/);
+  return matched ? Number(matched[1]) : null;
+}
+
+function awardEliminationBonus(sectionRows, memberIds, points) {
+  const divisor = Math.max(1, memberIds.length);
+  memberIds.forEach((memberId) => {
+    const row = sectionRows.get(String(memberId));
+    if (row) row.bonus_points = roundPoint(row.bonus_points + points / divisor);
+  });
+}
+
+function eligibleTournamentBonusMemberIds(memberIds, tournamentOption, excludeUpperPoints, lowerMemberIds) {
+  if (tournamentOption === "LOWER" || !excludeUpperPoints) return memberIds;
+  return memberIds.filter((memberId) => !lowerMemberIds?.has(String(memberId)));
 }
 
 function applyMatchPoints(rowsA, rowsB, scoreA, scoreB, pointRules, memberACount, memberBCount) {
@@ -681,6 +705,7 @@ async function getPointRanking(groupId, year, scope, seasonId) {
 
   const leagueGroups = new Map();
   const tournamentGroups = new Map();
+  const lowerTournamentMembers = new Map();
   const standingWinners = new Map();
   // A league that has a regular/group phase remains a "league" ranking entry
   // even when its finals are played as a tournament. Only tournament-only
@@ -729,6 +754,13 @@ async function getPointRanking(groupId, year, scope, seasonId) {
     match._memberBIds = memberBIds;
     match._rankingMemberAIds = rankingMemberAIds;
     match._rankingMemberBIds = rankingMemberBIds;
+
+    if (phaseSection === "tournament" && match._rankingOption === "LOWER") {
+      const lowerScopeKey = `${match.league_id}:${match.program_round ?? 0}`;
+      const lowerMembers = lowerTournamentMembers.get(lowerScopeKey) ?? new Set();
+      [...memberAIds, ...memberBIds].forEach((memberId) => lowerMembers.add(String(memberId)));
+      lowerTournamentMembers.set(lowerScopeKey, lowerMembers);
+    }
 
     const attendanceSets = section === "tournament" ? tournamentParticipantSets : leagueParticipantSets;
     const attendanceKey = match.league_id;
@@ -859,6 +891,14 @@ async function getPointRanking(groupId, year, scope, seasonId) {
   tournamentGroups.forEach((matches) => {
     if (matches.length === 0) return;
     const sample = matches[0];
+    const lowerMembers = lowerTournamentMembers.get(`${sample.league_id}:${sample.program_round ?? 0}`) ?? new Set();
+    const excludeUpperPoints = pointRules.rankings.tournamentLower.excludeUpperPointsOnLowerAdvance === true;
+    const eligibleBonusIds = (memberIds) => eligibleTournamentBonusMemberIds(
+      memberIds,
+      sample._rankingOption,
+      excludeUpperPoints,
+      lowerMembers,
+    );
     const statMap = new Map();
 
     matches.forEach((match) => {
@@ -926,6 +966,18 @@ async function getPointRanking(groupId, year, scope, seasonId) {
       });
     };
     const bonusRule = getBonusRule(pointRules, "tournament", sample._rankingFormat, sample._rankingOption);
+    if (bonusRule.enabled !== false) {
+      matches.forEach((match) => {
+        const eliminationRound = tournamentEliminationRound(match);
+        const points = eliminationRound == null ? null : bonusRule.eliminationRounds?.[eliminationRound];
+        const outcome = points == null ? null : completedOutcome(match);
+        if (outcome) awardEliminationBonus(
+          sample._rankingSection === "league" ? leagueRows : tournamentRows,
+          eligibleBonusIds(outcome.loserIds),
+          points,
+        );
+      });
+    }
     const finalMatch = matches.find(isFinalMatch)
       ?? [...matches]
         .filter((match) => !isThirdPlaceMatch(match))
@@ -933,14 +985,14 @@ async function getPointRanking(groupId, year, scope, seasonId) {
     const finalOutcome = completedOutcome(finalMatch);
 
     if (finalMatch && finalOutcome) {
-      awardMemberRank(finalOutcome.winnerIds, 1, bonusRule);
-      awardMemberRank(finalOutcome.loserIds, 2, bonusRule);
+      awardMemberRank(eligibleBonusIds(finalOutcome.winnerIds), 1, bonusRule);
+      awardMemberRank(eligibleBonusIds(finalOutcome.loserIds), 2, bonusRule);
 
       const thirdPlaceMatch = matches.find(isThirdPlaceMatch);
       const thirdPlaceOutcome = completedOutcome(thirdPlaceMatch);
       if (thirdPlaceOutcome) {
-        awardMemberRank(thirdPlaceOutcome.winnerIds, 3, bonusRule);
-        awardMemberRank(thirdPlaceOutcome.loserIds, 4, bonusRule);
+        awardMemberRank(eligibleBonusIds(thirdPlaceOutcome.winnerIds), 3, bonusRule);
+        awardMemberRank(eligibleBonusIds(thirdPlaceOutcome.loserIds), 4, bonusRule);
       } else if (!thirdPlaceMatch) {
         matches
           .filter(
@@ -950,7 +1002,7 @@ async function getPointRanking(groupId, year, scope, seasonId) {
           )
           .map(completedOutcome)
           .filter(Boolean)
-          .forEach((outcome) => awardMemberRank(outcome.loserIds, 3, bonusRule));
+          .forEach((outcome) => awardMemberRank(eligibleBonusIds(outcome.loserIds), 3, bonusRule));
       }
       return;
     }
@@ -1052,6 +1104,8 @@ module.exports = {
   _test: {
     awardBonus,
     awardChampionship,
+    awardEliminationBonus,
+    eligibleTournamentBonusMemberIds,
     applyMatchPoints,
     getBonusRule,
     getMatchPhaseSection,
@@ -1060,5 +1114,6 @@ module.exports = {
     isThirdPlaceMatch,
     rankingMemberKey,
     rankingUnitKey,
+    tournamentEliminationRound,
   },
 };

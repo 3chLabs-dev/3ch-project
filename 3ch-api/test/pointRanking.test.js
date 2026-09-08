@@ -87,3 +87,36 @@ test('상대가 순위 대상이 아니어도 식별된 회원의 획득 세트�
   assert.equal(member.wins, 1);
   assert.equal(member.losses, 0);
 });
+
+test('토너먼트 추가 점수는 해당 강에서 패배한 구성원에게만 나눠 지급한다', () => {
+  const rows = new Map([
+    ['member:1', { bonus_points: 0 }],
+    ['member:2', { bonus_points: 0 }],
+    ['member:3', { bonus_points: 0 }],
+  ]);
+
+  assert.equal(_test.tournamentEliminationRound({ match_label: '상위 8강' }), 8);
+  assert.equal(_test.tournamentEliminationRound({ match_label: '결승' }), null);
+  _test.awardEliminationBonus(rows, ['member:1', 'member:2'], 10);
+
+  assert.equal(rows.get('member:1').bonus_points, 5);
+  assert.equal(rows.get('member:2').bonus_points, 5);
+  assert.equal(rows.get('member:3').bonus_points, 0);
+});
+
+test('하위부 진출 시 상위부 포인트 제외 옵션은 같은 토너먼트의 하위부 참가자를 상위부 지급 대상에서 뺀다', () => {
+  const lowerMembers = new Set(['member:2']);
+
+  assert.deepEqual(
+    _test.eligibleTournamentBonusMemberIds(['member:1', 'member:2'], 'UPPER', true, lowerMembers),
+    ['member:1'],
+  );
+  assert.deepEqual(
+    _test.eligibleTournamentBonusMemberIds(['member:1', 'member:2'], 'UPPER', false, lowerMembers),
+    ['member:1', 'member:2'],
+  );
+  assert.deepEqual(
+    _test.eligibleTournamentBonusMemberIds(['member:2'], 'LOWER', true, lowerMembers),
+    ['member:2'],
+  );
+});

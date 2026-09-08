@@ -17,6 +17,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import NotificationsOffIcon from "@mui/icons-material/NotificationsOff";
+import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import { usePushNotification } from "../../hooks/usePushNotification";
 import {
   useGetLeagueQuery,
@@ -340,9 +341,10 @@ export default function LeagueTournamentMatchOrder() {
   const [registerTarget, setRegisterTarget] = useState<{ matchId: string; slot: "a" | "b" } | null>(null);
   const [participantSearch, setParticipantSearch] = useState("");
   const [startedMatchIds, setStartedMatchIds] = useState<string[]>([]);
+  const matchListRef = useRef<HTMLDivElement>(null);
 
   const { data: leagueData } = useGetLeagueQuery(id!);
-  const { data: matchesData, isLoading } = useGetLeagueMatchesQuery(id!, { pollingInterval: 15000 });
+  const { data: matchesData, isLoading, refetch: refetchMatches } = useGetLeagueMatchesQuery(id!, { pollingInterval: 15000 });
   const { data: groupData } = useGetGroupDetailQuery(
     leagueData?.league?.group_id ?? "",
     { skip: !leagueData?.league?.group_id },
@@ -350,6 +352,12 @@ export default function LeagueTournamentMatchOrder() {
   const isCreator = !!authUser && leagueData?.league?.created_by_id === authUser?.id;
   const canManage = isCreator || groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.league === true);
   const manualSeeding = leagueData?.league?.tournament_seeding === "manual";
+
+  useEffect(() => {
+    const refresh = () => void refetchMatches();
+    window.addEventListener("refresh-match-order", refresh);
+    return () => window.removeEventListener("refresh-match-order", refresh);
+  }, [refetchMatches]);
 
   const { data: participantsData } = useGetLeagueParticipantsQuery(id!, { skip: !canManage });
   const [assignParticipant] = useAssignMatchParticipantMutation();
@@ -503,7 +511,7 @@ export default function LeagueTournamentMatchOrder() {
   }
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", minHeight: "100%", bgcolor: "#fff" }}>
+    <Box sx={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, bgcolor: "#fff" }}>
 
       {/* ── 헤더 ── */}
       <Box sx={{ bgcolor: "#fff", borderBottom: "1px solid #E5E7EB", display: "flex", alignItems: "center", px: 0.5, py: 0.75, gap: 0.25, position: "sticky", top: 0, zIndex: 10 }}>
@@ -563,7 +571,7 @@ export default function LeagueTournamentMatchOrder() {
       )}
 
       {/* ── 매치 목록 ── */}
-      <Box sx={{ flex: 1, px: 1, pt: 1.5, pb: 10 }}>
+      <Box ref={matchListRef} sx={{ flex: 1, minHeight: 0, overflowY: "auto", px: 1, pt: 1.5, pb: 12, WebkitOverflowScrolling: "touch" }}>
         {currentMatches.length === 0 ? (
           <Box sx={{ textAlign: "center", py: 6 }}>
             <Typography color="text.secondary" sx={{ fontSize: 13 }}>경기가 없습니다.</Typography>
@@ -592,6 +600,27 @@ export default function LeagueTournamentMatchOrder() {
           );
         })}
       </Box>
+
+      <Tooltip title="상단으로">
+        <IconButton
+          onClick={() => matchListRef.current?.scrollTo({ top: 0, behavior: "smooth" })}
+          sx={{
+            position: "absolute",
+            bottom: "calc(68px + env(safe-area-inset-bottom))",
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 21,
+            bgcolor: "#fff",
+            color: "#6B7280",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+            width: 45,
+            height: 45,
+            "&:hover": { bgcolor: "#F3F4F6" },
+          }}
+        >
+          <ArrowUpwardIcon sx={{ fontSize: 18 }} />
+        </IconButton>
+      </Tooltip>
 
       {/* ── 참가자 등록 다이얼로그 ── */}
       <Dialog

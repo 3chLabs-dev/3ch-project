@@ -108,6 +108,7 @@ model Group {
   address_detail String?
   lat            Float?
   lng            Float?
+  activity_venues Json      @default("[]")
   club_code      String? @unique
 
   created_by_id Int

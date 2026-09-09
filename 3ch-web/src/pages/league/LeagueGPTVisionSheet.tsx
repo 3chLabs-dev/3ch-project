@@ -2261,6 +2261,12 @@ export default function LeagueGPTVisionSheet() {
     return null;
   };
 
+  useEffect(() => {
+    if (searchParams.get("resultImport") !== "1" || !canManage || !localOrder.length) return;
+    handleOpenResultDialog();
+    navigate(`/league/${id}/bracket`, { replace: true });
+  }, [canManage, id, localOrder.length, navigate, searchParams]);
+
   const saveVisionPreview = async (skipRuleCheck = false) => {
     if (isSavingVision) return;
     if (!skipRuleCheck) {

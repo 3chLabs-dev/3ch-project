@@ -35,6 +35,13 @@ export interface CreateLeagueRequest {
   rules?: string;
   join_permission?: "public" | "club_only";
   premium_enabled?: boolean;
+  format?: string;
+  group_id?: string;
+  recruit_count?: number;
+  participant_count?: number;
+  sort_order?: string;
+  participants?: { division: string; name: string; member_id?: number | null; source_group_id?: string | null; paid?: boolean; arrived?: boolean; after?: boolean }[];
+  invited_group_ids?: string[];
 }
 
 export interface UpdateLeagueRequest {
@@ -403,6 +410,36 @@ export interface ScanParticipantImagesResponse {
   engine: string;
   imageCount: number;
   participants: RecognizedParticipant[];
+}
+
+export interface LeagueResultImportParticipant {
+  key: string;
+  name: string;
+  division: string;
+  members: string[];
+  rosterIncomplete: boolean;
+  confidence: number;
+  needsReview: boolean;
+  member_id: number | null;
+  canonical_name: string | null;
+  imageIndex: number;
+}
+
+export interface LeagueResultImportMatch {
+  participantAKey: string;
+  participantBKey: string;
+  scoreA: number;
+  scoreB: number;
+  confidence: number;
+  needsReview: boolean;
+  imageIndex: number;
+}
+
+export interface ScanLeagueResultImportResponse {
+  engine: string;
+  imageCount: number;
+  participants: LeagueResultImportParticipant[];
+  matches: LeagueResultImportMatch[];
 }
 
 export interface ScanOcrRequest {
@@ -1212,6 +1249,20 @@ export const leagueApi = baseApi.injectEndpoints({
       },
     }),
 
+    scanLeagueResultImport: builder.mutation<ScanLeagueResultImportResponse, { files: File[]; groupIds?: string[]; idempotencyKey?: string }>({
+      query: ({ files, groupIds = [], idempotencyKey }) => {
+        const formData = new FormData();
+        files.forEach((file) => formData.append("images", file));
+        formData.append("group_ids", JSON.stringify(groupIds));
+        return {
+          url: "/league/result-import/scan",
+          method: "POST",
+          body: formData,
+          headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
+        };
+      },
+    }),
+
     scanOcr: builder.mutation<ScanOcrResponse, ScanOcrRequest>({
       query: ({ file, language, psm, maxSide }) => {
         const formData = new FormData();
@@ -1360,6 +1411,7 @@ export const {
   useUpdateLeagueMatchMutation,
   useScanLeagueOmrMutation,
   useScanLeagueOpenAIVisionMutation,
+  useScanLeagueResultImportMutation,
   useScanParticipantImagesMutation,
   useScanOcrMutation,
   useReorderLeagueMatchesMutation,

@@ -31,6 +31,19 @@ export interface Group {
   is_primary?: boolean;
   is_pre_registered?: boolean;
   management_permissions?: ManagementPermissions;
+  activity_venues?: GroupActivityVenue[];
+}
+
+export interface GroupActivityVenue {
+  id: string;
+  name: string;
+  address: string;
+  address_detail?: string;
+  lat?: number | null;
+  lng?: number | null;
+  region_city?: string | null;
+  region_district?: string | null;
+  is_default: boolean;
 }
 
 export interface GetGroupsResponse {
@@ -55,6 +68,7 @@ export interface CreateGroupRequest {
   address_detail?: string;
   lat?: number;
   lng?: number;
+  activity_venues?: GroupActivityVenue[];
   links?: CreateGroupLinkRequest[];
 }
 
@@ -146,6 +160,7 @@ export interface GetGroupDetailResponse {
     address_detail?: string;
     lat?: number;
     lng?: number;
+    activity_venues?: GroupActivityVenue[];
     created_at: string;
     creator_name?: string;
   };
@@ -167,6 +182,7 @@ export interface UpdateGroupRequest {
   address_detail?: string;
   lat?: number;
   lng?: number;
+  activity_venues?: GroupActivityVenue[];
   links?: GroupLink[];
 }
 

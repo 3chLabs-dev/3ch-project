@@ -27,6 +27,7 @@ import {
     Radio,
     RadioGroup,
     FormControlLabel,
+    Checkbox,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import EditIcon from "@mui/icons-material/Edit";
@@ -51,6 +52,7 @@ import {
     useUpdateGroupPreMemberMutation,
     useDeleteGroupPreMemberMutation,
 } from "../../features/group/groupApi";
+import type { GroupActivityVenue } from "../../features/group/groupApi";
 import { useGetLeaguesQuery, useGetLeagueParticipantsQuery, useUpdateParticipantMutation } from "../../features/league/leagueApi";
 import type { LeagueParticipantItem } from "../../features/league/leagueApi";
 import ParticipantDetailDialog from "../league/ParticipantDetailDialog";
@@ -161,6 +163,9 @@ export default function GroupManage() {
         lng: undefined as number | undefined,
     });
     const [placeDialogOpen, setPlaceDialogOpen] = useState(false);
+    const [venueName, setVenueName] = useState("");
+    const [venueIsDefault, setVenueIsDefault] = useState(false);
+    const [editActivityVenues, setEditActivityVenues] = useState<GroupActivityVenue[]>([]);
 
     const [editLinks, setEditLinks] = useState<GroupLinkInput[]>([
         { label: "", url: "" },
@@ -313,6 +318,9 @@ export default function GroupManage() {
             lat: group.lat,
             lng: group.lng,
         });
+        setVenueName("");
+        setVenueIsDefault(false);
+        setEditActivityVenues(group.activity_venues ?? []);
 
         setEditLinks(
             links.length > 0
@@ -334,6 +342,7 @@ export default function GroupManage() {
                 groupId: id,
                 data: {
                 ...formData,
+                activity_venues: editActivityVenues,
                 links: editLinks
                     .filter((link) => link.url.trim() !== "")
                     .map((link, index) => ({
@@ -1055,6 +1064,7 @@ export default function GroupManage() {
                         </FormControl>
 
                         {/* 주소 */}
+                        <TextField label="활동 장소 이름" value={venueName} onChange={(e) => setVenueName(e.target.value)} fullWidth size="small" placeholder="예: 정기 모임 탁구장" />
                         <Stack direction="row" spacing={1}>
                             <TextField
                                 label="주소"
@@ -1085,6 +1095,24 @@ export default function GroupManage() {
                                 sx={{ "& .MuiInputBase-input": { fontSize: 14 } }}
                             />
                         )}
+                        <FormControlLabel control={<Checkbox checked={venueIsDefault} onChange={(e) => setVenueIsDefault(e.target.checked)} />} label="기본 활동 장소로 선택" />
+                        <Button variant="outlined" disabled={!venueName.trim() || !formData.address.trim()} onClick={() => {
+                            const makeDefault = venueIsDefault || editActivityVenues.length === 0;
+                            setEditActivityVenues((prev) => [...prev.map((item) => makeDefault ? { ...item, is_default: false } : item), { id: crypto.randomUUID(), name: venueName.trim(), address: formData.address.trim(), address_detail: formData.address_detail.trim(), lat: formData.lat ?? null, lng: formData.lng ?? null, region_city: formData.region_city || null, region_district: formData.region_district || null, is_default: makeDefault }]);
+                            setVenueName("");
+                            setVenueIsDefault(false);
+                        }}>활동 장소 추가</Button>
+                        {editActivityVenues.map((venue) => <Box key={venue.id} sx={{ border: "1px solid #D9DDE6", borderRadius: 1, p: 1 }}>
+                            <Stack direction="row" justifyContent="space-between"><Typography fontWeight={800}>{venue.name}{venue.is_default ? " · 기본" : ""}</Typography><Button size="small" color="error" onClick={() => setEditActivityVenues((prev) => { const next = prev.filter((item) => item.id !== venue.id); return next.some((item) => item.is_default) ? next : next.map((item, index) => ({ ...item, is_default: index === 0 })); })}>삭제</Button></Stack>
+                            <Typography fontSize={12} color="text.secondary">{venue.address} {venue.address_detail}</Typography>
+                            <Button size="small" onClick={() => {
+                                setVenueName(venue.name);
+                                setVenueIsDefault(venue.is_default);
+                                setFormData((prev) => ({ ...prev, address: venue.address, address_detail: venue.address_detail ?? "", lat: venue.lat ?? undefined, lng: venue.lng ?? undefined, region_city: venue.region_city ?? "", region_district: venue.region_district ?? "" }));
+                                setEditActivityVenues((prev) => prev.filter((item) => item.id !== venue.id));
+                            }}>수정</Button>
+                            {!venue.is_default && <Button size="small" onClick={() => setEditActivityVenues((prev) => prev.map((item) => ({ ...item, is_default: item.id === venue.id })))}>기본으로 설정</Button>}
+                        </Box>)}
 
                         {/* 지역 */}
                         <Stack direction="row" spacing={1}>
@@ -1301,6 +1329,7 @@ export default function GroupManage() {
                 const city = CITY_ALIAS_MAP[rawCity] ?? "";
                 const district = city === "세종특별자치시" ? "세종시" : ((REGION_DATA[city] ?? []).includes(rawDistrict) ? rawDistrict : "");
                 setFormData((prev) => ({ ...prev, address: place.address, address_detail: place.name, lat: place.lat, lng: place.lng, region_city: city, region_district: district }));
+                if (!venueName.trim()) setVenueName(place.name);
                 setPlaceDialogOpen(false);
             }} />
 

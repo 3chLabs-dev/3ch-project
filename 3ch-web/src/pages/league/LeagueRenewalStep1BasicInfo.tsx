@@ -20,6 +20,7 @@ import { setRenewalBasicInfo, setRenewalStep } from "../../features/league/leagu
 import LeagueInvitedGroupsPicker from "./LeagueInvitedGroupsPicker";
 import { useGetMyFeatureUsageQuery } from "../../features/payment/usageApi";
 import PlaceSearchDialog from "../../components/PlaceSearchDialog";
+import { useGetMyGroupsQuery, type GroupActivityVenue } from "../../features/group/groupApi";
 
 const rowSx = { display: "grid", gridTemplateColumns: "72px 1fr", alignItems: "center", gap: 2, py: 1.2, borderBottom: "1px solid #D9DDE6" };
 const fieldSx = { "& .MuiOutlinedInput-root": { borderRadius: 0.6, bgcolor: "#fff", height: 32 }, "& .MuiOutlinedInput-input": { py: 0.5, fontSize: "0.95rem" } };
@@ -119,6 +120,9 @@ export default function LeagueRenewalStep1BasicInfo() {
   const [venueRegionCity, setVenueRegionCity] = useState(existing?.venueRegionCity ?? "");
   const [venueRegionDistrict, setVenueRegionDistrict] = useState(existing?.venueRegionDistrict ?? "");
   const [placeDialogOpen, setPlaceDialogOpen] = useState(false);
+  const [venuePickerOpen, setVenuePickerOpen] = useState(false);
+  const { data: myGroupsData } = useGetMyGroupsQuery();
+  const savedVenues = useMemo(() => (myGroupsData?.groups ?? []).flatMap((group) => (group.activity_venues ?? []).map((venue) => ({ ...venue, groupName: group.name, groupPrimary: Boolean(group.is_primary) }))), [myGroupsData]);
   const [participantCount, setParticipantCount] = useState<number | "">(existing?.participantCount ?? "");
   const [courtCount, setCourtCount] = useState<number | "">(existing?.courtCount ?? "");
   const [joinPermission, setJoinPermission] = useState<"public" | "club_only">(existing?.joinPermission ?? "club_only");
@@ -128,6 +132,19 @@ export default function LeagueRenewalStep1BasicInfo() {
   const { data: usageData } = useGetMyFeatureUsageQuery(authUserId, { skip: !authUserId, refetchOnMountOrArgChange: true });
   const premiumBalance = usageData?.usage.premium_promotion;
   const canUsePremium = Boolean(premiumBalance?.unlimited || Number(premiumBalance?.remaining ?? 0) > 0);
+  const applyVenue = (venue: GroupActivityVenue) => {
+    setLocation(venue.name);
+    setVenueAddress([venue.address, venue.address_detail].filter(Boolean).join(" "));
+    setVenueLat(venue.lat ?? null);
+    setVenueLng(venue.lng ?? null);
+    setVenueRegionCity(venue.region_city ?? "");
+    setVenueRegionDistrict(venue.region_district ?? "");
+  };
+  useEffect(() => {
+    if (existing || location || savedVenues.length === 0) return;
+    const defaultVenue = savedVenues.find((venue) => venue.groupPrimary && venue.is_default) ?? savedVenues.find((venue) => venue.is_default) ?? savedVenues[0];
+    applyVenue(defaultVenue);
+  }, [existing, location, savedVenues]);
   useEffect(() => {
     if (premiumDefaultApplied.current || !usageData) return;
     premiumDefaultApplied.current = true;
@@ -142,7 +159,8 @@ export default function LeagueRenewalStep1BasicInfo() {
   const canNext = useMemo(() => Boolean(title && date && startTime), [date, startTime, title]);
 
   const openPlaceSearch = () => {
-    setPlaceDialogOpen(true);
+    if (savedVenues.length > 0) setVenuePickerOpen(true);
+    else setPlaceDialogOpen(true);
   };
 
   const useDirectPlaceInput = (directLocation: string) => {
@@ -190,7 +208,7 @@ export default function LeagueRenewalStep1BasicInfo() {
         <Box>
           <Stack direction="row" spacing={0.8}>
             <TextField value={location} onChange={(event) => { setLocation(event.target.value); setVenueLat(null); setVenueLng(null); }} sx={{ ...fieldSx, flex: 1 }} placeholder="장소명 또는 주소" />
-            <Button variant="outlined" size="small" startIcon={<SearchIcon />} onClick={openPlaceSearch} sx={{ whiteSpace: "nowrap", fontWeight: 800 }}>주소 검색</Button>
+            <Button variant="outlined" size="small" startIcon={<SearchIcon />} onClick={openPlaceSearch} sx={{ whiteSpace: "nowrap", fontWeight: 800 }}>{savedVenues.length > 0 ? "변경" : "주소 검색"}</Button>
           </Stack>
           {venueAddress && <Typography fontSize={11.5} color="text.secondary" sx={{ mt: 0.6 }}>{venueAddress} · {venueRegionCity} {venueRegionDistrict}</Typography>}
         </Box>
@@ -278,5 +296,16 @@ export default function LeagueRenewalStep1BasicInfo() {
       setVenueRegionDistrict(place.region_district ?? "");
       setPlaceDialogOpen(false);
     }} />
+    <Dialog open={venuePickerOpen} onClose={() => setVenuePickerOpen(false)} fullWidth maxWidth="sm">
+      <DialogTitle sx={{ fontWeight: 900 }}>활동 장소 선택</DialogTitle>
+      <DialogContent><Stack spacing={1} sx={{ pt: 0.5 }}>
+        {savedVenues.map((venue) => <Button key={venue.id} variant="outlined" onClick={() => { applyVenue(venue); setVenuePickerOpen(false); }} sx={{ display: "block", textAlign: "left", color: "text.primary", p: 1.3 }}>
+          <Typography fontWeight={900}>{venue.name}{venue.is_default ? " · 기본" : ""}</Typography>
+          <Typography fontSize={11.5} color="text.secondary">{venue.groupName} · {venue.address} {venue.address_detail}</Typography>
+        </Button>)}
+        <Button onClick={() => { setVenuePickerOpen(false); setPlaceDialogOpen(true); }} sx={{ fontWeight: 800 }}>+ 새로운 장소 검색</Button>
+      </Stack></DialogContent>
+      <DialogActions><Button onClick={() => setVenuePickerOpen(false)}>닫기</Button></DialogActions>
+    </Dialog>
   </Box>;
 }

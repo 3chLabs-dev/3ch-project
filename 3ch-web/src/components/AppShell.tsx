@@ -337,7 +337,7 @@ export default function AppShell() {
                             </Box>
 
                             <Box
-                                onClick={() => navigate(token ? "/league" : "/login")}
+                                onClick={() => navigate(token ? "/league/quick-result" : `/login?redirect=${encodeURIComponent("/league/quick-result")}`)}
                                 sx={{
                                     position: "absolute",
                                     left: "50%",
@@ -356,7 +356,7 @@ export default function AppShell() {
                                     whiteSpace: "nowrap",
                                 }}
                             >
-                                지금 시작하기
+                                빠른 결과 등록
                             </Box>
                         </Box>
                     )}

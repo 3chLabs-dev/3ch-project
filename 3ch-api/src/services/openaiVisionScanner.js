@@ -289,7 +289,64 @@ async function scanParticipantNamesWithOpenAIVision({ imageBuffer, mimeType }) {
   return { engine: model, result: parseJsonObject(extractOutputText(responseBody)) };
 }
 
+const LEAGUE_RESULT_IMPORT_PROMPT = `You extract a completed Korean sports league result sheet from a photo.
+The printed layout uses a star symbol as the boundary: text to the left of the star identifies the participant, and values from the star onward are set scores.
+Participant labels are usually written in name then division order. Keep the display name separate from the division. A division is a short rank such as 1, 2, 3, 4, 5, 6, 7, 8, 선수, 초심, or a similar compact class label.
+Read every printed participant and every played match. For doubles or team events, return all visible member names in each side's members array; if only a team representative is printed, return that one name and set rosterIncomplete true.
+For each match, identify the two sides and return the score as sets won by side A and side B. Never infer an unplayed match. Use the participant key exactly as returned in participants.
+Handwriting may be uncertain: lower confidence and set needsReview instead of inventing text. Printed text should normally receive higher confidence.
+Respond only in the required JSON format.`;
+
+async function scanLeagueResultImportWithOpenAIVision({ imageBuffer, mimeType }) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    const error = new Error('OPENAI_API_KEY가 설정되어 있지 않습니다.');
+    error.code = 'OPENAI_API_KEY_MISSING';
+    throw error;
+  }
+  const model = process.env.OPENAI_VISION_MODEL || 'gpt-4.1-mini';
+  const response = await fetch(OPENAI_RESPONSES_URL, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      ...(model.startsWith('gpt-4') ? { temperature: 0 } : {}),
+      input: [{ role: 'user', content: [
+        { type: 'input_text', text: LEAGUE_RESULT_IMPORT_PROMPT },
+        { type: 'input_image', image_url: `data:${mimeType};base64,${imageBuffer.toString('base64')}` },
+      ] }],
+      text: { format: { type: 'json_schema', name: 'league_result_import', strict: true, schema: {
+        type: 'object', additionalProperties: false, required: ['participants', 'matches'], properties: {
+          participants: { type: 'array', items: { type: 'object', additionalProperties: false,
+            required: ['key', 'name', 'division', 'members', 'rosterIncomplete', 'confidence', 'needsReview'], properties: {
+              key: { type: 'string' }, name: { type: 'string' }, division: { type: 'string' },
+              members: { type: 'array', items: { type: 'string' } }, rosterIncomplete: { type: 'boolean' },
+              confidence: { type: 'number', minimum: 0, maximum: 1 }, needsReview: { type: 'boolean' },
+            } },
+          },
+          matches: { type: 'array', items: { type: 'object', additionalProperties: false,
+            required: ['participantAKey', 'participantBKey', 'scoreA', 'scoreB', 'confidence', 'needsReview'], properties: {
+              participantAKey: { type: 'string' }, participantBKey: { type: 'string' },
+              scoreA: { type: 'integer', minimum: 0, maximum: 99 }, scoreB: { type: 'integer', minimum: 0, maximum: 99 },
+              confidence: { type: 'number', minimum: 0, maximum: 1 }, needsReview: { type: 'boolean' },
+            } },
+          },
+        },
+      } } },
+    }),
+  });
+  const responseBody = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(responseBody.error?.message || '리그 결과 이미지 인식에 실패했습니다.');
+    error.code = 'OPENAI_VISION_FAILED';
+    error.details = responseBody;
+    throw error;
+  }
+  return { engine: model, result: parseJsonObject(extractOutputText(responseBody)) };
+}
+
 module.exports = {
   scanLeagueSheetWithOpenAIVision,
   scanParticipantNamesWithOpenAIVision,
+  scanLeagueResultImportWithOpenAIVision,
 };

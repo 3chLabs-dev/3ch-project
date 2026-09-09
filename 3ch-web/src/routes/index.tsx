@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, Navigate } from "react-router-dom";
 import AppShell from "../components/AppShell";
 import AdminGuard from "../components/AdminGuard";
 import AdminLogin from "../pages/admin/AdminLogin";
@@ -89,6 +89,7 @@ import LeagueAlgorithmDemo from "../pages/demo/LeagueAlgorithmDemo";
 import DemoLeaguePage from "../pages/demo/DemoLeaguePage";
 import DemoClubPage from "../pages/demo/DemoClubPage";
 import DemoDrawPage from "../pages/demo/DemoDrawPage";
+import LeagueQuickResult from "../pages/league/LeagueQuickResult";
 // import League from "../pages/League";
 // import Match from "../pages/Match";
 // import My from "../pages/My";
@@ -105,6 +106,8 @@ export const router = createBrowserRouter([
       { path: "/signup", element: <SignUp />},
       { path: "/league", element: <LeagueMain /> },
       { path: "/league/new", element: <LeagueRenewalCreationWizard /> },
+      { path: "/league/quick-result", element: <LeagueQuickResult /> },
+      { path: "/league/result-import", element: <Navigate to="/league/quick-result" replace /> },
       { path: "/league/renewal", element: <LeagueRenewalCreationWizard /> },
       { path: "/league/:id", element: <LeagueDetail /> },
       { path: "/league/:id/ranking", element: <LeaguePointRankingPage /> },

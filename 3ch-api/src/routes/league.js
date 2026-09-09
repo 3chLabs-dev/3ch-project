@@ -9,7 +9,7 @@ const webpush = require('web-push');
 const { rebuildGroupRanking, getGroupIdByLeagueId } = require('../services/groupRanking');
 const { rebuildSportRankingByLeagueId } = require('../services/sportRanking');
 const { scanOmrImageWithPython } = require('../services/omrScanner');
-const { scanLeagueSheetWithOpenAIVision, scanParticipantNamesWithOpenAIVision } = require('../services/openaiVisionScanner');
+const { scanLeagueSheetWithOpenAIVision, scanParticipantNamesWithOpenAIVision, scanLeagueResultImportWithOpenAIVision } = require('../services/openaiVisionScanner');
 const { FEATURES, consumeFeatureCredit, refundFeatureCredit } = require('../services/featureUsageService');
 const { getPointRanking, ensureDefaultRankingSeasons, normalizePointRules } = require('../services/pointRanking');
 
@@ -4823,6 +4823,91 @@ router.post('/league/:id/omr/scan', optionalAuth, omrUpload.single('image'), asy
 
     console.error('Error scanning OMR image:', error);
     return res.status(500).json({ message: '서버 오류' });
+  }
+});
+
+router.post('/league/result-import/scan', requireAuth, participantImageUpload.array('images', 32), async (req, res) => {
+  const userId = Number(req.user.sub);
+  const files = Array.isArray(req.files) ? req.files : [];
+  const requestId = String(req.get('Idempotency-Key') || randomUUID()).trim().slice(0, 48);
+  const consumedKeys = [];
+  try {
+    if (!files.length) return res.status(400).json({ message: '대진표 사진을 1장 이상 선택해 주세요.' });
+    if (files.some((file) => !String(file.mimetype || '').startsWith('image/'))) {
+      return res.status(400).json({ message: '이미지 파일만 업로드할 수 있습니다.' });
+    }
+    let groupIds = [];
+    try {
+      const parsed = JSON.parse(String(req.body?.group_ids || '[]'));
+      if (Array.isArray(parsed)) groupIds = [...new Set(parsed.map(String).filter(Boolean))].slice(0, 20);
+    } catch {}
+
+    for (let index = 0; index < files.length; index += 1) {
+      const requestKey = `league-result-import:${requestId}:${index}`;
+      const usage = await consumeFeatureCredit({
+        userId, feature: FEATURES.VISION_SCAN, requestKey,
+        referenceType: 'LEAGUE_RESULT_IMPORT', referenceId: requestId,
+        metadata: { imageIndex: index, imageCount: files.length },
+      });
+      if (!usage.allowed || usage.duplicate) {
+        for (const key of consumedKeys) await refundFeatureCredit({ userId, feature: FEATURES.VISION_SCAN, requestKey: key, reason: 'BATCH_NOT_STARTED' }).catch(() => {});
+        return res.status(usage.duplicate ? 409 : 402).json({
+          message: usage.duplicate ? '이미 처리된 인식 요청입니다.' : `사진 ${files.length}장에 대한 인식 잔여 횟수가 부족합니다.`,
+          code: usage.duplicate ? 'DUPLICATE_REQUEST' : 'VISION_QUOTA_EXHAUSTED',
+        });
+      }
+      consumedKeys.push(requestKey);
+    }
+
+    const scans = await Promise.all(files.map((file) => scanLeagueResultImportWithOpenAIVision({ imageBuffer: file.buffer, mimeType: file.mimetype })));
+    const participants = [];
+    const matches = [];
+    const byKey = new Map();
+    scans.forEach((scan, imageIndex) => {
+      for (const raw of Array.isArray(scan.result?.participants) ? scan.result.participants : []) {
+        const name = String(raw.name || '').replace(/\s+/g, ' ').trim();
+        const sourceKey = String(raw.key || name).trim();
+        if (!name || !sourceKey) continue;
+        const key = `${imageIndex}:${sourceKey}`;
+        const item = { key, name, division: String(raw.division || '').trim(), members: Array.isArray(raw.members) ? raw.members.map(String) : [], rosterIncomplete: Boolean(raw.rosterIncomplete), confidence: Number(raw.confidence || 0), needsReview: Boolean(raw.needsReview), member_id: null, canonical_name: null, imageIndex };
+        participants.push(item);
+        byKey.set(key, item);
+      }
+      for (const raw of Array.isArray(scan.result?.matches) ? scan.result.matches : []) {
+        const participantAKey = `${imageIndex}:${String(raw.participantAKey || '').trim()}`;
+        const participantBKey = `${imageIndex}:${String(raw.participantBKey || '').trim()}`;
+        if (!byKey.has(participantAKey) || !byKey.has(participantBKey)) continue;
+        matches.push({ participantAKey, participantBKey, scoreA: Number(raw.scoreA), scoreB: Number(raw.scoreB), confidence: Number(raw.confidence || 0), needsReview: Boolean(raw.needsReview), imageIndex });
+      }
+    });
+
+    if (groupIds.length && participants.length) {
+      const memberResult = await pool.query(
+        `SELECT gm.group_id, gm.division, u.id AS member_id,
+                COALESCE(NULLIF(u.name, ''), NULLIF(u.nickname, ''), u.email) AS canonical_name,
+                u.name, u.nickname, ua.alias AS external_alias
+           FROM group_members gm JOIN users u ON u.id = gm.user_id
+           LEFT JOIN user_external_aliases ua ON ua.user_id = u.id AND ua.group_id = gm.group_id
+          WHERE gm.group_id = ANY($1::uuid[])`, [groupIds],
+      );
+      for (const participant of participants) {
+        const normalized = participant.name.replace(/\s+/g, '').toLocaleLowerCase('ko-KR');
+        const candidates = memberResult.rows.filter((row) => [row.name, row.nickname, row.external_alias, row.canonical_name]
+          .some((value) => String(value || '').replace(/\s+/g, '').toLocaleLowerCase('ko-KR') === normalized));
+        const ids = [...new Set(candidates.map((row) => row.member_id))];
+        if (ids.length === 1) {
+          const match = candidates[0];
+          participant.member_id = match.member_id;
+          participant.canonical_name = match.canonical_name;
+          if (!participant.division && match.division) participant.division = String(match.division);
+        } else if (ids.length > 1) participant.needsReview = true;
+      }
+    }
+    return res.json({ engine: scans[0]?.engine || 'openai', imageCount: files.length, participants, matches });
+  } catch (error) {
+    for (const key of consumedKeys) await refundFeatureCredit({ userId, feature: FEATURES.VISION_SCAN, requestKey: key, reason: 'SCAN_FAILED' }).catch(() => {});
+    console.error('Error scanning league result import:', error);
+    return res.status(error.code === 'OPENAI_API_KEY_MISSING' ? 503 : 500).json({ message: error.message || '리그 결과 인식 중 오류가 발생했습니다.' });
   }
 });
 

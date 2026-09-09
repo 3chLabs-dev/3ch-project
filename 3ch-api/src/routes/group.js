@@ -136,6 +136,17 @@ const createGroupSchema = z.object({
   address_detail: z.string().optional(),
   lat: z.number().optional(),
   lng: z.number().optional(),
+  activity_venues: z.array(z.object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    address: z.string().min(1),
+    address_detail: z.string().optional().default(''),
+    lat: z.number().nullable().optional(),
+    lng: z.number().nullable().optional(),
+    region_city: z.string().nullable().optional(),
+    region_district: z.string().nullable().optional(),
+    is_default: z.boolean(),
+  })).optional(),
   links: z
     .array(
       z.object({
@@ -273,7 +284,7 @@ router.get('/group/check-name', requireAuth, async (req, res) => {
 router.post('/group', requireAuth, async (req, res) => {
   const client = await pool.connect();
   try {
-    const { name, description, sport, region_city, region_district, founded_at, address, address_detail, lat, lng, links = [], } = createGroupSchema.parse(req.body);
+    const { name, description, sport, region_city, region_district, founded_at, address, address_detail, lat, lng, activity_venues = [], links = [], } = createGroupSchema.parse(req.body);
     const userId = req.user.sub;
     const groupId = randomUUID();
     const memberId = randomUUID();
@@ -301,9 +312,9 @@ router.post('/group', requireAuth, async (req, res) => {
     }
 
     await client.query(
-      `INSERT INTO groups (id, name, description, sport, region_city, region_district, founded_at, address, address_detail, lat, lng, created_by_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-      [groupId, name, description || null, sport || null, region_city || null, region_district || null, founded_at || null, address || null, address_detail || null, lat ?? null, lng ?? null, userId]
+      `INSERT INTO groups (id, name, description, sport, region_city, region_district, founded_at, address, address_detail, lat, lng, activity_venues, created_by_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13)`,
+      [groupId, name, description || null, sport || null, region_city || null, region_district || null, founded_at || null, address || null, address_detail || null, lat ?? null, lng ?? null, JSON.stringify(activity_venues), userId]
     );
 
     for ( const [index, link] of links.entries() ) {
@@ -473,7 +484,7 @@ router.get('/group/search', requireAuth, async (req, res) => {
     params.push(Math.min(parseInt(limit, 10) || 20, 50));
 
     const result = await pool.query(
-      `SELECT g.id, g.name, g.description, g.sport, g.region_city, g.region_district, g.created_at,
+      `SELECT g.id, g.name, g.description, g.sport, g.region_city, g.region_district, g.created_at, g.activity_venues,
               (SELECT COUNT(*) FROM group_members WHERE group_id = g.id)::int AS member_count,
               EXISTS (
                 SELECT 1
@@ -549,7 +560,7 @@ router.get('/group', requireAuth, async (req, res) => {
     const userId = req.user.sub;
 
     const result = await pool.query(
-      `SELECT g.id, g.name, g.description, g.sport, g.region_city, g.region_district, g.created_at,
+      `SELECT g.id, g.name, g.description, g.sport, g.region_city, g.region_district, g.created_at, g.activity_venues,
               g.club_code, gm.role, gm.division, gm.display_order, gm.is_primary, gm.management_permissions,
               u.name AS creator_name,
               (SELECT COUNT(*) FROM group_members WHERE group_id = g.id)::int AS member_count
@@ -971,7 +982,7 @@ router.get('/group/:id', requireAuth, async (req, res) => {
 
     const groupResult = await pool.query(
       `SELECT g.id, g.name, g.description, g.sport, g.region_city, g.region_district,
-              g.founded_at, g.address, g.address_detail, g.lat, g.lng, g.created_at,
+              g.founded_at, g.address, g.address_detail, g.lat, g.lng, g.activity_venues, g.created_at,
               g.club_code, u.name AS creator_name
        FROM groups g
        LEFT JOIN users u ON g.created_by_id = u.id
@@ -2170,7 +2181,7 @@ router.patch('/group/:id', requireAuth, requireGroupOwner, async (req, res) => {
 
   try {
     const { id } = req.params;
-    const { name, description, sport, region_city, region_district, founded_at, address, address_detail, lat, lng, links, } = req.body;
+    const { name, description, sport, region_city, region_district, founded_at, address, address_detail, lat, lng, activity_venues, links, } = req.body;
 
     const hasLinks = Array.isArray(links);
     const updates = [];
@@ -2216,6 +2227,10 @@ router.patch('/group/:id', requireAuth, requireGroupOwner, async (req, res) => {
     if (lng !== undefined) {
       updates.push(`lng = $${paramIdx++}`);
       values.push(lng);
+    }
+    if (Array.isArray(activity_venues)) {
+      updates.push(`activity_venues = $${paramIdx++}::jsonb`);
+      values.push(JSON.stringify(activity_venues));
     }
 
     if (updates.length === 0 && !hasLinks) {

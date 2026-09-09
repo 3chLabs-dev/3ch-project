@@ -13,11 +13,13 @@ import {
     Dialog,
     DialogContent,
     DialogActions,
+    Checkbox,
+    FormControlLabel,
 } from "@mui/material";
 import confetti from "canvas-confetti";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import type { SelectChangeEvent } from "@mui/material";
-import { useCreateGroupMutation, useLazyCheckGroupNameQuery } from "../../features/group/groupApi";
+import { useCreateGroupMutation, useLazyCheckGroupNameQuery, type GroupActivityVenue } from "../../features/group/groupApi";
 import { REGION_DATA, CITY_ALIAS_MAP } from "./regionData";
 import confettiImg from "../../assets/128_축포.png";
 import PlaceSearchDialog from "../../components/PlaceSearchDialog";
@@ -43,6 +45,9 @@ export default function GroupCreate() {
     const [addressDetail, setAddressDetail] = useState("");
     const [lat, setLat] = useState<number | undefined>();
     const [lng, setLng] = useState<number | undefined>();
+    const [venueName, setVenueName] = useState("");
+    const [venueIsDefault, setVenueIsDefault] = useState(true);
+    const [activityVenues, setActivityVenues] = useState<GroupActivityVenue[]>([]);
     const [placeDialogOpen, setPlaceDialogOpen] = useState(false);
 
     const [links, setLinks] = useState<GroupLinkInput[]>([
@@ -162,9 +167,20 @@ export default function GroupCreate() {
         setConfirmOpen(true);
     };
 
+    const addActivityVenue = () => {
+        if (!venueName.trim() || !address.trim()) return;
+        const makeDefault = venueIsDefault || activityVenues.length === 0;
+        setActivityVenues((prev) => [
+            ...prev.map((venue) => makeDefault ? { ...venue, is_default: false } : venue),
+            { id: crypto.randomUUID(), name: venueName.trim(), address: address.trim(), address_detail: addressDetail.trim(), lat: lat ?? null, lng: lng ?? null, region_city: regionCity || null, region_district: regionDistrict || null, is_default: makeDefault },
+        ]);
+        setVenueName(""); setAddress(""); setAddressDetail(""); setLat(undefined); setLng(undefined); setVenueIsDefault(false);
+    };
+
     const handleConfirmCreate = async () => {
         setConfirmOpen(false);
         try {
+            const defaultVenue = activityVenues.find((venue) => venue.is_default) ?? activityVenues[0];
             await createGroup({
                 name: groupName.trim(),
                 sport: sport,
@@ -172,10 +188,11 @@ export default function GroupCreate() {
                 region_city: regionCity,
                 region_district: regionDistrict,
                 description: description || undefined,
-                address: address || undefined,
-                address_detail: addressDetail || undefined,
-                lat,
-                lng,
+                address: defaultVenue?.address || address || undefined,
+                address_detail: defaultVenue?.address_detail || addressDetail || undefined,
+                lat: defaultVenue?.lat ?? lat,
+                lng: defaultVenue?.lng ?? lng,
+                activity_venues: activityVenues,
                 links: links.filter((link) => link.url.trim() !== "").map((link, index) => ({
                             id: link.id,
                             label: link.label.trim() || undefined,
@@ -335,6 +352,7 @@ export default function GroupCreate() {
                 {/* 주소 */}
                 <Box>
                     <Typography sx={{ fontWeight: 900, mb: 1 }}>활동 장소 <Typography component="span" sx={{ fontSize: 11, fontWeight: 500, color: "#9CA3AF" }}>(선택)</Typography></Typography>
+                    <TextField placeholder="활동 장소 이름 (예: 정기 모임 탁구장)" size="small" fullWidth value={venueName} onChange={(e) => setVenueName(e.target.value)} sx={{ ...inputSx, mb: 1 }} />
                     <Stack direction="row" spacing={1} mb={1}>
                         <TextField
                             placeholder="도로명 주소 또는 장소명"
@@ -378,12 +396,25 @@ export default function GroupCreate() {
                     setPlaceDialogOpen(false);
                 }} onSelect={(place) => {
                     setAddress(place.address);
-                    setAddressDetail(place.name);
+                    if (!venueName.trim()) setVenueName(place.name);
+                    setAddressDetail("");
                     syncRegionFromAddress(place.address);
                     setLat(place.lat);
                     setLng(place.lng);
                     setPlaceDialogOpen(false);
                 }} />
+
+                {(venueName || address) && <Box sx={{ mt: -1, mb: 2 }}>
+                    <FormControlLabel control={<Checkbox checked={venueIsDefault} onChange={(e) => setVenueIsDefault(e.target.checked)} />} label="기본 활동 장소로 선택" />
+                    <Button fullWidth variant="outlined" onClick={addActivityVenue} disabled={!venueName.trim() || !address.trim()}>활동 장소 추가</Button>
+                </Box>}
+                {activityVenues.length > 0 && <Stack spacing={1} sx={{ mb: 2 }}>
+                    {activityVenues.map((venue) => <Box key={venue.id} sx={{ border: "1px solid #D9DDE6", borderRadius: 1, p: 1.2 }}>
+                        <Stack direction="row" justifyContent="space-between"><Typography fontWeight={800}>{venue.name}{venue.is_default ? " · 기본" : ""}</Typography><Button size="small" color="error" onClick={() => setActivityVenues((prev) => { const next = prev.filter((item) => item.id !== venue.id); return next.some((item) => item.is_default) ? next : next.map((item, index) => ({ ...item, is_default: index === 0 })); })}>삭제</Button></Stack>
+                        <Typography fontSize={12} color="text.secondary">{venue.address} {venue.address_detail}</Typography>
+                        {!venue.is_default && <Button size="small" onClick={() => setActivityVenues((prev) => prev.map((item) => ({ ...item, is_default: item.id === venue.id })))}>기본으로 설정</Button>}
+                    </Box>)}
+                </Stack>}
 
                 {/* 지역 */}
                 <Box>

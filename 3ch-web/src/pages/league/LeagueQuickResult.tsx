@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type Dispatch, type SetStateAction } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
-import { Alert, Box, Button, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, LinearProgress, MenuItem, Paper, Stack, Step, StepLabel, Stepper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Tooltip, Typography } from "@mui/material";
+import { Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, LinearProgress, MenuItem, Paper, Stack, Step, StepLabel, Stepper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Tooltip, Typography } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import RemoveIcon from "@mui/icons-material/Remove";
 import CameraAltIcon from "@mui/icons-material/CameraAlt";
@@ -11,7 +11,6 @@ import RotateRightIcon from "@mui/icons-material/RotateRight";
 import CropIcon from "@mui/icons-material/Crop";
 import NavigateBeforeIcon from "@mui/icons-material/NavigateBefore";
 import NavigateNextIcon from "@mui/icons-material/NavigateNext";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import ReactCrop, { type Crop, type PixelCrop } from "react-image-crop";
 import "react-image-crop/dist/ReactCrop.css";
 import type { RootState } from "../../app/store";
@@ -20,8 +19,10 @@ import { useGetMyGroupsQuery } from "../../features/group/groupApi";
 import {
   useAddParticipantsMutation, useCreateLeagueMutation, useGetLeagueParticipantsQuery,
   useGetMyGroupLeaguesQuery, useInitLeagueMatchesMutation, useScanLeagueResultImportMutation,
-  useUpdateLeagueMatchMutation, useInitTournamentMatchesMutation, type LeagueResultImportMatch, type LeagueResultImportParticipant,
+  useUpdateLeagueMatchMutation, useSyncLeagueProgramMatchesMutation, type LeagueMatch, type LeagueResultImportMatch, type LeagueResultImportParticipant,
 } from "../../features/league/leagueApi";
+import { generateProgramRoundMatches } from "../../utils/programMatchGenerator";
+import type { MatchRuleType, ProgramOption, ProgramType } from "../../features/league/types/tournament.types";
 
 type Mode = "new" | "existing";
 const steps = ["등록 대상", "리그 유형", "리그 방식", "리그 규칙", "사진 등록"];
@@ -32,6 +33,8 @@ const errorMessage = (error: unknown) => {
   const value = error as { data?: { message?: string }; message?: string };
   return value?.data?.message || value?.message || "처리 중 오류가 발생했습니다.";
 };
+const matchRuleType = (rule: string): MatchRuleType => rule === "5전 3선승제" ? "BEST_OF_5" : rule === "3세트제" ? "THREE_SET" : "BEST_OF_3";
+const programType = (type: string): ProgramType => type === "복식" ? "DOUBLES" : type === "단체전" ? "TEAM" : "SINGLES";
 
 export default function LeagueQuickResult() {
   const navigate = useNavigate();
@@ -49,7 +52,6 @@ export default function LeagueQuickResult() {
   const [leagueType, setLeagueType] = useState("단식");
   const [format, setFormat] = useState("단일리그");
   const [groupCount, setGroupCount] = useState(2);
-  const [bracketSize, setBracketSize] = useState(8);
   const [rule, setRule] = useState("3전 2선승제");
   const [files, setFiles] = useState<File[]>([]);
   const [guideSlide, setGuideSlide] = useState(0);
@@ -65,14 +67,12 @@ export default function LeagueQuickResult() {
   const [matches, setMatches] = useState<LeagueResultImportMatch[]>([]);
   const [error, setError] = useState("");
   const [progress, setProgress] = useState(0);
-  const [tournamentOpen, setTournamentOpen] = useState(false);
-  const [createFinals, setCreateFinals] = useState(false);
   const [scan, { isLoading: scanning }] = useScanLeagueResultImportMutation();
   const [createLeague] = useCreateLeagueMutation();
   const [addParticipants] = useAddParticipantsMutation();
   const [initMatches] = useInitLeagueMatchesMutation();
   const [updateMatch] = useUpdateLeagueMatchMutation();
-  const [initTournament] = useInitTournamentMatchesMutation();
+  const [syncProgramMatches] = useSyncLeagueProgramMatchesMutation();
   const { data: groupsData } = useGetMyGroupsQuery(undefined, { skip: !token });
   const { data: leaguesData } = useGetMyGroupLeaguesQuery(undefined, { skip: !token });
   const { data: existingParticipantData } = useGetLeagueParticipantsQuery(leagueId, { skip: mode !== "existing" || !leagueId });
@@ -145,20 +145,57 @@ export default function LeagueQuickResult() {
       const selectedParticipants = participants.filter((item)=>selectedParticipantKeys.has(item.key) && item.name.trim());
       const unique = selectedParticipants.filter((item, index, all) => all.findIndex((other) => other.name === item.name && other.division === item.division) === index);
       const missing = unique.filter((item) => !normalizedExisting.has(item.name.replace(/\s+/g, "").toLowerCase()));
+      let quickProgram: ProgramOption | null = null;
+      let quickProgramMatches: LeagueMatch[] = [];
       if (mode === "new") {
+        const groupSizes = format === "조별리그"
+          ? Array.from({ length: groupCount }, (_, imageIndex) => selectedParticipants.filter((item) => item.imageIndex === imageIndex).length)
+          : [unique.length];
+        if (groupSizes.some((size) => size < 2)) throw new Error("각 조에서 참가자를 2명 이상 선택해 주세요.");
+        const matchCount = groupSizes.reduce((sum, size) => sum + size * Math.max(0, size - 1) / 2, 0);
+        const roundFormat = format === "조별리그" ? "GROUP" as const : "LEAGUE" as const;
+        const formationPlayers = (imageIndex: number) => selectedParticipants.filter((item) => item.imageIndex === imageIndex).map((item) => ({
+          name: item.name,
+          level: Number.parseInt(item.division, 10) || 0,
+          sourceGroupId: groupId,
+        }));
+        const block = {
+          title: "1라운드",
+          type: programType(leagueType),
+          format: roundFormat,
+          roundOption: format === "조별리그" ? "PRELIM" as const : "NONE" as const,
+          matchRule: rule as ProgramOption["matchRule"],
+          expectedMinutes: matchCount * 10,
+          matchCount,
+          groupSizes,
+          ...(format === "조별리그" ? { groupAssignments: groupSizes.map((_, index) => formationPlayers(index)), groupFormationPublished: true } : {}),
+        };
+        quickProgram = {
+          title: "빠른 결과 등록 프로그램", groupSizes, matchRule: rule as ProgramOption["matchRule"], matchCount,
+          expectedMinutes: matchCount * 10, recommendationScore: 0, description: "대진표 사진에서 생성한 프로그램",
+          blocks: [block], totalBlockMatchCount: matchCount, totalProgramMinutes: matchCount * 10, isOverTime: false,
+          rounds: [{ id: 1, expanded: true, program: programType(leagueType), format: roundFormat, option: format === "조별리그" ? "PRELIM" : "NONE", matchRule: matchRuleType(rule), teamPlayerCount: 3, teamMatchType: "SSS", groupSizes, ...(format === "조별리그" ? { groupAssignments: groupSizes.map((_, index) => formationPlayers(index)) } : {}) }],
+        };
         const created = await createLeague({
-          name: name.trim(), title: name.trim(), type: leagueType, format, sport: "탁구",
-          start_date: new Date().toISOString(), rules: rule, group_id: groupId,
+          name: name.trim(), title: name.trim(), type: "클럽 이벤트", format: "이벤트 프로그램", sport: "탁구",
+          start_date: new Date().toISOString(), rules: "프로그램별 설정", group_id: groupId,
           recruit_count: unique.length, participant_count: unique.length, sort_order: "이름 > 부수",
           register_unmatched_as_pre_members: true,
           participants: unique.map((item) => ({ name: item.name, division: item.division, member_id: item.member_id })),
+          program_data: quickProgram,
         }).unwrap();
         targetLeagueId = created.league.id;
+        const createdParticipants = created.participants || [];
+        const generatedMatches = generateProgramRoundMatches(targetLeagueId, quickProgram, createdParticipants, 1).map((match) => ({ ...match, program_round: 1, program_block_type: programType(leagueType) }));
+        quickProgramMatches = generatedMatches;
+        await syncProgramMatches({ leagueId: targetLeagueId, matches: generatedMatches, resetResults: false }).unwrap();
       } else if (missing.length) {
         await addParticipants({ leagueId: targetLeagueId, participants: missing.map((item) => ({ name: item.name, division: item.division, member_id: item.member_id })) }).unwrap();
       }
       setProgress(40);
-      const initialized = await initMatches({ id: targetLeagueId, force: mode === "new" }).unwrap();
+      const initialized = mode === "new" && quickProgram
+        ? { matches: quickProgramMatches }
+        : await initMatches({ id: targetLeagueId, force: false }).unwrap();
       const participantName = (key: string) => participants.find((item) => item.key === key)?.name || "";
       let saved = 0;
       for (const recognized of matches.filter((item)=>selectedParticipantKeys.has(item.participantAKey)&&selectedParticipantKeys.has(item.participantBKey))) {
@@ -174,12 +211,9 @@ export default function LeagueQuickResult() {
         } }).unwrap();
         saved += 1; setProgress(40 + Math.round((saved / Math.max(matches.length, 1)) * 60));
       }
-      if (createFinals) {
-        await initTournament({ leagueId: targetLeagueId, bracket_size: bracketSize, seeding: "seed", advancement: "upper-only", force: true }).unwrap();
-        navigate(`/league/${targetLeagueId}/tournament/bracket`, { replace: true });
-      } else {
-        navigate(`/league/${targetLeagueId}/bracket`, { replace: true });
-      }
+      navigate(mode === "new"
+        ? `/league/${targetLeagueId}/program/bracket?program=1&round=1&back=detail&quickFinals=1`
+        : `/league/${targetLeagueId}/bracket`, { replace: true });
     } catch (e) { setProgress(0); setError(errorMessage(e)); }
   };
 
@@ -200,10 +234,9 @@ export default function LeagueQuickResult() {
       {progress > 0 && <Box sx={{ mt: 2 }}><LinearProgress variant="determinate" value={progress} /><Typography textAlign="right" fontSize={12}>{progress}%</Typography></Box>}{error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
       <Stack direction="row" spacing={2} sx={{ mt: 4 }}><Button fullWidth variant="contained" disableElevation disabled={step === 0 || scanning || progress > 0 && progress < 100} onClick={() => setStep((s) => s-1)} sx={{height:44,borderRadius:1,fontWeight:900,bgcolor:"#777","&:hover":{bgcolor:"#777"},"&.Mui-disabled":{bgcolor:"#BDBDBD",color:"#fff"}}}>이전</Button>{step < 4 && <Button fullWidth variant="contained" disableElevation disabled={!canContinue()} onClick={() => setStep((s)=>s+1)} sx={{height:44,borderRadius:1,fontWeight:900,bgcolor:"#2F80ED","&:hover":{bgcolor:"#256FD1"},"&.Mui-disabled":{bgcolor:"#CFE1FB",color:"#fff"}}}>다음</Button>}</Stack>
     </Paper>
-    <Dialog open={resultOpen} onClose={()=>{if(!(progress>0&&progress<100))setResultOpen(false)}} fullWidth maxWidth="lg" slotProps={{paper:{sx:{position:"relative",borderRadius:3}}}}><DialogTitle fontWeight={900}>AI 인식 결과</DialogTitle><DialogContent dividers><Typography sx={{mb:2,color:"#6B7280",fontSize:13,fontWeight:700}}>클럽 회원 이름과 동일하면 회원 계정에 연결합니다. 나머지는 임시회원으로 등록되며 이름과 부수를 직접 수정할 수 있습니다.</Typography>{expectedFiles>1&&<Stack direction="row" spacing={1} sx={{mb:2,overflowX:"auto"}}>{Array.from({length:expectedFiles},(_,i)=><Button key={i} variant={resultGroup===i?"contained":"outlined"} onClick={()=>setResultGroup(i)} sx={{minWidth:64}}>{i+1}조</Button>)}</Stack>}<Typography sx={{mb:1}} fontWeight={900}>참가자</Typography><Stack spacing={1}>{participants.map((p,index)=>({p,index})).filter(({p})=>p.imageIndex===resultGroup).map(({p,index})=><Box key={p.key} sx={{display:"grid",gridTemplateColumns:"32px 66px minmax(0,1fr) 32px",gap:.7,alignItems:"center",border:"1px solid #E5E7EB",borderRadius:1,p:.8,bgcolor:"#fff"}}><Checkbox size="small" checked={selectedParticipantKeys.has(p.key)} onChange={(e)=>setSelectedParticipantKeys(current=>{const next=new Set(current);if(e.target.checked)next.add(p.key);else next.delete(p.key);return next})}/><TextField size="small" placeholder="부수" value={p.division} onChange={(e)=>setParticipants(all=>all.map((x,j)=>j===index?{...x,division:e.target.value}:x))} inputProps={{style:{textAlign:"center",padding:"7px 4px"}}}/><Box sx={{minWidth:0}}><TextField size="small" fullWidth value={p.name} onChange={(e)=>setParticipants(all=>all.map((x,j)=>j===index?{...x,name:e.target.value,member_id:x.canonical_name===e.target.value?x.member_id:null}:x))} inputProps={{style:{padding:"7px 8px"}}}/><Chip label={p.member_id?"클럽 회원":p.rosterIncomplete?"임시회원 · 팀원 추후 등록":"임시회원"} size="small" color={p.member_id?"primary":"default"} variant="outlined" sx={{mt:.5,height:20,fontSize:10}}/></Box><IconButton size="small" aria-label="참가자 제외" onClick={()=>setSelectedParticipantKeys(current=>{const next=new Set(current);next.delete(p.key);return next})}><DeleteOutlineIcon fontSize="small" color="error"/></IconButton></Box>)}</Stack><ResultMatrix participants={participants.filter((item)=>item.imageIndex===resultGroup&&selectedParticipantKeys.has(item.key))} matches={matches.filter((item)=>item.imageIndex===resultGroup)} allMatches={matches} onChange={setMatches}/><Paper variant="outlined" sx={{mt:2,p:1.5,bgcolor:"#F8FAFC"}}><Stack direction="row" alignItems="center"><Typography sx={{flex:1}} fontWeight={800}>본선 토너먼트도 생성할까요?</Typography><Button onClick={()=>setTournamentOpen(true)}>예</Button></Stack></Paper></DialogContent><DialogActions><Button disabled={progress>0&&progress<100} onClick={()=>setResultOpen(false)}>취소</Button><Button variant="contained" disabled={!selectedParticipantKeys.size||progress>0&&progress<100} onClick={save}>대진표에 입력</Button></DialogActions>{progress>0&&progress<100&&<Box sx={{position:"absolute",inset:0,bgcolor:"rgba(255,255,255,.82)",display:"grid",placeItems:"center",zIndex:2}}><Paper elevation={8} sx={{width:"min(420px,80%)",p:2.5,borderRadius:3}}><Stack direction="row" justifyContent="space-between"><Typography fontWeight={900}>경기 결과 저장 중</Typography><Typography color="primary" fontWeight={900}>{progress}%</Typography></Stack><LinearProgress variant="determinate" value={progress} sx={{mt:1,height:10,borderRadius:99}}/></Paper></Box>}</Dialog>
+    <Dialog open={resultOpen} onClose={()=>{if(!(progress>0&&progress<100))setResultOpen(false)}} fullWidth maxWidth="lg" slotProps={{paper:{sx:{position:"relative",borderRadius:3}}}}><DialogTitle fontWeight={900}>AI 인식 결과</DialogTitle><DialogContent dividers><Typography sx={{mb:2,color:"#6B7280",fontSize:13,fontWeight:700}}>클럽 회원 이름과 동일하면 회원 계정에 연결합니다. 나머지는 사전등록 회원으로 등록되며 참가명단 열에서 이름과 부수를 수정할 수 있습니다.</Typography>{expectedFiles>1&&<Stack direction="row" spacing={1} sx={{mb:2,overflowX:"auto"}}>{Array.from({length:expectedFiles},(_,i)=><Button key={i} variant={resultGroup===i?"contained":"outlined"} onClick={()=>setResultGroup(i)} sx={{minWidth:64}}>{i+1}조</Button>)}</Stack>}<ResultMatrix participants={participants.filter((item)=>item.imageIndex===resultGroup&&selectedParticipantKeys.has(item.key))} matches={matches.filter((item)=>item.imageIndex===resultGroup)} allMatches={matches} onChange={setMatches} onParticipantsChange={(key, updates)=>setParticipants((all)=>all.map((item)=>item.key===key?{...item,...updates}:item))}/></DialogContent><DialogActions><Button disabled={progress>0&&progress<100} onClick={()=>setResultOpen(false)}>취소</Button><Button variant="contained" disabled={!selectedParticipantKeys.size||progress>0&&progress<100} onClick={save}>대진표에 입력</Button></DialogActions>{progress>0&&progress<100&&<Box sx={{position:"absolute",inset:0,bgcolor:"rgba(255,255,255,.82)",display:"grid",placeItems:"center",zIndex:2}}><Paper elevation={8} sx={{width:"min(420px,80%)",p:2.5,borderRadius:3}}><Stack direction="row" justifyContent="space-between"><Typography fontWeight={900}>경기 결과 저장 중</Typography><Typography color="primary" fontWeight={900}>{progress}%</Typography></Stack><LinearProgress variant="determinate" value={progress} sx={{mt:1,height:10,borderRadius:99}}/></Paper></Box>}</Dialog>
     <Dialog open={Boolean(imageEditor)} onClose={()=>setImageEditor(null)} fullWidth maxWidth="md"><DialogTitle fontWeight={900}>사진 확인</DialogTitle><DialogContent dividers><Typography sx={{mb:1,color:"#6B7280",fontSize:13,fontWeight:700}}>이름과 점수가 잘 인식되도록 정방향으로 맞추고, 대진표 부분만 인식 영역으로 지정해 주세요.</Typography><Box sx={{height:"min(58vh,520px)",bgcolor:"#111827",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden","& .ReactCrop":{maxWidth:"100%",maxHeight:"100%",lineHeight:0,touchAction:"none"},"& .ReactCrop__crop-mask":{fill:"rgba(0,0,0,.62)"},"& .ReactCrop__crop-selection":{border:"1px solid rgba(255,255,255,.9)",backgroundImage:"none",animation:"none"},"& .ReactCrop__drag-handle":{display:"block !important",width:28,height:28,background:"transparent",border:0,borderRadius:0},"& .ReactCrop__drag-handle.ord-nw":{top:0,left:0,transform:"none",borderTop:"3px solid #fff",borderLeft:"3px solid #fff"},"& .ReactCrop__drag-handle.ord-ne":{top:0,right:0,transform:"none",borderTop:"3px solid #fff",borderRight:"3px solid #fff"},"& .ReactCrop__drag-handle.ord-se":{right:0,bottom:0,transform:"none",borderRight:"3px solid #fff",borderBottom:"3px solid #fff"},"& .ReactCrop__drag-handle.ord-sw":{bottom:0,left:0,transform:"none",borderBottom:"3px solid #fff",borderLeft:"3px solid #fff"},"& .ReactCrop__drag-handle.ord-n, & .ReactCrop__drag-handle.ord-s":{display:"block !important",width:48,height:24,left:"50%"},"& .ReactCrop__drag-handle.ord-n":{top:0,transform:"translateX(-50%)",borderTop:"3px solid #fff"},"& .ReactCrop__drag-handle.ord-s":{bottom:0,transform:"translateX(-50%)",borderBottom:"3px solid #fff"},"& .ReactCrop__drag-handle.ord-e, & .ReactCrop__drag-handle.ord-w":{display:"block !important",width:24,height:48,top:"50%"},"& .ReactCrop__drag-handle.ord-e":{right:0,transform:"translateY(-50%)",borderRight:"3px solid #fff"},"& .ReactCrop__drag-handle.ord-w":{left:0,transform:"translateY(-50%)",borderLeft:"3px solid #fff"}}}>{imageEditor&&<ReactCrop crop={crop} onChange={(_,percent)=>setCrop(percent)} onComplete={setCompletedCrop} disabled={!cropMode} keepSelection={cropMode} ruleOfThirds={cropMode} minWidth={48} minHeight={48}><img ref={editorImageRef} src={imageEditor.url} onLoad={()=>setEditorLoaded(true)} alt="선택한 대진표" draggable={false} style={{display:"block",maxWidth:"100%",maxHeight:"min(58vh,520px)",objectFit:"contain"}}/></ReactCrop>}</Box><Stack direction="row" justifyContent="center" spacing={2} sx={{pt:1}}><EditorButton label="왼쪽으로 회전" icon={<RotateLeftIcon/>} onClick={()=>rotateImage(-90)}/><EditorButton label="자르기" icon={<CropIcon color={cropMode?"primary":"inherit"}/>} onClick={enableCrop}/><EditorButton label="오른쪽으로 회전" icon={<RotateRightIcon/>} onClick={()=>rotateImage(90)}/></Stack></DialogContent><DialogActions><Button onClick={()=>setImageEditor(null)}>취소</Button><Button variant="contained" disabled={!editorLoaded} onClick={confirmEditedImage}>{format==="조별리그"?`${files.length+1}조 사진 확인`:"사진 확인"}</Button></DialogActions></Dialog>
     <Dialog open={scanning} fullWidth maxWidth="xs"><DialogContent sx={{px:3.5,py:4}}><Typography textAlign="center" fontWeight={900}>AI가 사진 속 이름과 점수를 인식하는 중입니다.</Typography><Typography textAlign="center" sx={{my:1.5,color:"#6B7280",fontSize:13,lineHeight:1.5}}>사진 상태에 따라 인식 결과가 다를 수 있습니다.<br/>결과 화면에서 이름과 점수를 확인하고 수정해 주세요.</Typography><LinearProgress sx={{height:11,borderRadius:99,bgcolor:"#DBEAFE","& .MuiLinearProgress-bar":{borderRadius:99}}}/></DialogContent></Dialog>
-    <Dialog open={tournamentOpen} onClose={()=>setTournamentOpen(false)} fullWidth maxWidth="xs"><DialogTitle>본선 토너먼트 옵션</DialogTitle><DialogContent><Stack spacing={2} sx={{pt:1}}><TextField select label="구분" defaultValue="본선"><MenuItem value="본선">본선</MenuItem><MenuItem value="하위">하위</MenuItem></TextField><TextField select label="진출" defaultValue="상위"><MenuItem value="상위">상위</MenuItem><MenuItem value="전체">전체</MenuItem></TextField><TextField select label="규칙" defaultValue="5전 3선승제"><MenuItem value="5전 3선승제">5전 3선승제</MenuItem><MenuItem value="3전 2선승제">3전 2선승제</MenuItem></TextField><TextField select label="규모" value={bracketSize} onChange={(e)=>setBracketSize(Number(e.target.value))}>{[4,8,16,32,64].map(n=><MenuItem key={n} value={n}>{n}강</MenuItem>)}</TextField><TextField select label="3·4위전" defaultValue="없음"><MenuItem value="없음">없음</MenuItem><MenuItem value="있음">있음</MenuItem></TextField></Stack></DialogContent><DialogActions><Button onClick={()=>setTournamentOpen(false)}>취소</Button><Button variant="contained" onClick={()=>{setCreateFinals(true);setTournamentOpen(false)}}>옵션 적용</Button></DialogActions></Dialog>
   </Box>;
 }
 
@@ -214,11 +247,12 @@ function Choice({ title, value, values, onChange }: { title: string; value: stri
 function SourceButton({label,icon,onClick}:{label:string;icon:React.ReactNode;onClick:()=>void}){return <Button onClick={onClick} sx={{flexDirection:"column",gap:.6,color:"#374151",fontWeight:800}}>{icon}<Typography fontSize={11} fontWeight={800}>{label}</Typography></Button>}
 function EditorButton({label,icon,onClick}:{label:string;icon:React.ReactNode;onClick:()=>void}){return <Stack alignItems="center"><Tooltip title={label}><IconButton onClick={onClick}>{icon}</IconButton></Tooltip><Typography fontSize={11} color="text.secondary" fontWeight={700}>{label}</Typography></Stack>}
 
-function ResultMatrix({ participants, matches, allMatches, onChange }: {
+function ResultMatrix({ participants, matches, allMatches, onChange, onParticipantsChange }: {
   participants: LeagueResultImportParticipant[];
   matches: LeagueResultImportMatch[];
   allMatches: LeagueResultImportMatch[];
   onChange: Dispatch<SetStateAction<LeagueResultImportMatch[]>>;
+  onParticipantsChange: (key: string, updates: Partial<LeagueResultImportParticipant>) => void;
 }) {
   const updateScore = (match: LeagueResultImportMatch, participantKey: string, value: number) => {
     const field = match.participantAKey === participantKey ? "scoreA" : "scoreB";
@@ -233,10 +267,10 @@ function ResultMatrix({ participants, matches, allMatches, onChange }: {
   return <Box sx={{ mt: 2 }}>
     <Typography sx={{ mb: 1 }} fontWeight={900}>경기 결과</Typography>
     <TableContainer sx={{ border: "1px solid #D1D5DB", overflowX: "auto" }}>
-      <Table size="small" sx={{ minWidth: Math.max(560, 190 + participants.length * 135), tableLayout: "fixed" }}>
+      <Table size="small" sx={{ minWidth: Math.max(660, 280 + participants.length * 135), tableLayout: "fixed" }}>
         <TableHead>
           <TableRow>
-            <TableCell align="center" sx={{ width: 190, bgcolor: "#F3F4F6", fontWeight: 800 }}>참가명단</TableCell>
+            <TableCell align="center" sx={{ width: 280, bgcolor: "#F3F4F6", fontWeight: 800 }}>참가명단</TableCell>
             {participants.map((participant, index) => <TableCell key={participant.key} align="center" sx={{ bgcolor: "#F3F4F6", p: 1 }}>
               <Chip label={index + 1} size="small" color="primary" sx={{ mb: .5, height: 23, fontWeight: 900 }} />
               <Typography fontWeight={900} fontSize={13} noWrap>{participant.division && <Box component="span" sx={{ color: "#F59E0B", mr: .6 }}>{participant.division}</Box>}{participant.name}</Typography>
@@ -245,7 +279,13 @@ function ResultMatrix({ participants, matches, allMatches, onChange }: {
         </TableHead>
         <TableBody>
           {participants.map((rowParticipant, rowIndex) => <TableRow key={rowParticipant.key}>
-            <TableCell sx={{ bgcolor: "#F8FAFC", p: 1 }}><Stack direction="row" spacing={1} alignItems="center"><Chip label={rowIndex + 1} size="small" color="primary" variant="outlined"/><Typography fontWeight={900} fontSize={13}>{rowParticipant.division && <Box component="span" sx={{ color: "#F59E0B", mr: .6 }}>{rowParticipant.division}</Box>}{rowParticipant.name}</Typography></Stack></TableCell>
+            <TableCell sx={{ bgcolor: "#F8FAFC", p: .75 }}>
+              <Stack direction="row" spacing={.6} alignItems="center">
+                <Chip label={rowIndex + 1} size="small" color="primary" variant="outlined" />
+                <TextField size="small" placeholder="부수" value={rowParticipant.division} onChange={(event) => onParticipantsChange(rowParticipant.key, { division: event.target.value })} inputProps={{ style: { textAlign: "center", padding: "7px 3px" } }} sx={{ width: 55, bgcolor: "#fff" }} />
+                <TextField size="small" placeholder="이름" value={rowParticipant.name} onChange={(event) => onParticipantsChange(rowParticipant.key, { name: event.target.value, member_id: rowParticipant.canonical_name === event.target.value ? rowParticipant.member_id : null })} inputProps={{ style: { padding: "7px 6px", fontWeight: 800 } }} sx={{ minWidth: 0, flex: 1, bgcolor: "#fff" }} />
+              </Stack>
+            </TableCell>
             {participants.map((columnParticipant) => {
               if (rowParticipant.key === columnParticipant.key) return <TableCell key={columnParticipant.key} sx={{ bgcolor: "#E5E7EB" }} />;
               const match = findMatch(rowParticipant.key, columnParticipant.key);
@@ -254,7 +294,7 @@ function ResultMatrix({ participants, matches, allMatches, onChange }: {
               return <TableCell key={columnParticipant.key} align="center" sx={{ p: .5, bgcolor: match.needsReview ? "#FFF7ED" : "#fff" }}>
                 <Stack direction="row" spacing={.3} alignItems="center" justifyContent="center">
                   <IconButton size="small" onClick={() => updateScore(match, rowParticipant.key, score - 1)} disabled={score <= 0}>−</IconButton>
-                  <TextField size="small" type="number" value={score} onChange={(event) => updateScore(match, rowParticipant.key, Number(event.target.value))} inputProps={{ min: 0, max: 99, style: { textAlign: "center", padding: "7px 2px", fontWeight: 900 } }} sx={{ width: 48 }} />
+                  <TextField size="small" type="text" value={score} onChange={(event) => updateScore(match, rowParticipant.key, Number(event.target.value.replace(/\D/g, "")) || 0)} inputProps={{ inputMode: "numeric", pattern: "[0-9]*", style: { textAlign: "center", padding: "7px 2px", fontWeight: 900 } }} sx={{ width: 48 }} />
                   <IconButton size="small" onClick={() => updateScore(match, rowParticipant.key, score + 1)}>+</IconButton>
                 </Stack>
               </TableCell>;

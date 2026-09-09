@@ -10,9 +10,9 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
-  Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, LinearProgress, Paper, Popover,
+  Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, FormControlLabel, IconButton, LinearProgress, MenuItem, Paper, Popover, Radio, RadioGroup,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Tooltip, Typography, Stack,
+  TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography, Stack,
 } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -76,6 +76,7 @@ import { useGetMyFeatureUsageQuery } from "../../features/payment/usageApi";
 import { useAppSelector } from "../../app/hooks";
 import { isLocalDevToken } from "../../utils/localDevAuth";
 import TieBreakRankingDialog from "../../components/TieBreakRankingDialog";
+import type { MatchRule, MatchRuleType, ProgramOption, TournamentMode, TournamentSeedingType } from "../../features/league/types/tournament.types";
 
 // ─── 색상 상수 ────────────────────────────────────────────────────────────────
 // 매직 컬러 문자열을 한 곳에서 관리. 디자인 변경 시 여기만 수정하면 됨
@@ -1068,7 +1069,19 @@ export default function LeagueGPTVisionSheet() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const isProgramMode = searchParams.get("program") === "1";
+  const isQuickFinalsOffer = isProgramMode && searchParams.get("quickFinals") === "1";
   const programRound = Number.parseInt(searchParams.get("round") ?? "1", 10) || 1;
+  const [quickFinalsOfferOpen, setQuickFinalsOfferOpen] = useState(isQuickFinalsOffer);
+  const [quickFinalsOptionsOpen, setQuickFinalsOptionsOpen] = useState(false);
+  const [quickFinalsSaving, setQuickFinalsSaving] = useState(false);
+  const [quickTournamentMode, setQuickTournamentMode] = useState<TournamentMode>("single");
+  const [quickTournamentSeeding, setQuickTournamentSeeding] = useState<TournamentSeedingType>("seed");
+  const [quickThirdPlace, setQuickThirdPlace] = useState(false);
+  const [quickAdvanceCount, setQuickAdvanceCount] = useState(2);
+  const [quickMatchRule, setQuickMatchRule] = useState<MatchRuleType>("BEST_OF_5");
+  const [quickRuleSwitchSize, setQuickRuleSwitchSize] = useState<number | "">("");
+  const [quickLateMatchRule, setQuickLateMatchRule] = useState<MatchRuleType>("BEST_OF_5");
+  const [quickFinalsError, setQuickFinalsError] = useState("");
   const backMode = searchParams.get("back");
   const backTo = backMode === "detail"
     ? `/league/${id}`
@@ -1610,6 +1623,70 @@ export default function LeagueGPTVisionSheet() {
   const [addParticipants, { isLoading: isAddingBot }] = useAddParticipantsMutation();
   const [saveLeagueProgram] = useSaveLeagueProgramMutation();
   const [syncProgramMatches] = useSyncLeagueProgramMatchesMutation();
+
+  const addQuickFinalTournament = async () => {
+    if (!id || !programOption || !programOption.blocks[0]) return;
+    try {
+      setQuickFinalsError("");
+      setQuickFinalsSaving(true);
+      const asMatchRule = (value: MatchRuleType): MatchRule => value === "BEST_OF_5" ? "5전 3선승제" : value === "THREE_SET" ? "3세트제" : "3전 2선승제";
+      const firstRoundMatches = (matchData?.matches ?? []).filter((match) => match.is_program && match.program_round === 1);
+      const snapshotted = withProgramRoundStandingsSnapshot(programOption, 1, firstRoundMatches);
+      const sourceBlock = snapshotted.blocks[0];
+      const finalBlock = {
+        title: "2라운드 본선 토너먼트",
+        type: sourceBlock.type,
+        format: "TOURNAMENT" as const,
+        roundOption: "FINAL" as const,
+        matchRule: asMatchRule(quickMatchRule),
+        ruleSwitchSize: quickRuleSwitchSize === "" ? undefined : quickRuleSwitchSize,
+        lateMatchRule: quickRuleSwitchSize === "" ? undefined : asMatchRule(quickLateMatchRule),
+        expectedMinutes: 0,
+        matchCount: 0,
+        tournamentBracketCount: 1,
+        tournamentMode: quickTournamentMode,
+        tournamentSeeding: quickTournamentSeeding,
+        thirdPlaceMatch: quickThirdPlace,
+        finalAdvancementMode: "top-n" as const,
+        advanceCount: quickAdvanceCount,
+        sourceRoundId: 1,
+      };
+      const nextProgram: ProgramOption = {
+        ...snapshotted,
+        blocks: [...snapshotted.blocks.slice(0, 1), finalBlock],
+        rounds: [
+          ...(snapshotted.rounds?.slice(0, 1) ?? []),
+          {
+            id: 2, expanded: true, program: sourceBlock.type, format: "TOURNAMENT", option: "FINAL",
+            matchRule: quickMatchRule, ruleSwitchSize: quickRuleSwitchSize === "" ? undefined : quickRuleSwitchSize,
+            lateMatchRule: quickRuleSwitchSize === "" ? undefined : quickLateMatchRule,
+            teamPlayerCount: sourceBlock.teamPlayerCount ?? 3, teamMatchType: "SSS",
+            tournamentBracketCount: 1, tournamentMode: quickTournamentMode, tournamentSeeding: quickTournamentSeeding,
+            thirdPlaceMatch: quickThirdPlace, finalAdvancementMode: "top-n", advanceCount: quickAdvanceCount, sourceRoundId: 1,
+          },
+        ],
+      };
+      const generated = generateProgramRoundMatches(id, nextProgram, rawParticipants, 2, firstRoundMatches)
+        .map((match) => ({ ...match, program_round: 2, program_block_type: sourceBlock.type }));
+      if (generated.length === 0) throw new Error("본선 진출자를 계산할 수 없습니다. 1라운드 결과를 모두 확인해 주세요.");
+      const finalizedProgram: ProgramOption = {
+        ...nextProgram,
+        blocks: nextProgram.blocks.map((block, index) => index === 1 ? { ...block, matchCount: generated.length, expectedMinutes: generated.length * 10 } : block),
+        totalBlockMatchCount: nextProgram.blocks[0].matchCount + generated.length,
+        totalProgramMinutes: nextProgram.blocks[0].expectedMinutes + generated.length * 10,
+      };
+      storeProgramOption(id, finalizedProgram);
+      await saveLeagueProgram({ leagueId: id, program: finalizedProgram }).unwrap();
+      await syncProgramMatches({ leagueId: id, matches: generated, resetResults: false }).unwrap();
+      setQuickFinalsOfferOpen(false);
+      setQuickFinalsOptionsOpen(false);
+      navigate(`/league/${id}/program/bracket?program=1&round=2&back=detail`, { replace: true });
+    } catch (error) {
+      setQuickFinalsError(getErrorMessage(error, "본선 토너먼트를 생성하지 못했습니다."));
+    } finally {
+      setQuickFinalsSaving(false);
+    }
+  };
 
   useEffect(() => {
     if (!isProgramMode || !id || !programOption || programMatchesAll.length === 0) return;
@@ -3141,6 +3218,71 @@ export default function LeagueGPTVisionSheet() {
         <DialogTitle sx={{ fontWeight: 900 }}>사진 인식 실패</DialogTitle>
         <DialogContent dividers><Typography>{visionError}</Typography></DialogContent>
         <DialogActions><Button onClick={() => setVisionError(null)}>확인</Button></DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={quickFinalsOfferOpen && !quickFinalsOptionsOpen}
+        onClose={() => undefined}
+        maxWidth="sm"
+        fullWidth
+        sx={{ zIndex: 10003, "& .MuiDialog-container": { alignItems: "flex-end" } }}
+        slotProps={{ paper: { sx: { mb: 2, mx: 1.5, borderRadius: 3, maxWidth: 560 } } }}
+      >
+        <DialogTitle sx={{ fontWeight: 900 }}>본선 토너먼트도 생성할까요?</DialogTitle>
+        <DialogContent>
+          <Typography sx={{ color: "#6B7280", fontSize: 13 }}>현재 결과를 기준으로 이 리그의 2라운드 본선 토너먼트를 만들 수 있습니다.</Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 2.5, pb: 2 }}>
+          <Button fullWidth variant="outlined" onClick={() => setQuickFinalsOfferOpen(false)}>아니오</Button>
+          <Button fullWidth variant="contained" onClick={() => setQuickFinalsOptionsOpen(true)}>예</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={quickFinalsOptionsOpen} onClose={() => !quickFinalsSaving && setQuickFinalsOptionsOpen(false)} maxWidth="sm" fullWidth sx={{ zIndex: 10004 }}>
+        <DialogTitle sx={{ fontWeight: 900 }}>2라운드 본선 토너먼트</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2.5}>
+            <Box>
+              <Typography sx={{ fontWeight: 900, mb: 1 }}>라운드 구분</Typography>
+              <ToggleButtonGroup exclusive fullWidth value={quickTournamentMode} onChange={(_, value: TournamentMode | null) => value && setQuickTournamentMode(value)}>
+                <ToggleButton value="single">일반</ToggleButton><ToggleButton value="upper-lower">상·하위</ToggleButton>
+              </ToggleButtonGroup>
+              <Typography sx={{ mt: .75, color: "#64748B", fontSize: 13 }}>{quickTournamentMode === "single" ? "경기에서 이긴 참가자가 다음 단계로 진출합니다." : "첫 경기 승자는 상위부, 패자는 하위부로 진출합니다."}</Typography>
+            </Box>
+            <Box>
+              <Typography sx={{ fontWeight: 900, mb: 1 }}>배치 방식</Typography>
+              <ToggleButtonGroup exclusive fullWidth value={quickTournamentSeeding} onChange={(_, value: TournamentSeedingType | null) => value && setQuickTournamentSeeding(value)}>
+                <ToggleButton value="seed">시드(순위)</ToggleButton><ToggleButton value="random">랜덤</ToggleButton><ToggleButton value="manual">수동</ToggleButton>
+              </ToggleButtonGroup>
+            </Box>
+            <TextField select fullWidth label={currentProgramBlock?.format === "GROUP" ? "각 조 진출 인원" : "진출 인원"} value={quickAdvanceCount} onChange={(event) => setQuickAdvanceCount(Number(event.target.value))}>
+              {[1,2,3,4,5,6,7,8].map((count) => <MenuItem key={count} value={count}>{currentProgramBlock?.format === "GROUP" ? `각 조 상위 ${count}명` : `전체 상위 ${count}명`}</MenuItem>)}
+            </TextField>
+            <Box>
+              <Typography sx={{ fontWeight: 900, mb: 1 }}>3·4위전</Typography>
+              <RadioGroup row value={quickThirdPlace ? "yes" : "no"} onChange={(event) => setQuickThirdPlace(event.target.value === "yes")}>
+                <FormControlLabel value="yes" control={<Radio />} label="진행"/><FormControlLabel value="no" control={<Radio />} label="진행 안 함"/>
+              </RadioGroup>
+            </Box>
+            <Box>
+              <Typography sx={{ fontWeight: 900, mb: 1 }}>경기 규칙</Typography>
+              <FormControl fullWidth><RadioGroup value={quickMatchRule} onChange={(event) => setQuickMatchRule(event.target.value as MatchRuleType)}><Stack spacing={1}>
+                <FormControlLabel value="BEST_OF_3" control={<Radio />} label="3전 2선승제"/><FormControlLabel value="BEST_OF_5" control={<Radio />} label="5전 3선승제"/><FormControlLabel value="THREE_SET" control={<Radio />} label="3세트제"/>
+              </Stack></RadioGroup></FormControl>
+            </Box>
+            <Stack direction="row" spacing={1.5}>
+              <TextField select fullWidth size="small" label="규칙 전환 단계" value={quickRuleSwitchSize} onChange={(event) => setQuickRuleSwitchSize(event.target.value === "" ? "" : Number(event.target.value))}>
+                <MenuItem value="">전환 없음</MenuItem><MenuItem value={0}>처음부터</MenuItem>{[128,64,32,16,8,4,2].map((size) => <MenuItem key={size} value={size}>{size === 2 ? "결승부터" : `${size}강부터`}</MenuItem>)}
+              </TextField>
+              <TextField select fullWidth size="small" label="전환 후 규칙" disabled={quickRuleSwitchSize === ""} value={quickLateMatchRule} onChange={(event) => setQuickLateMatchRule(event.target.value as MatchRuleType)}>
+                <MenuItem value="BEST_OF_3">3전 2선승제</MenuItem><MenuItem value="BEST_OF_5">5전 3선승제</MenuItem><MenuItem value="THREE_SET">3세트제</MenuItem>
+              </TextField>
+            </Stack>
+            {quickFinalsError && <Alert severity="error">{quickFinalsError}</Alert>}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 2.5, py: 1.5 }}><Button disabled={quickFinalsSaving} onClick={() => setQuickFinalsOptionsOpen(false)}>이전</Button><Button variant="contained" disabled={quickFinalsSaving} onClick={() => void addQuickFinalTournament()}>토너먼트 생성</Button></DialogActions>
+        {quickFinalsSaving && <Box sx={{ position: "absolute", inset: 0, bgcolor: "rgba(255,255,255,.86)", display: "grid", placeItems: "center", zIndex: 2 }}><Paper elevation={8} sx={{ width: "min(420px,80%)", p: 2.5, borderRadius: 3 }}><Typography fontWeight={900} sx={{ mb: 1 }}>2라운드 토너먼트 생성 중</Typography><LinearProgress /></Paper></Box>}
       </Dialog>
 
       <Dialog

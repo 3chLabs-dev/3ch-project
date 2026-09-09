@@ -43,6 +43,7 @@ export interface CreateLeagueRequest {
   participants?: { division: string; name: string; member_id?: number | null; source_group_id?: string | null; paid?: boolean; arrived?: boolean; after?: boolean }[];
   invited_group_ids?: string[];
   register_unmatched_as_pre_members?: boolean;
+  program_data?: unknown;
 }
 
 export interface UpdateLeagueRequest {
@@ -122,6 +123,7 @@ export interface League {
 export interface CreateLeagueResponse {
   message: string;
   league: League;
+  participants?: LeagueParticipantItem[];
 }
 
 export interface GetLeagueResponse {

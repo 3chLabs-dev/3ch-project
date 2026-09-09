@@ -1317,7 +1317,7 @@ export default function GroupManage() {
                 const [rawCity = "", rawDistrict = ""] = place.address.trim().split(/\s+/);
                 const city = CITY_ALIAS_MAP[rawCity] ?? "";
                 const district = city === "세종특별자치시" ? "세종시" : ((REGION_DATA[city] ?? []).includes(rawDistrict) ? rawDistrict : "");
-                setVenueDraft((prev) => ({ ...prev, address: place.address, address_detail: prev.name.trim(), lat: place.lat, lng: place.lng, region_city: city, region_district: district }));
+                setVenueDraft((prev) => ({ ...prev, address: place.address, address_detail: place.name, lat: place.lat, lng: place.lng, region_city: city, region_district: district }));
                 setPlaceDialogOpen(false);
             }} />
 

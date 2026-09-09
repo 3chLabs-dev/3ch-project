@@ -393,7 +393,7 @@ export default function GroupCreate() {
                     setPlaceDialogOpen(false);
                 }} onSelect={(place) => {
                     setAddress(place.address);
-                    setAddressDetail(venueName.trim());
+                    setAddressDetail(place.name);
                     syncRegionFromAddress(place.address);
                     setLat(place.lat);
                     setLng(place.lng);

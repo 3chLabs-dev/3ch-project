@@ -1,4 +1,4 @@
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   Box,
   Card,
@@ -27,6 +27,8 @@ function maskEmail(email: string): string {
 export default function ClubMemberDetail() {
   const { id: groupId, userId } = useParams<{ id: string; userId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const openedFromLeagueRanking = Boolean((location.state as { fromLeagueRanking?: boolean } | null)?.fromLeagueRanking);
   const [selectedSeasonId, setSelectedSeasonId] = useState("");
 
   const { data, isLoading } = useGetGroupMemberDetailQuery(
@@ -55,7 +57,7 @@ export default function ClubMemberDetail() {
   return (
     <Stack spacing={2.5} sx={{ pb: 3 }}>
       <Stack direction="row" alignItems="center" spacing={1.5}>
-        <IconButton onClick={() => navigate(`/club/${groupId}`)} size="small">
+        <IconButton onClick={() => openedFromLeagueRanking ? navigate(-1) : navigate(`/club/${groupId}`)} size="small">
           <ArrowBackIcon />
         </IconButton>
         <Typography variant="h6" fontWeight={900} flex={1}>

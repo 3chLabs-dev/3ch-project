@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Alert, Box, Button, Card, CardContent, Checkbox, CircularProgress, FormControlLabel, MenuItem, Select, Stack, TextField, Typography } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useGetLeaguePointRankingQuery, useUpdateLeaguePointRankingAdjustmentsMutation, useUpdateLeaguePointRankingSettingsMutation } from "../../features/league/leagueApi";
 import type { GroupRankingPointRules } from "../../features/group/groupApi";
 
@@ -10,7 +10,7 @@ const rankingLabels = { league: "단일리그", group: "조별리그", tournamen
 const rankLabels = { first: "1위", second: "2위", third: "3위", fourth: "4위" } as const;
 
 export default function LeaguePointRankingPage() {
-  const { id = "" } = useParams(); const navigate = useNavigate();
+  const { id = "" } = useParams(); const navigate = useNavigate(); const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const settingsMode = searchParams.get("settings") === "1";
   const [seasonId, setSeasonId] = useState<string | undefined>(() => searchParams.get("season") || undefined);
@@ -28,6 +28,10 @@ export default function LeaguePointRankingPage() {
   if (error || !data || !rules) return <Box sx={{ p:2 }}><Alert severity="error">리그 순위를 불러오지 못했습니다.</Alert></Box>;
   const changeSeason = (value: string) => { setSeasonId(value); setVisibleCount(10); setSearchParams(settingsMode ? { settings:"1",season:value } : { season:value }); };
   if (!settingsMode) {
+    const openMemberDetail = (memberId: number) => navigate(
+      `/club/${data.league_info.group_id}/member/${memberId}`,
+      { state: { fromLeagueRanking: true, returnTo: `${location.pathname}${location.search}` } },
+    );
     return <Box sx={{ maxWidth:720, mx:"auto", p:2, pb:8 }}>
       <Stack direction="row" alignItems="center" spacing={1} sx={{ mb:2 }}>
         <Button onClick={() => navigate(`/league/${id}`)} sx={{ minWidth:36 }}><ArrowBackIcon /></Button>
@@ -35,9 +39,9 @@ export default function LeaguePointRankingPage() {
         <Select size="small" value={data.season.id} onChange={(e) => changeSeason(String(e.target.value))} sx={{ minWidth:116, borderRadius:2 }}>{data.seasons.map((s) => <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>)}</Select>
         {data.can_manage && <Button variant="outlined" onClick={() => setSearchParams({ settings:"1", season:data.season.id })} sx={{ whiteSpace:"nowrap", borderRadius:2, fontWeight:800 }}>순위 설정</Button>}
       </Stack>
-      {data.unit_rankings.length > 0 ? data.unit_rankings.map((section) => <RankingSection key={`${section.type}-${section.round}`} title={section.title} rows={section.rows} visibleCount={visibleCount} currentUserId={data.currentUserId} onSelect={(memberId) => navigate(`/club/${data.league_info.group_id}/member/${memberId}`)} onMore={() => setVisibleCount((count) => count+10)} />) : <>
-        <RankingSection title="리그" rows={data.league.rankings} visibleCount={visibleCount} currentUserId={data.currentUserId} onSelect={(memberId) => navigate(`/club/${data.league_info.group_id}/member/${memberId}`)} onMore={() => setVisibleCount((count) => count+10)} />
-        {data.tournament.rankings.some((row) => row.total_points > 0 || row.matches_played > 0) && <RankingSection title="대회" rows={data.tournament.rankings} visibleCount={visibleCount} currentUserId={data.currentUserId} onSelect={(memberId) => navigate(`/club/${data.league_info.group_id}/member/${memberId}`)} onMore={() => setVisibleCount((count) => count+10)} />}
+      {data.unit_rankings.length > 0 ? data.unit_rankings.map((section) => <RankingSection key={`${section.type}-${section.round}`} title={section.title} rows={section.rows} visibleCount={visibleCount} currentUserId={data.currentUserId} onSelect={openMemberDetail} onMore={() => setVisibleCount((count) => count+10)} />) : <>
+        <RankingSection title="리그" rows={data.league.rankings} visibleCount={visibleCount} currentUserId={data.currentUserId} onSelect={openMemberDetail} onMore={() => setVisibleCount((count) => count+10)} />
+        {data.tournament.rankings.some((row) => row.total_points > 0 || row.matches_played > 0) && <RankingSection title="대회" rows={data.tournament.rankings} visibleCount={visibleCount} currentUserId={data.currentUserId} onSelect={openMemberDetail} onMore={() => setVisibleCount((count) => count+10)} />}
       </>}
     </Box>;
   }

@@ -291,7 +291,7 @@ function ScoreButton({ icon, disabled, rotate, variant = "order", onClick }: {
       onClick={onClick}
       sx={{ p: 0.75, minWidth: 28, minHeight: 28 }}
     >
-      <Icon sx={{ fontSize: 16, ...(rotate && { transform: "rotate(90deg)" }) }} />
+      <Icon sx={{ fontSize: 16, ...(rotate && { transform: "rotate(-90deg)" }) }} />
     </IconButton>
   );
 }
@@ -405,7 +405,7 @@ function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, la
 
   // 편집 불가: 점수 숫자만 표시 (빈 칸 또는 숫자)
   if (!canEdit) {
-    return <StyledTableCell {...cellCoordinates} sx={winnerStyle}>{score !== null ? score : ""}</StyledTableCell>;
+    return <StyledTableCell {...cellCoordinates} sx={winnerStyle}><Box sx={landscape ? {} : { transform: "rotate(-90deg)" }}>{score !== null ? score : ""}</Box></StyledTableCell>;
   }
 
   // landscape / portrait 공통: [↓] 점수 [↑] 가로 배치, 좌우 여백 있게
@@ -418,7 +418,7 @@ function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, la
     }}>
       <ScoreButton icon="down" variant="score" disabled={(score ?? 0) <= 0} rotate={!landscape} onClick={() => handleChange(-1)} />
       {!isEditing && 
-        <Typography className="score-text" data-row={rowIndex} data-col={colIndex} data-tc ={totalCols} data-tr={totalRows} onClick={() => { setTempValue(String(score ?? 0)); setIsEditing(true); }}sx={{ fontSize: 14, ...winnerStyle, lineHeight: 1, ...(landscape ? {} : { transform: "rotate(90deg)" }), minWidth: 14, textAlign: "center" }}>
+        <Typography className="score-text" data-row={rowIndex} data-col={colIndex} data-tc ={totalCols} data-tr={totalRows} onClick={() => { setTempValue(String(score ?? 0)); setIsEditing(true); }}sx={{ fontSize: 14, ...winnerStyle, lineHeight: 1, ...(landscape ? {} : { transform: "rotate(-90deg)" }), minWidth: 14, textAlign: "center" }}>
           {score ?? 0}
         </Typography>
       }
@@ -468,7 +468,7 @@ function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, la
                                 }, 0);
                               }
                             }}
-          style={{ width: 50, textAlign: "center",}}/>
+          style={{ width: 50, textAlign: "center", transform: landscape ? undefined : "rotate(-90deg)" }}/>
       }
       <ScoreButton icon="up" variant="score" rotate={!landscape} onClick={() => handleChange(1)} />
     </Box>
@@ -1077,6 +1077,7 @@ export default function LeagueGPTVisionSheet() {
   const [quickTournamentMode, setQuickTournamentMode] = useState<TournamentMode>("single");
   const [quickTournamentSeeding, setQuickTournamentSeeding] = useState<TournamentSeedingType>("seed");
   const [quickThirdPlace, setQuickThirdPlace] = useState(false);
+  const [quickAdvanceMode, setQuickAdvanceMode] = useState<"top-n" | "all">("top-n");
   const [quickAdvanceCount, setQuickAdvanceCount] = useState(2);
   const [quickMatchRule, setQuickMatchRule] = useState<MatchRuleType>("BEST_OF_5");
   const [quickRuleSwitchSize, setQuickRuleSwitchSize] = useState<number | "">("");
@@ -1647,7 +1648,7 @@ export default function LeagueGPTVisionSheet() {
         tournamentMode: quickTournamentMode,
         tournamentSeeding: quickTournamentSeeding,
         thirdPlaceMatch: quickThirdPlace,
-        finalAdvancementMode: "top-n" as const,
+        finalAdvancementMode: quickAdvanceMode,
         advanceCount: quickAdvanceCount,
         sourceRoundId: 1,
       };
@@ -1662,7 +1663,7 @@ export default function LeagueGPTVisionSheet() {
             lateMatchRule: quickRuleSwitchSize === "" ? undefined : quickLateMatchRule,
             teamPlayerCount: sourceBlock.teamPlayerCount ?? 3, teamMatchType: "SSS",
             tournamentBracketCount: 1, tournamentMode: quickTournamentMode, tournamentSeeding: quickTournamentSeeding,
-            thirdPlaceMatch: quickThirdPlace, finalAdvancementMode: "top-n", advanceCount: quickAdvanceCount, sourceRoundId: 1,
+            thirdPlaceMatch: quickThirdPlace, finalAdvancementMode: quickAdvanceMode, advanceCount: quickAdvanceCount, sourceRoundId: 1,
           },
         ],
       };
@@ -1680,7 +1681,7 @@ export default function LeagueGPTVisionSheet() {
       await syncProgramMatches({ leagueId: id, matches: generated, resetResults: false }).unwrap();
       setQuickFinalsOfferOpen(false);
       setQuickFinalsOptionsOpen(false);
-      navigate(`/league/${id}/program/bracket?program=1&round=2&back=detail`, { replace: true });
+      navigate(`/league/${id}/program/tournament-bracket?program=1&round=2&back=detail`, { replace: true });
     } catch (error) {
       setQuickFinalsError(getErrorMessage(error, "본선 토너먼트를 생성하지 못했습니다."));
     } finally {
@@ -3226,7 +3227,7 @@ export default function LeagueGPTVisionSheet() {
         maxWidth="sm"
         fullWidth
         sx={{ zIndex: 10003, "& .MuiDialog-container": { alignItems: "flex-end" } }}
-        slotProps={{ paper: { sx: { mb: 2, mx: 1.5, borderRadius: 3, maxWidth: 560 } } }}
+        slotProps={{ backdrop: { sx: { backgroundColor: "transparent" } }, paper: { sx: { mb: 2, mx: 1.5, borderRadius: 3, maxWidth: 560, ...mobileDialogPaperSx } } }}
       >
         <DialogTitle sx={{ fontWeight: 900 }}>본선 토너먼트도 생성할까요?</DialogTitle>
         <DialogContent>
@@ -3238,7 +3239,7 @@ export default function LeagueGPTVisionSheet() {
         </DialogActions>
       </Dialog>
 
-      <Dialog open={quickFinalsOptionsOpen} onClose={() => !quickFinalsSaving && setQuickFinalsOptionsOpen(false)} maxWidth="sm" fullWidth sx={{ zIndex: 10004 }}>
+      <Dialog open={quickFinalsOptionsOpen} onClose={() => !quickFinalsSaving && setQuickFinalsOptionsOpen(false)} maxWidth="sm" fullWidth sx={{ zIndex: 10004 }} slotProps={{ backdrop: { sx: { backgroundColor: "transparent" } }, paper: { sx: mobileDialogPaperSx } }}>
         <DialogTitle sx={{ fontWeight: 900 }}>2라운드 본선 토너먼트</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2.5}>
@@ -3255,9 +3256,19 @@ export default function LeagueGPTVisionSheet() {
                 <ToggleButton value="seed">시드(순위)</ToggleButton><ToggleButton value="random">랜덤</ToggleButton><ToggleButton value="manual">수동</ToggleButton>
               </ToggleButtonGroup>
             </Box>
-            <TextField select fullWidth label={currentProgramBlock?.format === "GROUP" ? "각 조 진출 인원" : "진출 인원"} value={quickAdvanceCount} onChange={(event) => setQuickAdvanceCount(Number(event.target.value))}>
-              {[1,2,3,4,5,6,7,8].map((count) => <MenuItem key={count} value={count}>{currentProgramBlock?.format === "GROUP" ? `각 조 상위 ${count}명` : `전체 상위 ${count}명`}</MenuItem>)}
-            </TextField>
+            <Box>
+              <Typography sx={{ fontWeight: 900, mb: 1 }}>진출 인원</Typography>
+              <ToggleButtonGroup exclusive fullWidth value={quickAdvanceMode} onChange={(_, value: "top-n" | "all" | null) => value && setQuickAdvanceMode(value)}>
+                <ToggleButton value="top-n">상위 인원</ToggleButton><ToggleButton value="all">모두 진출</ToggleButton>
+              </ToggleButtonGroup>
+              {quickAdvanceMode === "top-n" && <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 1.25 }}>
+                <Typography fontWeight={900}>{currentProgramBlock?.format === "GROUP" ? "각 조 상위" : "전체 상위"}</Typography>
+                <IconButton size="small" disabled={quickAdvanceCount <= 1} onClick={() => setQuickAdvanceCount((count) => Math.max(1, count - 1))} sx={{ border: "1px solid #BFDBFE", color: "#2563EB" }}><RemoveIcon /></IconButton>
+                <Box sx={{ minWidth: 48, py: .7, border: "1px solid #D1D5DB", borderRadius: 2, textAlign: "center", fontWeight: 900 }}>{quickAdvanceCount}</Box>
+                <IconButton size="small" onClick={() => setQuickAdvanceCount((count) => Math.min(64, count + 1))} sx={{ border: "1px solid #BFDBFE", color: "#2563EB" }}><AddIcon /></IconButton>
+                <Typography fontWeight={900}>명</Typography>
+              </Stack>}
+            </Box>
             <Box>
               <Typography sx={{ fontWeight: 900, mb: 1 }}>3·4위전</Typography>
               <RadioGroup row value={quickThirdPlace ? "yes" : "no"} onChange={(event) => setQuickThirdPlace(event.target.value === "yes")}>

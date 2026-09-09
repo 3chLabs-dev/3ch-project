@@ -4595,6 +4595,75 @@ router.patch('/league/:id/matches/reorder', requireAuth, async (req, res) => {
  *       500:
  *         description: 서버 오류
  */
+// PATCH /league/:id/matches/batch-results - Vision으로 인식한 일반 대진표 결과 일괄 저장
+router.patch('/league/:id/matches/batch-results', optionalAuth, async (req, res) => {
+  const leagueId = req.params.id;
+  const client = await pool.connect();
+  try {
+    const items = z.array(z.object({
+      match_id: z.string().min(1),
+      score_a: z.number().int().min(0).max(99).nullable().optional(),
+      score_b: z.number().int().min(0).max(99).nullable().optional(),
+      status: z.enum(['pending', 'playing', 'done']).optional(),
+    })).min(1).max(500).parse(req.body?.matches);
+    if (new Set(items.map((item) => item.match_id)).size !== items.length) {
+      return res.status(400).json({ message: '중복된 경기 결과가 포함되어 있습니다.' });
+    }
+
+    const leagueRow = await client.query(
+      `SELECT join_permission, tournament_seeding FROM leagues WHERE id = $1`,
+      [leagueId],
+    );
+    if (leagueRow.rowCount === 0) return res.status(404).json({ message: '리그를 찾을 수 없습니다.' });
+    if (leagueRow.rows[0].join_permission === 'club_only') {
+      const userId = req.user ? Number(req.user.sub) : null;
+      if (!userId) return res.status(401).json({ message: '로그인이 필요합니다.' });
+      const accessCheck = await client.query(
+        `SELECT 1 FROM leagues l INNER JOIN group_members gm ON gm.group_id = l.group_id WHERE l.id = $1 AND gm.user_id = $2`,
+        [leagueId, userId],
+      );
+      if (accessCheck.rowCount === 0) return res.status(403).json({ message: '클럽 회원만 수정할 수 있습니다.' });
+    }
+
+    await client.query('BEGIN');
+    let updated = 0;
+    for (const item of items) {
+      const fields = [];
+      const values = [];
+      if (Object.prototype.hasOwnProperty.call(item, 'score_a')) { fields.push(`score_a = $${values.length + 1}`); values.push(item.score_a); }
+      if (Object.prototype.hasOwnProperty.call(item, 'score_b')) { fields.push(`score_b = $${values.length + 1}`); values.push(item.score_b); }
+      if (item.status !== undefined) { fields.push(`status = $${values.length + 1}`); values.push(item.status); }
+      if (fields.length === 0) continue;
+      values.push(item.match_id, leagueId);
+      const result = await client.query(
+        `UPDATE league_matches SET ${fields.join(', ')} WHERE id = $${values.length - 1} AND league_id = $${values.length}`,
+        values,
+      );
+      if (result.rowCount !== 1) {
+        const error = new Error('저장할 경기를 찾을 수 없습니다.');
+        error.statusCode = 404;
+        throw error;
+      }
+      updated += 1;
+    }
+    await reconcileTournamentMatches(client, leagueId, { manualSeeding: leagueRow.rows[0].tournament_seeding === 'manual' });
+    await client.query('COMMIT');
+
+    // 모든 점수가 확정된 뒤 순위를 한 번만 다시 계산한다.
+    await triggerRankingRebuildByLeagueId(leagueId).catch((error) => {
+      console.error('Batch result ranking rebuild failed:', error);
+    });
+    return res.json({ updated });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    if (error instanceof z.ZodError) return res.status(400).json({ message: '경기 결과 형식이 올바르지 않습니다.', issues: error.issues });
+    console.error('Error batch updating matches:', error);
+    return res.status(error.statusCode || 500).json({ message: error.message || '서버 오류' });
+  } finally {
+    client.release();
+  }
+});
+
 // PATCH /league/:id/matches/:matchId - 점수/코트/상태/참가자 업데이트 (public 리그는 누구나, club_only는 클럽 멤버; 참가자 변경은 owner/admin만)
 router.patch('/league/:id/matches/:matchId', optionalAuth, async (req, res) => {
   const { id, matchId } = req.params;

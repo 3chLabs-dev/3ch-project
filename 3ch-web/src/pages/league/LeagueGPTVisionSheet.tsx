@@ -64,6 +64,7 @@ import {
   useSaveLeagueProgramMutation,
   useSyncLeagueProgramMatchesMutation,
   useUpdateLeagueMatchMutation,
+  useUpdateLeagueMatchResultsBatchMutation,
   useScanLeagueOpenAIVisionMutation,
   useReorderLeagueParticipantsMutation,
   type LeagueParticipantItem,
@@ -1201,6 +1202,7 @@ export default function LeagueGPTVisionSheet() {
   }, [generatedProgramMatchesAll, hasProgramMatchPolicy, isProgramFinalRound, isProgramUnitRound, serverProgramMatchesAll]);
   const [updateMatch] = useUpdateLeagueMatchMutation();
   const [scanVision, { isLoading: isScanning }] = useScanLeagueOpenAIVisionMutation();
+  const [updateMatchResultsBatch] = useUpdateLeagueMatchResultsBatchMutation();
   const [resultDialogOpen, setResultDialogOpen] = useState(false);
   const [tieBreakDialogOpen, setTieBreakDialogOpen] = useState(false);
   const [isSavingTieBreak, setIsSavingTieBreak] = useState(false);
@@ -2301,19 +2303,27 @@ export default function LeagueGPTVisionSheet() {
     setVisionSaveProgress(0);
     try {
       let saved = 0;
-      for (const { match, scoreA, scoreB } of pendingMatches) {
-        const updates: ProgramMatchPatch = {};
-        if (scoreA != null) updates.score_a = scoreA;
-        if (scoreB != null) updates.score_b = scoreB;
-        if (scoreA != null && scoreB != null) updates.status = "done";
-        if (Object.keys(updates).length === 0) continue;
-        if (isProgramMode) {
+      if (isProgramMode) {
+        for (const { match, scoreA, scoreB } of pendingMatches) {
+          const updates: ProgramMatchPatch = {};
+          if (scoreA != null) updates.score_a = scoreA;
+          if (scoreB != null) updates.score_b = scoreB;
+          if (scoreA != null && scoreB != null) updates.status = "done";
+          if (Object.keys(updates).length === 0) continue;
           await updateProgramMatch(match.id, updates);
-        } else {
-          await updateMatch({ leagueId: id ?? "", matchId: match.id, updates }).unwrap();
+          saved += 1;
+          setVisionSaveProgress(Math.round((saved / pendingMatches.length) * 90));
         }
-        saved += 1;
-        setVisionSaveProgress(Math.round((saved / pendingMatches.length) * 90));
+      } else {
+        const batch = pendingMatches.map(({ match, scoreA, scoreB }) => ({
+          match_id: match.id,
+          ...(scoreA != null ? { score_a: scoreA } : {}),
+          ...(scoreB != null ? { score_b: scoreB } : {}),
+          ...(scoreA != null && scoreB != null ? { status: "done" as const } : {}),
+        }));
+        const result = await updateMatchResultsBatch({ leagueId: id ?? "", matches: batch }).unwrap();
+        saved = result.updated;
+        setVisionSaveProgress(90);
       }
       if (!isProgramMode || serverProgramMatchesAll.length > 0) {
         await refetchMatches();

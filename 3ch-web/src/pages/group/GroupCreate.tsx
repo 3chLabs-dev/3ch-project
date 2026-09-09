@@ -13,8 +13,6 @@ import {
     Dialog,
     DialogContent,
     DialogActions,
-    Checkbox,
-    FormControlLabel,
 } from "@mui/material";
 import confetti from "canvas-confetti";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -46,8 +44,6 @@ export default function GroupCreate() {
     const [lat, setLat] = useState<number | undefined>();
     const [lng, setLng] = useState<number | undefined>();
     const [venueName, setVenueName] = useState("");
-    const [venueIsDefault, setVenueIsDefault] = useState(true);
-    const [activityVenues, setActivityVenues] = useState<GroupActivityVenue[]>([]);
     const [placeDialogOpen, setPlaceDialogOpen] = useState(false);
 
     const [links, setLinks] = useState<GroupLinkInput[]>([
@@ -167,20 +163,20 @@ export default function GroupCreate() {
         setConfirmOpen(true);
     };
 
-    const addActivityVenue = () => {
-        if (!venueName.trim() || !address.trim()) return;
-        const makeDefault = venueIsDefault || activityVenues.length === 0;
-        setActivityVenues((prev) => [
-            ...prev.map((venue) => makeDefault ? { ...venue, is_default: false } : venue),
-            { id: crypto.randomUUID(), name: venueName.trim(), address: address.trim(), address_detail: addressDetail.trim(), lat: lat ?? null, lng: lng ?? null, region_city: regionCity || null, region_district: regionDistrict || null, is_default: makeDefault },
-        ]);
-        setVenueName(""); setAddress(""); setAddressDetail(""); setLat(undefined); setLng(undefined); setVenueIsDefault(false);
-    };
-
     const handleConfirmCreate = async () => {
         setConfirmOpen(false);
         try {
-            const defaultVenue = activityVenues.find((venue) => venue.is_default) ?? activityVenues[0];
+            const defaultVenue: GroupActivityVenue | undefined = venueName.trim() ? {
+                id: crypto.randomUUID(),
+                name: venueName.trim(),
+                address: address.trim(),
+                address_detail: addressDetail.trim(),
+                lat: lat ?? null,
+                lng: lng ?? null,
+                region_city: regionCity || null,
+                region_district: regionDistrict || null,
+                is_default: true,
+            } : undefined;
             await createGroup({
                 name: groupName.trim(),
                 sport: sport,
@@ -192,7 +188,7 @@ export default function GroupCreate() {
                 address_detail: defaultVenue?.address_detail || addressDetail || undefined,
                 lat: defaultVenue?.lat ?? lat,
                 lng: defaultVenue?.lng ?? lng,
-                activity_venues: activityVenues,
+                activity_venues: defaultVenue ? [defaultVenue] : [],
                 links: links.filter((link) => link.url.trim() !== "").map((link, index) => ({
                             id: link.id,
                             label: link.label.trim() || undefined,
@@ -386,8 +382,9 @@ export default function GroupCreate() {
                     )}
                 </Box>
 
-                <PlaceSearchDialog open={placeDialogOpen} initialQuery={address} onClose={() => setPlaceDialogOpen(false)} allowDirectInput onDirectInput={(value) => {
-                    setAddress(value);
+                <PlaceSearchDialog open={placeDialogOpen} initialQuery={venueName} onClose={() => setPlaceDialogOpen(false)} allowDirectInput onDirectInput={(value) => {
+                    setVenueName(value);
+                    setAddress("");
                     setAddressDetail("");
                     setLat(undefined);
                     setLng(undefined);
@@ -396,25 +393,12 @@ export default function GroupCreate() {
                     setPlaceDialogOpen(false);
                 }} onSelect={(place) => {
                     setAddress(place.address);
-                    if (!venueName.trim()) setVenueName(place.name);
-                    setAddressDetail("");
+                    setAddressDetail(venueName.trim());
                     syncRegionFromAddress(place.address);
                     setLat(place.lat);
                     setLng(place.lng);
                     setPlaceDialogOpen(false);
                 }} />
-
-                {(venueName || address) && <Box sx={{ mt: -1, mb: 2 }}>
-                    <FormControlLabel control={<Checkbox checked={venueIsDefault} onChange={(e) => setVenueIsDefault(e.target.checked)} />} label="기본 활동 장소로 선택" />
-                    <Button fullWidth variant="outlined" onClick={addActivityVenue} disabled={!venueName.trim() || !address.trim()}>활동 장소 추가</Button>
-                </Box>}
-                {activityVenues.length > 0 && <Stack spacing={1} sx={{ mb: 2 }}>
-                    {activityVenues.map((venue) => <Box key={venue.id} sx={{ border: "1px solid #D9DDE6", borderRadius: 1, p: 1.2 }}>
-                        <Stack direction="row" justifyContent="space-between"><Typography fontWeight={800}>{venue.name}{venue.is_default ? " · 기본" : ""}</Typography><Button size="small" color="error" onClick={() => setActivityVenues((prev) => { const next = prev.filter((item) => item.id !== venue.id); return next.some((item) => item.is_default) ? next : next.map((item, index) => ({ ...item, is_default: index === 0 })); })}>삭제</Button></Stack>
-                        <Typography fontSize={12} color="text.secondary">{venue.address} {venue.address_detail}</Typography>
-                        {!venue.is_default && <Button size="small" onClick={() => setActivityVenues((prev) => prev.map((item) => ({ ...item, is_default: item.id === venue.id })))}>기본으로 설정</Button>}
-                    </Box>)}
-                </Stack>}
 
                 {/* 지역 */}
                 <Box>

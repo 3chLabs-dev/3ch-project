@@ -139,7 +139,7 @@ const createGroupSchema = z.object({
   activity_venues: z.array(z.object({
     id: z.string().min(1),
     name: z.string().min(1),
-    address: z.string().min(1),
+    address: z.string(),
     address_detail: z.string().optional().default(''),
     lat: z.number().nullable().optional(),
     lng: z.number().nullable().optional(),

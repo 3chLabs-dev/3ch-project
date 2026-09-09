@@ -163,9 +163,10 @@ export default function GroupManage() {
         lng: undefined as number | undefined,
     });
     const [placeDialogOpen, setPlaceDialogOpen] = useState(false);
-    const [venueName, setVenueName] = useState("");
-    const [venueIsDefault, setVenueIsDefault] = useState(false);
     const [editActivityVenues, setEditActivityVenues] = useState<GroupActivityVenue[]>([]);
+    const [venueEditorOpen, setVenueEditorOpen] = useState(false);
+    const [editingVenueId, setEditingVenueId] = useState<string | null>(null);
+    const [venueDraft, setVenueDraft] = useState<GroupActivityVenue>({ id: "", name: "", address: "", address_detail: "", lat: null, lng: null, region_city: null, region_district: null, is_default: false });
 
     const [editLinks, setEditLinks] = useState<GroupLinkInput[]>([
         { label: "", url: "" },
@@ -318,9 +319,11 @@ export default function GroupManage() {
             lat: group.lat,
             lng: group.lng,
         });
-        setVenueName("");
-        setVenueIsDefault(false);
-        setEditActivityVenues(group.activity_venues ?? []);
+        const venues = group.activity_venues ?? [];
+        setEditActivityVenues(venues);
+        setVenueEditorOpen(venues.length === 0);
+        setEditingVenueId(null);
+        setVenueDraft({ id: "", name: "", address: "", address_detail: "", lat: null, lng: null, region_city: null, region_district: null, is_default: venues.length === 0 });
 
         setEditLinks(
             links.length > 0
@@ -338,10 +341,15 @@ export default function GroupManage() {
     const handleUpdateGroup = async () => {
         if (!id) return;
         try {
+            const defaultVenue = editActivityVenues.find((venue) => venue.is_default) ?? editActivityVenues[0];
             await updateGroup({
                 groupId: id,
                 data: {
                 ...formData,
+                address: defaultVenue?.address ?? "",
+                address_detail: defaultVenue?.address_detail ?? "",
+                lat: defaultVenue?.lat ?? undefined,
+                lng: defaultVenue?.lng ?? undefined,
                 activity_venues: editActivityVenues,
                 links: editLinks
                     .filter((link) => link.url.trim() !== "")
@@ -1063,56 +1071,37 @@ export default function GroupManage() {
                             </Select>
                         </FormControl>
 
-                        {/* 주소 */}
-                        <TextField label="활동 장소 이름" value={venueName} onChange={(e) => setVenueName(e.target.value)} fullWidth size="small" placeholder="예: 정기 모임 탁구장" />
-                        <Stack direction="row" spacing={1}>
-                            <TextField
-                                label="주소"
-                                value={formData.address}
-                                onChange={(e) => setFormData((prev) => ({ ...prev, address: e.target.value, lat: undefined, lng: undefined }))}
-                                fullWidth
-                                size="small"
-                                sx={{ "& .MuiInputBase-input": { fontSize: 14 } }}
-                            />
-                            <Button
-                                variant="outlined"
-                                size="small"
-                                onClick={handleAddressSearch}
-                                sx={{ whiteSpace: "nowrap", height: 40, fontWeight: 700 }}
-                            >
-                                주소 검색
-                            </Button>
+                        {/* 활동 장소 */}
+                        <Stack spacing={1}>
+                            {editActivityVenues.map((venue) => <Box key={venue.id} sx={{ border: "1px solid #D9DDE6", borderRadius: 1, p: 1.2 }}>
+                                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                    <Stack direction="row" spacing={0.7} alignItems="center"><Typography fontWeight={800}>{venue.name}</Typography>{venue.is_default && <Chip label="기본" size="small" color="primary" sx={{ height: 21, fontWeight: 800 }} />}</Stack>
+                                    <Button size="small" color="error" onClick={() => setEditActivityVenues((prev) => { const next = prev.filter((item) => item.id !== venue.id); const normalized = next.some((item) => item.is_default) ? next : next.map((item, index) => ({ ...item, is_default: index === 0 })); if (normalized.length === 0) setVenueEditorOpen(true); return normalized; })}>삭제</Button>
+                                </Stack>
+                                <Typography fontSize={12} color="text.secondary">{venue.address} {venue.address_detail}</Typography>
+                                <Button size="small" onClick={() => { setEditingVenueId(venue.id); setVenueDraft({ ...venue }); setVenueEditorOpen(true); }}>수정</Button>
+                                {!venue.is_default && <Button size="small" onClick={() => setEditActivityVenues((prev) => prev.map((item) => ({ ...item, is_default: item.id === venue.id })))}>기본으로 설정</Button>}
+                            </Box>)}
+                            {!venueEditorOpen && <Button variant="outlined" onClick={() => { setEditingVenueId(null); setVenueDraft({ id: "", name: "", address: "", address_detail: "", lat: null, lng: null, region_city: null, region_district: null, is_default: editActivityVenues.length === 0 }); setVenueEditorOpen(true); }}>+ 활동 장소 추가</Button>}
+                            {venueEditorOpen && <Box sx={{ border: "1px solid #B9D5FA", borderRadius: 1, p: 1.2 }}>
+                                <Typography fontWeight={900} sx={{ mb: 1 }}>{editingVenueId ? "활동 장소 수정" : "활동 장소 추가"}</Typography>
+                                <Stack spacing={1}>
+                                    <TextField label="활동 장소 이름" value={venueDraft.name} onChange={(e) => setVenueDraft((prev) => ({ ...prev, name: e.target.value }))} fullWidth size="small" />
+                                    <Stack direction="row" spacing={1}><TextField label="주소" value={venueDraft.address} fullWidth size="small" slotProps={{ input: { readOnly: true } }} /><Button variant="outlined" size="small" onClick={handleAddressSearch} sx={{ whiteSpace: "nowrap" }}>주소 검색</Button></Stack>
+                                    {venueDraft.address && <TextField label="상세 주소" value={venueDraft.address_detail ?? ""} onChange={(e) => setVenueDraft((prev) => ({ ...prev, address_detail: e.target.value }))} fullWidth size="small" />}
+                                    <FormControlLabel control={<Checkbox checked={venueDraft.is_default} onChange={(e) => setVenueDraft((prev) => ({ ...prev, is_default: e.target.checked }))} />} label="기본 활동 장소로 선택" />
+                                    <Stack direction="row" justifyContent="flex-end" spacing={1}>
+                                        {editActivityVenues.length > 0 && <Button onClick={() => { setVenueEditorOpen(false); setEditingVenueId(null); }}>취소</Button>}
+                                        <Button variant="contained" disabled={!venueDraft.name.trim()} onClick={() => {
+                                            const makeDefault = venueDraft.is_default || editActivityVenues.length === 0;
+                                            const saved = { ...venueDraft, id: editingVenueId ?? crypto.randomUUID(), name: venueDraft.name.trim(), is_default: makeDefault };
+                                            setEditActivityVenues((prev) => [...prev.filter((item) => item.id !== editingVenueId).map((item) => makeDefault ? { ...item, is_default: false } : item), saved]);
+                                            setVenueEditorOpen(false); setEditingVenueId(null);
+                                        }}>{editingVenueId ? "수정 완료" : "추가"}</Button>
+                                    </Stack>
+                                </Stack>
+                            </Box>}
                         </Stack>
-                        {formData.address && (
-                            <TextField
-                                label="상세 주소"
-                                value={formData.address_detail}
-                                onChange={(e) => setFormData({ ...formData, address_detail: e.target.value })}
-                                fullWidth
-                                size="small"
-                                placeholder="동/호수 등"
-                                slotProps={{ inputLabel: { shrink: true } }}
-                                sx={{ "& .MuiInputBase-input": { fontSize: 14 } }}
-                            />
-                        )}
-                        <FormControlLabel control={<Checkbox checked={venueIsDefault} onChange={(e) => setVenueIsDefault(e.target.checked)} />} label="기본 활동 장소로 선택" />
-                        <Button variant="outlined" disabled={!venueName.trim() || !formData.address.trim()} onClick={() => {
-                            const makeDefault = venueIsDefault || editActivityVenues.length === 0;
-                            setEditActivityVenues((prev) => [...prev.map((item) => makeDefault ? { ...item, is_default: false } : item), { id: crypto.randomUUID(), name: venueName.trim(), address: formData.address.trim(), address_detail: formData.address_detail.trim(), lat: formData.lat ?? null, lng: formData.lng ?? null, region_city: formData.region_city || null, region_district: formData.region_district || null, is_default: makeDefault }]);
-                            setVenueName("");
-                            setVenueIsDefault(false);
-                        }}>활동 장소 추가</Button>
-                        {editActivityVenues.map((venue) => <Box key={venue.id} sx={{ border: "1px solid #D9DDE6", borderRadius: 1, p: 1 }}>
-                            <Stack direction="row" justifyContent="space-between"><Typography fontWeight={800}>{venue.name}{venue.is_default ? " · 기본" : ""}</Typography><Button size="small" color="error" onClick={() => setEditActivityVenues((prev) => { const next = prev.filter((item) => item.id !== venue.id); return next.some((item) => item.is_default) ? next : next.map((item, index) => ({ ...item, is_default: index === 0 })); })}>삭제</Button></Stack>
-                            <Typography fontSize={12} color="text.secondary">{venue.address} {venue.address_detail}</Typography>
-                            <Button size="small" onClick={() => {
-                                setVenueName(venue.name);
-                                setVenueIsDefault(venue.is_default);
-                                setFormData((prev) => ({ ...prev, address: venue.address, address_detail: venue.address_detail ?? "", lat: venue.lat ?? undefined, lng: venue.lng ?? undefined, region_city: venue.region_city ?? "", region_district: venue.region_district ?? "" }));
-                                setEditActivityVenues((prev) => prev.filter((item) => item.id !== venue.id));
-                            }}>수정</Button>
-                            {!venue.is_default && <Button size="small" onClick={() => setEditActivityVenues((prev) => prev.map((item) => ({ ...item, is_default: item.id === venue.id })))}>기본으로 설정</Button>}
-                        </Box>)}
 
                         {/* 지역 */}
                         <Stack direction="row" spacing={1}>
@@ -1308,7 +1297,7 @@ export default function GroupManage() {
                     <Button
                         variant="contained"
                         disableElevation
-                        disabled={isUpdating}
+                        disabled={isUpdating || venueEditorOpen}
                         onClick={handleUpdateGroup}
                         sx={{
                             borderRadius: 1,
@@ -1321,15 +1310,14 @@ export default function GroupManage() {
                 </DialogActions>
             </Dialog>
 
-            <PlaceSearchDialog open={placeDialogOpen} initialQuery={formData.address} onClose={() => setPlaceDialogOpen(false)} allowDirectInput onDirectInput={(value) => {
-                setFormData((prev) => ({ ...prev, address: value, address_detail: "", lat: undefined, lng: undefined, region_city: "", region_district: "" }));
+            <PlaceSearchDialog open={placeDialogOpen} initialQuery={venueDraft.name} onClose={() => setPlaceDialogOpen(false)} allowDirectInput onDirectInput={(value) => {
+                setVenueDraft((prev) => ({ ...prev, name: value, address: "", address_detail: "", lat: null, lng: null, region_city: null, region_district: null }));
                 setPlaceDialogOpen(false);
             }} onSelect={(place) => {
                 const [rawCity = "", rawDistrict = ""] = place.address.trim().split(/\s+/);
                 const city = CITY_ALIAS_MAP[rawCity] ?? "";
                 const district = city === "세종특별자치시" ? "세종시" : ((REGION_DATA[city] ?? []).includes(rawDistrict) ? rawDistrict : "");
-                setFormData((prev) => ({ ...prev, address: place.address, address_detail: place.name, lat: place.lat, lng: place.lng, region_city: city, region_district: district }));
-                if (!venueName.trim()) setVenueName(place.name);
+                setVenueDraft((prev) => ({ ...prev, address: place.address, address_detail: prev.name.trim(), lat: place.lat, lng: place.lng, region_city: city, region_district: district }));
                 setPlaceDialogOpen(false);
             }} />
 

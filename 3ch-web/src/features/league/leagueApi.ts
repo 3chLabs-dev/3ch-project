@@ -414,6 +414,13 @@ export interface ScanParticipantImagesResponse {
   participants: RecognizedParticipant[];
 }
 
+export interface BatchLeagueMatchResult {
+  match_id: string;
+  score_a?: number | null;
+  score_b?: number | null;
+  status?: "pending" | "playing" | "done";
+}
+
 export interface LeagueResultImportParticipant {
   key: string;
   name: string;
@@ -1251,6 +1258,17 @@ export const leagueApi = baseApi.injectEndpoints({
       },
     }),
 
+    updateLeagueMatchResultsBatch: builder.mutation<
+      { updated: number },
+      { leagueId: string; matches: BatchLeagueMatchResult[] }
+    >({
+      query: ({ leagueId, matches }) => ({
+        url: `/league/${leagueId}/matches/batch-results`,
+        method: "PATCH",
+        body: { matches },
+      }),
+    }),
+
     scanLeagueResultImport: builder.mutation<ScanLeagueResultImportResponse, { files: File[]; groupIds?: string[]; idempotencyKey?: string }>({
       query: ({ files, groupIds = [], idempotencyKey }) => {
         const formData = new FormData();
@@ -1411,6 +1429,7 @@ export const {
   useGetLeagueMatchesQuery,
   useInitLeagueMatchesMutation,
   useUpdateLeagueMatchMutation,
+  useUpdateLeagueMatchResultsBatchMutation,
   useScanLeagueOmrMutation,
   useScanLeagueOpenAIVisionMutation,
   useScanLeagueResultImportMutation,

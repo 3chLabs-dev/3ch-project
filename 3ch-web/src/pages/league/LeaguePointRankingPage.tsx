@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Box, Button, Card, CardContent, Checkbox, CircularProgress, FormControlLabel, MenuItem, Select, Stack, TextField, Typography } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useGetLeaguePointRankingQuery, useUpdateLeaguePointRankingAdjustmentsMutation, useUpdateLeaguePointRankingSettingsMutation } from "../../features/league/leagueApi";
 import type { GroupRankingPointRules } from "../../features/group/groupApi";
@@ -83,6 +84,6 @@ function RankingSection({ title, rows, visibleCount, onMore }: { title:string; r
         </CardContent>
       </Card>;
     })}</Stack>
-    {rows.length > visibleCount && <Button fullWidth variant="outlined" onClick={onMore} sx={{ mt:1, height:40, borderRadius:2, fontWeight:900 }}>더보기⌄</Button>}
+    {rows.length > visibleCount && <Button fullWidth variant="outlined" endIcon={<ExpandMoreIcon sx={{ fontSize:18 }} />} onClick={onMore} sx={{ mt:1.1, height:42, borderRadius:2.5, borderColor:"#2F80ED", bgcolor:"#FFF", color:"#1976D2", fontSize:14, fontWeight:900, boxShadow:"0 2px 7px rgba(47,128,237,0.08)", "&:hover":{ borderColor:"#1565C0", bgcolor:"#F5F9FF", boxShadow:"0 3px 10px rgba(47,128,237,0.14)" }, "& .MuiButton-endIcon":{ ml:0.7 } }}>더보기</Button>}
   </Box>;
 }

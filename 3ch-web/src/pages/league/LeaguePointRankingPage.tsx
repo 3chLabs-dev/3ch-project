@@ -35,9 +35,9 @@ export default function LeaguePointRankingPage() {
         <Select size="small" value={data.season.id} onChange={(e) => changeSeason(String(e.target.value))} sx={{ minWidth:116, borderRadius:2 }}>{data.seasons.map((s) => <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>)}</Select>
         {data.can_manage && <Button variant="outlined" onClick={() => setSearchParams({ settings:"1", season:data.season.id })} sx={{ whiteSpace:"nowrap", borderRadius:2, fontWeight:800 }}>순위 설정</Button>}
       </Stack>
-      {data.unit_rankings.length > 0 ? data.unit_rankings.map((section) => <RankingSection key={`${section.type}-${section.round}`} title={section.title} rows={section.rows} visibleCount={visibleCount} onMore={() => setVisibleCount((count) => count+10)} />) : <>
-        <RankingSection title="리그" rows={data.league.rankings} visibleCount={visibleCount} onMore={() => setVisibleCount((count) => count+10)} />
-        {data.tournament.rankings.some((row) => row.total_points > 0 || row.matches_played > 0) && <RankingSection title="대회" rows={data.tournament.rankings} visibleCount={visibleCount} onMore={() => setVisibleCount((count) => count+10)} />}
+      {data.unit_rankings.length > 0 ? data.unit_rankings.map((section) => <RankingSection key={`${section.type}-${section.round}`} title={section.title} rows={section.rows} visibleCount={visibleCount} currentUserId={data.currentUserId} onSelect={(memberId) => navigate(`/club/${data.league_info.group_id}/member/${memberId}`)} onMore={() => setVisibleCount((count) => count+10)} />) : <>
+        <RankingSection title="리그" rows={data.league.rankings} visibleCount={visibleCount} currentUserId={data.currentUserId} onSelect={(memberId) => navigate(`/club/${data.league_info.group_id}/member/${memberId}`)} onMore={() => setVisibleCount((count) => count+10)} />
+        {data.tournament.rankings.some((row) => row.total_points > 0 || row.matches_played > 0) && <RankingSection title="대회" rows={data.tournament.rankings} visibleCount={visibleCount} currentUserId={data.currentUserId} onSelect={(memberId) => navigate(`/club/${data.league_info.group_id}/member/${memberId}`)} onMore={() => setVisibleCount((count) => count+10)} />}
       </>}
     </Box>;
   }
@@ -65,25 +65,9 @@ export default function LeaguePointRankingPage() {
 }
 function NumberField({label,value,onChange,disabled=false}:{label:string;value:number;onChange:(v:number)=>void;disabled?:boolean}) { return <TextField type="number" size="small" fullWidth label={label} value={value} disabled={disabled} onChange={(e)=>onChange(Number(e.target.value)||0)} inputProps={{ step:1 }} />; }
 
-type LeagueRankingListRow = { rank:number|null; name:string; division?:string|null; total_points:number; is_pre_registered?:boolean };
-function RankingSection({ title, rows, visibleCount, onMore }: { title:string; rows:LeagueRankingListRow[]; visibleCount:number; onMore:()=>void }) {
-  const ranked = rows.filter((row) => row.total_points > 0 || row.rank != null).slice(0, visibleCount);
-  return <Box sx={{ mb:3 }}>
-    <Typography fontWeight={900} fontSize={18} sx={{ mb:1.2 }}>{title}</Typography>
-    <Stack spacing={0.8}>{ranked.map((row) => {
-      const rankBadgeBg = row.rank === 1 ? "#E9C23B" : row.rank === 2 ? "#D1D5DB" : row.rank === 3 ? "#D6A348" : "#F3F4F6";
-      const rankBadgeColor = row.rank && row.rank <= 3 ? "#FFF" : "#374151";
-      return <Card key={`${row.rank}-${row.name}`} elevation={2} sx={{ borderRadius:0.85, boxShadow:"0 4px 12px rgba(0,0,0,0.08)", bgcolor:"#FFF" }}>
-        <CardContent sx={{ py:0.95, px:1.3, "&:last-child":{ pb:0.95 } }}>
-          <Stack direction="row" alignItems="center" spacing={0.75}>
-            <Box sx={{ width:42, height:30, borderRadius:"5px 0 0 5px", clipPath:"polygon(0 0,100% 0,82% 100%,0 100%)", bgcolor:rankBadgeBg, display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, fontSize:13, color:rankBadgeColor, flexShrink:0 }}>{row.rank ?? "-"}</Box>
-            {row.division && <Box sx={{ minWidth:28, height:28, px:0.55, borderRadius:999, bgcolor:"#FDBA4D", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, fontSize:10, color:"#111827", flexShrink:0 }}>{row.division}</Box>}
-            <Box sx={{ flex:1, minWidth:0 }}><Stack direction="row" alignItems="center" spacing={0.5}><Typography sx={{ minWidth:0, fontSize:13.5, fontWeight:900, color:"#111827", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{row.name}</Typography>{row.is_pre_registered && <Typography sx={{ fontSize:9, fontWeight:800, color:"#6B7280", whiteSpace:"nowrap" }}>사전등록</Typography>}</Stack></Box>
-            <Box sx={{ textAlign:"right", minWidth:52 }}><Typography sx={{ fontSize:24, fontWeight:900, color:"#1D4ED8", lineHeight:1 }}>{row.total_points}</Typography><Typography sx={{ fontSize:10, color:"text.secondary", fontWeight:700, lineHeight:1.1 }}>포인트</Typography></Box>
-          </Stack>
-        </CardContent>
-      </Card>;
-    })}</Stack>
-    {rows.length > visibleCount && <Button fullWidth variant="outlined" endIcon={<ExpandMoreIcon sx={{ fontSize:18 }} />} onClick={onMore} sx={{ mt:1.1, height:42, borderRadius:2.5, borderColor:"#2F80ED", bgcolor:"#FFF", color:"#1976D2", fontSize:14, fontWeight:900, boxShadow:"0 2px 7px rgba(47,128,237,0.08)", "&:hover":{ borderColor:"#1565C0", bgcolor:"#F5F9FF", boxShadow:"0 3px 10px rgba(47,128,237,0.14)" }, "& .MuiButton-endIcon":{ ml:0.7 } }}>더보기</Button>}
-  </Box>;
+type LeagueRankingListRow = { rank:number|null; name:string; division?:string|null; total_points:number; member_id?:number|null; member_ids?:number[]; is_pre_registered?:boolean };
+function RankingSection({ title, rows, visibleCount, currentUserId, onSelect, onMore }: { title:string; rows:LeagueRankingListRow[]; visibleCount:number; currentUserId:number; onSelect:(id:number)=>void; onMore:()=>void }) {
+  const allRows=rows.filter((row)=>row.total_points>0||row.rank!=null); const visible=allRows.slice(0,visibleCount); const mine=allRows.find((row)=>row.member_id===currentUserId||row.member_ids?.includes(currentUserId)); const pinned=mine&&!visible.includes(mine)?mine:null;
+  const card=(row:LeagueRankingListRow,isPinned=false)=>{const bg=row.rank===1?"#E9C23B":row.rank===2?"#D1D5DB":row.rank===3?"#D6A348":"#F3F4F6";const color=row.rank&&row.rank<=3?"#FFF":"#374151";const canOpen=row.member_id!=null&&!row.is_pre_registered;return <Card key={`${row.rank}-${row.name}-${isPinned}`} elevation={2} sx={{borderRadius:.85,boxShadow:"0 4px 12px rgba(0,0,0,.08)",bgcolor:isPinned?"#EEF2FF":"#FFF"}}><CardContent sx={{py:.95,px:1.3,"&:last-child":{pb:.95}}}><Stack direction="row" alignItems="center" spacing={.75}><Box sx={{width:42,height:30,borderRadius:"5px 0 0 5px",clipPath:"polygon(0 0,100% 0,82% 100%,0 100%)",bgcolor:bg,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:13,color,flexShrink:0}}>{row.rank??"-"}</Box>{row.division&&<Box sx={{minWidth:28,height:28,px:.55,borderRadius:999,bgcolor:"#FDBA4D",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:10,flexShrink:0}}>{row.division}</Box>}<Box sx={{flex:1,minWidth:0}}><Stack direction="row" alignItems="center" spacing={.5}><Typography onClick={()=>canOpen&&onSelect(Number(row.member_id))} sx={{minWidth:0,fontSize:13.5,fontWeight:900,color:isPinned?"#1D4ED8":"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",cursor:canOpen?"pointer":"default",textDecoration:canOpen?"underline":"none"}}>{row.name}</Typography>{row.is_pre_registered&&<Typography sx={{fontSize:9,fontWeight:800,color:"#6B7280",whiteSpace:"nowrap"}}>사전등록</Typography>}</Stack></Box><Box sx={{textAlign:"right",minWidth:52}}><Typography sx={{fontSize:24,fontWeight:900,color:"#1D4ED8",lineHeight:1}}>{row.total_points}</Typography><Typography sx={{fontSize:10,color:"text.secondary",fontWeight:700,lineHeight:1.1}}>포인트</Typography></Box></Stack></CardContent></Card>};
+  return <Box sx={{mb:3}}><Typography fontWeight={900} fontSize={18} sx={{mb:1.2}}>{title}</Typography><Stack spacing={.8}>{visible.map((row)=>card(row))}</Stack>{allRows.length>visibleCount&&<Button fullWidth variant="outlined" endIcon={<ExpandMoreIcon sx={{fontSize:18}}/>} onClick={onMore} sx={{mt:1.1,height:42,borderRadius:2.5,borderColor:"#2F80ED",bgcolor:"#FFF",color:"#1976D2",fontSize:14,fontWeight:900}}>더보기</Button>}{pinned&&<Box sx={{mt:.8}}>{card(pinned,true)}</Box>}</Box>;
 }

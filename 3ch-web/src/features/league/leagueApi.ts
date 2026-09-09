@@ -42,6 +42,7 @@ export interface CreateLeagueRequest {
   sort_order?: string;
   participants?: { division: string; name: string; member_id?: number | null; source_group_id?: string | null; paid?: boolean; arrived?: boolean; after?: boolean }[];
   invited_group_ids?: string[];
+  register_unmatched_as_pre_members?: boolean;
 }
 
 export interface UpdateLeagueRequest {
@@ -179,12 +180,13 @@ export interface LeaguePointRankingResponse {
   override_enabled: boolean;
   point_rules: GroupRankingPointRules;
   can_manage: boolean;
+  currentUserId: number;
   can_combine_all_rounds: boolean;
   league: { rankings: PointRankingRow[] };
   tournament: { rankings: PointRankingRow[] };
   participants: Array<{ id: string; member_id?: number | null; name: string; division?: string | null }>;
   adjustments: Array<{ participant_id: string; league_points: number; tournament_points: number; championships: number }>;
-  unit_rankings: Array<{ type:"SINGLES"|"DOUBLES"|"TEAM"; round:number; title:string; rows:Array<{ rank:number; unit_key:string; name:string; total_points:number }> }>;
+  unit_rankings: Array<{ type:"SINGLES"|"DOUBLES"|"TEAM"; round:number; title:string; rows:Array<{ rank:number; unit_key:string; name:string; division?:string|null; member_id?:number|null; member_ids?:number[]; pre_member_id?:string|null; is_pre_registered?:boolean; total_points:number }> }>;
 }
 
 export interface GetMyGroupLeaguesParams {

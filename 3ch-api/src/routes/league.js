@@ -62,7 +62,14 @@ function canCombineProgramRoundPoints(programData) {
 
 async function getProgramUnitRankings(leagueId, programData, rules) {
   const result = await pool.query(`SELECT m.program_round,m.program_block_type,m.bracket,m.status,m.score_a,m.score_b,m.participant_a_id,m.participant_b_id,m.participant_a_roster_ids,m.participant_b_roster_ids FROM league_matches m WHERE m.league_id=$1 AND m.is_program=true ORDER BY m.program_round,m.match_order`, [leagueId]);
-  const participantResult = await pool.query(`SELECT id,name,division FROM league_participants WHERE league_id=$1`, [leagueId]);
+  const participantResult = await pool.query(`
+    SELECT lp.id,lp.name,lp.division,
+           COALESCE(lp.member_id, CASE WHEN matched.matched_count=1 THEN matched.user_id END) AS member_id,
+           CASE WHEN COALESCE(lp.member_id, CASE WHEN matched.matched_count=1 THEN matched.user_id END) IS NULL AND matched_pre.matched_count=1 THEN matched_pre.pre_member_id END AS pre_member_id
+      FROM league_participants lp JOIN leagues l ON l.id=lp.league_id
+      LEFT JOIN LATERAL (SELECT MIN(gm.user_id) AS user_id,COUNT(*)::int AS matched_count FROM group_members gm JOIN users u ON u.id=gm.user_id WHERE gm.group_id=l.group_id AND u.name=lp.name) matched ON lp.member_id IS NULL
+      LEFT JOIN LATERAL (SELECT MIN(pm.id::text) AS pre_member_id,COUNT(*)::int AS matched_count FROM group_pre_members pm WHERE pm.group_id=l.group_id AND pm.status='active' AND (pm.name=lp.name OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(pm.external_aliases) alias_value WHERE alias_value=lp.name))) matched_pre ON lp.member_id IS NULL
+     WHERE lp.league_id=$1`, [leagueId]);
   const participantMap = new Map(participantResult.rows.map((row) => [String(row.id), row]));
   const groups = new Map();
   const unit = (ids) => {
@@ -77,7 +84,7 @@ async function getProgramUnitRankings(leagueId, programData, rules) {
     const a=unit(type==='SINGLES'?[match.participant_a_id]:(match.participant_a_roster_ids||[])); const b=unit(type==='SINGLES'?[match.participant_b_id]:(match.participant_b_roster_ids||[]));
     if (!a.key || !b.key) return;
     const groupKey=`${type}:${match.program_round}`; const map=groups.get(groupKey)??new Map(); groups.set(groupKey,map);
-    [a,b].forEach((side) => { if(!map.has(side.key)) map.set(side.key,{ unit_key:side.key,name:side.name,members:side.members,matches_played:0,wins:0,losses:0,score_points:0,attendance_points:0,bonus_points:0,total_points:0 }); });
+    [a,b].forEach((side) => { if(!map.has(side.key)) map.set(side.key,{ unit_key:side.key,name:side.name,members:side.members,member_id:type==='SINGLES'?(side.members[0]?.member_id??null):null,member_ids:side.members.map((member)=>member.member_id).filter(Boolean).map(Number),pre_member_id:type==='SINGLES'?(side.members[0]?.pre_member_id??null):null,is_pre_registered:type==='SINGLES'&&Boolean(side.members[0]?.pre_member_id),division:type==='SINGLES'?(side.members[0]?.division??null):null,matches_played:0,wins:0,losses:0,score_points:0,attendance_points:0,bonus_points:0,total_points:0 }); });
     const ar=map.get(a.key),br=map.get(b.key),sa=Number(match.score_a||0),sb=Number(match.score_b||0); ar.matches_played++;br.matches_played++;
     if(rules.matchPoints.mode==='win'){if(sa>sb)ar.score_points+=rules.matchPoints.winPoints;if(sb>sa)br.score_points+=rules.matchPoints.winPoints;}else{ar.score_points+=sa;br.score_points+=sb;}
     if(sa>sb){ar.wins++;br.losses++;}else if(sb>sa){br.wins++;ar.losses++;}
@@ -1005,6 +1012,7 @@ const createLeagueSchema = z.object({
   participant_count: z.number().int().min(0).default(0),
   group_id: z.string().uuid('클럽 ID 형식이 올바르지 않습니다.'),
   participants: z.array(participantSchema).default([]),
+  register_unmatched_as_pre_members: z.boolean().default(false),
   tournament_seeding: z.string().optional(),      // 'manual' | 'seed' | 'random'
   tournament_advancement: z.string().optional(),  // 'upper-only' | 'upper-lower'
   tournament_rules: z.string().optional(),        // 본선 규칙
@@ -1525,6 +1533,28 @@ router.post('/league', requireAuth, async (req, res) => {
           [sourceGroupId, p.name],
         );
         if (memberMatch.rowCount === 1) resolvedMemberId = memberMatch.rows[0].id;
+      }
+      if (!resolvedMemberId && register_unmatched_as_pre_members) {
+        const existingPreMember = await client.query(
+          `SELECT id, division
+             FROM group_pre_members
+            WHERE group_id = $1 AND status = 'active' AND BTRIM(name) = BTRIM($2)
+            ORDER BY created_at ASC
+            LIMIT 1`,
+          [sourceGroupId, p.name],
+        );
+        if (existingPreMember.rowCount === 0) {
+          await client.query(
+            `INSERT INTO group_pre_members (id, group_id, name, division, created_by_id)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [randomUUID(), sourceGroupId, p.name, String(p.division || '').trim() || null, Number(userId)],
+          );
+        } else if (!String(existingPreMember.rows[0].division || '').trim() && String(p.division || '').trim()) {
+          await client.query(
+            `UPDATE group_pre_members SET division = $1, updated_at = NOW() WHERE id = $2`,
+            [String(p.division).trim(), existingPreMember.rows[0].id],
+          );
+        }
       }
       await client.query(
         `INSERT INTO league_participants (id, league_id, division, name, member_id, source_group_id, paid, arrived, "after")
@@ -4888,12 +4918,14 @@ router.post('/league/result-import/scan', requireAuth, participantImageUpload.ar
                 u.name, u.nickname, ua.alias AS external_alias
            FROM group_members gm JOIN users u ON u.id = gm.user_id
            LEFT JOIN user_external_aliases ua ON ua.user_id = u.id AND ua.group_id = gm.group_id
-          WHERE gm.group_id = ANY($1::uuid[])`, [groupIds],
+          WHERE gm.group_id = ANY($1::text[])`, [groupIds],
       );
       for (const participant of participants) {
-        const normalized = participant.name.replace(/\s+/g, '').toLocaleLowerCase('ko-KR');
-        const candidates = memberResult.rows.filter((row) => [row.name, row.nickname, row.external_alias, row.canonical_name]
-          .some((value) => String(value || '').replace(/\s+/g, '').toLocaleLowerCase('ko-KR') === normalized));
+        const normalized = participant.name.normalize('NFKC').replace(/\s+/g, '').toLocaleLowerCase('ko-KR');
+        // 빠른 결과 등록은 선택한 클럽의 실제 회원 이름과 일치할 때만 계정을 연결한다.
+        // 닉네임이나 외부 별칭은 우연한 오매칭을 만들 수 있으므로 이 흐름에서는 사용하지 않는다.
+        const candidates = memberResult.rows.filter((row) =>
+          String(row.name || '').normalize('NFKC').replace(/\s+/g, '').toLocaleLowerCase('ko-KR') === normalized);
         const ids = [...new Set(candidates.map((row) => row.member_id))];
         if (ids.length === 1) {
           const match = candidates[0];
@@ -5247,6 +5279,7 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
       imageBuffer: req.file.buffer,
       mimeType: req.file.mimetype,
       participants,
+      register_unmatched_as_pre_members,
       mode: visionMode,
       targetRegion,
       targetRowStart: requestedRowStart,

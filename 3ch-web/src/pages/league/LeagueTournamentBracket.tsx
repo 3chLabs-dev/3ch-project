@@ -619,6 +619,7 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
           outline: swapSelA ? "2px solid #3B82F6" : "none",
         }}
       >
+        <Box sx={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 0.45 }}>
         {isR1 && !nameA && manualSeeding ? (
           <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 0.75 }}>
             {displaySeedA && <Typography sx={{ fontSize: 11, fontWeight: 800, color: "#94A3B8" }}>{displaySeedA}</Typography>}
@@ -632,11 +633,12 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
             )}
           </Box>
         ) : (
-          <Typography sx={{ fontSize: nameA?.includes(" · ") ? 9 : 11, fontWeight: isByeA || isUndecidedA ? 400 : 600, flex: 1, overflow: "hidden", whiteSpace: "normal", lineHeight: 1.1, color: winA ? "#16A34A" : isByeA || isUndecidedA ? "#9CA3AF" : "text.primary", fontStyle: isByeA || isUndecidedA ? "italic" : "normal" }}>
+          <Typography sx={{ fontSize: nameA?.includes(" · ") ? 9 : 11, fontWeight: isByeA || isUndecidedA ? 400 : 600, minWidth: 0, overflow: "hidden", whiteSpace: "normal", lineHeight: 1.1, color: winA ? "#16A34A" : isByeA || isUndecidedA ? "#9CA3AF" : "text.primary", fontStyle: isByeA || isUndecidedA ? "italic" : "normal" }}>
             {nameA ?? (isByeA ? "BYE" : "미정")}
           </Typography>
         )}
         {nameA && m.participant_a_division && <DivisionBadge division={m.participant_a_division} sx={{ minWidth: 16, height: 16, fontSize: 7 }} />}
+        </Box>
         {m.score_a != null && <Typography sx={{ fontSize: 12, fontWeight: 800, color: winA ? "#16A34A" : "#6B7280", flexShrink: 0 }}>{m.score_a}</Typography>}
       </Box>
       <Box
@@ -648,6 +650,7 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
           outline: swapSelB ? "2px solid #3B82F6" : "none",
         }}
       >
+        <Box sx={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 0.45 }}>
         {isR1 && !nameB && manualSeeding ? (
           <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 0.75 }}>
             {displaySeedB && <Typography sx={{ fontSize: 11, fontWeight: 800, color: "#94A3B8" }}>{displaySeedB}</Typography>}
@@ -661,11 +664,12 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
             )}
           </Box>
         ) : (
-          <Typography sx={{ fontSize: nameB?.includes(" · ") ? 9 : 11, fontWeight: isByeB || isUndecidedB ? 400 : 600, flex: 1, overflow: "hidden", whiteSpace: "normal", lineHeight: 1.1, color: winB ? "#16A34A" : isByeB || isUndecidedB ? "#9CA3AF" : "text.primary", fontStyle: isByeB || isUndecidedB ? "italic" : "normal" }}>
+          <Typography sx={{ fontSize: nameB?.includes(" · ") ? 9 : 11, fontWeight: isByeB || isUndecidedB ? 400 : 600, minWidth: 0, overflow: "hidden", whiteSpace: "normal", lineHeight: 1.1, color: winB ? "#16A34A" : isByeB || isUndecidedB ? "#9CA3AF" : "text.primary", fontStyle: isByeB || isUndecidedB ? "italic" : "normal" }}>
             {nameB ?? (isByeB ? "BYE" : "미정")}
           </Typography>
         )}
         {nameB && m.participant_b_division && <DivisionBadge division={m.participant_b_division} sx={{ minWidth: 16, height: 16, fontSize: 7 }} />}
+        </Box>
         {m.score_b != null && <Typography sx={{ fontSize: 12, fontWeight: 800, color: winB ? "#16A34A" : "#6B7280", flexShrink: 0 }}>{m.score_b}</Typography>}
       </Box>
     </Box>
@@ -754,6 +758,7 @@ function SingleSlotBox({ pos, slot, actions, manualSeeding = false }: { pos: Mat
 
       {/* 이름 행 */}
       <Box sx={{ display: "flex", alignItems: "center", px: 0.75, gap: 0.4, flex: 1, minWidth: 0 }}>
+        <Box sx={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 0.4 }}>
         {isR1 && !name && manualSeeding ? (
           <Box sx={{ flex: 1, display: "flex", justifyContent: "center" }}>
             {actions?.canRegister && !actions.editMode && (
@@ -766,11 +771,12 @@ function SingleSlotBox({ pos, slot, actions, manualSeeding = false }: { pos: Mat
             )}
           </Box>
         ) : (
-          <Typography sx={{ fontSize: name?.includes(" · ") ? 9 : 11, fontWeight: isBye || isUndecided ? 400 : 700, flex: 1, overflow: "hidden", whiteSpace: "normal", lineHeight: 1.1, color: win ? "#16A34A" : isBye || isUndecided ? "#9CA3AF" : "#111827", fontStyle: isBye || isUndecided ? "italic" : "normal" }}>
+          <Typography sx={{ fontSize: name?.includes(" · ") ? 9 : 11, fontWeight: isBye || isUndecided ? 400 : 700, minWidth: 0, overflow: "hidden", whiteSpace: "normal", lineHeight: 1.1, color: win ? "#16A34A" : isBye || isUndecided ? "#9CA3AF" : "#111827", fontStyle: isBye || isUndecided ? "italic" : "normal" }}>
             {name ?? (isBye ? "BYE" : "미정")}
           </Typography>
         )}
         {name && division && <DivisionBadge division={division} sx={{ minWidth: 16, height: 16, fontSize: 7 }} />}
+        </Box>
         {isPendingLowerWalkover && actions?.canManage && !actions.editMode && (
           <IconButton
             size="small"

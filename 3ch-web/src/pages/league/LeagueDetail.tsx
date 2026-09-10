@@ -1807,7 +1807,7 @@ const handleSaveEdit = async () => {
           <Box sx={{ bgcolor: "#fff", borderRadius: 1, border: "1px solid #E5E7EB", overflow: "hidden" }}>
             {/* 테이블 헤더 */}
             <Box sx={{ display: "grid", gridTemplateColumns: participantTableColumns, alignItems: "center", px: 1.5, py: 0.8, bgcolor: "#F9FAFB", borderBottom: "1px solid #E5E7EB" }}>
-              <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#6B7280", textAlign: "right", pr: 0.5 }}>
+              <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#6B7280", textAlign: "left" }}>
                 {showParticipantGroups ? "클럽" : ""}
               </Typography>
               <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", width: 56, minWidth: 0, ml: "auto" }}>
@@ -1843,12 +1843,11 @@ const handleSaveEdit = async () => {
                       <Typography
                         title={showParticipantGroups ? p.source_group_name ?? "-" : undefined}
                         sx={{
-                          ml: "auto",
                           width: "5em",
                           color: "#6B7280",
                           fontSize: 8,
                           fontWeight: 700,
-                          textAlign: "right",
+                          textAlign: "left",
                           overflow: "hidden",
                           textOverflow: "ellipsis",
                           whiteSpace: "nowrap",

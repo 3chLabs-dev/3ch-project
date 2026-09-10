@@ -30,7 +30,7 @@ export default function LeagueRenewalStep5Participants() {
   const [openImageImport, setOpenImageImport] = useState(false);
   const [alertMsg, setAlertMsg] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<{ idx: number; division: string; name: string } | null>(null);
-  const divisionInputRef = useRef<HTMLInputElement>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
   const targetCount = basicInfo?.participantCount ?? null;
   const isFull = targetCount !== null && participants.length >= targetCount;
   const canAdd = useMemo(() => Boolean(division.trim() && name.trim()), [division, name]);
@@ -46,7 +46,7 @@ export default function LeagueRenewalStep5Participants() {
     setParticipants((current) => [...current, next]);
     setDivision("");
     setName("");
-    requestAnimationFrame(() => divisionInputRef.current?.focus());
+    requestAnimationFrame(() => nameInputRef.current?.focus());
   };
 
   const handleConfirmLoad = (selected: MemberRow[]) => {
@@ -123,20 +123,20 @@ export default function LeagueRenewalStep5Participants() {
       {invitedGroupOptions.map((group) => <MenuItem key={group.id} value={group.id}>{group.name}</MenuItem>)}
     </TextField>}
 
-    <Box sx={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 56px 56px", gap: 1, alignItems: "center", px: 0.5, mb: 0.8 }}>
+    <Box sx={{ display: "grid", gridTemplateColumns: "minmax(0,160px) 56px 56px", gap: 1, alignItems: "center", px: 0.5, mb: 0.8 }}>
       <Typography sx={headCellSx}>이름</Typography><Typography sx={headCellSx}>부수</Typography><Typography sx={headCellSx}>관리</Typography>
     </Box>
-    <Box component="form" onSubmit={(event) => { event.preventDefault(); handleAdd(); }} sx={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 56px 56px", gap: 1, alignItems: "center", px: 0.5, mb: 1.2 }}>
+    <Box component="form" onSubmit={(event) => { event.preventDefault(); handleAdd(); }} sx={{ display: "grid", gridTemplateColumns: "minmax(0,160px) 56px 56px", gap: 1, alignItems: "center", px: 0.5, mb: 1.2 }}>
       <Box sx={{ position: "relative", minWidth: 0 }}>
-        <TextField placeholder="이름" value={name} onChange={(event) => setName(event.target.value)} slotProps={{ htmlInput: { enterKeyHint: "done" } }} sx={inputSx} fullWidth />
+        <TextField inputRef={nameInputRef} placeholder="이름" value={name} onChange={(event) => setName(event.target.value)} slotProps={{ htmlInput: { enterKeyHint: "done" } }} sx={inputSx} fullWidth />
         {canAdd && <Box sx={{ position: "absolute", right: -2, top: -34, bgcolor: "#111827", color: "#fff", px: 1.2, py: 0.6, borderRadius: 1, fontSize: 11, fontWeight: 700, whiteSpace: "nowrap", boxShadow: "0 4px 10px rgba(15,23,42,0.18)", zIndex: 2, "&::after": { content: '\"\"', position: "absolute", right: 14, bottom: -5, width: 10, height: 10, bgcolor: "#111827", transform: "rotate(45deg)" } }}>Enter 키를 누르면 추가됩니다.</Box>}
       </Box>
-      <TextField inputRef={divisionInputRef} placeholder="부수" value={division} onChange={(event) => setDivision(event.target.value)} slotProps={{ htmlInput: { enterKeyHint: "done" } }} sx={inputSx} />
+      <TextField placeholder="부수" value={division} onChange={(event) => setDivision(event.target.value)} slotProps={{ htmlInput: { enterKeyHint: "done" } }} sx={inputSx} />
       <Button type="submit" variant="contained" disableElevation disabled={!canAdd} sx={{ borderRadius: 1, height: 30, fontWeight: 900, bgcolor: "#BDBDBD", "&:hover": { bgcolor: "#BDBDBD" }, "&.Mui-disabled": { bgcolor: "#D7D7D7", color: "#fff" } }}>추가</Button>
     </Box>
 
     {participants.length > 0 && <Box sx={{ borderTop: "1px solid #D9DDE6", borderBottom: "1px solid #D9DDE6" }}>
-      {participants.map((participant, index) => <Box key={`${participant.division}-${participant.name}-${index}`} sx={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 56px 56px", gap: 1, alignItems: "center", px: 0.5, py: 0.6, borderTop: index === 0 ? "none" : "1px solid #ECEFF5" }}>
+      {participants.map((participant, index) => <Box key={`${participant.division}-${participant.name}-${index}`} sx={{ display: "grid", gridTemplateColumns: "minmax(0,160px) 56px 56px", gap: 1, alignItems: "center", px: 0.5, py: 0.6, borderTop: index === 0 ? "none" : "1px solid #ECEFF5" }}>
         <Typography sx={{ fontWeight: 900, fontSize: 16, lineHeight: 1.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{participant.name}</Typography>
         <Box sx={cellCenter}><DivisionBadge division={participant.division} /></Box>
         <Box sx={cellCenter}><Button variant="contained" disableElevation onClick={() => setDeleteTarget({ idx: index, division: participant.division, name: participant.name })} sx={{ borderRadius: 1, height: 28, fontWeight: 900, bgcolor: "#D1D5DB", color: "#111827", "&:hover": { bgcolor: "#D1D5DB" } }}>삭제</Button></Box>

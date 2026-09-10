@@ -95,6 +95,7 @@ export interface SportRankingEvent {
   result: string;
   match_type: string;
   opponent_name: string | null;
+  opponent_division: string | null;
   created_at: string;
 }
 

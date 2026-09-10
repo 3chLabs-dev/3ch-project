@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { DivisionBadge } from "../../components/ParticipantName";
 import {
   Box,
@@ -71,6 +71,7 @@ export default function LeagueStep5Participants() {
   const [sortOrder, setSortOrder] = useState<string>("");
   const [division, setDivision] = useState("");
   const [name, setName] = useState("");
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
   const [openLoad, setOpenLoad] = useState(false);
   const [alertMsg, setAlertMsg] = useState("");
@@ -112,6 +113,7 @@ export default function LeagueStep5Participants() {
 
     setDivision("");
     setName("");
+    requestAnimationFrame(() => nameInputRef.current?.focus());
   };
 
   const handleDelete = (idx: number) => {
@@ -248,7 +250,7 @@ export default function LeagueStep5Participants() {
       <Box
         sx={{
           display: "grid",
-          gridTemplateColumns: "minmax(0,1fr) 56px 56px",
+          gridTemplateColumns: "minmax(0,160px) 56px 56px",
           gap: 1,
           alignItems: "center",
           px: 0.5,
@@ -268,7 +270,7 @@ export default function LeagueStep5Participants() {
         }}
         sx={{
           display: "grid",
-          gridTemplateColumns: "minmax(0,1fr) 56px 56px",
+          gridTemplateColumns: "minmax(0,160px) 56px 56px",
           gap: 1,
           alignItems: "center",
           px: 0.5,
@@ -277,6 +279,7 @@ export default function LeagueStep5Participants() {
       >
         <Box sx={{ position: "relative", minWidth: 0 }}>
         <TextField
+          inputRef={nameInputRef}
           placeholder="이름"
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -343,7 +346,7 @@ export default function LeagueStep5Participants() {
               key={`${p.division}-${p.name}-${idx}`}
               sx={{
                 display: "grid",
-                gridTemplateColumns: "minmax(0,1fr) 56px 56px",
+                gridTemplateColumns: "minmax(0,160px) 56px 56px",
                 gap: 1,
                 alignItems: "center",
                 px: 0.5,

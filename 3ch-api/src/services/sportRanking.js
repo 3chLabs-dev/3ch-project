@@ -570,7 +570,15 @@ async function getSportRanking(sport, userId) {
          e.result,
          e.match_type,
          e.created_at,
-         COALESCE(u.name, u.email) AS opponent_name
+         COALESCE(u.name, u.email) AS opponent_name,
+         (SELECT gm.division
+            FROM group_members gm
+            JOIN groups opponent_group ON opponent_group.id = gm.group_id
+           WHERE gm.user_id = e.opponent_member_id
+             AND opponent_group.sport = e.sport
+             AND NULLIF(BTRIM(gm.division), '') IS NOT NULL
+           ORDER BY (gm.group_id = e.group_id) DESC, gm.is_primary DESC NULLS LAST, gm.joined_at DESC
+           LIMIT 1) AS opponent_division
        FROM sport_ranking_events e
        LEFT JOIN groups g ON g.id = e.group_id
        LEFT JOIN users u ON u.id = e.opponent_member_id
@@ -592,6 +600,7 @@ async function getSportRanking(sport, userId) {
       result: event.result,
       match_type: event.match_type,
       opponent_name: event.opponent_name,
+      opponent_division: event.opponent_division || null,
       created_at: event.created_at,
     }));
   }

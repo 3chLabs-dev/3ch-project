@@ -701,24 +701,29 @@ export default function GroupManage() {
                         <ListItem
                             sx={{
                                 display: "grid",
-                                gridTemplateColumns: "1fr 1fr 1fr",
+                                gridTemplateColumns: "76px minmax(0, 1fr) 56px",
                                 py: 1.5,
                                 px: 2.5,
+                                pr: 7,
                                 spacing: 0.5,
                                 bgcolor: "#f5f5f5"
                             }}
                         >
-                            <Typography fontWeight={700} fontSize={14} sx={{ flex: 1, textAlign: "left" }}>구분</Typography>
-                            <Typography fontWeight={700} fontSize={14} sx={{ flex: 1, textAlign: "left" }}>이름</Typography>
-                            <Typography fontWeight={700} fontSize={14} sx={{ flex: 1, textAlign: "left" }}>부수</Typography>
+                            <Typography fontWeight={700} fontSize={14} textAlign="center">구분</Typography>
+                            <Typography fontWeight={700} fontSize={14} textAlign="center">이름</Typography>
+                            <Typography fontWeight={700} fontSize={14} textAlign="center">부수</Typography>
                         </ListItem>
                         {sortedMembers.map((member, idx) => (
                             <Box key={member.id}>
                                 {idx > 0 && <Divider />}
                                 <ListItem
                                     sx={{
+                                        display: "grid",
+                                        gridTemplateColumns: "76px minmax(0, 1fr) 56px",
+                                        alignItems: "center",
                                         py: 1,
                                         px: 2.5,
+                                        pr: 7,
                                         bgcolor: member.role === "owner"
                                             ? "rgba(255, 193, 7, 0.08)"
                                             : member.role === "admin"
@@ -750,7 +755,7 @@ export default function GroupManage() {
                                         </Stack>
                                     }
                                 >
-                                    <ListItemText sx={{ flex: 1 }}
+                                    <ListItemText sx={{ m: 0, textAlign: "center" }}
                                         primary={
                                             <Typography fontWeight={700} fontSize={14}>
                                                 {member.is_pre_member && member.claim_status === "pending"
@@ -759,12 +764,12 @@ export default function GroupManage() {
                                             </Typography>
                                         }
                                     />
-                                    <ListItemText sx={{ flex: 1, order: 3 }}
+                                    <ListItemText sx={{ m: 0, textAlign: "center", order: 3 }}
                                         primary={
                                             <DivisionBadge division={member.division} />
                                         }
                                     />
-                                    <ListItemText sx={{ flex: 1, order: 2 }}
+                                    <ListItemText sx={{ m: 0, textAlign: "center", order: 2 }}
                                         primary={
                                             <Typography
                                                 fontWeight={700} fontSize={14}

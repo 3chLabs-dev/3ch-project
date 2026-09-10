@@ -36,6 +36,13 @@ const steps = ["등록 대상", "리그 유형", "리그 방식", "리그 규칙
 const GUIDE_IMAGES = [1,2,3,4,5].map((index) => `/images/vision-guide/guide-0${index}.png`);
 type ImageEditorState = { file: File; url: string };
 const idempotencyKey = () => crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+const todayLeagueName = () => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day} 리그`;
+};
 const errorMessage = (error: unknown) => {
   const value = error as { data?: { message?: string }; message?: string };
   return value?.data?.message || value?.message || "처리 중 오류가 발생했습니다.";
@@ -55,7 +62,8 @@ export default function LeagueQuickResult() {
   const [mode, setMode] = useState<Mode>("new");
   const [leagueId, setLeagueId] = useState("");
   const [groupId, setGroupId] = useState(preferredGroupId || "");
-  const [name, setName] = useState(`${new Date().toLocaleDateString("ko-KR")} 리그 결과`);
+  const [name, setName] = useState("");
+  const defaultLeagueName = todayLeagueName();
   const [leagueType, setLeagueType] = useState("단식");
   const [format, setFormat] = useState("단일리그");
   const [groupCount, setGroupCount] = useState(2);
@@ -158,7 +166,7 @@ export default function LeagueQuickResult() {
     } catch (e) { setProgress(0); setError(errorMessage(e)); }
   };
   const canContinue = () => {
-    if (step === 0) return mode === "new" ? Boolean(groupId && name.trim()) : Boolean(leagueId);
+    if (step === 0) return mode === "new" ? Boolean(groupId) : Boolean(leagueId);
     if (step === 4) return files.length === expectedFiles;
     return true;
   };
@@ -202,8 +210,9 @@ export default function LeagueQuickResult() {
           blocks: [block], totalBlockMatchCount: matchCount, totalProgramMinutes: matchCount * 10, isOverTime: false,
           rounds: [{ id: 1, expanded: true, program: programType(leagueType), format: roundFormat, option: format === "조별리그" ? "PRELIM" : "NONE", matchRule: matchRuleType(rule), teamPlayerCount: 3, teamMatchType: "SSS", groupSizes, ...(format === "조별리그" ? { groupAssignments: groupSizes.map((_, index) => formationPlayers(index)) } : {}) }],
         };
+        const leagueName = name.trim() || defaultLeagueName;
         const created = await createLeague({
-          name: name.trim(), title: name.trim(), type: "클럽 이벤트", format: "이벤트 프로그램", sport: "탁구",
+          name: leagueName, title: leagueName, type: "클럽 이벤트", format: "이벤트 프로그램", sport: "탁구",
           start_date: new Date().toISOString(), rules: "프로그램별 설정", group_id: groupId,
           recruit_count: unique.length, participant_count: unique.length, sort_order: "이름 > 부수",
           register_unmatched_as_pre_members: true,
@@ -250,7 +259,7 @@ export default function LeagueQuickResult() {
       {step === 0 && <Stack spacing={2}>
         <Typography fontWeight={900}>어디에 결과를 등록할까요?</Typography>
         <Stack direction="row" spacing={1}>{([['new','리그 신규 생성'],['existing','생성된 리그에 등록']] as const).map(([value,label]) => <Button key={value} fullWidth variant={mode === value ? "contained" : "outlined"} onClick={() => setMode(value)}>{label}</Button>)}</Stack>
-        {mode === "new" ? <><TextField label="리그 이름" value={name} onChange={(e) => setName(e.target.value)} /><TextField select label="클럽" value={groupId} onChange={(e) => setGroupId(e.target.value)}>{manageableGroups.map((g) => <MenuItem key={g.id} value={g.id}>{g.name}</MenuItem>)}</TextField>{!manageableGroups.length && <Alert severity="info">리그를 만들 수 있는 클럽이 필요합니다.</Alert>}</> :
+        {mode === "new" ? <><TextField label="리그 이름" placeholder={defaultLeagueName} value={name} onChange={(e) => setName(e.target.value)} sx={{ "& input::placeholder": { color: "#9CA3AF", opacity: 1 } }} /><TextField select label="클럽" value={groupId} onChange={(e) => setGroupId(e.target.value)}>{manageableGroups.map((g) => <MenuItem key={g.id} value={g.id}>{g.name}</MenuItem>)}</TextField>{!manageableGroups.length && <Alert severity="info">리그를 만들 수 있는 클럽이 필요합니다.</Alert>}</> :
           <ExistingLeaguePicker leagues={filteredExistingLeagues} groups={manageableGroups} visibleCounts={visibleLeagueCounts} onMore={(id, count)=>setVisibleLeagueCounts((current)=>({...current,[id]:count+5}))} onFilter={()=>setLeagueFilterOpen(true)} onSelect={(id)=>{setLeagueId(id);navigate(`/league/${id}/bracket?resultImport=1`);}} />}
       </Stack>}
       {step === 1 && <Choice title="리그 유형" value={leagueType} values={["단식","복식","단체전"]} onChange={setLeagueType} />}
@@ -261,7 +270,7 @@ export default function LeagueQuickResult() {
       <Stack direction="row" spacing={2} sx={{ mt: 4 }}><Button fullWidth variant="contained" disableElevation disabled={step === 0 || scanning || progress > 0 && progress < 100} onClick={() => setStep((s) => s-1)} sx={{height:44,borderRadius:1,fontWeight:900,bgcolor:"#777","&:hover":{bgcolor:"#777"},"&.Mui-disabled":{bgcolor:"#BDBDBD",color:"#fff"}}}>이전</Button>{step < 4 && <Button fullWidth variant="contained" disableElevation disabled={!canContinue()} onClick={() => setStep((s)=>s+1)} sx={{height:44,borderRadius:1,fontWeight:900,bgcolor:"#2F80ED","&:hover":{bgcolor:"#256FD1"},"&.Mui-disabled":{bgcolor:"#CFE1FB",color:"#fff"}}}>다음</Button>}</Stack>
     </Paper>
     <LeagueFilterDialog key={leagueFilterOpen ? "open" : "closed"} open={leagueFilterOpen} onClose={()=>setLeagueFilterOpen(false)} startDate={leagueFilterStart} endDate={leagueFilterEnd} status={leagueFilterStatus} onApply={({startDate,endDate,status})=>{setLeagueFilterStart(startDate);setLeagueFilterEnd(endDate);setLeagueFilterStatus(status);setVisibleLeagueCounts({});setLeagueFilterOpen(false);}} />
-    <Dialog open={resultOpen} onClose={()=>{if(!(progress>0&&progress<100))setResultOpen(false)}} fullWidth maxWidth="lg" slotProps={{paper:{sx:{position:"relative",borderRadius:3}}}}><DialogTitle fontWeight={900}>AI 인식 결과</DialogTitle><DialogContent dividers><Typography sx={{mb:2,color:"#6B7280",fontSize:13,fontWeight:700}}>클럽 회원 이름과 동일하면 회원 계정에 연결합니다. 나머지는 사전등록 회원으로 등록되며 참가명단 열에서 이름과 부수를 수정할 수 있습니다.</Typography>{expectedFiles>1&&<Stack direction="row" spacing={1} sx={{mb:2,overflowX:"auto"}}>{Array.from({length:expectedFiles},(_,i)=><Button key={i} variant={resultGroup===i?"contained":"outlined"} onClick={()=>setResultGroup(i)} sx={{minWidth:64}}>{i+1}조</Button>)}</Stack>}<ResultMatrix participants={participants.filter((item)=>item.imageIndex===resultGroup&&selectedParticipantKeys.has(item.key))} matches={matches.filter((item)=>item.imageIndex===resultGroup)} allMatches={matches} onChange={setMatches} onParticipantsChange={(key, updates)=>setParticipants((all)=>all.map((item)=>item.key===key?{...item,...updates}:item))}/></DialogContent><DialogActions><Button disabled={progress>0&&progress<100} onClick={()=>setResultOpen(false)}>취소</Button><Button variant="contained" disabled={!selectedParticipantKeys.size||progress>0&&progress<100} onClick={save}>대진표에 입력</Button></DialogActions>{progress>0&&progress<100&&<Box sx={{position:"absolute",inset:0,bgcolor:"rgba(255,255,255,.82)",display:"grid",placeItems:"center",zIndex:2}}><Paper elevation={8} sx={{width:"min(420px,80%)",p:2.5,borderRadius:3}}><Stack direction="row" justifyContent="space-between"><Typography fontWeight={900}>경기 결과 저장 중</Typography><Typography color="primary" fontWeight={900}>{progress}%</Typography></Stack><LinearProgress variant="determinate" value={progress} sx={{mt:1,height:10,borderRadius:99}}/></Paper></Box>}</Dialog>
+    <Dialog open={resultOpen} onClose={()=>{if(!(progress>0&&progress<100))setResultOpen(false)}} fullWidth maxWidth="lg" slotProps={{paper:{sx:{position:"relative",borderRadius:{xs:2,sm:3},m:{xs:1,sm:4},width:{xs:"calc(100% - 16px)",sm:"calc(100% - 64px)"},maxHeight:{xs:"calc(100% - 16px)",sm:"calc(100% - 64px)"}}}}}><DialogTitle fontWeight={900}>AI 인식 결과</DialogTitle><DialogContent dividers sx={{px:{xs:1.5,sm:3}}}><Typography sx={{mb:2,color:"#6B7280",fontSize:13,fontWeight:700}}>클럽 회원 이름과 동일하면 회원 계정에 연결합니다. 나머지는 사전등록 회원으로 등록되며 참가명단 열에서 이름과 부수를 수정할 수 있습니다.</Typography>{expectedFiles>1&&<Stack direction="row" spacing={1} sx={{mb:2,overflowX:"auto"}}>{Array.from({length:expectedFiles},(_,i)=><Button key={i} variant={resultGroup===i?"contained":"outlined"} onClick={()=>setResultGroup(i)} sx={{minWidth:64}}>{i+1}조</Button>)}</Stack>}<ResultMatrix participants={participants.filter((item)=>item.imageIndex===resultGroup&&selectedParticipantKeys.has(item.key))} matches={matches.filter((item)=>item.imageIndex===resultGroup)} allMatches={matches} onChange={setMatches} onParticipantsChange={(key, updates)=>setParticipants((all)=>all.map((item)=>item.key===key?{...item,...updates}:item))}/></DialogContent><DialogActions><Button disabled={progress>0&&progress<100} onClick={()=>setResultOpen(false)}>취소</Button><Button variant="contained" disabled={!selectedParticipantKeys.size||progress>0&&progress<100} onClick={save}>대진표에 입력</Button></DialogActions>{progress>0&&progress<100&&<Box sx={{position:"absolute",inset:0,bgcolor:"rgba(255,255,255,.82)",display:"grid",placeItems:"center",zIndex:2}}><Paper elevation={8} sx={{width:"min(420px,80%)",p:2.5,borderRadius:3}}><Stack direction="row" justifyContent="space-between"><Typography fontWeight={900}>경기 결과 저장 중</Typography><Typography color="primary" fontWeight={900}>{progress}%</Typography></Stack><LinearProgress variant="determinate" value={progress} sx={{mt:1,height:10,borderRadius:99}}/></Paper></Box>}</Dialog>
     <Dialog open={Boolean(imageEditor)} onClose={()=>setImageEditor(null)} fullWidth maxWidth="md"><DialogTitle fontWeight={900}>사진 확인</DialogTitle><DialogContent dividers><Typography sx={{mb:1,color:"#6B7280",fontSize:13,fontWeight:700}}>이름과 점수가 잘 인식되도록 정방향으로 맞추고, 대진표 부분만 인식 영역으로 지정해 주세요.</Typography><Box sx={{height:"min(58vh,520px)",bgcolor:"#111827",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden","& .ReactCrop":{maxWidth:"100%",maxHeight:"100%",lineHeight:0,touchAction:"none"},"& .ReactCrop__crop-mask":{fill:"rgba(0,0,0,.62)"},"& .ReactCrop__crop-selection":{border:"1px solid rgba(255,255,255,.9)",backgroundImage:"none",animation:"none"},"& .ReactCrop__drag-handle":{display:"block !important",width:28,height:28,background:"transparent",border:0,borderRadius:0},"& .ReactCrop__drag-handle.ord-nw":{top:0,left:0,transform:"none",borderTop:"3px solid #fff",borderLeft:"3px solid #fff"},"& .ReactCrop__drag-handle.ord-ne":{top:0,right:0,transform:"none",borderTop:"3px solid #fff",borderRight:"3px solid #fff"},"& .ReactCrop__drag-handle.ord-se":{right:0,bottom:0,transform:"none",borderRight:"3px solid #fff",borderBottom:"3px solid #fff"},"& .ReactCrop__drag-handle.ord-sw":{bottom:0,left:0,transform:"none",borderBottom:"3px solid #fff",borderLeft:"3px solid #fff"},"& .ReactCrop__drag-handle.ord-n, & .ReactCrop__drag-handle.ord-s":{display:"block !important",width:48,height:24,left:"50%"},"& .ReactCrop__drag-handle.ord-n":{top:0,transform:"translateX(-50%)",borderTop:"3px solid #fff"},"& .ReactCrop__drag-handle.ord-s":{bottom:0,transform:"translateX(-50%)",borderBottom:"3px solid #fff"},"& .ReactCrop__drag-handle.ord-e, & .ReactCrop__drag-handle.ord-w":{display:"block !important",width:24,height:48,top:"50%"},"& .ReactCrop__drag-handle.ord-e":{right:0,transform:"translateY(-50%)",borderRight:"3px solid #fff"},"& .ReactCrop__drag-handle.ord-w":{left:0,transform:"translateY(-50%)",borderLeft:"3px solid #fff"}}}>{imageEditor&&<ReactCrop crop={crop} onChange={(_,percent)=>setCrop(percent)} onComplete={setCompletedCrop} disabled={!cropMode} keepSelection={cropMode} ruleOfThirds={cropMode} minWidth={48} minHeight={48}><img ref={editorImageRef} src={imageEditor.url} onLoad={()=>setEditorLoaded(true)} alt="선택한 대진표" draggable={false} style={{display:"block",maxWidth:"100%",maxHeight:"min(58vh,520px)",objectFit:"contain"}}/></ReactCrop>}</Box><Stack direction="row" justifyContent="center" spacing={2} sx={{pt:1}}><EditorButton label="왼쪽으로 회전" icon={<RotateLeftIcon/>} onClick={()=>rotateImage(-90)}/><EditorButton label="자르기" icon={<CropIcon color={cropMode?"primary":"inherit"}/>} onClick={enableCrop}/><EditorButton label="오른쪽으로 회전" icon={<RotateRightIcon/>} onClick={()=>rotateImage(90)}/></Stack></DialogContent><DialogActions><Button onClick={()=>setImageEditor(null)}>취소</Button><Button variant="contained" disabled={!editorLoaded} onClick={confirmEditedImage}>{format==="조별리그"?`${files.length+1}조 사진 확인`:"사진 확인"}</Button></DialogActions></Dialog>
     <Dialog open={scanning} fullWidth maxWidth="xs"><DialogContent sx={{px:3.5,py:4}}><Typography textAlign="center" fontWeight={900}>AI가 사진 속 이름과 점수를 인식하는 중입니다.</Typography><Typography textAlign="center" sx={{my:1.5,color:"#6B7280",fontSize:13,lineHeight:1.5}}>사진 상태에 따라 인식 결과가 다를 수 있습니다.<br/>결과 화면에서 이름과 점수를 확인하고 수정해 주세요.</Typography><LinearProgress sx={{height:11,borderRadius:99,bgcolor:"#DBEAFE","& .MuiLinearProgress-bar":{borderRadius:99}}}/></DialogContent></Dialog>
   </Box>;
@@ -321,11 +330,14 @@ function ResultMatrix({ participants, matches, allMatches, onChange, onParticipa
 
   return <Box sx={{ mt: 2 }}>
     <Typography sx={{ mb: 1 }} fontWeight={900}>경기 결과</Typography>
+    <Typography sx={{ display: { xs: "block", sm: "none" }, mb: 0.7, color: "#6B7280", fontSize: 11, fontWeight: 700 }}>
+      경기 결과는 좌우로 밀어서 확인할 수 있습니다.
+    </Typography>
     <TableContainer sx={{ border: "1px solid #D1D5DB", overflowX: "auto" }}>
-      <Table size="small" sx={{ minWidth: Math.max(660, 280 + participants.length * 135), tableLayout: "fixed" }}>
+      <Table size="small" sx={{ minWidth: Math.max(570, 190 + participants.length * 135), tableLayout: "fixed", "& th:first-of-type, & td:first-of-type": { position: "sticky", left: 0, zIndex: 2, boxShadow: "2px 0 3px rgba(15,23,42,0.08)" }, "& thead th:first-of-type": { zIndex: 3 } }}>
         <TableHead>
           <TableRow>
-            <TableCell align="center" sx={{ width: 280, bgcolor: "#F3F4F6", fontWeight: 800 }}>참가명단</TableCell>
+            <TableCell align="center" sx={{ width: 190, bgcolor: "#F3F4F6", fontWeight: 800 }}>참가명단</TableCell>
             {participants.map((participant, index) => <TableCell key={participant.key} align="center" sx={{ bgcolor: "#F3F4F6", p: 1 }}>
               <Chip label={index + 1} size="small" color="primary" sx={{ mb: .5, height: 23, fontWeight: 900 }} />
               <ParticipantName name={participant.name} division={participant.division} nameSx={{ fontWeight: 900, fontSize: 13 }} sx={{ justifyContent: "center" }} />
@@ -337,8 +349,8 @@ function ResultMatrix({ participants, matches, allMatches, onChange, onParticipa
             <TableCell sx={{ bgcolor: "#F8FAFC", p: .75 }}>
               <Stack direction="row" spacing={.6} alignItems="center">
                 <Chip label={rowIndex + 1} size="small" color="primary" variant="outlined" />
-                <TextField size="small" placeholder="이름" value={rowParticipant.name} onChange={(event) => onParticipantsChange(rowParticipant.key, { name: event.target.value, member_id: rowParticipant.canonical_name === event.target.value ? rowParticipant.member_id : null })} inputProps={{ style: { padding: "7px 6px", fontWeight: 800 } }} sx={{ minWidth: 0, flex: 1, bgcolor: "#fff" }} />
-                <TextField size="small" placeholder="부수" value={rowParticipant.division} onChange={(event) => onParticipantsChange(rowParticipant.key, { division: event.target.value })} inputProps={{ style: { textAlign: "center", padding: "7px 3px" } }} sx={{ width: 55, bgcolor: "#fff" }} />
+                <TextField size="small" placeholder="이름" value={rowParticipant.name} onChange={(event) => onParticipantsChange(rowParticipant.key, { name: event.target.value, member_id: rowParticipant.canonical_name === event.target.value ? rowParticipant.member_id : null })} inputProps={{ style: { padding: "7px 6px", fontWeight: 800 } }} sx={{ width: 92, flexShrink: 0, bgcolor: "#fff" }} />
+                <TextField size="small" placeholder="부수" value={rowParticipant.division} onChange={(event) => onParticipantsChange(rowParticipant.key, { division: event.target.value })} inputProps={{ style: { textAlign: "center", padding: "7px 3px" } }} sx={{ width: 46, flexShrink: 0, bgcolor: "#fff" }} />
               </Stack>
             </TableCell>
             {participants.map((columnParticipant) => {

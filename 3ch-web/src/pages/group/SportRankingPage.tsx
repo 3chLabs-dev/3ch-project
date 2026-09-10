@@ -130,9 +130,12 @@ export default function SportRankingPage() {
                   <Typography fontWeight={800} fontSize={13}>
                     {event.result === "win" ? "승리" : "패배"}
                   </Typography>
-                  <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
-                    vs {event.opponent_name ?? "상대 미상"}
-                  </Typography>
+                  <Stack direction="row" spacing={0.45} alignItems="center">
+                    <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
+                      vs {event.opponent_name ?? "상대 미상"}
+                    </Typography>
+                    <DivisionBadge division={event.opponent_division} />
+                  </Stack>
                   <Box sx={{ ml: "auto" }}>
                     <Typography
                       fontWeight={900}

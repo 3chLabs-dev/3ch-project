@@ -698,10 +698,8 @@ export default function DrawList() {
             ) : (
               <Box sx={{ bgcolor: "#fff", borderRadius: 1, border: "1px solid #E5E7EB", overflow: "hidden" }}>
                 <Box sx={{ display: "flex", alignItems: "center", px: 1.5, py: 0.8, bgcolor: "#F9FAFB", borderBottom: "1px solid #E5E7EB" }}>
-                  <Box sx={{ flex: 1, display: "flex", justifyContent: "center", minWidth: 0 }}>
+                  <Box sx={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", gap: 0.7, minWidth: 0 }}>
                     <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#6B7280" }}>이름</Typography>
-                  </Box>
-                  <Box sx={{ width: 40, display: "flex", justifyContent: "center", flexShrink: 0 }}>
                     <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#6B7280" }}>부수</Typography>
                   </Box>
                   <Box sx={{ width: 92, display: "flex", justifyContent: "center", flexShrink: 0 }}>
@@ -714,12 +712,12 @@ export default function DrawList() {
                     key={row.id}
                     sx={{ display: "flex", alignItems: "center", px: 1.5, py: 0.9, borderTop: idx === 0 ? "none" : "1px solid #F3F4F6", opacity: row.weight === 0 ? 0.35 : 1 }}
                   >
-                    <Box sx={{ flex: 1, minWidth: 0, textAlign: "center" }}>
+                    <Box sx={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 0.6 }}>
                       <Typography sx={{ fontWeight: 800, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: row.weight === 0 ? "line-through" : "none" }}>
                         {row.name}
                       </Typography>
+                      <DivisionBadge division={row.division} />
                     </Box>
-                    <Box sx={{ width: 40, display: "flex", justifyContent: "center", flexShrink: 0 }}><DivisionBadge division={row.division} /></Box>
                     <Stack direction="row" alignItems="center" justifyContent="center" spacing={0.5} sx={{ width: 92, flexShrink: 0 }}>
                       <Box
                         component="button"

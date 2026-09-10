@@ -272,10 +272,9 @@ function sortParticipantsByDivision<T extends Pick<LeagueParticipantItem, "divis
 // BracketScoreCell(점수 조정)과 SortableBracketRow(시드 순서 이동)에서 공통 사용
 // - rotate=true: writingMode가 90° 회전된 portrait 모드에서 화살표 방향 보정
 // - onPointerDown stopPropagation: DnD 드래그 이벤트와 충돌 방지
-function ScoreButton({ icon, disabled, rotate, variant = "order", onClick }: {
+function ScoreButton({ icon, disabled, variant = "order", onClick }: {
   icon: "up" | "down";
   disabled?: boolean;
-  rotate?: boolean;
   variant?: "score" | "order";
   onClick: () => void;
 }) {
@@ -291,7 +290,7 @@ function ScoreButton({ icon, disabled, rotate, variant = "order", onClick }: {
       onClick={onClick}
       sx={{ p: 0.75, minWidth: 28, minHeight: 28 }}
     >
-      <Icon sx={{ fontSize: 16, ...(rotate && { transform: "rotate(-90deg)" }) }} />
+      <Icon sx={{ fontSize: 16 }} />
     </IconButton>
   );
 }
@@ -405,7 +404,7 @@ function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, la
 
   // 편집 불가: 점수 숫자만 표시 (빈 칸 또는 숫자)
   if (!canEdit) {
-    return <StyledTableCell {...cellCoordinates} sx={winnerStyle}><Box sx={landscape ? {} : { transform: "rotate(-90deg)" }}>{score !== null ? score : ""}</Box></StyledTableCell>;
+    return <StyledTableCell {...cellCoordinates} sx={winnerStyle}>{score !== null ? score : ""}</StyledTableCell>;
   }
 
   // landscape / portrait 공통: [↓] 점수 [↑] 가로 배치, 좌우 여백 있게
@@ -416,9 +415,9 @@ function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, la
       writingMode: "horizontal-tb",
       px: 0.25, height: "100%", gap: 0.25,
     }}>
-      <ScoreButton icon="down" variant="score" disabled={(score ?? 0) <= 0} rotate={!landscape} onClick={() => handleChange(-1)} />
+      <ScoreButton icon="down" variant="score" disabled={(score ?? 0) <= 0} onClick={() => handleChange(-1)} />
       {!isEditing && 
-        <Typography className="score-text" data-row={rowIndex} data-col={colIndex} data-tc ={totalCols} data-tr={totalRows} onClick={() => { setTempValue(String(score ?? 0)); setIsEditing(true); }}sx={{ fontSize: 14, ...winnerStyle, lineHeight: 1, ...(landscape ? {} : { transform: "rotate(-90deg)" }), minWidth: 14, textAlign: "center" }}>
+        <Typography className="score-text" data-row={rowIndex} data-col={colIndex} data-tc ={totalCols} data-tr={totalRows} onClick={() => { setTempValue(String(score ?? 0)); setIsEditing(true); }}sx={{ fontSize: 14, ...winnerStyle, lineHeight: 1, minWidth: 14, textAlign: "center" }}>
           {score ?? 0}
         </Typography>
       }
@@ -468,9 +467,9 @@ function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, la
                                 }, 0);
                               }
                             }}
-          style={{ width: 50, textAlign: "center", transform: landscape ? undefined : "rotate(-90deg)" }}/>
+          style={{ width: 50, textAlign: "center" }}/>
       }
-      <ScoreButton icon="up" variant="score" rotate={!landscape} onClick={() => handleChange(1)} />
+      <ScoreButton icon="up" variant="score" onClick={() => handleChange(1)} />
     </Box>
   );
 

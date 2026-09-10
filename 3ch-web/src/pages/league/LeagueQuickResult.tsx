@@ -335,10 +335,10 @@ function ResultMatrix({ participants, matches, allMatches, onChange, onParticipa
       경기 결과는 좌우로 밀어서 확인할 수 있습니다.
     </Typography>
     <TableContainer sx={{ border: "1px solid #D1D5DB", overflowX: "auto" }}>
-      <Table size="small" sx={{ minWidth: Math.max(570, 190 + participants.length * 135), tableLayout: "fixed", "& th:first-of-type, & td:first-of-type": { position: "sticky", left: 0, zIndex: 2, boxShadow: "2px 0 3px rgba(15,23,42,0.08)" }, "& thead th:first-of-type": { zIndex: 3 } }}>
+      <Table size="small" sx={{ minWidth: Math.max(520, 160 + participants.length * 120), tableLayout: "fixed", "& th:first-of-type, & td:first-of-type": { position: "sticky", left: 0, zIndex: 2, boxShadow: "2px 0 3px rgba(15,23,42,0.08)" }, "& thead th:first-of-type": { zIndex: 3 } }}>
         <TableHead>
           <TableRow>
-            <TableCell align="center" sx={{ width: 190, bgcolor: "#F3F4F6", fontWeight: 800 }}>참가명단</TableCell>
+            <TableCell align="center" sx={{ width: 160, bgcolor: "#F3F4F6", fontWeight: 800 }}>참가명단</TableCell>
             {participants.map((participant, index) => <TableCell key={participant.key} align="center" sx={{ bgcolor: "#F3F4F6", p: 1 }}>
               <Chip label={index + 1} size="small" color="primary" sx={{ mb: .5, height: 23, fontWeight: 900 }} />
               <ParticipantName name={participant.name} division={participant.division} nameSx={{ fontWeight: 900, fontSize: 13 }} sx={{ justifyContent: "center" }} />
@@ -350,7 +350,7 @@ function ResultMatrix({ participants, matches, allMatches, onChange, onParticipa
             <TableCell sx={{ bgcolor: "#F8FAFC", p: .75 }}>
               <Stack direction="row" spacing={.6} alignItems="center">
                 <Chip label={rowIndex + 1} size="small" color="primary" variant="outlined" />
-                <TextField size="small" placeholder="이름" value={rowParticipant.name} onChange={(event) => onParticipantsChange(rowParticipant.key, { name: event.target.value, member_id: rowParticipant.canonical_name === event.target.value ? rowParticipant.member_id : null })} inputProps={{ style: { padding: "7px 6px", fontWeight: 800 } }} sx={{ width: 92, flexShrink: 0, bgcolor: "#fff" }} />
+                <TextField size="small" placeholder="이름" value={rowParticipant.name} onChange={(event) => onParticipantsChange(rowParticipant.key, { name: event.target.value, member_id: rowParticipant.canonical_name === event.target.value ? rowParticipant.member_id : null })} inputProps={{ style: { padding: "7px 5px", fontWeight: 800 } }} sx={{ width: 64, flexShrink: 0, bgcolor: "#fff" }} />
                 <TextField size="small" placeholder="부수" value={rowParticipant.division} onChange={(event) => onParticipantsChange(rowParticipant.key, { division: event.target.value })} inputProps={{ style: { textAlign: "center", padding: "7px 3px" } }} sx={{ width: 46, flexShrink: 0, bgcolor: "#fff" }} />
               </Stack>
             </TableCell>

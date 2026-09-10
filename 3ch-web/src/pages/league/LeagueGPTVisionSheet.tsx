@@ -3227,7 +3227,7 @@ export default function LeagueGPTVisionSheet() {
         maxWidth="sm"
         fullWidth
         sx={{ zIndex: 10003, "& .MuiDialog-container": { alignItems: "flex-end" } }}
-        slotProps={{ backdrop: { sx: { backgroundColor: "transparent" } }, paper: { sx: { mb: 2, mx: 1.5, borderRadius: 3, maxWidth: 560, ...mobileDialogPaperSx } } }}
+        slotProps={{ backdrop: { sx: { backgroundColor: "transparent" } }, paper: { sx: { mx: 1.5, borderRadius: 3, maxWidth: 560, ...mobileDialogPaperSx, mb: landscape ? `${(scheduleRef.current?.offsetHeight ?? 86) + 16}px` : 2 } } }}
       >
         <DialogTitle sx={{ fontWeight: 900 }}>본선 토너먼트도 생성할까요?</DialogTitle>
         <DialogContent>

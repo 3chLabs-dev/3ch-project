@@ -5,6 +5,7 @@ import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { adminLogout } from "../../features/admin/adminSlice";
+import { NoIndex } from "../../components/SearchVisibility";
 
 const MAIN_MENU = [
   { label: "채팅 상담",   path: "/admin/support-chat" },
@@ -82,6 +83,7 @@ export default function AdminShell() {
 
   return (
     <Box sx={{ height: "100vh", bgcolor: "#F3F4F6", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <NoIndex />
       {/* 헤더 */}
       <Box sx={{ bgcolor: "#fff", borderBottom: "1px solid #E5E7EB", px: 3, py: 1.5, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, cursor: "pointer" }} onClick={() => navigate("/admin")}>

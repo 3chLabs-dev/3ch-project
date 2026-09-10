@@ -1,6 +1,7 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { formatLeagueDate } from "../../utils/dateUtils";
+import { DivisionBadge } from "../../components/ParticipantName";
 import {
   Box,
   Typography,
@@ -12,7 +13,6 @@ import {
   Collapse,
   Chip,
   CircularProgress,
-  Avatar,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -189,12 +189,11 @@ export default function GroupLeagueManage() {
                               "&:hover": { bgcolor: "#F3F4F6" },
                             }}
                           >
-                            <Avatar sx={{ width: 36, height: 36, bgcolor: "#FAAA47", color: "#000000", fontSize: 11, fontWeight: 900 }}>
-                              {participant.division || "-"}
-                            </Avatar>
-                            <Typography fontWeight={700} fontSize={14} flex={1}>
+                            <Typography fontWeight={700} fontSize={14}>
                               {participant.name}
                             </Typography>
+                            <DivisionBadge division={participant.division} />
+                            <Box flex={1} />
                             <Stack direction="row" spacing={0.5}>
                               {participant.paid && <Chip label="입금" size="small" color="success" sx={{ height: 20, fontSize: 10 }} />}
                               {participant.arrived && <Chip label="도착" size="small" color="primary" sx={{ height: 20, fontSize: 10 }} />}

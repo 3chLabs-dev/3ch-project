@@ -33,7 +33,7 @@ const COLOR = {
 function DivBadge({ division }: { division?: string | null }) {
   if (!division) return null;
   return (
-    <Box component="span" sx={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: { xs: 18, sm: 20 }, height: { xs: 18, sm: 20 }, borderRadius: "50%", bgcolor: COLOR.divBadge, color: "#000", fontSize: 9, fontWeight: 900, lineHeight: 1, flexShrink: 0 }}>
+    <Box component="span" sx={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 18, height: 18, px: String(division).length > 1 ? 0.55 : 0.3, borderRadius: 0.8, bgcolor: COLOR.divBadge, color: "#000", fontSize: 9, fontWeight: 900, lineHeight: 1, whiteSpace: "nowrap", flexShrink: 0 }}>
       {division}
     </Box>
   );
@@ -55,11 +55,11 @@ function SortableParticipant({ user, index }: { user: LeagueParticipantItem; ind
       <Typography sx={{ display: { xs: 'none', md: 'block' }, color: "#9CA3AF", fontSize: 11, fontWeight: 600, width: 10, flexShrink: 0, mr: 0.5 }}>
         {index + 1}
       </Typography>
-      <DivBadge division={user.division} />
-      
-      <Typography variant="body2" fontWeight={index === 0 ? "800" : "600"} color={COLOR.darkCard} noWrap sx={{ flex: 1, minWidth: 0, ml: 0.75, fontSize: { xs: '0.85rem', sm: '0.9rem' } }}>
+      <Typography variant="body2" fontWeight={index === 0 ? "800" : "600"} color={COLOR.darkCard} noWrap sx={{ minWidth: 0, ml: 0.75, fontSize: { xs: '0.85rem', sm: '0.9rem' } }}>
         {user.name}
       </Typography>
+      <Box sx={{ ml: 0.45 }}><DivBadge division={user.division} /></Box>
+      <Box sx={{ flex: 1 }} />
     </Box>
   );
 }

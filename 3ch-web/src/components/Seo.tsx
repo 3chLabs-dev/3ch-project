@@ -22,6 +22,7 @@ export default function Seo({ title, description, path, type = "website", struct
     const fullTitle = title === "우리리그" ? title : `${title} | 우리리그`;
     const canonicalUrl = `https://woorileague.com${path}`;
     document.title = fullTitle;
+    upsertMeta('meta[name="robots"]', { name: "robots", content: "index,follow,max-image-preview:large" });
     upsertMeta('meta[name="description"]', { name: "description", content: description });
     upsertMeta('meta[property="og:title"]', { property: "og:title", content: fullTitle });
     upsertMeta('meta[property="og:description"]', { property: "og:description", content: description });
@@ -45,7 +46,11 @@ export default function Seo({ title, description, path, type = "website", struct
       script.textContent = JSON.stringify(structuredData);
       document.head.appendChild(script);
     }
-    return () => document.getElementById(scriptId)?.remove();
+    return () => {
+      document.getElementById(scriptId)?.remove();
+      upsertMeta('meta[name="robots"]', { name: "robots", content: "noindex,nofollow" });
+      canonical?.remove();
+    };
   }, [description, path, structuredData, title, type]);
 
   return null;

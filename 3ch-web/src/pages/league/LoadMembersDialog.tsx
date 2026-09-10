@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { DivisionBadge } from "../../components/ParticipantName";
 import {
     Dialog,
     DialogTitle,
@@ -290,7 +291,7 @@ export default function LoadMembersDialog({
                         <Box
                             sx={{
                                 display: "grid",
-                                gridTemplateColumns: "34px 1fr 1fr",
+                                gridTemplateColumns: "34px minmax(0, 1fr) 64px",
                                 alignItems: "center",
                                 px: 3.5,
                                 py: 1,
@@ -308,10 +309,10 @@ export default function LoadMembersDialog({
                                 sx={{ p: 0 }}
                             />
                             <Typography sx={{ fontSize: 12, color: "#6B7280", fontWeight: 900, textAlign: "center" }}>
-                                부수
+                                이름
                             </Typography>
                             <Typography sx={{ fontSize: 12, color: "#6B7280", fontWeight: 900, textAlign: "center" }}>
-                                이름
+                                부수
                             </Typography>
                         </Box>
 
@@ -322,7 +323,7 @@ export default function LoadMembersDialog({
                                     onClick={() => toggle(r.id)}
                                     sx={{
                                         display: "grid",
-                                        gridTemplateColumns: "34px 1fr 1fr",
+                                        gridTemplateColumns: "34px 1fr 64px",
                                         alignItems: "center",
                                         px: 0.5,
                                         py: 0.6,
@@ -332,10 +333,8 @@ export default function LoadMembersDialog({
                                     }}
                                 >
                                     <Checkbox checked={!!checked[r.id]} size="small" />
-                                    <Typography sx={{ textAlign: "center", fontWeight: 800 }}>
-                                        {r.division || "-"}
-                                    </Typography>
                                     <Typography sx={{ fontWeight: 800, textAlign: "center" }}>{r.name}</Typography>
+                                    <Box sx={{ textAlign: "center" }}><DivisionBadge division={r.division} /></Box>
                                 </Box>
                             ))}
 

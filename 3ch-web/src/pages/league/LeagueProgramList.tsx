@@ -33,6 +33,7 @@ import {
   type DragEndEvent, type DragOverEvent,
 } from "@dnd-kit/core";
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { DivisionBadge } from "../../components/ParticipantName";
 import { CSS } from "@dnd-kit/utilities";
 import {
   useDeleteAllLeagueMatchesMutation,
@@ -153,10 +154,8 @@ function SortableFormationPlayer({ player, locked = false }: { player: Formation
       }}
     >
       {!locked && <DragHandleIcon sx={{ color: "#9CA3AF", fontSize: 17, flexShrink: 0 }} />}
-      <Box sx={{ width: 22, height: 22, borderRadius: "50%", bgcolor: "#FAAA47", display: "grid", placeItems: "center", fontSize: 10, fontWeight: 900, flexShrink: 0 }}>
-        {hasFormationLevel(player.level) ? `${player.level}부` : "-"}
-      </Box>
       <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{player.name}</Typography>
+      <DivisionBadge division={hasFormationLevel(player.level) ? String(player.level) : null} />
     </Box>
   );
 }
@@ -2050,17 +2049,17 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
                   const roster = (player as typeof player & { roster?: Array<{ name: string; level: number }> }).roster;
                   return (
                     <Box key={player.name}>
-                      <Typography sx={{ fontSize: 13, fontWeight: 700 }}>
-                        {isDoublesGroupResult && roster
-                          ? formatFormationName(player.name, player.level)
-                          : `${hasFormationLevel(player.level) ? `${player.level}부` : "-"} - ${formatFormationName(player.name, player.level)}`}
-                      </Typography>
+                      <Stack direction="row" spacing={0.45} alignItems="center">
+                        <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{formatFormationName(player.name, player.level)}</Typography>
+                        {!isDoublesGroupResult && <DivisionBadge division={hasFormationLevel(player.level) ? String(player.level) : null} />}
+                      </Stack>
                       {roster && (
                         <Box sx={{ pl: isDoublesGroupResult ? 0 : 1.5, mt: 0.5, color: "#6B7280" }}>
                           {roster.map((member) => (
-                            <Typography key={member.name} sx={{ fontSize: 12 }}>
-                              {hasFormationLevel(member.level) ? `${member.level}부` : "-"} - {formatFormationName(member.name, member.level)}
-                            </Typography>
+                            <Stack key={member.name} direction="row" spacing={0.4} alignItems="center">
+                              <Typography sx={{ fontSize: 12 }}>{formatFormationName(member.name, member.level)}</Typography>
+                              <DivisionBadge division={hasFormationLevel(member.level) ? String(member.level) : null} />
+                            </Stack>
                           ))}
                         </Box>
                       )}

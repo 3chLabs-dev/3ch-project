@@ -6,6 +6,7 @@ import {
 import CloseIcon from "@mui/icons-material/Close";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import PhotoLibraryOutlinedIcon from "@mui/icons-material/PhotoLibraryOutlined";
+import { DivisionBadge } from "../../components/ParticipantName";
 import {
   useCreateGroupPreMemberMutation, useDeleteGroupPreMemberMutation,
   useGetGroupPreMembersQuery, useRequestGroupMemberClaimMutation,
@@ -139,7 +140,7 @@ export default function GroupPreMemberDialog({ open, onClose, groupId, manager =
               >
                 {!manager && <Radio checked={selectedId === member.id} size="small" />}
                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography fontWeight={800}>{member.division ? `${member.division}부 · ` : ""}{member.name}</Typography>
+                  <Stack direction="row" spacing={0.45} alignItems="center"><Typography fontWeight={800}>{member.name}</Typography><DivisionBadge division={member.division}/></Stack>
                   {member.claim_status === "pending" && (
                     <Typography fontSize={12} color="primary.main">{member.requester_name}님의 전환 승인 대기 중</Typography>
                   )}

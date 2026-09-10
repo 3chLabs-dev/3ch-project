@@ -58,6 +58,7 @@ export interface HomeSummary {
 export interface SportRankingRow {
   member_id: number;
   name: string;
+  division?: string | null;
   rank: number | null;
   rating: number;
   wins: number;
@@ -71,6 +72,7 @@ export interface SportRankingRow {
 export interface SportRankingPreviewRow {
   member_id: number;
   name: string;
+  division?: string | null;
   rank: number | null;
   rating: number;
 }

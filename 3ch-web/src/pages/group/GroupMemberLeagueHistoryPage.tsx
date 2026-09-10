@@ -11,6 +11,7 @@ import {
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import { useGetGroupMemberLeagueHistoryQuery } from "../../features/group/groupApi";
+import { DivisionBadge } from "../../components/ParticipantName";
 
 function formatDate(value?: string | null) {
   if (!value) return "-";
@@ -55,9 +56,10 @@ export default function GroupMemberLeagueHistoryPage() {
 
       <Card elevation={2} sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
         <CardContent sx={{ py: 2, px: 2.2, "&:last-child": { pb: 2 } }}>
-          <Typography fontWeight={900} fontSize={15}>
-            {data.member.name}
-          </Typography>
+          <Stack direction="row" alignItems="center" spacing={0.45}>
+            <Typography fontWeight={900} fontSize={15}>{data.member.name}</Typography>
+            <DivisionBadge division={data.member.division} />
+          </Stack>
           <Typography sx={{ mt: 0.4, fontSize: 12, color: "text.secondary" }}>
             총 {data.histories.length}개의 리그·대회 참여기록
           </Typography>

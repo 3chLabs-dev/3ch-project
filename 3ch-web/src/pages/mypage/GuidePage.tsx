@@ -6,20 +6,16 @@ import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { sanitizeGuideHtml } from "../../utils/sanitizeHtml";
+import Seo from "../../components/Seo";
 
 const API = import.meta.env.VITE_API_BASE_URL;
-
-const SECTIONS: Record<string, string[]> = {
-  leader: ["클럽 생성", "회원 관리", "리그 생성", "리그 진행", "결과 등록", "추첨 생성", "추첨 진행"],
-  member: ["클럽 가입", "리그 참가", "결과 입력", "추첨 확인"],
-};
 
 type Guide = { id: number; tab: string; section: string; content: string };
 
 export default function GuidePage() {
   const navigate = useNavigate();
   const [tab, setTab] = useState<"leader" | "member">("leader");
-  const [section, setSection] = useState(SECTIONS.leader[0]);
+  const [section, setSection] = useState("");
   const [guides, setGuides] = useState<Guide[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -27,7 +23,9 @@ export default function GuidePage() {
     let cancelled = false;
     axios.get(`${API}/guides?tab=${tab}`).then((r) => {
       if (!cancelled) {
-        setGuides(r.data.guides ?? []);
+        const nextGuides: Guide[] = r.data.guides ?? [];
+        setGuides(nextGuides);
+        setSection(nextGuides[0]?.section ?? "");
         setLoading(false);
       }
     });
@@ -37,14 +35,15 @@ export default function GuidePage() {
   const handleTabChange = (t: "leader" | "member") => {
     setLoading(true);
     setTab(t);
-    setSection(SECTIONS[t][0]);
+    setSection("");
   };
 
   const current = guides.find((g) => g.section === section);
-  const sections = SECTIONS[tab];
+  const sections = guides.map((g) => g.section);
 
-  return (
-    <Stack spacing={2} sx={{ width: "100%", mx: "auto", mt: "-4px" }}>
+    return (
+        <Stack spacing={2} sx={{ width: "100%", mx: "auto", mt: "-4px" }}>
+      <Seo title="이용방법" description="우리리그에서 클럽을 만들고 회원을 관리하며 리그와 추첨을 운영하는 방법을 확인하세요." path="/mypage/guide" />
       {/* 헤더 */}
       <Stack direction="row" alignItems="center" spacing={1.5}>
         <IconButton onClick={() => navigate("/mypage")} size="small">

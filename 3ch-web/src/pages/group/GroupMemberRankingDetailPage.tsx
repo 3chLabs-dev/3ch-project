@@ -11,6 +11,7 @@ import {
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useGetGroupRankingDetailQuery } from "../../features/group/groupApi";
+import { DivisionBadge } from "../../components/ParticipantName";
 
 function formatDate(value?: string | null) {
   if (!value) return "-";
@@ -66,28 +67,10 @@ export default function GroupMemberRankingDetailPage() {
       <Card elevation={2} sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
         <CardContent sx={{ py: 2.5, px: 2.5, "&:last-child": { pb: 2.5 } }}>
           <Stack direction="row" alignItems="center" spacing={1.2}>
-            {data.member.division && (
-              <Box
-                sx={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  height: 36,
-                  minWidth: 36,
-                  px: 0.8,
-                  borderRadius: "999px",
-                  bgcolor: "#FAAA47",
-                  fontSize: 11,
-                  fontWeight: 900,
-                  color: "#000000",
-                }}
-              >
-                {data.member.division}
-              </Box>
-            )}
             <Typography fontWeight={900} fontSize={20}>
               {data.member.name}
             </Typography>
+            <DivisionBadge division={data.member.division} />
           </Stack>
 
           <Stack direction="row" spacing={1} sx={{ mt: 2 }}>

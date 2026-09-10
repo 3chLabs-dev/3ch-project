@@ -236,7 +236,7 @@ function DiagonalScoreCell({ isVisionStart = false, rowIndex, colIndex }: { land
 }
 
 // ─── 부 배지 ──────────────────────────────────────────────────────────────────
-// 참가자 이름 옆에 표시하는 "부수" 원형 배지 (예: 3부 → "3")
+// 참가자 이름 뒤에 표시하는 작은 부수 배지
 // division이 없으면 렌더링하지 않음
 function DivBadge({ division, aggregate = false }: { division?: string | null; aggregate?: boolean }) {
   if (!division) return null;
@@ -245,7 +245,7 @@ function DivBadge({ division, aggregate = false }: { division?: string | null; a
       component="span"
       sx={{
         display: "inline-flex", alignItems: "center", justifyContent: "center",
-        width: 20, height: 20, borderRadius: "50%",
+        minWidth: 18, height: 18, px: String(division).length > 1 ? 0.55 : 0.3, borderRadius: 0.8,
         bgcolor: COLOR.divBadge, color: aggregate ? "#0057FF" : "#000",
         fontSize: 9, fontWeight: 900, lineHeight: 1,
         flexShrink: 0, verticalAlign: "middle",
@@ -585,23 +585,22 @@ const SortableBracketRow = memo(function SortableBracketRow({
         {teamRoster?.length ? (
           <Stack spacing={0.35} alignItems="center">
             <Stack direction="row" spacing={0.4} alignItems="center" justifyContent="center" flexWrap="wrap">
-              <DivBadge division={teamRoster[0]?.division} aggregate={aggregateDivision} />
               <Box component="span" sx={{ color: isMe ? COLOR.myText : "inherit", fontWeight: 800 }}>
                 {participant.name.split("\n")[0]}
               </Box>
+              <DivBadge division={teamRoster[0]?.division} aggregate={aggregateDivision} />
             </Stack>
             {teamRoster.slice(1).map((member, memberIndex) => (
               <Stack key={`${member.name}-${memberIndex}`} direction="row" spacing={0.4} alignItems="center" justifyContent="center" flexWrap="wrap">
-                <DivBadge division={member.division} />
                 <Box component="span" sx={{ fontSize: 10, lineHeight: 1.2 }}>
                   {member.name}
                 </Box>
+                <DivBadge division={member.division} />
               </Stack>
             ))}
           </Stack>
         ) : (
           <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0.4, flexWrap: "wrap" }}>
-            <DivBadge division={participant.division} aggregate={aggregateDivision} />
             <Box
               component="span"
               sx={{
@@ -613,6 +612,7 @@ const SortableBracketRow = memo(function SortableBracketRow({
             >
               {participant.name}
             </Box>
+            <DivBadge division={participant.division} aggregate={aggregateDivision} />
           </Box>
         )}
       </BodyHeaderCell>
@@ -2778,11 +2778,11 @@ export default function LeagueGPTVisionSheet() {
                       return (
                         <NameHeaderCell key={p.id} sx={isMe ? { bgcolor: COLOR.myHighlight } : undefined}>
                           <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0.4, flexWrap: "wrap" }}>
-                            <DivBadge division={p.division} aggregate={isProgramTeamRound} />
                             {/* portrait: minHeight로 세로 공간 확보 */}
                             <Box component="span" sx={{ color: isMe ? COLOR.myText : "inherit", fontWeight: isMe ? 700 : "inherit" }}>
                               {isProgramTeamRound ? p.name.split("\n")[0] : p.name}
                             </Box>
+                            <DivBadge division={p.division} aggregate={isProgramTeamRound} />
                           </Box>
                         </NameHeaderCell>
                       );
@@ -3393,8 +3393,8 @@ export default function LeagueGPTVisionSheet() {
                   {previewColumns.map(({ participant: columnPlayer }) => (
                     <th key={columnPlayer.id} style={{ background: "#F9FAFB", fontSize: 12, fontWeight: 800, whiteSpace: "pre-line", lineHeight: 1.3 }}>
                       <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="center" flexWrap="wrap">
-                        <DivBadge division={columnPlayer.division} aggregate={isProgramTeamRound} />
                         <Box component="span">{columnPlayer.name}</Box>
+                        <DivBadge division={columnPlayer.division} aggregate={isProgramTeamRound} />
                       </Stack>
                     </th>
                   ))}
@@ -3408,8 +3408,8 @@ export default function LeagueGPTVisionSheet() {
                     </th>
                     <th className="preview-name-cell" style={{ background: "#F9FAFB", fontSize: 12, fontWeight: 800, whiteSpace: "pre-line", lineHeight: 1.3 }}>
                       <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="center" flexWrap="wrap">
-                        <DivBadge division={rowPlayer.division} aggregate={isProgramTeamRound} />
                         <Box component="span">{rowPlayer.name}</Box>
+                        <DivBadge division={rowPlayer.division} aggregate={isProgramTeamRound} />
                       </Stack>
                     </th>
                     {previewColumns.map(({ participant: columnPlayer, index: columnIndex }) => {

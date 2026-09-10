@@ -26,6 +26,7 @@ import { useGetPreferencesQuery, useGetHomeSummaryQuery } from "../features/user
 import type { MyGroupItem, MyMatchItem, MyWinItem } from "../features/user/userApi";
 import { useGetLeaguesQuery } from "../features/league/leagueApi";
 import type { LeagueListItem } from "../features/league/leagueApi";
+import { DivisionBadge } from "../components/ParticipantName";
 import { useGetGroupRankingQuery, useGetMyGroupsQuery, useUpdateMyGroupPreferencesMutation } from "../features/group/groupApi";
 import { setPreferredGroupId } from "../features/league/leagueCreationSlice";
 import LeagueFilterDialog from "../components/LeagueFilterDialog.tsx";
@@ -200,25 +201,10 @@ export default function Home() {
             {isLoggedIn && (
                 <Stack direction="row" alignItems="center" justifyContent="space-between">
                     <Stack direction="row" alignItems="center" spacing={1.2}>
-                        <Box
-                            sx={{
-                                width: 30,
-                                height: 30,
-                                borderRadius: "50%",
-                                bgcolor: "#FAAA47",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                flexShrink: 0,
-                            }}
-                        >
-                            <Typography fontSize={13} fontWeight={900} color="#000000" lineHeight={1}>
-                                {selectedGroup?.division || "-"}
-                            </Typography>
-                        </Box>
                         <Typography variant="h5" fontWeight={900} lineHeight={1.1}>
                             {user?.name || user?.email || "우리리그"}
                         </Typography>
+                        <DivisionBadge division={selectedGroup?.division} />
                     </Stack>
                     {hasGroups && groups.length > 1 && (
                         <Select
@@ -389,6 +375,7 @@ export default function Home() {
                                                 <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: "#374151" }}>
                                                     {row.rank}위 {row.name}
                                                 </Typography>
+                                                <DivisionBadge division={row.division} sx={{ minWidth: 15, height: 15, fontSize: 8 }} />
                                             </Box>
                                         ))}
                                     </Stack>
@@ -786,12 +773,7 @@ function MyMatchCard({ item, navigate }: { item: MyMatchItem; navigate: (path: s
                                 {item.participant_name || "나"}
                             </Typography>
                             <Typography fontWeight={700} fontSize={12} color="text.secondary">vs</Typography>
-                            <Typography fontWeight={700} fontSize={14}>
-                                {item.opponent_name ?? "?"}
-                                {item.program_block_type === "SINGLES" && item.opponent_division
-                                    ? ` (${item.opponent_division})`
-                                    : ""}
-                            </Typography>
+                            <Stack direction="row" spacing={0.4} alignItems="center"><Typography fontWeight={700} fontSize={14}>{item.opponent_name ?? "?"}</Typography>{item.program_block_type === "SINGLES" && <DivisionBadge division={item.opponent_division} />}</Stack>
                         </Stack>
                     </Stack>
                     <Stack alignItems="flex-end" spacing={0.3}>

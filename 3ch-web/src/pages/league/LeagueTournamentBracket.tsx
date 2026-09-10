@@ -32,6 +32,7 @@ import {
 } from "../../features/league/leagueApi";
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
 import { formatLeagueDate } from "../../utils/dateUtils";
+import { DivisionBadge } from "../../components/ParticipantName";
 import { applyProgramMatchState, applyProgramTournamentAdvancement, clearProgramMatchState, generateProgramRoundMatches, getStoredProgramOption, isAutomaticProgramWalkover, saveProgramMatchPatch } from "../../utils/programMatchGenerator";
 
 // ─── 단일 토너먼트 레이아웃 상수 ────────────────────────────────────────────
@@ -183,9 +184,8 @@ function RankingSummary({ title, rankings, rankLabels, color, borderColor, left,
       {rankings.map((participant, index) => (
         <Box key={index} sx={{ height: 13.5, px: 1, display: "flex", alignItems: "center", gap: 0.6, borderTop: index ? "1px solid #F1F5F9" : 0 }}>
           <Typography sx={{ width: 14, fontSize: 8, fontWeight: 900, color }}>{rankLabels?.[index] ?? index + 1}위</Typography>
-          <Typography sx={{ minWidth: 0, fontSize: 8, fontWeight: 700, color: participant ? "#334155" : "#94A3B8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {participant ? `${participant.division ? `${participant.division} ` : ""}${participant.name}` : "-"}
-          </Typography>
+          <Typography sx={{ minWidth: 0, fontSize: 8, fontWeight: 700, color: participant ? "#334155" : "#94A3B8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{participant?.name ?? "-"}</Typography>
+          {participant && <DivisionBadge division={participant.division} sx={{ minWidth: 14, height: 14, fontSize: 7 }} />}
         </Box>
       ))}
     </Box>
@@ -262,8 +262,9 @@ function TournamentResultDialog({ open, match, rule, leagueId, splitBracket, onC
 
   const row = (slot: "a" | "b", name: string | null, division: string | null, score: number, highlight: boolean) => (
     <Stack direction="row" alignItems="center" sx={{ minHeight: 58, px: 1.5, gap: 0.75 }}>
-      {division && <Box sx={{ minWidth: 23, height: 23, px: 0.35, borderRadius: "50%", bgcolor: "#FAAA47", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 900 }}>{division}</Box>}
-      <Typography sx={{ flex: 1, fontSize: 15, fontWeight: 800, color: highlight ? "#16A34A" : "#111827" }}>{name ?? "미정"}</Typography>
+      <Typography sx={{ fontSize: 15, fontWeight: 800, color: highlight ? "#16A34A" : "#111827" }}>{name ?? "미정"}</Typography>
+      {division && <DivisionBadge division={division} />}
+      <Box sx={{ flex: 1 }} />
       <IconButton size="small" disabled={!canScore} onClick={() => changeScore(slot, -1)} sx={{ border: "1px solid #E2E8F0" }}><RemoveIcon sx={{ fontSize: 16 }} /></IconButton>
       <Typography sx={{ width: 34, textAlign: "center", fontSize: 20, fontWeight: 900, color: highlight ? "#16A34A" : "#111827" }}>{score}</Typography>
       <IconButton size="small" disabled={!canScore} onClick={() => changeScore(slot, 1)} sx={{ border: "1px solid #E2E8F0", color: "#2F80ED" }}><AddIcon sx={{ fontSize: 16 }} /></IconButton>
@@ -618,9 +619,6 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
           outline: swapSelA ? "2px solid #3B82F6" : "none",
         }}
       >
-        {m.participant_a_division && (
-          <Box sx={{ width: 18, height: 18, borderRadius: "50%", bgcolor: "#FAAA47", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: 900, color: "#111827", flexShrink: 0, lineHeight: 1 }}>{m.participant_a_division}</Box>
-        )}
         {isR1 && !nameA && manualSeeding ? (
           <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 0.75 }}>
             {displaySeedA && <Typography sx={{ fontSize: 11, fontWeight: 800, color: "#94A3B8" }}>{displaySeedA}</Typography>}
@@ -638,6 +636,7 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
             {nameA ?? (isByeA ? "BYE" : "미정")}
           </Typography>
         )}
+        {nameA && m.participant_a_division && <DivisionBadge division={m.participant_a_division} sx={{ minWidth: 16, height: 16, fontSize: 7 }} />}
         {m.score_a != null && <Typography sx={{ fontSize: 12, fontWeight: 800, color: winA ? "#16A34A" : "#6B7280", flexShrink: 0 }}>{m.score_a}</Typography>}
       </Box>
       <Box
@@ -649,9 +648,6 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
           outline: swapSelB ? "2px solid #3B82F6" : "none",
         }}
       >
-        {m.participant_b_division && (
-          <Box sx={{ width: 18, height: 18, borderRadius: "50%", bgcolor: "#FAAA47", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: 900, color: "#111827", flexShrink: 0, lineHeight: 1 }}>{m.participant_b_division}</Box>
-        )}
         {isR1 && !nameB && manualSeeding ? (
           <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 0.75 }}>
             {displaySeedB && <Typography sx={{ fontSize: 11, fontWeight: 800, color: "#94A3B8" }}>{displaySeedB}</Typography>}
@@ -669,6 +665,7 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
             {nameB ?? (isByeB ? "BYE" : "미정")}
           </Typography>
         )}
+        {nameB && m.participant_b_division && <DivisionBadge division={m.participant_b_division} sx={{ minWidth: 16, height: 16, fontSize: 7 }} />}
         {m.score_b != null && <Typography sx={{ fontSize: 12, fontWeight: 800, color: winB ? "#16A34A" : "#6B7280", flexShrink: 0 }}>{m.score_b}</Typography>}
       </Box>
     </Box>
@@ -757,9 +754,6 @@ function SingleSlotBox({ pos, slot, actions, manualSeeding = false }: { pos: Mat
 
       {/* 이름 행 */}
       <Box sx={{ display: "flex", alignItems: "center", px: 0.75, gap: 0.4, flex: 1, minWidth: 0 }}>
-        {division && (
-          <Box sx={{ width: 16, height: 16, borderRadius: "50%", bgcolor: "#FAAA47", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 7, fontWeight: 900, color: "#111827", flexShrink: 0, lineHeight: 1 }}>{division}</Box>
-        )}
         {isR1 && !name && manualSeeding ? (
           <Box sx={{ flex: 1, display: "flex", justifyContent: "center" }}>
             {actions?.canRegister && !actions.editMode && (
@@ -776,6 +770,7 @@ function SingleSlotBox({ pos, slot, actions, manualSeeding = false }: { pos: Mat
             {name ?? (isBye ? "BYE" : "미정")}
           </Typography>
         )}
+        {name && division && <DivisionBadge division={division} sx={{ minWidth: 16, height: 16, fontSize: 7 }} />}
         {isPendingLowerWalkover && actions?.canManage && !actions.editMode && (
           <IconButton
             size="small"
@@ -2168,10 +2163,8 @@ export default function LeagueTournamentBracket() {
                     </Typography>
                     {upperWinner ? (
                       <Box sx={{ display: "flex", alignItems: "center", gap: 0.4 }}>
-                        {upperWinner.division && (
-                          <Box sx={{ width: 16, height: 16, borderRadius: "50%", bgcolor: "#FAAA47", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 7, fontWeight: 900, color: "#111827", flexShrink: 0, lineHeight: 1 }}>{upperWinner.division}</Box>
-                        )}
                         <Typography sx={{ fontSize: 11, fontWeight: 800, color: "#111827" }}>{upperWinner.name}</Typography>
+                        <DivisionBadge division={upperWinner.division} sx={{ minWidth: 16, height: 16, fontSize: 7 }} />
                       </Box>
                     ) : (
                       <Typography sx={{ fontSize: 9, color: "#CBD5E1" }}>미결정</Typography>
@@ -2205,10 +2198,8 @@ export default function LeagueTournamentBracket() {
                     </Typography>
                     {lowerWinner ? (
                       <Box sx={{ display: "flex", alignItems: "center", gap: 0.4 }}>
-                        {lowerWinner.division && (
-                          <Box sx={{ width: 16, height: 16, borderRadius: "50%", bgcolor: "#FAAA47", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 7, fontWeight: 900, color: "#111827", flexShrink: 0, lineHeight: 1 }}>{lowerWinner.division}</Box>
-                        )}
                         <Typography sx={{ fontSize: 11, fontWeight: 800, color: "#111827" }}>{lowerWinner.name}</Typography>
+                        <DivisionBadge division={lowerWinner.division} sx={{ minWidth: 16, height: 16, fontSize: 7 }} />
                       </Box>
                     ) : (
                       <Typography sx={{ fontSize: 9, color: "#CBD5E1" }}>미결정</Typography>
@@ -2387,17 +2378,11 @@ export default function LeagueTournamentBracket() {
                       "&:hover": { bgcolor: "#F9FAFB" },
                     }}
                   >
-                    {p.division && (
-                      <Box sx={{
-                        fontSize: 9, fontWeight: 700, color: "#fff", bgcolor: "#FAAA47",
-                        borderRadius: "3px", px: 0.5, lineHeight: "16px", flexShrink: 0, mr: 0.75,
-                      }}>
-                        {p.division}
-                      </Box>
-                    )}
-                    <Typography sx={{ fontSize: 13, fontWeight: 600, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <Typography sx={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {p.name}
                     </Typography>
+                    <DivisionBadge division={p.division} sx={{ ml: 0.45 }} />
+                    <Box sx={{ flex: 1 }} />
                     <Button
                       size="small"
                       variant={isAssigned ? "outlined" : "contained"}

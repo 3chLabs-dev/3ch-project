@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { DivisionBadge } from "../../components/ParticipantName";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Box,
@@ -288,27 +289,6 @@ function PointRankingList({
                   {row.rank ?? "-"}
                 </Box>
 
-                {row.division && (
-                  <Box
-                    sx={{
-                      minWidth: 28,
-                      height: 28,
-                      px: 0.55,
-                      borderRadius: 999,
-                      bgcolor: "#FDBA4D",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontWeight: 900,
-                      fontSize: 10,
-                      color: "#111827",
-                      flexShrink: 0,
-                    }}
-                  >
-                    {row.division}
-                  </Box>
-                )}
-
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Stack direction="row" alignItems="center" spacing={0.5}>
                     <Typography
@@ -324,6 +304,7 @@ function PointRankingList({
                     >
                       {row.name}
                     </Typography>
+                    <DivisionBadge division={row.division} />
                     {row.is_pre_registered && (
                       <Typography sx={{ fontSize: 9, fontWeight: 800, color: "#6B7280", whiteSpace: "nowrap" }}>
                         사전등록

@@ -18,6 +18,7 @@ import {
   useGetMySportRankingsQuery,
   type SportRankingSummaryItem,
 } from "../../features/user/userApi";
+import { DivisionBadge } from "../../components/ParticipantName";
 
 const SPORT_EMOJI: Record<string, string> = {
   탁구: "🏓",
@@ -194,6 +195,7 @@ function SportRankingCard({
                     <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: "#374151" }}>
                       {row.rank}위 {row.name}
                     </Typography>
+                    <DivisionBadge division={row.division} sx={{ minWidth: 15, height: 15, fontSize: 8 }} />
                   </Box>
                 ))
               ) : (
@@ -284,6 +286,7 @@ function RankingClubCard({
                       <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: "#374151" }}>
                         {row.rank}위 {row.name}
                       </Typography>
+                      <DivisionBadge division={row.division} sx={{ minWidth: 15, height: 15, fontSize: 8 }} />
                     </Box>
                   )) : (
                     <Typography sx={{ fontSize: 10.5, color: "text.secondary", lineHeight: 1.35 }}>

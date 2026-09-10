@@ -90,14 +90,16 @@ import DemoLeaguePage from "../pages/demo/DemoLeaguePage";
 import DemoClubPage from "../pages/demo/DemoClubPage";
 import DemoDrawPage from "../pages/demo/DemoDrawPage";
 import LeagueQuickResult from "../pages/league/LeagueQuickResult";
+import NotFoundPage from "../pages/util/NotFoundPage";
+import { NoIndex } from "../components/SearchVisibility";
 // import League from "../pages/League";
 // import Match from "../pages/Match";
 // import My from "../pages/My";
 // import Login from "../pages/Login";
 
 export const router = createBrowserRouter([
-  { path: "/auth/success", element: <AuthSuccess /> },
-  { path: "/auth/fail", element: <AuthFail /> },
+  { path: "/auth/success", element: <><NoIndex /><AuthSuccess /></> },
+  { path: "/auth/fail", element: <><NoIndex /><AuthFail /></> },
   {
     element: <AppShell />,
     children: [
@@ -172,6 +174,7 @@ export const router = createBrowserRouter([
       { path: "/demo/league", element: <DemoLeaguePage /> },
       { path: "/demo/club", element: <DemoClubPage /> },
       { path: "/demo/draw", element: <DemoDrawPage /> },
+      { path: "*", element: <NotFoundPage /> },
 
 
     //   { path: "/my", element: <My /> },
@@ -180,7 +183,7 @@ export const router = createBrowserRouter([
   },
   // 어드민 (AppShell 밖 - 별도 레이아웃)
   { path: "/demo", element: <DemoLandingPage /> },
-  { path: "/admin/login", element: <AdminLogin /> },
+  { path: "/admin/login", element: <><NoIndex /><AdminLogin /></> },
   {
     element: <AdminGuard />,
     children: [

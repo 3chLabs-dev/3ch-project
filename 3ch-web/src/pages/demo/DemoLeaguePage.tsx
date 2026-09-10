@@ -3,6 +3,7 @@ import { Box, Button, Card, CardContent, Chip, Divider, FormControlLabel, IconBu
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useNavigate } from "react-router-dom";
 import { DEMO_BRACKET, DEMO_CUSTOM_PROGRAM, DEMO_LEAGUE, DEMO_MATCHES, DEMO_PEOPLE, DEMO_RECOMMENDED_PROGRAM } from "./demoSampleData";
+import Seo from "../../components/Seo";
 
 const rowSx = { display: "grid", gridTemplateColumns: "72px 1fr", alignItems: "center", gap: 2, py: 1.2, borderBottom: "1px solid #D9DDE6" };
 const fieldSx = { "& .MuiOutlinedInput-root": { borderRadius: 0.6, bgcolor: "#fff", minHeight: 32 }, "& .MuiOutlinedInput-input": { py: 0.5, fontSize: "0.95rem", WebkitTextFillColor: "#111827" } };
@@ -42,7 +43,7 @@ function DemoLeagueDetail({ mode, onBack, onMatches, onBracket, onRestart }: { m
   </Box>;
 }
 
-export default function DemoLeaguePage() {
+function DemoLeagueContent() {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [mode, setMode] = useState<"recommend" | "custom">("recommend");
@@ -65,4 +66,13 @@ export default function DemoLeaguePage() {
     <Stack direction="row" spacing={2} sx={{ mt: 4 }}><Button fullWidth variant="contained" onClick={() => step === 1 ? navigate("/league") : setStep(step - 1)} sx={{ ...navButtonSx, bgcolor: "#777", "&:hover": { bgcolor: "#777" } }}>이전</Button><Button fullWidth variant="contained" onClick={() => step === 4 ? setView("detail") : setStep(step + 1)} sx={{ ...navButtonSx, bgcolor: "#2F80ED" }}>{step === 4 ? "완료" : "다음"}</Button></Stack>
     <Typography textAlign="center" color="text.secondary" fontSize={12} mt={2}>샘플 데이터는 수정할 수 없습니다.</Typography>
   </Box>;
+}
+
+export default function DemoLeaguePage() {
+  return (
+    <>
+      <Seo title="샘플 리그" description="샘플 참가자로 리그 생성, 프로그램 구성, 경기순서와 토너먼트 대진표를 직접 체험해보세요." path="/demo/league" />
+      <DemoLeagueContent />
+    </>
+  );
 }

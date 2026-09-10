@@ -41,6 +41,7 @@ import {
 import type { DrawListItem } from "../../features/draw/drawApi";
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
 import { useGetMyFeatureUsageQuery } from "../../features/payment/usageApi";
+import { DivisionBadge } from "../../components/ParticipantName";
 
 // Animation delay steps (ms): fast → slow
 const ANIM_STEPS = [50,50,50,50,50,50,50,50,50,50,50,50,50,50,50,80,110,150,200,280,400,600];
@@ -670,10 +671,8 @@ export default function DrawList() {
                       {prize.winners.map((w, wi) => (
                         <Stack key={wi} direction="row" alignItems="center" spacing={1}>
                           <Chip label={`${wi + 1}`} size="small" sx={{ height: 22, fontWeight: 800, minWidth: 28 }} />
-                          {w.participant_division !== "-" && (
-                            <Chip label={w.participant_division} size="small" sx={{ borderRadius: 9999, fontWeight: 700, bgcolor: "#FAAA47", color: "#000000", height: 36, minWidth: 36 }} />
-                          )}
                           <Typography fontWeight={800} fontSize={15}>{w.participant_name}</Typography>
+                          {w.participant_division !== "-" && <DivisionBadge division={w.participant_division} />}
                         </Stack>
                       ))}
                     </Stack>
@@ -699,11 +698,11 @@ export default function DrawList() {
             ) : (
               <Box sx={{ bgcolor: "#fff", borderRadius: 1, border: "1px solid #E5E7EB", overflow: "hidden" }}>
                 <Box sx={{ display: "flex", alignItems: "center", px: 1.5, py: 0.8, bgcolor: "#F9FAFB", borderBottom: "1px solid #E5E7EB" }}>
-                  <Box sx={{ width: 40, display: "flex", justifyContent: "center", flexShrink: 0 }}>
-                    <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#6B7280" }}>부수</Typography>
-                  </Box>
                   <Box sx={{ flex: 1, display: "flex", justifyContent: "center", minWidth: 0 }}>
                     <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#6B7280" }}>이름</Typography>
+                  </Box>
+                  <Box sx={{ width: 40, display: "flex", justifyContent: "center", flexShrink: 0 }}>
+                    <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#6B7280" }}>부수</Typography>
                   </Box>
                   <Box sx={{ width: 92, display: "flex", justifyContent: "center", flexShrink: 0 }}>
                     <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#6B7280" }}>가중치</Typography>
@@ -715,16 +714,12 @@ export default function DrawList() {
                     key={row.id}
                     sx={{ display: "flex", alignItems: "center", px: 1.5, py: 0.9, borderTop: idx === 0 ? "none" : "1px solid #F3F4F6", opacity: row.weight === 0 ? 0.35 : 1 }}
                   >
-                    <Box sx={{ width: 40, display: "flex", justifyContent: "center", flexShrink: 0 }}>
-                      <Box sx={{ width: 32, height: 32, borderRadius: "50%", bgcolor: "#FAAA47", color: "#000", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 900 }}>
-                        {row.division || "-"}
-                      </Box>
-                    </Box>
                     <Box sx={{ flex: 1, minWidth: 0, textAlign: "center" }}>
                       <Typography sx={{ fontWeight: 800, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: row.weight === 0 ? "line-through" : "none" }}>
                         {row.name}
                       </Typography>
                     </Box>
+                    <Box sx={{ width: 40, display: "flex", justifyContent: "center", flexShrink: 0 }}><DivisionBadge division={row.division} /></Box>
                     <Stack direction="row" alignItems="center" justifyContent="center" spacing={0.5} sx={{ width: 92, flexShrink: 0 }}>
                       <Box
                         component="button"
@@ -887,14 +882,10 @@ export default function DrawList() {
                     textAlign: "center",
                   }}
                 >
-                  {w.participant_division && (
-                    <Typography fontSize={12} color="text.secondary" fontWeight={700}>
-                      {w.participant_division}
-                    </Typography>
-                  )}
-                  <Typography fontSize={28} fontWeight={900} color="#2F80ED">
-                    {w.participant_name}
-                  </Typography>
+                  <Stack direction="row" spacing={0.6} alignItems="center" justifyContent="center">
+                    <Typography fontSize={28} fontWeight={900} color="#2F80ED">{w.participant_name}</Typography>
+                    {w.participant_division && <DivisionBadge division={w.participant_division} />}
+                  </Stack>
                 </Box>
               ))}
             </Stack>
@@ -975,10 +966,7 @@ export default function DrawList() {
                       ) : (
                         prize.winners.map((winner, winnerIndex) => (
                           <Box key={`${winner.participant_name}-${winnerIndex}`} sx={{ bgcolor: "#EEF2FF", borderRadius: 2, px: 2, py: 1.2, textAlign: "center" }}>
-                            {winner.participant_division && winner.participant_division !== "-" && (
-                              <Typography fontSize={12} color="text.secondary" fontWeight={700}>{winner.participant_division}</Typography>
-                            )}
-                            <Typography fontSize={24} fontWeight={900} color="#2F80ED">{winner.participant_name}</Typography>
+                            <Stack direction="row" spacing={0.6} alignItems="center" justifyContent="center"><Typography fontSize={24} fontWeight={900} color="#2F80ED">{winner.participant_name}</Typography>{winner.participant_division && winner.participant_division !== "-" && <DivisionBadge division={winner.participant_division}/>}</Stack>
                           </Box>
                         ))
                       )}

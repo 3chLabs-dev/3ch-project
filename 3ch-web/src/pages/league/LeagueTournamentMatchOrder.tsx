@@ -30,6 +30,7 @@ import {
 } from "../../features/league/leagueApi";
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
 import { useAppSelector } from "../../app/hooks";
+import { DivisionBadge } from "../../components/ParticipantName";
 
 // ─── 시드 배치 ────────────────────────────────────────────────────────────────
 function seededBracket(n: number): number[] {
@@ -106,11 +107,6 @@ function SlotRow({ slot, name, seed, division, score, isWin, isR1, canManage, ca
 
       {/* 이름 / 등록 / 미정 */}
       <Stack direction="row" alignItems="center" spacing={0.5} flex={1} px={1.5} minWidth={0}>
-        {division && (
-          <Box sx={{ width: 22, height: 22, borderRadius: "50%", bgcolor: "#FAAA47", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 900, color: "#111827", flexShrink: 0 }}>
-            {division}
-          </Box>
-        )}
         {name ? (
           <Typography noWrap sx={{ fontSize: 14, fontWeight: 700, color: isWin ? "#16A34A" : "#111827" }}>
             {name}
@@ -125,6 +121,7 @@ function SlotRow({ slot, name, seed, division, score, isWin, isR1, canManage, ca
         ) : (
           <Typography sx={{ fontSize: 13, color: "#CBD5E1", fontStyle: "italic" }}>미정</Typography>
         )}
+        {name && division && <DivisionBadge division={division} />}
       </Stack>
 
       {/* -[점수]+ */}
@@ -656,14 +653,11 @@ export default function LeagueTournamentMatchOrder() {
                   sx={{ px: 2, py: 1.25, borderBottom: "1px solid #F1F5F9" }}
                 >
                   <Stack direction="row" alignItems="center" spacing={1.25} sx={{ width: "100%" }}>
-                    {p.division && (
-                      <Box sx={{ width: 22, height: 22, borderRadius: "50%", bgcolor: "#FAAA47", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 900, color: "#111827", lineHeight: 1, flexShrink: 0 }}>
-                        {p.division}
-                      </Box>
-                    )}
-                    <Typography sx={{ fontSize: 14, fontWeight: 600, flex: 1 }}>
+                    <Typography sx={{ fontSize: 14, fontWeight: 600 }}>
                       {p.name}
                     </Typography>
+                    <DivisionBadge division={p.division} />
+                    <Box sx={{ flex: 1 }} />
                     {isAssigned && (
                       <Typography sx={{ fontSize: 11, color: "#94A3B8" }}>배정됨</Typography>
                     )}

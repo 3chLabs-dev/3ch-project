@@ -1,5 +1,6 @@
 ﻿import { useParams, useNavigate } from "react-router-dom";
 import { useMemo, useState, useRef } from "react";
+import { DivisionBadge } from "../../components/ParticipantName";
 import {
     Box,
     Stack,
@@ -53,6 +54,7 @@ import {
     useDeleteGroupPreMemberMutation,
 } from "../../features/group/groupApi";
 import type { GroupActivityVenue } from "../../features/group/groupApi";
+import { DivisionBadge as ParticipantDivisionBadge } from "../../components/ParticipantName";
 import { useGetLeaguesQuery, useGetLeagueParticipantsQuery, useUpdateParticipantMutation } from "../../features/league/leagueApi";
 import type { LeagueParticipantItem } from "../../features/league/leagueApi";
 import ParticipantDetailDialog from "../league/ParticipantDetailDialog";
@@ -707,8 +709,8 @@ export default function GroupManage() {
                             }}
                         >
                             <Typography fontWeight={700} fontSize={14} sx={{ flex: 1, textAlign: "left" }}>구분</Typography>
-                            <Typography fontWeight={700} fontSize={14} sx={{ flex: 1, textAlign: "left" }}>부수</Typography>
                             <Typography fontWeight={700} fontSize={14} sx={{ flex: 1, textAlign: "left" }}>이름</Typography>
+                            <Typography fontWeight={700} fontSize={14} sx={{ flex: 1, textAlign: "left" }}>부수</Typography>
                         </ListItem>
                         {sortedMembers.map((member, idx) => (
                             <Box key={member.id}>
@@ -757,31 +759,12 @@ export default function GroupManage() {
                                             </Typography>
                                         }
                                     />
-                                    <ListItemText
-                                        sx={{ flex: 1 }}
+                                    <ListItemText sx={{ flex: 1, order: 3 }}
                                         primary={
-                                            <Typography
-                                                fontWeight={700}
-                                                fontSize={12}
-                                                sx={{
-                                                    display: "inline-flex",
-                                                    alignItems: "center",
-                                                    justifyContent: "center",
-                                                    minWidth: 35,
-                                                    height: 35,
-                                                    px: 1,
-                                                    borderRadius: "999px",
-                                                    bgcolor: "#F5A623",
-                                                    color: "#000000",
-                                                    lineHeight: 1,
-                                                    whiteSpace: "nowrap",
-                                                }}
-                                            >
-                                                {member.division?.trim() ? member.division : "-"}
-                                            </Typography>
+                                            <DivisionBadge division={member.division} />
                                         }
                                     />
-                                    <ListItemText sx={{ flex: 1 }}
+                                    <ListItemText sx={{ flex: 1, order: 2 }}
                                         primary={
                                             <Typography
                                                 fontWeight={700} fontSize={14}
@@ -932,16 +915,11 @@ export default function GroupManage() {
                                                                     "&:hover": canManage ? { bgcolor: "#F3F4F6" } : {},
                                                                 }}
                                                             >
-                                                                {participant.division && (
-                                                                    <Chip
-                                                                        label={participant.division}
-                                                                        size="small"
-                                                                        sx={{ height: 20, fontSize: 11, fontWeight: 800 }}
-                                                                    />
-                                                                )}
-                                                                <Typography fontWeight={700} fontSize={14} flex={1}>
+                                                                <Typography fontWeight={700} fontSize={14}>
                                                                     {participant.name}
                                                                 </Typography>
+                                                                <ParticipantDivisionBadge division={participant.division} />
+                                                                <Box flex={1} />
                                                                 <Stack direction="row" spacing={0.5}>
                                                                     {participant.paid && (
                                                                         <Chip label="입금" size="small" color="success" sx={{ height: 20, fontSize: 10 }} />

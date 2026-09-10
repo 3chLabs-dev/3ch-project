@@ -429,12 +429,13 @@ async function getUserSportRankingSummary(userId) {
   }
 
   const previewResult = await pool.query(
-    `SELECT sport, member_id, name, rank, rating
+    `SELECT sport, member_id, name, division, rank, rating
        FROM (
          SELECT
            sr.sport,
            sr.member_id,
            COALESCE(u.name, u.email) AS name,
+           (SELECT gm.division FROM group_members gm JOIN groups dg ON dg.id = gm.group_id WHERE gm.user_id = sr.member_id AND dg.sport = sr.sport AND NULLIF(BTRIM(gm.division), '') IS NOT NULL ORDER BY gm.is_primary DESC NULLS LAST, gm.joined_at DESC LIMIT 1) AS division,
            sr.rank,
            sr.rating,
            ROW_NUMBER() OVER (
@@ -460,6 +461,7 @@ async function getUserSportRankingSummary(userId) {
     current.push({
       member_id: Number(row.member_id),
       name: row.name,
+      division: row.division || null,
       rank: row.rank == null ? null : Number(row.rank),
       rating: Number(row.rating),
     });
@@ -488,6 +490,7 @@ async function getSportRanking(sport, userId) {
     `SELECT
        sr.member_id,
        COALESCE(u.name, u.email) AS name,
+       (SELECT gm.division FROM group_members gm JOIN groups dg ON dg.id = gm.group_id WHERE gm.user_id = sr.member_id AND dg.sport = sr.sport AND NULLIF(BTRIM(gm.division), '') IS NOT NULL ORDER BY gm.is_primary DESC NULLS LAST, gm.joined_at DESC LIMIT 1) AS division,
        sr.rank,
        sr.rating,
        sr.wins,
@@ -543,6 +546,7 @@ async function getSportRanking(sport, userId) {
       myRanking = {
         member_id: Number(myRow.member_id),
         name: myRow.name,
+        division: myRow.division || null,
         rank: myRow.rank == null ? null : Number(myRow.rank),
         rating: Number(myRow.rating),
         wins: Number(myRow.wins),
@@ -603,6 +607,7 @@ async function getSportRanking(sport, userId) {
     rankings: rankingResult.rows.map((row) => ({
       member_id: Number(row.member_id),
       name: row.name,
+      division: row.division || null,
       rank: row.rank == null ? null : Number(row.rank),
       rating: Number(row.rating),
       wins: Number(row.wins),

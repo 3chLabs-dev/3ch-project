@@ -1138,14 +1138,24 @@ router.get("/guide/:id", async (req, res) => {
  */
 // POST /admin/board/guide
 router.post("/guide", async (req, res) => {
-  const { tab, section, content, display_order = 0 } = req.body;
-  if (!tab?.trim() || !section?.trim() || !content?.trim()) {
-    return res.status(400).json({ message: "탭, 섹션, 내용을 입력하세요." });
+  const { tab, section, content = "", display_order = 0 } = req.body;
+  if (!tab?.trim() || !section?.trim()) {
+    return res.status(400).json({ message: "탭과 섹션 이름을 입력하세요." });
+  }
+  if (!["leader", "member"].includes(tab.trim())) {
+    return res.status(400).json({ message: "올바른 탭을 선택하세요." });
   }
   try {
+    const duplicate = await pool.query(
+      "SELECT 1 FROM guides WHERE tab = $1 AND section = $2 LIMIT 1",
+      [tab.trim(), section.trim()],
+    );
+    if (duplicate.rowCount > 0) {
+      return res.status(409).json({ message: "선택한 탭에 같은 이름의 섹션이 이미 있습니다." });
+    }
     const r = await pool.query(
       `INSERT INTO guides (tab, section, content, display_order) VALUES ($1, $2, $3, $4) RETURNING *`,
-      [tab.trim(), section.trim(), sanitizeRichHtml(content), display_order],
+      [tab.trim(), section.trim(), sanitizeRichHtml(content), Math.max(0, Number(display_order) || 0)],
     );
     res.status(201).json(r.rows[0]);
   } catch (e) {

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { DivisionBadge } from "../../components/ParticipantName";
 import {
   Box,
   Typography,
@@ -247,15 +248,15 @@ export default function LeagueStep5Participants() {
       <Box
         sx={{
           display: "grid",
-          gridTemplateColumns: "56px minmax(0,1fr) 56px",
+          gridTemplateColumns: "minmax(0,1fr) 56px 56px",
           gap: 1,
           alignItems: "center",
           px: 0.5,
           mb: 0.8,
         }}
       >
-        <Typography sx={headCellSx}>부수</Typography>
         <Typography sx={headCellSx}>이름</Typography>
+        <Typography sx={headCellSx}>부수</Typography>
         <Typography sx={headCellSx}>관리</Typography>
       </Box>
 
@@ -267,20 +268,13 @@ export default function LeagueStep5Participants() {
         }}
         sx={{
           display: "grid",
-          gridTemplateColumns: "56px minmax(0,1fr) 56px",
+          gridTemplateColumns: "minmax(0,1fr) 56px 56px",
           gap: 1,
           alignItems: "center",
           px: 0.5,
           mb: 1.2,
         }}
       >
-        <TextField
-          placeholder="부수"
-          value={division}
-          onChange={(e) => setDivision(e.target.value)}
-          slotProps={{ htmlInput: { enterKeyHint: "done" } }}
-          sx={inputSx}
-        />
         <Box sx={{ position: "relative", minWidth: 0 }}>
         <TextField
           placeholder="이름"
@@ -322,6 +316,7 @@ export default function LeagueStep5Participants() {
             </Box>
           )}
         </Box>
+        <TextField placeholder="부수" value={division} onChange={(e) => setDivision(e.target.value)} slotProps={{ htmlInput: { enterKeyHint: "done" } }} sx={inputSx} />
 
         <Button
           type="submit"
@@ -348,7 +343,7 @@ export default function LeagueStep5Participants() {
               key={`${p.division}-${p.name}-${idx}`}
               sx={{
                 display: "grid",
-                gridTemplateColumns: "56px minmax(0,1fr) 56px",
+                gridTemplateColumns: "minmax(0,1fr) 56px 56px",
                 gap: 1,
                 alignItems: "center",
                 px: 0.5,
@@ -356,27 +351,6 @@ export default function LeagueStep5Participants() {
                 borderTop: idx === 0 ? "none" : "1px solid #ECEFF5",
               }}
             >
-              <Box sx={cellCenter}>
-                <Box
-                  sx={{
-                    minWidth: 36,
-                    height: 36,
-                    px: 0.8,
-                    lineHeight: 1,
-                    borderRadius: 9999,
-                    bgcolor: "#FAAA47",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontWeight: 900,
-                    fontSize: 11,
-                    color: "#000000",
-                  }}
-                >
-                  {p.division || "-"}
-                </Box>
-              </Box>
-
               <Typography
                 sx={{
                   fontWeight: 900,
@@ -389,6 +363,7 @@ export default function LeagueStep5Participants() {
               >
                 {p.name}
               </Typography>
+              <Box sx={cellCenter}><DivisionBadge division={p.division} /></Box>
 
               <Box sx={cellCenter}>
                 <Button
@@ -471,7 +446,7 @@ export default function LeagueStep5Participants() {
 
           <Typography sx={{ fontSize: 15, lineHeight: 1.5 }}>
             {deleteTarget
-              ? `"(${deleteTarget.division})${deleteTarget.name}"을 참가자 명단에서 삭제하시겠습니까?`
+              ? `"${deleteTarget.name}${deleteTarget.division ? ` ${deleteTarget.division}` : ""}"을 참가자 명단에서 삭제하시겠습니까?`
               : "참가자를 삭제하시겠습니까?"}
           </Typography>
         </DialogContent>

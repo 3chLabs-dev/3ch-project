@@ -22,6 +22,7 @@ import SettingsIcon from "@mui/icons-material/Settings";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import homeHeaderBg from "../assets/메인 배너_900x700_버튼X.png"
 import ClubSelectionDialog from "./ClubSelectionDialog";
+import SearchVisibility from "./SearchVisibility";
 // import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
 
 const APP_BAR_H = 56;
@@ -123,6 +124,7 @@ export default function AppShell() {
 
     return (
         <Box sx={{ minHeight: "100dvh", bgcolor: "background.default" }}>
+            <SearchVisibility />
             <Paper
                 elevation={0}
                 sx={{

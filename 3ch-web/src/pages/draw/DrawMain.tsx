@@ -32,6 +32,7 @@ import { useGetLeagueParticipantsQuery, useGetLeaguesQuery } from "../../feature
 import { useGetDrawsQuery } from "../../features/draw/drawApi";
 import { useAppSelector } from "../../app/hooks";
 import { generateId } from "../../utils/dateUtils";
+import { DivisionBadge } from "../../components/ParticipantName";
 import confettiImg from "../../assets/128_축포.png";
 import AdFitBanner from "../../components/AdFitBanner";
 
@@ -303,11 +304,11 @@ export default function DrawMain() {
         ) : (
           <>
             <Stack direction="row" sx={{ px: 0.5 }}>
-              <Typography variant="caption" sx={{ width: 52, color: "text.secondary", fontWeight: 700 }}>
-                부수
-              </Typography>
               <Typography variant="caption" sx={{ flex: 1, color: "text.secondary", fontWeight: 700 }}>
                 이름
+              </Typography>
+              <Typography variant="caption" sx={{ width: 52, color: "text.secondary", fontWeight: 700 }}>
+                부수
               </Typography>
               <Typography variant="caption" sx={{ width: 72, color: "text.secondary", fontWeight: 700 }}>
                 확률
@@ -318,10 +319,8 @@ export default function DrawMain() {
             <Stack spacing={0.8}>
               {participantRows.map((row) => (
                 <Stack key={row.key} direction="row" alignItems="center" sx={{ px: 0.5 }}>
-                  <Box sx={{ width: 52 }}>
-                    <Chip label={row.division} size="small" sx={{ height: 22, fontWeight: 800 }} />
-                  </Box>
                   <Typography sx={{ flex: 1, fontWeight: 800, fontSize: 16 }}>{row.name}</Typography>
+                  <Box sx={{ width: 52 }}><DivisionBadge division={row.division} /></Box>
                   <Stack direction="row" alignItems="center" spacing={0.5} sx={{ width: 72 }}>
                     <Typography sx={{ fontWeight: 900 }}>-</Typography>
                     <Box

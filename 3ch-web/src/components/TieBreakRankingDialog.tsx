@@ -10,6 +10,7 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
+import { DivisionBadge } from "./ParticipantName";
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import type { LeagueParticipantItem } from "../features/league/leagueApi";
@@ -76,9 +77,6 @@ export default function TieBreakRankingDialog({
           {orderedIds.map((id, index) => {
             const player = playerById.get(id);
             if (!player) return null;
-            const divisionLabel = player.division
-              ? `${player.division}${String(player.division).endsWith("부") ? "" : "부"} `
-              : "";
             const manualGroup = manualGroupById.get(id);
             const canMoveUp = index > 0 && Boolean(manualGroup?.has(orderedIds[index - 1]));
             const canMoveDown = index < orderedIds.length - 1 && Boolean(manualGroup?.has(orderedIds[index + 1]));
@@ -98,9 +96,7 @@ export default function TieBreakRankingDialog({
               >
                 <Typography sx={{ fontWeight: 900, textAlign: "center" }}>{index + 1}</Typography>
                 <Box minWidth={0}>
-                  <Typography sx={{ fontSize: 14, fontWeight: 800 }}>
-                    {divisionLabel}{player.name}
-                  </Typography>
+                  <Stack direction="row" spacing={0.45} alignItems="center"><Typography sx={{ fontSize: 14, fontWeight: 800 }}>{player.name}</Typography><DivisionBadge division={player.division}/></Stack>
                   <Typography sx={{ fontSize: 11, color: manualGroup ? "#C2410C" : "text.secondary" }}>
                     {manualGroup ? "가위바위보 순위 지정" : "부수 우선 자동 확정"}
                   </Typography>

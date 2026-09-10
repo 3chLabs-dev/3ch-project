@@ -8,6 +8,7 @@ import {
     useGetPolicyVersionQuery,
 } from "../../features/policy/policyApi";
 import { sanitizeRichHtml } from "../../utils/sanitizeHtml";
+import Seo from "../../components/Seo";
 
 export default function PrivacyPolicyPage() {
     const navigate    = useNavigate();
@@ -48,6 +49,7 @@ export default function PrivacyPolicyPage() {
                 overflow: "hidden",
             }}
         >
+            <Seo title="개인정보 처리방침" description="우리리그의 개인정보 수집, 이용, 보관 및 이용자 권리에 관한 처리방침을 확인하세요." path="/mypage/privacy" />
             {/* 헤더 */}
             <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", pb: 1 }}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>

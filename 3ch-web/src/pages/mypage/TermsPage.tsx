@@ -8,6 +8,7 @@ import {
     useGetPolicyVersionQuery,
 } from "../../features/policy/policyApi";
 import { sanitizeRichHtml } from "../../utils/sanitizeHtml";
+import Seo from "../../components/Seo";
 
 export default function TermsPage() {
     const navigate    = useNavigate();
@@ -49,6 +50,7 @@ export default function TermsPage() {
                 mt: "-4px"
             }}
         >
+            <Seo title="이용약관" description="우리리그 서비스 이용에 적용되는 이용약관과 최신 시행 내용을 확인하세요." path="/mypage/terms" />
             {/* 헤더 */}
             <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", pb: 1 }}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>

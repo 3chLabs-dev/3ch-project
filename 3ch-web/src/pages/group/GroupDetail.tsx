@@ -1,4 +1,5 @@
 import { Navigate, useNavigate, useParams } from "react-router-dom";
+import { DivisionBadge } from "../../components/ParticipantName";
 import {
   Box,
   Button,
@@ -235,8 +236,7 @@ export default function GroupDetail() {
                           : "transparent",
                   }}
                 >
-                  <ListItemText
-                    sx={{ flex: 1 }}
+                  <ListItemText sx={{ flex: 1, order: 3 }}
                     primary={
                       <Typography fontWeight={700} fontSize={14}>
                         {getRoleLabel(member.role)}
@@ -246,13 +246,10 @@ export default function GroupDetail() {
                   <ListItemText
                     sx={{ flex: 1 }}
                     primary={
-                      <Typography fontWeight={700} fontSize={14}>
-                        {member.division?.trim() ? member.division : "-"}
-                      </Typography>
+                      <DivisionBadge division={member.division} />
                     }
                   />
-                  <ListItemText
-                    sx={{ flex: 1 }}
+                  <ListItemText sx={{ flex: 1, order: 2 }}
                     primary={
                       <Typography
                         fontWeight={700}

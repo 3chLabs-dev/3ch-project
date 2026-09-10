@@ -28,6 +28,7 @@ import {
   useGetLeagueParticipantsQuery,
 } from "../../features/league/leagueApi";
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
+import { DivisionBadge } from "../../components/ParticipantName";
 
 // Animation delay steps (ms): fast → slow
 const ANIM_STEPS = [50,50,50,50,50,50,50,50,50,50,50,50,50,50,50,80,110,150,200,280,400,600];
@@ -293,16 +294,10 @@ export default function DrawDetail() {
                             size="small"
                             sx={{ height: 22, fontWeight: 800, minWidth: 28, ...(isMe && { bgcolor: "#2F80ED", color: "#fff" }) }}
                           />
-                          {w.participant_division && (
-                            <Chip
-                              label={w.participant_division}
-                              size="small"
-                              sx={{ borderRadius: 9999, fontWeight: 700, bgcolor: "#FAAA47", color: "#000000", height: 36, minWidth: 36 }}
-                            />
-                          )}
                           <Typography fontWeight={800} fontSize={15} color={isMe ? "#2F80ED" : undefined}>
                             {w.participant_name}
                           </Typography>
+                          {w.participant_division && <DivisionBadge division={w.participant_division} />}
                         </Stack>
                         );
                       })}
@@ -359,14 +354,10 @@ export default function DrawDetail() {
                     textAlign: "center",
                   }}
                 >
-                  {w.participant_division && (
-                    <Typography fontSize={12} color="text.secondary" fontWeight={700}>
-                      {w.participant_division}
-                    </Typography>
-                  )}
-                  <Typography fontSize={28} fontWeight={900} color="#2F80ED">
-                    {w.participant_name}
-                  </Typography>
+                  <Stack direction="row" spacing={0.6} alignItems="center" justifyContent="center">
+                    <Typography fontSize={28} fontWeight={900} color="#2F80ED">{w.participant_name}</Typography>
+                    {w.participant_division && <DivisionBadge division={w.participant_division} />}
+                  </Stack>
                 </Box>
               ))}
             </Stack>

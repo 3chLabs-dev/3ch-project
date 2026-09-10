@@ -9,6 +9,7 @@ import ManageAccountsOutlinedIcon from "@mui/icons-material/ManageAccountsOutlin
 import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
 import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
 import { useNavigate } from "react-router-dom";
+import Seo from "../../components/Seo";
 
 const API = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
@@ -63,6 +64,7 @@ export default function FaqPage() {
 
     return (
         <Stack spacing={2.5} sx={{ width: "100%", mx: "auto", mt: "-4px" }}>
+            <Seo title="자주 하는 질문" description="우리리그의 클럽 가입, 리그 참가, 경기 운영과 추첨 기능에 관한 자주 하는 질문을 확인하세요." path="/mypage/faq" />
             {/* 헤더 */}
             <Stack direction="row" alignItems="center" spacing={1.5}>
                 <IconButton onClick={() => navigate("/mypage")} size="small">

@@ -1,4 +1,5 @@
   import { useMemo, useState } from "react";
+  import { DivisionBadge } from "../../components/ParticipantName";
   import { useRef } from "react";
   import { useNavigate, useParams } from "react-router-dom";
   import { useEffect } from "react";
@@ -20,7 +21,6 @@ import {
     DialogTitle,
     DialogContent,
     DialogActions,
-    Avatar,
     Checkbox,
     Chip,
     ToggleButtonGroup,
@@ -181,6 +181,7 @@ import {
     const [editFinalsAdvance] = useState<number>(2);
     const [editRecruitCount, setEditRecruitCount] = useState<number | null>(null);
     const [searchQuery, setSearchQuery] = useState("");
+    const [participantGroupFilter, setParticipantGroupFilter] = useState("all");
     const [visibleParticipantCount, setVisibleParticipantCount] = useState(10);
     const [inputDivision, setInputDivision] = useState("");
     const [inputName, setInputName] = useState("");
@@ -292,6 +293,15 @@ import {
         setInputSourceGroupId(participantSourceGroupOptions[0].id);
       }
     }, [inputSourceGroupId, participantSourceGroupOptions]);
+
+    useEffect(() => {
+      if (
+        participantGroupFilter !== "all"
+        && !participantSourceGroupOptions.some((group) => group.id === participantGroupFilter)
+      ) {
+        setParticipantGroupFilter("all");
+      }
+    }, [participantGroupFilter, participantSourceGroupOptions]);
 
     const isPublicLeague = league?.join_permission === "public";
     const canInteract = isMember || isPublicLeague;
@@ -600,13 +610,25 @@ import {
     // 뷰 모드 검색 필터
     const filteredParticipants = useMemo(() => {
       const q = searchQuery.trim().toLowerCase();
-      if (!q) return participants;
-      return participants.filter((p) =>
-        p.name.toLowerCase().includes(q) || (p.division ?? "").toLowerCase().includes(q)
+      const selectedGroup = participantSourceGroupOptions.find(
+        (group) => group.id === participantGroupFilter,
       );
-    }, [participants, searchQuery]);
+      return participants.filter((participant) => {
+        const matchesGroup = participantGroupFilter === "all"
+          || participant.source_group_id === participantGroupFilter
+          || (!participant.source_group_id
+            && Boolean(selectedGroup?.name)
+            && participant.source_group_name === selectedGroup?.name);
+        if (!matchesGroup) return false;
+        if (!q) return true;
+        return participant.name.toLowerCase().includes(q)
+          || (participant.division ?? "").toLowerCase().includes(q)
+          || (participant.source_group_name ?? "").toLowerCase().includes(q);
+      });
+    }, [participantGroupFilter, participantSourceGroupOptions, participants, searchQuery]);
 
-    const isParticipantSearchActive = searchQuery.trim().length > 0;
+    const isParticipantSearchActive = searchQuery.trim().length > 0 || participantGroupFilter !== "all";
+    const participantTableColumns = "72px 66px 38px minmax(12px, 1fr) 146px";
     const visibleParticipants = isParticipantSearchActive
       ? filteredParticipants
       : filteredParticipants.slice(0, visibleParticipantCount);
@@ -1732,16 +1754,70 @@ const handleSaveEdit = async () => {
               }}
             />
 
+          {showParticipantGroups && participantSourceGroupOptions.length > 1 && (
+            <Box
+              sx={{
+                display: "flex",
+                gap: 0.7,
+                mb: 1,
+                overflowX: "auto",
+                scrollbarWidth: "none",
+                "&::-webkit-scrollbar": { display: "none" },
+              }}
+            >
+              {[
+                { id: "all", name: "전체" },
+                ...participantSourceGroupOptions.map((group) => ({
+                  ...group,
+                  name: group.id === league?.group_id ? `주최 · ${group.name}` : group.name,
+                })),
+              ].map((group) => {
+                const selected = participantGroupFilter === group.id;
+                return (
+                  <Chip
+                    key={group.id}
+                    label={group.name}
+                    title={group.name}
+                    onClick={() => {
+                      setParticipantGroupFilter(group.id);
+                      setVisibleParticipantCount(10);
+                    }}
+                    size="small"
+                    sx={{
+                      flexShrink: 0,
+                      maxWidth: 120,
+                      height: 28,
+                      borderRadius: "14px",
+                      bgcolor: selected ? "#E8F1FF" : "#F3F4F6",
+                      color: selected ? "#1D6FBF" : "#374151",
+                      fontWeight: 800,
+                      border: selected ? "1px solid #BFDBFE" : "1px solid transparent",
+                      "& .MuiChip-label": {
+                        px: 1.2,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      },
+                    }}
+                  />
+                );
+              })}
+            </Box>
+          )}
+
           <Box sx={{ bgcolor: "#fff", borderRadius: 1, border: "1px solid #E5E7EB", overflow: "hidden" }}>
             {/* 테이블 헤더 */}
-            <Box sx={{ display: "flex", alignItems: "center", px: 1.5, py: 0.8, bgcolor: "#F9FAFB", borderBottom: "1px solid #E5E7EB" }}>
-              <Box sx={{ width: 40, display: "flex", justifyContent: "center", flexShrink: 0 }}>
-                <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#6B7280", textAlign: "center" }}>부수</Typography>
-              </Box>
-              <Box sx={{ flex: 1, display: "flex", justifyContent: "center", minWidth: 0 }}>
+            <Box sx={{ display: "grid", gridTemplateColumns: participantTableColumns, alignItems: "center", px: 1.5, py: 0.8, bgcolor: "#F9FAFB", borderBottom: "1px solid #E5E7EB" }}>
+              <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#6B7280", textAlign: "right", pr: 0.5 }}>
+                {showParticipantGroups ? "클럽" : ""}
+              </Typography>
+              <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", width: 56, minWidth: 0, ml: "auto" }}>
                 <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#6B7280", textAlign: "center" }}>이름</Typography>
               </Box>
-              <Box sx={{ width: 146, display: "flex", justifyContent: "center", flexShrink: 0 }}>
+              <Box sx={{ display: "flex", justifyContent: "center" }}>
+                <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#6B7280", textAlign: "center" }}>부수</Typography>
+              </Box>
+              <Box />
+              <Box sx={{ display: "flex", justifyContent: "center" }}>
                 <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#6B7280", textAlign: "center" }}>상태</Typography>
               </Box>
             </Box>
@@ -1753,7 +1829,7 @@ const handleSaveEdit = async () => {
             ) : filteredParticipants.length === 0 ? (
               <Box sx={{ py: 3, textAlign: "center" }}>
                 <Typography fontSize={13} fontWeight={700} color="text.secondary">
-                  {searchQuery ? "검색 결과가 없습니다." : "참가자가 없습니다."}
+                  {isParticipantSearchActive ? "검색 결과가 없습니다." : "참가자가 없습니다."}
                 </Typography>
               </Box>
             ) : (
@@ -1762,24 +1838,38 @@ const handleSaveEdit = async () => {
                 return (
                   <Box
                     key={p.id}
-                    sx={{ display: "flex", alignItems: "center", px: 1.5, py: 0.9, borderTop: idx === 0 ? "none" : "1px solid #F3F4F6", bgcolor: isMe ? "#EFF6FF" : "transparent" }}
+                    sx={{ display: "grid", gridTemplateColumns: participantTableColumns, alignItems: "center", px: 1.5, py: 0.9, borderTop: idx === 0 ? "none" : "1px solid #F3F4F6", bgcolor: isMe ? "#EFF6FF" : "transparent" }}
                   >
-                      <Box sx={{ width: 40, display: "flex", justifyContent: "center", flexShrink: 0 }}>
-                        <Avatar sx={{ width: 32, height: 32, bgcolor: "#FAAA47", color: "#000000", fontSize: 10, fontWeight: 900 }}>
-                          {p.division || "-"}
-                        </Avatar>
+                      <Typography
+                        title={showParticipantGroups ? p.source_group_name ?? "-" : undefined}
+                        sx={{
+                          ml: "auto",
+                          width: "5em",
+                          color: "#6B7280",
+                          fontSize: 8,
+                          fontWeight: 700,
+                          textAlign: "right",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {showParticipantGroups
+                          ? p.source_group_name
+                            ? p.source_group_name.length > 4
+                              ? `${p.source_group_name.slice(0, 4)}…`
+                              : p.source_group_name
+                            : "-"
+                          : ""}
+                      </Typography>
+                      <Box sx={{ width: 56, minWidth: 0, ml: "auto", textAlign: "center" }}>
+                          <Typography fontWeight={800} fontSize={14} sx={{ color: isMe ? "#2F80ED" : "inherit", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</Typography>
                       </Box>
-
-                      <Box sx={{ flex: 1, minWidth: 0, textAlign: "center" }}>
-                        <Typography fontWeight={800} fontSize={14} sx={{ color: isMe ? "#2F80ED" : "inherit", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</Typography>
-                        {showParticipantGroups && p.source_group_name && (
-                          <Typography sx={{ mt: 0.2, color: "#6B7280", fontSize: 10, lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {p.source_group_name}
-                          </Typography>
-                        )}
+                      <Box sx={{ display: "flex", justifyContent: "center" }}>
+                        <DivisionBadge division={p.division} />
                       </Box>
-
-                      <Box sx={{ width: 146, display: "flex", justifyContent: "center", flexShrink: 0 }}>
+                      <Box />
+                      <Box sx={{ display: "flex", justifyContent: "center" }}>
                         <Stack
                           direction="row"
                           spacing={0.5}
@@ -2329,8 +2419,7 @@ const handleSaveEdit = async () => {
           <DialogTitle sx={{ fontWeight: 900, fontSize: 17 }}>참가자 삭제</DialogTitle>
           <DialogContent>
             <Typography fontWeight={700}>
-              {deleteParticipantTarget?.division ? `(${deleteParticipantTarget.division}) ` : ""}
-              {deleteParticipantTarget?.name} 님을 참가자 명단에서 삭제하겠습니까?
+              {deleteParticipantTarget?.name}{deleteParticipantTarget?.division ? ` ${deleteParticipantTarget.division}` : ""} 님을 참가자 명단에서 삭제하겠습니까?
             </Typography>
             <Typography sx={{ mt: 1, fontSize: 12, color: "text.secondary" }}>
               완료된 경기 결과는 유지되며, 시작하지 않은 남은 경기에서는 해당 참가자가 제외됩니다.
@@ -2753,8 +2842,9 @@ const handleSaveEdit = async () => {
                     sx={{ display: "flex", alignItems: "center", gap: 1, minHeight: 42, px: 0.5, borderRadius: 1, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.45 : 1, "&:hover": { bgcolor: disabled ? "transparent" : "#F8FAFC" } }}
                   >
                     <Checkbox checked={checked} disabled={disabled} size="small" />
-                    <Avatar sx={{ width: 25, height: 25, bgcolor: "#FAAA47", color: "#111827", fontSize: 10, fontWeight: 900 }}>{participant.division || "-"}</Avatar>
-                    <Typography sx={{ fontSize: 14, fontWeight: 700, flex: 1 }}>{participant.name}</Typography>
+                    <Typography sx={{ fontSize: 14, fontWeight: 700 }}>{participant.name}</Typography>
+                    <DivisionBadge division={participant.division} />
+                    <Box sx={{ flex: 1 }} />
                     {alreadyFormed && <Chip label="구성됨" size="small" sx={{ height: 20, fontSize: 10, fontWeight: 800, bgcolor: "#FEF3C7", color: "#B45309" }} />}
                   </Box>
                 );

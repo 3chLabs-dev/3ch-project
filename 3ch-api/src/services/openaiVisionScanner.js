@@ -291,7 +291,9 @@ async function scanParticipantNamesWithOpenAIVision({ imageBuffer, mimeType }) {
 
 const LEAGUE_RESULT_IMPORT_PROMPT = `You extract a completed Korean sports league result sheet from a photo.
 The printed layout uses a star symbol as the boundary: text to the left of the star identifies the participant, and values from the star onward are set scores.
-Participant labels are usually written in name then division order. Keep the display name separate from the division. A division is a short rank such as 1, 2, 3, 4, 5, 6, 7, 8, 선수, 초심, or a similar compact class label.
+Participant labels are normally written in NAME THEN DIVISION order, sometimes without a space (for example "이병우6" or "홍길동 희망"). Split only the trailing short rank from the name. A division can be 1, 2, 3, 4, 5, 6, 7, 8, 선수, 초심, 희망, or a similar compact class label. It may also appear in a separate division column. Keep the display name and division in separate fields.
+The same participant can appear once as a row label and again as a column label; merge those occurrences into one participant key. In doubles, two NAME+DIVISION labels may be stacked vertically in one row or column header and must be returned as members of the same side.
+Do not mistake group numbers, row/column indexes, match scores, WL/GL totals, rankings, or other table numbers for a division. Scores occur in result cells after the star boundary; divisions belong directly beside a participant name or in an explicitly labeled division column.
 Read every printed participant and every played match. For doubles or team events, return all visible member names in each side's members array; if only a team representative is printed, return that one name and set rosterIncomplete true.
 For each match, identify the two sides and return the score as sets won by side A and side B. Never infer an unplayed match. Use the participant key exactly as returned in participants.
 Handwriting may be uncertain: lower confidence and set needsReview instead of inventing text. Printed text should normally receive higher confidence.

@@ -178,7 +178,7 @@ export default function MemberEditDialog({
           <Box
             sx={{
               display: "grid",
-              gridTemplateColumns: "58px minmax(0, 1fr) 36px 108px",
+              gridTemplateColumns: "minmax(0, 1fr) 58px 36px 108px",
               px: 1.5,
               py: 0.8,
               bgcolor: "#F9FAFB",
@@ -186,10 +186,10 @@ export default function MemberEditDialog({
             }}
           >
             <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#6B7280", textAlign: "center" }}>
-              부수
+              이름
             </Typography>
             <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#6B7280", textAlign: "center" }}>
-              이름
+              부수
             </Typography>
             <Box />
             <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#6B7280", textAlign: "center" }}>
@@ -205,13 +205,33 @@ export default function MemberEditDialog({
             }}
             sx={{
               display: "grid",
-              gridTemplateColumns: "58px minmax(0, 1fr) 36px 108px",
+              gridTemplateColumns: "minmax(0, 1fr) 58px 36px 108px",
               gap: 0.8,
               px: 1.5,
               py: 0.8,
               borderBottom: "1px solid #E5E7EB",
             }}
           >
+            <TextField
+              placeholder="이름"
+              value={inputName}
+              onChange={(e) => setInputName(e.target.value)}
+              slotProps={{ htmlInput: { enterKeyHint: "done" } }}
+              size="small"
+              sx={{
+                mx: 0.5,
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: 0.6,
+                  height: 30,
+                  bgcolor: "#fff",
+                },
+                "& input": {
+                  fontSize: 13,
+                  py: 0.3,
+                },
+              }}
+            />
+
             <TextField
               inputRef={divisionInputRef}
               placeholder="부수"
@@ -229,26 +249,6 @@ export default function MemberEditDialog({
                   fontSize: 12,
                   py: 0.3,
                   textAlign: "center",
-                },
-              }}
-            />
-
-            <TextField
-              placeholder="이름"
-              value={inputName}
-              onChange={(e) => setInputName(e.target.value)}
-              slotProps={{ htmlInput: { enterKeyHint: "done" } }}
-              size="small"
-              sx={{
-                mx: 0.5,
-                "& .MuiOutlinedInput-root": {
-                  borderRadius: 0.6,
-                  height: 30,
-                  bgcolor: "#fff",
-                },
-                "& input": {
-                  fontSize: 13,
-                  py: 0.3,
                 },
               }}
             />
@@ -303,13 +303,41 @@ export default function MemberEditDialog({
                   key={p.id}
                   sx={{
                     display: "grid",
-                    gridTemplateColumns: "58px minmax(0, 1fr) 36px 108px",
+                    gridTemplateColumns: "minmax(0, 1fr) 58px 36px 108px",
                     alignItems: "center",
                     px: 1.5,
                     py: 0.9,
                     borderTop: idx === 0 ? "none" : "1px solid #F3F4F6",
                   }}
                 >
+                  <Box sx={{ mx: 0.5, minWidth: 0 }}>
+                    <TextField
+                      value={editName}
+                      onChange={(e) =>
+                        setEditingParticipants((prev) => ({
+                          ...prev,
+                          [p.id]: {
+                            ...(prev[p.id] ?? { division: p.division ?? "", name: p.name }),
+                            name: e.target.value,
+                          },
+                        }))
+                      }
+                      onBlur={() => handleParticipantFieldBlur(p.id, "name", p.name)}
+                      size="small"
+                      disabled={!isManual}
+                      fullWidth
+                      sx={{
+                        "& .MuiOutlinedInput-root": { borderRadius: 0.6, height: 30, bgcolor: "#fff" },
+                        "& input": { fontSize: 13, py: 0.3 },
+                      }}
+                    />
+                    {showGroupName && p.source_group_name && (
+                      <Typography sx={{ mt: 0.35, px: 0.4, fontSize: 10, color: "#6B7280", lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {p.source_group_name}
+                      </Typography>
+                    )}
+                  </Box>
+
                   <TextField
                     value={editDiv}
                     onChange={(e) =>
@@ -344,34 +372,6 @@ export default function MemberEditDialog({
                       },
                     }}
                   />
-
-                  <Box sx={{ mx: 0.5, minWidth: 0 }}>
-                    <TextField
-                      value={editName}
-                      onChange={(e) =>
-                        setEditingParticipants((prev) => ({
-                          ...prev,
-                          [p.id]: {
-                            ...(prev[p.id] ?? { division: p.division ?? "", name: p.name }),
-                            name: e.target.value,
-                          },
-                        }))
-                      }
-                      onBlur={() => handleParticipantFieldBlur(p.id, "name", p.name)}
-                      size="small"
-                      disabled={!isManual}
-                      fullWidth
-                      sx={{
-                        "& .MuiOutlinedInput-root": { borderRadius: 0.6, height: 30, bgcolor: "#fff" },
-                        "& input": { fontSize: 13, py: 0.3 },
-                      }}
-                    />
-                    {showGroupName && p.source_group_name && (
-                      <Typography sx={{ mt: 0.35, px: 0.4, fontSize: 10, color: "#6B7280", lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {p.source_group_name}
-                      </Typography>
-                    )}
-                  </Box>
 
                   <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center" }}>
                     <Box

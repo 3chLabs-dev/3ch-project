@@ -5,6 +5,7 @@ import {
   useRequestParticipantClaimMutation,
   useReviewParticipantClaimMutation,
 } from "../../features/league/leagueApi";
+import { DivisionBadge } from "../../components/ParticipantName";
 
 type Props = {
   open: boolean;
@@ -79,11 +80,8 @@ export default function ParticipantClaimDialog({ open, leagueId, loggedIn, canMa
             {pendingClaims.map((participant) => (
               <Box key={participant.id} sx={{ border: "1px solid #E5E7EB", borderRadius: 1, p: 1.25, bgcolor: "#fff" }}>
                 <Stack direction="row" alignItems="center" spacing={1}>
-                  <Box sx={{ width: 34, height: 34, borderRadius: "50%", bgcolor: "#FAAA47", display: "grid", placeItems: "center", fontSize: 11, fontWeight: 900, flexShrink: 0 }}>
-                    {participant.division || "-"}
-                  </Box>
                   <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography sx={{ fontWeight: 900 }}>{participant.name}</Typography>
+                    <Stack direction="row" spacing={0.45} alignItems="center"><Typography sx={{ fontWeight: 900 }}>{participant.name}</Typography><DivisionBadge division={participant.division}/></Stack>
                     <Typography sx={{ color: "text.secondary", fontSize: 12 }}>
                       신청자: {participant.requester_name || "회원"}
                     </Typography>
@@ -118,10 +116,9 @@ export default function ParticipantClaimDialog({ open, leagueId, loggedIn, canMa
                     }}
                   >
                     <Radio checked={selectedId === participant.id} disabled={isPending || !loggedIn} size="small" />
-                    <Box sx={{ width: 34, height: 34, borderRadius: "50%", bgcolor: "#FAAA47", display: "grid", placeItems: "center", fontSize: 11, fontWeight: 900 }}>
-                      {participant.division || "-"}
-                    </Box>
-                    <Typography sx={{ ml: 1.2, fontWeight: 800, flex: 1 }}>{participant.name}</Typography>
+                    <Typography sx={{ ml: 1.2, fontWeight: 800 }}>{participant.name}</Typography>
+                    <DivisionBadge division={participant.division}/>
+                    <Box sx={{ flex: 1 }} />
                     {isPending && <Typography sx={{ fontSize: 11, color: "#1976D2", fontWeight: 800 }}>승인 대기</Typography>}
                   </Box>
                 );

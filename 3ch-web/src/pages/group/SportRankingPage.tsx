@@ -13,6 +13,7 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import EmojiEventsOutlinedIcon from "@mui/icons-material/EmojiEventsOutlined";
 import { useAppSelector } from "../../app/hooks";
 import { useGetSportRankingQuery } from "../../features/user/userApi";
+import { DivisionBadge } from "../../components/ParticipantName";
 
 function formatDate(value?: string | null) {
   if (!value) return "-";
@@ -203,6 +204,7 @@ export default function SportRankingPage() {
                         <Typography fontWeight={800} fontSize={15} noWrap>
                           {row.name}
                         </Typography>
+                        <DivisionBadge division={row.division} />
                         {isMine && (
                           <Typography sx={{ fontSize: 11, color: "#2563EB", fontWeight: 800 }}>
                             나

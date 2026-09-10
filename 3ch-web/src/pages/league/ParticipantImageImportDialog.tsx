@@ -173,9 +173,8 @@ export default function ParticipantImageImportDialog({
               <Typography sx={{ fontSize: 12, color: "#6B7280" }}>이름과 부수를 확인한 뒤 등록할 참가자만 선택해 주세요.</Typography>
             </Box>
             {rows.map((row) => (
-              <Box key={row.id} sx={{ display: "grid", gridTemplateColumns: "32px 62px minmax(0,1fr) 32px", gap: 0.7, alignItems: "center", border: "1px solid #E5E7EB", borderRadius: 1, p: 0.8, bgcolor: row.existingDuplicate || row.duplicateCount > 1 ? "#FFF8ED" : "#fff" }}>
+              <Box key={row.id} sx={{ display: "grid", gridTemplateColumns: "32px minmax(0,1fr) 62px 32px", gap: 0.7, alignItems: "center", border: "1px solid #E5E7EB", borderRadius: 1, p: 0.8, bgcolor: row.existingDuplicate || row.duplicateCount > 1 ? "#FFF8ED" : "#fff" }}>
                 <Checkbox size="small" checked={row.selected} onChange={(event) => updateRow(row.id, { selected: event.target.checked })} />
-                <TextField value={row.division} onChange={(event) => updateRow(row.id, { division: event.target.value })} placeholder="부수" size="small" inputProps={{ style: { textAlign: "center", padding: "7px 4px" } }} />
                 <Box sx={{ minWidth: 0 }}>
                   <TextField value={row.name} onChange={(event) => updateRow(row.id, { name: event.target.value })} size="small" fullWidth inputProps={{ style: { padding: "7px 8px" } }} />
                   <Stack direction="row" spacing={0.5} useFlexGap flexWrap="wrap" sx={{ mt: 0.5 }}>
@@ -194,6 +193,7 @@ export default function ParticipantImageImportDialog({
                     {row.duplicateCount > 1 && <Chip label={`${row.duplicateCount}회 인식`} size="small" color="warning" variant="outlined" sx={{ height: 20, fontSize: 10 }} />}
                   </Stack>
                 </Box>
+                <TextField value={row.division} onChange={(event) => updateRow(row.id, { division: event.target.value })} placeholder="부수" size="small" inputProps={{ style: { textAlign: "center", padding: "7px 4px" } }} />
                 <IconButton size="small" aria-label="결과 삭제" onClick={() => setRows((current) => current.filter((item) => item.id !== row.id))}><DeleteOutlineIcon fontSize="small" color="error" /></IconButton>
               </Box>
             ))}

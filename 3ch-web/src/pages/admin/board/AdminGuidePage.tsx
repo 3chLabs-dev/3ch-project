@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   Box, Button, Dialog, DialogContent, IconButton,
   MenuItem, Pagination, Select, Stack, Table, TableBody,
-  TableCell, TableHead, TableRow, Typography,
+  TableCell, TableHead, TableRow, TextField, Typography,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import PolicyEditor from "../../../components/PolicyEditor";
@@ -15,11 +15,6 @@ const TABS = [
   { value: "member", label: "일반 회원" },
 ] as const;
 type TabValue = typeof TABS[number]["value"];
-
-const SECTIONS: Record<TabValue, string[]> = {
-  leader: ["클럽 생성", "회원 관리", "리그 생성", "리그 진행", "결과 등록", "추첨 생성", "추첨 진행"],
-  member: ["클럽 가입", "리그 참가", "결과 입력", "추첨 확인"],
-};
 
 type Guide = {
   id: number;
@@ -68,7 +63,7 @@ export default function AdminGuidePage() {
 
   const openAdd = () => {
     setEditId(null);
-    setForm(EMPTY_FORM);
+    setForm({ ...EMPTY_FORM, section: "", content: "" });
     setAlert("");
     setDialogOpen(true);
   };
@@ -82,7 +77,8 @@ export default function AdminGuidePage() {
   };
 
   const handleSave = async () => {
-    if (!form.content.trim()) { setAlert("내용을 입력하세요."); return; }
+    if (!form.section.trim()) { setAlert("섹션 이름을 입력하세요."); return; }
+    if (editId && !form.content.trim()) { setAlert("내용을 입력하세요."); return; }
     setSaving(true);
     try {
       if (editId) await axios.put(`${API}/admin/board/guide/${editId}`, form, { headers: authHeaders() });
@@ -104,7 +100,7 @@ export default function AdminGuidePage() {
   };
 
   const handleTabChange = (tab: TabValue) => {
-    setForm((f) => ({ ...f, tab, section: SECTIONS[tab][0] }));
+    setForm((f) => ({ ...f, tab }));
   };
 
   const fmtDate = (s: string) => s?.slice(0, 10) ?? "";
@@ -197,33 +193,49 @@ export default function AdminGuidePage() {
               </Select>
             </Stack>
 
-            {/* 섹션 선택 */}
+            {/* 섹션 이름 */}
             <Stack direction="row" alignItems="center" spacing={2}>
               <Typography fontWeight={700} fontSize={14} sx={{ width: 60, flexShrink: 0 }}>섹션</Typography>
-              <Select size="small" value={form.section} onChange={(e) => setForm((f) => ({ ...f, section: e.target.value }))} sx={{ minWidth: 200 }}>
-                {SECTIONS[form.tab].map((s) => <MenuItem key={s} value={s}>{s}</MenuItem>)}
-              </Select>
+              <TextField
+                size="small"
+                value={form.section}
+                onChange={(e) => setForm((f) => ({ ...f, section: e.target.value }))}
+                placeholder="섹션 이름을 입력하세요"
+                inputProps={{ maxLength: 100 }}
+                sx={{ minWidth: 280 }}
+              />
             </Stack>
 
             {/* 순서 */}
             <Stack direction="row" alignItems="center" spacing={2}>
               <Typography fontWeight={700} fontSize={14} sx={{ width: 60, flexShrink: 0 }}>순서</Typography>
-              <Select size="small" value={form.display_order} onChange={(e) => setForm((f) => ({ ...f, display_order: Number(e.target.value) }))} sx={{ minWidth: 100 }}>
-                {[0,1,2,3,4,5,6,7,8,9].map((n) => <MenuItem key={n} value={n}>{n}</MenuItem>)}
-              </Select>
-            </Stack>
-
-            {/* 내용 에디터 */}
-            <Stack spacing={0.5}>
-              <Typography fontWeight={700} fontSize={14}>내용 (이미지 업로드)</Typography>
-              <Typography fontSize={12} color="text.secondary">
-                YouTube 영상 주소를 한 줄에 단독으로 입력하면 이용방법 화면에 플레이어가 표시됩니다.
-              </Typography>
-              <PolicyEditor
-                value={form.content}
-                onChange={(v) => setForm((f) => ({ ...f, content: v }))}
+              <TextField
+                size="small"
+                type="number"
+                value={form.display_order}
+                onChange={(e) => setForm((f) => ({ ...f, display_order: Math.max(0, Number(e.target.value) || 0) }))}
+                inputProps={{ min: 0, step: 1 }}
+                helperText="숫자가 작을수록 먼저 노출됩니다."
+                sx={{ width: 220 }}
               />
             </Stack>
+
+            {editId ? (
+              <Stack spacing={0.5}>
+                <Typography fontWeight={700} fontSize={14}>내용 (이미지 업로드)</Typography>
+                <Typography fontSize={12} color="text.secondary">
+                  YouTube 영상 주소를 한 줄에 단독으로 입력하면 이용방법 화면에 플레이어가 표시됩니다.
+                </Typography>
+                <PolicyEditor
+                  value={form.content}
+                  onChange={(v) => setForm((f) => ({ ...f, content: v }))}
+                />
+              </Stack>
+            ) : (
+              <Typography fontSize={12} color="text.secondary" sx={{ pl: 9.5 }}>
+                섹션을 만든 뒤 목록의 수정 버튼에서 이용방법 내용을 등록할 수 있습니다.
+              </Typography>
+            )}
 
             {alert && <Typography color="error" fontSize={13}>{alert}</Typography>}
 

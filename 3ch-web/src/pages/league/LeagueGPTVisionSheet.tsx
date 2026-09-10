@@ -410,7 +410,7 @@ function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, la
   // landscape / portrait 공통: [↓] 점수 [↑] 가로 배치, 좌우 여백 있게
   const inner = (
     <Box className="score-control-container" sx={{
-      display: "flex", flexDirection: landscape ? "row" : "column", alignItems: "center",
+      display: "flex", flexDirection: landscape ? "row" : "column-reverse", alignItems: "center",
       justifyContent: "space-between",
       writingMode: "horizontal-tb",
       px: 0.25, height: "100%", gap: 0.25,
@@ -3225,8 +3225,8 @@ export default function LeagueGPTVisionSheet() {
         onClose={() => undefined}
         maxWidth="sm"
         fullWidth
-        sx={{ zIndex: 10003, "& .MuiDialog-container": { alignItems: "flex-end" } }}
-        slotProps={{ backdrop: { sx: { backgroundColor: "transparent" } }, paper: { sx: { mx: 1.5, borderRadius: 3, maxWidth: 560, ...mobileDialogPaperSx, mb: landscape ? `${(scheduleRef.current?.offsetHeight ?? 86) + 16}px` : 2 } } }}
+        sx={{ zIndex: 10003, "& .MuiDialog-container": { alignItems: landscape ? "flex-end" : "center" } }}
+        slotProps={{ backdrop: { sx: { backgroundColor: "transparent" } }, paper: { sx: { mx: 1.5, borderRadius: 3, maxWidth: 560, ...mobileDialogPaperSx, mb: landscape ? `${(scheduleRef.current?.offsetHeight ?? 86) + 16}px` : 0 } } }}
       >
         <DialogTitle sx={{ fontWeight: 900 }}>본선 토너먼트도 생성할까요?</DialogTitle>
         <DialogContent>

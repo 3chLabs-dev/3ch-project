@@ -254,6 +254,7 @@ export default function LeagueQuickResult() {
   };
 
   return <Box sx={{ maxWidth: 720, mx: "auto", pb: 12 }}>
+    <style>{`.MuiDialog-paper .MuiTableCell-root { z-index: 1 !important; }`}</style>
     <Typography sx={{ fontSize: 22, fontWeight: 900, mb: 2, pb: 2, borderBottom: "1px solid #D9DDE6" }}>빠른 결과 등록</Typography>
     <Stepper activeStep={step} alternativeLabel sx={{ mb: 3 }}>{steps.map((label) => <Step key={label}><StepLabel>{label}</StepLabel></Step>)}</Stepper>
     <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 3 }}>
@@ -350,7 +351,7 @@ function ResultMatrix({ participants, matches, allMatches, onChange, onParticipa
             <TableCell sx={{ bgcolor: "#F8FAFC", p: .75 }}>
               <Stack direction="row" spacing={.6} alignItems="center">
                 <Chip label={rowIndex + 1} size="small" color="primary" variant="outlined" />
-                <TextField size="small" placeholder="이름" value={rowParticipant.name} onChange={(event) => onParticipantsChange(rowParticipant.key, { name: event.target.value, member_id: rowParticipant.canonical_name === event.target.value ? rowParticipant.member_id : null })} inputProps={{ style: { padding: "7px 5px", fontWeight: 800 } }} sx={{ width: 64, flexShrink: 0, bgcolor: "#fff" }} />
+                <TextField size="small" placeholder="이름" value={rowParticipant.name} onChange={(event) => onParticipantsChange(rowParticipant.key, { name: event.target.value, member_id: rowParticipant.canonical_name === event.target.value ? rowParticipant.member_id : null })} inputProps={{ style: { padding: "7px 5px", fontWeight: 800, textAlign: "center" } }} sx={{ width: 64, flexShrink: 0, bgcolor: "#fff" }} />
                 <TextField size="small" placeholder="부수" value={rowParticipant.division} onChange={(event) => onParticipantsChange(rowParticipant.key, { division: event.target.value })} inputProps={{ style: { textAlign: "center", padding: "7px 3px" } }} sx={{ width: 46, flexShrink: 0, bgcolor: "#fff" }} />
               </Stack>
             </TableCell>

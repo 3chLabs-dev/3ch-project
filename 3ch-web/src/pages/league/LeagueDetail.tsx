@@ -628,7 +628,7 @@ import {
     }, [participantGroupFilter, participantSourceGroupOptions, participants, searchQuery]);
 
     const isParticipantSearchActive = searchQuery.trim().length > 0 || participantGroupFilter !== "all";
-    const participantTableColumns = "72px 66px 38px minmax(12px, 1fr) 146px";
+    const participantTableColumns = "58px 66px 38px minmax(12px, 1fr) 146px";
     const visibleParticipants = isParticipantSearchActive
       ? filteredParticipants
       : filteredParticipants.slice(0, visibleParticipantCount);

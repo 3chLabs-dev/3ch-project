@@ -63,6 +63,7 @@ export default function LeagueQuickResult() {
   const [leagueId, setLeagueId] = useState("");
   const [groupId, setGroupId] = useState(preferredGroupId || "");
   const [name, setName] = useState("");
+  const [nameFocused, setNameFocused] = useState(false);
   const defaultLeagueName = todayLeagueName();
   const [leagueType, setLeagueType] = useState("단식");
   const [format, setFormat] = useState("단일리그");
@@ -259,7 +260,7 @@ export default function LeagueQuickResult() {
       {step === 0 && <Stack spacing={2}>
         <Typography fontWeight={900}>어디에 결과를 등록할까요?</Typography>
         <Stack direction="row" spacing={1}>{([['new','리그 신규 생성'],['existing','생성된 리그에 등록']] as const).map(([value,label]) => <Button key={value} fullWidth variant={mode === value ? "contained" : "outlined"} onClick={() => setMode(value)}>{label}</Button>)}</Stack>
-        {mode === "new" ? <><TextField label="리그 이름" placeholder={defaultLeagueName} value={name} onChange={(e) => setName(e.target.value)} sx={{ "& input::placeholder": { color: "#9CA3AF", opacity: 1 } }} /><TextField select label="클럽" value={groupId} onChange={(e) => setGroupId(e.target.value)}>{manageableGroups.map((g) => <MenuItem key={g.id} value={g.id}>{g.name}</MenuItem>)}</TextField>{!manageableGroups.length && <Alert severity="info">리그를 만들 수 있는 클럽이 필요합니다.</Alert>}</> :
+        {mode === "new" ? <><TextField label="리그 이름" placeholder={nameFocused ? "" : defaultLeagueName} value={name} onFocus={()=>setNameFocused(true)} onBlur={()=>setNameFocused(false)} onChange={(e) => setName(e.target.value)} InputLabelProps={{ shrink: true }} sx={{ "& input::placeholder": { color: "#9CA3AF", opacity: 1 } }} /><TextField select label="클럽" value={groupId} onChange={(e) => setGroupId(e.target.value)}>{manageableGroups.map((g) => <MenuItem key={g.id} value={g.id}>{g.name}</MenuItem>)}</TextField>{!manageableGroups.length && <Alert severity="info">리그를 만들 수 있는 클럽이 필요합니다.</Alert>}</> :
           <ExistingLeaguePicker leagues={filteredExistingLeagues} groups={manageableGroups} visibleCounts={visibleLeagueCounts} onMore={(id, count)=>setVisibleLeagueCounts((current)=>({...current,[id]:count+5}))} onFilter={()=>setLeagueFilterOpen(true)} onSelect={(id)=>{setLeagueId(id);navigate(`/league/${id}/bracket?resultImport=1`);}} />}
       </Stack>}
       {step === 1 && <Choice title="리그 유형" value={leagueType} values={["단식","복식","단체전"]} onChange={setLeagueType} />}

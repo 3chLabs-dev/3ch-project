@@ -701,7 +701,7 @@ export default function GroupManage() {
                         <ListItem
                             sx={{
                                 display: "grid",
-                                gridTemplateColumns: "76px minmax(0, 1fr) 56px",
+                                gridTemplateColumns: "76px minmax(0, 1fr)",
                                 py: 1.5,
                                 px: 2.5,
                                 pr: 7,
@@ -710,8 +710,10 @@ export default function GroupManage() {
                             }}
                         >
                             <Typography fontWeight={700} fontSize={14} textAlign="center">구분</Typography>
-                            <Typography fontWeight={700} fontSize={14} textAlign="center">이름</Typography>
-                            <Typography fontWeight={700} fontSize={14} textAlign="center">부수</Typography>
+                            <Box sx={{ display: "grid", gridTemplateColumns: "72px 32px", justifyContent: "center", alignItems: "center" }}>
+                                <Typography fontWeight={700} fontSize={14} textAlign="center">이름</Typography>
+                                <Typography fontWeight={700} fontSize={14} textAlign="center">부수</Typography>
+                            </Box>
                         </ListItem>
                         {sortedMembers.map((member, idx) => (
                             <Box key={member.id}>
@@ -719,7 +721,7 @@ export default function GroupManage() {
                                 <ListItem
                                     sx={{
                                         display: "grid",
-                                        gridTemplateColumns: "76px minmax(0, 1fr) 56px",
+                                        gridTemplateColumns: "76px minmax(0, 1fr)",
                                         alignItems: "center",
                                         py: 1,
                                         px: 2.5,
@@ -764,13 +766,7 @@ export default function GroupManage() {
                                             </Typography>
                                         }
                                     />
-                                    <ListItemText sx={{ m: 0, textAlign: "center", order: 3 }}
-                                        primary={
-                                            <DivisionBadge division={member.division} />
-                                        }
-                                    />
-                                    <ListItemText sx={{ m: 0, textAlign: "center", order: 2 }}
-                                        primary={
+                                    <Box sx={{ minWidth: 0, display: "grid", gridTemplateColumns: "72px 32px", alignItems: "center", justifyContent: "center" }}>
                                             <Typography
                                                 fontWeight={700} fontSize={14}
                                                 onClick={() => {
@@ -780,15 +776,20 @@ export default function GroupManage() {
                                                 }}
                                                 sx={{
                                                     cursor: member.is_pre_member ? "default" : "pointer",
-                                                    display: "inline",
+                                                    display: "block",
+                                                    minWidth: 0,
+                                                    textAlign: "center",
+                                                    overflow: "hidden",
+                                                    textOverflow: "ellipsis",
+                                                    whiteSpace: "nowrap",
                                                     textDecoration: member.is_pre_member ? "none" : "underline",
                                                     color: Number(member.user_id) === Number(authUser?.id) ? "#2F80ED" : "inherit",
                                                 }}
                                             >
                                                 {member.name || member.email || "-"}
                                             </Typography>
-                                        }
-                                    />
+                                            <Box sx={{ display: "flex", justifyContent: "center" }}><DivisionBadge division={member.division} /></Box>
+                                    </Box>
                                 </ListItem>
                             </Box>
                         ))}

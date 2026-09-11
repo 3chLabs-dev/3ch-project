@@ -35,6 +35,7 @@ import PrintIcon from "@mui/icons-material/Print";
 import QRCode from "react-qr-code";
 import { formatLeagueDate } from "../../utils/dateUtils";
 import { calculateRoundRobinStandings } from "../../utils/roundRobinStandings";
+import { toggleFullscreen } from "../../utils/fullscreen";
 import {
   applyProgramMatchState,
   generateProgramRoundMatches,
@@ -2152,6 +2153,13 @@ export default function LeagueBracket() {
             <ScreenRotationIcon sx={{ fontSize: 18 }} />
           </IconButton>
         </Tooltip>
+        <Button
+          variant="contained"
+          onClick={() => void toggleFullscreen().catch(() => window.alert("이 브라우저에서는 전체 화면을 사용할 수 없습니다."))}
+          sx={{ minWidth: 68, height: 36, px: 1, borderRadius: 2, fontSize: 11, fontWeight: 900, whiteSpace: "nowrap", boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}
+        >
+          전체 화면
+        </Button>
         </Box>
 
       </Box>{/* /wrapperRef */}

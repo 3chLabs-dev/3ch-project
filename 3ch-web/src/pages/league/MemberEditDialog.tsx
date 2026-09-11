@@ -98,7 +98,7 @@ export default function MemberEditDialog({
   onReplaceParticipant,
   showGroupName = false,
 }: MemberEditDialogProps) {
-  const divisionInputRef = useRef<HTMLInputElement>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
   const hadParticipantInputRef = useRef(false);
   const [openImageImport, setOpenImageImport] = useState(false);
 
@@ -109,7 +109,7 @@ export default function MemberEditDialog({
     }
     if (open && hadParticipantInputRef.current) {
       hadParticipantInputRef.current = false;
-      requestAnimationFrame(() => divisionInputRef.current?.focus());
+      requestAnimationFrame(() => nameInputRef.current?.focus());
     }
   }, [inputDivision, inputName, open]);
 
@@ -213,6 +213,7 @@ export default function MemberEditDialog({
             }}
           >
             <TextField
+              inputRef={nameInputRef}
               placeholder="이름"
               value={inputName}
               onChange={(e) => setInputName(e.target.value)}
@@ -233,7 +234,6 @@ export default function MemberEditDialog({
             />
 
             <TextField
-              inputRef={divisionInputRef}
               placeholder="부수"
               value={inputDivision}
               onChange={(e) => setInputDivision(e.target.value)}

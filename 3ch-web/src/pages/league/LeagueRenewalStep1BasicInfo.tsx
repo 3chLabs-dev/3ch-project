@@ -110,6 +110,9 @@ export default function LeagueRenewalStep1BasicInfo() {
   const existing = useAppSelector((state) => state.leagueRenewalCreation.basicInfo);
   const dateRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState(existing?.title ?? "");
+  const [titleFocused, setTitleFocused] = useState(false);
+  const today = new Date();
+  const defaultLeagueTitle = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")} 리그`;
   const [date, setDate] = useState(existing?.date ?? "");
   const [startTime, setStartTime] = useState(existing?.startTime ?? "");
   const [endTime, setEndTime] = useState(existing?.endTime ?? "");
@@ -156,7 +159,7 @@ export default function LeagueRenewalStep1BasicInfo() {
   const [participantCountDialogOpen, setParticipantCountDialogOpen] = useState(false);
   const [startHour, startMinute] = startTime ? startTime.split(":") : ["", ""];
   const [endHour, endMinute] = endTime ? endTime.split(":") : ["", ""];
-  const canNext = useMemo(() => Boolean(title && date && startTime), [date, startTime, title]);
+  const canNext = useMemo(() => Boolean(date && startTime), [date, startTime]);
 
   const openPlaceSearch = () => {
     if (savedVenues.length > 0) setVenuePickerOpen(true);
@@ -180,7 +183,7 @@ export default function LeagueRenewalStep1BasicInfo() {
       setParticipantCountDialogOpen(true);
       return;
     }
-    dispatch(setRenewalBasicInfo({ title, date, startTime, endTime, location, participantCount: participantCount === "" ? null : participantCount, courtCount: courtCount === "" ? null : courtCount, joinPermission, premiumEnabled, venueAddress, venueLat, venueLng, venueRegionCity, venueRegionDistrict }));
+    dispatch(setRenewalBasicInfo({ title: title.trim() || defaultLeagueTitle, date, startTime, endTime, location, participantCount: participantCount === "" ? null : participantCount, courtCount: courtCount === "" ? null : courtCount, joinPermission, premiumEnabled, venueAddress, venueLat, venueLng, venueRegionCity, venueRegionDistrict }));
     dispatch(setRenewalStep(2));
   };
 
@@ -194,7 +197,7 @@ export default function LeagueRenewalStep1BasicInfo() {
   return <Box sx={{ px: 2.5, pt: 2 }}>
     <Typography sx={{ fontSize: 22, fontWeight: 900, mb: 2 }}>리그 정보</Typography>
     <Box sx={{ borderTop: "1px solid #D9DDE6" }}>
-      <Box sx={rowSx}><Typography sx={{ fontWeight: 900 }}>리그명 <RequiredMark /></Typography><TextField value={title} onChange={(event) => setTitle(event.target.value)} sx={fieldSx} /></Box>
+      <Box sx={rowSx}><Typography sx={{ fontWeight: 900 }}>리그명 <RequiredMark /></Typography><TextField value={title} placeholder={titleFocused ? "" : defaultLeagueTitle} onFocus={() => setTitleFocused(true)} onBlur={() => setTitleFocused(false)} onChange={(event) => setTitle(event.target.value)} sx={{ ...fieldSx, "& input::placeholder": { color: "#9CA3AF", opacity: 1 } }} /></Box>
       <Box sx={{ ...rowSx, cursor: "pointer" }} onClick={() => dateRef.current?.showPicker()}><Typography sx={{ fontWeight: 900 }}>날짜 <RequiredMark /></Typography><TextField inputRef={dateRef} type="date" value={date} onChange={(event) => setDate(event.target.value)} sx={fieldSx} /></Box>
       <Box sx={rowSx}>
         <Typography sx={{ fontWeight: 900 }}>시간 <RequiredMark /></Typography>

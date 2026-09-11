@@ -291,7 +291,7 @@ export default function LoadMembersDialog({
                         <Box
                             sx={{
                                 display: "grid",
-                                gridTemplateColumns: "34px minmax(0, 1fr) 64px",
+                                gridTemplateColumns: "34px minmax(0, 1fr)",
                                 alignItems: "center",
                                 px: 3.5,
                                 py: 1,
@@ -308,12 +308,14 @@ export default function LoadMembersDialog({
                                 inputProps={{ "aria-label": "현재 페이지 회원 전체 선택" }}
                                 sx={{ p: 0 }}
                             />
-                            <Typography sx={{ fontSize: 12, color: "#6B7280", fontWeight: 900, textAlign: "center" }}>
-                                이름
-                            </Typography>
-                            <Typography sx={{ fontSize: 12, color: "#6B7280", fontWeight: 900, textAlign: "center" }}>
-                                부수
-                            </Typography>
+                            <Box sx={{ display: "grid", gridTemplateColumns: "72px 32px", justifyContent: "center", alignItems: "center" }}>
+                                <Typography sx={{ fontSize: 12, color: "#6B7280", fontWeight: 900, textAlign: "center" }}>
+                                    이름
+                                </Typography>
+                                <Typography sx={{ fontSize: 12, color: "#6B7280", fontWeight: 900, textAlign: "center" }}>
+                                    부수
+                                </Typography>
+                            </Box>
                         </Box>
 
                         <Box sx={{ display: "flex", flexDirection: "column", gap: 0.6, px: 3, pt: 1 }}>
@@ -323,7 +325,7 @@ export default function LoadMembersDialog({
                                     onClick={() => toggle(r.id)}
                                     sx={{
                                         display: "grid",
-                                        gridTemplateColumns: "34px 1fr 64px",
+                                        gridTemplateColumns: "34px minmax(0, 1fr)",
                                         alignItems: "center",
                                         px: 0.5,
                                         py: 0.6,
@@ -333,8 +335,10 @@ export default function LoadMembersDialog({
                                     }}
                                 >
                                     <Checkbox checked={!!checked[r.id]} size="small" />
-                                    <Typography sx={{ fontWeight: 800, textAlign: "center" }}>{r.name}</Typography>
-                                    <Box sx={{ textAlign: "center" }}><DivisionBadge division={r.division} /></Box>
+                                    <Box sx={{ display: "grid", gridTemplateColumns: "72px 32px", justifyContent: "center", alignItems: "center", minWidth: 0 }}>
+                                        <Typography sx={{ minWidth: 0, fontWeight: 800, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}</Typography>
+                                        <Box sx={{ display: "flex", justifyContent: "center" }}><DivisionBadge division={r.division} /></Box>
+                                    </Box>
                                 </Box>
                             ))}
 

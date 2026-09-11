@@ -252,9 +252,9 @@ function TournamentResultDialog({ open, match, rule, leagueId, splitBracket, onC
       const stage = splitBracket && !rawStage.startsWith("상위") && !rawStage.startsWith("하위")
         ? `${match.bracket === "lower" ? "하위" : "상위"} ${rawStage}`
         : rawStage;
-      const aDiv = match.participant_a_division ? `(${match.participant_a_division}) ` : "";
-      const bDiv = match.participant_b_division ? `(${match.participant_b_division}) ` : "";
-      setStartToast(`${stage} ${aDiv}${match.participant_a_name ?? "미정"} vs ${bDiv}${match.participant_b_name ?? "미정"} 경기 시작!`);
+      const aDiv = match.participant_a_division ? `(${match.participant_a_division})` : "";
+      const bDiv = match.participant_b_division ? `(${match.participant_b_division})` : "";
+      setStartToast(`${stage} ${match.participant_a_name ?? "미정"}${aDiv} vs ${match.participant_b_name ?? "미정"}${bDiv} 경기 시작!`);
     } else if (match.status === "playing") {
       updateMatch({ leagueId, matchId: match.id, updates: { status: "done", score_a: scoreA, score_b: scoreB } });
     }
@@ -633,9 +633,16 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
             )}
           </Box>
         ) : (
-          <Typography sx={{ fontSize: nameA?.includes(" · ") ? 9 : 11, fontWeight: isByeA || isUndecidedA ? 400 : 600, minWidth: 0, overflow: "hidden", whiteSpace: "normal", lineHeight: 1.1, color: winA ? "#16A34A" : isByeA || isUndecidedA ? "#9CA3AF" : "text.primary", fontStyle: isByeA || isUndecidedA ? "italic" : "normal" }}>
-            {nameA ?? (isByeA ? "BYE" : "미정")}
-          </Typography>
+          <>
+            {nameA && displaySeedA && (
+              <Typography sx={{ fontSize: 8, fontWeight: 800, color: "#3B82F6", flexShrink: 0 }}>
+                {displaySeedA}
+              </Typography>
+            )}
+            <Typography sx={{ fontSize: nameA?.includes(" · ") ? 9 : 11, fontWeight: isByeA || isUndecidedA ? 400 : 600, minWidth: 0, overflow: "hidden", whiteSpace: "normal", lineHeight: 1.1, color: winA ? "#16A34A" : isByeA || isUndecidedA ? "#9CA3AF" : "text.primary", fontStyle: isByeA || isUndecidedA ? "italic" : "normal" }}>
+              {nameA ?? (isByeA ? "BYE" : "미정")}
+            </Typography>
+          </>
         )}
         {nameA && m.participant_a_division && <DivisionBadge division={m.participant_a_division} sx={{ minWidth: 16, height: 16, fontSize: 7 }} />}
         </Box>
@@ -664,9 +671,16 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
             )}
           </Box>
         ) : (
-          <Typography sx={{ fontSize: nameB?.includes(" · ") ? 9 : 11, fontWeight: isByeB || isUndecidedB ? 400 : 600, minWidth: 0, overflow: "hidden", whiteSpace: "normal", lineHeight: 1.1, color: winB ? "#16A34A" : isByeB || isUndecidedB ? "#9CA3AF" : "text.primary", fontStyle: isByeB || isUndecidedB ? "italic" : "normal" }}>
-            {nameB ?? (isByeB ? "BYE" : "미정")}
-          </Typography>
+          <>
+            {nameB && displaySeedB && (
+              <Typography sx={{ fontSize: 8, fontWeight: 800, color: "#3B82F6", flexShrink: 0 }}>
+                {displaySeedB}
+              </Typography>
+            )}
+            <Typography sx={{ fontSize: nameB?.includes(" · ") ? 9 : 11, fontWeight: isByeB || isUndecidedB ? 400 : 600, minWidth: 0, overflow: "hidden", whiteSpace: "normal", lineHeight: 1.1, color: winB ? "#16A34A" : isByeB || isUndecidedB ? "#9CA3AF" : "text.primary", fontStyle: isByeB || isUndecidedB ? "italic" : "normal" }}>
+              {nameB ?? (isByeB ? "BYE" : "미정")}
+            </Typography>
+          </>
         )}
         {nameB && m.participant_b_division && <DivisionBadge division={m.participant_b_division} sx={{ minWidth: 16, height: 16, fontSize: 7 }} />}
         </Box>
@@ -2042,6 +2056,34 @@ export default function LeagueTournamentBracket() {
             minWidth: canvasW * zoom,
             minHeight: canvasH * zoom,
           }}>
+            {!isDoubleElim && (
+              <Box sx={{
+                position: "sticky",
+                top: 0,
+                zIndex: 6,
+                ml: `max(0px, calc((100% - ${canvasW * zoom}px) / 2))`,
+                width: canvasW * zoom,
+                height: PT * zoom,
+                bgcolor: "rgba(240,242,245,0.96)",
+                borderBottom: "1px solid rgba(203,213,225,0.75)",
+                pointerEvents: "none",
+              }}>
+                {[...roundLabels.entries()].map(([r, label]) => (
+                  <Typography key={`sticky-lbl-${r}`} sx={{
+                    position: "absolute",
+                    top: 10 * zoom,
+                    left: (PX + (r - 1) * (MW + RGAP)) * zoom,
+                    width: MW * zoom,
+                    textAlign: "center",
+                    fontSize: 12 * zoom,
+                    fontWeight: 700,
+                    color: "#64748B",
+                  }}>
+                    {label}
+                  </Typography>
+                ))}
+              </Box>
+            )}
             <Box sx={{
               width: canvasW * zoom,
               height: canvasH * zoom,

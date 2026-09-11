@@ -202,9 +202,9 @@ function MatchCard({
     if (isPlaying && !window.confirm(`${nA}(${sa}) VS (${sb})${nB}\n경기를 종료하겠습니까?`)) return;
     if (!isPlaying) {
       onMatchStarted?.(match.id);
-      const aDiv = match.participant_a_division ? `(${match.participant_a_division}) ` : "";
-      const bDiv = match.participant_b_division ? `(${match.participant_b_division}) ` : "";
-      setStartToast(`${matchIndex}경기 ${aDiv}${nA} vs ${bDiv}${nB} 경기 시작!`);
+      const aDiv = match.participant_a_division ? `(${match.participant_a_division})` : "";
+      const bDiv = match.participant_b_division ? `(${match.participant_b_division})` : "";
+      setStartToast(`${matchIndex}경기 ${nA}${aDiv} vs ${nB}${bDiv} 경기 시작!`);
     }
     updateMatch({ leagueId, matchId: match.id, updates: { status: NEXT_STATUS[match.status], score_a: sa, score_b: sb } });
   }, [match, matchIndex, isPlaying, isDone, displayNameA, displayNameB, leagueId, sa, sb, onMatchStarted, updateMatch]);
@@ -218,7 +218,7 @@ function MatchCard({
     setMenuAnchor(null);
     const aDiv = match.participant_a_division ? `(${match.participant_a_division})` : "";
     const bDiv = match.participant_b_division ? `(${match.participant_b_division})` : "";
-    const text = `${matchIndex}경기\n${aDiv}${displayNameA} VS ${bDiv}${displayNameB}\n곧 경기 시작! 지금 입장해 주세요`;
+    const text = `${matchIndex}경기\n${displayNameA}${aDiv} VS ${displayNameB}${bDiv}\n곧 경기 시작! 지금 입장해 주세요`;
     const kakaoKey = import.meta.env.VITE_KAKAO_JS_KEY;
     const kakao = (window as unknown as { Kakao?: { init?: (key: string) => void; isInitialized?: () => boolean; Share?: { sendDefault: (o: unknown) => void } } }).Kakao;
     if (kakao && kakaoKey && !kakao.isInitialized?.()) {

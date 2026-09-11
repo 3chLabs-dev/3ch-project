@@ -304,7 +304,7 @@ function MatchCard({
     const title = match.match_label?.includes("3·4위전") || match.match_label?.includes("결승")
       ? match.match_label
       : `${index + 1}경기`;
-    return `${title}\n${aDiv}${displayNameA} VS ${bDiv}${displayNameB}`;
+    return `${title}\n${displayNameA}${aDiv} VS ${displayNameB}${bDiv}`;
   }, [match, index, displayNameA, displayNameB]);
 
   const handleScore = useCallback((side: "a" | "b", delta: number) => {
@@ -329,9 +329,9 @@ function MatchCard({
       const title = match.match_label?.includes("3·4위전") || match.match_label?.includes("결승")
         ? match.match_label
         : `${index + 1}경기`;
-      const aDiv = match.participant_a_division ? `(${match.participant_a_division}) ` : "";
-      const bDiv = match.participant_b_division ? `(${match.participant_b_division}) ` : "";
-      setStartToast(`${title} ${aDiv}${displayNameA} vs ${bDiv}${displayNameB} 경기 시작!`);
+      const aDiv = match.participant_a_division ? `(${match.participant_a_division})` : "";
+      const bDiv = match.participant_b_division ? `(${match.participant_b_division})` : "";
+      setStartToast(`${title} ${displayNameA}${aDiv} vs ${displayNameB}${bDiv} 경기 시작!`);
     } else if (match.status === "playing") {
       if (!window.confirm(`${matchLabel()}\n종료되었습니까?`)) return;
     }

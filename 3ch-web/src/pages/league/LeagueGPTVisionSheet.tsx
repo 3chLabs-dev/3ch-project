@@ -200,7 +200,7 @@ const DiagonalBase = styled(TableCell)(({ theme }) => ({
  * - ResizeObserver로 셀의 실제 크기를 측정해 빗금 각도(angle)를 동적 계산
  * - portrait에서는 테이블 전체가 90° 회전하므로 셀 내부 각도는 가로모드와 동일하게 유지
  */
-function DiagonalScoreCell({ isVisionStart = false, rowIndex, colIndex }: { landscape: boolean; isVisionStart?: boolean; rowIndex: number; colIndex: number }) {
+function DiagonalScoreCell({ isVisionStart = false, rowIndex, colIndex }: { isVisionStart?: boolean; rowIndex: number; colIndex: number }) {
   const ref = useRef<HTMLTableCellElement>(null);
   const [angle, setAngle] = useState(45);
 
@@ -312,14 +312,13 @@ function ScoreButton({ icon, disabled, variant = "order", onClick }: {
  * - landscape(가로): ↑ 점수 ↓ 세로 배치
  * - portrait(세로, writingMode 적용): ← 점수 → 가로 배치 + 아이콘 90° 회전
  */
-function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, landscape, rowIndex, colIndex, totalRows, totalCols, onProgramMatchUpdate }: {
+function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, rowIndex, colIndex, totalRows, totalCols, onProgramMatchUpdate }: {
   match: LeagueMatch | undefined;
   isA: boolean;         // 현재 행 참가자가 해당 경기의 A선수인지 여부
   leagueId: string;
   rules?: string | null;
   winScore: number | null; // 선승 기준 점수 (null이면 선승제 아님)
   canManage: boolean;
-  landscape: boolean;
   rowIndex: number;
   colIndex: number;
   totalRows: number;
@@ -410,7 +409,7 @@ function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, la
   // landscape / portrait 공통: [↓] 점수 [↑] 가로 배치, 좌우 여백 있게
   const inner = (
     <Box className="score-control-container" sx={{
-      display: "flex", flexDirection: landscape ? "row" : "column-reverse", alignItems: "center",
+      display: "flex", flexDirection: "row", alignItems: "center",
       justifyContent: "space-between",
       writingMode: "horizontal-tb",
       px: 0.25, height: "100%", gap: 0.25,
@@ -618,11 +617,11 @@ const SortableBracketRow = memo(function SortableBracketRow({
 
       {/* 점수 셀: 같은 인덱스(자기 자신)는 대각선 셀, 나머지는 점수 편집 셀 */}
       {localOrder.map((colPlayer, colIdx) => {
-        if (participant.id === colPlayer.id) return <DiagonalScoreCell key={colPlayer.id} landscape={landscape} isVisionStart={rowIdx === 0} rowIndex={rowIdx} colIndex={colIdx} />;
+        if (participant.id === colPlayer.id) return <DiagonalScoreCell key={colPlayer.id} isVisionStart={rowIdx === 0} rowIndex={rowIdx} colIndex={colIdx} />;
         const m   = matchLookup.get(`${participant.id}__${colPlayer.id}`);
         const isA = m?.participant_a_id === participant.id;
         return (
-          <BracketScoreCell key={colIdx} match={m} isA={isA} leagueId={leagueId} rules={m?.match_rule ?? rules} winScore={getWinScore(m?.match_rule ?? rules) ?? winScore} canManage={canScore} landscape={landscape} rowIndex={rowIdx} colIndex={colIdx} totalRows={n} totalCols={n} onProgramMatchUpdate={onProgramMatchUpdate}/>
+          <BracketScoreCell key={colIdx} match={m} isA={isA} leagueId={leagueId} rules={m?.match_rule ?? rules} winScore={getWinScore(m?.match_rule ?? rules) ?? winScore} canManage={canScore} rowIndex={rowIdx} colIndex={colIdx} totalRows={n} totalCols={n} onProgramMatchUpdate={onProgramMatchUpdate}/>
         );
       })}
 
@@ -1075,6 +1074,7 @@ export default function LeagueGPTVisionSheet() {
   const [quickFinalsSaving, setQuickFinalsSaving] = useState(false);
   const [quickTournamentMode, setQuickTournamentMode] = useState<TournamentMode>("single");
   const [quickTournamentSeeding, setQuickTournamentSeeding] = useState<TournamentSeedingType>("seed");
+  const [quickTournamentBracketCount, setQuickTournamentBracketCount] = useState(1);
   const [quickThirdPlace, setQuickThirdPlace] = useState(false);
   const [quickAdvanceMode, setQuickAdvanceMode] = useState<"top-n" | "all">("top-n");
   const [quickAdvanceCount, setQuickAdvanceCount] = useState(2);
@@ -1643,7 +1643,7 @@ export default function LeagueGPTVisionSheet() {
         lateMatchRule: quickRuleSwitchSize === "" ? undefined : asMatchRule(quickLateMatchRule),
         expectedMinutes: 0,
         matchCount: 0,
-        tournamentBracketCount: 1,
+        tournamentBracketCount: quickTournamentBracketCount,
         tournamentMode: quickTournamentMode,
         tournamentSeeding: quickTournamentSeeding,
         thirdPlaceMatch: quickThirdPlace,
@@ -1661,7 +1661,7 @@ export default function LeagueGPTVisionSheet() {
             matchRule: quickMatchRule, ruleSwitchSize: quickRuleSwitchSize === "" ? undefined : quickRuleSwitchSize,
             lateMatchRule: quickRuleSwitchSize === "" ? undefined : quickLateMatchRule,
             teamPlayerCount: sourceBlock.teamPlayerCount ?? 3, teamMatchType: "SSS",
-            tournamentBracketCount: 1, tournamentMode: quickTournamentMode, tournamentSeeding: quickTournamentSeeding,
+            tournamentBracketCount: quickTournamentBracketCount, tournamentMode: quickTournamentMode, tournamentSeeding: quickTournamentSeeding,
             thirdPlaceMatch: quickThirdPlace, finalAdvancementMode: quickAdvanceMode, advanceCount: quickAdvanceCount, sourceRoundId: 1,
           },
         ],
@@ -2523,12 +2523,17 @@ export default function LeagueGPTVisionSheet() {
     currentProgramRound?.halfSplitOnlyMatches
     ?? currentProgramBlock?.halfSplitOnlyMatches,
   );
+  const isCrossClubOnlyRound = Boolean(
+    currentProgramRound?.crossClubOnlyMatches
+    ?? currentProgramBlock?.crossClubOnlyMatches,
+  );
+  const usesSplitMatchAreas = isHalfSplitRound || isCrossClubOnlyRound;
   const hasStartedMatch = matches.some(
     (match) => !match.is_no_game && (match.status === "playing" || match.status === "done"),
   );
   const showInlineResultButtons = canScore && !hasStartedMatch && n > 1;
   const fullMatchRowBands = getVisionRowBands(n);
-  const inlineVisionTargets = isHalfSplitRound
+  const inlineVisionTargets = usesSplitMatchAreas
     ? [
         { key: "upper-right", region: "upper-right" as const, order: 1, startRow: 0, endRow: Math.ceil(n / 2) - 1 },
         { key: "lower-left", region: "lower-left" as const, order: 2, startRow: Math.ceil(n / 2), endRow: n - 1 },
@@ -3220,23 +3225,27 @@ export default function LeagueGPTVisionSheet() {
         <DialogActions><Button onClick={() => setVisionError(null)}>확인</Button></DialogActions>
       </Dialog>
 
-      <Dialog
-        open={quickFinalsOfferOpen && !quickFinalsOptionsOpen}
-        onClose={() => undefined}
-        maxWidth="sm"
-        fullWidth
-        sx={{ zIndex: 10003, "& .MuiDialog-container": { alignItems: landscape ? "flex-end" : "center" } }}
-        slotProps={{ backdrop: { sx: { backgroundColor: "transparent" } }, paper: { sx: { mx: 1.5, borderRadius: 3, maxWidth: 560, ...mobileDialogPaperSx, mb: landscape ? `${(scheduleRef.current?.offsetHeight ?? 86) + 16}px` : 0 } } }}
-      >
-        <DialogTitle sx={{ fontWeight: 900 }}>본선 토너먼트도 생성할까요?</DialogTitle>
-        <DialogContent>
-          <Typography sx={{ color: "#6B7280", fontSize: 13 }}>현재 결과를 기준으로 이 리그의 2라운드 본선 토너먼트를 만들 수 있습니다.</Typography>
-        </DialogContent>
-        <DialogActions sx={{ px: 2.5, pb: 2 }}>
-          <Button fullWidth variant="outlined" onClick={() => setQuickFinalsOfferOpen(false)}>아니오</Button>
-          <Button fullWidth variant="contained" onClick={() => setQuickFinalsOptionsOpen(true)}>예</Button>
-        </DialogActions>
-      </Dialog>
+      {quickFinalsOfferOpen && !quickFinalsOptionsOpen && (
+        <Box sx={landscape ? {
+          position: "fixed", right: 14, bottom: `${(scheduleRef.current?.offsetHeight ?? 86) + 12}px`, zIndex: 10003,
+        } : {
+          position: "fixed", right: 8, bottom: 8, width: 112, height: 292, zIndex: 10003, overflow: "visible",
+        }}>
+          <Paper elevation={10} sx={landscape ? {
+            width: 340, p: 1.5, borderRadius: 2.5,
+          } : {
+            position: "absolute", top: 0, left: 0, width: 292, height: 112, p: 1.25, borderRadius: 2.5,
+            transform: "rotate(90deg) translateY(-100%)", transformOrigin: "top left",
+          }}>
+            <Typography sx={{ fontWeight: 900, fontSize: 15, lineHeight: 1.3 }}>본선 토너먼트도 생성할까요?</Typography>
+            <Typography sx={{ mt: .4, color: "#6B7280", fontSize: 11, lineHeight: 1.35 }}>현재 결과를 기준으로 2라운드 본선을 만들 수 있습니다.</Typography>
+            <Stack direction="row" spacing={.75} sx={{ mt: 1 }}>
+              <Button fullWidth size="small" variant="outlined" onClick={() => setQuickFinalsOfferOpen(false)} sx={{ minHeight: 30, py: .25 }}>아니오</Button>
+              <Button fullWidth size="small" variant="contained" onClick={() => setQuickFinalsOptionsOpen(true)} sx={{ minHeight: 30, py: .25 }}>예</Button>
+            </Stack>
+          </Paper>
+        </Box>
+      )}
 
       <Dialog open={quickFinalsOptionsOpen} onClose={() => !quickFinalsSaving && setQuickFinalsOptionsOpen(false)} maxWidth="sm" fullWidth sx={{ zIndex: 10004 }} slotProps={{ backdrop: { sx: { backgroundColor: "transparent" } }, paper: { sx: mobileDialogPaperSx } }}>
         <DialogTitle sx={{ fontWeight: 900 }}>2라운드 본선 토너먼트</DialogTitle>
@@ -3254,6 +3263,12 @@ export default function LeagueGPTVisionSheet() {
               <ToggleButtonGroup exclusive fullWidth value={quickTournamentSeeding} onChange={(_, value: TournamentSeedingType | null) => value && setQuickTournamentSeeding(value)}>
                 <ToggleButton value="seed">시드(순위)</ToggleButton><ToggleButton value="random">랜덤</ToggleButton><ToggleButton value="manual">수동</ToggleButton>
               </ToggleButtonGroup>
+            </Box>
+            <Box>
+              <Typography sx={{ fontWeight: 900, mb: 1 }}>대진표 개수</Typography>
+              <TextField select fullWidth size="small" value={quickTournamentBracketCount} onChange={(event) => { const count=Number(event.target.value); setQuickTournamentBracketCount(count); setQuickThirdPlace(count===1); }}>
+                {Array.from({length:8},(_,index)=>index+1).map((count)=><MenuItem key={count} value={count}>{count}개</MenuItem>)}
+              </TextField>
             </Box>
             <Box>
               <Typography sx={{ fontWeight: 900, mb: 1 }}>진출 인원</Typography>

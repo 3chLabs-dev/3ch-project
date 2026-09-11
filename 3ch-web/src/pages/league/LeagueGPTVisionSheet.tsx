@@ -288,7 +288,9 @@ function ScoreButton({ icon, disabled, variant = "order", onClick }: {
       disabled={disabled}
       onPointerDown={(e) => e.stopPropagation()}
       onClick={onClick}
-      sx={{ p: 0.75, minWidth: 28, minHeight: 28 }}
+      sx={variant === "score"
+        ? { p: 0, width: 20, height: 20, minWidth: 20, minHeight: 20, flexShrink: 0 }
+        : { p: 0.75, minWidth: 28, minHeight: 28 }}
     >
       <Icon sx={{ fontSize: 16 }} />
     </IconButton>
@@ -312,13 +314,14 @@ function ScoreButton({ icon, disabled, variant = "order", onClick }: {
  * - landscape(가로): ↑ 점수 ↓ 세로 배치
  * - portrait(세로, writingMode 적용): ← 점수 → 가로 배치 + 아이콘 90° 회전
  */
-function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, rowIndex, colIndex, totalRows, totalCols, onProgramMatchUpdate }: {
+function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, landscape, rowIndex, colIndex, totalRows, totalCols, onProgramMatchUpdate }: {
   match: LeagueMatch | undefined;
   isA: boolean;         // 현재 행 참가자가 해당 경기의 A선수인지 여부
   leagueId: string;
   rules?: string | null;
   winScore: number | null; // 선승 기준 점수 (null이면 선승제 아님)
   canManage: boolean;
+  landscape: boolean;
   rowIndex: number;
   colIndex: number;
   totalRows: number;
@@ -409,14 +412,15 @@ function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, ro
   // landscape / portrait 공통: [↓] 점수 [↑] 가로 배치, 좌우 여백 있게
   const inner = (
     <Box className="score-control-container" sx={{
-      display: "flex", flexDirection: "row", alignItems: "center",
-      justifyContent: "space-between",
+      display: "flex", flexDirection: landscape ? "row" : "column-reverse", alignItems: "center",
+      justifyContent: "center",
       writingMode: "horizontal-tb",
-      px: 0.25, height: "100%", gap: 0.25,
+      width: "100%", height: "100%", minWidth: 0, minHeight: 0,
+      boxSizing: "border-box", overflow: "hidden", gap: 0,
     }}>
       <ScoreButton icon="down" variant="score" disabled={(score ?? 0) <= 0} onClick={() => handleChange(-1)} />
       {!isEditing && 
-        <Typography className="score-text" data-row={rowIndex} data-col={colIndex} data-tc ={totalCols} data-tr={totalRows} onClick={() => { setTempValue(String(score ?? 0)); setIsEditing(true); }}sx={{ fontSize: 14, ...winnerStyle, lineHeight: 1, minWidth: 14, textAlign: "center" }}>
+        <Typography className="score-text" data-row={rowIndex} data-col={colIndex} data-tc ={totalCols} data-tr={totalRows} onClick={() => { setTempValue(String(score ?? 0)); setIsEditing(true); }}sx={{ fontSize: 14, ...winnerStyle, lineHeight: 1, width: 18, minWidth: 18, flexShrink: 0, textAlign: "center", ...(landscape ? {} : { transform: "rotate(-90deg)" }) }}>
           {score ?? 0}
         </Typography>
       }
@@ -466,7 +470,7 @@ function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, ro
                                 }, 0);
                               }
                             }}
-          style={{ width: 50, textAlign: "center" }}/>
+          style={{ width: 18, minWidth: 18, padding: 0, textAlign: "center", boxSizing: "border-box", transform: landscape ? undefined : "rotate(-90deg)" }}/>
       }
       <ScoreButton icon="up" variant="score" onClick={() => handleChange(1)} />
     </Box>
@@ -621,7 +625,7 @@ const SortableBracketRow = memo(function SortableBracketRow({
         const m   = matchLookup.get(`${participant.id}__${colPlayer.id}`);
         const isA = m?.participant_a_id === participant.id;
         return (
-          <BracketScoreCell key={colIdx} match={m} isA={isA} leagueId={leagueId} rules={m?.match_rule ?? rules} winScore={getWinScore(m?.match_rule ?? rules) ?? winScore} canManage={canScore} rowIndex={rowIdx} colIndex={colIdx} totalRows={n} totalCols={n} onProgramMatchUpdate={onProgramMatchUpdate}/>
+          <BracketScoreCell key={colIdx} match={m} isA={isA} leagueId={leagueId} rules={m?.match_rule ?? rules} winScore={getWinScore(m?.match_rule ?? rules) ?? winScore} canManage={canScore} landscape={landscape} rowIndex={rowIdx} colIndex={colIdx} totalRows={n} totalCols={n} onProgramMatchUpdate={onProgramMatchUpdate}/>
         );
       })}
 

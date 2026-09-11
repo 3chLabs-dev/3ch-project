@@ -31,7 +31,7 @@ export default function GroupPreMemberDialog({ open, onClose, groupId, manager =
   const [name, setName] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [imageImportOpen, setImageImportOpen] = useState(false);
-  const divisionInputRef = useRef<HTMLInputElement>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
   const members = useMemo(
     () => [...(data?.pre_members ?? [])].sort((left, right) => {
       const pendingDifference = Number(right.claim_status === "pending") - Number(left.claim_status === "pending");
@@ -47,7 +47,7 @@ export default function GroupPreMemberDialog({ open, onClose, groupId, manager =
       await createMember({ groupId, name: name.trim(), division: division.trim() }).unwrap();
       await onChanged?.();
       setName(""); setDivision("");
-      requestAnimationFrame(() => divisionInputRef.current?.focus());
+      requestAnimationFrame(() => nameInputRef.current?.focus());
     } catch (error) { window.alert(errorMessage(error)); }
   };
 
@@ -116,8 +116,8 @@ export default function GroupPreMemberDialog({ open, onClose, groupId, manager =
               이미지로 등록하기
             </Button>
             <Stack direction="row" spacing={1} component="form" onSubmit={(e) => { e.preventDefault(); void addMember(); }}>
-              <TextField inputRef={divisionInputRef} size="small" label="부수" value={division} onChange={(e) => setDivision(e.target.value)} sx={{ width: 92 }} />
-              <TextField size="small" label="이름" value={name} onChange={(e) => setName(e.target.value)} fullWidth />
+              <TextField inputRef={nameInputRef} size="small" label="이름" value={name} onChange={(e) => setName(e.target.value)} fullWidth />
+              <TextField size="small" label="부수" value={division} onChange={(e) => setDivision(e.target.value)} sx={{ width: 92 }} />
               <Button type="submit" variant="contained" disabled={!name.trim() || isCreating} sx={{ minWidth: 64 }}>추가</Button>
             </Stack>
           </Stack>

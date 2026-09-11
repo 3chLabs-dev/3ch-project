@@ -253,7 +253,9 @@ function ScoreButton({ icon, disabled, rotate, variant = "order", onClick }: {
       disabled={disabled}
       onPointerDown={(e) => e.stopPropagation()}
       onClick={onClick}
-      sx={{ p: 0.75, minWidth: 28, minHeight: 28 }}
+      sx={variant === "score"
+        ? { p: 0, width: 20, height: 20, minWidth: 20, minHeight: 20, flexShrink: 0 }
+        : { p: 0.75, minWidth: 28, minHeight: 28 }}
     >
       <Icon sx={{ fontSize: 16, ...(rotate && { transform: "rotate(90deg)" }) }} />
     </IconButton>
@@ -369,14 +371,15 @@ function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, la
   // landscape / portrait 공통: [↓] 점수 [↑] 가로 배치, 좌우 여백 있게
   const inner = (
     <Box className="score-control-container" sx={{
-      display: "flex", flexDirection: "row", alignItems: "center",
-      justifyContent: "space-between",
-      ...(landscape ? {} : { writingMode: "horizontal-tb" }),
-      px: 0.25, height: "100%", gap: 0.25,
+      display: "flex", flexDirection: landscape ? "row" : "column-reverse", alignItems: "center",
+      justifyContent: "center",
+      writingMode: "horizontal-tb",
+      width: "100%", height: "100%", minWidth: 0, minHeight: 0,
+      boxSizing: "border-box", overflow: "hidden", gap: 0,
     }}>
       <ScoreButton icon="down" variant="score" disabled={(score ?? 0) <= 0} rotate={!landscape} onClick={() => handleChange(-1)} />
       {!isEditing && 
-        <Typography className="score-text" data-row={rowIndex} data-col={colIndex} data-tc ={totalCols} data-tr={totalRows} onClick={() => { setTempValue(String(score ?? 0)); setIsEditing(true); }}sx={{ fontSize: 14, ...winnerStyle, lineHeight: 1, ...(landscape ? {} : { transform: "rotate(90deg)" }), minWidth: 14, textAlign: "center" }}>
+        <Typography className="score-text" data-row={rowIndex} data-col={colIndex} data-tc ={totalCols} data-tr={totalRows} onClick={() => { setTempValue(String(score ?? 0)); setIsEditing(true); }}sx={{ fontSize: 14, ...winnerStyle, lineHeight: 1, width: 18, minWidth: 18, flexShrink: 0, ...(landscape ? {} : { transform: "rotate(-90deg)" }), textAlign: "center" }}>
           {score ?? 0}
         </Typography>
       }
@@ -426,7 +429,7 @@ function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, la
                                 }, 0);
                               }
                             }}
-          style={{ width: 50, textAlign: "center",}}/>
+          style={{ width: 18, minWidth: 18, padding: 0, textAlign: "center", boxSizing: "border-box", transform: landscape ? undefined : "rotate(-90deg)" }}/>
       }
       <ScoreButton icon="up" variant="score" rotate={!landscape} onClick={() => handleChange(1)} />
     </Box>

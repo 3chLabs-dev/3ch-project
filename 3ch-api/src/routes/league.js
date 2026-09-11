@@ -2583,7 +2583,14 @@ router.get('/league/:id/point-ranking', optionalAuth, async (req, res) => {
     const adjustments = await pool.query(`SELECT participant_id,league_points::float,tournament_points::float,championships FROM league_point_ranking_adjustments WHERE league_id=$1 AND season_id=$2`, [league.id, season.id]).catch(() => ({ rows: [] }));
     const participants = await pool.query(`SELECT id,member_id,name,division FROM league_participants WHERE league_id=$1 AND status='active' ORDER BY sort_order NULLS LAST,created_at`, [league.id]);
     const ranking = await getPointRanking(league.group_id, undefined, 'club', season.id, league.id);
-    const effectiveRules = normalizePointRules(saved.rows[0]?.enabled ? saved.rows[0].point_rules : season.point_rules);
+    const hasLeagueOverride = saved.rows[0]?.enabled === true;
+    const baseRules = normalizePointRules(hasLeagueOverride ? saved.rows[0].point_rules : season.point_rules);
+    // 리그별 별도 설정이 없으면 합산 가능한 프로그램은 전체 라운드 합계를 기본으로 보여준다.
+    // 별도 설정을 켠 리그에서는 관리자가 합산 옵션을 직접 끌 수 있다.
+    const effectiveRules = {
+      ...baseRules,
+      combineAllRounds: canCombineAllRounds && (hasLeagueOverride ? baseRules.combineAllRounds : true),
+    };
     const unitRankings = await getProgramUnitRankings(league.id, programResult.rows[0]?.program_data, effectiveRules);
     return res.json({ ...ranking, league_info: league, seasons: seasonRows.rows, season,
       override_enabled: saved.rows[0]?.enabled === true,

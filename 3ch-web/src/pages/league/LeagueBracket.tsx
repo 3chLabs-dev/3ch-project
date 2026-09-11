@@ -371,7 +371,7 @@ function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, la
   // landscape / portrait 공통: [↓] 점수 [↑] 가로 배치, 좌우 여백 있게
   const inner = (
     <Box className="score-control-container" sx={{
-      display: "flex", flexDirection: landscape ? "row" : "column-reverse", alignItems: "center",
+      display: "flex", flexDirection: "row", alignItems: "center",
       justifyContent: "center",
       writingMode: "horizontal-tb",
       width: "100%", height: "100%", minWidth: 0, minHeight: 0,
@@ -379,7 +379,7 @@ function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, la
     }}>
       <ScoreButton icon="down" variant="score" disabled={(score ?? 0) <= 0} rotate={!landscape} onClick={() => handleChange(-1)} />
       {!isEditing && 
-        <Typography className="score-text" data-row={rowIndex} data-col={colIndex} data-tc ={totalCols} data-tr={totalRows} onClick={() => { setTempValue(String(score ?? 0)); setIsEditing(true); }}sx={{ fontSize: 14, ...winnerStyle, lineHeight: 1, width: 18, minWidth: 18, flexShrink: 0, ...(landscape ? {} : { transform: "rotate(-90deg)" }), textAlign: "center" }}>
+        <Typography className="score-text" data-row={rowIndex} data-col={colIndex} data-tc ={totalCols} data-tr={totalRows} onClick={() => { setTempValue(String(score ?? 0)); setIsEditing(true); }}sx={{ fontSize: 14, ...winnerStyle, lineHeight: 1, width: 18, minWidth: 18, flexShrink: 0, textAlign: "center" }}>
           {score ?? 0}
         </Typography>
       }
@@ -429,7 +429,7 @@ function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, la
                                 }, 0);
                               }
                             }}
-          style={{ width: 18, minWidth: 18, padding: 0, textAlign: "center", boxSizing: "border-box", transform: landscape ? undefined : "rotate(-90deg)" }}/>
+          style={{ width: 18, minWidth: 18, padding: 0, textAlign: "center", boxSizing: "border-box" }}/>
       }
       <ScoreButton icon="up" variant="score" rotate={!landscape} onClick={() => handleChange(1)} />
     </Box>

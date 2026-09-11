@@ -27,6 +27,7 @@ import MenuIcon from "@mui/icons-material/Menu";
 import AddIcon from "@mui/icons-material/Add";
 import RemoveIcon from "@mui/icons-material/Remove";
 import ScreenRotationIcon from "@mui/icons-material/ScreenRotation";
+import FullscreenIcon from "@mui/icons-material/Fullscreen";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import ZoomInIcon from "@mui/icons-material/ZoomIn";
 import ZoomOutIcon from "@mui/icons-material/ZoomOut";
@@ -2153,13 +2154,11 @@ export default function LeagueBracket() {
             <ScreenRotationIcon sx={{ fontSize: 18 }} />
           </IconButton>
         </Tooltip>
-        <Button
-          variant="contained"
-          onClick={() => void toggleFullscreen().catch(() => window.alert("이 브라우저에서는 전체 화면을 사용할 수 없습니다."))}
-          sx={{ minWidth: 68, height: 36, px: 1, borderRadius: 2, fontSize: 11, fontWeight: 900, whiteSpace: "nowrap", boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}
-        >
-          전체 화면
-        </Button>
+        <Tooltip title="전체 화면">
+          <IconButton onClick={() => void toggleFullscreen().catch(() => window.alert("이 브라우저에서는 전체 화면을 사용할 수 없습니다."))} sx={{ bgcolor: "#fff", color: "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: "#F3F4F6" } }}>
+            <FullscreenIcon sx={{ fontSize: 22 }} />
+          </IconButton>
+        </Tooltip>
         </Box>
 
       </Box>{/* /wrapperRef */}

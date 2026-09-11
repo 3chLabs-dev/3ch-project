@@ -18,6 +18,8 @@ import {
   TextField,
   Checkbox,
   FormControlLabel,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
@@ -335,6 +337,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
     program: StoredProgramOption;
     roundIndex: number;
   } | null>(null);
+  const [formationRequiredMessage, setFormationRequiredMessage] = useState("");
   const autoSyncedRoundsRef = useRef(new Set<number>());
   const programExportRef = useRef<HTMLDivElement | null>(null);
   const sensors = useSensors(
@@ -393,6 +396,32 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
     return start && !Number.isNaN(start.getTime()) ? start.getHours() * 60 + start.getMinutes() : 0;
   })();
   const exportEndMinutes = programRounds.at(-1)?.endMinutes ?? exportStartMinutes + exportTotalMinutes;
+
+  const navigateToRoundPage = (
+    round: {
+      round: number;
+      type?: StoredProgramBlock["type"];
+      format?: StoredProgramBlock["format"];
+      bracketPath: string;
+      teamFormationPublished?: boolean;
+      groupFormationPublished?: boolean;
+    },
+    destination: "matches" | "bracket",
+  ) => {
+    if (round.type === "TEAM" && !round.teamFormationPublished) {
+      setFormationRequiredMessage("팀 편성 전입니다");
+      return;
+    }
+    if (round.format === "GROUP" && !round.groupFormationPublished) {
+      setFormationRequiredMessage("조 편성 전입니다");
+      return;
+    }
+    if (destination === "matches") {
+      navigate(`/league/${id}/program/matches?program=1&round=${round.round}`);
+      return;
+    }
+    navigate(`/league/${id}/program/${round.bracketPath}?program=1&round=${round.round}&format=${round.format}${embedded ? "&back=detail" : ""}`);
+  };
   const exportRentalEndMinutes = (() => {
     const end = league?.end_date ? new Date(league.end_date) : null;
     return end && !Number.isNaN(end.getTime()) ? end.getHours() * 60 + end.getMinutes() : exportEndMinutes;
@@ -1562,35 +1591,26 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
                       </Typography>
                     )}
 
-                    <Stack direction="row" spacing={1}>
-                      <Button
-                        variant="outlined"
-                        disableElevation
-                        endIcon={<ChevronRightIcon sx={{ fontSize: 16 }} />}
-                        onClick={() => navigate(`/league/${id}/program/matches?program=1&round=${round.round}`)}
-                        sx={{ flex: 1, height: 38, fontWeight: 700, fontSize: 12, borderRadius: 1.5, textTransform: "none", whiteSpace: "nowrap", borderColor: "#2563EB", color: "#2563EB", "&:hover": { bgcolor: "#EFF6FF" } }}
-                      >
-                        경기 순서
-                      </Button>
-                      <Button
-                        variant="contained"
-                        disableElevation
-                        endIcon={<ChevronRightIcon sx={{ fontSize: 16 }} />}
-                        onClick={() => navigate(`/league/${id}/program/${round.bracketPath}?program=1&round=${round.round}&format=${round.format}${embedded ? "&back=detail" : ""}`)}
-                        sx={{ flex: 1, height: 38, fontWeight: 700, fontSize: 12, borderRadius: 1.5, textTransform: "none", boxShadow: "none", whiteSpace: "nowrap", bgcolor: "#2563EB", "&:hover": { bgcolor: "#1D4ED8" } }}
-                      >
-                        {round.bracketLabel}
-                      </Button>
-                    </Stack>
-
                     {(round.type === "TEAM" || round.type === "DOUBLES" || round.format === "GROUP") && (
-                      <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                      <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
                         {round.type === "TEAM" && (round.teamFormationPublished || canManage) && (
                           <Button
                             variant="outlined"
                             size="small"
                             onClick={() => round.teamFormationPublished ? setFormationDialog({ roundIndex: round.round - 1, mode: "team" }) : openGroupStructureDialog(round.round - 1, "team")}
-                            sx={{ flex: 1, height: 34, fontWeight: 700, fontSize: 12, borderRadius: 1.5, textTransform: "none", whiteSpace: "nowrap" }}
+                            sx={{
+                              flex: 1,
+                              height: 34,
+                              fontWeight: 700,
+                              fontSize: 12,
+                              borderRadius: 1.5,
+                              textTransform: "none",
+                              whiteSpace: "nowrap",
+                              color: "#2563EB",
+                              borderColor: "#93C5FD",
+                              bgcolor: "#EFF6FF",
+                              "&:hover": { borderColor: "#60A5FA", bgcolor: "#DBEAFE" },
+                            }}
                           >
                             {round.teamFormationPublished ? "팀 편성 결과" : "팀 편성하기"}
                           </Button>
@@ -1618,13 +1638,46 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
                             variant="outlined"
                             size="small"
                             onClick={() => round.groupFormationPublished ? setFormationDialog({ roundIndex: round.round - 1, mode: "group" }) : openGroupStructureDialog(round.round - 1, "group")}
-                            sx={{ flex: 1, height: 34, fontWeight: 700, fontSize: 12, borderRadius: 1.5, textTransform: "none", whiteSpace: "nowrap" }}
+                            sx={{
+                              flex: 1,
+                              height: 34,
+                              fontWeight: 700,
+                              fontSize: 12,
+                              borderRadius: 1.5,
+                              textTransform: "none",
+                              whiteSpace: "nowrap",
+                              color: "#7C3AED",
+                              borderColor: "#C4B5FD",
+                              bgcolor: "#F5F3FF",
+                              "&:hover": { borderColor: "#A78BFA", bgcolor: "#EDE9FE" },
+                            }}
                           >
                             {round.groupFormationPublished ? "조 편성 결과" : "조 편성하기"}
                           </Button>
                         )}
                       </Stack>
                     )}
+
+                    <Stack direction="row" spacing={1}>
+                      <Button
+                        variant="outlined"
+                        disableElevation
+                        endIcon={<ChevronRightIcon sx={{ fontSize: 16 }} />}
+                        onClick={() => navigateToRoundPage(round, "matches")}
+                        sx={{ flex: 1, height: 38, fontWeight: 700, fontSize: 12, borderRadius: 1.5, textTransform: "none", whiteSpace: "nowrap", borderColor: "#2563EB", color: "#2563EB", "&:hover": { bgcolor: "#EFF6FF" } }}
+                      >
+                        경기 순서
+                      </Button>
+                      <Button
+                        variant="contained"
+                        disableElevation
+                        endIcon={<ChevronRightIcon sx={{ fontSize: 16 }} />}
+                        onClick={() => navigateToRoundPage(round, "bracket")}
+                        sx={{ flex: 1, height: 38, fontWeight: 700, fontSize: 12, borderRadius: 1.5, textTransform: "none", boxShadow: "none", whiteSpace: "nowrap", bgcolor: "#2563EB", "&:hover": { bgcolor: "#1D4ED8" } }}
+                      >
+                        {round.bracketLabel}
+                      </Button>
+                    </Stack>
                   </Box>
                 ))}
 
@@ -2229,6 +2282,21 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={Boolean(formationRequiredMessage)}
+        autoHideDuration={2500}
+        onClose={() => setFormationRequiredMessage("")}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          severity="warning"
+          onClose={() => setFormationRequiredMessage("")}
+          sx={{ width: "100%", fontWeight: 800 }}
+        >
+          {formationRequiredMessage}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 });

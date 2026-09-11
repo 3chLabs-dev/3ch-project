@@ -250,7 +250,7 @@ export default function LeagueStep5Participants() {
       <Box
         sx={{
           display: "grid",
-          gridTemplateColumns: "minmax(0,160px) 56px 56px",
+          gridTemplateColumns: "minmax(0,1fr) 56px 56px",
           gap: 1,
           alignItems: "center",
           px: 0.5,
@@ -270,7 +270,7 @@ export default function LeagueStep5Participants() {
         }}
         sx={{
           display: "grid",
-          gridTemplateColumns: "minmax(0,160px) 56px 56px",
+          gridTemplateColumns: "minmax(0,1fr) 56px 56px",
           gap: 1,
           alignItems: "center",
           px: 0.5,
@@ -346,7 +346,7 @@ export default function LeagueStep5Participants() {
               key={`${p.division}-${p.name}-${idx}`}
               sx={{
                 display: "grid",
-                gridTemplateColumns: "minmax(0,160px) 56px 56px",
+                gridTemplateColumns: "minmax(0,1fr) 56px 56px",
                 gap: 1,
                 alignItems: "center",
                 px: 0.5,

@@ -3229,7 +3229,7 @@ export default function LeagueGPTVisionSheet() {
         <Box sx={landscape ? {
           position: "fixed", right: 14, bottom: `${(scheduleRef.current?.offsetHeight ?? 86) + 12}px`, zIndex: 10003,
         } : {
-          position: "fixed", right: 8, bottom: 8, width: 112, height: 292, zIndex: 10003, overflow: "visible",
+          position: "fixed", left: 0, bottom: 0, width: 112, height: 292, zIndex: 10003, overflow: "visible",
         }}>
           <Paper elevation={10} sx={landscape ? {
             width: 340, p: 1.5, borderRadius: 2.5,

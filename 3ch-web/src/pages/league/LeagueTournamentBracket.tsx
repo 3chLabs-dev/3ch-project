@@ -1082,6 +1082,7 @@ export default function LeagueTournamentBracket() {
   const [viewportSize, setViewportSize] = useState(() => ({
     width: window.visualViewport?.width ?? window.innerWidth,
     height: window.visualViewport?.height ?? window.innerHeight,
+    orientation: window.screen.orientation?.type ?? "",
   }));
 
   useEffect(() => {
@@ -1089,6 +1090,7 @@ export default function LeagueTournamentBracket() {
       setViewportSize({
         width: window.visualViewport?.width ?? window.innerWidth,
         height: window.visualViewport?.height ?? window.innerHeight,
+        orientation: window.screen.orientation?.type ?? "",
       });
     };
 
@@ -1096,17 +1098,20 @@ export default function LeagueTournamentBracket() {
     window.addEventListener("resize", updateViewportSize);
     window.addEventListener("orientationchange", updateViewportSize);
     window.visualViewport?.addEventListener("resize", updateViewportSize);
+    window.screen.orientation?.addEventListener("change", updateViewportSize);
     return () => {
       window.removeEventListener("resize", updateViewportSize);
       window.removeEventListener("orientationchange", updateViewportSize);
       window.visualViewport?.removeEventListener("resize", updateViewportSize);
+      window.screen.orientation?.removeEventListener("change", updateViewportSize);
     };
   }, []);
 
   // 휴대폰이 세로 뷰포트를 유지하면 대진표 전체를 가로 방향으로 보정한다.
   // 기기 자동 회전으로 브라우저가 가로 뷰포트가 되면 자체 회전은 해제된다.
-  const rotatePortraitPhone = viewportSize.height > viewportSize.width
-    && Math.min(viewportSize.width, viewportSize.height) <= 600;
+  const rotatePortraitPhone = viewportSize.orientation
+    ? viewportSize.orientation.startsWith("portrait")
+    : viewportSize.height >= viewportSize.width;
 
   // 참가자 등록 팝업
   const [registerTarget, setRegisterTarget] = useState<{ matchId: string; slot: "a" | "b" } | null>(null);

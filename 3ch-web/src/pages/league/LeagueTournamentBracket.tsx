@@ -276,6 +276,7 @@ function TournamentResultDialog({ open, match, rule, leagueId, splitBracket, onC
     <Dialog
       open={open}
       onClose={onClose}
+      disablePortal
       fullWidth
       maxWidth="xs"
       sx={{ zIndex: 11000 }}
@@ -1078,6 +1079,34 @@ export default function LeagueTournamentBracket() {
   const [deleteSlotDialogOpen, setDeleteSlotDialogOpen] = useState(false);
   const [reseedDialogOpen, setReseedDialogOpen] = useState(false);
   const exportRef = useRef<HTMLDivElement | null>(null);
+  const [viewportSize, setViewportSize] = useState(() => ({
+    width: window.visualViewport?.width ?? window.innerWidth,
+    height: window.visualViewport?.height ?? window.innerHeight,
+  }));
+
+  useEffect(() => {
+    const updateViewportSize = () => {
+      setViewportSize({
+        width: window.visualViewport?.width ?? window.innerWidth,
+        height: window.visualViewport?.height ?? window.innerHeight,
+      });
+    };
+
+    updateViewportSize();
+    window.addEventListener("resize", updateViewportSize);
+    window.addEventListener("orientationchange", updateViewportSize);
+    window.visualViewport?.addEventListener("resize", updateViewportSize);
+    return () => {
+      window.removeEventListener("resize", updateViewportSize);
+      window.removeEventListener("orientationchange", updateViewportSize);
+      window.visualViewport?.removeEventListener("resize", updateViewportSize);
+    };
+  }, []);
+
+  // 휴대폰이 세로 뷰포트를 유지하면 대진표 전체를 가로 방향으로 보정한다.
+  // 기기 자동 회전으로 브라우저가 가로 뷰포트가 되면 자체 회전은 해제된다.
+  const rotatePortraitPhone = viewportSize.height > viewportSize.width
+    && Math.min(viewportSize.width, viewportSize.height) <= 600;
 
   // 참가자 등록 팝업
   const [registerTarget, setRegisterTarget] = useState<{ matchId: string; slot: "a" | "b" } | null>(null);
@@ -1945,7 +1974,24 @@ export default function LeagueTournamentBracket() {
   }
 
   return createPortal(
-    <Box sx={{ bgcolor: "#fff", display: "flex", flexDirection: "column", overflow: "hidden", position: "fixed", inset: 0, zIndex: 9999 }}>
+    <Box sx={{
+      bgcolor: "#fff",
+      display: "flex",
+      flexDirection: "column",
+      overflow: "hidden",
+      position: "fixed",
+      zIndex: 9999,
+      ...(rotatePortraitPhone
+        ? {
+            top: "50%",
+            left: "50%",
+            width: viewportSize.height,
+            height: viewportSize.width,
+            transform: "translate(-50%, -50%) rotate(90deg)",
+            transformOrigin: "center",
+          }
+        : { inset: 0 }),
+    }}>
 
       {/* ── 헤더 ── */}
       <Box sx={{ display: "flex", alignItems: "center", px: 1, py: 0.75, borderBottom: "1px solid #E5E7EB", gap: 0.5, flexShrink: 0 }}>
@@ -2323,6 +2369,7 @@ export default function LeagueTournamentBracket() {
       <Dialog
         open={reseedDialogOpen}
         onClose={() => setReseedDialogOpen(false)}
+        disablePortal
         fullWidth
         maxWidth="xs"
         sx={{ zIndex: 11000 }}
@@ -2346,6 +2393,7 @@ export default function LeagueTournamentBracket() {
       <Dialog
         open={deleteSlotDialogOpen}
         onClose={() => setDeleteSlotDialogOpen(false)}
+        disablePortal
         fullWidth
         maxWidth="xs"
         sx={{ zIndex: 11000 }}

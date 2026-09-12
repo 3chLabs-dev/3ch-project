@@ -33,7 +33,7 @@ import {
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
 import { formatLeagueDate } from "../../utils/dateUtils";
 import { DivisionBadge } from "../../components/ParticipantName";
-import { applyProgramMatchState, applyProgramTournamentAdvancement, clearProgramMatchState, generateProgramRoundMatches, getStoredProgramOption, isAutomaticProgramWalkover, saveProgramMatchPatch } from "../../utils/programMatchGenerator";
+import { applyProgramMatchState, applyProgramTournamentAdvancement, clearProgramMatchState, generateProgramRoundMatches, getStoredProgramOption, isAutomaticProgramWalkover, saveProgramMatchPatch, type ProgramMatchPatch } from "../../utils/programMatchGenerator";
 
 // ─── 단일 토너먼트 레이아웃 상수 ────────────────────────────────────────────
 // 단일 토너먼트(라운드로빈 등)에서 매치 박스를 좌→우 방향으로 나열할 때 사용
@@ -1779,30 +1779,52 @@ export default function LeagueTournamentBracket() {
     const selected = swapFirst;
 
     if (isProgramMode && programBlock) {
+      const selectedMatch = allProgramMatches.find((match) => match.id === selected.matchId);
+      if (!selectedMatch) return;
+      const deletedParticipantId = selected.participantId;
+      const slotPatch: ProgramMatchPatch = selected.slot === "a"
+        ? {
+            participant_a_id: null,
+            participant_a_name: null,
+            participant_a_division: null,
+            participant_a_seed_label: null,
+          }
+        : {
+            participant_b_id: null,
+            participant_b_name: null,
+            participant_b_division: null,
+            participant_b_seed_label: null,
+          };
+      const remainingParticipantId = selected.slot === "a"
+        ? selectedMatch.participant_b_id
+        : selectedMatch.participant_a_id;
+      const selectedMatchPatch: ProgramMatchPatch = {
+        ...slotPatch,
+        status: remainingParticipantId ? "done" : "pending",
+        score_a: remainingParticipantId ? 0 : null,
+        score_b: remainingParticipantId ? 0 : null,
+      };
+      saveProgramMatchPatch(id!, programRound, selected.matchId, selectedMatchPatch);
+
+      const downstreamPatches = new Map<string, ProgramMatchPatch>();
+      const clearDownstreamParticipant = (matchId: string | null | undefined, slot: string | null | undefined) => {
+        if (!matchId || (slot !== "a" && slot !== "b") || !deletedParticipantId) return;
+        const downstream = allProgramMatches.find((match) => match.id === matchId);
+        const downstreamParticipantId = slot === "a" ? downstream?.participant_a_id : downstream?.participant_b_id;
+        if (downstreamParticipantId !== deletedParticipantId) return;
+        const patch: ProgramMatchPatch = slot === "a"
+          ? { participant_a_id: null, participant_a_name: null, participant_a_division: null, participant_a_seed_label: null, status: "pending", score_a: null, score_b: null }
+          : { participant_b_id: null, participant_b_name: null, participant_b_division: null, participant_b_seed_label: null, status: "pending", score_a: null, score_b: null };
+        downstreamPatches.set(matchId, patch);
+        saveProgramMatchPatch(id!, programRound, matchId, patch);
+      };
+      clearDownstreamParticipant(selectedMatch.next_match_id, selectedMatch.next_slot);
+      clearDownstreamParticipant(selectedMatch.loser_next_match_id, selectedMatch.loser_next_slot);
+
       const nextMatches = allProgramMatches.map((match) => {
-        if (match.id !== selected.matchId) return match;
-        const next = { ...match };
-        if (selected.slot === "a") {
-          next.participant_a_id = null;
-          next.participant_a_name = null;
-          next.participant_a_division = null;
-          next.participant_a_seed_label = null;
-          next.participant_a_roster = [];
-          next.participant_a_roster_details = [];
-        } else {
-          next.participant_b_id = null;
-          next.participant_b_name = null;
-          next.participant_b_division = null;
-          next.participant_b_seed_label = null;
-          next.participant_b_roster = [];
-          next.participant_b_roster_details = [];
-        }
-        if (Boolean(next.participant_a_id) !== Boolean(next.participant_b_id)) {
-          next.status = "done";
-          next.score_a = 0;
-          next.score_b = 0;
-        }
-        return next;
+        if (match.id === selected.matchId) return { ...match, ...selectedMatchPatch };
+        const downstreamPatch = downstreamPatches.get(match.id);
+        return downstreamPatch ? { ...match, ...downstreamPatch } : match;
       });
       await syncLeagueProgramMatches({
         leagueId: id!,

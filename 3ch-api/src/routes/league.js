@@ -2625,9 +2625,14 @@ router.post('/league/:leagueId/participants', optionalAuth, async (req, res) => 
  */
 router.get('/league/:id/point-ranking', optionalAuth, async (req, res) => {
   try {
-    const found = await pool.query(`SELECT id, group_id, start_date, name FROM leagues WHERE id=$1`, [req.params.id]);
+    const found = await pool.query(`SELECT id, group_id, start_date, name, ranking_visibility FROM leagues WHERE id=$1`, [req.params.id]);
     const league = found.rows[0];
     if (!league?.group_id) return res.status(404).json({ message: '클럽 리그를 찾을 수 없습니다.' });
+    if (league.ranking_visibility === 'club_only') {
+      if (!req.user) return res.status(403).json({ message: '클럽 회원만 순위를 열람할 수 있습니다.' });
+      const membership = await pool.query(`SELECT 1 FROM group_members WHERE group_id=$1 AND user_id=$2 LIMIT 1`, [league.group_id, req.user.sub]);
+      if (!membership.rowCount) return res.status(403).json({ message: '클럽 회원만 순위를 열람할 수 있습니다.' });
+    }
     await ensureDefaultRankingSeasons(league.group_id);
     const seasonRows = await pool.query(`SELECT id,name,start_date,end_date,is_default,is_display_default,point_rules FROM group_ranking_seasons WHERE group_id=$1 AND $2::date BETWEEN start_date AND end_date ORDER BY is_display_default DESC,is_default ASC,start_date DESC`, [league.group_id, league.start_date]);
     const season = seasonRows.rows.find((row) => row.id === String(req.query.season_id || '')) ?? seasonRows.rows[0];
@@ -2671,6 +2676,19 @@ router.get('/league/:id/point-ranking', optionalAuth, async (req, res) => {
       adjustments: adjustments.rows, participants: participants.rows, can_combine_all_rounds: canCombineAllRounds,
       can_manage: req.user ? await getLeagueRankingManager(pool, league.id, req.user.sub) : false });
   } catch (error) { console.error('리그 순위 조회 실패:', error); return res.status(500).json({ message: '리그 순위를 불러오지 못했습니다.' }); }
+});
+
+router.put('/league/:id/point-ranking/visibility', requireAuth, async (req, res) => {
+  try {
+    if (!await getLeagueRankingManager(pool, req.params.id, req.user.sub)) return res.status(403).json({ message: '순위 관리 권한이 없습니다.' });
+    const visibility = z.enum(['public', 'club_only']).parse(req.body?.visibility);
+    const result = await pool.query(`UPDATE leagues SET ranking_visibility=$1,updated_at=CURRENT_TIMESTAMP WHERE id=$2 RETURNING ranking_visibility`, [visibility, req.params.id]);
+    if (!result.rowCount) return res.status(404).json({ message: '리그를 찾을 수 없습니다.' });
+    return res.json({ ranking_visibility: result.rows[0].ranking_visibility });
+  } catch (error) {
+    console.error('리그 순위 열람 권한 저장 실패:', error);
+    return res.status(400).json({ message: '순위 열람 권한을 저장하지 못했습니다.' });
+  }
 });
 
 router.put('/league/:id/point-ranking/settings', requireAuth, async (req, res) => {

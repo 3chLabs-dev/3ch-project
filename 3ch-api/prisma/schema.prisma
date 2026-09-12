@@ -297,6 +297,7 @@ model League {
   participant_count      Int       @default(0)
   league_code            String?   @unique
   join_permission        String    @default("public") // "public" | "club_only"
+  ranking_visibility     String    @default("public") // "public" | "club_only"
   visibility             String    @default("club_only") // "club_only" | "public"
   premium_enabled        Boolean   @default(false)
   premium_started_at     DateTime? @db.Timestamptz(6)

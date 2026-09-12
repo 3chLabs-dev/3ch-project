@@ -176,7 +176,7 @@ export interface GetLeaguesParams {
 }
 
 export interface LeaguePointRankingResponse {
-  league_info: { id: string; name: string; group_id: string };
+  league_info: { id: string; name: string; group_id: string; ranking_visibility: "public" | "club_only" };
   season: { id: string; name: string };
   seasons: Array<{ id: string; name: string }>;
   override_enabled: boolean;
@@ -726,6 +726,10 @@ export const leagueApi = baseApi.injectEndpoints({
     getLeaguePointRanking: builder.query<LeaguePointRankingResponse, { leagueId: string; seasonId?: string }>({
       query: ({ leagueId, seasonId }) => ({ url: `/league/${leagueId}/point-ranking`, params: seasonId ? { season_id: seasonId } : undefined }),
       providesTags: (_r, _e, { leagueId }) => [{ type: "League", id: `point-ranking-${leagueId}` }],
+    }),
+    updateLeaguePointRankingVisibility: builder.mutation<{ ranking_visibility: "public" | "club_only" }, { leagueId: string; visibility: "public" | "club_only" }>({
+      query: ({ leagueId, visibility }) => ({ url: `/league/${leagueId}/point-ranking/visibility`, method: "PUT", body: { visibility } }),
+      invalidatesTags: (_r, _e, { leagueId }) => [{ type: "League", id: `point-ranking-${leagueId}` }],
     }),
     updateLeaguePointRankingSettings: builder.mutation<{ message: string; enabled: boolean; point_rules: GroupRankingPointRules }, { leagueId: string; seasonId: string; enabled: boolean; pointRules: GroupRankingPointRules }>({
       query: ({ leagueId, seasonId, enabled, pointRules }) => ({ url: `/league/${leagueId}/point-ranking/settings`, method: "PUT", body: { season_id: seasonId, enabled, point_rules: pointRules } }),
@@ -1403,6 +1407,7 @@ export const {
   useGetLeagueQuery,
   useGetLeagueParticipantsQuery,
   useGetLeaguePointRankingQuery,
+  useUpdateLeaguePointRankingVisibilityMutation,
   useUpdateLeaguePointRankingSettingsMutation,
   useUpdateLeaguePointRankingAdjustmentsMutation,
   useGetMyLeagueInvitationsQuery,

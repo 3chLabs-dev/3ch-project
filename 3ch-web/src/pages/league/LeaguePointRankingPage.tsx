@@ -1,11 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
-import { Alert, Box, Button, Card, CardContent, Checkbox, CircularProgress, Divider, FormControlLabel, MenuItem, Radio, RadioGroup, Select, Snackbar, Stack, TextField, Typography } from "@mui/material";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
+import { Alert, Box, Button, Card, CardContent, Checkbox, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, MenuItem, Radio, RadioGroup, Select, Snackbar, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
+import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import LanguageIcon from "@mui/icons-material/Language";
+import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
+import SmsOutlinedIcon from "@mui/icons-material/SmsOutlined";
+import QRCode from "react-qr-code";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { useGetLeaguePointRankingQuery, useUpdateLeaguePointRankingAdjustmentsMutation, useUpdateLeaguePointRankingSettingsMutation } from "../../features/league/leagueApi";
+import { useGetLeaguePointRankingQuery, useUpdateLeaguePointRankingAdjustmentsMutation, useUpdateLeaguePointRankingSettingsMutation, useUpdateLeaguePointRankingVisibilityMutation } from "../../features/league/leagueApi";
 import type { GroupRankingPointRules } from "../../features/group/groupApi";
 import { DivisionBadge } from "../../components/ParticipantName";
+import CurvedShareIcon from "../../components/CurvedShareIcon";
 
 const rankingLabels = { league: "풀리그", group: "조별리그", tournamentUpper: "토너먼트(상위)", tournamentLower: "토너먼트(하위)" } as const;
 const rankLabels = { first: "1위", second: "2위", third: "3위", fourth: "4위" } as const;
@@ -19,10 +27,14 @@ export default function LeaguePointRankingPage() {
   const { data, isLoading, error, refetch } = useGetLeaguePointRankingQuery({ leagueId: id, seasonId }, { skip: !id });
   const [saveSettings, settingsState] = useUpdateLeaguePointRankingSettingsMutation();
   const [saveAdjustments, adjustmentsState] = useUpdateLeaguePointRankingAdjustmentsMutation();
+  const [updateRankingVisibility, visibilityState] = useUpdateLeaguePointRankingVisibilityMutation();
   const [enabled, setEnabled] = useState(false); const [rules, setRules] = useState<GroupRankingPointRules>();
   const [adjustments, setAdjustments] = useState<Record<string, { league_points:number; tournament_points:number; championships:number }>>({});
   const [saveError, setSaveError] = useState("");
   const [saveNotice, setSaveNotice] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const exportRef = useRef<HTMLDivElement>(null);
   useEffect(() => { if (!data) return; setEnabled(data.override_enabled); setRules(structuredClone(data.point_rules)); setAdjustments(Object.fromEntries(data.adjustments.map((a) => [a.participant_id, { league_points:a.league_points, tournament_points:a.tournament_points, championships:a.championships }]))); }, [data]);
   const rows = useMemo(() => [...(data?.league.rankings ?? []), ...(data?.tournament.rankings ?? [])], [data]);
   const updateRank = (section:keyof GroupRankingPointRules["rankings"], key:"first"|"second"|"third"|"fourth", value:number) => setRules((old) => old ? ({ ...old, rankings:{ ...old.rankings, [section]:{ ...old.rankings[section], [key]:value } } }) : old);
@@ -54,6 +66,19 @@ export default function LeaguePointRankingPage() {
       `/club/${data.league_info.group_id}/member/${memberId}`,
       { state: { fromLeagueRanking: true, returnTo: `${location.pathname}${location.search}` } },
     );
+    const shareUrl = `${window.location.origin}/league/${id}/ranking?season=${encodeURIComponent(data.season.id)}`;
+    const downloadRanking = async () => {
+      if (!exportRef.current || isDownloading) return;
+      setIsDownloading(true);
+      try {
+        const html2canvas = (await import("html2canvas")).default;
+        const canvas = await html2canvas(exportRef.current, { scale:2, useCORS:true, backgroundColor:"#FFFFFF" });
+        const link = document.createElement("a");
+        link.href = canvas.toDataURL("image/png");
+        link.download = `리그순위_${data.league_info.name}_${data.season.name}.png`;
+        link.click();
+      } finally { setIsDownloading(false); }
+    };
     return <Box sx={{ maxWidth:720, mx:"auto", p:2, pb:8 }}>
       <Snackbar open={saveNotice} autoHideDuration={2500} onClose={() => setSaveNotice(false)} message="순위 설정이 저장되었습니다." />
       <Stack direction="row" alignItems="center" spacing={1} sx={{ mb:2 }}>
@@ -62,10 +87,20 @@ export default function LeaguePointRankingPage() {
         <Select size="small" value={data.season.id} onChange={(e) => changeSeason(String(e.target.value))} sx={{ minWidth:116, borderRadius:2 }}>{data.seasons.map((s) => <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>)}</Select>
         {data.can_manage && <Button variant="outlined" onClick={() => setSearchParams({ settings:"1", season:data.season.id })} sx={{ whiteSpace:"nowrap", borderRadius:2, fontWeight:800 }}>순위 설정</Button>}
       </Stack>
+      <Stack direction="row" justifyContent="flex-end" spacing={.5} sx={{ mb:1.2 }}>
+        <IconButton size="small" disabled={isDownloading} onClick={() => void downloadRanking()} aria-label="리그 순위 이미지 다운로드" sx={{ border:"1px solid #D1D5DB", borderRadius:1 }}><DownloadOutlinedIcon sx={{ fontSize:18 }} /></IconButton>
+        <IconButton size="small" onClick={() => setShareDialogOpen(true)} aria-label="리그 순위 공유" sx={{ border:"1px solid #D1D5DB", borderRadius:1 }}><CurvedShareIcon sx={{ fontSize:19 }} /></IconButton>
+      </Stack>
       {data.unit_rankings.length > 0 ? data.unit_rankings.map((section) => <RankingSection key={`${section.type}-${section.round}`} title={section.title} rows={section.rows} visibleCount={visibleCount} currentUserId={data.currentUserId} onSelect={openMemberDetail} onMore={() => setVisibleCount((count) => count+10)} />) : <>
         <RankingSection title="리그" rows={data.league.rankings} visibleCount={visibleCount} currentUserId={data.currentUserId} onSelect={openMemberDetail} onMore={() => setVisibleCount((count) => count+10)} />
         {data.tournament.rankings.some((row) => row.total_points > 0 || row.matches_played > 0) && <RankingSection title="대회" rows={data.tournament.rankings} visibleCount={visibleCount} currentUserId={data.currentUserId} onSelect={openMemberDetail} onMore={() => setVisibleCount((count) => count+10)} />}
       </>}
+      <Box ref={exportRef} sx={{ position:"fixed", left:-10000, top:0, width:430, bgcolor:"#FFF", p:2.5, zIndex:-1 }}>
+        <Typography sx={{ fontSize:22, fontWeight:900 }}>{data.league_info.name} 순위</Typography>
+        <Typography sx={{ mt:.4, mb:2, color:"#6B7280", fontSize:13, fontWeight:700 }}>{data.season.name}</Typography>
+        {data.unit_rankings.length > 0 ? data.unit_rankings.map((section) => <RankingSection key={`export-${section.type}-${section.round}`} title={section.title} rows={section.rows} visibleCount={Number.MAX_SAFE_INTEGER} currentUserId={data.currentUserId} onSelect={() => undefined} onMore={() => undefined} />) : <RankingSection title="리그" rows={data.league.rankings} visibleCount={Number.MAX_SAFE_INTEGER} currentUserId={data.currentUserId} onSelect={() => undefined} onMore={() => undefined} />}
+      </Box>
+      <LeagueRankingShareDialog open={shareDialogOpen} onClose={() => setShareDialogOpen(false)} link={shareUrl} leagueName={data.league_info.name} seasonName={data.season.name} visibility={data.league_info.ranking_visibility} canManage={data.can_manage} savingVisibility={visibilityState.isLoading} onVisibilityChange={async (visibility) => { try { await updateRankingVisibility({ leagueId:id, visibility }).unwrap(); } catch { window.alert("열람 권한을 변경하지 못했습니다."); } }} />
     </Box>;
   }
   return <Box sx={{ maxWidth:720, mx:"auto", p:2, pb:8 }}>
@@ -103,4 +138,26 @@ function RankingSection({ title, rows, visibleCount, currentUserId, onSelect, on
   const allRows=rows.filter((row)=>row.total_points>0||row.rank!=null); const visible=allRows.slice(0,visibleCount); const mine=allRows.find((row)=>row.member_id===currentUserId||row.member_ids?.includes(currentUserId)); const pinned=mine&&!visible.includes(mine)?mine:null;
   const card=(row:LeagueRankingListRow,isPinned=false)=>{const bg=row.rank===1?"#E9C23B":row.rank===2?"#D1D5DB":row.rank===3?"#D6A348":"#F3F4F6";const color=row.rank&&row.rank<=3?"#FFF":"#374151";const canOpen=row.member_id!=null&&!row.is_pre_registered;return <Card key={`${row.rank}-${row.name}-${isPinned}`} elevation={2} sx={{borderRadius:.85,boxShadow:"0 4px 12px rgba(0,0,0,.08)",bgcolor:isPinned?"#EEF2FF":"#FFF"}}><CardContent sx={{py:.95,px:1.3,"&:last-child":{pb:.95}}}><Stack direction="row" alignItems="center" spacing={.75}><Box sx={{width:42,height:30,borderRadius:"5px 0 0 5px",clipPath:"polygon(0 0,100% 0,82% 100%,0 100%)",bgcolor:bg,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:13,color,flexShrink:0}}>{row.rank??"-"}</Box><Box sx={{flex:1,minWidth:0}}><Stack direction="row" alignItems="center" spacing={.5}><Typography onClick={()=>canOpen&&onSelect(Number(row.member_id))} sx={{minWidth:0,fontSize:13.5,fontWeight:900,color:isPinned?"#1D4ED8":"#111827",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",cursor:canOpen?"pointer":"default",textDecoration:canOpen?"underline":"none"}}>{row.name}</Typography><DivisionBadge division={row.division}/>{row.is_pre_registered&&<Typography sx={{fontSize:9,fontWeight:800,color:"#6B7280",whiteSpace:"nowrap"}}>사전등록</Typography>}</Stack></Box><Box sx={{textAlign:"right",minWidth:52}}><Typography sx={{fontSize:24,fontWeight:900,color:"#1D4ED8",lineHeight:1}}>{row.total_points}</Typography><Typography sx={{fontSize:10,color:"text.secondary",fontWeight:700,lineHeight:1.1}}>포인트</Typography></Box></Stack></CardContent></Card>};
   return <Box sx={{mb:3}}><Typography fontWeight={900} fontSize={18} sx={{mb:1.2}}>{title}</Typography><Stack spacing={.8}>{visible.map((row)=>card(row))}</Stack>{allRows.length>visibleCount&&<Button fullWidth variant="outlined" endIcon={<ExpandMoreIcon sx={{fontSize:18}}/>} onClick={onMore} sx={{mt:1.1,height:42,borderRadius:2.5,borderColor:"#2F80ED",bgcolor:"#FFF",color:"#1976D2",fontSize:14,fontWeight:900}}>더보기</Button>}{pinned&&<Box sx={{mt:.8}}>{card(pinned,true)}</Box>}</Box>;
+}
+
+function LeagueRankingShareDialog({ open, onClose, link, leagueName, seasonName, visibility, canManage, savingVisibility, onVisibilityChange }: { open:boolean; onClose:()=>void; link:string; leagueName:string; seasonName:string; visibility:"public"|"club_only"; canManage:boolean; savingVisibility:boolean; onVisibilityChange:(visibility:"public"|"club_only")=>Promise<void> }) {
+  const copyLink = async () => {
+    try { await navigator.clipboard.writeText(link); window.alert("링크가 복사되었습니다."); onClose(); }
+    catch { window.alert("링크 복사에 실패했습니다."); }
+  };
+  const shareKakao = () => {
+    const kakaoKey=import.meta.env.VITE_KAKAO_JS_KEY;
+    if(window.Kakao&&kakaoKey&&!window.Kakao.isInitialized())window.Kakao.init(kakaoKey);
+    if(window.Kakao?.Share){window.Kakao.Share.sendDefault({objectType:"feed",content:{title:`${leagueName} 리그 순위`,description:seasonName,imageUrl:`${window.location.origin}/og-image.png`,link:{mobileWebUrl:link,webUrl:link}},buttons:[{title:"순위 보기",link:{mobileWebUrl:link,webUrl:link}}]});}
+    else void copyLink();
+  };
+  return <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth slotProps={{paper:{sx:{borderRadius:1,mx:2}}}}>
+    <DialogTitle sx={{fontWeight:900}}>리그 순위 공유</DialogTitle>
+    <DialogContent><Stack spacing={3} sx={{pt:1,alignItems:"center"}}><Box sx={{width:"100%"}}><Typography fontSize={12} color="text.secondary" fontWeight={700} sx={{mb:.8}}>열람 권한</Typography><ToggleButtonGroup value={visibility} exclusive disabled={!canManage||savingVisibility} onChange={(_event,value)=>{if(value)void onVisibilityChange(value);}} size="small" fullWidth sx={{"& .MuiToggleButton-root":{fontWeight:700,fontSize:13,py:.8}}}><ToggleButton value="club_only" sx={{gap:.5}}><LockOutlinedIcon sx={{fontSize:16}}/>클럽에 가입한 회원만</ToggleButton><ToggleButton value="public" sx={{gap:.5}}><LanguageIcon sx={{fontSize:16}}/>링크가 있는 모든 사람</ToggleButton></ToggleButtonGroup></Box><Box sx={{p:2,bgcolor:"#FFF",borderRadius:1,border:"1px solid #E0E0E0"}}><QRCode value={link} size={200} style={{height:"auto",maxWidth:"100%",width:"100%"}}/></Box><Box sx={{width:"100%"}}><Typography fontSize={12} color="text.secondary" fontWeight={700} sx={{mb:.6}}>공유 링크</Typography><TextField value={link} fullWidth size="small" slotProps={{input:{readOnly:true}}}/></Box><Stack direction="row" justifyContent="space-around" sx={{width:"100%"}}><RankingShareAction label="카카오톡" bgcolor="#FFEB3A" onClick={shareKakao}><Box component="img" src="/kakao-logo.png" alt="카카오톡" sx={{width:38,height:38}}/></RankingShareAction><RankingShareAction label="문자" bgcolor="#4CAF50" color="#FFF" onClick={()=>{window.location.href=`sms:?body=${encodeURIComponent(`${leagueName} 리그 순위 (${seasonName}) ${link}`)}`;}}><SmsOutlinedIcon/></RankingShareAction><RankingShareAction label="링크 복사" bgcolor="#E5E7EB" color="#374151" onClick={()=>void copyLink()}><ContentCopyOutlinedIcon/></RankingShareAction></Stack></Stack></DialogContent>
+    <DialogActions sx={{px:3,pb:2.5}}><Button variant="contained" onClick={onClose} sx={{fontWeight:800}}>닫기</Button></DialogActions>
+  </Dialog>;
+}
+
+function RankingShareAction({ label, bgcolor, color, onClick, children }: { label:string; bgcolor:string; color?:string; onClick:()=>void; children:ReactNode }) {
+  return <Stack alignItems="center" spacing={.7}><IconButton onClick={onClick} sx={{width:56,height:56,bgcolor,color,"&:hover":{bgcolor}}}>{children}</IconButton><Typography fontSize={11} fontWeight={700} color="text.secondary">{label}</Typography></Stack>;
 }

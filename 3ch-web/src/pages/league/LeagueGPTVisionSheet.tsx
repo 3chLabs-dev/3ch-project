@@ -3358,16 +3358,16 @@ export default function LeagueGPTVisionSheet() {
         </DialogActions>
       </Dialog>
 
-      <Dialog open={previewOpen} onClose={() => !isScanning && !isSavingVision && setPreviewOpen(false)} maxWidth="lg" fullWidth sx={{ zIndex: 10002 }} slotProps={{ paper: { sx: { overflow: "hidden", position: "relative", ...mobileDialogPaperSx } } }}>
+      <Dialog open={previewOpen} onClose={() => !isScanning && !isSavingVision && setPreviewOpen(false)} maxWidth="lg" fullWidth sx={{ zIndex: 10002 }} slotProps={{ paper: { sx: { overflow: "hidden", position: "relative", display: "flex", flexDirection: "column", height: landscape ? "min(900px, calc(100dvh - 32px))" : "calc(100vw - 8px)", ...mobileDialogPaperSx } } }}>
         <DialogTitle sx={{ fontWeight: 900 }}>AI 인식 결과</DialogTitle>
-        <DialogContent dividers sx={{ overflow: "hidden" }}>
-          <Typography sx={{ mb: 1.5, color: "#6B7280", fontSize: 13, fontWeight: 700 }}>별 표시한 부분부터 점수를 인식했습니다. 잘못 인식된 점수는 직접 수정한 후 저장해 주세요.</Typography>
+        <DialogContent dividers sx={{ overflow: "hidden", minHeight: 0, display: "flex", flexDirection: "column" }}>
+          <Typography sx={{ mb: 1.5, color: "#6B7280", fontSize: 13, fontWeight: 700, flexShrink: 0 }}>별 표시한 부분부터 점수를 인식했습니다. 잘못 인식된 점수는 직접 수정한 후 저장해 주세요.</Typography>
           <Box
             sx={{
               width: "100%",
               maxWidth: "100%",
-              height: "100%",
-              maxHeight: "100%",
+              flex: 1,
+              minHeight: 0,
               overflow: "auto",
               WebkitOverflowScrolling: "touch",
               touchAction: "pan-x pan-y",

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Box, Button, Card, CardContent, Checkbox, CircularProgress, FormControlLabel, MenuItem, Select, Stack, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, Card, CardContent, Checkbox, CircularProgress, FormControlLabel, MenuItem, Select, Snackbar, Stack, TextField, Typography } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -21,10 +21,23 @@ export default function LeaguePointRankingPage() {
   const [saveAdjustments, adjustmentsState] = useUpdateLeaguePointRankingAdjustmentsMutation();
   const [enabled, setEnabled] = useState(false); const [rules, setRules] = useState<GroupRankingPointRules>();
   const [adjustments, setAdjustments] = useState<Record<string, { league_points:number; tournament_points:number; championships:number }>>({});
+  const [saveError, setSaveError] = useState("");
+  const [saveNotice, setSaveNotice] = useState(false);
   useEffect(() => { if (!data) return; setEnabled(data.override_enabled); setRules(structuredClone(data.point_rules)); setAdjustments(Object.fromEntries(data.adjustments.map((a) => [a.participant_id, { league_points:a.league_points, tournament_points:a.tournament_points, championships:a.championships }]))); }, [data]);
   const rows = useMemo(() => [...(data?.league.rankings ?? []), ...(data?.tournament.rankings ?? [])], [data]);
   const updateRank = (section:keyof GroupRankingPointRules["rankings"], key:"first"|"second"|"third"|"fourth", value:number) => setRules((old) => old ? ({ ...old, rankings:{ ...old.rankings, [section]:{ ...old.rankings[section], [key]:value } } }) : old);
-  const save = async () => { if (!data || !rules) return; await saveSettings({ leagueId:id, seasonId:data.season.id, enabled, pointRules:rules }).unwrap(); await saveAdjustments({ leagueId:id, seasonId:data.season.id, adjustments:data.participants.map((p) => ({ participant_id:p.id, ...(adjustments[p.id] ?? { league_points:0,tournament_points:0,championships:0 }) })) }).unwrap(); };
+  const save = async () => {
+    if (!data || !rules) return;
+    setSaveError("");
+    try {
+      await saveSettings({ leagueId:id, seasonId:data.season.id, enabled, pointRules:rules }).unwrap();
+      await saveAdjustments({ leagueId:id, seasonId:data.season.id, adjustments:data.participants.map((p) => ({ participant_id:p.id, ...(adjustments[p.id] ?? { league_points:0,tournament_points:0,championships:0 }) })) }).unwrap();
+      setSaveNotice(true);
+      setSearchParams({ season:data.season.id }, { replace:true });
+    } catch {
+      setSaveError("순위 설정을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    }
+  };
   if (isLoading) return <Box sx={{ p:3, textAlign:"center" }}><CircularProgress /></Box>;
   if (error || !data || !rules) return <Box sx={{ p:2 }}><Alert severity="error">리그 순위를 불러오지 못했습니다.</Alert></Box>;
   const changeSeason = (value: string) => { setSeasonId(value); setVisibleCount(10); setSearchParams(settingsMode ? { settings:"1",season:value } : { season:value }); };
@@ -34,6 +47,7 @@ export default function LeaguePointRankingPage() {
       { state: { fromLeagueRanking: true, returnTo: `${location.pathname}${location.search}` } },
     );
     return <Box sx={{ maxWidth:720, mx:"auto", p:2, pb:8 }}>
+      <Snackbar open={saveNotice} autoHideDuration={2500} onClose={() => setSaveNotice(false)} message="순위 설정이 저장되었습니다." />
       <Stack direction="row" alignItems="center" spacing={1} sx={{ mb:2 }}>
         <Button onClick={() => navigate(`/league/${id}`)} sx={{ minWidth:36 }}><ArrowBackIcon /></Button>
         <Typography variant="h6" fontWeight={900} sx={{ flex:1 }}>순위</Typography>
@@ -65,7 +79,8 @@ export default function LeaguePointRankingPage() {
     </Box>
     <Typography fontWeight={900} sx={{ mt:2, mb:1 }}>참가자 포인트 보정</Typography><Typography fontSize={12} color="text.secondary" sx={{ mb:1 }}>계산된 포인트에 더하거나 뺄 값을 입력합니다.</Typography>
     <Stack spacing={.8}>{data.participants.map((p) => { const a=adjustments[p.id] ?? { league_points:0,tournament_points:0,championships:0 }; const total=rows.filter((r) => Number(r.member_id)===Number(p.member_id) || r.name===p.name).reduce((sum,r) => sum+r.total_points,0); return <Box key={p.id} sx={{ p:1, border:"1px solid #E5E7EB", borderRadius:2 }}><Stack direction="row" alignItems="center" spacing={.45}><Typography fontWeight={800}>{p.name}</Typography><DivisionBadge division={p.division}/><Box sx={{flex:1}}/><Typography color="#2563EB" fontWeight={900}>{total}점</Typography></Stack><Stack direction="row" spacing={.7} sx={{ mt:.7 }}><NumberField label="리그 보정" value={a.league_points} disabled={!enabled} onChange={(v) => setAdjustments({ ...adjustments, [p.id]:{ ...a, league_points:v } })} /><NumberField label="대회 보정" value={a.tournament_points} disabled={!enabled} onChange={(v) => setAdjustments({ ...adjustments, [p.id]:{ ...a, tournament_points:v } })} /><NumberField label="우승 보정" value={a.championships} disabled={!enabled} onChange={(v) => setAdjustments({ ...adjustments, [p.id]:{ ...a, championships:v } })} /></Stack></Box>; })}</Stack>
-    {data.can_manage && <Button fullWidth variant="contained" disabled={settingsState.isLoading || adjustmentsState.isLoading} onClick={() => void save()} sx={{ mt:2, height:44, fontWeight:900 }}>저장</Button>}
+    {saveError && <Alert severity="error" sx={{ mt:2 }}>{saveError}</Alert>}
+    {data.can_manage && <Button fullWidth variant="contained" disabled={settingsState.isLoading || adjustmentsState.isLoading} onClick={() => void save()} sx={{ mt:2, height:44, fontWeight:900 }}>{settingsState.isLoading || adjustmentsState.isLoading ? "저장 중..." : "저장"}</Button>}
   </Box>;
 }
 function NumberField({label,value,onChange,disabled=false}:{label:string;value:number;onChange:(v:number)=>void;disabled?:boolean}) { return <TextField type="number" size="small" fullWidth label={label} value={value} disabled={disabled} onChange={(e)=>onChange(Number(e.target.value)||0)} inputProps={{ step:1 }} />; }

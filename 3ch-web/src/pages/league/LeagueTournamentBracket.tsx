@@ -322,6 +322,17 @@ interface SlotActions {
   onOpenResult: (matchId: string) => void;
 }
 
+interface WalkoverUndoState {
+  matchId: string;
+  participantId: string;
+  participantName: string;
+  nextMatchId: string | null;
+  nextSlot: "a" | "b" | null;
+  previousStatus: LeagueMatch["status"];
+  previousScoreA: number | null;
+  previousScoreB: number | null;
+}
+
 // ─── 단일 토너먼트 위치 계산 (좌→우) ────────────────────────────────────────
 /**
  * 단일 토너먼트(싱글·라운드로빈)의 각 매치에 캔버스 좌표(x, y)를 계산한다.
@@ -1122,6 +1133,8 @@ export default function LeagueTournamentBracket() {
   const [resultDialogOpen, setResultDialogOpen] = useState(false);
   const [deleteSlotDialogOpen, setDeleteSlotDialogOpen] = useState(false);
   const [reseedDialogOpen, setReseedDialogOpen] = useState(false);
+  const [walkoverUndo, setWalkoverUndo] = useState<WalkoverUndoState | null>(null);
+  const [isUndoingWalkover, setIsUndoingWalkover] = useState(false);
   const exportRef = useRef<HTMLDivElement | null>(null);
   const bracketScrollRef = useRef<HTMLDivElement | null>(null);
   const lastBracketScrollRef = useRef({ left: 0, top: 0 });
@@ -1751,6 +1764,93 @@ export default function LeagueTournamentBracket() {
     }
   };
 
+  const handleAdvanceLowerWalkover = async (matchId: string) => {
+    if (!id) return;
+    const match = matches.find((candidate) => candidate.id === matchId);
+    if (!match) return;
+    const participantId = match.participant_a_id ?? match.participant_b_id;
+    if (!participantId) return;
+    setWalkoverUndo({
+      matchId,
+      participantId,
+      participantName: match.participant_a_name ?? match.participant_b_name ?? "선택한 참가자",
+      nextMatchId: match.next_match_id ?? null,
+      nextSlot: match.next_slot === "a" || match.next_slot === "b" ? match.next_slot : null,
+      previousStatus: match.status,
+      previousScoreA: match.score_a,
+      previousScoreB: match.score_b,
+    });
+    if (isProgramMode) saveProgramMatchPatch(id, programRound, matchId, { status: "done", score_a: 0, score_b: 0 });
+    await updateTournamentMatch({ leagueId: id, matchId, updates: { status: "done", score_a: 0, score_b: 0 } }).unwrap();
+    await refetchMatches();
+  };
+
+  const handleUndoLowerWalkover = useCallback(async () => {
+    if (!id || !walkoverUndo || isUndoingWalkover) return;
+    setIsUndoingWalkover(true);
+    try {
+      const sourcePatch: ProgramMatchPatch = {
+        status: walkoverUndo.previousStatus,
+        score_a: walkoverUndo.previousScoreA,
+        score_b: walkoverUndo.previousScoreB,
+      };
+      const downstreamPatch: ProgramMatchPatch | null = walkoverUndo.nextMatchId && walkoverUndo.nextSlot
+        ? walkoverUndo.nextSlot === "a"
+          ? { participant_a_id: null, participant_a_name: null, participant_a_division: null, participant_a_seed_label: null, status: "pending", score_a: null, score_b: null }
+          : { participant_b_id: null, participant_b_name: null, participant_b_division: null, participant_b_seed_label: null, status: "pending", score_a: null, score_b: null }
+        : null;
+
+      if (isProgramMode && programBlock) {
+        saveProgramMatchPatch(id, programRound, walkoverUndo.matchId, sourcePatch);
+        if (walkoverUndo.nextMatchId && downstreamPatch) {
+          saveProgramMatchPatch(id, programRound, walkoverUndo.nextMatchId, downstreamPatch);
+        }
+        const nextMatches = allProgramMatches.map((match) =>
+          match.id === walkoverUndo.matchId
+            ? { ...match, ...sourcePatch }
+            : match.id === walkoverUndo.nextMatchId && downstreamPatch
+              ? { ...match, ...downstreamPatch }
+              : match
+        );
+        await syncLeagueProgramMatches({
+          leagueId: id,
+          matches: nextMatches.map((match) => ({ ...match, program_round: programRound, program_block_type: programBlock.type })),
+        }).unwrap();
+      } else {
+        await updateTournamentMatch({ leagueId: id, matchId: walkoverUndo.matchId, updates: sourcePatch }).unwrap();
+        if (walkoverUndo.nextMatchId && walkoverUndo.nextSlot) {
+          await assignParticipant({
+            leagueId: id,
+            matchId: walkoverUndo.nextMatchId,
+            ...(walkoverUndo.nextSlot === "a" ? { participant_a_id: null } : { participant_b_id: null }),
+          }).unwrap();
+          await updateTournamentMatch({ leagueId: id, matchId: walkoverUndo.nextMatchId, updates: { status: "pending", score_a: null, score_b: null } }).unwrap();
+        }
+      }
+      await refetchMatches();
+      setWalkoverUndo(null);
+    } catch (error) {
+      console.error("Failed to undo lower bracket walkover", error);
+      window.alert("진출 상태를 되돌리지 못했습니다. 잠시 후 다시 시도해주세요.");
+    } finally {
+      setIsUndoingWalkover(false);
+    }
+  }, [allProgramMatches, assignParticipant, id, isProgramMode, isUndoingWalkover, programBlock, programRound, refetchMatches, syncLeagueProgramMatches, updateTournamentMatch, walkoverUndo]);
+
+  useEffect(() => {
+    if (!walkoverUndo) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.tagName === "INPUT" || target?.tagName === "TEXTAREA" || target?.isContentEditable) return;
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+        event.preventDefault();
+        void handleUndoLowerWalkover();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleUndoLowerWalkover, walkoverUndo]);
+
   const slotActions: SlotActions = {
     canManage,
     canRegister: canManage,
@@ -1762,12 +1862,7 @@ export default function LeagueTournamentBracket() {
     onOpenSlotActions: (matchId, slot, participantId, name) => setSwapFirst({ matchId, slot, participantId, name }),
     onMoveToLower: handleMoveSelectedToLower,
     onDeleteSelected: () => setDeleteSlotDialogOpen(true),
-    onAdvanceWalkover: async (matchId) => {
-      if (!id) return;
-      if (isProgramMode) saveProgramMatchPatch(id, programRound, matchId, { status: "done", score_a: 0, score_b: 0 });
-      await updateTournamentMatch({ leagueId: id, matchId, updates: { status: "done", score_a: 0, score_b: 0 } }).unwrap();
-      await refetchMatches();
-    },
+    onAdvanceWalkover: handleAdvanceLowerWalkover,
     onOpenResult: (matchId) => {
       setResultMatchId(matchId);
       setResultDialogOpen(true);
@@ -2096,6 +2191,19 @@ export default function LeagueTournamentBracket() {
               </Button>
             )}
           </Box>
+        )}
+
+        {walkoverUndo && canManage && (
+          <Button
+            size="small"
+            variant="outlined"
+            disabled={isUndoingWalkover}
+            onClick={() => void handleUndoLowerWalkover()}
+            title={`${walkoverUndo.participantName} 선수 진출 되돌리기 (Ctrl+Z)`}
+            sx={{ borderRadius: "20px", fontSize: 11, fontWeight: 900, px: 1.3, py: 0.4, textTransform: "none", flexShrink: 0, minWidth: "auto", borderColor: "#F59E0B", color: "#B45309", bgcolor: "#FFFBEB", "&:hover": { borderColor: "#D97706", bgcolor: "#FEF3C7" } }}
+          >
+            되돌리기
+          </Button>
         )}
 
         {isProgramMode && canManage && !isCompleted && (

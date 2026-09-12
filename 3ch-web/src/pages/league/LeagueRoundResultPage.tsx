@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Box,
@@ -198,6 +198,7 @@ export default function LeagueRoundResultPage() {
   const { id = "" } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const round = Math.max(1, Number(searchParams.get("round") || 1));
   const { data: leagueData, isLoading: leagueLoading } = useGetLeagueQuery(id, { skip: !id });
   const { data: matchData, isLoading: matchLoading } = useGetLeagueMatchesQuery(id, { skip: !id });
@@ -211,8 +212,8 @@ export default function LeagueRoundResultPage() {
   const grouped = useMemo(() => {
     if (format === "LEAGUE") return [{ key: "league", title: "전체 순위", rows: roundRobinStandings(matches, threeSet) }];
     if (format === "GROUP") {
-      const labels = [...new Set(matches.map((match) => match.bracket || "1조"))];
-      return labels.map((label) => ({ key: label, title: label, rows: roundRobinStandings(matches.filter((match) => (match.bracket || "1조") === label), threeSet) }));
+      const labels = [...new Set(matches.map((match) => match.match_label).filter((label): label is string => Boolean(label)))].sort((left, right) => Number.parseInt(left, 10) - Number.parseInt(right, 10));
+      return labels.map((label) => ({ key: label, title: label, rows: roundRobinStandings(matches.filter((match) => match.match_label === label), threeSet) }));
     }
     const indexes = [...new Set(matches.map((match) => match.tournament_bracket_index || 1))].sort((a, b) => a - b);
     const brackets = [...new Set(matches.map((match) => match.bracket || "upper"))];
@@ -222,6 +223,10 @@ export default function LeagueRoundResultPage() {
       rows: tournamentStandings(matches.filter((match) => (match.tournament_bracket_index || 1) === index && (match.bracket || "upper") === bracket)),
     })).filter((section) => section.rows.length > 0));
   }, [format, matches, threeSet]);
+  const activeGroup = format === "GROUP"
+    ? grouped.some((section) => section.key === selectedGroup) ? selectedGroup : grouped[0]?.key
+    : null;
+  const visibleSections = format === "GROUP" ? grouped.filter((section) => section.key === activeGroup) : grouped;
 
   if (leagueLoading || matchLoading || programLoading) return <Box sx={{ display: "flex", justifyContent: "center", py: 10 }}><CircularProgress /></Box>;
   return (
@@ -240,11 +245,38 @@ export default function LeagueRoundResultPage() {
           sx={{ flexShrink: 0, borderRadius: "16px", px: 1.25, fontSize: 11, fontWeight: 800, whiteSpace: "nowrap" }}
         >대진표 보기</Button>
       </Stack>
+      {format === "GROUP" && grouped.length > 0 && (
+        <Box sx={{ px: 0, pt: 0.25, pb: 0 }}>
+          <Stack direction="row" spacing={1} sx={{ overflowX: "auto", "&::-webkit-scrollbar": { display: "none" } }}>
+            {grouped.map((section) => (
+              <Button
+                key={section.key}
+                variant={activeGroup === section.key ? "contained" : "outlined"}
+                onClick={() => setSelectedGroup(section.key)}
+                size="small"
+                sx={{
+                  minWidth: 60,
+                  flexShrink: 0,
+                  borderRadius: 1.5,
+                  fontWeight: 800,
+                  fontSize: 13,
+                  boxShadow: "none",
+                  ...(activeGroup === section.key
+                    ? { bgcolor: "#2563EB" }
+                    : { color: "#6B7280", borderColor: "#D1D5DB", bgcolor: "#fff" }),
+                }}
+              >
+                {section.title}
+              </Button>
+            ))}
+          </Stack>
+        </Box>
+      )}
       {!complete ? (
         <Paper variant="outlined" sx={{ p: 4, textAlign: "center", borderRadius: 1.5 }}><Typography fontWeight={800}>아직 라운드가 종료되지 않았습니다.</Typography></Paper>
       ) : grouped.length === 0 ? (
         <Paper variant="outlined" sx={{ p: 4, textAlign: "center", borderRadius: 1.5 }}><Typography fontWeight={800}>표시할 결과가 없습니다.</Typography></Paper>
-      ) : grouped.map((section) => (
+      ) : visibleSections.map((section) => (
         <Stack key={section.key} spacing={1}>
           <Typography sx={{ fontSize: 16, fontWeight: 900 }}>{section.title}</Typography>
           <ResultTable rows={section.rows} threeSet={threeSet} />

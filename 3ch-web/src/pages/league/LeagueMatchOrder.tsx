@@ -995,9 +995,11 @@ export default function LeagueMatchOrder() {
     storeProgramOption(leagueId, nextProgram);
     await saveLeagueProgram({ leagueId, program: nextProgram }).unwrap();
     const nextRound = programRound + 1;
+    const nextBlock = nextProgram.blocks[nextRound - 1];
+    const nextBracketPath = nextBlock?.format === "TOURNAMENT" ? "tournament-bracket" : "bracket";
     localStorage.setItem(`league-program-active-round-${leagueId}`, String(nextRound));
     setFinishRoundConfirmOpen(false);
-    navigate(`/league/${leagueId}/program/matches?program=1&round=${nextRound}`);
+    navigate(`/league/${leagueId}/program/${nextBracketPath}?program=1&round=${nextRound}&format=${nextBlock?.format ?? ""}`);
   }, [canFinishProgramRound, isProgramMode, leagueId, navigate, programMatches, programOption, programRound, saveLeagueProgram]);
 
   const tournamentSeedMap = useMemo(() => {

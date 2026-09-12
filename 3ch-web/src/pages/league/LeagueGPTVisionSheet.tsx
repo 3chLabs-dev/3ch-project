@@ -316,13 +316,14 @@ function ScoreButton({ icon, disabled, variant = "order", onClick }: {
  * - landscape(가로): ↑ 점수 ↓ 세로 배치
  * - portrait(세로, writingMode 적용): ← 점수 → 가로 배치 + 아이콘 90° 회전
  */
-function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, rowIndex, colIndex, totalRows, totalCols, onProgramMatchUpdate }: {
+function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, completedRound, rowIndex, colIndex, totalRows, totalCols, onProgramMatchUpdate }: {
   match: LeagueMatch | undefined;
   isA: boolean;         // 현재 행 참가자가 해당 경기의 A선수인지 여부
   leagueId: string;
   rules?: string | null;
   winScore: number | null; // 선승 기준 점수 (null이면 선승제 아님)
   canManage: boolean;
+  completedRound: boolean;
   rowIndex: number;
   colIndex: number;
   totalRows: number;
@@ -331,6 +332,7 @@ function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, ro
 }) {
   const [updateMatch] = useUpdateLeagueMatchMutation();
   const autoCompleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const collapseControlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestMatchRef = useRef(match);
   const isActive = match?.status === "playing" || match?.status === "done";
   const storedScore = match ? (isA ? match.score_a : match.score_b) : null;
@@ -338,6 +340,7 @@ function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, ro
   // 저장된 값은 즉시 보여주고, 실제 경기 시작 전에는 기존처럼 편집 컨트롤만 숨긴다.
   const score = storedScore ?? (isActive ? 0 : null);
   const [isEditing, setIsEditing] = useState(false);
+  const [showCompletedControls, setShowCompletedControls] = useState(false);
   const [tempValue, setTempValue] = useState<string>("");
   const canEdit  = canManage && isActive;
   useEffect(() => {
@@ -377,13 +380,31 @@ function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, ro
     if (autoCompleteTimerRef.current) {
       clearTimeout(autoCompleteTimerRef.current);
     }
+    if (collapseControlsTimerRef.current) {
+      clearTimeout(collapseControlsTimerRef.current);
+    }
   }, []);
+
+  useEffect(() => {
+    if (!completedRound) setShowCompletedControls(false);
+  }, [completedRound]);
+
+  const scheduleControlsCollapse = () => {
+    if (!completedRound) return;
+    if (collapseControlsTimerRef.current) clearTimeout(collapseControlsTimerRef.current);
+    collapseControlsTimerRef.current = setTimeout(() => {
+      setIsEditing(false);
+      setShowCompletedControls(false);
+      collapseControlsTimerRef.current = null;
+    }, AUTO_COMPLETE_DELAY_MS);
+  };
 
   const handleSet = (value: number) => {
     if (!match || !canEdit) return;
     const next = (Math.max(0, value));
     updateCurrentMatch(isA ? { score_a: next } : { score_b: next });
     scheduleAutoComplete();
+    scheduleControlsCollapse();
   };
   const storedOppScore = match ? (isA ? match.score_b : match.score_a) : null;
   const oppScore = storedOppScore ?? (isActive ? 0 : null);
@@ -396,6 +417,7 @@ function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, ro
     const next = Math.max(0, cur + delta); // 0 미만 방지
     updateCurrentMatch(isA ? { score_a: next } : { score_b: next });
     scheduleAutoComplete();
+    scheduleControlsCollapse();
   };
 
   const winnerStyle = { color: isWinner ? COLOR.win : "inherit", fontWeight: isWinner ? 700 : 400 };
@@ -408,6 +430,18 @@ function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, ro
   // 편집 불가: 점수 숫자만 표시 (빈 칸 또는 숫자)
   if (!canEdit) {
     return <StyledTableCell {...cellCoordinates} sx={winnerStyle}>{score !== null ? score : ""}</StyledTableCell>;
+  }
+
+  if (completedRound && !showCompletedControls) {
+    return (
+      <StyledTableCell
+        {...cellCoordinates}
+        onClick={() => setShowCompletedControls(true)}
+        sx={{ ...winnerStyle, cursor: "pointer", "&:hover": { bgcolor: "#EFF6FF" } }}
+      >
+        {score !== null ? score : ""}
+      </StyledTableCell>
+    );
   }
 
   // landscape / portrait 공통: [↓] 점수 [↑] 가로 배치, 좌우 여백 있게
@@ -431,7 +465,7 @@ function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, ro
                               if (/^\d*$/.test(val)) {
                                 setTempValue(val);
                               }}}
-          onBlur={() => { const num = tempValue === "" ? 0 : Number(tempValue); handleSet(num); setIsEditing(false);}}
+          onBlur={() => { const num = tempValue === "" ? 0 : Number(tempValue); handleSet(num); setIsEditing(false); scheduleControlsCollapse();}}
           onKeyDown={(e) => { if (e.key === "Enter") {
                                 const num = tempValue === "" ? 0 : Number(tempValue);
                                 handleSet(num);
@@ -495,6 +529,7 @@ interface BracketRowProps {
   editMode: boolean;    // 시드 순서 편집 모드 여부
   canManage: boolean;   // 관리 권한 (오너/어드민/생성자) - 드래그 전용
   canScore: boolean;    // 점수 편집 권한 (canManage || public 리그)
+  completedRound: boolean;
   landscape: boolean;
   matchLookup: Map<string, LeagueMatch>; // "aId__bId" 키로 경기 빠르게 조회
   wins: number;
@@ -522,7 +557,7 @@ interface BracketRowProps {
  * - 시드 번호 셀 자체가 드래그 핸들 역할을 겸함
  */
 const SortableBracketRow = memo(function SortableBracketRow({
-  participant, teamRoster, aggregateDivision = false, rowIdx, n, localOrder, editMode, canManage, canScore, landscape,
+  participant, teamRoster, aggregateDivision = false, rowIdx, n, localOrder, editMode, canManage, canScore, completedRound, landscape,
   matchLookup, wins, losses, setTotal, rank, tieSetDiff, hasPlayed, leagueId, winScore, isMe, isBot, rules, onProgramMatchUpdate,
 }: BracketRowProps) {
   const canDrag = editMode && canManage;
@@ -626,7 +661,7 @@ const SortableBracketRow = memo(function SortableBracketRow({
         const m   = matchLookup.get(`${participant.id}__${colPlayer.id}`);
         const isA = m?.participant_a_id === participant.id;
         return (
-          <BracketScoreCell key={colIdx} match={m} isA={isA} leagueId={leagueId} rules={m?.match_rule ?? rules} winScore={getWinScore(m?.match_rule ?? rules) ?? winScore} canManage={canScore} rowIndex={rowIdx} colIndex={colIdx} totalRows={n} totalCols={n} onProgramMatchUpdate={onProgramMatchUpdate}/>
+          <BracketScoreCell key={colIdx} match={m} isA={isA} leagueId={leagueId} rules={m?.match_rule ?? rules} winScore={getWinScore(m?.match_rule ?? rules) ?? winScore} canManage={canScore} completedRound={completedRound} rowIndex={rowIdx} colIndex={colIdx} totalRows={n} totalCols={n} onProgramMatchUpdate={onProgramMatchUpdate}/>
         );
       })}
 
@@ -1649,9 +1684,11 @@ export default function LeagueGPTVisionSheet() {
       storeProgramOption(id, nextProgram);
       await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
       const nextRound = programRound + 1;
+      const nextBlock = nextProgram.blocks[nextRound - 1];
+      const nextBracketPath = nextBlock?.format === "TOURNAMENT" ? "tournament-bracket" : "bracket";
       localStorage.setItem(`league-program-active-round-${id}`, String(nextRound));
       setFinishRoundConfirmOpen(false);
-      navigate(`/league/${id}/program/matches?program=1&round=${nextRound}`);
+      navigate(`/league/${id}/program/${nextBracketPath}?program=1&round=${nextRound}&format=${nextBlock?.format ?? ""}`);
     } catch (error) {
       setVisionNotice({ type: "error", message: getErrorMessage(error, "라운드 종료 처리에 실패했습니다.") });
     } finally {
@@ -2945,6 +2982,7 @@ export default function LeagueGPTVisionSheet() {
                         editMode={editMode}
                         canManage={canManage}
                         canScore={canScore}
+                        completedRound={isProgramRoundComplete}
                         landscape={landscape}
                         matchLookup={matchLookup}
                         wins={playerStats[rowIdx]?.wins ?? 0}

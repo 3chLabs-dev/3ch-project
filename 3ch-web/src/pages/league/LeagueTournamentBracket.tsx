@@ -20,6 +20,7 @@ import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import AddIcon from "@mui/icons-material/Add";
 import RemoveIcon from "@mui/icons-material/Remove";
+import UndoIcon from "@mui/icons-material/Undo";
 import {
   useGetLeagueQuery,
   useGetLeagueMatchesQuery,
@@ -2194,28 +2195,30 @@ export default function LeagueTournamentBracket() {
         )}
 
         {walkoverUndo && canManage && (
-          <Button
+          <Tooltip title={`${walkoverUndo.participantName} 선수 진출 되돌리기 (Ctrl+Z)`}>
+          <span>
+          <IconButton
             size="small"
-            variant="outlined"
             disabled={isUndoingWalkover}
             onClick={() => void handleUndoLowerWalkover()}
-            title={`${walkoverUndo.participantName} 선수 진출 되돌리기 (Ctrl+Z)`}
-            sx={{ borderRadius: "20px", fontSize: 11, fontWeight: 900, px: 1.3, py: 0.4, textTransform: "none", flexShrink: 0, minWidth: "auto", borderColor: "#F59E0B", color: "#B45309", bgcolor: "#FFFBEB", "&:hover": { borderColor: "#D97706", bgcolor: "#FEF3C7" } }}
+            aria-label="하위부 진출 되돌리기"
+            sx={{ width: 34, height: 34, flexShrink: 0, border: "1px solid #F59E0B", color: "#B45309", bgcolor: "#FFFBEB", "&:hover": { borderColor: "#D97706", bgcolor: "#FEF3C7" } }}
           >
-            되돌리기
-          </Button>
+            <UndoIcon sx={{ fontSize: 19 }} />
+          </IconButton>
+          </span>
+          </Tooltip>
         )}
 
         {isProgramMode && canManage && !isCompleted && (
           <Button
             size="small"
             variant="outlined"
-            startIcon={<RefreshIcon sx={{ fontSize: 14 }} />}
             disabled={isSyncingProgramMatches || canonicalProgramMatches.length === 0}
             onClick={() => setReseedDialogOpen(true)}
-            sx={{ borderRadius: "20px", fontSize: 11, fontWeight: 800, px: 1.3, py: 0.4, textTransform: "none", flexShrink: 0, minWidth: "auto" }}
+            sx={{ borderRadius: "20px", fontSize: 11, fontWeight: 800, px: 1.3, py: 0.4, textTransform: "none", flexShrink: 0, minWidth: "auto", borderColor: "#EF4444", color: "#DC2626", "&:hover": { borderColor: "#DC2626", bgcolor: "#FEF2F2" } }}
           >
-            표준 재배치
+            초기화
           </Button>
         )}
 
@@ -2536,7 +2539,7 @@ export default function LeagueTournamentBracket() {
         PaperProps={{ sx: { borderRadius: 3 } }}
       >
         <DialogContent sx={{ p: 2.5 }}>
-          <Typography sx={{ fontSize: 19, fontWeight: 900 }}>대진표 표준 재배치</Typography>
+          <Typography sx={{ fontSize: 19, fontWeight: 900 }}>대진표 초기화</Typography>
           <Typography sx={{ mt: 1.2, fontSize: 14, color: "#475569", lineHeight: 1.6 }}>
             저장된 수동 이동·삭제 내역을 지우고 예선 조별 순위 기준의 표준 토너먼트 대진표로 다시 배치합니다.
           </Typography>
@@ -2545,7 +2548,7 @@ export default function LeagueTournamentBracket() {
           </Typography>
           <Stack direction="row" spacing={1} sx={{ mt: 2.5 }}>
             <Button fullWidth variant="outlined" onClick={() => setReseedDialogOpen(false)} sx={{ height: 42, borderRadius: 1.5, fontWeight: 800 }}>취소</Button>
-            <Button fullWidth variant="contained" onClick={handleReseedProgramBracket} disabled={isSyncingProgramMatches} sx={{ height: 42, borderRadius: 1.5, fontWeight: 900, boxShadow: "none" }}>재배치</Button>
+            <Button fullWidth variant="contained" color="error" onClick={handleReseedProgramBracket} disabled={isSyncingProgramMatches} sx={{ height: 42, borderRadius: 1.5, fontWeight: 900, boxShadow: "none" }}>초기화</Button>
           </Stack>
         </DialogContent>
       </Dialog>

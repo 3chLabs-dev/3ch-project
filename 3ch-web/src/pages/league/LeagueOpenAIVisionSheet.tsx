@@ -276,7 +276,7 @@ export default function LeagueOpenAIVisionSheet() {
   const isBusy = isScanning || isSaving;
   const isCompleted = league?.status === "completed";
   const pageUrl = typeof window === "undefined" ? "" : window.location.href;
-  const sheetTitle = `${formatSheetDate(league?.start_date)} / ${league?.type ?? "리그"} ${league?.format ?? "단일리그"} / ${league?.rules ?? ""}`;
+  const sheetTitle = `${formatSheetDate(league?.start_date)} / ${league?.type ?? "리그"} ${league?.format ?? "풀리그"} / ${league?.rules ?? ""}`;
 
   const previewByCell = useMemo(() => {
     const map = new Map<string, VisionPreviewCell>();

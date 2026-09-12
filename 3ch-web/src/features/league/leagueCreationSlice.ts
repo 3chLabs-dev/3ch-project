@@ -63,7 +63,7 @@ export interface LeagueTournamentOptionsInfo {
   advancement: TournamentAdvancementValue;
 }
 
-/** Step 4b: 본선 편성 설정 (단일리그+토너먼트 전용) */
+/** Step 4b: 본선 편성 설정 (풀리그+토너먼트 전용) */
 export type AdvanceMethodValue = "rank" | "top1" | "top2" | "upper-lower";
 export interface LeagueMainSetupInfo {
   tournament_rules: string;
@@ -178,13 +178,13 @@ export const createLeague = createAsyncThunk.withTypes<{ state: RootState }>()(
 
     // 리그 방식 매핑
     const formatMap: Record<string, string> = {
-      "single-league": "단일리그",
+      "single-league": "풀리그",
       "four-player-omr": "4인 리그 (OMR)",
       "ocr-assisted": "OCR 텍스트 인식",
       "gpt-recognition": "GPT 인식",
       "group-league": "조별리그",
       "group-and-knockout": "조별리그 + 본선리그",
-      "single-league-tournament": "단일리그 + 토너먼트",
+      "single-league-tournament": "풀리그 + 토너먼트",
       "group-league-tournament": "조별리그 + 토너먼트",
       "upper-lower-tournament": "상·하위 토너먼트",
     };

@@ -62,7 +62,7 @@ export default function LeagueTournamentGenerate() {
   const [updateLeague] = useUpdateLeagueMutation();
 
   const league = data?.league;
-  const isLeagueTournament = league?.format === "단일리그 + 토너먼트";
+  const isLeagueTournament = league?.format === "풀리그 + 토너먼트";
   const seedingOptions = isLeagueTournament ? SEEDING_OPTIONS_LEAGUE_TOURNAMENT : SEEDING_OPTIONS_DEFAULT;
 
   const [advancement, setAdvancement] = useState<string>("upper-only");
@@ -77,9 +77,9 @@ export default function LeagueTournamentGenerate() {
     const target = league.recruit_count ?? 0;
     setBracketSize(BRACKET_SIZES.reduce((prev, cur) =>
       cur >= target && cur < prev ? cur : prev, 128));
-    const isLT = league.format === "단일리그 + 토너먼트";
+    const isLT = league.format === "풀리그 + 토너먼트";
     const saved = league.tournament_seeding;
-    // 단일리그+토너먼트는 "seed"(등록순)가 아닌 "standings"(예선순위)가 기본값
+    // 풀리그+토너먼트는 "seed"(등록순)가 아닌 "standings"(예선순위)가 기본값
     if (isLT && (!saved || saved === "seed")) {
       setSeeding("standings");
     } else {

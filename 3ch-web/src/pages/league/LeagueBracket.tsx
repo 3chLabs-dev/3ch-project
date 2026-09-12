@@ -116,7 +116,7 @@ function getProgramTypeLabel(type?: string) {
 }
 
 function getProgramFormatLabel(format?: string) {
-  if (format === "LEAGUE") return "단일리그";
+  if (format === "LEAGUE") return "풀리그";
   if (format === "GROUP") return "조별리그";
   if (format === "TOURNAMENT") return "토너먼트";
   return "";

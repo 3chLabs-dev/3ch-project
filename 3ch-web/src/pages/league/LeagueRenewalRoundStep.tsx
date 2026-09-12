@@ -654,7 +654,7 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
               onChange={(event) => updateFormat(index, event.target.value as RoundFormat)}
             >
               <Stack spacing={1.5}>
-                <FormControlLabel value="LEAGUE" control={<Radio />} label="단일리그" sx={optionCardSx} />
+                <FormControlLabel value="LEAGUE" control={<Radio />} label="풀리그" sx={optionCardSx} />
                 <FormControlLabel value="GROUP" control={<Radio />} label="조별리그" sx={optionCardSx} />
                 <FormControlLabel value="TOURNAMENT" control={<Radio />} label="토너먼트" sx={optionCardSx} />
               </Stack>

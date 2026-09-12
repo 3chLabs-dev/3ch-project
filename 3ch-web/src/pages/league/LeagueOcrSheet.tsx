@@ -219,7 +219,7 @@ export default function LeagueOcrSheet() {
   const loading = leagueLoading || participantsLoading || matchesLoading;
   const pageUrl = typeof window === "undefined" ? "" : window.location.href;
   const sheetDate = league?.start_date ? formatLeagueDate(league.start_date) : "-";
-  const sheetTitle = `${sheetDate} / ${league?.type ?? "단식"} ${league?.format ?? "단일리그"} / ${league?.rules ?? ""}`;
+  const sheetTitle = `${sheetDate} / ${league?.type ?? "단식"} ${league?.format ?? "풀리그"} / ${league?.rules ?? ""}`;
   const canCreateMatches = participants.length >= 2 && !isIniting;
 
   useEffect(() => {

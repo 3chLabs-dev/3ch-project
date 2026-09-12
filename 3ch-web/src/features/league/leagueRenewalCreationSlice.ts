@@ -99,9 +99,9 @@ const typeMap: Record<LeagueTypeValue, string> = {
 };
 
 const formatMap: Partial<Record<LeagueFormatValue, string>> = {
-  "single-league": "단일리그",
+  "single-league": "풀리그",
   "group-league": "조별리그",
-  "single-league-tournament": "단일리그 + 토너먼트",
+  "single-league-tournament": "풀리그 + 토너먼트",
   "upper-lower-tournament": "상·하위 토너먼트",
   "event-program": "이벤트 프로그램",
 };

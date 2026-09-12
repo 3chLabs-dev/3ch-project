@@ -129,13 +129,13 @@ import {
     { label: "교류전", disabled: true },
   ];
   const FORMAT_OPTIONS = [
-    { label: "단일리그", disabled: false },
+    { label: "풀리그", disabled: false },
     { label: "4인 리그 (OMR)", disabled: false },
     { label: "OCR 텍스트 인식", disabled: false },
     { label: "GPT 인식", disabled: false },
     { label: "조별리그", disabled: false },
     { label: "조별리그 + 본선리그", disabled: false },
-    { label: "단일리그 + 토너먼트", disabled: false },
+    { label: "풀리그 + 토너먼트", disabled: false },
     { label: "조별리그 + 토너먼트", disabled: true },
     { label: "상·하위 토너먼트", disabled: false },
     { label: "이벤트 프로그램", disabled: false },
@@ -173,7 +173,7 @@ import {
     const [editSortOrder, setEditSortOrder] = useState("");
     const [editTournamentSeeding, setEditTournamentSeeding] = useState("seed");
     const [editTournamentAdvancement, setEditTournamentAdvancement] = useState("upper-lower");
-    // 단일리그+토너먼트 본선 편성
+    // 풀리그+토너먼트 본선 편성
     const [editTournamentRules] = useState("");
     const [editAdvanceCount] = useState<number>(8);
     const [editAdvanceMethod] = useState("rank");
@@ -429,14 +429,14 @@ import {
           );
         }
         setAlertSeverity("warning");
-        setAlertMsg("현재는 단식 단일리그 프로그램에서만 참가자를 변경할 수 있습니다. 조별리그, 단체전, 토너먼트 참가자 변경은 추후 지원됩니다.");
+        setAlertMsg("현재는 단식 풀리그 프로그램에서만 참가자를 변경할 수 있습니다. 조별리그, 단체전, 토너먼트 참가자 변경은 추후 지원됩니다.");
         return false;
       }
       return window.confirm(
         league?.status !== "active"
           ? "참가자 변경에 맞춰 프로그램 편성과 경기 데이터를 다시 생성합니다. 계속하시겠습니까?"
           : changeType === "add"
-          ? "참가자를 추가하면 새 참가자의 경기가 각 단일리그 라운드 마지막에 추가됩니다. 계속하시겠습니까?"
+          ? "참가자를 추가하면 새 참가자의 경기가 각 풀리그 라운드 마지막에 추가됩니다. 계속하시겠습니까?"
           : "참가자 정보 변경에 맞춰 프로그램 경기 데이터가 동기화됩니다. 계속하시겠습니까?",
       );
     };
@@ -898,7 +898,7 @@ import {
       } | null;
       const isLimitedSingleLeague = isEventProgramFormat
         ? isSingleRoundSinglesLeagueProgram(activeProgram)
-        : league?.type === "단식" && league?.format === "단일리그";
+        : league?.type === "단식" && league?.format === "풀리그";
       if (
         isLimitedSingleLeague
         && actualParticipantCount > SINGLE_ROUND_SINGLES_LEAGUE_MAX_PARTICIPANTS
@@ -921,7 +921,7 @@ import {
           ? `/league/${id}/program/matches?program=1&round=${activeRound}`
           : `/league/${id}/program`;
       }
-      if (league?.format?.includes("토너먼트") && league?.format !== "단일리그 + 토너먼트") {
+      if (league?.format?.includes("토너먼트") && league?.format !== "풀리그 + 토너먼트") {
         return `/league/${id}/tournament/matches`;
       }
       if (league?.format === "4인 리그 (OMR)") {
@@ -1144,7 +1144,7 @@ const handleSaveEdit = async () => {
             "upper-lower",
         }),
 
-        ...(safeFormat === "단일리그 + 토너먼트" && {
+        ...(safeFormat === "풀리그 + 토너먼트" && {
           tournament_rules:
             editTournamentRules ||
             league.tournament_rules ||
@@ -2030,14 +2030,14 @@ const handleSaveEdit = async () => {
             </Stack>
           )}
           {!isEventProgramFormat && league.format !== "OCR 텍스트 인식" && ((!canManage  && league.status === "active") || canManage) && (
-            league.format === "단일리그 + 토너먼트" ? (
+            league.format === "풀리그 + 토너먼트" ? (
               <Stack spacing={1} sx={{ mt: 1 }}>
                 <Button
                   fullWidth variant="outlined" disableElevation
                   sx={{ borderRadius: 1, height: 40, fontWeight: 700, bgcolor: "#87B8FF", color: "#FFF", "&:hover": { borderColor: "#79AEFF", bgcolor: "#EFF6FF" } }}
                   onClick={() => navigate(`/league/${id}/bracket?back=detail`)}
                 >
-                  {canManage && league.status === "draft" ? "단일리그 대진표 생성" : "단일리그 대진표 보기"}
+                  {canManage && league.status === "draft" ? "풀리그 대진표 생성" : "풀리그 대진표 보기"}
                 </Button>
                 <Button
                   fullWidth variant="contained" disableElevation

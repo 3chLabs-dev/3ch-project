@@ -1,4 +1,4 @@
-﻿import { generateProgramOptions } from '../../features/league/algorithms/generateProgramOptions';
+import { generateProgramOptions } from '../../features/league/algorithms/generateProgramOptions';
 import { generateProgramBlocks } from '../../features/league/algorithms/generateProgramBlocks';
 import { distributeSnake } from '../../features/league/algorithms/distributeSnake';
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
@@ -743,7 +743,7 @@ const getRoundFormatLabel = (
 ) => {
   switch (format) {
     case "LEAGUE":
-      return "단일리그";
+      return "풀리그";
     case "GROUP":
       return "조별리그";
     case "TOURNAMENT":
@@ -971,7 +971,7 @@ function RoundConfigEditor({
                     }}
                   >
                     <ToggleButton value="LEAGUE">
-                      단일리그
+                      풀리그
                     </ToggleButton>
 
                     <ToggleButton value="GROUP">
@@ -2904,7 +2904,7 @@ const LeagueAlgorithmDemo = ({
                   }}
                 >
                   <ToggleButton value="LEAGUE">
-                    단일리그
+                    풀리그
                   </ToggleButton>
 
                   <ToggleButton value="GROUP">

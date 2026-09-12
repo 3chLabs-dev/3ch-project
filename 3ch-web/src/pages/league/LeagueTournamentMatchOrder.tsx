@@ -360,7 +360,7 @@ export default function LeagueTournamentMatchOrder() {
   const [assignParticipant] = useAssignMatchParticipantMutation();
   const [resetRegisteredMatch] = useUpdateLeagueMatchMutation();
 
-  // bracket=null인 리그 단계 경기 제외 (단일리그+토너먼트 혼합 포맷 지원)
+  // bracket=null인 리그 단계 경기 제외 (풀리그+토너먼트 혼합 포맷 지원)
   const matches = useMemo(() => (matchesData?.matches ?? []).filter((m) => !!m.bracket), [matchesData]);
   const participants = useMemo(() => participantsData?.participants ?? [], [participantsData]);
 

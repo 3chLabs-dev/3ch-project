@@ -513,7 +513,7 @@ export interface GroupMemberHeadToHeadResponse {
     match_date?: string | null;
     stage: string;
     event_type: "단식";
-    format: "단일리그" | "조별리그" | "토너먼트";
+    format: "풀리그" | "조별리그" | "토너먼트";
     match_rule: string;
     round_label?: string | null;
     requester_score: number;

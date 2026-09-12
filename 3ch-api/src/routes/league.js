@@ -60,7 +60,7 @@ function canCombineProgramRoundPoints(programData) {
   return [...lastIndexByType.values()].length > 0;
 }
 
-async function getProgramUnitRankings(leagueId, programData, rules) {
+async function getProgramUnitRankings(leagueId, programData, rules, adjustments = []) {
   const result = await pool.query(`SELECT m.program_round,m.program_block_type,m.bracket,m.status,m.score_a,m.score_b,m.participant_a_id,m.participant_b_id,m.participant_a_roster_ids,m.participant_b_roster_ids FROM league_matches m WHERE m.league_id=$1 AND m.is_program=true ORDER BY m.program_round,m.match_order`, [leagueId]);
   const participantResult = await pool.query(`
     SELECT lp.id,lp.name,lp.division,
@@ -90,9 +90,14 @@ async function getProgramUnitRankings(leagueId, programData, rules) {
     if(sa>sb){ar.wins++;br.losses++;}else if(sb>sa){br.wins++;ar.losses++;}
   });
   const sections=[];
-  groups.forEach((map,key) => { const [type,roundText]=key.split(':'); const round=Number(roundText); const block=programData?.blocks?.[round-1]??{}; const rows=[...map.values()].sort((a,b)=>b.wins-a.wins||b.score_points-a.score_points||a.name.localeCompare(b.name,'ko')); const rankRule=block.format==='GROUP'?rules.rankings.group:block.format==='TOURNAMENT'?(String(block.option).includes('LOWER')?rules.rankings.tournamentLower:rules.rankings.tournamentUpper):rules.rankings.league; rows.forEach((row,index)=>{row.rank=index+1;row.attendance_points=0;row.bonus_points=rankRule.enabled===false?0:[rankRule.first,rankRule.second,rankRule.third,rankRule.fourth][index]||0;row.total_points=row.score_points+row.bonus_points;}); const eventLabel=type==='SINGLES'?'단식':type==='DOUBLES'?'복식':'단체전'; const formatLabel=block.format==='GROUP'?'조별리그':block.format==='TOURNAMENT'?'토너먼트':'단일리그'; sections.push({type,round,title:`${round}라운드 ${eventLabel} ${formatLabel} 순위`,rows}); });
+  groups.forEach((map,key) => { const [type,roundText]=key.split(':'); const round=Number(roundText); const block=programData?.blocks?.[round-1]??{}; const rows=[...map.values()].sort((a,b)=>b.wins-a.wins||b.score_points-a.score_points||a.name.localeCompare(b.name,'ko')); const rankRule=block.format==='GROUP'?rules.rankings.group:block.format==='TOURNAMENT'?(String(block.option).includes('LOWER')?rules.rankings.tournamentLower:rules.rankings.tournamentUpper):rules.rankings.league; rows.forEach((row,index)=>{row.rank=index+1;row.attendance_points=0;row.bonus_points=rankRule.enabled===false?0:[rankRule.first,rankRule.second,rankRule.third,rankRule.fourth][index]||0;row.total_points=row.score_points+row.bonus_points;}); const eventLabel=type==='SINGLES'?'단식':type==='DOUBLES'?'복식':'단체전'; const formatLabel=block.format==='GROUP'?'조별리그':block.format==='TOURNAMENT'?'토너먼트':'풀리그'; sections.push({type,round,title:`${round}라운드 ${eventLabel} ${formatLabel} 순위`,rows}); });
   if(!rules.combineAllRounds)return sections.sort((a,b)=>['SINGLES','DOUBLES','TEAM'].indexOf(a.type)-['SINGLES','DOUBLES','TEAM'].indexOf(b.type)||a.round-b.round);
-  return ['SINGLES','DOUBLES','TEAM'].flatMap((type)=>{const targets=sections.filter((s)=>s.type===type).sort((a,b)=>a.round-b.round);if(!targets.length)return[];const merged=new Map();targets.flatMap((s)=>s.rows).forEach((row)=>{const current=merged.get(row.unit_key)??{...row,matches_played:0,wins:0,losses:0,score_points:0,attendance_points:0,bonus_points:0,total_points:0};['matches_played','wins','losses','score_points','bonus_points','total_points'].forEach((field)=>{current[field]+=row[field]});merged.set(row.unit_key,current);});const rows=[...merged.values()];rows.forEach((row)=>{row.attendance_points=rules.attendance.league;row.total_points+=row.attendance_points;});rows.sort((a,b)=>b.total_points-a.total_points||b.wins-a.wins||a.name.localeCompare(b.name,'ko'));rows.forEach((row,index)=>{row.rank=index+1});const eventLabel=type==='SINGLES'?'단식':type==='DOUBLES'?'복식':'단체전';return[{type,round:0,title:`전체 라운드 ${eventLabel} 순위`,rows},...targets];});
+  const adjustmentMap=new Map(adjustments.map((adjustment)=>[String(adjustment.participant_id),adjustment]));
+  const programBlocks=(programData?.blocks?.length?programData.blocks:programData?.rounds)??[];
+  const hasRegularPhase=programBlocks.some((block)=>block?.format!=='TOURNAMENT');
+  const adjustmentField=hasRegularPhase?'league_points':'tournament_points';
+  const attendancePoints=hasRegularPhase?rules.attendance.league:rules.attendance.tournament;
+  return ['SINGLES','DOUBLES','TEAM'].flatMap((type)=>{const targets=sections.filter((s)=>s.type===type).sort((a,b)=>a.round-b.round);if(!targets.length)return[];const merged=new Map();targets.flatMap((s)=>s.rows).forEach((row)=>{const current=merged.get(row.unit_key)??{...row,matches_played:0,wins:0,losses:0,score_points:0,attendance_points:0,bonus_points:0,total_points:0};['matches_played','wins','losses','score_points','bonus_points','total_points'].forEach((field)=>{current[field]+=row[field]});merged.set(row.unit_key,current);});const rows=[...merged.values()];rows.forEach((row)=>{const adjustment=row.members.reduce((sum,member)=>sum+Number(adjustmentMap.get(String(member.id))?.[adjustmentField]||0),0);row.attendance_points=attendancePoints;row.bonus_points+=adjustment;row.total_points+=row.attendance_points+adjustment;});rows.sort((a,b)=>b.total_points-a.total_points||b.wins-a.wins||a.name.localeCompare(b.name,'ko'));rows.forEach((row,index)=>{row.rank=index+1});const eventLabel=type==='SINGLES'?'단식':type==='DOUBLES'?'복식':'단체전';return[{type,round:0,title:`전체 라운드 ${eventLabel} 순위`,rows},...targets];});
 }
 
 if (isWebPushConfigured) {
@@ -2591,7 +2596,7 @@ router.get('/league/:id/point-ranking', optionalAuth, async (req, res) => {
       ...baseRules,
       combineAllRounds: canCombineAllRounds && (hasLeagueOverride ? baseRules.combineAllRounds : true),
     };
-    const unitRankings = await getProgramUnitRankings(league.id, programResult.rows[0]?.program_data, effectiveRules);
+    const unitRankings = await getProgramUnitRankings(league.id, programResult.rows[0]?.program_data, effectiveRules, adjustments.rows);
     return res.json({ ...ranking, league_info: league, seasons: seasonRows.rows, season,
       override_enabled: saved.rows[0]?.enabled === true,
       point_rules: effectiveRules, unit_rankings: unitRankings,
@@ -5585,12 +5590,12 @@ router.post('/league/:id/matches/init-tournament', requireAuth, async (req, res)
     const seeding = seedingOverride ?? access.rows[0].tournament_seeding ?? 'seed';
     const advancement = advancementOverride ?? access.rows[0].tournament_advancement ?? 'upper-only';
 
-    // 리그 포맷 확인 (단일리그+토너먼트는 리그 경기 보존)
+    // 리그 포맷 확인 (풀리그+토너먼트는 리그 경기 보존)
     const leagueFormatRow = await pool.query(`SELECT format FROM leagues WHERE id = $1`, [leagueId]);
     const leagueFormat = leagueFormatRow.rows[0]?.format ?? '';
-    const isLeaguePlusTournament = leagueFormat === '단일리그 + 토너먼트';
+    const isLeaguePlusTournament = leagueFormat === '풀리그 + 토너먼트';
 
-    // 기존 경기 확인 (단일리그+토너먼트: 토너먼트 경기만 확인/삭제, 리그 경기 보존)
+    // 기존 경기 확인 (풀리그+토너먼트: 토너먼트 경기만 확인/삭제, 리그 경기 보존)
     const existingQuery = isLeaguePlusTournament
       ? `SELECT id FROM league_matches WHERE league_id = $1 AND bracket IS NOT NULL LIMIT 1`
       : `SELECT id FROM league_matches WHERE league_id = $1 LIMIT 1`;

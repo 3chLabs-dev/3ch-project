@@ -371,7 +371,7 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
             </Typography>
             <Stack direction="row" spacing={0.5} sx={{ mb: 0.5, pl: 0, flexWrap: "wrap" }}>
               {([
-                ["league", "단일리그"],
+                ["league", "풀리그"],
                 ["group", "조별리그"],
                 ["tournament", "토너먼트"],
               ] as const).map(([key, label]) => (
@@ -429,7 +429,7 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
           </Box>
           <Typography sx={{ fontSize: 15, fontWeight: 900 }}>입상자 포인트 설정</Typography>
           <Stack spacing={1.5}>
-            <RankingPointRow label="단일리그" values={pointRules.rankings.league} onEnabledChange={(enabled) => updateRankingEnabled("league", enabled)} onChange={(rank, value) => updateRanking("league", rank, value)} />
+            <RankingPointRow label="풀리그" values={pointRules.rankings.league} onEnabledChange={(enabled) => updateRankingEnabled("league", enabled)} onChange={(rank, value) => updateRanking("league", rank, value)} />
             <RankingPointRow label="조별리그" values={pointRules.rankings.group} onEnabledChange={(enabled) => updateRankingEnabled("group", enabled)} onChange={(rank, value) => updateRanking("group", rank, value)} />
             <RankingPointRow label="토너먼트(상위)" values={pointRules.rankings.tournamentUpper} onEnabledChange={(enabled) => updateRankingEnabled("tournamentUpper", enabled)} onChange={(rank, value) => updateRanking("tournamentUpper", rank, value)} onEliminationChange={(round, value) => updateEliminationRound("tournamentUpper", round, value)} />
             <RankingPointRow label="토너먼트(하위)" values={pointRules.rankings.tournamentLower} onEnabledChange={(enabled) => updateRankingEnabled("tournamentLower", enabled)} onChange={(rank, value) => updateRanking("tournamentLower", rank, value)} onEliminationChange={(round, value) => updateEliminationRound("tournamentLower", round, value)} />

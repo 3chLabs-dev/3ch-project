@@ -706,7 +706,7 @@ export default function LeagueOmrSheet() {
   const matchLookup = useMemo(() => buildMatchLookup(matches), [matches]);
   const stats = useMemo(() => calculateStats(participants, matches), [participants, matches]);
   const pageUrl = typeof window === "undefined" ? "" : window.location.href;
-  const sheetTitle = `${formatSheetDate(league?.start_date)} / ${league?.type ?? "단식"} ${league?.format ?? "단일리그"} / ${league?.rules ?? ""}`;
+  const sheetTitle = `${formatSheetDate(league?.start_date)} / ${league?.type ?? "단식"} ${league?.format ?? "풀리그"} / ${league?.rules ?? ""}`;
   const isCompleted = league?.status === "completed";
   const scoreEditMode = isCompleted || forceScoreEditMode;
   const validOmrPreviewCount = omrPreviewMatches.filter((match) => (

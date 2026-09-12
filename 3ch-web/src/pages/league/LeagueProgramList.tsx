@@ -238,7 +238,7 @@ function getProgramTypeLabel(type?: StoredProgramBlock["type"]) {
 function getProgramFormatLabel(format?: StoredProgramBlock["format"]) {
   switch (format) {
     case "LEAGUE":
-      return "단일리그";
+      return "풀리그";
     case "GROUP":
       return "조별리그";
     case "TOURNAMENT":

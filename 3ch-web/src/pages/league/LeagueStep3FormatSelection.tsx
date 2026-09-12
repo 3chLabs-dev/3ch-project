@@ -14,13 +14,13 @@ import type { LeagueFormatValue } from "../../features/league/leagueCreationSlic
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 
 const LeagueFormatOptions = [
-  { value: "single-league", label: "단일리그", disabled: false },
+  { value: "single-league", label: "풀리그", disabled: false },
   { value: "four-player-omr", label: "4인 리그 (OMR)", disabled: false },
   { value: "ocr-assisted", label: "OCR 텍스트 인식", disabled: false },
   { value: "gpt-recognition", label: "GPT 인식", disabled: false },
   { value: "group-league", label: "조별리그", disabled: false },
   { value: "group-and-knockout", label: "조별리그 + 본선리그", disabled: true },
-  { value: "single-league-tournament", label: "단일리그 + 토너먼트", disabled: false },
+  { value: "single-league-tournament", label: "풀리그 + 토너먼트", disabled: false },
   { value: "group-league-tournament", label: "조별리그 + 토너먼트", disabled: true },
   { value: "upper-lower-tournament", label: "상·하위 토너먼트", disabled: false },
   { value: "event-program", label: "이벤트 프로그램", disabled: false },

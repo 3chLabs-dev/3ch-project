@@ -32,7 +32,7 @@ const typeLabel = (program: RoundConfig["program"]) =>
   ({ SINGLES: "단식", DOUBLES: "복식", TEAM: "단체전" })[program];
 
 const formatLabel = (format: RoundConfig["format"]) =>
-  ({ LEAGUE: "단일리그", GROUP: "조별리그", TOURNAMENT: "토너먼트" })[format];
+  ({ LEAGUE: "풀리그", GROUP: "조별리그", TOURNAMENT: "토너먼트" })[format];
 
 const optionLabel = (option: RoundConfig["option"]) =>
   ({ NONE: "", PRELIM: "예선", FINAL: "본선", UPPER: "상위", LOWER: "하위" })[option];

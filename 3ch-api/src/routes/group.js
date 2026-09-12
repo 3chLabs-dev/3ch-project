@@ -3380,7 +3380,7 @@ router.get('/group/:id/member/:userId/head-to-head', requireAuth, async (req, re
     );
 
     const optionLabels = { PRELIM: '예선', FINAL: '본선', UPPER: '상위부', LOWER: '하위부' };
-    const formatLabels = { LEAGUE: '단일리그', GROUP: '조별리그', TOURNAMENT: '토너먼트' };
+    const formatLabels = { LEAGUE: '풀리그', GROUP: '조별리그', TOURNAMENT: '토너먼트' };
     const ruleLabels = {
       BEST_OF_3: '3전 2선승제',
       THREE_SET: '3세트제',

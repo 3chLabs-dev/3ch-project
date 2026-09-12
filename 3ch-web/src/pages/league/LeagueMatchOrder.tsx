@@ -1051,7 +1051,7 @@ export default function LeagueMatchOrder() {
       }
       return total;
     } else {
-      // 💡 단일리그(개인전): 전체 인원으로 매치 수 계산
+      // 💡 풀리그(개인전): 전체 인원으로 매치 수 계산
       const count = rawParticipants.length;
       return (count * (count - 1)) / 2;
     }

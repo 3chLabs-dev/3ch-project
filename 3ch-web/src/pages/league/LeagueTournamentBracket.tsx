@@ -73,7 +73,7 @@ function getProgramTypeLabel(type?: string) {
 }
 
 function getProgramFormatLabel(format?: string) {
-  if (format === "LEAGUE") return "단일리그";
+  if (format === "LEAGUE") return "풀리그";
   if (format === "GROUP") return "조별리그";
   if (format === "TOURNAMENT") return "토너먼트";
   return "";
@@ -315,6 +315,7 @@ interface SlotActions {
   seedMap: Map<string, { a: number; b: number }>;
   onRegister: (matchId: string, slot: "a" | "b") => void;
   onSwapSelect: (matchId: string, slot: "a" | "b", participantId: string | null, name: string | null) => void;
+  onOpenSlotActions: (matchId: string, slot: "a" | "b", participantId: string, name: string | null) => void;
   onMoveToLower: () => void;
   onDeleteSelected: () => void;
   onAdvanceWalkover: (matchId: string) => void;
@@ -727,6 +728,20 @@ function SingleSlotBox({ pos, slot, actions, manualSeeding = false }: { pos: Mat
   const displaySeed = participantSeedLabel ??
     (isR1 && participantId && seedNum ? `1-${seedNum}` : undefined);
   const swapSel = actions?.swapFirstKey === `${m.id}:${slot}`;
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suppressNextClickRef = useRef(false);
+
+  const clearLongPress = () => {
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = null;
+  };
+
+  useEffect(() => () => clearLongPress(), []);
+
+  const openSlotActions = () => {
+    if (!actions?.canManage || !participantId) return;
+    actions.onOpenSlotActions(m.id, slot, participantId, name ?? null);
+  };
 
   const handleClick = () => {
     if (!actions) return;
@@ -756,7 +771,26 @@ function SingleSlotBox({ pos, slot, actions, manualSeeding = false }: { pos: Mat
       display: "flex", flexDirection: "column",
       cursor,
       outline: swapSel ? "2px solid #3B82F6" : "none",
-    }} onClick={() => { handleClick(); if (canOpenResult) actions?.onOpenResult(m.id); }}>
+      userSelect: "none",
+      WebkitTouchCallout: "none",
+    }}
+      onContextMenu={(event) => { if (!participantId || !actions?.canManage) return; event.preventDefault(); openSlotActions(); }}
+      onPointerDown={(event) => {
+        if (event.pointerType === "mouse" || !participantId || !actions?.canManage) return;
+        clearLongPress();
+        longPressTimerRef.current = setTimeout(() => {
+          suppressNextClickRef.current = true;
+          openSlotActions();
+        }, 550);
+      }}
+      onPointerUp={clearLongPress}
+      onPointerCancel={clearLongPress}
+      onPointerLeave={clearLongPress}
+      onClick={() => {
+        if (suppressNextClickRef.current) { suppressNextClickRef.current = false; return; }
+        handleClick();
+        if (canOpenResult) actions?.onOpenResult(m.id);
+      }}>
 
       {/* 라운드/시드 레이블 */}
       <Box sx={{
@@ -817,10 +851,10 @@ function SingleSlotBox({ pos, slot, actions, manualSeeding = false }: { pos: Mat
         ) : null}
       </Box>
     </Box>
-    {swapSel && participantId && m.bracket !== "lower" && (
-      <Stack spacing={0.4} sx={{ position: "absolute", left: slot === "a" ? x - 72 : x + SS_W + 4, top: y + 8, width: 68, zIndex: 20 }}>
-        <Button size="small" variant="contained" onClick={(event) => { event.stopPropagation(); actions?.onMoveToLower(); }} sx={{ minWidth: 0, px: 0.4, py: 0.35, fontSize: 8, fontWeight: 900, lineHeight: 1.15 }}>하위부로 이동</Button>
-        <Button size="small" color="error" variant="outlined" onClick={(event) => { event.stopPropagation(); actions?.onDeleteSelected(); }} sx={{ minWidth: 0, px: 0.4, py: 0.25, fontSize: 8, fontWeight: 900, lineHeight: 1.15 }}>삭제</Button>
+    {swapSel && participantId && (
+      <Stack spacing={0.6} sx={{ position: "absolute", left: slot === "a" ? Math.max(4, x - 108) : x + SS_W + 6, top: y + 3, width: 102, zIndex: 20 }}>
+        {m.bracket !== "lower" && <Button size="small" variant="contained" onClick={(event) => { event.stopPropagation(); actions?.onMoveToLower(); }} sx={{ minWidth: 0, minHeight: 30, px: 0.8, py: 0.5, fontSize: 11, fontWeight: 900, lineHeight: 1.2, whiteSpace: "nowrap" }}>하위부로 이동</Button>}
+        <Button size="small" color="error" variant="outlined" onClick={(event) => { event.stopPropagation(); actions?.onDeleteSelected(); }} sx={{ minWidth: 0, minHeight: 30, px: 0.8, py: 0.5, fontSize: 11, fontWeight: 900, lineHeight: 1.2, bgcolor: "#fff" }}>삭제</Button>
       </Stack>
     )}
     </>
@@ -1078,10 +1112,12 @@ export default function LeagueTournamentBracket() {
   const [deleteSlotDialogOpen, setDeleteSlotDialogOpen] = useState(false);
   const [reseedDialogOpen, setReseedDialogOpen] = useState(false);
   const exportRef = useRef<HTMLDivElement | null>(null);
+  const bracketScrollRef = useRef<HTMLDivElement | null>(null);
   // 참가자 등록 팝업
   const [registerTarget, setRegisterTarget] = useState<{ matchId: string; slot: "a" | "b" } | null>(null);
   const [participantSearch, setParticipantSearch] = useState("");
   const [selectedBracketIndex, setSelectedBracketIndex] = useState(1);
+  const scrollStorageKey = `league-tournament-scroll:${id ?? ""}:${isProgramMode ? programRound : 0}:${selectedBracketIndex}`;
 
   // 스왑 모드: 첫 번째 선택 슬롯
   const [swapFirst, setSwapFirst] = useState<{
@@ -1711,6 +1747,7 @@ export default function LeagueTournamentBracket() {
     seedMap,
     onRegister: handleRegister,
     onSwapSelect: handleSwapSelect,
+    onOpenSlotActions: (matchId, slot, participantId, name) => setSwapFirst({ matchId, slot, participantId, name }),
     onMoveToLower: handleMoveSelectedToLower,
     onDeleteSelected: () => setDeleteSlotDialogOpen(true),
     onAdvanceWalkover: async (matchId) => {
@@ -1899,6 +1936,34 @@ export default function LeagueTournamentBracket() {
     return { canvasW: w, canvasH: h };
   }, [positions, isDoubleElim, standardFinalPos]);
 
+  const handleBracketScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
+    const element = event.currentTarget;
+    try {
+      sessionStorage.setItem(scrollStorageKey, JSON.stringify({ left: element.scrollLeft, top: element.scrollTop }));
+    } catch {
+      // Storage can be unavailable in private browsing; scrolling should still work normally.
+    }
+  }, [scrollStorageKey]);
+
+  useEffect(() => {
+    if (!positions.length) return;
+    let saved: { left?: number; top?: number } | null = null;
+    try {
+      const raw = sessionStorage.getItem(scrollStorageKey);
+      saved = raw ? JSON.parse(raw) as { left?: number; top?: number } : null;
+    } catch {
+      saved = null;
+    }
+    if (!saved) return;
+    const frame = requestAnimationFrame(() => {
+      const element = bracketScrollRef.current;
+      if (!element) return;
+      element.scrollLeft = Math.max(0, saved?.left ?? 0);
+      element.scrollTop = Math.max(0, saved?.top ?? 0);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [canvasH, canvasW, positions.length, scrollStorageKey]);
+
   // 필터된 참가자 목록
   const filteredParticipants = useMemo(() => {
     const q = participantSearch.trim().toLowerCase();
@@ -2047,7 +2112,7 @@ export default function LeagueTournamentBracket() {
         </Tabs>
       )}
       <Box sx={{ flex: 1, overflow: "hidden", position: "relative", minHeight: 0, bgcolor: "#F0F2F5" }}>
-        <Box sx={{ position: "absolute", top: 0, bottom: 0, left: 0, right: registerTarget ? 260 : 0, overflow: "auto", transition: "right 0.2s ease" }}>
+        <Box ref={bracketScrollRef} onScroll={handleBracketScroll} sx={{ position: "absolute", top: 0, bottom: 0, left: 0, right: registerTarget ? 260 : 0, overflow: "auto", transition: "right 0.2s ease" }}>
           <Box sx={{
             position: "relative",
             width: `max(100%, ${canvasW * zoom}px)`,

@@ -61,7 +61,7 @@ function canCombineProgramRoundPoints(programData) {
 }
 
 async function getProgramUnitRankings(leagueId, programData, rules, adjustments = []) {
-  const result = await pool.query(`SELECT m.program_round,m.program_block_type,m.bracket,m.status,m.score_a,m.score_b,m.participant_a_id,m.participant_b_id,m.participant_a_roster_ids,m.participant_b_roster_ids FROM league_matches m WHERE m.league_id=$1 AND m.is_program=true ORDER BY m.program_round,m.match_order`, [leagueId]);
+  const result = await pool.query(`SELECT m.id,m.program_round,m.program_block_type,m.bracket,m.tournament_bracket_index,m.round_number,m.match_label,m.next_match_id,m.status,m.score_a,m.score_b,m.participant_a_id,m.participant_b_id,m.participant_a_roster_ids,m.participant_b_roster_ids FROM league_matches m WHERE m.league_id=$1 AND m.is_program=true ORDER BY m.program_round,m.match_order`, [leagueId]);
   const participantResult = await pool.query(`
     SELECT lp.id,lp.name,lp.division,
            COALESCE(lp.member_id, CASE WHEN matched.matched_count=1 THEN matched.user_id END) AS member_id,
@@ -72,6 +72,7 @@ async function getProgramUnitRankings(leagueId, programData, rules, adjustments 
      WHERE lp.league_id=$1`, [leagueId]);
   const participantMap = new Map(participantResult.rows.map((row) => [String(row.id), row]));
   const groups = new Map();
+  const matchesByGroup = new Map();
   const unit = (ids) => {
     const sorted = ids.map(String).filter(Boolean).sort();
     return { key:sorted.join('+'), name:sorted.map((id) => participantMap.get(id)?.name).filter(Boolean).join(' · '), members:sorted.map((id) => participantMap.get(id)).filter(Boolean) };
@@ -84,7 +85,7 @@ async function getProgramUnitRankings(leagueId, programData, rules, adjustments 
     if (!['SINGLES','DOUBLES','TEAM'].includes(type)) return;
     const a=unit(type==='SINGLES'?[match.participant_a_id]:(match.participant_a_roster_ids||[])); const b=unit(type==='SINGLES'?[match.participant_b_id]:(match.participant_b_roster_ids||[]));
     if (!a.key || !b.key) return;
-    const groupKey=`${type}:${match.program_round}`; const map=groups.get(groupKey)??new Map(); groups.set(groupKey,map);
+    const groupKey=`${type}:${match.program_round}`; const map=groups.get(groupKey)??new Map(); groups.set(groupKey,map); const groupedMatches=matchesByGroup.get(groupKey)??[]; groupedMatches.push(match); matchesByGroup.set(groupKey,groupedMatches);
     [a,b].forEach((side) => { if(!map.has(side.key)) map.set(side.key,{ unit_key:side.key,name:side.name,members:side.members,member_id:type==='SINGLES'?(side.members[0]?.member_id??null):null,member_ids:side.members.map((member)=>member.member_id).filter(Boolean).map(Number),pre_member_id:type==='SINGLES'?(side.members[0]?.pre_member_id??null):null,is_pre_registered:type==='SINGLES'&&Boolean(side.members[0]?.pre_member_id),division:type==='SINGLES'?(side.members[0]?.division??null):null,matches_played:0,wins:0,losses:0,score_points:0,attendance_points:0,bonus_points:0,total_points:0 }); });
     const ar=map.get(a.key),br=map.get(b.key),sa=Number(match.score_a||0),sb=Number(match.score_b||0); ar.matches_played++;br.matches_played++;
     const eventKey=type==='SINGLES'?'singles':type==='DOUBLES'?'doubles':'team';
@@ -94,7 +95,52 @@ async function getProgramUnitRankings(leagueId, programData, rules, adjustments 
     if(sa>sb){ar.wins++;br.losses++;}else if(sb>sa){br.wins++;ar.losses++;}
   });
   const sections=[];
-  groups.forEach((map,key) => { const [type,roundText]=key.split(':'); const round=Number(roundText); const block=programData?.blocks?.[round-1]??programData?.rounds?.[round-1]??{}; const compareRows=rules.matchPoints.mode==='sets'?(a,b)=>b.score_points-a.score_points||b.wins-a.wins||a.losses-b.losses||a.name.localeCompare(b.name,'ko'):(a,b)=>b.wins-a.wins||b.score_points-a.score_points||a.losses-b.losses||a.name.localeCompare(b.name,'ko'); const rows=[...map.values()].sort(compareRows); const rankRule=block.format==='GROUP'?rules.rankings.group:block.format==='TOURNAMENT'?(String(block.option).includes('LOWER')?rules.rankings.tournamentLower:rules.rankings.tournamentUpper):rules.rankings.league; rows.forEach((row,index)=>{row.rank=index+1;row.attendance_points=0;row.bonus_points=rankRule.enabled===false?0:[rankRule.first,rankRule.second,rankRule.third,rankRule.fourth][index]||0;row.total_points=row.score_points+row.bonus_points;}); const eventLabel=type==='SINGLES'?'단식':type==='DOUBLES'?'복식':'단체전'; const formatLabel=block.format==='GROUP'?'조별리그':block.format==='TOURNAMENT'?'토너먼트':'풀리그'; sections.push({type,round,title:`${round}라운드 ${eventLabel} ${formatLabel} 순위`,rows}); });
+  groups.forEach((map,key) => {
+    const [type,roundText]=key.split(':');
+    const round=Number(roundText);
+    const block=programData?.blocks?.[round-1]??programData?.rounds?.[round-1]??{};
+    const compareRows=rules.matchPoints.mode==='sets'
+      ?(a,b)=>b.score_points-a.score_points||b.wins-a.wins||a.losses-b.losses||a.name.localeCompare(b.name,'ko')
+      :(a,b)=>b.wins-a.wins||b.score_points-a.score_points||a.losses-b.losses||a.name.localeCompare(b.name,'ko');
+    let rows=[...map.values()];
+    rows.forEach((row)=>{row.attendance_points=0;row.bonus_points=0;});
+
+    if(block.format==='TOURNAMENT'){
+      const matches=matchesByGroup.get(key)??[];
+      const side=(match,which)=>unit(type==='SINGLES'?[match[`participant_${which}_id`]]:(match[`participant_${which}_roster_ids`]||[]));
+      const outcome=(match)=>{
+        if(!match||match.status!=='done'||Number(match.score_a)===Number(match.score_b))return null;
+        const a=side(match,'a'),b=side(match,'b');
+        return Number(match.score_a)>Number(match.score_b)?{winner:a,loser:b}:{winner:b,loser:a};
+      };
+      const isLower=(match)=>{const bracket=String(match.bracket??'').toLowerCase();return bracket.includes('lower')||bracket.includes('하위');};
+      const lowerKeys=new Set(matches.filter(isLower).flatMap((match)=>[side(match,'a').key,side(match,'b').key]).filter(Boolean));
+      const award=(entry,points,isUpper)=>{if(!entry?.key||!Number.isFinite(Number(points)))return;if(isUpper&&rules.rankings.tournamentLower.excludeUpperPointsOnLowerAdvance&&lowerKeys.has(entry.key))return;const row=map.get(entry.key);if(row)row.bonus_points+=Number(points);};
+      [[false,rules.rankings.tournamentUpper],[true,rules.rankings.tournamentLower]].forEach(([lower,rule])=>{
+        if(rule.enabled===false)return;
+        const bracketMatches=matches.filter((match)=>isLower(match)===lower);
+        bracketMatches.forEach((match)=>{const elimination=String(match.match_label??'').match(/(?:^|\s)(8|16|32|64|128)강(?:$|\s)/);const points=elimination?rule.eliminationRounds?.[elimination[1]]:null;const result=points==null?null:outcome(match);if(result)award(result.loser,points,!lower);});
+        const isThird=(match)=>String(match.match_label??'').includes('3·4위전');
+        const final=bracketMatches.find((match)=>String(match.match_label??'').includes('결승')&&!isThird(match))??[...bracketMatches].filter((match)=>!isThird(match)).sort((a,b)=>Number(b.round_number||0)-Number(a.round_number||0))[0];
+        const finalResult=outcome(final);
+        if(!finalResult)return;
+        award(finalResult.winner,rule.first,!lower);award(finalResult.loser,rule.second,!lower);
+        const third=bracketMatches.find(isThird),thirdResult=outcome(third);
+        if(thirdResult){award(thirdResult.winner,rule.third,!lower);award(thirdResult.loser,rule.fourth,!lower);}
+        else bracketMatches.filter((match)=>match.next_match_id===final?.id&&Number(match.round_number)===Number(final?.round_number)-1).map(outcome).filter(Boolean).forEach((result)=>award(result.loser,rule.third,!lower));
+      });
+      rows.forEach((row)=>{row.total_points=row.score_points+row.bonus_points;});
+      rows.sort((a,b)=>b.total_points-a.total_points||compareRows(a,b));
+    }else{
+      rows.sort(compareRows);
+      const rankRule=block.format==='GROUP'?rules.rankings.group:rules.rankings.league;
+      rows.forEach((row,index)=>{row.bonus_points=rankRule.enabled===false?0:[rankRule.first,rankRule.second,rankRule.third,rankRule.fourth][index]||0;row.total_points=row.score_points+row.bonus_points;});
+    }
+    rows.forEach((row,index)=>{row.rank=index+1;});
+    const eventLabel=type==='SINGLES'?'단식':type==='DOUBLES'?'복식':'단체전';
+    const formatLabel=block.format==='GROUP'?'조별리그':block.format==='TOURNAMENT'?'토너먼트':'풀리그';
+    sections.push({type,round,title:`${round}라운드 ${eventLabel} ${formatLabel} 순위`,rows});
+  });
   if(!rules.combineAllRounds)return sections.sort((a,b)=>['SINGLES','DOUBLES','TEAM'].indexOf(a.type)-['SINGLES','DOUBLES','TEAM'].indexOf(b.type)||a.round-b.round);
   const adjustmentMap=new Map(adjustments.map((adjustment)=>[String(adjustment.participant_id),adjustment]));
   const programBlocks=(programData?.blocks?.length?programData.blocks:programData?.rounds)??[];

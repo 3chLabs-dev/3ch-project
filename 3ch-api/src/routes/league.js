@@ -2597,9 +2597,27 @@ router.get('/league/:id/point-ranking', optionalAuth, async (req, res) => {
       combineAllRounds: canCombineAllRounds && (hasLeagueOverride ? baseRules.combineAllRounds : true),
     };
     const unitRankings = await getProgramUnitRankings(league.id, programResult.rows[0]?.program_data, effectiveRules, adjustments.rows);
+    const authoritativeSingles = [...ranking.league.rankings, ...ranking.tournament.rankings]
+      .filter((row) => Number(row.matches_played || 0) > 0 || Number(row.attendance_points || 0) > 0 || Number(row.total_points || 0) !== 0)
+      .sort((a, b) => Number(b.total_points) - Number(a.total_points)
+        || Number(b.championships) - Number(a.championships)
+        || Number(b.wins) - Number(a.wins)
+        || Number(a.losses) - Number(b.losses)
+        || String(a.name).localeCompare(String(b.name), 'ko'))
+      .map((row, index) => ({ ...row, rank: index + 1 }));
+    const programBlocks = programResult.rows[0]?.program_data?.blocks?.length
+      ? programResult.rows[0].program_data.blocks
+      : (programResult.rows[0]?.program_data?.rounds ?? []);
+    const isSinglesOnlyProgram = programBlocks.length > 0
+      && programBlocks.every((block) => (block?.type ?? block?.program) === 'SINGLES');
+    const resolvedUnitRankings = unitRankings.map((section) => (
+      isSinglesOnlyProgram && section.type === 'SINGLES' && section.round === 0
+        ? { ...section, rows: authoritativeSingles }
+        : section
+    ));
     return res.json({ ...ranking, league_info: league, seasons: seasonRows.rows, season,
       override_enabled: saved.rows[0]?.enabled === true,
-      point_rules: effectiveRules, unit_rankings: unitRankings,
+      point_rules: effectiveRules, unit_rankings: resolvedUnitRankings,
       adjustments: adjustments.rows, participants: participants.rows, can_combine_all_rounds: canCombineAllRounds,
       can_manage: req.user ? await getLeagueRankingManager(pool, league.id, req.user.sub) : false });
   } catch (error) { console.error('리그 순위 조회 실패:', error); return res.status(500).json({ message: '리그 순위를 불러오지 못했습니다.' }); }

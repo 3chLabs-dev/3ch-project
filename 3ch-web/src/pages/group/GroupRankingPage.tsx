@@ -16,16 +16,21 @@ import {
   Select,
   Stack,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import LanguageIcon from "@mui/icons-material/Language";
+import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import SmsOutlinedIcon from "@mui/icons-material/SmsOutlined";
+import QRCode from "react-qr-code";
 import CurvedShareIcon from "../../components/CurvedShareIcon";
 import type { PointRankingRow } from "../../features/group/groupApi";
-import { useGetGroupPointRankingQuery } from "../../features/group/groupApi";
+import { useGetGroupPointRankingQuery, useUpdateGroupRankingVisibilityMutation } from "../../features/group/groupApi";
 
 export default function GroupRankingPage() {
   const { id: groupId = "" } = useParams<{ id: string }>();
@@ -41,6 +46,7 @@ export default function GroupRankingPage() {
   const [selectedSeasonId, setSelectedSeasonId] = useState<string | undefined>(searchParams.get("season") ?? undefined);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [updateRankingVisibility, visibilityState] = useUpdateGroupRankingVisibilityMutation();
   const exportRef = useRef<HTMLDivElement>(null);
 
   const { data, isLoading } = useGetGroupPointRankingQuery(
@@ -70,7 +76,8 @@ export default function GroupRankingPage() {
     navigate(`/club/${groupId}/ranking/detail?${seasonId ? `season=${seasonId}` : `year=${activeYear}`}`);
   };
 
-  const rankingShareUrl = `${window.location.origin}/club/${groupId}/ranking${data?.season_id ? `?season=${encodeURIComponent(selectedSeasonId ?? data.season_id)}` : ""}`;
+  const appUrl = String(import.meta.env.VITE_APP_URL || window.location.origin).replace(/\/$/, "");
+  const rankingShareUrl = `${appUrl}/club/${groupId}/ranking${data?.season_id ? `?season=${encodeURIComponent(selectedSeasonId ?? data.season_id)}` : ""}`;
 
   const handleDownloadRanking = async () => {
     if (!exportRef.current || isDownloading) return;
@@ -185,6 +192,16 @@ export default function GroupRankingPage() {
         link={rankingShareUrl}
         clubName={data.group.name}
         seasonName={data.season?.name ?? `${activeYear}년`}
+        visibility={data.ranking_visibility}
+        canManage={canManage}
+        savingVisibility={visibilityState.isLoading}
+        onVisibilityChange={async (visibility) => {
+          try {
+            await updateRankingVisibility({ groupId, visibility }).unwrap();
+          } catch {
+            window.alert("열람 권한을 변경하지 못했습니다.");
+          }
+        }}
       />
     </Stack>
   );
@@ -340,7 +357,7 @@ function PointRankingList({
   );
 }
 
-function RankingShareDialog({ open, onClose, link, clubName, seasonName }: { open: boolean; onClose: () => void; link: string; clubName: string; seasonName: string }) {
+function RankingShareDialog({ open, onClose, link, clubName, seasonName, visibility, canManage, savingVisibility, onVisibilityChange }: { open: boolean; onClose: () => void; link: string; clubName: string; seasonName: string; visibility: "public" | "club_only"; canManage: boolean; savingVisibility: boolean; onVisibilityChange: (visibility: "public" | "club_only") => Promise<void> }) {
   const copyLink = async () => {
     try {
       await navigator.clipboard.writeText(link);
@@ -356,7 +373,7 @@ function RankingShareDialog({ open, onClose, link, clubName, seasonName }: { ope
     if (window.Kakao?.Share) {
       window.Kakao.Share.sendDefault({
         objectType: "feed",
-        content: { title: `${clubName} 클럽 순위`, description: seasonName, imageUrl: `${window.location.origin}/og-image.png`, link: { mobileWebUrl: link, webUrl: link } },
+        content: { title: `${clubName} 클럽 순위`, description: seasonName, imageUrl: `${new URL(link).origin}/og-image.png`, link: { mobileWebUrl: link, webUrl: link } },
         buttons: [{ title: "순위 보기", link: { mobileWebUrl: link, webUrl: link } }],
       });
     } else {
@@ -368,12 +385,30 @@ function RankingShareDialog({ open, onClose, link, clubName, seasonName }: { ope
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth slotProps={{ paper: { sx: { borderRadius: 1, mx: 2 } } }}>
       <DialogTitle sx={{ fontWeight: 900 }}>클럽 순위 공유</DialogTitle>
       <DialogContent>
-        <Stack spacing={3} sx={{ pt: 1 }}>
-          <Box>
+        <Stack spacing={3} sx={{ pt: 1, alignItems: "center" }}>
+          <Box sx={{ width: "100%" }}>
+            <Typography fontSize={12} color="text.secondary" fontWeight={700} sx={{ mb: 0.8 }}>열람 권한</Typography>
+            <ToggleButtonGroup
+              value={visibility}
+              exclusive
+              disabled={!canManage || savingVisibility}
+              onChange={(_event, value: "public" | "club_only" | null) => { if (value) void onVisibilityChange(value); }}
+              size="small"
+              fullWidth
+              sx={{ "& .MuiToggleButton-root": { fontWeight: 700, fontSize: 13, py: 0.8 } }}
+            >
+              <ToggleButton value="club_only" sx={{ gap: 0.5 }}><LockOutlinedIcon sx={{ fontSize: 16 }} />클럽에 가입한 회원만</ToggleButton>
+              <ToggleButton value="public" sx={{ gap: 0.5 }}><LanguageIcon sx={{ fontSize: 16 }} />링크가 있는 모든 사람</ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+          <Box sx={{ p: 2, bgcolor: "#FFF", borderRadius: 1, border: "1px solid #E0E0E0" }}>
+            <QRCode value={link} size={200} style={{ height: "auto", maxWidth: "100%", width: "100%" }} />
+          </Box>
+          <Box sx={{ width: "100%" }}>
             <Typography fontSize={12} color="text.secondary" fontWeight={700} sx={{ mb: 0.6 }}>공유 링크</Typography>
             <TextField value={link} fullWidth size="small" slotProps={{ input: { readOnly: true } }} />
           </Box>
-          <Stack direction="row" justifyContent="space-around">
+          <Stack direction="row" justifyContent="space-around" sx={{ width: "100%" }}>
             <ShareAction label="카카오톡" bgcolor="#FFEB3A" onClick={shareKakao}><Box component="img" src="/kakao-logo.png" alt="카카오톡" sx={{ width: 38, height: 38 }} /></ShareAction>
             <ShareAction label="문자" bgcolor="#4CAF50" color="#FFF" onClick={() => { window.location.href = `sms:?body=${encodeURIComponent(`${clubName} 클럽 순위 (${seasonName}) ${link}`)}`; }}><SmsOutlinedIcon /></ShareAction>
             <ShareAction label="링크 복사" bgcolor="#E5E7EB" color="#374151" onClick={() => { void copyLink(); }}><ContentCopyOutlinedIcon /></ShareAction>

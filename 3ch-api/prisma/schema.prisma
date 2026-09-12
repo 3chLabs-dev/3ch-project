@@ -110,6 +110,7 @@ model Group {
   lng            Float?
   activity_venues Json      @default("[]")
   club_code      String? @unique
+  ranking_visibility String @default("club_only") // "public" | "club_only"
 
   created_by_id Int
   creator       User @relation("GroupCreator", fields: [created_by_id], references: [id])

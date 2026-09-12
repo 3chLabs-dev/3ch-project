@@ -383,6 +383,7 @@ export type RankingPointRule = {
 
 export interface GroupPointRankingResponse {
   group: { id: string; name: string; sport?: string | null };
+  ranking_visibility: "public" | "club_only";
   year: number;
   scope: "club" | "national";
   available_years: number[];
@@ -952,6 +953,7 @@ export const groupApi = baseApi.injectEndpoints({
               seasons,
               no_active_season: !selectedSeason,
               point_rules: selectedSeason?.point_rules ?? LOCAL_DEFAULT_POINT_RULES,
+              ranking_visibility: "club_only",
               myRole: profile.group.id === group.id ? "owner" : "",
               currentUserId: profile.user.id,
               league: { rankings: rows },
@@ -966,6 +968,18 @@ export const groupApi = baseApi.injectEndpoints({
         return result.error ? { error: result.error } : { data: result.data as GroupPointRankingResponse };
       },
       providesTags: (_result, _error, { groupId, year, seasonId, scope }) => [{ type: "Group", id: `point-ranking-${groupId}-${scope}-${seasonId ?? year ?? "latest"}` }],
+    }),
+
+    updateGroupRankingVisibility: builder.mutation<
+      { ranking_visibility: "public" | "club_only" },
+      { groupId: string; visibility: "public" | "club_only" }
+    >({
+      query: ({ groupId, visibility }) => ({
+        url: `/group/${groupId}/ranking/visibility`,
+        method: "PUT",
+        body: { visibility },
+      }),
+      invalidatesTags: ["Group"],
     }),
 
     getGroupRankingSeasons: builder.query<{ seasons: GroupRankingSeason[]; myRole: string }, string>({
@@ -1179,6 +1193,7 @@ export const {
   useGetGroupMemberHeadToHeadQuery,
   useGetGroupRankingQuery,
   useGetGroupPointRankingQuery,
+  useUpdateGroupRankingVisibilityMutation,
   useGetGroupRankingSeasonsQuery,
   useCreateGroupRankingSeasonMutation,
   useUpdateGroupRankingSeasonMutation,

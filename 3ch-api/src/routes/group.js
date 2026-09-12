@@ -2,7 +2,7 @@ const express = require('express');
 const { z } = require('zod');
 const { randomUUID } = require('crypto');
 const pool = require('../db/pool');
-const { requireAuth } = require('../middlewares/auth');
+const { requireAuth, optionalAuth } = require('../middlewares/auth');
 const { requireGroupOwner, requireGroupPermission } = require('../middlewares/permissions');
 const { generateClubCode } = require('../utils/clubCodeUtils');
 const {
@@ -2455,20 +2455,29 @@ router.delete('/group/:id/member/:userId', requireAuth, requireGroupPermission('
  *       403:
  *         description: 권한 없음
  */
-router.get('/group/:id/ranking/points', requireAuth, async (req, res) => {
+router.get('/group/:id/ranking/points', optionalAuth, async (req, res) => {
   try {
-    const userId = Number(req.user.sub);
+    const userId = req.user ? Number(req.user.sub) : 0;
     const { id: groupId } = req.params;
     const year = req.query.year ? Number(req.query.year) : undefined;
     const seasonId = req.query.season_id ? String(req.query.season_id) : undefined;
     const scope = req.query.scope === 'national' ? 'national' : 'club';
 
-    const accessCheck = await pool.query(
-      `SELECT role, management_permissions FROM group_members WHERE group_id = $1 AND user_id = $2`,
-      [groupId, userId],
+    const groupResult = await pool.query(
+      `SELECT ranking_visibility FROM groups WHERE id = $1`,
+      [groupId],
     );
-    if (accessCheck.rowCount === 0) {
-      return res.status(403).json({ message: '권한이 없습니다.' });
+    if (groupResult.rowCount === 0) return res.status(404).json({ message: '클럽을 찾을 수 없습니다.' });
+
+    const accessCheck = userId
+      ? await pool.query(
+        `SELECT role, management_permissions FROM group_members WHERE group_id = $1 AND user_id = $2`,
+        [groupId, userId],
+      )
+      : { rowCount: 0, rows: [] };
+    const rankingVisibility = groupResult.rows[0].ranking_visibility || 'club_only';
+    if (rankingVisibility === 'club_only' && accessCheck.rowCount === 0) {
+      return res.status(403).json({ message: '클럽 회원만 순위를 열람할 수 있습니다.' });
     }
 
     const data = await getPointRanking(groupId, year, scope, seasonId);
@@ -2476,12 +2485,32 @@ router.get('/group/:id/ranking/points', requireAuth, async (req, res) => {
 
     return res.json({
       ...data,
-      myRole: accessCheck.rows[0].role,
-      myPermissions: accessCheck.rows[0].management_permissions || {},
+      ranking_visibility: rankingVisibility,
+      myRole: accessCheck.rows[0]?.role || 'guest',
+      myPermissions: accessCheck.rows[0]?.management_permissions || {},
       currentUserId: userId,
     });
   } catch (error) {
     console.error('Error fetching point ranking:', error);
+    return res.status(500).json({ message: '서버 오류' });
+  }
+});
+
+router.put('/group/:id/ranking/visibility', requireAuth, requireGroupPermission('ranking'), async (req, res) => {
+  try {
+    const { id: groupId } = req.params;
+    const visibility = String(req.body?.visibility || '');
+    if (!['public', 'club_only'].includes(visibility)) {
+      return res.status(400).json({ message: '올바른 열람 권한을 선택해주세요.' });
+    }
+    const result = await pool.query(
+      `UPDATE groups SET ranking_visibility = $1, updated_at = NOW() WHERE id = $2 RETURNING ranking_visibility`,
+      [visibility, groupId],
+    );
+    if (result.rowCount === 0) return res.status(404).json({ message: '클럽을 찾을 수 없습니다.' });
+    return res.json({ ranking_visibility: result.rows[0].ranking_visibility });
+  } catch (error) {
+    console.error('Error updating group ranking visibility:', error);
     return res.status(500).json({ message: '서버 오류' });
   }
 });

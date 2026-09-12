@@ -161,8 +161,8 @@ function ResultTable({ rows, threeSet }: { rows: StandingRow[]; threeSet: boolea
       <Table size="small" sx={{ width: "100%", tableLayout: "fixed" }}>
         <colgroup>
           <col style={{ width: "11%" }} />
-          <col style={{ width: threeSet ? "34%" : "30%" }} />
-          <col style={{ width: "10%" }} />
+          <col style={{ width: threeSet ? "35%" : "31%" }} />
+          <col style={{ width: "9%" }} />
           <col style={{ width: "10%" }} />
           {threeSet ? <col style={{ width: "15%" }} /> : <><col style={{ width: "9%" }} /><col style={{ width: "9%" }} /></>}
           <col style={{ width: threeSet ? "20%" : "21%" }} />
@@ -170,7 +170,7 @@ function ResultTable({ rows, threeSet }: { rows: StandingRow[]; threeSet: boolea
         <TableHead><TableRow sx={{ bgcolor: "#F8FAFC" }}>
           <TableCell sx={rankCellSx}>순위</TableCell>
           <TableCell align="center" sx={{ ...bodyCellSx, fontWeight: 800, px: 0 }}>이름</TableCell>
-          <TableCell align="center" sx={{ ...bodyCellSx, fontWeight: 800, px: 0 }}>부수</TableCell>
+          <TableCell align="left" sx={{ ...bodyCellSx, fontWeight: 800, px: 0 }}>부수</TableCell>
           <TableCell align="center" sx={{ ...bodyCellSx, fontWeight: 800 }}>경기</TableCell>
           {threeSet
             ? <TableCell align="center" sx={{ ...bodyCellSx, fontWeight: 800 }}>세트합</TableCell>
@@ -181,7 +181,7 @@ function ResultTable({ rows, threeSet }: { rows: StandingRow[]; threeSet: boolea
           {rows.map((row) => <TableRow key={row.key}>
             <TableCell sx={rankCellSx}>{row.rank}</TableCell>
             <TableCell align="center" sx={{ ...bodyCellSx, fontWeight: 800, px: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{row.name}</TableCell>
-            <TableCell align="center" sx={{ ...bodyCellSx, px: 0 }}><DivisionBadge division={row.division} /></TableCell>
+            <TableCell align="left" sx={{ ...bodyCellSx, px: 0 }}><Box sx={{ display: "inline-flex", transform: "translateX(-4px)" }}><DivisionBadge division={row.division} /></Box></TableCell>
             <TableCell align="center" sx={bodyCellSx}>{row.played}</TableCell>
             {threeSet
               ? <TableCell align="center" sx={bodyCellSx}>{row.setsFor}</TableCell>

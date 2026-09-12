@@ -333,7 +333,6 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
                 sx={{ m: 0 }}
               />
             </RadioGroup>
-            <Divider sx={{ my: 1.25 }} />
             <Typography sx={{ fontSize: 12, fontWeight: 800, color: "text.secondary", mb: 0.25 }}>
               반영 유형
             </Typography>
@@ -427,6 +426,7 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
               </Box>
             )}
           </Box>
+          <Divider />
           <Typography sx={{ fontSize: 15, fontWeight: 900 }}>입상자 포인트 설정</Typography>
           <Stack spacing={1.5}>
             <RankingPointRow label="풀리그" values={pointRules.rankings.league} onEnabledChange={(enabled) => updateRankingEnabled("league", enabled)} onChange={(rank, value) => updateRanking("league", rank, value)} />

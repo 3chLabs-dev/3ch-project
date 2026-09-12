@@ -28,7 +28,7 @@ import {
 type RoundFormat = "LEAGUE" | "GROUP" | "TOURNAMENT";
 type RoundType = "SINGLES" | "DOUBLES" | "TEAM";
 type ResultUnit = { key: string; name: string; division: string | null };
-type StandingRow = ResultUnit & { rank: string; wins: number; losses: number; setsFor: number; setsAgainst: number };
+type StandingRow = ResultUnit & { rank: string; played: number; wins: number; losses: number; setsFor: number; setsAgainst: number };
 type ProgramBlock = {
   title?: string;
   type?: RoundType;
@@ -75,7 +75,7 @@ function setRate(row: StandingRow) {
 function roundRobinStandings(matches: LeagueMatch[], threeSet: boolean): StandingRow[] {
   const stats = new Map<string, StandingRow>();
   const ensure = (unit: ResultUnit) => {
-    if (!stats.has(unit.key)) stats.set(unit.key, { ...unit, rank: "", wins: 0, losses: 0, setsFor: 0, setsAgainst: 0 });
+    if (!stats.has(unit.key)) stats.set(unit.key, { ...unit, rank: "", played: 0, wins: 0, losses: 0, setsFor: 0, setsAgainst: 0 });
     return stats.get(unit.key)!;
   };
   matches.filter((match) => !match.is_no_game && match.status === "done").forEach((match) => {
@@ -86,6 +86,8 @@ function roundRobinStandings(matches: LeagueMatch[], threeSet: boolean): Standin
     const scoreB = Number(match.score_b ?? 0);
     const aRow = ensure(a);
     const bRow = ensure(b);
+    aRow.played += 1;
+    bRow.played += 1;
     aRow.setsFor += scoreA;
     aRow.setsAgainst += scoreB;
     bRow.setsFor += scoreB;
@@ -111,13 +113,15 @@ function tournamentStandings(matches: LeagueMatch[]): StandingRow[] {
   done.forEach((match) => [sideUnit(match, "a"), sideUnit(match, "b")].forEach((unit) => { if (unit) units.set(unit.key, unit); }));
   const placement = new Map<string, string>();
   const stats = new Map<string, Omit<StandingRow, "rank">>();
-  units.forEach((unit) => stats.set(unit.key, { ...unit, wins: 0, losses: 0, setsFor: 0, setsAgainst: 0 }));
+  units.forEach((unit) => stats.set(unit.key, { ...unit, played: 0, wins: 0, losses: 0, setsFor: 0, setsAgainst: 0 }));
   done.filter((match) => !match.is_no_game).forEach((match) => {
     const a = sideUnit(match, "a");
     const b = sideUnit(match, "b");
     if (!a || !b) return;
     const aRow = stats.get(a.key)!;
     const bRow = stats.get(b.key)!;
+    aRow.played += 1;
+    bRow.played += 1;
     const scoreA = Number(match.score_a ?? 0);
     const scoreB = Number(match.score_b ?? 0);
     aRow.setsFor += scoreA; aRow.setsAgainst += scoreB;
@@ -154,20 +158,34 @@ function tournamentStandings(matches: LeagueMatch[]): StandingRow[] {
 function ResultTable({ rows, threeSet }: { rows: StandingRow[]; threeSet: boolean }) {
   return (
     <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 1.5, overflowX: "auto" }}>
-      <Table size="small" sx={{ minWidth: 390 }}>
+      <Table size="small" sx={{ minWidth: threeSet ? 420 : 446, tableLayout: "fixed" }}>
+        <colgroup>
+          <col style={{ width: 48 }} />
+          <col style={{ width: 126 }} />
+          <col style={{ width: 48 }} />
+          <col style={{ width: 46 }} />
+          {threeSet ? <col style={{ width: 66 }} /> : <><col style={{ width: 46 }} /><col style={{ width: 46 }} /></>}
+          <col style={{ width: 86 }} />
+        </colgroup>
         <TableHead><TableRow sx={{ bgcolor: "#F8FAFC" }}>
           <TableCell sx={rankCellSx}>순위</TableCell>
-          <TableCell sx={{ ...bodyCellSx, fontWeight: 800 }}>이름</TableCell>
-          <TableCell align="center" sx={{ ...bodyCellSx, fontWeight: 800 }}>부수</TableCell>
-          <TableCell align="center" sx={{ ...bodyCellSx, fontWeight: 800 }}>{threeSet ? "세트합" : "승/패"}</TableCell>
+          <TableCell align="center" sx={{ ...bodyCellSx, fontWeight: 800, pr: 0.25 }}>이름</TableCell>
+          <TableCell align="center" sx={{ ...bodyCellSx, fontWeight: 800, pl: 0.25 }}>부수</TableCell>
+          <TableCell align="center" sx={{ ...bodyCellSx, fontWeight: 800 }}>경기</TableCell>
+          {threeSet
+            ? <TableCell align="center" sx={{ ...bodyCellSx, fontWeight: 800 }}>세트합</TableCell>
+            : <><TableCell align="center" sx={{ ...bodyCellSx, fontWeight: 800 }}>승</TableCell><TableCell align="center" sx={{ ...bodyCellSx, fontWeight: 800 }}>패</TableCell></>}
           <TableCell align="center" sx={{ ...bodyCellSx, fontWeight: 800 }}>세트득실률</TableCell>
         </TableRow></TableHead>
         <TableBody>
           {rows.map((row) => <TableRow key={row.key}>
             <TableCell sx={rankCellSx}>{row.rank}</TableCell>
-            <TableCell sx={{ ...bodyCellSx, fontWeight: 800 }}>{row.name}</TableCell>
-            <TableCell align="center" sx={bodyCellSx}><DivisionBadge division={row.division} /></TableCell>
-            <TableCell align="center" sx={bodyCellSx}>{threeSet ? row.setsFor : `${row.wins}/${row.losses}`}</TableCell>
+            <TableCell sx={{ ...bodyCellSx, fontWeight: 800, pr: 0.25, overflow: "hidden", textOverflow: "ellipsis" }}>{row.name}</TableCell>
+            <TableCell align="center" sx={{ ...bodyCellSx, pl: 0.25 }}><DivisionBadge division={row.division} /></TableCell>
+            <TableCell align="center" sx={bodyCellSx}>{row.played}</TableCell>
+            {threeSet
+              ? <TableCell align="center" sx={bodyCellSx}>{row.setsFor}</TableCell>
+              : <><TableCell align="center" sx={bodyCellSx}>{row.wins}</TableCell><TableCell align="center" sx={bodyCellSx}>{row.losses}</TableCell></>}
             <TableCell align="center" sx={bodyCellSx}>{setRate(row)}</TableCell>
           </TableRow>)}
         </TableBody>

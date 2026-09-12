@@ -985,13 +985,20 @@ export default function LeagueMatchOrder() {
     );
   }, [mineOnly, myName, search, visibleMatches]);
   const hasNextProgramRound = isProgramMode && programRound < (programOption?.blocks?.length ?? 0);
-  const handleFinishProgramRound = useCallback(() => {
-    if (!isProgramMode || !leagueId || !hasNextProgramRound) return;
+  const isProgramRoundComplete = isProgramMode
+    && programMatches.length > 0
+    && programMatches.every((match) => match.is_no_game || match.status === "done");
+  const canFinishProgramRound = hasNextProgramRound && isProgramRoundComplete;
+  const handleFinishProgramRound = useCallback(async () => {
+    if (!isProgramMode || !leagueId || !programOption || !canFinishProgramRound) return;
+    const nextProgram = withProgramRoundStandingsSnapshot(programOption, programRound, programMatches);
+    storeProgramOption(leagueId, nextProgram);
+    await saveLeagueProgram({ leagueId, program: nextProgram }).unwrap();
     const nextRound = programRound + 1;
     localStorage.setItem(`league-program-active-round-${leagueId}`, String(nextRound));
     setFinishRoundConfirmOpen(false);
     navigate(`/league/${leagueId}/program/matches?program=1&round=${nextRound}`);
-  }, [hasNextProgramRound, isProgramMode, leagueId, navigate, programRound]);
+  }, [canFinishProgramRound, isProgramMode, leagueId, navigate, programMatches, programOption, programRound, saveLeagueProgram]);
 
   const tournamentSeedMap = useMemo(() => {
     if (!isTournamentProgramRound) return new Map<string, { a?: string; b?: string }>();
@@ -1375,7 +1382,7 @@ export default function LeagueMatchOrder() {
       )}
       </Box>
 
-      {hasNextProgramRound && (
+      {canFinishProgramRound && (
         <Box
           sx={{
             position: "fixed",

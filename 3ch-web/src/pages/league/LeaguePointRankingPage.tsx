@@ -16,7 +16,7 @@ export default function LeaguePointRankingPage() {
   const settingsMode = searchParams.get("settings") === "1";
   const [seasonId, setSeasonId] = useState<string | undefined>(() => searchParams.get("season") || undefined);
   const [visibleCount, setVisibleCount] = useState(10);
-  const { data, isLoading, error } = useGetLeaguePointRankingQuery({ leagueId: id, seasonId }, { skip: !id });
+  const { data, isLoading, error, refetch } = useGetLeaguePointRankingQuery({ leagueId: id, seasonId }, { skip: !id });
   const [saveSettings, settingsState] = useUpdateLeaguePointRankingSettingsMutation();
   const [saveAdjustments, adjustmentsState] = useUpdateLeaguePointRankingAdjustmentsMutation();
   const [enabled, setEnabled] = useState(false); const [rules, setRules] = useState<GroupRankingPointRules>();
@@ -30,8 +30,16 @@ export default function LeaguePointRankingPage() {
     if (!data || !rules) return;
     setSaveError("");
     try {
-      await saveSettings({ leagueId:id, seasonId:data.season.id, enabled, pointRules:rules }).unwrap();
+      const savedSettings = await saveSettings({ leagueId:id, seasonId:data.season.id, enabled, pointRules:rules }).unwrap();
+      if (savedSettings.enabled !== enabled
+        || savedSettings.point_rules.matchPoints.formats.tournament !== rules.matchPoints.formats.tournament) {
+        throw new Error("저장된 순위 설정이 요청한 값과 다릅니다.");
+      }
       await saveAdjustments({ leagueId:id, seasonId:data.season.id, adjustments:data.participants.map((p) => ({ participant_id:p.id, ...(adjustments[p.id] ?? { league_points:0,tournament_points:0,championships:0 }) })) }).unwrap();
+      const refreshed = await refetch().unwrap();
+      if (enabled && refreshed.point_rules.matchPoints.formats.tournament !== rules.matchPoints.formats.tournament) {
+        throw new Error("갱신된 순위에 설정이 반영되지 않았습니다.");
+      }
       setSaveNotice(true);
       setSearchParams({ season:data.season.id }, { replace:true });
     } catch {

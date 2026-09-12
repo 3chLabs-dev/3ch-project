@@ -727,7 +727,7 @@ export const leagueApi = baseApi.injectEndpoints({
       query: ({ leagueId, seasonId }) => ({ url: `/league/${leagueId}/point-ranking`, params: seasonId ? { season_id: seasonId } : undefined }),
       providesTags: (_r, _e, { leagueId }) => [{ type: "League", id: `point-ranking-${leagueId}` }],
     }),
-    updateLeaguePointRankingSettings: builder.mutation<void, { leagueId: string; seasonId: string; enabled: boolean; pointRules: GroupRankingPointRules }>({
+    updateLeaguePointRankingSettings: builder.mutation<{ message: string; enabled: boolean; point_rules: GroupRankingPointRules }, { leagueId: string; seasonId: string; enabled: boolean; pointRules: GroupRankingPointRules }>({
       query: ({ leagueId, seasonId, enabled, pointRules }) => ({ url: `/league/${leagueId}/point-ranking/settings`, method: "PUT", body: { season_id: seasonId, enabled, point_rules: pointRules } }),
       invalidatesTags: (_r, _e, { leagueId }) => [{ type: "League", id: `point-ranking-${leagueId}` }],
     }),

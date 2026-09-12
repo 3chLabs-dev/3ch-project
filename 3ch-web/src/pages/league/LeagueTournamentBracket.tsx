@@ -1113,6 +1113,7 @@ export default function LeagueTournamentBracket() {
   const [reseedDialogOpen, setReseedDialogOpen] = useState(false);
   const exportRef = useRef<HTMLDivElement | null>(null);
   const bracketScrollRef = useRef<HTMLDivElement | null>(null);
+  const lastBracketScrollRef = useRef({ left: 0, top: 0 });
   // 참가자 등록 팝업
   const [registerTarget, setRegisterTarget] = useState<{ matchId: string; slot: "a" | "b" } | null>(null);
   const [participantSearch, setParticipantSearch] = useState("");
@@ -1134,8 +1135,8 @@ export default function LeagueTournamentBracket() {
   );
 
   const league = leagueData?.league;
-  const { data: participantsData, isLoading: isParticipantsLoading, isFetching: isParticipantsFetching } = useGetLeagueParticipantsQuery(id!, { skip: !id });
-  const { data: programData, isLoading: isProgramLoading, isFetching: isProgramFetching } = useGetLeagueProgramQuery(id!, { skip: !isProgramMode || !id });
+  const { data: participantsData, isLoading: isParticipantsLoading } = useGetLeagueParticipantsQuery(id!, { skip: !id });
+  const { data: programData, isLoading: isProgramLoading } = useGetLeagueProgramQuery(id!, { skip: !isProgramMode || !id });
   const participants = useMemo(() => participantsData?.participants ?? [], [participantsData]);
   const programOption = useMemo(
     () => (isProgramMode && id ? (programData?.program?.program_data as ReturnType<typeof getStoredProgramOption> | undefined) ?? getStoredProgramOption(id) : null),
@@ -1938,6 +1939,7 @@ export default function LeagueTournamentBracket() {
 
   const handleBracketScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
     const element = event.currentTarget;
+    lastBracketScrollRef.current = { left: element.scrollLeft, top: element.scrollTop };
     try {
       sessionStorage.setItem(scrollStorageKey, JSON.stringify({ left: element.scrollLeft, top: element.scrollTop }));
     } catch {
@@ -1954,12 +1956,12 @@ export default function LeagueTournamentBracket() {
     } catch {
       saved = null;
     }
-    if (!saved) return;
+    const target = saved ?? lastBracketScrollRef.current;
     const frame = requestAnimationFrame(() => {
       const element = bracketScrollRef.current;
       if (!element) return;
-      element.scrollLeft = Math.max(0, saved?.left ?? 0);
-      element.scrollTop = Math.max(0, saved?.top ?? 0);
+      element.scrollLeft = Math.max(0, target.left ?? 0);
+      element.scrollTop = Math.max(0, target.top ?? 0);
     });
     return () => cancelAnimationFrame(frame);
   }, [canvasH, canvasW, positions.length, scrollStorageKey]);
@@ -1973,8 +1975,8 @@ export default function LeagueTournamentBracket() {
   if (
     isLoading ||
     (isProgramMode && (
-      isProgramLoading || isProgramFetching ||
-      isParticipantsLoading || isParticipantsFetching ||
+      (isProgramLoading && !programData) ||
+      (isParticipantsLoading && !participantsData) ||
       (isMatchesFetching && !matchesData)
     ))
   ) {

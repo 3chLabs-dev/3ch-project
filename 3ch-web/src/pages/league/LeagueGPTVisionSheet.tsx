@@ -1222,6 +1222,8 @@ export default function LeagueGPTVisionSheet() {
   const [scanVision, { isLoading: isScanning }] = useScanLeagueOpenAIVisionMutation();
   const [updateMatchResultsBatch] = useUpdateLeagueMatchResultsBatchMutation();
   const [resultDialogOpen, setResultDialogOpen] = useState(false);
+  const [finishRoundConfirmOpen, setFinishRoundConfirmOpen] = useState(false);
+  const [isFinishingRound, setIsFinishingRound] = useState(false);
   const [tieBreakDialogOpen, setTieBreakDialogOpen] = useState(false);
   const [isSavingTieBreak, setIsSavingTieBreak] = useState(false);
   const [localTieBreakOrder, setLocalTieBreakOrder] = useState<string[] | null>(null);
@@ -1628,6 +1630,29 @@ export default function LeagueGPTVisionSheet() {
   const [addParticipants, { isLoading: isAddingBot }] = useAddParticipantsMutation();
   const [saveLeagueProgram] = useSaveLeagueProgramMutation();
   const [syncProgramMatches] = useSyncLeagueProgramMatchesMutation();
+
+  const hasNextProgramRound = isProgramMode && programRound < (programOption?.blocks?.length ?? 0);
+  const isProgramRoundComplete = isProgramMode
+    && programMatchesAll.length > 0
+    && programMatchesAll.every((match) => match.is_no_game || match.status === "done");
+  const canFinishProgramRound = canManage && hasNextProgramRound && isProgramRoundComplete;
+  const handleFinishProgramRound = useCallback(async () => {
+    if (!id || !programOption || !canFinishProgramRound) return;
+    setIsFinishingRound(true);
+    try {
+      const nextProgram = withProgramRoundStandingsSnapshot(programOption, programRound, programMatchesAll);
+      storeProgramOption(id, nextProgram);
+      await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
+      const nextRound = programRound + 1;
+      localStorage.setItem(`league-program-active-round-${id}`, String(nextRound));
+      setFinishRoundConfirmOpen(false);
+      navigate(`/league/${id}/program/matches?program=1&round=${nextRound}`);
+    } catch (error) {
+      setVisionNotice({ type: "error", message: getErrorMessage(error, "라운드 종료 처리에 실패했습니다.") });
+    } finally {
+      setIsFinishingRound(false);
+    }
+  }, [canFinishProgramRound, id, navigate, programMatchesAll, programOption, programRound, saveLeagueProgram]);
 
   const addQuickFinalTournament = async () => {
     if (!id || !programOption || !programOption.blocks[0]) return;
@@ -2945,9 +2970,34 @@ export default function LeagueGPTVisionSheet() {
             transformOrigin: "top left",
             transform: "rotate(90deg) translateY(-100%)",
           }}>
-            <MatchSchedulePanel matches={matches} localOrder={localOrder} participantNumberMap={scheduleParticipantNumberMap} landscape leagueId={id ?? ""} onProgramMatchUpdate={isProgramMode ? updateProgramMatch : undefined} />
+            {canFinishProgramRound ? (
+              <Box sx={{ bgcolor: COLOR.darkCard, p: 1.25 }}>
+                <Button
+                  fullWidth
+                  variant="contained"
+                  disableElevation
+                  onClick={() => setFinishRoundConfirmOpen(true)}
+                  sx={{ height: 44, borderRadius: 2, fontSize: 14, fontWeight: 900, bgcolor: "#2563EB", "&:hover": { bgcolor: "#1D4ED8" } }}
+                >
+                  {programRound}라운드 종료
+                </Button>
+              </Box>
+            ) : (
+              <MatchSchedulePanel matches={matches} localOrder={localOrder} participantNumberMap={scheduleParticipantNumberMap} landscape leagueId={id ?? ""} onProgramMatchUpdate={isProgramMode ? updateProgramMatch : undefined} />
+            )}
           </Box>
         </Box>
+
+        <Dialog open={finishRoundConfirmOpen} onClose={() => !isFinishingRound && setFinishRoundConfirmOpen(false)} fullWidth maxWidth="xs" slotProps={{ paper: { sx: { borderRadius: 2, mx: 2 } } }}>
+          <DialogTitle sx={{ fontWeight: 900, fontSize: 17, pb: 1 }}>{programRound}라운드 종료</DialogTitle>
+          <DialogContent sx={{ px: 3, pt: 0 }}>
+            <Typography>다음 라운드로 넘어가시겠습니까?</Typography>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
+            <Button onClick={() => setFinishRoundConfirmOpen(false)} disabled={isFinishingRound} sx={{ fontWeight: 700 }}>취소</Button>
+            <Button variant="contained" disableElevation onClick={() => void handleFinishProgramRound()} disabled={isFinishingRound} sx={{ fontWeight: 800 }}>확인</Button>
+          </DialogActions>
+        </Dialog>
 
         <Box sx={{
           position: "absolute",

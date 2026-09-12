@@ -3938,7 +3938,7 @@ router.get('/league/:id/matches', optionalAuth, async (req, res) => {
          m.participant_a_roster_ids, m.participant_b_roster_ids,
          m.participant_a_seed_label, m.participant_b_seed_label,
          m.is_program, m.program_round, m.program_block_type,
-         m.bracket, m.round_number, m.match_label,
+         m.bracket, m.tournament_bracket_index, m.round_number, m.match_label,
          m.next_match_id, m.next_slot, m.loser_next_match_id, m.loser_next_slot,
          pa.name AS participant_a_name, pa.division AS participant_a_division,
          pb.name AS participant_b_name, pb.division AS participant_b_division

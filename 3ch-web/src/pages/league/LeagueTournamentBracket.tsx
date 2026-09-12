@@ -1119,6 +1119,8 @@ export default function LeagueTournamentBracket() {
   const backMode = searchParams.get("back");
   const backTo = backMode === "detail"
     ? `/league/${id}`
+    : backMode === "results"
+      ? `/league/${id}/program/results?round=${searchParams.get("round") ?? "1"}`
     : backMode === "matches"
       ? `/league/${id}/tournament/matches`
       : backMode === "tournament"

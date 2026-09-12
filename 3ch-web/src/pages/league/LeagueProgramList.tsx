@@ -379,6 +379,10 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
         description: block.description,
         advanceCount: block.advanceCount,
         finalAdvancementMode: block.finalAdvancementMode,
+        completed: matches.some((match) => match.is_program && match.program_round === index + 1)
+          && matches
+            .filter((match) => match.is_program && match.program_round === index + 1)
+            .every((match) => match.is_no_game || match.status === "done"),
       };
       })
     : [];
@@ -1678,6 +1682,18 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
                         {round.bracketLabel}
                       </Button>
                     </Stack>
+                    {round.completed && (
+                      <Button
+                        fullWidth
+                        variant="outlined"
+                        disableElevation
+                        endIcon={<ChevronRightIcon sx={{ fontSize: 16 }} />}
+                        onClick={() => navigate(`/league/${id}/program/results?round=${round.round}`)}
+                        sx={{ mt: 1, height: 38, fontWeight: 800, fontSize: 12, borderRadius: 1.5, textTransform: "none", whiteSpace: "nowrap", borderColor: "#16A34A", color: "#15803D", bgcolor: "#F0FDF4", "&:hover": { borderColor: "#15803D", bgcolor: "#DCFCE7" } }}
+                      >
+                        결과 보기
+                      </Button>
+                    )}
                   </Box>
                 ))}
 

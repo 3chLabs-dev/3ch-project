@@ -1125,6 +1125,8 @@ export default function LeagueGPTVisionSheet() {
   const backMode = searchParams.get("back");
   const backTo = backMode === "detail"
     ? `/league/${id}`
+    : backMode === "results"
+      ? `/league/${id}/program/results?round=${programRound}`
     : backMode === "matches"
       ? isProgramMode
         ? `/league/${id}/program/matches?program=1&round=${programRound}`

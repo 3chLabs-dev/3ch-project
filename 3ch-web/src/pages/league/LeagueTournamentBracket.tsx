@@ -555,6 +555,7 @@ function calcCenterOutPositions(matches: LeagueMatch[]): MatchPos[] {
  */
 function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; actions?: SlotActions; manualSeeding?: boolean }) {
   const { x, y, match: m } = pos;
+  const isPlaying = m.status === "playing";
   const isLower = m.bracket === "lower";
   const isR1 = m.round_number === 1 && !isLower;
   const winA = shouldHighlightTournamentWinner(m, "a");
@@ -604,12 +605,18 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
       position: "absolute", left: x, top: y,
       width: MW, height: MH,
       bgcolor: isLower ? "#FAF5FF" : "background.paper",
-      border: `1.5px solid ${isLower ? "#DDD6FE" : "#E2E8F0"}`,
+      border: `1.5px solid ${isPlaying ? "#3B82F6" : isLower ? "#DDD6FE" : "#E2E8F0"}`,
       borderRadius: "6px",
       overflow: "hidden",
-      boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
+      boxShadow: isPlaying ? "0 0 0 2px rgba(59,130,246,0.14), 0 2px 8px rgba(37,99,235,0.18)" : "0 1px 4px rgba(0,0,0,0.07)",
       cursor: canOpenResult ? "pointer" : "default",
     }} onClick={() => canOpenResult && actions?.onOpenResult(m.id)}>
+      {isPlaying && (
+        <Box sx={{ position: "absolute", top: 3, right: 4, zIndex: 2, display: "flex", alignItems: "center", gap: 0.35, px: 0.55, py: 0.15, borderRadius: 99, bgcolor: "#2563EB", color: "#fff" }}>
+          <Box sx={{ width: 5, height: 5, borderRadius: "50%", bgcolor: "#fff", animation: "tournamentPlayingPulse 1.2s ease-in-out infinite", "@keyframes tournamentPlayingPulse": { "0%, 100%": { opacity: 0.35 }, "50%": { opacity: 1 } } }} />
+          <Typography sx={{ fontSize: 7, fontWeight: 900, lineHeight: 1.25 }}>진행중</Typography>
+        </Box>
+      )}
       <Box
         onClick={(event) => { event.stopPropagation(); handleSlotA(); if (canOpenResult) actions?.onOpenResult(m.id); }}
         sx={{
@@ -717,6 +724,7 @@ function SingleSlotBox({ pos, slot, actions, manualSeeding = false }: { pos: Mat
   const participantId = slot === "a" ? m.participant_a_id : m.participant_b_id;
   const score = slot === "a" ? m.score_a : m.score_b;
   const win = shouldHighlightTournamentWinner(m, slot);
+  const isPlaying = m.status === "playing";
   const isBye = !name && isR1 && !manualSeeding;
   const isUndecided = !name && !isBye;
   const division = slot === "a" ? m.participant_a_division : m.participant_b_division;
@@ -764,10 +772,10 @@ function SingleSlotBox({ pos, slot, actions, manualSeeding = false }: { pos: Mat
       position: "absolute", left: x, top: y,
       width: SS_W, height: SS_H,
       bgcolor: win ? "#F0FDF4" : swapSel ? "#DBEAFE" : "background.paper",
-      border: `1.5px solid ${win ? "#86EFAC" : swapSel ? "#3B82F6" : "#E2E8F0"}`,
+      border: `1.5px solid ${win ? "#86EFAC" : isPlaying || swapSel ? "#3B82F6" : "#E2E8F0"}`,
       borderRadius: "6px",
       overflow: "hidden",
-      boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
+      boxShadow: isPlaying ? "0 0 0 2px rgba(59,130,246,0.14), 0 2px 8px rgba(37,99,235,0.18)" : "0 1px 4px rgba(0,0,0,0.07)",
       display: "flex", flexDirection: "column",
       cursor,
       outline: swapSel ? "2px solid #3B82F6" : "none",
@@ -795,13 +803,16 @@ function SingleSlotBox({ pos, slot, actions, manualSeeding = false }: { pos: Mat
       {/* 라운드/시드 레이블 */}
       <Box sx={{
         height: VB_LABEL_H, display: "flex", alignItems: "center", justifyContent: "center",
-        bgcolor: m.bracket === "lower" ? "#F5F3FF" : "#EFF6FF",
+        bgcolor: isPlaying ? "#DBEAFE" : m.bracket === "lower" ? "#F5F3FF" : "#EFF6FF",
         borderBottom: `1px solid ${m.bracket === "lower" ? "#DDD6FE" : "#E2E8F0"}`,
         flexShrink: 0,
       }}>
         <Typography sx={{ fontSize: 8, fontWeight: 700, color: m.bracket === "lower" ? "#7C3AED" : "#2563EB", lineHeight: 1 }}>
           {displaySeed ?? (m.match_label ?? `R${m.round_number}`)}
         </Typography>
+        {isPlaying && (
+          <Box title="진행중" sx={{ ml: 0.45, width: 6, height: 6, borderRadius: "50%", bgcolor: "#2563EB", animation: "tournamentPlayingPulse 1.2s ease-in-out infinite", "@keyframes tournamentPlayingPulse": { "0%, 100%": { opacity: 0.35 }, "50%": { opacity: 1 } } }} />
+        )}
       </Box>
 
       {/* 이름 행 */}
@@ -841,7 +852,7 @@ function SingleSlotBox({ pos, slot, actions, manualSeeding = false }: { pos: Mat
       <Box sx={{
         height: 24, display: "flex", alignItems: "center", justifyContent: "center",
         borderTop: `1px solid ${win ? "#BBF7D0" : "#F1F5F9"}`,
-        bgcolor: win ? "#DCFCE7" : "#F8FAFC",
+        bgcolor: win ? "#DCFCE7" : isPlaying ? "#EFF6FF" : "#F8FAFC",
         flexShrink: 0,
       }}>
         {score != null ? (

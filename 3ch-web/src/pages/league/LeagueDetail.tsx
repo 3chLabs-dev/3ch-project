@@ -1642,6 +1642,52 @@ const handleSaveEdit = async () => {
             </>
           )}
           <Divider sx={{ borderColor: "#F3F4F6" }} />
+          <Box sx={{ py: 1 }}>
+            <Typography sx={labelSx}>이벤트</Typography>
+            <Stack spacing={1} sx={{ mt: 1 }}>
+              <Button
+                fullWidth
+                variant="outlined"
+                disableElevation
+                startIcon={<EmojiEventsOutlinedIcon fontSize="small" />}
+                onClick={() => navigate(`/league/${id}/ranking`)}
+                sx={{
+                  borderRadius: 1,
+                  height: 40,
+                  fontWeight: 700,
+                  color: "#9A4D00",
+                  borderColor: "#F59E0B",
+                  bgcolor: "#FFF7D6",
+                  "&:hover": { borderColor: "#D97706", bgcolor: "#FFEDAD" },
+                  "& .MuiSvgIcon-root": { color: "#F59E0B" },
+                }}
+              >
+                순위
+              </Button>
+              {canInteract && (
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  disableElevation
+                  startIcon={<CardGiftcardOutlinedIcon fontSize="small" />}
+                  onClick={() => navigate(`/draw/${id}`)}
+                  sx={{
+                    borderRadius: 1,
+                    height: 40,
+                    fontWeight: 700,
+                    color: "#7C3AED",
+                    borderColor: "#A78BFA",
+                    bgcolor: "#F5F3FF",
+                    "&:hover": { borderColor: "#7C3AED", bgcolor: "#EDE9FE" },
+                    "& .MuiSvgIcon-root": { color: "#8B5CF6" },
+                  }}
+                >
+                  경품 추첨
+                </Button>
+              )}
+            </Stack>
+          </Box>
+          <Divider sx={{ borderColor: "#F3F4F6" }} />
           <Stack direction="row" alignItems="center" sx={{ py: 0.8 }}>
             <Typography sx={{ ...labelSx, flex: 1 }}>참여 클럽</Typography>
             <Button size="small" variant="outlined" onClick={() => setInvitedGroupsOpen(true)} sx={{ minWidth: 44, height: 24, borderRadius: 1, px: 1.25, fontSize: 11, fontWeight: 800 }}>
@@ -1964,47 +2010,6 @@ const handleSaveEdit = async () => {
             showGroupName={showParticipantGroups}
           />
 
-          <Button
-            fullWidth
-            variant="outlined"
-            disableElevation
-            startIcon={<EmojiEventsOutlinedIcon fontSize="small" />}
-            onClick={() => navigate(`/league/${id}/ranking`)}
-            sx={{
-              mt: 1.5,
-              borderRadius: 1,
-              height: 40,
-              fontWeight: 700,
-              color: "#9A4D00",
-              borderColor: "#F59E0B",
-              bgcolor: "#FFF7D6",
-              "&:hover": { borderColor: "#D97706", bgcolor: "#FFEDAD" },
-              "& .MuiSvgIcon-root": { color: "#F59E0B" },
-            }}
-          >
-            순위
-          </Button>
-
-          {canInteract && (
-            <Button
-              fullWidth variant="outlined" disableElevation
-              startIcon={<CardGiftcardOutlinedIcon fontSize="small" />}
-              sx={{
-                mt: 1,
-                borderRadius: 1,
-                height: 40,
-                fontWeight: 700,
-                color: "#7C3AED",
-                borderColor: "#A78BFA",
-                bgcolor: "#F5F3FF",
-                "&:hover": { borderColor: "#7C3AED", bgcolor: "#EDE9FE" },
-                "& .MuiSvgIcon-root": { color: "#8B5CF6" },
-              }}
-              onClick={() => navigate(`/draw/${id}`)}
-            >
-              경품 추첨
-            </Button>
-          )}
           {!isEventProgramFormat && ((!canManage  && league.status === "active") || canManage) && (
             league.format === "조별리그" && (
               <Stack spacing={1} sx={{ mt: 1 }}>

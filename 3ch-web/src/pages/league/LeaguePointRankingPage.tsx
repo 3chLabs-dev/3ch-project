@@ -66,7 +66,8 @@ export default function LeaguePointRankingPage() {
       `/club/${data.league_info.group_id}/member/${memberId}`,
       { state: { fromLeagueRanking: true, returnTo: `${location.pathname}${location.search}` } },
     );
-    const shareUrl = `${window.location.origin}/league/${id}/ranking?season=${encodeURIComponent(data.season.id)}`;
+    const appUrl = String(import.meta.env.VITE_APP_URL || window.location.origin).replace(/\/$/, "");
+    const shareUrl = `${appUrl}/league/${id}/ranking?season=${encodeURIComponent(data.season.id)}`;
     const downloadRanking = async () => {
       if (!exportRef.current || isDownloading) return;
       setIsDownloading(true);
@@ -148,7 +149,7 @@ function LeagueRankingShareDialog({ open, onClose, link, leagueName, seasonName,
   const shareKakao = () => {
     const kakaoKey=import.meta.env.VITE_KAKAO_JS_KEY;
     if(window.Kakao&&kakaoKey&&!window.Kakao.isInitialized())window.Kakao.init(kakaoKey);
-    if(window.Kakao?.Share){window.Kakao.Share.sendDefault({objectType:"feed",content:{title:`${leagueName} 리그 순위`,description:seasonName,imageUrl:`${window.location.origin}/og-image.png`,link:{mobileWebUrl:link,webUrl:link}},buttons:[{title:"순위 보기",link:{mobileWebUrl:link,webUrl:link}}]});}
+    if(window.Kakao?.Share){const appOrigin=new URL(link).origin;window.Kakao.Share.sendDefault({objectType:"feed",content:{title:`${leagueName} 리그 순위`,description:seasonName,imageUrl:`${appOrigin}/og-image.png`,link:{mobileWebUrl:link,webUrl:link}},buttons:[{title:"순위 보기",link:{mobileWebUrl:link,webUrl:link}}]});}
     else void copyLink();
   };
   return <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth slotProps={{paper:{sx:{borderRadius:1,mx:2}}}}>

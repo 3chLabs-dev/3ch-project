@@ -1218,6 +1218,9 @@ export default function LeagueGPTVisionSheet() {
         : match;
     });
   }, [generatedProgramMatchesAll, hasProgramMatchPolicy, isProgramFinalRound, isProgramUnitRound, serverProgramMatchesAll]);
+  const hasStartedProgramMatch = programMatchesAll.some(
+    (match) => !match.is_no_game && (match.status === "playing" || match.status === "done"),
+  );
   const [updateMatch] = useUpdateLeagueMatchMutation();
   const [scanVision, { isLoading: isScanning }] = useScanLeagueOpenAIVisionMutation();
   const [updateMatchResultsBatch] = useUpdateLeagueMatchResultsBatchMutation();
@@ -1234,6 +1237,8 @@ export default function LeagueGPTVisionSheet() {
   const [visionRuleMismatch, setVisionRuleMismatch] = useState<"best3-over" | "best5-under" | null>(null);
   const [previewCells, setPreviewCells] = useState<VisionPreviewCell[]>([]);
   const [isSavingVision, setIsSavingVision] = useState(false);
+  const [standardResetDialogOpen, setStandardResetDialogOpen] = useState(false);
+  const [isResettingStandard, setIsResettingStandard] = useState(false);
   const [visionSaveProgress, setVisionSaveProgress] = useState(0);
   const [visionError, setVisionError] = useState<string | null>(null);
   const [visionNotice, setVisionNotice] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
@@ -1807,6 +1812,78 @@ export default function LeagueGPTVisionSheet() {
     programSourceMatches, rawParticipants, refetchMatches, reorderParticipants,
     saveLeagueProgram, syncProgramMatches,
   ]);
+
+  const handleStandardReset = useCallback(async () => {
+    if (!id || !programOption || !currentProgramBlock || hasStartedProgramMatch || isResettingStandard) return;
+    setIsResettingStandard(true);
+    try {
+      const clearSavedOrder = <T extends { participantOrder?: string[] }>(value: T): T => ({
+        ...value,
+        participantOrder: undefined,
+      });
+      const baseProgram = {
+        ...programOption,
+        blocks: programOption.blocks.map((block, index) =>
+          index === programRound - 1 ? clearSavedOrder(block) : block
+        ),
+        rounds: programOption.rounds?.map((round, index) =>
+          index === programRound - 1 ? clearSavedOrder(round) : round
+        ),
+      };
+      const canonicalMatches = generateProgramRoundMatches(
+        id,
+        baseProgram,
+        rawParticipants,
+        programRound,
+        programSourceMatches,
+      );
+      const standardPosition = new Map<string, { group: number; seed: number }>();
+      canonicalMatches.forEach((match) => {
+        const parsedGroup = Number.parseInt(match.match_label ?? "", 10);
+        const group = Number.isFinite(parsedGroup) ? parsedGroup : 0;
+        const addParticipant = (participantId: string | null, seedLabel?: string | null) => {
+          if (!participantId || standardPosition.has(participantId)) return;
+          const parsedSeed = Number.parseInt(seedLabel ?? "", 10);
+          standardPosition.set(participantId, {
+            group,
+            seed: Number.isFinite(parsedSeed) ? parsedSeed : Number.MAX_SAFE_INTEGER,
+          });
+        };
+        addParticipant(match.participant_a_id, match.participant_a_seed_label);
+        addParticipant(match.participant_b_id, match.participant_b_seed_label);
+      });
+      const participantOrder = [...standardPosition.entries()]
+        .sort(([, left], [, right]) => left.group - right.group || left.seed - right.seed)
+        .map(([participantId]) => participantId);
+      const standardProgram = {
+        ...baseProgram,
+        blocks: baseProgram.blocks.map((block, index) =>
+          index === programRound - 1 ? { ...block, participantOrder } : block
+        ),
+        rounds: baseProgram.rounds?.map((round, index) =>
+          index === programRound - 1 ? { ...round, participantOrder } : round
+        ),
+      };
+      const standardMatches = generateProgramRoundMatches(
+        id,
+        standardProgram,
+        rawParticipants,
+        programRound,
+        programSourceMatches,
+      );
+      storeProgramOption(id, standardProgram);
+      await saveLeagueProgram({ leagueId: id, program: standardProgram }).unwrap();
+      await syncProgramMatches({ leagueId: id, matches: standardMatches }).unwrap();
+      await refetchMatches();
+      setEditOrder(null);
+      setEditMode(false);
+      setStandardResetDialogOpen(false);
+    } catch (error) {
+      setVisionNotice({ type: "error", message: getErrorMessage(error, "표준 재배치에 실패했습니다.") });
+    } finally {
+      setIsResettingStandard(false);
+    }
+  }, [currentProgramBlock, hasStartedProgramMatch, id, isResettingStandard, programOption, programRound, programSourceMatches, rawParticipants, refetchMatches, saveLeagueProgram, syncProgramMatches]);
 
   const handleAddBot = useCallback(async () => {
     if (!id || isAddingBot) return;
@@ -2655,6 +2732,19 @@ export default function LeagueGPTVisionSheet() {
           </Tooltip>
         </Box>
 
+        {isProgramMode && canManage && !hasStartedProgramMatch && (
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<RefreshIcon sx={{ fontSize: 14 }} />}
+            disabled={isResettingStandard || programMatchesAll.length === 0}
+            onClick={() => setStandardResetDialogOpen(true)}
+            sx={{ borderRadius: "20px", fontSize: 11, fontWeight: 800, px: 1.3, py: 0.4, textTransform: "none", flexShrink: 0, minWidth: "auto" }}
+          >
+            표준 재배치
+          </Button>
+        )}
+
         {/* 수정 버튼: 리그 완료 전 + 관리 권한자에게만 표시 */}
         {canManage && (
           <Button
@@ -2697,6 +2787,22 @@ export default function LeagueGPTVisionSheet() {
           </Typography>
         </Box>
       </Popover>
+
+      <Dialog open={standardResetDialogOpen} onClose={() => !isResettingStandard && setStandardResetDialogOpen(false)} fullWidth maxWidth="xs" sx={{ zIndex: 10004 }} slotProps={{ paper: { sx: { borderRadius: 3, ...mobileDialogPaperSx } } }}>
+        <DialogTitle sx={{ fontWeight: 900 }}>대진표 표준 재배치</DialogTitle>
+        <DialogContent dividers>
+          <Typography sx={{ fontSize: 14, color: "#475569", lineHeight: 1.6 }}>
+            현재 확정된 조 편성을 기준으로 참가자 번호와 경기 순서를 다시 배치합니다.
+          </Typography>
+          <Typography sx={{ mt: 0.7, fontSize: 12, fontWeight: 700, color: "#2563EB", lineHeight: 1.5 }}>
+            경기가 시작되기 전까지만 사용할 수 있습니다.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 2, py: 1.5 }}>
+          <Button onClick={() => setStandardResetDialogOpen(false)} disabled={isResettingStandard}>취소</Button>
+          <Button variant="contained" onClick={() => void handleStandardReset()} disabled={isResettingStandard}>재배치</Button>
+        </DialogActions>
+      </Dialog>
 
       {landscape && groupNames.length > 0 && (
         <Box sx={{ px: 1, pt: 1, pb: 0.5, bgcolor: "#F0F2F5", borderBottom: "1px solid #E5E7EB" }}>

@@ -158,19 +158,19 @@ function tournamentStandings(matches: LeagueMatch[]): StandingRow[] {
 function ResultTable({ rows, threeSet }: { rows: StandingRow[]; threeSet: boolean }) {
   return (
     <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 1.5, overflowX: "auto" }}>
-      <Table size="small" sx={{ minWidth: threeSet ? 420 : 446, tableLayout: "fixed" }}>
+      <Table size="small" sx={{ width: "100%", tableLayout: "fixed" }}>
         <colgroup>
-          <col style={{ width: 48 }} />
-          <col style={{ width: 126 }} />
-          <col style={{ width: 48 }} />
-          <col style={{ width: 46 }} />
-          {threeSet ? <col style={{ width: 66 }} /> : <><col style={{ width: 46 }} /><col style={{ width: 46 }} /></>}
-          <col style={{ width: 86 }} />
+          <col style={{ width: "11%" }} />
+          <col style={{ width: threeSet ? "34%" : "30%" }} />
+          <col style={{ width: "10%" }} />
+          <col style={{ width: "10%" }} />
+          {threeSet ? <col style={{ width: "15%" }} /> : <><col style={{ width: "9%" }} /><col style={{ width: "9%" }} /></>}
+          <col style={{ width: threeSet ? "20%" : "21%" }} />
         </colgroup>
         <TableHead><TableRow sx={{ bgcolor: "#F8FAFC" }}>
           <TableCell sx={rankCellSx}>순위</TableCell>
-          <TableCell align="center" sx={{ ...bodyCellSx, fontWeight: 800, pr: 0.25 }}>이름</TableCell>
-          <TableCell align="center" sx={{ ...bodyCellSx, fontWeight: 800, pl: 0.25 }}>부수</TableCell>
+          <TableCell align="center" sx={{ ...bodyCellSx, fontWeight: 800, px: 0 }}>이름</TableCell>
+          <TableCell align="center" sx={{ ...bodyCellSx, fontWeight: 800, px: 0 }}>부수</TableCell>
           <TableCell align="center" sx={{ ...bodyCellSx, fontWeight: 800 }}>경기</TableCell>
           {threeSet
             ? <TableCell align="center" sx={{ ...bodyCellSx, fontWeight: 800 }}>세트합</TableCell>
@@ -180,8 +180,8 @@ function ResultTable({ rows, threeSet }: { rows: StandingRow[]; threeSet: boolea
         <TableBody>
           {rows.map((row) => <TableRow key={row.key}>
             <TableCell sx={rankCellSx}>{row.rank}</TableCell>
-            <TableCell sx={{ ...bodyCellSx, fontWeight: 800, pr: 0.25, overflow: "hidden", textOverflow: "ellipsis" }}>{row.name}</TableCell>
-            <TableCell align="center" sx={{ ...bodyCellSx, pl: 0.25 }}><DivisionBadge division={row.division} /></TableCell>
+            <TableCell align="center" sx={{ ...bodyCellSx, fontWeight: 800, px: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{row.name}</TableCell>
+            <TableCell align="center" sx={{ ...bodyCellSx, px: 0 }}><DivisionBadge division={row.division} /></TableCell>
             <TableCell align="center" sx={bodyCellSx}>{row.played}</TableCell>
             {threeSet
               ? <TableCell align="center" sx={bodyCellSx}>{row.setsFor}</TableCell>

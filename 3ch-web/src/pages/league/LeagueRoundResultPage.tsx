@@ -159,9 +159,9 @@ type AwardMode = "league" | "upper" | "lower";
 
 function awardStyle(rank: string, mode: AwardMode) {
   const medal = mode === "upper" ? rank : rank === "1" ? "1" : "";
-  if (medal === "1") return { background: "linear-gradient(90deg, #FFF3B0 0%, #FFFDF3 100%)", accent: "#D9A800", color: "#7A5900" };
-  if (medal === "2") return { background: "linear-gradient(90deg, #E5E7EB 0%, #FAFAFA 100%)", accent: "#9CA3AF", color: "#4B5563" };
-  if (medal === "3") return { background: "linear-gradient(90deg, #F5CBA7 0%, #FFF8F1 100%)", accent: "#C47A32", color: "#8A4B16" };
+  if (medal === "1") return { background: "#FFF8D8", accent: "#E1B600", color: "#7A5900" };
+  if (medal === "2") return { background: "#F1F3F5", accent: "#A8AFB8", color: "#4B5563" };
+  if (medal === "3") return { background: "#FFF0E4", accent: "#CD7F32", color: "#8A4B16" };
   return null;
 }
 

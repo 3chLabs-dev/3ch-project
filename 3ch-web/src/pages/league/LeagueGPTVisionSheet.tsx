@@ -1058,6 +1058,7 @@ type VisionPreviewCell = OpenAIVisionCell & {
 };
 
 const PORTRAIT_SCHEDULE_RAIL_WIDTH = 84;
+const TOOL_RAIL_QR_OFFSET = 80;
 
 type VisionTargetRegion = "all" | "upper-right" | "lower-left" | "row-band";
 type OverlayRect = { left: number; top: number; width: number; height: number };
@@ -3164,8 +3165,8 @@ export default function LeagueGPTVisionSheet() {
         <Box sx={{
           position: "absolute",
           ...(landscape
-            ? { bottom: 380, right: 14 }
-            : { bottom: 12, right: 85 }),
+            ? { bottom: 380 + TOOL_RAIL_QR_OFFSET, right: 14 }
+            : { bottom: 12, right: 85 + TOOL_RAIL_QR_OFFSET }),
           zIndex: 20,
           display: "flex",
           flexDirection: "column",
@@ -3202,8 +3203,8 @@ export default function LeagueGPTVisionSheet() {
         <Box sx={{
           position: "absolute",
           ...(landscape
-            ? { bottom: 300, right: 14 }
-            : { bottom: 12, right: 170 }),
+            ? { bottom: 300 + TOOL_RAIL_QR_OFFSET, right: 14 }
+            : { bottom: 12, right: 170 + TOOL_RAIL_QR_OFFSET }),
           zIndex: 10,
           writingMode: landscape ? "horizontal-tb" : "vertical-rl",
           bgcolor: "#fff",
@@ -3230,8 +3231,8 @@ export default function LeagueGPTVisionSheet() {
         <Box sx={{
           position: "absolute",
           ...(landscape
-            ? { bottom: 216, right: 14 }
-            : { bottom: 12, right: 250 }),
+            ? { bottom: 216 + TOOL_RAIL_QR_OFFSET, right: 14 }
+            : { bottom: 12, right: 250 + TOOL_RAIL_QR_OFFSET }),
           zIndex: 10,
           writingMode: landscape ? "horizontal-tb" : "vertical-rl",
           bgcolor: "#fff",
@@ -3254,17 +3255,17 @@ export default function LeagueGPTVisionSheet() {
         </Box>
 
         <Tooltip title="새로고침">
-          <IconButton onClick={handleRefresh} sx={{ position: "absolute", ...(landscape ? { bottom: 157, right: 14 } : { bottom: 62, right: 170 }), zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: "#fff", color: "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: "#F3F4F6" } }}>
+          <IconButton onClick={handleRefresh} sx={{ position: "absolute", ...(landscape ? { bottom: 157 + TOOL_RAIL_QR_OFFSET, right: 14 } : { bottom: 62, right: 170 + TOOL_RAIL_QR_OFFSET }), zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: "#fff", color: "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: "#F3F4F6" } }}>
             <RefreshIcon sx={{ fontSize: 18 }} />
           </IconButton>
         </Tooltip>
         <Tooltip title={landscape ? "세로 보기" : "가로 보기"}>
-          <IconButton onClick={() => { setLandscape((v) => !v); setUserZoom(1); }} sx={{ position: "absolute", ...(landscape ? { bottom: 104, right: 14 } : { bottom: 62, right: 220 }), zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: landscape ? COLOR.primary : "#fff", color: landscape ? "#fff" : "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: landscape ? "#1D4ED8" : "#F3F4F6" } }}>
+          <IconButton onClick={() => { setLandscape((v) => !v); setUserZoom(1); }} sx={{ position: "absolute", ...(landscape ? { bottom: 104 + TOOL_RAIL_QR_OFFSET, right: 14 } : { bottom: 62, right: 220 + TOOL_RAIL_QR_OFFSET }), zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: landscape ? COLOR.primary : "#fff", color: landscape ? "#fff" : "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: landscape ? "#1D4ED8" : "#F3F4F6" } }}>
             <ScreenRotationIcon sx={{ fontSize: 18 }} />
           </IconButton>
         </Tooltip>
         <Tooltip title="전체 화면">
-          <IconButton onClick={() => void toggleFullscreen().catch(() => window.alert("이 브라우저에서는 전체 화면을 사용할 수 없습니다."))} sx={{ position: "absolute", ...(landscape ? { bottom: 51, right: 14 } : { bottom: 62, right: 270 }), zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: "#fff", color: "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: "#F3F4F6" } }}>
+          <IconButton onClick={() => void toggleFullscreen().catch(() => window.alert("이 브라우저에서는 전체 화면을 사용할 수 없습니다."))} sx={{ position: "absolute", ...(landscape ? { bottom: 51 + TOOL_RAIL_QR_OFFSET, right: 14 } : { bottom: 62, right: 270 + TOOL_RAIL_QR_OFFSET }), zIndex: 10, writingMode: landscape ? "horizontal-tb" : "vertical-rl", bgcolor: "#fff", color: "#6B7280", boxShadow: "0 2px 8px rgba(0,0,0,0.15)", width: 45, height: 45, "&:hover": { bgcolor: "#F3F4F6" } }}>
             <FullscreenIcon sx={{ fontSize: 22 }} />
           </IconButton>
         </Tooltip>

@@ -1060,7 +1060,7 @@ type VisionPreviewCell = OpenAIVisionCell & {
 const PORTRAIT_SCHEDULE_RAIL_WIDTH = 84;
 const LANDSCAPE_TOOL_RAIL_OFFSET = 80;
 // portrait 화면은 대진표가 90도 회전하므로 right 값을 줄여야 화면상 오른쪽으로 이동한다.
-const PORTRAIT_TOOL_RAIL_OFFSET = -80;
+const PORTRAIT_TOOL_RAIL_OFFSET = -40;
 
 type VisionTargetRegion = "all" | "upper-right" | "lower-left" | "row-band";
 type OverlayRect = { left: number; top: number; width: number; height: number };

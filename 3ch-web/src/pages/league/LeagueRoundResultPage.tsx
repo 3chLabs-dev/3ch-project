@@ -155,7 +155,17 @@ function tournamentStandings(matches: LeagueMatch[]): StandingRow[] {
     .sort((left, right) => order(left.rank) - order(right.rank) || left.name.localeCompare(right.name, "ko"));
 }
 
-function ResultTable({ rows, threeSet }: { rows: StandingRow[]; threeSet: boolean }) {
+type AwardMode = "league" | "upper" | "lower";
+
+function awardStyle(rank: string, mode: AwardMode) {
+  const medal = mode === "upper" ? rank : rank === "1" ? "1" : "";
+  if (medal === "1") return { background: "linear-gradient(90deg, #FFF3B0 0%, #FFFDF3 100%)", accent: "#D9A800", color: "#7A5900" };
+  if (medal === "2") return { background: "linear-gradient(90deg, #E5E7EB 0%, #FAFAFA 100%)", accent: "#9CA3AF", color: "#4B5563" };
+  if (medal === "3") return { background: "linear-gradient(90deg, #F5CBA7 0%, #FFF8F1 100%)", accent: "#C47A32", color: "#8A4B16" };
+  return null;
+}
+
+function ResultTable({ rows, threeSet, awardMode }: { rows: StandingRow[]; threeSet: boolean; awardMode: AwardMode }) {
   return (
     <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 1.5, overflowX: "auto" }}>
       <Table size="small" sx={{ width: "100%", tableLayout: "fixed" }}>
@@ -178,8 +188,10 @@ function ResultTable({ rows, threeSet }: { rows: StandingRow[]; threeSet: boolea
           <TableCell align="center" sx={{ ...bodyCellSx, fontWeight: 800 }}>세트득실률</TableCell>
         </TableRow></TableHead>
         <TableBody>
-          {rows.map((row) => <TableRow key={row.key}>
-            <TableCell sx={rankCellSx}>{row.rank}</TableCell>
+          {rows.map((row) => {
+            const award = awardStyle(row.rank, awardMode);
+            return <TableRow key={row.key} sx={award ? { "& > td": { background: award.background } } : undefined}>
+            <TableCell sx={{ ...rankCellSx, ...(award ? { borderLeft: `4px solid ${award.accent}`, color: award.color, fontSize: 14 } : {}) }}>{row.rank}</TableCell>
             <TableCell align="center" sx={{ ...bodyCellSx, fontWeight: 800, px: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{row.name}</TableCell>
             <TableCell align="center" sx={{ ...bodyCellSx, px: 0 }}><Box sx={{ display: "inline-flex", transform: "translateX(-4px)" }}><DivisionBadge division={row.division} /></Box></TableCell>
             <TableCell align="center" sx={bodyCellSx}>{row.played}</TableCell>
@@ -187,7 +199,7 @@ function ResultTable({ rows, threeSet }: { rows: StandingRow[]; threeSet: boolea
               ? <TableCell align="center" sx={bodyCellSx}>{row.setsFor}</TableCell>
               : <><TableCell align="center" sx={bodyCellSx}>{row.wins}</TableCell><TableCell align="center" sx={bodyCellSx}>{row.losses}</TableCell></>}
             <TableCell align="center" sx={bodyCellSx}>{setRate(row)}</TableCell>
-          </TableRow>)}
+          </TableRow>;})}
         </TableBody>
       </Table>
     </TableContainer>
@@ -210,10 +222,10 @@ export default function LeagueRoundResultPage() {
   const threeSet = block?.matchRule === "THREE_SET" || block?.matchRule?.includes("3세트") || matches.some((match) => match.match_rule === "THREE_SET" || match.match_rule?.includes("3세트"));
   const bracketPath = format === "TOURNAMENT" ? "tournament-bracket" : "bracket";
   const grouped = useMemo(() => {
-    if (format === "LEAGUE") return [{ key: "league", title: "전체 순위", rows: roundRobinStandings(matches, threeSet) }];
+    if (format === "LEAGUE") return [{ key: "league", title: "전체 순위", rows: roundRobinStandings(matches, threeSet), awardMode: "league" as const }];
     if (format === "GROUP") {
       const labels = [...new Set(matches.map((match) => match.match_label).filter((label): label is string => Boolean(label)))].sort((left, right) => Number.parseInt(left, 10) - Number.parseInt(right, 10));
-      return labels.map((label) => ({ key: label, title: label, rows: roundRobinStandings(matches.filter((match) => match.match_label === label), threeSet) }));
+      return labels.map((label) => ({ key: label, title: label, rows: roundRobinStandings(matches.filter((match) => match.match_label === label), threeSet), awardMode: "league" as const }));
     }
     const indexes = [...new Set(matches.map((match) => match.tournament_bracket_index || 1))].sort((a, b) => a - b);
     const brackets = [...new Set(matches.map((match) => match.bracket || "upper"))];
@@ -221,6 +233,7 @@ export default function LeagueRoundResultPage() {
       key: `${index}-${bracket}`,
       title: `${bracket === "lower" ? "하위부" : "상위부"}${indexes.length > 1 ? ` ${index}조` : ""}`,
       rows: tournamentStandings(matches.filter((match) => (match.tournament_bracket_index || 1) === index && (match.bracket || "upper") === bracket)),
+      awardMode: (bracket === "lower" ? "lower" : "upper") as AwardMode,
     })).filter((section) => section.rows.length > 0));
   }, [format, matches, threeSet]);
   const activeGroup = format === "GROUP"
@@ -279,7 +292,7 @@ export default function LeagueRoundResultPage() {
       ) : visibleSections.map((section) => (
         <Stack key={section.key} spacing={1}>
           <Typography sx={{ fontSize: 16, fontWeight: 900 }}>{section.title}</Typography>
-          <ResultTable rows={section.rows} threeSet={threeSet} />
+          <ResultTable rows={section.rows} threeSet={threeSet} awardMode={section.awardMode} />
         </Stack>
       ))}
     </Stack>

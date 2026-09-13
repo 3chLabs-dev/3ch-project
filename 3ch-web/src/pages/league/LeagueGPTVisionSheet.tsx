@@ -18,6 +18,8 @@ import { styled } from "@mui/material/styles";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import CloseIcon from "@mui/icons-material/Close";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
 import EditIcon from "@mui/icons-material/Edit";
 import CheckIcon from "@mui/icons-material/Check";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
@@ -1057,6 +1059,8 @@ type VisionPreviewCell = OpenAIVisionCell & {
 };
 
 const PORTRAIT_SCHEDULE_RAIL_WIDTH = 84;
+const LANDSCAPE_TOOL_RAIL_WIDTH = 72;
+const PORTRAIT_TOOL_RAIL_LENGTH = 320;
 
 type VisionTargetRegion = "all" | "upper-right" | "lower-left" | "row-band";
 type OverlayRect = { left: number; top: number; width: number; height: number };
@@ -1590,6 +1594,7 @@ export default function LeagueGPTVisionSheet() {
   const [rulesAnchor, setRulesAnchor] = useState<HTMLButtonElement | null>(null);
   // landscape: false=세로(writingMode 회전) / true=가로(일반 layout)
   const [landscape, setLandscape]     = useState(false);
+  const [toolsVisible, setToolsVisible] = useState(true);
 
   // ── 스케일 계산 ───────────────────────────────────────────────────────────
   // 참가자 수에 따라 테이블이 화면보다 클 수 있으므로 CSS scale로 축소 fit
@@ -1642,9 +1647,14 @@ export default function LeagueGPTVisionSheet() {
       const mobileScheduleReserve = Math.max(sh, PORTRAIT_SCHEDULE_RAIL_WIDTH);
       const availableWidth = Math.max(
         1,
-        ww - (landscape ? 0 : mobileScheduleReserve + 10),
+        ww - (landscape
+          ? (toolsVisible ? LANDSCAPE_TOOL_RAIL_WIDTH : 0)
+          : mobileScheduleReserve + 10),
       );
-      const availableHeight = Math.max(1, wh);
+      const availableHeight = Math.max(
+        1,
+        wh - (!landscape && toolsVisible ? PORTRAIT_TOOL_RAIL_LENGTH : 0),
+      );
       setAutoFitScale(
         landscape
           ? Math.min(ww / tw, (wh - sh) / th)
@@ -1665,7 +1675,7 @@ export default function LeagueGPTVisionSheet() {
     if (scheduleRef.current)     ro.observe(scheduleRef.current);
     window.addEventListener("resize", updateScale);
     return () => { ro.disconnect(); window.removeEventListener("resize", updateScale); };
-  }, [landscape, dataReady, localOrder.length, groupNames.length]);
+  }, [landscape, toolsVisible, dataReady, localOrder.length, groupNames.length]);
 
   // ── DnD 순서 변경 ─────────────────────────────────────────────────────────
   const [reorderParticipants] = useReorderLeagueParticipantsMutation();
@@ -2802,10 +2812,19 @@ export default function LeagueGPTVisionSheet() {
           </Button>
         )}
 
-        {/* 닫기 (뒤로 이동) */}
-        <IconButton size="small" onClick={() => navigate(backTo)} sx={{ flexShrink: 0 }}>
-          <CloseIcon sx={{ fontSize: 20 }} />
-        </IconButton>
+        <Tooltip title={toolsVisible ? "기능 버튼 접기" : "기능 버튼 펼치기"}>
+          <IconButton
+            size="small"
+            aria-label={toolsVisible ? "기능 버튼 접기" : "기능 버튼 펼치기"}
+            aria-pressed={!toolsVisible}
+            onClick={() => setToolsVisible((visible) => !visible)}
+            sx={{ flexShrink: 0 }}
+          >
+            {toolsVisible
+              ? <VisibilityOffIcon sx={{ fontSize: 20 }} />
+              : <VisibilityIcon sx={{ fontSize: 20 }} />}
+          </IconButton>
+        </Tooltip>
       </Box>
 
       {/* ===== 경기 규칙 Popover ===== */}
@@ -3145,6 +3164,7 @@ export default function LeagueGPTVisionSheet() {
           </DialogActions>
         </Dialog>
 
+        {toolsVisible && <>
         <Box sx={{
           position: "absolute",
           ...(landscape
@@ -3157,9 +3177,6 @@ export default function LeagueGPTVisionSheet() {
           gap: 0.8,
           pointerEvents: "auto",
         }}>
-          <Box sx={{ bgcolor: "#fff", p: 0.5, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>
-            <QRCode value={`${window.location.origin}/league/${id}/gpt-vision`} size={landscape ? 66 : 72} />
-          </Box>
           <Box onClick={() => handleOpenResultDialog("all")} sx={{ width: landscape ? "auto" : 36, height: landscape ? "auto" : 76, display: "flex", alignItems: "center", justifyContent: "center", alignSelf: landscape ? "center" : "flex-end", cursor: "pointer" }}>
             <Box
               component="button"
@@ -3255,6 +3272,7 @@ export default function LeagueGPTVisionSheet() {
             <FullscreenIcon sx={{ fontSize: 22 }} />
           </IconButton>
         </Tooltip>
+        </>}
 
       </Box>{/* /wrapperRef */}
 

@@ -18,8 +18,7 @@ import { styled } from "@mui/material/styles";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import CloseIcon from "@mui/icons-material/Close";
-import VisibilityIcon from "@mui/icons-material/Visibility";
-import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
+import ViewSidebarOutlinedIcon from "@mui/icons-material/ViewSidebarOutlined";
 import EditIcon from "@mui/icons-material/Edit";
 import CheckIcon from "@mui/icons-material/Check";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
@@ -1059,8 +1058,6 @@ type VisionPreviewCell = OpenAIVisionCell & {
 };
 
 const PORTRAIT_SCHEDULE_RAIL_WIDTH = 84;
-const LANDSCAPE_TOOL_RAIL_WIDTH = 72;
-const PORTRAIT_TOOL_RAIL_LENGTH = 320;
 
 type VisionTargetRegion = "all" | "upper-right" | "lower-left" | "row-band";
 type OverlayRect = { left: number; top: number; width: number; height: number };
@@ -1647,14 +1644,9 @@ export default function LeagueGPTVisionSheet() {
       const mobileScheduleReserve = Math.max(sh, PORTRAIT_SCHEDULE_RAIL_WIDTH);
       const availableWidth = Math.max(
         1,
-        ww - (landscape
-          ? (toolsVisible ? LANDSCAPE_TOOL_RAIL_WIDTH : 0)
-          : mobileScheduleReserve + 10),
+        ww - (landscape ? 0 : mobileScheduleReserve + 10),
       );
-      const availableHeight = Math.max(
-        1,
-        wh - (!landscape && toolsVisible ? PORTRAIT_TOOL_RAIL_LENGTH : 0),
-      );
+      const availableHeight = Math.max(1, wh);
       setAutoFitScale(
         landscape
           ? Math.min(ww / tw, (wh - sh) / th)
@@ -1675,7 +1667,7 @@ export default function LeagueGPTVisionSheet() {
     if (scheduleRef.current)     ro.observe(scheduleRef.current);
     window.addEventListener("resize", updateScale);
     return () => { ro.disconnect(); window.removeEventListener("resize", updateScale); };
-  }, [landscape, toolsVisible, dataReady, localOrder.length, groupNames.length]);
+  }, [landscape, dataReady, localOrder.length, groupNames.length]);
 
   // ── DnD 순서 변경 ─────────────────────────────────────────────────────────
   const [reorderParticipants] = useReorderLeagueParticipantsMutation();
@@ -2820,9 +2812,13 @@ export default function LeagueGPTVisionSheet() {
             onClick={() => setToolsVisible((visible) => !visible)}
             sx={{ flexShrink: 0 }}
           >
-            {toolsVisible
-              ? <VisibilityOffIcon sx={{ fontSize: 20 }} />
-              : <VisibilityIcon sx={{ fontSize: 20 }} />}
+            <ViewSidebarOutlinedIcon
+              sx={{
+                fontSize: 21,
+                transform: toolsVisible ? "none" : "scaleX(-1)",
+                transition: "transform 150ms ease",
+              }}
+            />
           </IconButton>
         </Tooltip>
       </Box>

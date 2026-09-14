@@ -550,6 +550,7 @@ export default function LeagueMatchOrder() {
   const { data: programData, refetch: refetchProgram } = useGetLeagueProgramQuery(leagueId, { skip: !isProgramMode || !leagueId });
   const [updateMatch] = useUpdateLeagueMatchMutation();
   const [saveLeagueProgram] = useSaveLeagueProgramMutation();
+  const [syncLeagueProgramMatches] = useSyncLeagueProgramMatchesMutation();
   const [search, setSearch] = useState("");
   const [mineOnly, setMineOnly] = useState(false);
   const [finishRoundConfirmOpen, setFinishRoundConfirmOpen] = useState(false);
@@ -996,11 +997,34 @@ export default function LeagueMatchOrder() {
     await saveLeagueProgram({ leagueId, program: nextProgram }).unwrap();
     const nextRound = programRound + 1;
     const nextBlock = nextProgram.blocks[nextRound - 1];
+    if (!nextBlock) return;
+    const nextRoundSourceMatches = [
+      ...(matchData?.matches ?? []).filter(
+        (match) => !(match.is_program && match.program_round === programRound),
+      ),
+      ...programMatches,
+    ];
+    const nextRoundMatches = generateProgramRoundMatches(
+      leagueId,
+      nextProgram,
+      rawParticipants,
+      nextRound,
+      nextRoundSourceMatches,
+    ).map((match) => ({
+      ...match,
+      program_round: nextRound,
+      program_block_type: nextBlock.type,
+    }));
+    if (nextRoundMatches.length === 0) {
+      window.alert("다음 라운드 대진을 생성하지 못했습니다. 현재 라운드 결과를 확인해 주세요.");
+      return;
+    }
+    await syncLeagueProgramMatches({ leagueId, matches: nextRoundMatches, resetResults: false }).unwrap();
     const nextBracketPath = nextBlock?.format === "TOURNAMENT" ? "tournament-bracket" : "bracket";
     localStorage.setItem(`league-program-active-round-${leagueId}`, String(nextRound));
     setFinishRoundConfirmOpen(false);
     navigate(`/league/${leagueId}/program/${nextBracketPath}?program=1&round=${nextRound}&format=${nextBlock?.format ?? ""}`);
-  }, [canFinishProgramRound, isProgramMode, leagueId, navigate, programMatches, programOption, programRound, saveLeagueProgram]);
+  }, [canFinishProgramRound, isProgramMode, leagueId, matchData?.matches, navigate, programMatches, programOption, programRound, rawParticipants, saveLeagueProgram, syncLeagueProgramMatches]);
 
   const tournamentSeedMap = useMemo(() => {
     if (!isTournamentProgramRound) return new Map<string, { a?: string; b?: string }>();
@@ -1032,7 +1056,6 @@ export default function LeagueMatchOrder() {
   const [initMatches, { isLoading: isIniting }] = useInitLeagueMatchesMutation();
   const [extendMatches, {isLoading: isExtending }] = useExtendLeagueMatchesMutation();
   const [reorderMatches] = useReorderLeagueMatchesMutation();
-  const [syncLeagueProgramMatches] = useSyncLeagueProgramMatchesMutation();
   const initCalledRef = useRef(false);
   const programSyncCalledRef = useRef<string | null>(null);
 

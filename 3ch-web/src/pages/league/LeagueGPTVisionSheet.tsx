@@ -1731,6 +1731,28 @@ export default function LeagueGPTVisionSheet() {
       await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
       const nextRound = programRound + 1;
       const nextBlock = nextProgram.blocks[nextRound - 1];
+      if (!nextBlock) throw new Error("다음 라운드 설정을 찾을 수 없습니다.");
+      const nextRoundSourceMatches = [
+        ...(matchData?.matches ?? []).filter(
+          (match) => !(match.is_program && match.program_round === programRound),
+        ),
+        ...programMatchesAll,
+      ];
+      const nextRoundMatches = generateProgramRoundMatches(
+        id,
+        nextProgram,
+        rawParticipants,
+        nextRound,
+        nextRoundSourceMatches,
+      ).map((match) => ({
+        ...match,
+        program_round: nextRound,
+        program_block_type: nextBlock.type,
+      }));
+      if (nextRoundMatches.length === 0) {
+        throw new Error("다음 라운드 대진을 생성하지 못했습니다. 현재 라운드 결과를 확인해 주세요.");
+      }
+      await syncProgramMatches({ leagueId: id, matches: nextRoundMatches, resetResults: false }).unwrap();
       const nextBracketPath = nextBlock?.format === "TOURNAMENT" ? "tournament-bracket" : "bracket";
       localStorage.setItem(`league-program-active-round-${id}`, String(nextRound));
       setFinishRoundConfirmOpen(false);
@@ -1740,7 +1762,7 @@ export default function LeagueGPTVisionSheet() {
     } finally {
       setIsFinishingRound(false);
     }
-  }, [canFinishProgramRound, id, navigate, programMatchesAll, programOption, programRound, saveLeagueProgram]);
+  }, [canFinishProgramRound, id, matchData?.matches, navigate, programMatchesAll, programOption, programRound, rawParticipants, saveLeagueProgram, syncProgramMatches]);
 
   const addQuickFinalTournament = async () => {
     if (!id || !programOption || !programOption.blocks[0]) return;

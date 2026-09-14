@@ -598,6 +598,7 @@ export interface GetLeagueProgramTemplatesResponse {
 export interface SyncLeagueProgramMatchesRequest {
   leagueId: string;
   resetResults?: boolean;
+  resetConfirmation?: "RESET_PROGRAM_RESULTS";
   matches: Array<Partial<LeagueMatch> & {
     program_round?: number | null;
     program_block_type?: string | null;
@@ -1109,7 +1110,18 @@ export const leagueApi = baseApi.injectEndpoints({
     }),
 
     syncLeagueProgramMatches: builder.mutation<{ ok: boolean; inserted: number }, SyncLeagueProgramMatchesRequest>({
-      async queryFn({ leagueId, matches, resetResults }, api, _extraOptions, fetchWithBQ) {
+      async queryFn({ leagueId, matches, resetResults, resetConfirmation }, api, _extraOptions, fetchWithBQ) {
+        if (resetResults && resetConfirmation !== "RESET_PROGRAM_RESULTS") {
+          return {
+            error: {
+              status: 400,
+              data: {
+                code: "EXPLICIT_RESET_CONFIRMATION_REQUIRED",
+                message: "경기 결과 초기화에는 명시적인 확인이 필요합니다.",
+              },
+            },
+          };
+        }
         const token = (api.getState() as RootState).auth?.token;
         if (isLocalDevToken(token)) {
           const programRounds = [...new Set(
@@ -1131,7 +1143,11 @@ export const leagueApi = baseApi.injectEndpoints({
         const result = await fetchWithBQ({
           url: `/league/${leagueId}/program/matches/sync`,
           method: "POST",
-          body: { matches, reset_results: Boolean(resetResults) },
+          body: {
+            matches,
+            reset_results: Boolean(resetResults),
+            reset_confirmation: resetConfirmation,
+          },
         });
         return result.error ? { error: result.error } : { data: result.data as { ok: boolean; inserted: number } };
       },

@@ -1347,6 +1347,7 @@ export default function LeagueTournamentBracket() {
         program_block_type: programBlock.type,
       })),
       resetResults: true,
+      resetConfirmation: "RESET_PROGRAM_RESULTS",
     }).unwrap();
     programSyncKeyRef.current = null;
     await refetchMatches();

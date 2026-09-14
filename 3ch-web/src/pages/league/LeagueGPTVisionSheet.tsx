@@ -1296,7 +1296,10 @@ export default function LeagueGPTVisionSheet() {
     });
   }, [generatedProgramMatchesAll, hasProgramMatchPolicy, isProgramFinalRound, isProgramUnitRound, serverProgramMatchesAll]);
   const hasStartedProgramMatch = programMatchesAll.some(
-    (match) => !match.is_no_game && (match.status === "playing" || match.status === "done"),
+    // Never trust a regenerated NO-GAME flag when deciding whether destructive
+    // controls are available. Persisted play/result state is authoritative.
+    (match) => match.status === "playing" || match.status === "done"
+      || match.score_a != null || match.score_b != null,
   );
   const [updateMatch] = useUpdateLeagueMatchMutation();
   const [scanVision, { isLoading: isScanning }] = useScanLeagueOpenAIVisionMutation();

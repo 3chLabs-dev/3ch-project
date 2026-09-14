@@ -996,6 +996,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
           leagueId: id,
           matches: roundMatches,
           resetResults: resetMatches,
+          ...(resetMatches ? { resetConfirmation: "RESET_PROGRAM_RESULTS" as const } : {}),
         }).unwrap();
       }
     }

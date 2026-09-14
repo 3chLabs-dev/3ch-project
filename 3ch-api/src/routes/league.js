@@ -3553,6 +3553,16 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
   const leagueId = req.params.id;
   const matches = Array.isArray(req.body?.matches) ? req.body.matches : [];
   const resetResults = req.body?.reset_results === true;
+  const resetConfirmation = req.body?.reset_confirmation;
+
+  // Result deletion is never an incidental side effect of synchronization.
+  // It requires a separate, explicit intent supplied only by confirmed reset UI.
+  if (resetResults && resetConfirmation !== 'RESET_PROGRAM_RESULTS') {
+    return res.status(400).json({
+      code: 'EXPLICIT_RESET_CONFIRMATION_REQUIRED',
+      message: '경기 결과 초기화에는 명시적인 확인이 필요합니다.',
+    });
+  }
 
   try {
     const access = await pool.query(

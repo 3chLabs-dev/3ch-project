@@ -5,7 +5,6 @@ import {
   Box, Button, CircularProgress, IconButton, InputAdornment,
   TextField, Tooltip, Typography, Tabs, Tab, Dialog, DialogContent, Stack, Snackbar,
 } from "@mui/material";
-import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import CloseIcon from "@mui/icons-material/Close";
 import EditIcon from "@mui/icons-material/Edit";
@@ -49,7 +48,6 @@ const PB = 32;   // 캔버스 하단 패딩
 // 상·하위 토너먼트는 16강이 중앙에, 상위 브래킷이 위로, 하위 브래킷이 아래로 펼쳐지는
 // "center-out" 구조를 사용한다. 각 라운드는 CO_ROW_H 간격으로 수직 배치됨.
 const CO_PT = 110;        // 캔버스 상단 패딩 — 상위 우승자 박스(CO_WINNER_H + 여백) 공간 포함
-const CO_WINNER_W = 214;  // 우승자 박스 너비 — CO_MATCH_W와 동일하게 맞춤
 const CO_WINNER_H = 72;   // 우승자 박스 높이
 const VB_LABEL_H = 20;    // 각 슬롯 박스 상단 라운드/시드 레이블 영역 높이
 const CO_ROW_H = 140;     // 라운드 간 수직 간격 (SVG 커넥터 포함)
@@ -416,8 +414,13 @@ function calcPositions(matches: LeagueMatch[]): MatchPos[] {
   return result;
 }
 
-// ─── 상·하위 토너먼트 위치 계산 (center-out) ─────────────────────────────────
+// ─── 상·하위 토너먼트 위치 계산 (legacy center-out) ──────────────────────────
 /**
+ * LEGACY BACKUP:
+ * 현재 화면은 상위부/하위부 탭에서 일반 토너먼트 레이아웃을 사용한다.
+ * 이 함수와 CenterOutConnectors/SingleSlotBox는 기존 통합 트리를 나중에
+ * 다시 사용할 수 있도록 의도적으로 보존한다.
+ *
  * 상·하위 토너먼트(더블 엘리미네이션)의 각 매치에 캔버스 좌표를 계산한다.
  *
  * center-out 레이아웃 구조:
@@ -578,9 +581,13 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
   const isByeB = !nameB && isR1 && !manualSeeding;
   const isUndecidedA = !nameA && !isByeA;
   const isUndecidedB = !nameB && !isByeB;
+  const isPendingLowerWalkover = isLower && m.status !== "done"
+    && Boolean(nameA) !== Boolean(nameB);
 
   const swapSelA = actions?.swapFirstKey === `${m.id}:a`;
   const swapSelB = actions?.swapFirstKey === `${m.id}:b`;
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suppressNextClickRef = useRef(false);
   const seed = actions?.seedMap?.get(m.id);
   // 예선 조별리그에서 진출한 참가자는 생성 시 저장된 "조-순위"를
   // 그대로 표시한다. 일반 토너먼트처럼 출처 라벨이 없는 참가자만
@@ -608,11 +615,36 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
     }
   };
 
+  const clearLongPress = () => {
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = null;
+  };
+
+  useEffect(() => () => clearLongPress(), []);
+
+  const openSlotActions = (slot: "a" | "b") => {
+    const participantId = slot === "a" ? m.participant_a_id : m.participant_b_id;
+    const name = slot === "a" ? nameA : nameB;
+    if (!actions?.canManage || !participantId) return;
+    actions.onOpenSlotActions(m.id, slot, participantId, name ?? null);
+  };
+
+  const handlePointerDown = (event: React.PointerEvent, slot: "a" | "b") => {
+    const participantId = slot === "a" ? m.participant_a_id : m.participant_b_id;
+    if (event.pointerType === "mouse" || !participantId || !actions?.canManage) return;
+    clearLongPress();
+    longPressTimerRef.current = setTimeout(() => {
+      suppressNextClickRef.current = true;
+      openSlotActions(slot);
+    }, 550);
+  };
+
   const slotACursor = (isR1 && actions?.canRegister && !nameA) || (actions?.canManage && actions.editMode) ? "pointer" : "default";
   const slotBCursor = (isR1 && actions?.canRegister && !nameB) || (actions?.canManage && actions.editMode) ? "pointer" : "default";
   const canOpenResult = Boolean(actions?.canManage && !actions.editMode && m.participant_a_id && m.participant_b_id);
 
   return (
+    <>
     <Box sx={{
       position: "absolute", left: x, top: y,
       width: MW, height: MH,
@@ -630,7 +662,12 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
         </Box>
       )}
       <Box
-        onClick={(event) => { event.stopPropagation(); handleSlotA(); if (canOpenResult) actions?.onOpenResult(m.id); }}
+        onContextMenu={(event) => { if (!m.participant_a_id || !actions?.canManage) return; event.preventDefault(); event.stopPropagation(); openSlotActions("a"); }}
+        onPointerDown={(event) => handlePointerDown(event, "a")}
+        onPointerUp={clearLongPress}
+        onPointerCancel={clearLongPress}
+        onPointerLeave={clearLongPress}
+        onClick={(event) => { event.stopPropagation(); if (suppressNextClickRef.current) { suppressNextClickRef.current = false; return; } handleSlotA(); if (canOpenResult) actions?.onOpenResult(m.id); }}
         sx={{
           height: MH / 2, display: "flex", alignItems: "center", px: 1, gap: 0.5,
           borderBottom: `1px solid ${isLower ? "#EDE9FE" : "#F1F5F9"}`,
@@ -666,10 +703,20 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
         )}
         {nameA && m.participant_a_division && <DivisionBadge division={m.participant_a_division} sx={{ minWidth: 16, height: 16, fontSize: 7 }} />}
         </Box>
+        {isPendingLowerWalkover && nameA && actions?.canManage && !actions.editMode && (
+          <IconButton size="small" title="부전승으로 다음 단계 진출" onClick={(event) => { event.stopPropagation(); actions.onAdvanceWalkover(m.id); }} sx={{ width: 20, height: 20, p: 0, color: "#16A34A", border: "1px solid #86EFAC", bgcolor: "#F0FDF4" }}>
+            <Typography sx={{ fontSize: 11, fontWeight: 900, lineHeight: 1 }}>∨</Typography>
+          </IconButton>
+        )}
         {m.score_a != null && <Typography sx={{ fontSize: 12, fontWeight: 800, color: winA ? "#16A34A" : "#6B7280", flexShrink: 0 }}>{m.score_a}</Typography>}
       </Box>
       <Box
-        onClick={(event) => { event.stopPropagation(); handleSlotB(); if (canOpenResult) actions?.onOpenResult(m.id); }}
+        onContextMenu={(event) => { if (!m.participant_b_id || !actions?.canManage) return; event.preventDefault(); event.stopPropagation(); openSlotActions("b"); }}
+        onPointerDown={(event) => handlePointerDown(event, "b")}
+        onPointerUp={clearLongPress}
+        onPointerCancel={clearLongPress}
+        onPointerLeave={clearLongPress}
+        onClick={(event) => { event.stopPropagation(); if (suppressNextClickRef.current) { suppressNextClickRef.current = false; return; } handleSlotB(); if (canOpenResult) actions?.onOpenResult(m.id); }}
         sx={{
           height: MH / 2, display: "flex", alignItems: "center", px: 1, gap: 0.5,
           bgcolor: swapSelB ? "#DBEAFE" : winB ? "#F0FDF4" : "transparent",
@@ -704,9 +751,21 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
         )}
         {nameB && m.participant_b_division && <DivisionBadge division={m.participant_b_division} sx={{ minWidth: 16, height: 16, fontSize: 7 }} />}
         </Box>
+        {isPendingLowerWalkover && nameB && actions?.canManage && !actions.editMode && (
+          <IconButton size="small" title="부전승으로 다음 단계 진출" onClick={(event) => { event.stopPropagation(); actions.onAdvanceWalkover(m.id); }} sx={{ width: 20, height: 20, p: 0, color: "#16A34A", border: "1px solid #86EFAC", bgcolor: "#F0FDF4" }}>
+            <Typography sx={{ fontSize: 11, fontWeight: 900, lineHeight: 1 }}>∨</Typography>
+          </IconButton>
+        )}
         {m.score_b != null && <Typography sx={{ fontSize: 12, fontWeight: 800, color: winB ? "#16A34A" : "#6B7280", flexShrink: 0 }}>{m.score_b}</Typography>}
       </Box>
     </Box>
+    {(swapSelA || swapSelB) && (swapSelA ? m.participant_a_id : m.participant_b_id) && (
+      <Stack spacing={0.6} sx={{ position: "absolute", left: x + MW + 6, top: y + 3, width: 102, zIndex: 20 }}>
+        {!isLower && <Button size="small" variant="contained" onClick={(event) => { event.stopPropagation(); actions?.onMoveToLower(); }} sx={{ minWidth: 0, minHeight: 30, px: 0.8, py: 0.5, fontSize: 11, fontWeight: 900, lineHeight: 1.2, whiteSpace: "nowrap" }}>하위부로 이동</Button>}
+        <Button size="small" color="error" variant="outlined" onClick={(event) => { event.stopPropagation(); actions?.onDeleteSelected(); }} sx={{ minWidth: 0, minHeight: 30, px: 0.8, py: 0.5, fontSize: 11, fontWeight: 900, lineHeight: 1.2, bgcolor: "#fff" }}>삭제</Button>
+      </Stack>
+    )}
+    </>
   );
 }
 
@@ -728,7 +787,7 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
  *   - editMode OFF + canRegister + 빈 슬롯: 참가자 등록 팝업 열기
  *   - 이외: 클릭 무반응
  */
-function SingleSlotBox({ pos, slot, actions, manualSeeding = false }: { pos: MatchPos; slot: "a" | "b"; actions?: SlotActions; manualSeeding?: boolean }) {
+export function LegacySingleSlotBox({ pos, slot, actions, manualSeeding = false }: { pos: MatchPos; slot: "a" | "b"; actions?: SlotActions; manualSeeding?: boolean }) {
   const { x: baseX, y, match: m } = pos;
   const x = slot === "a" ? baseX : baseX + SS_W + SS_GAP;
   const isR1 = m.round_number === 1 && m.bracket !== "lower";
@@ -1002,7 +1061,7 @@ function Connectors({ positions }: { positions: MatchPos[] }) {
  *
  * 각 매치 중심 x(mcx) = pos.x + CO_MATCH_W / 2 로 A·B 슬롯 중앙을 기준으로 한다.
  */
-function CenterOutConnectors({ positions }: { positions: MatchPos[] }) {
+export function LegacyCenterOutConnectors({ positions }: { positions: MatchPos[] }) {
   const posById = new Map(positions.map((p) => [p.id, p]));
   const paths: React.ReactElement[] = [];
   const mcx = (pos: MatchPos) => pos.x + CO_MATCH_W / 2;
@@ -1145,7 +1204,7 @@ export default function LeagueTournamentBracket() {
   const [registerTarget, setRegisterTarget] = useState<{ matchId: string; slot: "a" | "b" } | null>(null);
   const [participantSearch, setParticipantSearch] = useState("");
   const [selectedBracketIndex, setSelectedBracketIndex] = useState(1);
-  const scrollStorageKey = `league-tournament-scroll:${id ?? ""}:${isProgramMode ? programRound : 0}:${selectedBracketIndex}`;
+  const [selectedDivision, setSelectedDivision] = useState<"upper" | "lower">("upper");
 
   // 스왑 모드: 첫 번째 선택 슬롯
   const [swapFirst, setSwapFirst] = useState<{
@@ -1274,6 +1333,16 @@ export default function LeagueTournamentBracket() {
     () => isProgramMode ? programMatches : matchesData?.matches ?? [],
     [isProgramMode, programMatches, matchesData],
   );
+  const isDoubleElim = matches.some((match) => match.bracket === "lower");
+  const visibleMatches = useMemo(
+    () => isDoubleElim
+      ? matches.filter((match) => selectedDivision === "upper"
+        ? !match.bracket || match.bracket === "upper"
+        : match.bracket === "lower")
+      : matches,
+    [isDoubleElim, matches, selectedDivision],
+  );
+  const scrollStorageKey = `league-tournament-scroll:${id ?? ""}:${isProgramMode ? programRound : 0}:${selectedBracketIndex}:${isDoubleElim ? selectedDivision : "single"}`;
   const resultMatch = useMemo(
     () => matches.find((match) => match.id === resultMatchId) ?? null,
     [matches, resultMatchId],
@@ -1324,7 +1393,6 @@ export default function LeagueTournamentBracket() {
     syncLeagueProgramMatches,
   ]);
 
-  const isDoubleElim = matches.some((match) => match.bracket === "lower");
   const canManage = groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.league === true);
   const isCompleted = league?.status === "completed";
 
@@ -1957,22 +2025,17 @@ export default function LeagueTournamentBracket() {
     setDeleteSlotDialogOpen(false);
   };
 
-  const positions = useMemo(
-    () => isDoubleElim ? calcCenterOutPositions(matches) : calcPositions(matches),
-    [matches, isDoubleElim],
-  );
+  const positions = useMemo(() => calcPositions(visibleMatches), [visibleMatches]);
 
   const { standardFinalPos, standardRankings, standardRankLabels } = useMemo(() => {
-    if (isDoubleElim) return { standardFinalPos: null, standardRankings: [], standardRankLabels: [] };
-    const finalMatch = matches
-      .filter((match) => (!match.bracket || match.bracket === "upper") && !match.match_label?.includes("3·4위전"))
+    const finalMatch = visibleMatches
+      .filter((match) => !match.match_label?.includes("3·4위전"))
       .reduce<LeagueMatch | null>((latest, match) =>
         !latest || (match.round_number ?? 0) > (latest.round_number ?? 0) ? match : latest, null);
-    const thirdPlaceMatch = matches.find((match) =>
-      (!match.bracket || match.bracket === "upper") && match.match_label?.includes("3·4위전"));
+    const thirdPlaceMatch = visibleMatches.find((match) => match.match_label?.includes("3·4위전"));
     const semifinalLosers = finalMatch && !thirdPlaceMatch
       ? matches
-          .filter((match) => match.next_match_id === finalMatch.id)
+          .filter((match) => visibleMatches.some((visible) => visible.id === match.id) && match.next_match_id === finalMatch.id)
           .sort((left, right) => left.match_order - right.match_order)
           .map((match) => getMatchResultParticipant(match, false))
           .slice(0, 2)
@@ -1988,62 +2051,11 @@ export default function LeagueTournamentBracket() {
       ],
       standardRankLabels: thirdPlaceMatch ? [1, 2, 3, 4] : [1, 2, 3, 3],
     };
-  }, [isDoubleElim, matches, positions]);
-
-  // 상위/하위 우승자 계산
-  const { upperWinner, lowerWinner, upperFinalPos, lowerFinalPos, upperRankings, lowerRankings, upperRankLabels, lowerRankLabels } = useMemo(() => {
-    if (!isDoubleElim) return { upperWinner: null, lowerWinner: null, upperFinalPos: null, lowerFinalPos: null, upperRankings: [], lowerRankings: [], upperRankLabels: [], lowerRankLabels: [] };
-    const posMap = new Map(positions.map((p) => [p.id, p]));
-    const upperMatches = matches.filter((m) => !m.bracket || m.bracket === "upper");
-    const lowerMatches = matches.filter((m) => m.bracket === "lower");
-    const maxUpperRound = Math.max(...upperMatches.map((m) => m.round_number ?? 0));
-    const maxLowerRound = Math.max(...lowerMatches.map((m) => m.round_number ?? 0));
-    const upperFinal = upperMatches.find((m) => m.round_number === maxUpperRound && !m.match_label?.includes("3·4위전"));
-    const lowerFinal = lowerMatches.find((m) => m.round_number === maxLowerRound && !m.match_label?.includes("3·4위전"));
-    const upperThird = upperMatches.find((m) => m.match_label?.includes("3·4위전"));
-    const lowerThird = lowerMatches.find((m) => m.match_label?.includes("3·4위전"));
-    const rankings = (finalMatch?: LeagueMatch, thirdPlaceMatch?: LeagueMatch) => {
-      const semifinalLosers = finalMatch && !thirdPlaceMatch
-        ? matches
-            .filter((match) => match.bracket === finalMatch.bracket && match.next_match_id === finalMatch.id)
-            .sort((left, right) => left.match_order - right.match_order)
-            .map((match) => getMatchResultParticipant(match, false))
-            .slice(0, 2)
-        : [];
-      return [
-        getMatchResultParticipant(finalMatch, true),
-        getMatchResultParticipant(finalMatch, false),
-        ...(thirdPlaceMatch
-          ? [getMatchResultParticipant(thirdPlaceMatch, true), getMatchResultParticipant(thirdPlaceMatch, false)]
-          : semifinalLosers),
-      ];
-    };
-    const getWinner = (m?: LeagueMatch) => {
-      if (!m || m.status !== "done") return null;
-      if (isWalkoverWinner(m, "a")) {
-        return { name: m.participant_a_name, division: m.participant_a_division };
-      }
-      if (isWalkoverWinner(m, "b")) {
-        return { name: m.participant_b_name, division: m.participant_b_division };
-      }
-      return null;
-    };
-    return {
-      upperWinner: getWinner(upperFinal),
-      lowerWinner: getWinner(lowerFinal),
-      upperFinalPos: upperFinal ? posMap.get(upperFinal.id) ?? null : null,
-      lowerFinalPos: lowerFinal ? posMap.get(lowerFinal.id) ?? null : null,
-      upperRankings: rankings(upperFinal, upperThird),
-      lowerRankings: rankings(lowerFinal, lowerThird),
-      upperRankLabels: upperThird ? [1, 2, 3, 4] : [1, 2, 3, 3],
-      lowerRankLabels: lowerThird ? [1, 2, 3, 4] : [1, 2, 3, 3],
-    };
-  }, [isDoubleElim, matches, positions]);
+  }, [matches, positions, visibleMatches]);
 
   const roundLabels = useMemo(() => {
-    if (isDoubleElim) return new Map<number, string>();
     const map = new Map<number, string>();
-    for (const m of matches) {
+    for (const m of visibleMatches) {
       if (
         m.round_number &&
         m.match_label &&
@@ -2053,21 +2065,16 @@ export default function LeagueTournamentBracket() {
         map.set(m.round_number, m.match_label);
     }
     return map;
-  }, [matches, isDoubleElim]);
+  }, [visibleMatches]);
 
   const { canvasW, canvasH } = useMemo(() => {
     if (!positions.length) return { canvasW: 400, canvasH: 300 };
-    if (isDoubleElim) {
-      const maxX = positions.reduce((acc, p) => Math.max(acc, p.x + CO_MATCH_W), 0) + CO_PX;
-      const maxY = positions.reduce((acc, p) => Math.max(acc, p.y + SS_H), 0) + CO_WINNER_H + 30 + PB;
-      return { canvasW: maxX, canvasH: maxY };
-    }
     const maxRound = Math.max(...positions.map((p) => p.match.round_number ?? 1));
     const summarySpace = standardFinalPos ? 174 : 0;
     const w = PX * 2 + maxRound * MW + (maxRound - 1) * RGAP + summarySpace;
     const h = positions.reduce((acc, p) => Math.max(acc, p.y + MH), PT) + PB;
     return { canvasW: w, canvasH: h };
-  }, [positions, isDoubleElim, standardFinalPos]);
+  }, [positions, standardFinalPos]);
 
   const handleBracketScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
     const element = event.currentTarget;
@@ -2260,6 +2267,22 @@ export default function LeagueTournamentBracket() {
           ))}
         </Tabs>
       )}
+      {isDoubleElim && (
+        <Tabs
+          value={selectedDivision}
+          onChange={(_, value: "upper" | "lower") => {
+            setSelectedDivision(value);
+            setSwapFirst(null);
+            setRegisterTarget(null);
+          }}
+          variant="fullWidth"
+          aria-label="상위부 및 하위부 대진표"
+          sx={{ minHeight: 40, borderBottom: "1px solid #E5E7EB", flexShrink: 0, "& .MuiTab-root": { minHeight: 40, py: 0.5, fontSize: 13, fontWeight: 800 } }}
+        >
+          <Tab value="upper" label="상위부" />
+          <Tab value="lower" label="하위부" />
+        </Tabs>
+      )}
       <Box sx={{ flex: 1, overflow: "hidden", position: "relative", minHeight: 0, bgcolor: "#F0F2F5" }}>
         <Box ref={bracketScrollRef} onScroll={handleBracketScroll} sx={{ position: "absolute", top: 0, bottom: 0, left: 0, right: registerTarget ? 260 : 0, overflow: "auto", transition: "right 0.2s ease" }}>
           <Box sx={{
@@ -2269,8 +2292,7 @@ export default function LeagueTournamentBracket() {
             minWidth: canvasW * zoom,
             minHeight: canvasH * zoom,
           }}>
-            {!isDoubleElim && (
-              <Box sx={{
+            <Box sx={{
                 position: "sticky",
                 top: 0,
                 zIndex: 6,
@@ -2296,7 +2318,6 @@ export default function LeagueTournamentBracket() {
                   </Typography>
                 ))}
               </Box>
-            )}
             <Box sx={{
               width: canvasW * zoom,
               height: canvasH * zoom,
@@ -2311,13 +2332,10 @@ export default function LeagueTournamentBracket() {
               transform: `scale(${zoom})`,
             }}>
               <svg style={{ position: "absolute", top: 0, left: 0, pointerEvents: "none" }} width={canvasW} height={canvasH}>
-                {isDoubleElim
-                  ? <CenterOutConnectors positions={positions} />
-                  : <Connectors positions={positions} />
-                }
+                <Connectors positions={positions} />
               </svg>
 
-              {!isDoubleElim && [...roundLabels.entries()].map(([r, label]) => (
+              {[...roundLabels.entries()].map(([r, label]) => (
                 <Typography key={`lbl-${r}`} sx={{
                   position: "absolute", top: 10,
                   left: PX + (r - 1) * (MW + RGAP),
@@ -2328,9 +2346,9 @@ export default function LeagueTournamentBracket() {
                 </Typography>
               ))}
 
-              {!isDoubleElim && standardFinalPos && (
+              {standardFinalPos && (
                 <RankingSummary
-                  title="최종 순위"
+                  title={isDoubleElim ? `${selectedDivision === "upper" ? "상위" : "하위"} 최종 순위` : "최종 순위"}
                   rankings={standardRankings}
                   rankLabels={standardRankLabels}
                   color="#2563EB"
@@ -2344,8 +2362,7 @@ export default function LeagueTournamentBracket() {
                 const visibleSlotActions = (canManage && (!isCompleted || isDoubleElim)) || (isProgramMode && (manualSeeding || isDoubleElim))
                   ? slotActions
                   : undefined;
-                if (!isDoubleElim) {
-                  return (
+                return (
                     <React.Fragment key={pos.id}>
                       {pos.match.match_label?.includes("3·4위전") && (
                         <Typography sx={{
@@ -2364,111 +2381,8 @@ export default function LeagueTournamentBracket() {
                       <MatchBox pos={pos} actions={visibleSlotActions} manualSeeding={manualSeeding} />
                     </React.Fragment>
                   );
-                }
-                return (
-                  <React.Fragment key={pos.id}>
-                    <SingleSlotBox pos={pos} slot="a" actions={visibleSlotActions} manualSeeding={manualSeeding} />
-                    <Box sx={{
-                      position: "absolute",
-                      left: pos.x + SS_W,
-                      top: pos.y + SS_H / 2 - 18,
-                      width: SS_GAP,
-                      height: 36,
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      textAlign: "center",
-                      pointerEvents: visibleSlotActions?.canManage && !visibleSlotActions.editMode && pos.match.participant_a_id && pos.match.participant_b_id ? "auto" : "none",
-                      cursor: visibleSlotActions?.canManage && !visibleSlotActions.editMode && pos.match.participant_a_id && pos.match.participant_b_id ? "pointer" : "default",
-                      bgcolor: "#F1F5F9", zIndex: 2,
-                    }} onClick={() => {
-                      if (visibleSlotActions?.canManage && !visibleSlotActions.editMode && pos.match.participant_a_id && pos.match.participant_b_id) {
-                        visibleSlotActions.onOpenResult(pos.match.id);
-                      }
-                    }}>
-                      <Typography sx={{ fontSize: 7, fontWeight: 900, color: pos.match.bracket === "lower" ? "#2563EB" : "#DC2626", lineHeight: 1 }}>
-                        {pos.match.bracket === "lower" ? "하위" : "상위"}
-                      </Typography>
-                      <Typography sx={{ my: 0.25, fontSize: 9, fontWeight: 900, color: "#94A3B8", lineHeight: 1 }}>vs</Typography>
-                      <Typography sx={{ fontSize: 7, fontWeight: 900, color: "#7C3AED", lineHeight: 1, whiteSpace: "nowrap" }}>
-                        {(pos.match.match_label ?? "경기").replace(/^상위\s*|^하위\s*/, "")}
-                      </Typography>
-                    </Box>
-                    <SingleSlotBox pos={pos} slot="b" actions={visibleSlotActions} manualSeeding={manualSeeding} />
-                  </React.Fragment>
-                );
               })}
 
-              {/* ── 상위 우승자 박스 ── */}
-              {isDoubleElim && upperFinalPos && (() => {
-                const cx = upperFinalPos.x + CO_MATCH_W / 2;
-                const bx = cx - CO_WINNER_W / 2;
-                const by = upperFinalPos.y - CO_WINNER_H - 16;
-                return (
-                  <React.Fragment key="upper-winner">
-                  <RankingSummary title="상위 최종 순위" rankings={upperRankings} rankLabels={upperRankLabels} color="#2563EB" borderColor="#BFDBFE" left={bx - 162} top={by} />
-                  <Box sx={{
-                    position: "absolute", left: bx, top: by,
-                    width: CO_WINNER_W, height: CO_WINNER_H,
-                    bgcolor: upperWinner ? "#FFF7ED" : "#F8FAFC",
-                    border: `2px solid ${upperWinner ? "#FB923C" : "#E2E8F0"}`,
-                    borderRadius: "8px",
-                    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                    boxShadow: upperWinner ? "0 2px 8px rgba(251,146,60,0.2)" : "none",
-                    gap: 0.4,
-                  }}>
-                    <EmojiEventsIcon sx={{ fontSize: 16, color: upperWinner ? "#F59E0B" : "#CBD5E1" }} />
-                    <Typography sx={{ fontSize: 9, fontWeight: 700, color: upperWinner ? "#F59E0B" : "#94A3B8" }}>
-                      상위 우승
-                    </Typography>
-                    {upperWinner ? (
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.4 }}>
-                        <Typography sx={{ fontSize: 11, fontWeight: 800, color: "#111827" }}>{upperWinner.name}</Typography>
-                        <DivisionBadge division={upperWinner.division} sx={{ minWidth: 16, height: 16, fontSize: 7 }} />
-                      </Box>
-                    ) : (
-                      <Typography sx={{ fontSize: 9, color: "#CBD5E1" }}>미결정</Typography>
-                    )}
-                  </Box>
-                  </React.Fragment>
-                );
-              })()}
-
-              {/* ── 하위 우승자 박스 ── */}
-              {isDoubleElim && lowerFinalPos && (() => {
-                const cx = lowerFinalPos.x + CO_MATCH_W / 2;
-                const bx = cx - CO_WINNER_W / 2;
-                const by = lowerFinalPos.y + SS_H + 16;
-                return (
-                  <React.Fragment key="lower-winner">
-                  <RankingSummary title="하위 최종 순위" rankings={lowerRankings} rankLabels={lowerRankLabels} color="#7C3AED" borderColor="#DDD6FE" left={bx - 162} top={by} />
-                  <Box sx={{
-                    position: "absolute", left: bx, top: by,
-                    width: CO_WINNER_W, height: CO_WINNER_H,
-                    bgcolor: lowerWinner ? "#F5F3FF" : "#F8FAFC",
-                    border: `2px solid ${lowerWinner ? "#A78BFA" : "#E2E8F0"}`,
-                    borderRadius: "8px",
-                    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                    boxShadow: lowerWinner ? "0 2px 8px rgba(167,139,250,0.2)" : "none",
-                    gap: 0.4,
-                  }}>
-                    <EmojiEventsIcon sx={{ fontSize: 16, color: lowerWinner ? "#7C3AED" : "#CBD5E1" }} />
-                    <Typography sx={{ fontSize: 9, fontWeight: 700, color: lowerWinner ? "#7C3AED" : "#94A3B8" }}>
-                      하위 우승
-                    </Typography>
-                    {lowerWinner ? (
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.4 }}>
-                        <Typography sx={{ fontSize: 11, fontWeight: 800, color: "#111827" }}>{lowerWinner.name}</Typography>
-                        <DivisionBadge division={lowerWinner.division} sx={{ minWidth: 16, height: 16, fontSize: 7 }} />
-                      </Box>
-                    ) : (
-                      <Typography sx={{ fontSize: 9, color: "#CBD5E1" }}>미결정</Typography>
-                    )}
-                  </Box>
-                  </React.Fragment>
-                );
-              })()}
             </Box>
             </Box>
           </Box>

@@ -15,6 +15,8 @@ import {
   MenuItem,
   Select,
   Stack,
+  Tab,
+  Tabs,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
@@ -27,9 +29,10 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import LanguageIcon from "@mui/icons-material/Language";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import SmsOutlinedIcon from "@mui/icons-material/SmsOutlined";
+import EmojiEventsOutlinedIcon from "@mui/icons-material/EmojiEventsOutlined";
 import QRCode from "react-qr-code";
 import CurvedShareIcon from "../../components/CurvedShareIcon";
-import type { PointRankingRow } from "../../features/group/groupApi";
+import type { PointRankingRow, ThemeRankingRow } from "../../features/group/groupApi";
 import { useGetGroupPointRankingQuery, useUpdateGroupRankingVisibilityMutation } from "../../features/group/groupApi";
 
 export default function GroupRankingPage() {
@@ -45,6 +48,7 @@ export default function GroupRankingPage() {
   const [selectedYear, setSelectedYear] = useState<number | undefined>(undefined);
   const [selectedSeasonId, setSelectedSeasonId] = useState<string | undefined>(searchParams.get("season") ?? undefined);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [rankingTab, setRankingTab] = useState("league");
   const [isDownloading, setIsDownloading] = useState(false);
   const [updateRankingVisibility, visibilityState] = useUpdateGroupRankingVisibilityMutation();
   const exportRef = useRef<HTMLDivElement>(null);
@@ -158,25 +162,60 @@ export default function GroupRankingPage() {
         )}
       </Stack>
 
-      <SectionHeader
-        title="리그"
-        onOpenDetail={handleOpenDetail}
-        onDownload={handleDownloadRanking}
-        onShare={() => setShareDialogOpen(true)}
-        isDownloading={isDownloading}
-      />
-      <PointRankingList
-        rows={data.league.rankings}
-        currentUserId={data.currentUserId}
-        onSelect={(memberId) => navigate(`/club/${groupId}/member/${memberId}`)}
-      />
+      <Tabs
+        value={rankingTab}
+        onChange={(_event, value) => setRankingTab(value)}
+        variant="scrollable"
+        scrollButtons={false}
+        sx={{
+          mx: -2,
+          px: 2,
+          minHeight: 42,
+          borderBottom: "1px solid #E5E7EB",
+          "& .MuiTab-root": { minHeight: 42, minWidth: "auto", px: 1.5, fontSize: 13, fontWeight: 800, color: "#6B7280" },
+          "& .Mui-selected": { color: "#2563EB" },
+          "& .MuiTabs-indicator": { height: 3, borderRadius: "3px 3px 0 0" },
+        }}
+      >
+        <Tab value="league" label="리그" />
+        <Tab value="attendance" label="참가" />
+        <Tab value="championships" label="우승" />
+        <Tab value="lower_championships" label="하위부 우승" />
+        <Tab value="wins" label="다승" />
+        <Tab value="set_ratio" label="세트득실" />
+        <Tab value="runners_up" label="아차상" />
+        <Tab value="prelim_firsts" label="예선왕" />
+      </Tabs>
 
-      <SectionHeader title="대회" onOpenDetail={handleOpenDetail} />
-      <PointRankingList
-        rows={data.tournament.rankings}
-        currentUserId={data.currentUserId}
-        onSelect={(memberId) => navigate(`/club/${groupId}/member/${memberId}`)}
-      />
+      {rankingTab === "league" ? <>
+        <SectionHeader
+          title="리그"
+          onOpenDetail={handleOpenDetail}
+          onDownload={handleDownloadRanking}
+          onShare={() => setShareDialogOpen(true)}
+          isDownloading={isDownloading}
+        />
+        <PointRankingList
+          rows={data.league.rankings}
+          currentUserId={data.currentUserId}
+          onSelect={(memberId) => navigate(`/club/${groupId}/member/${memberId}`)}
+        />
+
+        <SectionHeader title="대회" onOpenDetail={handleOpenDetail} />
+        <PointRankingList
+          rows={data.tournament.rankings}
+          currentUserId={data.currentUserId}
+          onSelect={(memberId) => navigate(`/club/${groupId}/member/${memberId}`)}
+        />
+      </> : (
+        <ThemeRankingPanel
+          key={rankingTab}
+          theme={rankingTab}
+          rows={data.themes?.[rankingTab as keyof typeof data.themes] ?? []}
+          currentUserId={data.currentUserId}
+          onSelect={(memberId) => navigate(`/club/${groupId}/member/${memberId}`)}
+        />
+      )}
 
       <Box ref={exportRef} sx={{ position: "fixed", left: -10000, top: 0, width: 430, bgcolor: "#FFF", p: 2.5, zIndex: -1 }}>
         <Typography sx={{ fontSize: 22, fontWeight: 900 }}>{data.group.name} 클럽 순위</Typography>
@@ -238,6 +277,58 @@ function SectionHeader({
         </Button>
       </Stack>
     </Stack>
+  );
+}
+
+const THEME_META: Record<string, { title: string; description: string; suffix: string }> = {
+  attendance: { title: "참가왕", description: "시즌 중 가장 많은 리그에 참가한 회원", suffix: "회" },
+  championships: { title: "우승왕", description: "마지막 라운드 상위 순위 우승 횟수", suffix: "회" },
+  lower_championships: { title: "하위부 우승왕", description: "하위부 토너먼트 우승 횟수", suffix: "회" },
+  wins: { title: "다승왕", description: "완료된 개별 경기에서 기록한 승리", suffix: "승" },
+  set_ratio: { title: "세트득실왕", description: "10경기 이상 출전 회원의 세트 득실률", suffix: "%" },
+  runners_up: { title: "아차상", description: "마지막 라운드 준우승 횟수", suffix: "회" },
+  prelim_firsts: { title: "예선왕", description: "예선 풀리그·조별리그 1위 횟수", suffix: "회" },
+};
+
+function ThemeRankingPanel({ theme, rows, currentUserId, onSelect }: { theme: string; rows: ThemeRankingRow[]; currentUserId: number; onSelect: (memberId: number) => void }) {
+  const [visibleCount, setVisibleCount] = useState(10);
+  const meta = THEME_META[theme] ?? THEME_META.attendance;
+  const winner = rows[0];
+  const valueLabel = (row: ThemeRankingRow) => `${theme === "set_ratio" ? row.value.toFixed(1) : row.value}${meta.suffix}`;
+  if (!winner) {
+    return <Stack spacing={0.5}><Typography sx={{ fontSize: 18, fontWeight: 900 }}>{meta.title}</Typography><Typography sx={{ fontSize: 12, color: "text.secondary", fontWeight: 700 }}>{meta.description}</Typography><EmptyRankingCard /></Stack>;
+  }
+  return (
+    <Box sx={{ bgcolor: "#EAF1FA", borderRadius: 2, p: 1.5 }}>
+      <Typography sx={{ fontSize: 18, fontWeight: 900 }}>{meta.title}</Typography>
+      <Typography sx={{ mb: 1.5, fontSize: 12, color: "#64748B", fontWeight: 700 }}>{meta.description}</Typography>
+      <Card elevation={0} onClick={() => winner.member_id != null && onSelect(winner.member_id)} sx={{ mb: 1, borderRadius: 1.5, cursor: winner.member_id != null ? "pointer" : "default", border: "1px solid #D8E3F0" }}>
+        <CardContent sx={{ py: 2, px: 2, "&:last-child": { pb: 2 } }}>
+          <Stack alignItems="center" spacing={0.6}>
+            <Box sx={{ width: 36, height: 36, borderRadius: "50%", bgcolor: "#FFC94A", color: "#FFF", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 3px 8px rgba(217,160,0,.28)" }}><EmojiEventsOutlinedIcon sx={{ fontSize: 21 }} /></Box>
+            <Stack direction="row" spacing={0.55} alignItems="center"><Typography sx={{ fontSize: 18, fontWeight: 900 }}>{winner.name}</Typography><DivisionBadge division={winner.division} /></Stack>
+            {winner.is_pre_registered && <Typography sx={{ fontSize: 9, fontWeight: 800, color: "#64748B" }}>사전등록</Typography>}
+            <Typography sx={{ fontSize: 22, lineHeight: 1, color: "#2878F0", fontWeight: 900 }}>{valueLabel(winner)}</Typography>
+            {theme === "set_ratio" && <Typography sx={{ fontSize: 10, color: "#64748B", fontWeight: 700 }}>{winner.matches_played}경기 · {winner.sets_for}/{winner.sets_against}세트</Typography>}
+          </Stack>
+        </CardContent>
+      </Card>
+      <Stack spacing={0.7}>
+        {rows.slice(1, visibleCount).map((row) => {
+          const isMine = row.member_id != null && row.member_id === currentUserId;
+          return <Card key={row.member_id ?? `pre-${row.pre_member_id}`} elevation={0} onClick={() => row.member_id != null && onSelect(row.member_id)} sx={{ borderRadius: 1.2, cursor: row.member_id != null ? "pointer" : "default", bgcolor: isMine ? "#EEF2FF" : "#FFF", border: "1px solid #DCE5F0" }}>
+            <CardContent sx={{ py: 1, px: 1.25, "&:last-child": { pb: 1 } }}>
+              <Stack direction="row" alignItems="center" spacing={1}>
+                <Typography sx={{ width: 22, textAlign: "center", color: "#64748B", fontSize: 13, fontWeight: 900 }}>{row.rank}</Typography>
+                <Box sx={{ flex: 1, minWidth: 0 }}><Stack direction="row" alignItems="center" spacing={0.5}><Typography sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: isMine ? "#1D4ED8" : "#111827", fontSize: 14, fontWeight: 900 }}>{row.name}</Typography><DivisionBadge division={row.division} />{row.is_pre_registered && <Typography sx={{ fontSize: 9, color: "#64748B", fontWeight: 800 }}>사전등록</Typography>}</Stack>{theme === "set_ratio" && <Typography sx={{ mt: 0.15, fontSize: 9.5, color: "#94A3B8", fontWeight: 700 }}>{row.matches_played}경기 · {row.sets_for}/{row.sets_against}세트</Typography>}</Box>
+                <Typography sx={{ color: "#2878F0", fontSize: 17, fontWeight: 900 }}>{valueLabel(row)}</Typography>
+              </Stack>
+            </CardContent>
+          </Card>;
+        })}
+        {visibleCount < rows.length && <Button variant="outlined" endIcon={<ExpandMoreIcon />} onClick={() => setVisibleCount((count) => Math.min(count + 10, rows.length))} sx={{ bgcolor: "#FFF", borderColor: "#8AB8F8", color: "#2563EB", fontWeight: 900 }}>더보기</Button>}
+      </Stack>
+    </Box>
   );
 }
 

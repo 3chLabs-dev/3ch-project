@@ -318,6 +318,19 @@ export interface PointRankingRow {
   total_points: number;
 }
 
+export interface ThemeRankingRow {
+  member_id: number | null;
+  pre_member_id?: string | null;
+  is_pre_registered?: boolean;
+  name: string;
+  division?: string | null;
+  rank: number;
+  value: number;
+  matches_played: number;
+  sets_for: number;
+  sets_against: number;
+}
+
 export interface LeagueVenuePlace {
   id: string;
   name: string;
@@ -400,6 +413,15 @@ export interface GroupPointRankingResponse {
   };
   tournament: {
     rankings: PointRankingRow[];
+  };
+  themes: {
+    attendance: ThemeRankingRow[];
+    championships: ThemeRankingRow[];
+    lower_championships: ThemeRankingRow[];
+    wins: ThemeRankingRow[];
+    set_ratio: ThemeRankingRow[];
+    runners_up: ThemeRankingRow[];
+    prelim_firsts: ThemeRankingRow[];
   };
 }
 
@@ -958,6 +980,15 @@ export const groupApi = baseApi.injectEndpoints({
               currentUserId: profile.user.id,
               league: { rankings: rows },
               tournament: { rankings: rows.map((row) => ({ ...row, total_points: Math.max(0, row.total_points - 5) })) },
+              themes: {
+                attendance: rows.map((row) => ({ ...row, value: row.attendance_count, rank: row.rank ?? 0, sets_for: row.score_points, sets_against: 0 })),
+                championships: rows.map((row) => ({ ...row, value: row.championships, rank: row.rank ?? 0, sets_for: row.score_points, sets_against: 0 })).filter((row) => row.value > 0),
+                lower_championships: [],
+                wins: rows.map((row) => ({ ...row, value: row.wins, rank: row.rank ?? 0, sets_for: row.score_points, sets_against: 0 })).filter((row) => row.value > 0),
+                set_ratio: [],
+                runners_up: [],
+                prelim_firsts: [],
+              },
             },
           };
         }

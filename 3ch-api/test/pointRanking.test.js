@@ -120,3 +120,33 @@ test('하위부 진출 시 상위부 포인트 제외 옵션은 같은 토너먼
     ['member:2'],
   );
 });
+
+test('세트득실 테마는 10경기 이상 출전한 회원만 집계한다', () => {
+  const eligible = _test.createThemeStat({ member_id: 1, name: '10경기', division: '3' });
+  eligible.matches_played = 10;
+  eligible.sets_for = 18;
+  eligible.sets_against = 12;
+  const excluded = _test.createThemeStat({ member_id: 2, name: '9경기', division: '4' });
+  excluded.matches_played = 9;
+  excluded.sets_for = 18;
+  excluded.sets_against = 0;
+
+  const rows = _test.finalizeThemeRows(new Map([['member:1', eligible], ['member:2', excluded]]), 'sets_for', { minimumMatches: 10, rate: true });
+
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].name, '10경기');
+  assert.equal(rows[0].value, 60);
+});
+
+test('테마 순위는 같은 기록에 공동 순위를 부여한다', () => {
+  const first = _test.createThemeStat({ member_id: 1, name: '가', division: '1' });
+  const tied = _test.createThemeStat({ member_id: 2, name: '나', division: '2' });
+  const third = _test.createThemeStat({ member_id: 3, name: '다', division: '3' });
+  first.championships = 2;
+  tied.championships = 2;
+  third.championships = 1;
+
+  const rows = _test.finalizeThemeRows(new Map([['member:1', first], ['member:2', tied], ['member:3', third]]), 'championships');
+
+  assert.deepEqual(rows.map((row) => row.rank), [1, 1, 3]);
+});

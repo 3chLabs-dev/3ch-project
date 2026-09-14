@@ -137,6 +137,21 @@ const formationLevelSum = (players: FormationPlayer[]): number =>
 const formationPlayerId = (player: FormationPlayer) =>
   `formation-${player.name}-${player.level}`;
 
+const formationPlayerNames = (player: FormationPlayer) =>
+  player.roster?.length ? player.roster.map((member) => member.name).join(" · ") : player.name;
+
+const formationStructureLabel = (sizes: number[], unit: "조" | "팀") => {
+  if (!sizes.length) return "";
+  const counts = sizes.reduce<Record<number, number>>((result, size) => {
+    result[size] = (result[size] ?? 0) + 1;
+    return result;
+  }, {});
+  return Object.entries(counts)
+    .sort(([left], [right]) => Number(left) - Number(right))
+    .map(([size, count]) => `${size}명 ${count}${unit}`)
+    .join(" · ");
+};
+
 function SortableFormationPlayer({ player, locked = false }: { player: FormationPlayer; locked?: boolean }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: formationPlayerId(player),
@@ -437,10 +452,6 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
   const exportAverageMatches = participants.length > 0 ? (exportPlayerSlots / participants.length).toFixed(1) : "0.0";
   const exportDurationLabel = `${Math.floor(exportTotalMinutes / 60) > 0 ? `${Math.floor(exportTotalMinutes / 60)}시간 ` : ""}${exportTotalMinutes % 60}분`;
   const exportRentalMinutes = Math.max(exportTotalMinutes, exportRentalEndMinutes - exportStartMinutes);
-  const exportDescription = storedProgram?.description
-    || (storedProgram?.compositionMode === "custom"
-      ? "리그 운영 조건에 맞춰 직접 구성한 프로그램입니다."
-      : "경기 수와 라운드 구성, 진행시간을 고려해 만든 프로그램입니다.");
   const exportScore = Math.max(0, Math.min(5, Math.round(storedProgram?.recommendationScore ?? 0)));
 
   useEffect(() => {
@@ -1753,9 +1764,15 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
       </Box>
 
       {hasProgram && (
-        <Box sx={{ position: "fixed", left: -10000, top: 0, width: 380, pointerEvents: "none" }}>
-          <Box ref={programExportRef} sx={{ width: 380, boxSizing: "border-box", p: 2, bgcolor: "#F8FAFC", fontFamily: "Pretendard, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" }}>
-            <Box sx={{ p: 2, border: "1px solid #D7DCE3", borderRadius: 2.5, bgcolor: "#FFF", boxShadow: "0 8px 28px rgba(15,23,42,0.06)" }}>
+        <Box sx={{ position: "fixed", left: -10000, top: 0, width: 720, pointerEvents: "none" }}>
+          <Box ref={programExportRef} sx={{ width: 720, boxSizing: "border-box", p: 2.5, bgcolor: "#EEF2F7", fontFamily: "Pretendard, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" }}>
+            <Box sx={{ overflow: "hidden", border: "1px solid #CBD5E1", bgcolor: "#FFF", boxShadow: "0 8px 28px rgba(15,23,42,0.08)" }}>
+              <Box sx={{ px: 2.5, py: 1.6, bgcolor: "#123477", color: "#FFF" }}>
+                <Typography sx={{ fontSize: 21, fontWeight: 900, letterSpacing: -0.5 }}>
+                  {league?.name ?? "리그"} 운영 프로그램
+                </Typography>
+              </Box>
+              <Box sx={{ p: 2.5 }}>
               <Stack direction="row" alignItems="center" spacing={1}>
                 <Typography sx={{ fontSize: 18, fontWeight: 900, color: "#111827", flex: 1 }}>
                   {storedProgram?.title ?? "리그 프로그램"}
@@ -1767,9 +1784,19 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
                 )}
               </Stack>
 
-              <Typography sx={{ mt: 1, fontSize: 13, lineHeight: 1.55, color: "#64748B" }}>
-                {exportDescription}
-              </Typography>
+              <Box sx={{ mt: 1.3, display: "grid", gridTemplateColumns: "92px 1fr 92px 1fr", borderTop: "1px solid #CBD5E1", borderLeft: "1px solid #CBD5E1" }}>
+                {[
+                  ["일시", formatLeagueDate(league?.start_date ?? "")],
+                  ["장소", league?.venue_name || "-"],
+                  ["참가 인원", `${participants.length}명`],
+                  ["운영 코트", `${league?.court_count ?? 1}개`],
+                ].map(([label, value]) => (
+                  <Box key={label} sx={{ display: "contents" }}>
+                    <Typography sx={{ px: 1, py: 0.75, borderRight: "1px solid #CBD5E1", borderBottom: "1px solid #CBD5E1", bgcolor: "#F1F5F9", fontSize: 11, fontWeight: 800, color: "#475569" }}>{label}</Typography>
+                    <Typography sx={{ px: 1, py: 0.75, borderRight: "1px solid #CBD5E1", borderBottom: "1px solid #CBD5E1", fontSize: 11, fontWeight: 700, color: "#0F172A" }}>{value}</Typography>
+                  </Box>
+                ))}
+              </Box>
 
               <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "repeat(3, 1fr)", border: "1px solid #E2E8F0", borderRadius: 1.5, overflow: "hidden", bgcolor: "#F8FAFC" }}>
                 {[
@@ -1803,11 +1830,25 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
                 <Typography sx={{ mb: 1.2, fontSize: 14, fontWeight: 900, color: "#0F172A" }}>라운드별 진행 일정</Typography>
                 <Stack spacing={1.1}>
                   {programRounds.map((round, roundIndex) => {
+                    const block = storedProgram?.blocks?.[roundIndex];
                     const fallbackStart = exportStartMinutes + programRounds.slice(0, roundIndex).reduce((sum, item) => sum + item.expectedMinutes, 0);
                     const roundStart = round.startMinutes ?? fallbackStart;
                     const roundEnd = round.endMinutes ?? roundStart + round.expectedMinutes;
                     const previousRound = programRounds[roundIndex - 1];
                     const showAdvancement = previousRound?.stageLabel === "예선" && previousRound.type === "SINGLES" && round.stageLabel === "본선" && round.type === "SINGLES";
+                    const publishedFormation = round.type === "TEAM" && round.teamFormationPublished
+                      ? block?.teamAssignments
+                      : round.format === "GROUP" && round.groupFormationPublished
+                        ? block?.groupAssignments
+                        : undefined;
+                    const formationUnit = round.type === "TEAM" ? "팀" : "조";
+                    const plannedSizes = round.type === "TEAM"
+                      ? block?.teamFormationSizes ?? block?.teamGroupSizes ?? block?.groupSizes ?? []
+                      : block?.groupSizes ?? [];
+                    const showPlannedFormation = !publishedFormation?.length
+                      && storedProgram?.compositionMode === "recommend"
+                      && (round.type === "TEAM" || round.format === "GROUP")
+                      && plannedSizes.length > 0;
                     return (
                       <Box key={round.round} sx={{ p: 1.4, border: "1px solid #E2E8F0", borderRadius: 1.5, bgcolor: "#FFF", boxShadow: "0 2px 7px rgba(15,23,42,0.04)" }}>
                         <Stack direction="row" alignItems="center" spacing={0.7}>
@@ -1823,10 +1864,32 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
                         <Typography sx={{ mt: 0.8, fontSize: 12, color: "#94A3B8" }}>경기 수&nbsp;&nbsp;<Box component="span" sx={{ color: "#0F172A", fontWeight: 900 }}>{round.matchCount}경기</Box></Typography>
                         {showAdvancement && <Typography sx={{ mt: 0.7, p: 0.7, borderRadius: 1, bgcolor: "#EFF6FF", color: "#1D4ED8", fontSize: 11, fontWeight: 800 }}>{round.finalAdvancementMode === "all" ? "예선 참가자 모두 진출" : `예선 ${previousRound.format === "GROUP" ? "각 조 " : ""}상위 ${round.advanceCount ?? 2}명 진출`}</Typography>}
                         <Typography sx={{ mt: 0.45, fontSize: 12, color: "#94A3B8" }}>진행시간&nbsp;&nbsp;<Box component="span" sx={{ color: "#0F172A", fontWeight: 900 }}>{formatClockMinutes(roundStart)} ~ {formatClockMinutes(roundEnd)}</Box></Typography>
+                        {publishedFormation?.length ? (
+                          <Box sx={{ mt: 1.1 }}>
+                            <Typography sx={{ mb: 0.65, fontSize: 11, fontWeight: 900, color: "#123477" }}>{formationUnit} 편성 결과</Typography>
+                            <Box sx={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 0.65 }}>
+                              {publishedFormation.map((members, formationIndex) => (
+                                <Box key={`${round.round}-${formationUnit}-${formationIndex}`} sx={{ border: "1px solid #CBD5E1", bgcolor: "#F8FAFC" }}>
+                                  <Typography sx={{ px: 0.7, py: 0.45, bgcolor: "#E8EEF8", borderBottom: "1px solid #CBD5E1", fontSize: 10, fontWeight: 900, color: "#123477" }}>{formationIndex + 1}{formationUnit} · {members.length}명</Typography>
+                                  <Typography sx={{ px: 0.7, py: 0.55, minHeight: 32, fontSize: 9.5, lineHeight: 1.45, fontWeight: 700, color: "#1E293B" }}>
+                                    {members.map(formationPlayerNames).join(", ")}
+                                  </Typography>
+                                </Box>
+                              ))}
+                            </Box>
+                          </Box>
+                        ) : showPlannedFormation ? (
+                          <Box sx={{ mt: 0.9, px: 1, py: 0.75, bgcolor: "#EFF6FF", borderLeft: "3px solid #2563EB" }}>
+                            <Typography sx={{ fontSize: 11, fontWeight: 800, color: "#1D4ED8" }}>
+                              편성 예정 · 총 {plannedSizes.reduce((sum, size) => sum + size, 0)}명 · {formationStructureLabel(plannedSizes, formationUnit)}
+                            </Typography>
+                          </Box>
+                        ) : null}
                       </Box>
                     );
                   })}
                 </Stack>
+              </Box>
               </Box>
             </Box>
           </Box>

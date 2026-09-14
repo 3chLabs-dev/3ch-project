@@ -342,15 +342,13 @@ interface WalkoverUndoState {
  *   - Y축: 1라운드 매치를 균등 간격으로 나열하고,
  *          상위 라운드는 자식 두 매치의 Y 중간값에 배치 (트리 중앙 정렬)
  *
- * upper 브래킷(bracket=null 또는 'upper') 매치만 처리하며,
- * match_order 기준으로 정렬 후 계산한다.
+ * 전달받은 단일 브래킷의 매치를 match_order 기준으로 정렬해 계산한다.
  */
 function calcPositions(matches: LeagueMatch[]): MatchPos[] {
   const upper = matches.filter(
     (m) =>
       m.round_number != null &&
-      (!m.bracket || m.bracket === "upper") &&
-      m.match_label !== "3·4위전",
+      !m.match_label?.includes("3·4위전"),
   );
   if (!upper.length) return [];
 
@@ -362,10 +360,11 @@ function calcPositions(matches: LeagueMatch[]): MatchPos[] {
   }
   for (const arr of byRound.values()) arr.sort((a, b) => a.match_order - b.match_order);
 
+  const minRound = Math.min(...byRound.keys());
   const maxRound = Math.max(...byRound.keys());
   const yMap = new Map<string, number>();
-  (byRound.get(1) ?? []).forEach((m, i) => yMap.set(m.id, i * (MH + 8)));
-  for (let r = 2; r <= maxRound; r++) {
+  (byRound.get(minRound) ?? []).forEach((m, i) => yMap.set(m.id, i * (MH + 8)));
+  for (let r = minRound + 1; r <= maxRound; r++) {
     const prev = byRound.get(r - 1) ?? [];
     const curr = byRound.get(r) ?? [];
     curr.forEach((m, i) => {
@@ -376,18 +375,17 @@ function calcPositions(matches: LeagueMatch[]): MatchPos[] {
 
   const result: MatchPos[] = [];
   for (const [r, arr] of byRound) {
-    const x = PX + (r - 1) * (MW + RGAP);
+    const x = PX + (r - minRound) * (MW + RGAP);
     for (const m of arr) result.push({ id: m.id, x, y: PT + (yMap.get(m.id) ?? 0), match: m });
   }
 
   const thirdPlaceMatch = matches.find(
     (m) =>
       m.round_number != null &&
-      (!m.bracket || m.bracket === "upper") &&
-      m.match_label === "3·4위전",
+      m.match_label?.includes("3·4위전"),
   );
   if (thirdPlaceMatch) {
-    const finalMatch = upper.find((m) => m.match_label === "결승")
+    const finalMatch = upper.find((m) => m.match_label?.includes("결승"))
       ?? upper.reduce<LeagueMatch | null>(
         (latest, match) =>
           !latest || (match.round_number ?? 0) > (latest.round_number ?? 0)
@@ -396,7 +394,7 @@ function calcPositions(matches: LeagueMatch[]): MatchPos[] {
         null,
     );
     const finalPos = finalMatch ? result.find((pos) => pos.id === finalMatch.id) : null;
-    const x = finalPos?.x ?? PX + ((thirdPlaceMatch.round_number ?? maxRound) - 1) * (MW + RGAP);
+    const x = finalPos?.x ?? PX + ((thirdPlaceMatch.round_number ?? maxRound) - minRound) * (MW + RGAP);
     const semifinalPositions = finalMatch
       ? result.filter((pos) => pos.match.next_match_id === finalMatch.id)
       : [];
@@ -448,7 +446,7 @@ function calcPositions(matches: LeagueMatch[]): MatchPos[] {
  * 하위 브래킷 X 좌표는 상위 패자(loser_next_match_id)와 하위 승자(next_match_id)
  * 의 X 평균으로 결정해 연결선이 자연스럽게 이어지도록 한다.
  */
-function calcCenterOutPositions(matches: LeagueMatch[]): MatchPos[] {
+export function legacyCalcCenterOutPositions(matches: LeagueMatch[]): MatchPos[] {
   const upper = matches.filter(
     (m) => m.round_number != null && (!m.bracket || m.bracket === "upper") && !m.match_label?.includes("3·4위전"),
   );
@@ -1335,11 +1333,19 @@ export default function LeagueTournamentBracket() {
   );
   const isDoubleElim = matches.some((match) => match.bracket === "lower");
   const visibleMatches = useMemo(
-    () => isDoubleElim
-      ? matches.filter((match) => selectedDivision === "upper"
-        ? !match.bracket || match.bracket === "upper"
-        : match.bracket === "lower")
-      : matches,
+    () => {
+      if (!isDoubleElim) return matches;
+      if (selectedDivision === "upper") {
+        return matches.filter((match) => !match.bracket || match.bracket === "upper");
+      }
+      const lowerMatches = matches.filter((match) => match.bracket === "lower");
+      const populatedRounds = lowerMatches
+        .filter((match) => match.participant_a_id || match.participant_b_id)
+        .map((match) => match.round_number ?? 1);
+      if (populatedRounds.length === 0) return [];
+      const firstVisibleRound = Math.min(...populatedRounds);
+      return lowerMatches.filter((match) => (match.round_number ?? 1) >= firstVisibleRound);
+    },
     [isDoubleElim, matches, selectedDivision],
   );
   const scrollStorageKey = `league-tournament-scroll:${id ?? ""}:${isProgramMode ? programRound : 0}:${selectedBracketIndex}:${isDoubleElim ? selectedDivision : "single"}`;
@@ -1739,42 +1745,28 @@ export default function LeagueTournamentBracket() {
     const sourceMatches = isProgramMode ? allProgramMatches : matches;
     const source = sourceMatches.find((match) => match.id === swapFirst.matchId);
     if (!source || source.bracket === "lower") return;
-    const upperPeers = sourceMatches.filter((match) => match.bracket !== "lower" && match.round_number === source.round_number && !match.match_label?.includes("3·4위전")).sort((a, b) => a.match_order - b.match_order);
-    const sourceIndex = upperPeers.findIndex((match) => match.id === source.id);
-    const lowerPeers = sourceMatches.filter((match) => match.bracket === "lower" && match.round_number === Math.max(1, (source.round_number ?? 1) - 1) && !match.match_label?.includes("3·4위전")).sort((a, b) => a.match_order - b.match_order);
-    const layoutPositions = calcCenterOutPositions(sourceMatches);
-    const sourcePosition = layoutPositions.find((position) => position.id === source.id);
-    const closestLowerMatch = sourcePosition
-      ? lowerPeers
-          .filter((match) => !match.participant_a_name || !match.participant_b_name)
-          .map((match) => ({ match, position: layoutPositions.find((position) => position.id === match.id) }))
-          .filter((entry) => entry.position)
-          .sort((left, right) => Math.abs(left.position!.x - sourcePosition.x) - Math.abs(right.position!.x - sourcePosition.x))[0]?.match
+    // 수동 이동도 완료 순서가 아니라 참가자의 최초 상위부 경기 위치를 기준으로 한다.
+    // 특히 첫 경기를 BYE로 통과한 참가자는 그 첫 경기의 패자 예약 슬롯을 사용한다.
+    const openingSource = sourceMatches
+      .filter((match) => match.bracket !== "lower" && match.round_number === 1 && !match.match_label?.includes("3·4위전"))
+      .find((match) => match.participant_a_id === swapFirst.participantId || match.participant_b_id === swapFirst.participantId);
+    const placementSource = source.round_number === 1 && source.loser_next_match_id
+      ? source
+      : openingSource;
+    const directTargetId = placementSource?.loser_next_match_id;
+    const targetSlot = placementSource?.loser_next_slot === "a" || placementSource?.loser_next_slot === "b"
+      ? placementSource.loser_next_slot
+      : null;
+    const target = directTargetId
+      ? sourceMatches.find((match) => match.id === directTargetId && match.bracket === "lower")
       : undefined;
-    // If this participant reached the current match through an opening-round BYE,
-    // reuse that feeder's originally reserved loser slot in the lower bracket.
-    const byeFeeder = sourceMatches.find((match) =>
-      match.next_match_id === source.id
-      && Boolean(match.loser_next_match_id)
-      && (match.participant_a_id === swapFirst.participantId || match.participant_b_id === swapFirst.participantId
-        || match.participant_a_name === swapFirst.name || match.participant_b_name === swapFirst.name),
-    );
-    const directTargetId = source.loser_next_match_id ?? byeFeeder?.loser_next_match_id;
-    let target = directTargetId
-      ? sourceMatches.find((match) => match.id === directTargetId)
-      : closestLowerMatch
-        ? closestLowerMatch
-        : lowerPeers[(source.round_number ?? 1) === 1 ? Math.floor(sourceIndex / 2) : sourceIndex];
-    let targetSlot = source.loser_next_match_id
-      ? source.loser_next_slot
-      : byeFeeder?.loser_next_slot;
-    if (targetSlot && target) {
-      const occupied = targetSlot === "a" ? target.participant_a_name : target.participant_b_name;
-      if (occupied) targetSlot = null;
-    }
-    targetSlot ??= target && !target.participant_a_name ? "a" : target && !target.participant_b_name ? "b" : null;
     if (!target || !targetSlot) {
-      window.alert("대응하는 하위부 경기에서 배치 가능한 미정 슬롯을 찾지 못했습니다.");
+      window.alert("이 참가자의 최초 상위부 경기 위치에 대응하는 하위부 슬롯을 찾지 못했습니다.");
+      return;
+    }
+    const occupiedParticipantId = targetSlot === "a" ? target.participant_a_id : target.participant_b_id;
+    if (occupiedParticipantId && occupiedParticipantId !== swapFirst.participantId) {
+      window.alert("이 참가자의 하위부 고정 위치에 이미 다른 참가자가 배치되어 있어 이동할 수 없습니다.");
       return;
     }
     const sourceName = swapFirst.slot === "a" ? source.participant_a_name : source.participant_b_name;
@@ -2026,6 +2018,10 @@ export default function LeagueTournamentBracket() {
   };
 
   const positions = useMemo(() => calcPositions(visibleMatches), [visibleMatches]);
+  const visibleMinRound = useMemo(
+    () => Math.min(...visibleMatches.map((match) => match.round_number ?? 1)),
+    [visibleMatches],
+  );
 
   const { standardFinalPos, standardRankings, standardRankLabels } = useMemo(() => {
     const finalMatch = visibleMatches
@@ -2070,11 +2066,12 @@ export default function LeagueTournamentBracket() {
   const { canvasW, canvasH } = useMemo(() => {
     if (!positions.length) return { canvasW: 400, canvasH: 300 };
     const maxRound = Math.max(...positions.map((p) => p.match.round_number ?? 1));
+    const roundCount = maxRound - visibleMinRound + 1;
     const summarySpace = standardFinalPos ? 174 : 0;
-    const w = PX * 2 + maxRound * MW + (maxRound - 1) * RGAP + summarySpace;
+    const w = PX * 2 + roundCount * MW + (roundCount - 1) * RGAP + summarySpace;
     const h = positions.reduce((acc, p) => Math.max(acc, p.y + MH), PT) + PB;
     return { canvasW: w, canvasH: h };
-  }, [positions, standardFinalPos]);
+  }, [positions, standardFinalPos, visibleMinRound]);
 
   const handleBracketScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
     const element = event.currentTarget;
@@ -2127,7 +2124,7 @@ export default function LeagueTournamentBracket() {
     );
   }
 
-  if (!positions.length) {
+  if (!positions.length && !isDoubleElim) {
     if (isProgramMode) {
       return createPortal(
         <Box sx={{ bgcolor: "#fff", position: "fixed", inset: 0, zIndex: 9999, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1.5 }}>
@@ -2284,6 +2281,12 @@ export default function LeagueTournamentBracket() {
         </Tabs>
       )}
       <Box sx={{ flex: 1, overflow: "hidden", position: "relative", minHeight: 0, bgcolor: "#F0F2F5" }}>
+        {isDoubleElim && selectedDivision === "lower" && visibleMatches.length === 0 && (
+          <Box sx={{ position: "absolute", inset: 0, zIndex: 2, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", px: 3, textAlign: "center", pointerEvents: "none" }}>
+            <Typography sx={{ fontSize: 15, fontWeight: 800, color: "#475569" }}>아직 하위부 진출자가 없습니다.</Typography>
+            <Typography sx={{ mt: 0.75, fontSize: 12, color: "#94A3B8" }}>첫 패자가 배치되면 해당 경기부터 하위부 대진표가 표시됩니다.</Typography>
+          </Box>
+        )}
         <Box ref={bracketScrollRef} onScroll={handleBracketScroll} sx={{ position: "absolute", top: 0, bottom: 0, left: 0, right: registerTarget ? 260 : 0, overflow: "auto", transition: "right 0.2s ease" }}>
           <Box sx={{
             position: "relative",
@@ -2307,7 +2310,7 @@ export default function LeagueTournamentBracket() {
                   <Typography key={`sticky-lbl-${r}`} sx={{
                     position: "absolute",
                     top: 10 * zoom,
-                    left: (PX + (r - 1) * (MW + RGAP)) * zoom,
+                    left: (PX + (r - visibleMinRound) * (MW + RGAP)) * zoom,
                     width: MW * zoom,
                     textAlign: "center",
                     fontSize: 12 * zoom,
@@ -2338,7 +2341,7 @@ export default function LeagueTournamentBracket() {
               {[...roundLabels.entries()].map(([r, label]) => (
                 <Typography key={`lbl-${r}`} sx={{
                   position: "absolute", top: 10,
-                  left: PX + (r - 1) * (MW + RGAP),
+                  left: PX + (r - visibleMinRound) * (MW + RGAP),
                   width: MW, textAlign: "center",
                   fontSize: 12, fontWeight: 700, color: "#64748B",
                 }}>

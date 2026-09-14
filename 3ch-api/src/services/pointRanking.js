@@ -150,6 +150,50 @@ function awardChampionship(sectionRows, memberIds) {
   });
 }
 
+function createThemeStat(base) {
+  return {
+    member_id: base.member_id == null ? null : Number(base.member_id),
+    pre_member_id: base.pre_member_id ?? null,
+    is_pre_registered: Boolean(base.pre_member_id),
+    name: base.name,
+    division: base.division || null,
+    league_ids: new Set(),
+    wins: 0,
+    matches_played: 0,
+    sets_for: 0,
+    sets_against: 0,
+    championships: 0,
+    lower_championships: 0,
+    runners_up: 0,
+    prelim_firsts: 0,
+  };
+}
+
+function finalizeThemeRows(themeStats, field, { minimumMatches = 0, rate = false } = {}) {
+  const rows = [...themeStats.values()].map((stat) => ({
+    member_id: stat.member_id,
+    pre_member_id: stat.pre_member_id,
+    is_pre_registered: stat.is_pre_registered,
+    name: stat.name,
+    division: stat.division,
+    matches_played: stat.matches_played,
+    sets_for: stat.sets_for,
+    sets_against: stat.sets_against,
+    value: rate
+      ? (stat.sets_for + stat.sets_against > 0 ? (stat.sets_for / (stat.sets_for + stat.sets_against)) * 100 : 0)
+      : field === "attendance" ? stat.league_ids.size : Number(stat[field] || 0),
+  })).filter((row) => row.value > 0 && row.matches_played >= minimumMatches);
+  rows.sort((a, b) => b.value - a.value || b.matches_played - a.matches_played || a.name.localeCompare(b.name, "ko"));
+  let previousValue = null;
+  let previousRank = 0;
+  return rows.map((row, index) => {
+    const roundedValue = rate ? Math.round(row.value * 10) / 10 : row.value;
+    if (previousValue === null || roundedValue !== previousValue) previousRank = index + 1;
+    previousValue = roundedValue;
+    return { ...row, value: roundedValue, rank: previousRank };
+  });
+}
+
 function tournamentEliminationRound(match) {
   const matched = String(match?.match_label ?? "").match(/(?:^|\s)(8|16|32|64|128)강(?:$|\s)/);
   return matched ? Number(matched[1]) : null;
@@ -722,6 +766,19 @@ async function getPointRanking(groupId, year, scope, seasonId, onlyLeagueId = nu
   const tournamentGroups = new Map();
   const lowerTournamentMembers = new Map();
   const standingWinners = new Map();
+  const standingPlacements = new Map();
+  const themeStats = new Map([...baseMembers].map(([memberId, base]) => [memberId, createThemeStat(base)]));
+  participantResult.rows.forEach((participant) => {
+    const memberId = rankingMemberKey(participant);
+    const stat = memberId ? themeStats.get(memberId) : null;
+    if (stat) stat.league_ids.add(String(participant.league_id));
+  });
+  const incrementTheme = (memberIds, field) => {
+    [...new Set(memberIds)].forEach((memberId) => {
+      const stat = themeStats.get(String(memberId));
+      if (stat) stat[field] += 1;
+    });
+  };
   // A league that has a regular/group phase remains a "league" ranking entry
   // even when its finals are played as a tournament. Only tournament-only
   // events belong in the separate tournament ranking section.
@@ -788,6 +845,26 @@ async function getPointRanking(groupId, year, scope, seasonId, onlyLeagueId = nu
 
     const scoreA = Number(match.score_a);
     const scoreB = Number(match.score_b);
+    const hasBothSides = Boolean(match.participant_a_id || match.participant_a_roster_ids?.length)
+      && Boolean(match.participant_b_id || match.participant_b_roster_ids?.length);
+    if (hasBothSides && scoreA !== scoreB) {
+      rankingMemberAIds.forEach((memberId) => {
+        const stat = themeStats.get(String(memberId));
+        if (!stat) return;
+        stat.matches_played += 1;
+        stat.sets_for += scoreA;
+        stat.sets_against += scoreB;
+        if (scoreA > scoreB) stat.wins += 1;
+      });
+      rankingMemberBIds.forEach((memberId) => {
+        const stat = themeStats.get(String(memberId));
+        if (!stat) return;
+        stat.matches_played += 1;
+        stat.sets_for += scoreB;
+        stat.sets_against += scoreA;
+        if (scoreB > scoreA) stat.wins += 1;
+      });
+    }
     const targetRows = section === "league" ? leagueRows : tournamentRows;
     const rowsA = rankingMemberAIds
       .map((memberId) => ensureRow(targetRows, memberId, baseMembers.get(memberId), section))
@@ -895,6 +972,10 @@ async function getPointRanking(groupId, year, scope, seasonId, onlyLeagueId = nu
 
     const standings = Array.from(statMap.values()).sort(compareStanding);
     if (standings[0]) standingWinners.set(groupKey, standings[0].member_ids);
+    standingPlacements.set(groupKey, standings);
+    if (sample._rankingOption === "PRELIM" && standings[0]) {
+      incrementTheme(standings[0].member_ids, "prelim_firsts");
+    }
     const bonusRule = getBonusRule(rulesForLeague(sample.league_id), "league", sample._rankingFormat, sample._rankingOption);
     standings.slice(0, 4).forEach((standing, index) => {
       const divisor = standing.member_ids.length;
@@ -1003,6 +1084,12 @@ async function getPointRanking(groupId, year, scope, seasonId, onlyLeagueId = nu
     const finalOutcome = completedOutcome(finalMatch);
 
     if (finalMatch && finalOutcome) {
+      if (sample._rankingOption === "LOWER") {
+        incrementTheme(finalOutcome.winnerIds, "lower_championships");
+      }
+      if (sample._rankingOption === "PRELIM") {
+        incrementTheme(finalOutcome.winnerIds, "prelim_firsts");
+      }
       awardMemberRank(eligibleBonusIds(finalOutcome.winnerIds), 1, bonusRule);
       awardMemberRank(eligibleBonusIds(finalOutcome.loserIds), 2, bonusRule);
 
@@ -1071,22 +1158,33 @@ async function getPointRanking(groupId, year, scope, seasonId, onlyLeagueId = nu
       const winnerIds = Number(finalMatch.score_a) > Number(finalMatch.score_b)
         ? (finalMatch._memberAIds ?? [])
         : (finalMatch._memberBIds ?? []);
+      const runnerUpIds = Number(finalMatch.score_a) > Number(finalMatch.score_b)
+        ? (finalMatch._memberBIds ?? [])
+        : (finalMatch._memberAIds ?? []);
       awardChampionship(sectionRows, winnerIds);
+      incrementTheme(winnerIds, "championships");
+      incrementTheme(runnerUpIds, "runners_up");
       return;
     }
 
     if (lastFormat === "LEAGUE") {
-      awardChampionship(sectionRows, standingWinners.get(`${leagueId}:${lastRound}:__all__`) ?? []);
+      const standings = standingPlacements.get(`${leagueId}:${lastRound}:__all__`) ?? [];
+      const winnerIds = standings[0]?.member_ids ?? [];
+      awardChampionship(sectionRows, winnerIds);
+      incrementTheme(winnerIds, "championships");
+      incrementTheme(standings[1]?.member_ids ?? [], "runners_up");
       return;
     }
 
     if (lastFormat === "GROUP") {
-      const championshipGroup = meta.finalAdvancementMode === "upper-lower-groups"
-        ? "상위부"
-        : meta.finalAdvancementMode === "rank-groups" ? "1위조" : null;
-      if (championshipGroup) {
-        awardChampionship(sectionRows, standingWinners.get(`${leagueId}:${lastRound}:${championshipGroup}`) ?? []);
-      }
+      [...standingPlacements.entries()]
+        .filter(([groupKey]) => groupKey.startsWith(`${leagueId}:${lastRound}:`))
+        .forEach(([, standings]) => {
+          const winnerIds = standings[0]?.member_ids ?? [];
+          awardChampionship(sectionRows, winnerIds);
+          incrementTheme(winnerIds, "championships");
+          incrementTheme(standings[1]?.member_ids ?? [], "runners_up");
+        });
     }
   });
 
@@ -1132,6 +1230,15 @@ async function getPointRanking(groupId, year, scope, seasonId, onlyLeagueId = nu
     tournament: {
       rankings: tournamentRankings,
     },
+    themes: {
+      attendance: finalizeThemeRows(themeStats, "attendance"),
+      championships: finalizeThemeRows(themeStats, "championships"),
+      lower_championships: finalizeThemeRows(themeStats, "lower_championships"),
+      wins: finalizeThemeRows(themeStats, "wins"),
+      set_ratio: finalizeThemeRows(themeStats, "sets_for", { minimumMatches: 10, rate: true }),
+      runners_up: finalizeThemeRows(themeStats, "runners_up"),
+      prelim_firsts: finalizeThemeRows(themeStats, "prelim_firsts"),
+    },
   };
 }
 
@@ -1143,11 +1250,13 @@ module.exports = {
     awardBonus,
     awardChampionship,
     awardEliminationBonus,
+    createThemeStat,
     eligibleTournamentBonusMemberIds,
     applyMatchPoints,
     getBonusRule,
     getMatchPhaseSection,
     getRankingSection,
+    finalizeThemeRows,
     isFinalMatch,
     isThirdPlaceMatch,
     rankingMemberKey,

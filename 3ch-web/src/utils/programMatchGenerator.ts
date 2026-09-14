@@ -1611,7 +1611,7 @@ export function applyProgramTournamentAdvancement(matches: LeagueMatch[]): Leagu
         parent.participant_a_name = winner.name;
         parent.participant_a_division = winner.division;
         parent.participant_a_seed_label = winner.seedLabel;
-      } else if (parent && !parent.participant_b_name) {
+      } else if (parent && match.next_slot === "b" && !parent.participant_b_name) {
         parent.participant_b_id = winner.id;
         parent.participant_b_name = winner.name;
         parent.participant_b_division = winner.division;
@@ -1627,7 +1627,7 @@ export function applyProgramTournamentAdvancement(matches: LeagueMatch[]): Leagu
         parent.participant_a_name = loser.name;
         parent.participant_a_division = loser.division;
         parent.participant_a_seed_label = loser.seedLabel;
-      } else if (parent && !parent.participant_b_name) {
+      } else if (parent && match.loser_next_slot === "b" && !parent.participant_b_name) {
         parent.participant_b_id = loser.id;
         parent.participant_b_name = loser.name;
         parent.participant_b_division = loser.division;

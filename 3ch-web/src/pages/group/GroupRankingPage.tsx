@@ -177,9 +177,9 @@ export default function GroupRankingPage() {
           "& .MuiTabs-indicator": { height: 3, borderRadius: "3px 3px 0 0" },
         }}
       >
-        <Tab value="league" label="리그" />
-        <Tab value="attendance" label="참가" />
-        <Tab value="championships" label="우승" />
+        <Tab value="league" label="시즌" />
+        <Tab value="attendance" label="참가상" />
+        <Tab value="championships" label="상위부 우승" />
         <Tab value="lower_championships" label="하위부 우승" />
         <Tab value="wins" label="다승" />
         <Tab value="set_ratio" label="세트득실" />
@@ -281,13 +281,13 @@ function SectionHeader({
 }
 
 const THEME_META: Record<string, { title: string; description: string; suffix: string }> = {
-  attendance: { title: "참가왕", description: "시즌 중 가장 많은 리그에 참가한 회원", suffix: "회" },
-  championships: { title: "우승왕", description: "마지막 라운드 상위 순위 우승 횟수", suffix: "회" },
-  lower_championships: { title: "하위부 우승왕", description: "하위부 토너먼트 우승 횟수", suffix: "회" },
-  wins: { title: "다승왕", description: "완료된 개별 경기에서 기록한 승리", suffix: "승" },
-  set_ratio: { title: "세트득실왕", description: "10경기 이상 출전 회원의 세트 득실률", suffix: "%" },
-  runners_up: { title: "아차상", description: "마지막 라운드 준우승 횟수", suffix: "회" },
-  prelim_firsts: { title: "예선왕", description: "예선 풀리그·조별리그 1위 횟수", suffix: "회" },
+  attendance: { title: "참가상", description: "시즌 중 가장 많은 리그에 참가한 횟수 순위", suffix: "회" },
+  championships: { title: "상위부 우승", description: "마지막 라운드 상위부 우승 횟수 순위", suffix: "회" },
+  lower_championships: { title: "하위부 우승", description: "하위부 우승 횟수 순위", suffix: "회" },
+  wins: { title: "다승왕", description: "개별 경기에서 기록한 승리 횟수 순위", suffix: "승" },
+  set_ratio: { title: "세트득실왕", description: "개별 경기에서 기록한 세트 득실률 순위", suffix: "%" },
+  runners_up: { title: "아차상", description: "마지막 라운드 상위부 준우승 횟수 순위", suffix: "회" },
+  prelim_firsts: { title: "예선왕", description: "예선 풀리그·조별리그 1위 횟수 순위", suffix: "회" },
 };
 
 function ThemeRankingPanel({ theme, rows, currentUserId, onSelect }: { theme: string; rows: ThemeRankingRow[]; currentUserId: number; onSelect: (memberId: number) => void }) {

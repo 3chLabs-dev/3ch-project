@@ -162,6 +162,8 @@ export interface ProgramBlock {
   /** NO-GAME 정책에서 관리자가 수동 복구한 경기 ID. */
   restoredMatchIds?: string[];
   deletedMatchIds?: string[];
+  /** 모든 기기의 이 시각 이전 로컬 경기 패치를 폐기하기 위한 초기화 버전. */
+  matchStateResetAt?: string;
   teamSinglesCount?: number;
   teamDoublesCount?: number;
   inheritPreviousTeamFormation?: boolean;
@@ -269,6 +271,8 @@ export interface RoundConfig {
   halfSplitMatchOrder?: string[];
   /** NO-GAME 정책에서 관리자가 수동 복구한 경기 ID. */
   restoredMatchIds?: string[];
+  /** 모든 기기의 이 시각 이전 로컬 경기 패치를 폐기하기 위한 초기화 버전. */
+  matchStateResetAt?: string;
 }
 
 export interface ProgramPreferences {

@@ -107,6 +107,7 @@ type StoredProgramBlock = {
   participantOrder?: string[];
   restoredMatchIds?: string[];
   deletedMatchIds?: string[];
+  matchStateResetAt?: string;
   description?: string;
   teamSinglesCount?: number;
   teamDoublesCount?: number;
@@ -991,11 +992,13 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
       affectedRoundIndexes.push(index);
     }
     const affectedRounds = new Set(affectedRoundIndexes);
+    const matchStateResetAt = resetMatches ? new Date().toISOString() : undefined;
     const clearManualMatchOverrides = (block: StoredProgramBlock, index: number): StoredProgramBlock => {
       if (!resetMatches || !affectedRounds.has(index)) return block;
       const cleanBlock = { ...block };
       delete cleanBlock.restoredMatchIds;
       delete cleanBlock.deletedMatchIds;
+      cleanBlock.matchStateResetAt = matchStateResetAt;
       return cleanBlock;
     };
     const persistedProgram: StoredProgramOption = resetMatches

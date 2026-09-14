@@ -50,6 +50,7 @@ import { calculateRoundRobinStandings } from "../../utils/roundRobinStandings";
 import { toggleFullscreen } from "../../utils/fullscreen";
 import {
   applyProgramMatchState,
+  clearProgramMatchState,
   generateProgramRoundMatches,
   getStoredProgramOption,
   isAutomaticProgramWalkover,
@@ -1208,6 +1209,15 @@ export default function LeagueGPTVisionSheet() {
   const currentProgramRound = programOption?.rounds?.[programRound - 1];
   const currentRule = currentProgramBlock?.matchRule ?? league?.rules;
   const [programMatchStateVersion, setProgramMatchStateVersion] = useState(0);
+  const matchStateResetAt = currentProgramRound?.matchStateResetAt ?? currentProgramBlock?.matchStateResetAt;
+  useEffect(() => {
+    if (!id || !matchStateResetAt) return;
+    const markerKey = `league-program-match-reset-version-${id}-r${programRound}`;
+    if (localStorage.getItem(markerKey) === matchStateResetAt) return;
+    clearProgramMatchState(id, programRound);
+    localStorage.setItem(markerKey, matchStateResetAt);
+    setProgramMatchStateVersion((version) => version + 1);
+  }, [id, matchStateResetAt, programRound]);
   const programSourceMatches = useMemo(() => {
     if (!isProgramMode || programRound <= 1) return [];
 

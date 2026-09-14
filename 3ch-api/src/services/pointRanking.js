@@ -71,6 +71,16 @@ function toKey(value) {
   return String(value ?? "");
 }
 
+function rankingGroupName(match, side, entryType) {
+  if (match._rankingFormat === "GROUP" && match.is_program && match.match_label) {
+    return toKey(match.match_label);
+  }
+  if (entryType === "singles") {
+    return toKey(side === "a" ? match.group_name_a : match.group_name_b);
+  }
+  return toKey(match.match_label);
+}
+
 function getBonusRule(pointRules, section, format, option) {
   if (section === "tournament") {
     return option === "LOWER"
@@ -884,8 +894,8 @@ async function getPointRanking(groupId, year, scope, seasonId, onlyLeagueId = nu
     const leagueKey = match.league_id;
     if (phaseSection === "league") {
       const roundKey = `${leagueKey}:${match.program_round ?? 0}`;
-      const groupNameA = entryType === "singles" ? toKey(match.group_name_a) : toKey(match.match_label);
-      const groupNameB = entryType === "singles" ? toKey(match.group_name_b) : toKey(match.match_label);
+      const groupNameA = rankingGroupName(match, "a", entryType);
+      const groupNameB = rankingGroupName(match, "b", entryType);
       match._rankingGroupA = groupNameA;
       match._rankingGroupB = groupNameB;
       const divisionKey = match._rankingFormat === "GROUP"
@@ -1260,6 +1270,7 @@ module.exports = {
     isFinalMatch,
     isThirdPlaceMatch,
     rankingMemberKey,
+    rankingGroupName,
     rankingUnitKey,
     tournamentEliminationRound,
   },

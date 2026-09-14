@@ -137,9 +137,6 @@ const formationLevelSum = (players: FormationPlayer[]): number =>
 const formationPlayerId = (player: FormationPlayer) =>
   `formation-${player.name}-${player.level}`;
 
-const formationPlayerNames = (player: FormationPlayer) =>
-  player.roster?.length ? player.roster.map((member) => member.name).join(" · ") : player.name;
-
 const formationStructureLabel = (sizes: number[], unit: "조" | "팀") => {
   if (!sizes.length) return "";
   const counts = sizes.reduce<Record<number, number>>((result, size) => {
@@ -480,7 +477,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
     const imageUrl = canvas.toDataURL("image/png");
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
-    printWindow.document.write(`<!DOCTYPE html><html><head><title>${escapeHtml(league?.name ?? "리그")} 프로그램</title><style>html,body{margin:0;background:#fff}body{padding:16px;box-sizing:border-box}img{display:block;width:100%;height:auto}@media print{body{padding:0}}</style></head><body><img src="${imageUrl}" alt="리그 프로그램" /></body></html>`);
+    printWindow.document.write(`<!DOCTYPE html><html><head><title>${escapeHtml(league?.name ?? "리그")} 프로그램</title><style>@page{size:A4 portrait;margin:10mm}html,body{margin:0;background:#fff}body{padding:16px;box-sizing:border-box}img{display:block;width:100%;max-width:720px;height:auto;margin:0 auto}@media print{html,body{width:100%;padding:0}img{width:100%;max-width:190mm;page-break-inside:avoid}}</style></head><body><img src="${imageUrl}" alt="리그 프로그램" /></body></html>`);
     printWindow.document.close();
     printWindow.focus();
     printWindow.onload = () => printWindow.print();
@@ -1764,8 +1761,8 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
       </Box>
 
       {hasProgram && (
-        <Box sx={{ position: "fixed", left: -10000, top: 0, width: 720, pointerEvents: "none" }}>
-          <Box ref={programExportRef} sx={{ width: 720, boxSizing: "border-box", p: 2.5, bgcolor: "#EEF2F7", fontFamily: "Pretendard, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" }}>
+        <Box sx={{ position: "fixed", left: -10000, top: 0, width: 520, pointerEvents: "none" }}>
+          <Box ref={programExportRef} sx={{ width: 520, boxSizing: "border-box", p: 2, bgcolor: "#EEF2F7", fontFamily: "Pretendard, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" }}>
             <Box sx={{ overflow: "hidden", border: "1px solid #CBD5E1", bgcolor: "#FFF", boxShadow: "0 8px 28px rgba(15,23,42,0.08)" }}>
               <Box sx={{ px: 2.5, py: 1.6, bgcolor: "#123477", color: "#FFF" }}>
                 <Typography sx={{ fontSize: 21, fontWeight: 900, letterSpacing: -0.5 }}>
@@ -1784,7 +1781,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
                 )}
               </Stack>
 
-              <Box sx={{ mt: 1.3, display: "grid", gridTemplateColumns: "92px 1fr 92px 1fr", borderTop: "1px solid #CBD5E1", borderLeft: "1px solid #CBD5E1" }}>
+              <Box sx={{ mt: 1.3, display: "grid", gridTemplateColumns: "76px 1fr 76px 1fr", borderTop: "1px solid #CBD5E1", borderLeft: "1px solid #CBD5E1" }}>
                 {[
                   ["일시", formatLeagueDate(league?.start_date ?? "")],
                   ["장소", league?.venue_name || "-"],
@@ -1866,16 +1863,43 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
                         <Typography sx={{ mt: 0.45, fontSize: 12, color: "#94A3B8" }}>진행시간&nbsp;&nbsp;<Box component="span" sx={{ color: "#0F172A", fontWeight: 900 }}>{formatClockMinutes(roundStart)} ~ {formatClockMinutes(roundEnd)}</Box></Typography>
                         {publishedFormation?.length ? (
                           <Box sx={{ mt: 1.1 }}>
-                            <Typography sx={{ mb: 0.65, fontSize: 11, fontWeight: 900, color: "#123477" }}>{formationUnit} 편성 결과</Typography>
-                            <Box sx={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 0.65 }}>
-                              {publishedFormation.map((members, formationIndex) => (
-                                <Box key={`${round.round}-${formationUnit}-${formationIndex}`} sx={{ border: "1px solid #CBD5E1", bgcolor: "#F8FAFC" }}>
-                                  <Typography sx={{ px: 0.7, py: 0.45, bgcolor: "#E8EEF8", borderBottom: "1px solid #CBD5E1", fontSize: 10, fontWeight: 900, color: "#123477" }}>{formationIndex + 1}{formationUnit} · {members.length}명</Typography>
-                                  <Typography sx={{ px: 0.7, py: 0.55, minHeight: 32, fontSize: 9.5, lineHeight: 1.45, fontWeight: 700, color: "#1E293B" }}>
-                                    {members.map(formationPlayerNames).join(", ")}
-                                  </Typography>
-                                </Box>
-                              ))}
+                            <Typography sx={{ mb: 0.75, fontSize: 12, fontWeight: 900, color: "#111827" }}>{formationUnit} 편성 결과</Typography>
+                            <Box sx={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 1 }}>
+                              {publishedFormation.map((members, formationIndex) => {
+                                const accent = FORMATION_COLORS[formationIndex % FORMATION_COLORS.length];
+                                const formationName = round.type === "TEAM"
+                                  ? `${String.fromCharCode(65 + formationIndex)}팀`
+                                  : `${formationIndex + 1}조`;
+                                return (
+                                  <Box key={`${round.round}-${formationUnit}-${formationIndex}`} sx={{ display: "flex", flexDirection: "column", overflow: "hidden", border: "1px solid #E5E7EB", borderTop: `3px solid ${accent}`, borderRadius: 1.5, bgcolor: "#FFF" }}>
+                                    <Box sx={{ px: 1.1, py: 0.8, bgcolor: "#F8FAFC", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                      <Typography sx={{ fontSize: 12, fontWeight: 900, color: "#111827" }}>{formationName}</Typography>
+                                      <Typography sx={{ fontSize: 9.5, fontWeight: 700, color: "#6B7280" }}>{members.length}명</Typography>
+                                    </Box>
+                                    <Stack spacing={0.55} sx={{ flex: 1, px: 1.1, py: 0.85 }}>
+                                      {members.map((player, playerIndex) => (
+                                        <Box key={`${player.name}-${playerIndex}`}>
+                                          <Stack direction="row" spacing={0.4} alignItems="center">
+                                            <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: "#1F2937" }}>{formatFormationName(player.name, player.level)}</Typography>
+                                            {!player.roster?.length && <DivisionBadge division={hasFormationLevel(player.level) ? String(player.level) : null} />}
+                                          </Stack>
+                                          {player.roster?.map((member) => (
+                                            <Stack key={member.name} direction="row" spacing={0.35} alignItems="center" sx={{ mt: 0.25, pl: 0.8 }}>
+                                              <Typography sx={{ fontSize: 9.5, color: "#4B5563" }}>{formatFormationName(member.name, member.level)}</Typography>
+                                              <DivisionBadge division={hasFormationLevel(member.level) ? String(member.level) : null} />
+                                            </Stack>
+                                          ))}
+                                        </Box>
+                                      ))}
+                                    </Stack>
+                                    <Box sx={{ borderTop: "1px solid #E5E7EB", px: 1.1, py: 0.65 }}>
+                                      <Typography sx={{ fontSize: 9.5, color: "#6B7280", fontWeight: 700 }}>
+                                        합 <Box component="span" sx={{ color: accent, fontWeight: 900 }}>{formationLevelSum(members)}부</Box>
+                                      </Typography>
+                                    </Box>
+                                  </Box>
+                                );
+                              })}
                             </Box>
                           </Box>
                         ) : showPlannedFormation ? (

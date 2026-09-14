@@ -150,3 +150,16 @@ test('테마 순위는 같은 기록에 공동 순위를 부여한다', () => {
 
   assert.deepEqual(rows.map((row) => row.rank), [1, 1, 3]);
 });
+
+test('프로그램 조별리그는 match_label을 조 이름으로 사용한다', () => {
+  const match = {
+    is_program: true,
+    _rankingFormat: 'GROUP',
+    match_label: '3조',
+    group_name_a: null,
+    group_name_b: null,
+  };
+
+  assert.equal(_test.rankingGroupName(match, 'a', 'singles'), '3조');
+  assert.equal(_test.rankingGroupName(match, 'b', 'singles'), '3조');
+});

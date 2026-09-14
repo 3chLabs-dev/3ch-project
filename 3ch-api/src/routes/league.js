@@ -3651,6 +3651,30 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
       });
     }
 
+    // A program sync rebuilds an entire round. Never allow a routine layout or
+    // rule change to silently discard a result that is absent from the newly
+    // generated payload. Explicit result resets remain the only exception.
+    if (!resetResults && existingState.size > 0) {
+      const incomingIds = new Set(validMatches.map((match) => match.id));
+      const incomingParticipantKeys = new Set(
+        validMatches.map(participantMatchKey).filter(Boolean),
+      );
+      const orphanedStartedMatches = [...existingState.values()].filter((row) => {
+        const hasResult = row.status === 'playing' || row.status === 'done'
+          || row.score_a != null || row.score_b != null;
+        if (!hasResult || incomingIds.has(row.id)) return false;
+        const key = participantMatchKey(row);
+        return !key || !incomingParticipantKeys.has(key);
+      });
+      if (orphanedStartedMatches.length > 0) {
+        const error = new Error('기존 경기 결과가 사라질 수 있어 대진표 동기화를 중단했습니다. 결과 초기화 후 다시 시도해 주세요.');
+        error.statusCode = 409;
+        error.code = 'PROGRAM_SYNC_WOULD_DELETE_RESULTS';
+        error.matchIds = orphanedStartedMatches.map((match) => match.id);
+        throw error;
+      }
+    }
+
     if (targetProgramRounds.length > 0) {
       await pool.query(
         `DELETE FROM league_matches WHERE league_id = $1 AND is_program = TRUE AND program_round = ANY($2::int[])`,

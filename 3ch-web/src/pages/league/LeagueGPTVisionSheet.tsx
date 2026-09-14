@@ -335,7 +335,8 @@ function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, co
   const autoCompleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const collapseControlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestMatchRef = useRef(match);
-  const isActive = match?.status === "playing" || match?.status === "done";
+  const [forcePlayable, setForcePlayable] = useState(false);
+  const isActive = forcePlayable || match?.status === "playing" || match?.status === "done";
   const storedScore = match ? (isA ? match.score_a : match.score_b) : null;
   // 영역 사진을 한 장만 저장한 경우 경기는 아직 pending이지만 한쪽 점수는 이미 존재한다.
   // 저장된 값은 즉시 보여주고, 실제 경기 시작 전에는 기존처럼 편집 컨트롤만 숨긴다.
@@ -424,8 +425,30 @@ function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, co
   const winnerStyle = { color: isWinner ? COLOR.win : "inherit", fontWeight: isWinner ? 700 : 400 };
   const cellCoordinates = { "data-score-row": rowIndex, "data-score-col": colIndex };
 
-  if (match?.is_no_game) {
-    return <StyledTableCell {...cellCoordinates} sx={{ color: "#E53935", fontWeight: 900, fontSize: 11, textAlign: "center" }}>NO-GAME</StyledTableCell>;
+  if (match?.is_no_game && !forcePlayable) {
+    const restoreNoGame = () => {
+      if (!canManage) return;
+      if (!window.confirm("이 NO-GAME을 실제 경기로 복구하고 점수를 입력하시겠습니까?")) return;
+      setForcePlayable(true);
+      updateCurrentMatch({ status: "playing", score_a: 0, score_b: 0 });
+    };
+    return (
+      <StyledTableCell
+        {...cellCoordinates}
+        onClick={restoreNoGame}
+        title={canManage ? "눌러서 실제 경기로 복구" : undefined}
+        sx={{
+          color: "#E53935",
+          fontWeight: 900,
+          fontSize: 11,
+          textAlign: "center",
+          cursor: canManage ? "pointer" : "default",
+          ...(canManage ? { textDecoration: "underline", textUnderlineOffset: 2, "&:hover": { bgcolor: "#FFF1F2" } } : {}),
+        }}
+      >
+        NO-GAME{canManage ? " · 복구" : ""}
+      </StyledTableCell>
+    );
   }
 
   // 편집 불가: 점수 숫자만 표시 (빈 칸 또는 숫자)
@@ -1189,6 +1212,12 @@ export default function LeagueGPTVisionSheet() {
         return serverMatch
           ? {
               ...match,
+              // A recorded source-round result must remain eligible for
+              // standings/finals even if regenerated policy now says NO-GAME.
+              is_no_game: serverMatch.status === "playing" || serverMatch.status === "done"
+                || serverMatch.score_a != null || serverMatch.score_b != null
+                ? false
+                : match.is_no_game,
               score_a: preserveWalkover ? match.score_a : serverMatch.score_a,
               score_b: preserveWalkover ? match.score_b : serverMatch.score_b,
               court: serverMatch.court,
@@ -1250,6 +1279,13 @@ export default function LeagueGPTVisionSheet() {
       return serverMatch
         ? {
             ...match,
+            // Persisted play always wins over a regenerated NO-GAME policy.
+            // Otherwise a later layout/config sync can hide a real result and
+            // make the score cell impossible to edit.
+            is_no_game: serverMatch.status === "playing" || serverMatch.status === "done"
+              || serverMatch.score_a != null || serverMatch.score_b != null
+              ? false
+              : match.is_no_game,
             score_a: preserveWalkover ? match.score_a : serverMatch.score_a,
             score_b: preserveWalkover ? match.score_b : serverMatch.score_b,
             court: serverMatch.court,
@@ -1923,7 +1959,7 @@ export default function LeagueGPTVisionSheet() {
       setEditMode(false);
       setStandardResetDialogOpen(false);
     } catch (error) {
-      setVisionNotice({ type: "error", message: getErrorMessage(error, "표준 재배치에 실패했습니다.") });
+      setVisionNotice({ type: "error", message: getErrorMessage(error, "대진표 초기화에 실패했습니다.") });
     } finally {
       setIsResettingStandard(false);
     }
@@ -2780,12 +2816,11 @@ export default function LeagueGPTVisionSheet() {
           <Button
             size="small"
             variant="outlined"
-            startIcon={<RefreshIcon sx={{ fontSize: 14 }} />}
             disabled={isResettingStandard || programMatchesAll.length === 0}
             onClick={() => setStandardResetDialogOpen(true)}
-            sx={{ borderRadius: "20px", fontSize: 11, fontWeight: 800, px: 1.3, py: 0.4, textTransform: "none", flexShrink: 0, minWidth: "auto" }}
+            sx={{ borderRadius: "20px", fontSize: 11, fontWeight: 800, px: 1.3, py: 0.4, textTransform: "none", flexShrink: 0, minWidth: "auto", borderColor: "#EF4444", color: "#DC2626", "&:hover": { borderColor: "#DC2626", bgcolor: "#FEF2F2" } }}
           >
-            표준 재배치
+            초기화
           </Button>
         )}
 
@@ -2846,7 +2881,7 @@ export default function LeagueGPTVisionSheet() {
       </Popover>
 
       <Dialog open={standardResetDialogOpen} onClose={() => !isResettingStandard && setStandardResetDialogOpen(false)} fullWidth maxWidth="xs" sx={{ zIndex: 10004 }} slotProps={{ paper: { sx: { borderRadius: 3, ...mobileDialogPaperSx } } }}>
-        <DialogTitle sx={{ fontWeight: 900 }}>대진표 표준 재배치</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 900 }}>대진표 초기화</DialogTitle>
         <DialogContent dividers>
           <Typography sx={{ fontSize: 14, color: "#475569", lineHeight: 1.6 }}>
             현재 확정된 조 편성을 기준으로 참가자 번호와 경기 순서를 다시 배치합니다.
@@ -2857,7 +2892,7 @@ export default function LeagueGPTVisionSheet() {
         </DialogContent>
         <DialogActions sx={{ px: 2, py: 1.5 }}>
           <Button onClick={() => setStandardResetDialogOpen(false)} disabled={isResettingStandard}>취소</Button>
-          <Button variant="contained" onClick={() => void handleStandardReset()} disabled={isResettingStandard}>재배치</Button>
+          <Button variant="contained" color="error" onClick={() => void handleStandardReset()} disabled={isResettingStandard}>초기화</Button>
         </DialogActions>
       </Dialog>
 

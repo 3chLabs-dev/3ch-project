@@ -6,7 +6,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { generateGroupOptions } from '../../features/league/algorithms/generateGroupOptions';
 import { useGetLeagueInvitedGroupsQuery, useGetLeagueParticipantsQuery, useGetLeagueProgramQuery, useGetLeagueQuery, useSaveLeagueProgramMutation, useSyncLeagueProgramMatchesMutation } from '../../features/league/leagueApi';
 import type { ProgramBlock, ProgramOption, ProgramType, TeamMatchType, RoundConfig, FormationAssignmentPlayer, FinalAdvancementMode, RoundOption, TournamentMode } from '../../features/league/types/tournament.types';
-import { ToggleButton, ToggleButtonGroup, Button, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Chip, Radio, CircularProgress, Box, Typography, Stack, Divider, Tooltip, Switch, FormControlLabel } from "@mui/material";
+import { ToggleButton, ToggleButtonGroup, Button, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Chip, Radio, CircularProgress, Box, Typography, Stack, Divider, Tooltip, Switch, FormControlLabel, Alert, Snackbar } from "@mui/material";
 import { DndContext, PointerSensor, TouchSensor, useSensor, useSensors, closestCenter,
   useDroppable, type DragEndEvent, type DragOverEvent, } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable, } from "@dnd-kit/sortable";
@@ -1232,6 +1232,7 @@ const LeagueAlgorithmDemo = ({
   const [saveLeagueProgram] = useSaveLeagueProgramMutation();
   const [syncLeagueProgramMatches] = useSyncLeagueProgramMatchesMutation();
   const [pendingProgramSave, setPendingProgramSave] = useState<StoredProgramWithEditState | null>(null);
+  const [programSaveError, setProgramSaveError] = useState<string | null>(null);
   const [playerCount, setPlayerCount] = useState(initialPlayerCount);
   const [courtCount, setCourtCount] = useState(initialCourtCount);
   const [startHour, setStartHour] = useState(Number(initialStartTime.split(":" )[0]) || 9);
@@ -1790,32 +1791,57 @@ const LeagueAlgorithmDemo = ({
     resetResults = false,
   ) => {
     if (!leagueId) return;
-    localStorage.setItem(`league-program-${leagueId}`, JSON.stringify(selectedOption));
-    localStorage.setItem(`league-program-active-round-${leagueId}`, "1");
-    await saveLeagueProgram({ leagueId, program: selectedOption }).unwrap();
-
-    if (syncMatches) {
-      const programMatches = selectedOption.blocks.flatMap((block, blockIndex) =>
-        generateProgramRoundMatches(
-          leagueId,
-          selectedOption,
-          participantData?.participants ?? [],
-          blockIndex + 1,
-        ).map((match) => ({
-          ...match,
-          program_round: blockIndex + 1,
-          program_block_type: block.type,
-        }))
-      );
-      await syncLeagueProgramMatches({
-        leagueId,
-        matches: programMatches,
-        resetResults,
-      }).unwrap();
-    }
-
     setPendingProgramSave(null);
-    navigate(isEditMode ? `/league/${leagueId}` : `/league/${leagueId}/program`);
+    setProgramSaveError(null);
+
+    const resetAt = new Date().toISOString();
+    const programToSave: StoredProgramWithEditState = resetResults
+      ? {
+          ...selectedOption,
+          blocks: selectedOption.blocks.map((block) => {
+            const { restoredMatchIds: _restored, deletedMatchIds: _deleted, ...cleanBlock } = block;
+            return { ...cleanBlock, matchStateResetAt: resetAt };
+          }),
+        }
+      : selectedOption;
+
+    try {
+      if (resetResults) {
+        programToSave.blocks.forEach((_, blockIndex) => {
+          clearProgramMatchState(leagueId, blockIndex + 1);
+        });
+      }
+
+      localStorage.setItem(`league-program-${leagueId}`, JSON.stringify(programToSave));
+      localStorage.setItem(`league-program-active-round-${leagueId}`, "1");
+      await saveLeagueProgram({ leagueId, program: programToSave }).unwrap();
+
+      if (syncMatches) {
+        const programMatches = programToSave.blocks.flatMap((block, blockIndex) =>
+          generateProgramRoundMatches(
+            leagueId,
+            programToSave,
+            participantData?.participants ?? [],
+            blockIndex + 1,
+          ).map((match) => ({
+            ...match,
+            program_round: blockIndex + 1,
+            program_block_type: block.type,
+          }))
+        );
+        await syncLeagueProgramMatches({
+          leagueId,
+          matches: programMatches,
+          resetResults,
+          ...(resetResults ? { resetConfirmation: "RESET_PROGRAM_RESULTS" as const } : {}),
+        }).unwrap();
+      }
+
+      navigate(isEditMode ? `/league/${leagueId}` : `/league/${leagueId}/program`);
+    } catch (error) {
+      console.error("Failed to save league program", error);
+      setProgramSaveError("프로그램 적용에 실패했습니다. 기존 경기 데이터는 변경되지 않았는지 확인 후 다시 시도해 주세요.");
+    }
   };
 
   const completeProgramCreation = async () => {
@@ -4020,6 +4046,17 @@ const LeagueAlgorithmDemo = ({
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={programSaveError !== null}
+        autoHideDuration={6000}
+        onClose={() => setProgramSaveError(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert severity="error" onClose={() => setProgramSaveError(null)} sx={{ width: "100%" }}>
+          {programSaveError}
+        </Alert>
+      </Snackbar>
 
       {isProgramGenerated && !isGeneratingProgram && (
         <div

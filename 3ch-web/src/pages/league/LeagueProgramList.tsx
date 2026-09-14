@@ -105,6 +105,8 @@ type StoredProgramBlock = {
   doublesFormationPublished?: boolean;
   groupFormationPublished?: boolean;
   participantOrder?: string[];
+  restoredMatchIds?: string[];
+  deletedMatchIds?: string[];
   description?: string;
   teamSinglesCount?: number;
   teamDoublesCount?: number;
@@ -980,26 +982,42 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
     syncMatches = true,
   ) => {
     if (!id || !canManage) return;
-    setStoredProgram(nextProgram);
-    localStorage.setItem(`league-program-${id}`, JSON.stringify(nextProgram));
-    await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
+    const affectedRoundIndexes = [roundIndex];
+    for (let index = roundIndex + 1; index < (nextProgram.blocks?.length ?? 0); index += 1) {
+      const linked =
+        nextProgram.rounds?.[index]?.inheritPreviousTeamFormation ??
+        nextProgram.blocks?.[index]?.inheritPreviousTeamFormation;
+      if (!linked || nextProgram.blocks?.[index]?.type !== "TEAM") break;
+      affectedRoundIndexes.push(index);
+    }
+    const affectedRounds = new Set(affectedRoundIndexes);
+    const clearManualMatchOverrides = (block: StoredProgramBlock, index: number): StoredProgramBlock => {
+      if (!resetMatches || !affectedRounds.has(index)) return block;
+      const cleanBlock = { ...block };
+      delete cleanBlock.restoredMatchIds;
+      delete cleanBlock.deletedMatchIds;
+      return cleanBlock;
+    };
+    const persistedProgram: StoredProgramOption = resetMatches
+      ? {
+          ...nextProgram,
+          blocks: nextProgram.blocks?.map(clearManualMatchOverrides),
+          rounds: nextProgram.rounds?.map(clearManualMatchOverrides),
+        }
+      : nextProgram;
+
+    setStoredProgram(persistedProgram);
+    localStorage.setItem(`league-program-${id}`, JSON.stringify(persistedProgram));
+    await saveLeagueProgram({ leagueId: id, program: persistedProgram }).unwrap();
 
     if (syncMatches) {
-      const affectedRoundIndexes = [roundIndex];
-      for (let index = roundIndex + 1; index < (nextProgram.blocks?.length ?? 0); index += 1) {
-        const linked =
-          nextProgram.rounds?.[index]?.inheritPreviousTeamFormation ??
-          nextProgram.blocks?.[index]?.inheritPreviousTeamFormation;
-        if (!linked || nextProgram.blocks?.[index]?.type !== "TEAM") break;
-        affectedRoundIndexes.push(index);
-      }
       for (const affectedRoundIndex of affectedRoundIndexes) {
-        const block = nextProgram.blocks?.[affectedRoundIndex];
+        const block = persistedProgram.blocks?.[affectedRoundIndex];
         if (!block) continue;
         if (resetMatches) clearProgramMatchState(id, affectedRoundIndex + 1);
         const roundMatches = generateProgramRoundMatches(
           id,
-          nextProgram as ProgramOption,
+          persistedProgram as ProgramOption,
           participants,
           affectedRoundIndex + 1,
           matches,
@@ -1027,14 +1045,15 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
   const finishFormationSave = async (resetMatches: boolean) => {
     if (!pendingFormationSave || isFormationStarting || isSavingFormation) return;
     const pending = pendingFormationSave;
+    // The administrator already made the choice. Close this choice dialog
+    // immediately and let the progress dialog communicate the ongoing work.
+    setPendingFormationSave(null);
     try {
       await runFormationProgress(() => persistFormation(pending.program, pending.roundIndex, resetMatches));
-      setPendingFormationSave(null);
       closeFormationDialog();
     } catch (error) {
-      // Keep the choice dialog open so the administrator can retry. Previously
-      // the promise rejection was discarded by the void click handler, making
-      // the button appear to do nothing and hiding the actual server response.
+      // Do not reopen the choice dialog after a failure. Keep the underlying
+      // formation editor available for retry and show the actual server error.
       setFormationRequiredMessage(mutationErrorMessage(error, "프로그램 수정 적용에 실패했습니다. 다시 시도해 주세요."));
     }
   };

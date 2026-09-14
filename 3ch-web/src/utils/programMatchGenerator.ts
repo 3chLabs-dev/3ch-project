@@ -1684,13 +1684,19 @@ export function generateProgramRoundMatches(
       currentRound?.halfSplitOnlyMatches ?? storedBlock.halfSplitOnlyMatches,
     participantOrder:
       currentRound?.participantOrder ?? storedBlock.participantOrder,
+    halfSplitMatchOrder:
+      currentRound?.halfSplitMatchOrder ?? storedBlock.halfSplitMatchOrder,
+    restoredMatchIds:
+      currentRound?.restoredMatchIds ?? storedBlock.restoredMatchIds,
   };
   const deletedMatchIds = new Set(block.deletedMatchIds ?? []);
+  const restoredMatchIds = new Set(block.restoredMatchIds ?? []);
   const withoutDeleted = (matches: LeagueMatch[]) =>
     matches
       .filter((match) => !deletedMatchIds.has(match.id))
       .map((match) => ({
         ...match,
+        is_no_game: restoredMatchIds.has(match.id) ? false : match.is_no_game,
         is_program: true,
         program_round: round,
         program_block_type: block.type,
@@ -1711,11 +1717,14 @@ export function generateProgramRoundMatches(
       ? toDoublesUnits(players, block.doublesAssignments, block.unitClubMode ?? "mixed")
       : players;
 
-  // The internal top-vs-bottom mode must start from the canonical seed order.
-  // Reusing a previously saved bracket edit order can interleave the two sides
-  // (for example 1, 10, 2, 9...) and turns NO-GAME cells into a checkerboard.
-  if (block.participantOrder?.length && !block.halfSplitOnlyMatches) {
-    const order = new Map(block.participantOrder.map((id, index) => [id, index]));
+  // 상단vs하단은 화면 표시 순서와 경기 구성 순서를 분리한다. 경기 시작 전에는
+  // halfSplitMatchOrder를 함께 갱신하고, 시작 후에는 이 값을 동결해 기존 경기와
+  // NO-GAME이 참가자를 따라 이동하도록 한다.
+  const matchUnitOrder = block.halfSplitOnlyMatches
+    ? block.halfSplitMatchOrder
+    : block.participantOrder;
+  if (matchUnitOrder?.length) {
+    const order = new Map(matchUnitOrder.map((id, index) => [id, index]));
     matchUnits = [...matchUnits].sort((left, right) =>
       ((left.id ? order.get(left.id) : undefined) ?? Number.MAX_SAFE_INTEGER)
       - ((right.id ? order.get(right.id) : undefined) ?? Number.MAX_SAFE_INTEGER)

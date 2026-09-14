@@ -317,7 +317,7 @@ function ScoreButton({ icon, disabled, variant = "order", onClick }: {
  * - landscape(가로): ↑ 점수 ↓ 세로 배치
  * - portrait(세로, writingMode 적용): ← 점수 → 가로 배치 + 아이콘 90° 회전
  */
-function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, completedRound, rowIndex, colIndex, totalRows, totalCols, onProgramMatchUpdate }: {
+function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, completedRound, rowIndex, colIndex, totalRows, totalCols, onProgramMatchUpdate, onRestoreNoGame }: {
   match: LeagueMatch | undefined;
   isA: boolean;         // 현재 행 참가자가 해당 경기의 A선수인지 여부
   leagueId: string;
@@ -330,13 +330,13 @@ function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, co
   totalRows: number;
   totalCols: number;
   onProgramMatchUpdate?: (matchId: string, updates: ProgramMatchPatch) => void;
+  onRestoreNoGame?: (matchId: string) => Promise<void>;
 }) {
   const [updateMatch] = useUpdateLeagueMatchMutation();
   const autoCompleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const collapseControlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestMatchRef = useRef(match);
-  const [forcePlayable, setForcePlayable] = useState(false);
-  const isActive = forcePlayable || match?.status === "playing" || match?.status === "done";
+  const isActive = match?.status === "playing" || match?.status === "done";
   const storedScore = match ? (isA ? match.score_a : match.score_b) : null;
   // 영역 사진을 한 장만 저장한 경우 경기는 아직 pending이지만 한쪽 점수는 이미 존재한다.
   // 저장된 값은 즉시 보여주고, 실제 경기 시작 전에는 기존처럼 편집 컨트롤만 숨긴다.
@@ -425,28 +425,49 @@ function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, co
   const winnerStyle = { color: isWinner ? COLOR.win : "inherit", fontWeight: isWinner ? 700 : 400 };
   const cellCoordinates = { "data-score-row": rowIndex, "data-score-col": colIndex };
 
-  if (match?.is_no_game && !forcePlayable) {
+  if (match?.is_no_game) {
     const restoreNoGame = () => {
-      if (!canManage) return;
-      if (!window.confirm("이 NO-GAME을 실제 경기로 복구하고 점수를 입력하시겠습니까?")) return;
-      setForcePlayable(true);
-      updateCurrentMatch({ status: "playing", score_a: 0, score_b: 0 });
+      if (!canManage || !onRestoreNoGame) return;
+      if (!window.confirm("이 NO-GAME을 실제 경기로 복구하시겠습니까?\n복구 후 경기는 시작 전 상태로 유지됩니다.")) return;
+      void onRestoreNoGame(match.id);
     };
     return (
       <StyledTableCell
         {...cellCoordinates}
-        onClick={restoreNoGame}
-        title={canManage ? "눌러서 실제 경기로 복구" : undefined}
         sx={{
-          color: "#E53935",
-          fontWeight: 900,
-          fontSize: 11,
           textAlign: "center",
-          cursor: canManage ? "pointer" : "default",
-          ...(canManage ? { textDecoration: "underline", textUnderlineOffset: 2, "&:hover": { bgcolor: "#FFF1F2" } } : {}),
         }}
       >
-        NO-GAME{canManage ? " · 복구" : ""}
+        <Stack direction="row" alignItems="center" justifyContent="center" spacing={0.5} sx={{ writingMode: "horizontal-tb" }}>
+          <Typography component="span" sx={{ color: "#E53935", fontWeight: 900, fontSize: 10, whiteSpace: "nowrap" }}>
+            NO-GAME
+          </Typography>
+          {canManage && onRestoreNoGame ? (
+            <Box
+              component="button"
+              type="button"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={restoreNoGame}
+              sx={{
+                appearance: "none",
+                border: "1px solid #2563EB",
+                borderRadius: 1,
+                px: 0.55,
+                py: 0.15,
+                bgcolor: "#EFF6FF",
+                color: "#2563EB",
+                fontSize: 9,
+                fontWeight: 900,
+                lineHeight: 1.35,
+                whiteSpace: "nowrap",
+                cursor: "pointer",
+                "&:hover": { bgcolor: "#DBEAFE" },
+              }}
+            >
+              복구
+            </Box>
+          ) : null}
+        </Stack>
       </StyledTableCell>
     );
   }
@@ -568,6 +589,7 @@ interface BracketRowProps {
   isBot?: boolean;
   rules?: string;
   onProgramMatchUpdate?: (matchId: string, updates: ProgramMatchPatch) => void;
+  onRestoreNoGame?: (matchId: string) => Promise<void>;
 }
 
 /**
@@ -582,7 +604,7 @@ interface BracketRowProps {
  */
 const SortableBracketRow = memo(function SortableBracketRow({
   participant, teamRoster, aggregateDivision = false, rowIdx, n, localOrder, editMode, canManage, canScore, completedRound, landscape,
-  matchLookup, wins, losses, setTotal, rank, tieSetDiff, hasPlayed, leagueId, winScore, isMe, isBot, rules, onProgramMatchUpdate,
+  matchLookup, wins, losses, setTotal, rank, tieSetDiff, hasPlayed, leagueId, winScore, isMe, isBot, rules, onProgramMatchUpdate, onRestoreNoGame,
 }: BracketRowProps) {
   const canDrag = editMode && canManage;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -685,7 +707,7 @@ const SortableBracketRow = memo(function SortableBracketRow({
         const m   = matchLookup.get(`${participant.id}__${colPlayer.id}`);
         const isA = m?.participant_a_id === participant.id;
         return (
-          <BracketScoreCell key={colIdx} match={m} isA={isA} leagueId={leagueId} rules={m?.match_rule ?? rules} winScore={getWinScore(m?.match_rule ?? rules) ?? winScore} canManage={canScore} completedRound={completedRound} rowIndex={rowIdx} colIndex={colIdx} totalRows={n} totalCols={n} onProgramMatchUpdate={onProgramMatchUpdate}/>
+          <BracketScoreCell key={colIdx} match={m} isA={isA} leagueId={leagueId} rules={m?.match_rule ?? rules} winScore={getWinScore(m?.match_rule ?? rules) ?? winScore} canManage={canScore} completedRound={completedRound} rowIndex={rowIdx} colIndex={colIdx} totalRows={n} totalCols={n} onProgramMatchUpdate={onProgramMatchUpdate} onRestoreNoGame={onRestoreNoGame}/>
         );
       })}
 
@@ -1717,6 +1739,39 @@ export default function LeagueGPTVisionSheet() {
   const [saveLeagueProgram] = useSaveLeagueProgramMutation();
   const [syncProgramMatches] = useSyncLeagueProgramMatchesMutation();
 
+  const restoreProgramNoGame = useCallback(async (matchId: string) => {
+    if (!id || !programOption || !currentProgramBlock) return;
+    try {
+      const addRestoredMatch = <T extends { restoredMatchIds?: string[] }>(value: T): T => ({
+        ...value,
+        restoredMatchIds: [...new Set([...(value.restoredMatchIds ?? []), matchId])],
+      });
+      const nextProgram = {
+        ...programOption,
+        blocks: programOption.blocks.map((block, index) =>
+          index === programRound - 1 ? addRestoredMatch(block) : block
+        ),
+        rounds: programOption.rounds?.map((round, index) =>
+          index === programRound - 1 ? addRestoredMatch(round) : round
+        ),
+      };
+      const nextMatches = generateProgramRoundMatches(
+        id,
+        nextProgram,
+        rawParticipants,
+        programRound,
+        programSourceMatches,
+      );
+      storeProgramOption(id, nextProgram);
+      await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
+      await syncProgramMatches({ leagueId: id, matches: nextMatches, resetResults: false }).unwrap();
+      await refetchMatches();
+      setVisionNotice({ type: "success", message: "경기를 시작 전 상태로 복구했습니다." });
+    } catch (error) {
+      setVisionNotice({ type: "error", message: getErrorMessage(error, "NO-GAME 복구에 실패했습니다.") });
+    }
+  }, [currentProgramBlock, id, programOption, programRound, programSourceMatches, rawParticipants, refetchMatches, saveLeagueProgram, syncProgramMatches]);
+
   const hasNextProgramRound = isProgramMode && programRound < (programOption?.blocks?.length ?? 0);
   const isProgramRoundComplete = isProgramMode
     && programMatchesAll.length > 0
@@ -1884,13 +1939,29 @@ export default function LeagueGPTVisionSheet() {
         ...savedParticipantOrder.filter((participantId) => !editedIds.has(participantId)),
         ...localOrder.map((participant) => participant.id),
       ];
+      const shouldUpdateHalfSplitMatchOrder = Boolean(
+        (currentProgramRound?.halfSplitOnlyMatches ?? currentProgramBlock?.halfSplitOnlyMatches)
+        && !hasStartedProgramMatch,
+      );
       const nextProgram = {
         ...programOption,
         blocks: programOption.blocks.map((block, index) =>
-          index === programRound - 1 ? { ...block, participantOrder } : block
+          index === programRound - 1
+            ? {
+                ...block,
+                participantOrder,
+                ...(shouldUpdateHalfSplitMatchOrder ? { halfSplitMatchOrder: participantOrder } : {}),
+              }
+            : block
         ),
         rounds: programOption.rounds?.map((round, index) =>
-          index === programRound - 1 ? { ...round, participantOrder } : round
+          index === programRound - 1
+            ? {
+                ...round,
+                participantOrder,
+                ...(shouldUpdateHalfSplitMatchOrder ? { halfSplitMatchOrder: participantOrder } : {}),
+              }
+            : round
         ),
       };
       storeProgramOption(id, nextProgram);
@@ -1913,7 +1984,7 @@ export default function LeagueGPTVisionSheet() {
 
     setEditMode(false);
   }, [
-    currentProgramBlock, currentProgramRound, editMode, id, isProgramMode, localOrder, programOption, programRound,
+    currentProgramBlock, currentProgramRound, editMode, hasStartedProgramMatch, id, isProgramMode, localOrder, programOption, programRound,
     programSourceMatches, rawParticipants, refetchMatches, reorderParticipants,
     saveLeagueProgram, syncProgramMatches,
   ]);
@@ -1922,9 +1993,10 @@ export default function LeagueGPTVisionSheet() {
     if (!id || !programOption || !currentProgramBlock || hasStartedProgramMatch || isResettingStandard) return;
     setIsResettingStandard(true);
     try {
-      const clearSavedOrder = <T extends { participantOrder?: string[] }>(value: T): T => ({
+      const clearSavedOrder = <T extends { participantOrder?: string[]; halfSplitMatchOrder?: string[] }>(value: T): T => ({
         ...value,
         participantOrder: undefined,
+        halfSplitMatchOrder: undefined,
       });
       const baseProgram = {
         ...programOption,
@@ -1960,13 +2032,28 @@ export default function LeagueGPTVisionSheet() {
       const participantOrder = [...standardPosition.entries()]
         .sort(([, left], [, right]) => left.group - right.group || left.seed - right.seed)
         .map(([participantId]) => participantId);
+      const shouldSetHalfSplitMatchOrder = Boolean(
+        currentProgramRound?.halfSplitOnlyMatches ?? currentProgramBlock.halfSplitOnlyMatches,
+      );
       const standardProgram = {
         ...baseProgram,
         blocks: baseProgram.blocks.map((block, index) =>
-          index === programRound - 1 ? { ...block, participantOrder } : block
+          index === programRound - 1
+            ? {
+                ...block,
+                participantOrder,
+                ...(shouldSetHalfSplitMatchOrder ? { halfSplitMatchOrder: participantOrder } : {}),
+              }
+            : block
         ),
         rounds: baseProgram.rounds?.map((round, index) =>
-          index === programRound - 1 ? { ...round, participantOrder } : round
+          index === programRound - 1
+            ? {
+                ...round,
+                participantOrder,
+                ...(shouldSetHalfSplitMatchOrder ? { halfSplitMatchOrder: participantOrder } : {}),
+              }
+            : round
         ),
       };
       const standardMatches = generateProgramRoundMatches(
@@ -1988,7 +2075,7 @@ export default function LeagueGPTVisionSheet() {
     } finally {
       setIsResettingStandard(false);
     }
-  }, [currentProgramBlock, hasStartedProgramMatch, id, isResettingStandard, programOption, programRound, programSourceMatches, rawParticipants, refetchMatches, saveLeagueProgram, syncProgramMatches]);
+  }, [currentProgramBlock, currentProgramRound, hasStartedProgramMatch, id, isResettingStandard, programOption, programRound, programSourceMatches, rawParticipants, refetchMatches, saveLeagueProgram, syncProgramMatches]);
 
   const handleAddBot = useCallback(async () => {
     if (!id || isAddingBot) return;
@@ -3077,6 +3164,7 @@ export default function LeagueGPTVisionSheet() {
                         isBot={rowPlayer.is_bot}
                         rules={getProgramRuleLabel(currentRule ?? "")}
                         onProgramMatchUpdate={isProgramMode ? updateProgramMatch : undefined}
+                        onRestoreNoGame={isProgramMode && canManage ? restoreProgramNoGame : undefined}
                       />
                     ))}
                     {editMode && canManage && (

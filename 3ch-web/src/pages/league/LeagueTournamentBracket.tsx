@@ -646,8 +646,8 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
     <Box sx={{
       position: "absolute", left: x, top: y,
       width: MW, height: MH,
-      bgcolor: isLower ? "#FAF5FF" : "background.paper",
-      border: `1.5px solid ${isPlaying ? "#3B82F6" : isLower ? "#DDD6FE" : "#E2E8F0"}`,
+      bgcolor: "background.paper",
+      border: `1.5px solid ${isPlaying ? "#3B82F6" : "#E2E8F0"}`,
       borderRadius: "6px",
       overflow: "hidden",
       boxShadow: isPlaying ? "0 0 0 2px rgba(59,130,246,0.14), 0 2px 8px rgba(37,99,235,0.18)" : "0 1px 4px rgba(0,0,0,0.07)",
@@ -668,7 +668,7 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
         onClick={(event) => { event.stopPropagation(); if (suppressNextClickRef.current) { suppressNextClickRef.current = false; return; } handleSlotA(); if (canOpenResult) actions?.onOpenResult(m.id); }}
         sx={{
           height: MH / 2, display: "flex", alignItems: "center", px: 1, gap: 0.5,
-          borderBottom: `1px solid ${isLower ? "#EDE9FE" : "#F1F5F9"}`,
+          borderBottom: "1px solid #F1F5F9",
           bgcolor: swapSelA ? "#DBEAFE" : winA ? "#F0FDF4" : "transparent",
           cursor: slotACursor,
           outline: swapSelA ? "2px solid #3B82F6" : "none",
@@ -2055,10 +2055,9 @@ export default function LeagueTournamentBracket() {
       if (
         m.round_number &&
         m.match_label &&
-        !m.match_label?.includes("3·4위전") &&
-        (!m.bracket || m.bracket === "upper")
+        !m.match_label?.includes("3·4위전")
       )
-        map.set(m.round_number, m.match_label);
+        map.set(m.round_number, m.match_label.replace(/^상위\s*|^하위\s*/, ""));
     }
     return map;
   }, [visibleMatches]);

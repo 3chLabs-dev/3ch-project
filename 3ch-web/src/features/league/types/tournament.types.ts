@@ -157,6 +157,10 @@ export interface ProgramBlock {
   halfSplitOnlyMatches?: boolean;
   unitClubMode?: UnitClubMode;
   participantOrder?: string[];
+  /** 상단vs하단 경기 구성을 고정할 때 사용하는 참가자 순서. */
+  halfSplitMatchOrder?: string[];
+  /** NO-GAME 정책에서 관리자가 수동 복구한 경기 ID. */
+  restoredMatchIds?: string[];
   deletedMatchIds?: string[];
   teamSinglesCount?: number;
   teamDoublesCount?: number;
@@ -261,6 +265,10 @@ export interface RoundConfig {
   halfSplitOnlyMatches?: boolean;
   unitClubMode?: UnitClubMode;
   participantOrder?: string[];
+  /** 상단vs하단 경기 구성을 고정할 때 사용하는 참가자 순서. */
+  halfSplitMatchOrder?: string[];
+  /** NO-GAME 정책에서 관리자가 수동 복구한 경기 ID. */
+  restoredMatchIds?: string[];
 }
 
 export interface ProgramPreferences {

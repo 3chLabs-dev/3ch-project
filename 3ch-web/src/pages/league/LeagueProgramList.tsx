@@ -73,6 +73,14 @@ const escapeHtml = (value: string) => value
   .replaceAll('"', "&quot;")
   .replaceAll("'", "&#039;");
 
+const mutationErrorMessage = (error: unknown, fallback: string) => {
+  if (!error || typeof error !== "object") return fallback;
+  const candidate = error as { data?: { message?: unknown }; message?: unknown };
+  if (typeof candidate.data?.message === "string") return candidate.data.message;
+  if (typeof candidate.message === "string") return candidate.message;
+  return fallback;
+};
+
 type StoredProgramBlock = {
   title?: string;
   type?: "SINGLES" | "DOUBLES" | "TEAM";
@@ -1017,11 +1025,18 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
   };
 
   const finishFormationSave = async (resetMatches: boolean) => {
-    if (!pendingFormationSave) return;
+    if (!pendingFormationSave || isFormationStarting || isSavingFormation) return;
     const pending = pendingFormationSave;
-    setPendingFormationSave(null);
-    await runFormationProgress(() => persistFormation(pending.program, pending.roundIndex, resetMatches));
-    closeFormationDialog();
+    try {
+      await runFormationProgress(() => persistFormation(pending.program, pending.roundIndex, resetMatches));
+      setPendingFormationSave(null);
+      closeFormationDialog();
+    } catch (error) {
+      // Keep the choice dialog open so the administrator can retry. Previously
+      // the promise rejection was discarded by the void click handler, making
+      // the button appear to do nothing and hiding the actual server response.
+      setFormationRequiredMessage(mutationErrorMessage(error, "프로그램 수정 적용에 실패했습니다. 다시 시도해 주세요."));
+    }
   };
 
   const beginFormationEditing = () => {
@@ -2308,7 +2323,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
         <DialogActions sx={{ px: 2, pb: 2 }}>
           <Button
             onClick={() => void finishFormationSave(false)}
-            disabled={isSavingFormation}
+            disabled={isSavingFormation || isFormationStarting}
             sx={{ fontWeight: 700 }}
           >
             계속 진행
@@ -2316,7 +2331,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
           <Button
             variant="contained"
             onClick={() => void finishFormationSave(true)}
-            disabled={isSavingFormation}
+            disabled={isSavingFormation || isFormationStarting}
             disableElevation
             sx={{
               bgcolor: "#EF4444",

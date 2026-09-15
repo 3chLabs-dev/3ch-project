@@ -974,10 +974,16 @@ function getSavedRankedUnitPools(
   const unitById = new Map(
     units.flatMap((unit) => unit.id ? [[unit.id, unit] as const] : []),
   );
+  const orderedSnapshotPools = [...snapshot.pools].sort((left, right) => {
+    const leftNumber = Number.parseInt(left.label, 10);
+    const rightNumber = Number.parseInt(right.label, 10);
+    if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) return leftNumber - rightNumber;
+    return left.label.localeCompare(right.label, "ko", { numeric: true });
+  });
   const placeholderPools = buildRankPlaceholderPools(
-    snapshot.pools.map((pool) => pool.participantIds.length),
+    orderedSnapshotPools.map((pool) => pool.participantIds.length),
   );
-  const pools = snapshot.pools.map((pool, poolIndex) => {
+  const pools = orderedSnapshotPools.map((pool, poolIndex) => {
     if (!pool.complete) return placeholderPools[poolIndex] ?? [];
     return pool.participantIds.flatMap((id) => {
       const unit = unitById.get(id);
@@ -1874,7 +1880,9 @@ export function generateProgramRoundMatches(
       } else if (finalMode === "rank-groups") {
         finalGroups = Array.from({ length: expectedRankGroupCount ?? 0 }, (_, rankIndex) => ({
           name: `${rankIndex + 1}위조`,
-          players: finalPools.flatMap((pool) => pool[rankIndex] ? [pool[rankIndex]] : []),
+          players: finalPools.flatMap((pool, poolIndex) => pool[rankIndex]
+            ? [{ ...pool[rankIndex], seedLabel: `${poolIndex + 1}-${rankIndex + 1}` }]
+            : []),
         })).filter((group) => group.players.length > 1);
       } else {
         const preferredGroupCount = Math.max(1, block.groupSizes?.length ?? finalPools.length);

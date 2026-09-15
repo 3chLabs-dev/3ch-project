@@ -1038,7 +1038,7 @@ router.get('/clubs/:id', requireAdmin, async (req, res) => {
       pool.query(
         `SELECT g.id, g.club_code, g.name, g.sport,
                 g.region_city, g.region_district,
-                g.founded_at::text, g.address, g.address_detail, g.description,
+                g.founded_at::text, g.address, g.address_detail, g.activity_venues, g.description,
                 g.created_at::text,
                 u.id AS leader_id, u.name AS leader_name, u.email AS leader_email
          FROM groups g
@@ -1133,12 +1133,36 @@ router.put('/clubs/:id', requireAdmin, async (req, res) => {
   try {
     await client.query('BEGIN');
 
+    const currentClub = await client.query(
+      `SELECT activity_venues FROM groups WHERE id = $1 FOR UPDATE`,
+      [id],
+    );
+    if (currentClub.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ ok: false, error: '클럽을 찾을 수 없습니다.' });
+    }
+    const normalizedAddress = address?.trim() || '';
+    const normalizedDetail = address_detail?.trim() || '';
+    const currentVenues = Array.isArray(currentClub.rows[0].activity_venues) ? currentClub.rows[0].activity_venues : [];
+    let syncedVenues = currentVenues.map((venue) => ({ ...venue }));
+    if (syncedVenues.length > 0) {
+      const defaultIndex = Math.max(0, syncedVenues.findIndex((venue) => venue.is_default));
+      syncedVenues[defaultIndex] = {
+        ...syncedVenues[defaultIndex],
+        name: normalizedDetail || syncedVenues[defaultIndex].name,
+        address: normalizedAddress,
+        address_detail: normalizedDetail,
+      };
+    } else if (normalizedAddress || normalizedDetail) {
+      syncedVenues = [{ id: randomUUID(), name: normalizedDetail || '기본 활동 장소', address: normalizedAddress, address_detail: normalizedDetail, lat: null, lng: null, region_city: region_city?.trim() || null, region_district: region_district?.trim() || null, is_default: true }];
+    }
+
     await client.query(
       `UPDATE groups SET name = $1, sport = $2, region_city = $3, region_district = $4, founded_at = $5,
-              address = $6, address_detail = $7, description = $8
-       WHERE id = $9`,
+              address = $6, address_detail = $7, description = $8, activity_venues = $9::jsonb
+       WHERE id = $10`,
       [name.trim(), sport?.trim() || null, region_city?.trim() || null, region_district?.trim() || null, founded_at || null,
-       address?.trim() || null, address_detail?.trim() || null, description?.trim() || null, id],
+       normalizedAddress || null, normalizedDetail || null, description?.trim() || null, JSON.stringify(syncedVenues), id],
     );
 
     if (owner_id) {

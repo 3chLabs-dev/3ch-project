@@ -124,8 +124,12 @@ export default function LeagueRenewalStep1BasicInfo() {
   const [venueRegionDistrict, setVenueRegionDistrict] = useState(existing?.venueRegionDistrict ?? "");
   const [placeDialogOpen, setPlaceDialogOpen] = useState(false);
   const [venuePickerOpen, setVenuePickerOpen] = useState(false);
-  const { data: myGroupsData } = useGetMyGroupsQuery();
-  const savedVenues = useMemo(() => (myGroupsData?.groups ?? []).flatMap((group) => (group.activity_venues ?? []).map((venue) => ({ ...venue, groupName: group.name, groupPrimary: Boolean(group.is_primary) }))), [myGroupsData]);
+  const renewalGroupId = useAppSelector((state) => state.leagueRenewalCreation.groupId);
+  const legacyGroupId = useAppSelector((state) => state.leagueCreation.groupId ?? state.leagueCreation.preferredGroupId);
+  const selectedGroupId = renewalGroupId ?? legacyGroupId;
+  const { data: myGroupsData } = useGetMyGroupsQuery(undefined, { refetchOnMountOrArgChange: true });
+  const selectedGroup = useMemo(() => (myGroupsData?.groups ?? []).find((group) => group.id === selectedGroupId), [myGroupsData, selectedGroupId]);
+  const savedVenues = useMemo(() => (selectedGroup?.activity_venues ?? []).map((venue) => ({ ...venue, groupName: selectedGroup?.name ?? "" })), [selectedGroup]);
   const [participantCount, setParticipantCount] = useState<number | "">(existing?.participantCount ?? "");
   const [courtCount, setCourtCount] = useState<number | "">(existing?.courtCount ?? "");
   const [joinPermission, setJoinPermission] = useState<"public" | "club_only">(existing?.joinPermission ?? "club_only");
@@ -145,7 +149,7 @@ export default function LeagueRenewalStep1BasicInfo() {
   };
   useEffect(() => {
     if (existing || location || savedVenues.length === 0) return;
-    const defaultVenue = savedVenues.find((venue) => venue.groupPrimary && venue.is_default) ?? savedVenues.find((venue) => venue.is_default) ?? savedVenues[0];
+    const defaultVenue = savedVenues.find((venue) => venue.is_default) ?? savedVenues[0];
     applyVenue(defaultVenue);
   }, [existing, location, savedVenues]);
   useEffect(() => {

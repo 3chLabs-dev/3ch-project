@@ -3787,7 +3787,12 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
   } catch (err) {
     await pool.query('ROLLBACK').catch(() => {});
     console.error('Error syncing league program matches:', err);
-    return res.status(500).json({ message: '프로그램 경기 동기화 중 서버 오류' });
+    const statusCode = Number.isInteger(err?.statusCode) ? err.statusCode : 500;
+    return res.status(statusCode).json({
+      code: err?.code,
+      message: statusCode === 500 ? '프로그램 경기 동기화 중 서버 오류' : err.message,
+      matchIds: err?.matchIds,
+    });
   }
 });
 

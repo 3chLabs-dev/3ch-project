@@ -1847,7 +1847,15 @@ export function generateProgramRoundMatches(
       if (!finalPools) return [];
 
       let finalGroups: Array<{ name: string; players: MatchUnit[] }> = [];
-      if (block.groupFormationCustomized && block.groupAssignments?.length) {
+      const expectedRankGroupCount = finalMode === "rank-groups"
+        ? Math.max(0, ...finalPools.map((pool) => pool.length))
+        : null;
+      const hasCompleteCustomizedFormation = Boolean(
+        block.groupFormationCustomized
+        && block.groupAssignments?.length
+        && (expectedRankGroupCount == null || block.groupAssignments.length === expectedRankGroupCount)
+      );
+      if (hasCompleteCustomizedFormation && block.groupAssignments) {
         const assignedGroups = assignedMatchUnits(block.groupAssignments, selectedFinalUnits);
         finalGroups = assignedGroups.map((groupPlayers, index) => ({
           name: finalMode === "rank-groups" ? `${index + 1}위조` : `${index + 1}조`,
@@ -1861,8 +1869,7 @@ export function generateProgramRoundMatches(
           { name: "하위부", players: lower },
         ].filter((group) => group.players.length > 1);
       } else if (finalMode === "rank-groups") {
-        const maxRank = Math.max(0, ...finalPools.map((pool) => pool.length));
-        finalGroups = Array.from({ length: maxRank }, (_, rankIndex) => ({
+        finalGroups = Array.from({ length: expectedRankGroupCount ?? 0 }, (_, rankIndex) => ({
           name: `${rankIndex + 1}위조`,
           players: finalPools.flatMap((pool) => pool[rankIndex] ? [pool[rankIndex]] : []),
         })).filter((group) => group.players.length > 1);

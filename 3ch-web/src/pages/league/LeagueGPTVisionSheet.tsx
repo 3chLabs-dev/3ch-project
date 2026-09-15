@@ -1813,9 +1813,9 @@ export default function LeagueGPTVisionSheet() {
         programRound,
         programSourceMatches,
       );
-      storeProgramOption(id, nextProgram);
-      await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
       await syncProgramMatches({ leagueId: id, matches: nextMatches, resetResults: false }).unwrap();
+      await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
+      storeProgramOption(id, nextProgram);
       await refetchMatches();
       setVisionNotice({ type: "success", message: "경기를 시작 전 상태로 복구했습니다." });
     } catch (error) {

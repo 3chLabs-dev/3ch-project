@@ -160,7 +160,7 @@ const formationStructureLabel = (sizes: number[], unit: "조" | "팀") => {
     .join(" · ");
 };
 
-function SortableFormationPlayer({ player, locked = false }: { player: FormationPlayer; locked?: boolean }) {
+function SortableFormationPlayer({ player, locked = false, groupIndex, groupLabels, onMove, onRemove }: { player: FormationPlayer; locked?: boolean; groupIndex: number; groupLabels: string[]; onMove?: (targetGroupIndex: number) => void; onRemove?: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: formationPlayerId(player),
     disabled: locked,
@@ -181,11 +181,41 @@ function SortableFormationPlayer({ player, locked = false }: { player: Formation
       {!locked && <DragHandleIcon sx={{ color: "#9CA3AF", fontSize: 17, flexShrink: 0 }} />}
       <Typography sx={{ fontSize: 13, fontWeight: 700 }}>{player.name}</Typography>
       <DivisionBadge division={hasFormationLevel(player.level) ? String(player.level) : null} />
+      {!locked && onMove && groupLabels.length > 1 && (
+        <Box
+          component="select"
+          aria-label={`${player.name} 이동할 조`}
+          value=""
+          onPointerDown={(event) => event.stopPropagation()}
+          onChange={(event) => {
+            event.stopPropagation();
+            const targetGroupIndex = Number(event.target.value);
+            if (Number.isInteger(targetGroupIndex)) onMove(targetGroupIndex);
+          }}
+          sx={{ ml: "auto", minWidth: 78, height: 30, px: 0.75, border: "1px solid #93C5FD", borderRadius: 1, bgcolor: "#EFF6FF", color: "#1D4ED8", fontSize: 11, fontWeight: 800, cursor: "pointer" }}
+        >
+          <option value="">조 이동</option>
+          {groupLabels.map((label, index) => index === groupIndex ? null : (
+            <option key={index} value={index}>{label}</option>
+          ))}
+        </Box>
+      )}
+      {!locked && onRemove && (
+        <IconButton
+          size="small"
+          aria-label={`${player.name} 편성에서 삭제`}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => { event.stopPropagation(); onRemove(); }}
+          sx={{ width: 30, height: 30, color: "#DC2626", bgcolor: "#FEF2F2", "&:hover": { bgcolor: "#FEE2E2" } }}
+        >
+          <DeleteOutlineIcon sx={{ fontSize: 18 }} />
+        </IconButton>
+      )}
     </Box>
   );
 }
 
-function FormationEditCard({ players, index, label, locked = false, teamMode, onAddBot, onAddWaiting, hasWaitingPlayer }: { players: FormationPlayer[]; index: number; label: string; locked?: boolean; teamMode?: "manual" | "auto"; onAddBot: (index: number) => void; onAddWaiting: (index: number) => void; hasWaitingPlayer: boolean }) {
+function FormationEditCard({ players, index, label, groupLabels, locked = false, teamMode, onAddBot, onAddWaiting, onMove, onRemove, hasWaitingPlayer }: { players: FormationPlayer[]; index: number; label: string; groupLabels: string[]; locked?: boolean; teamMode?: "manual" | "auto"; onAddBot: (index: number) => void; onAddWaiting: (index: number) => void; onMove: (sourceGroupIndex: number, targetGroupIndex: number, player: FormationPlayer) => void; onRemove: (groupIndex: number, player: FormationPlayer) => void; hasWaitingPlayer: boolean }) {
   const { setNodeRef, isOver } = useDroppable({ id: `formation-group-${index}`, disabled: locked });
   const accent = FORMATION_COLORS[index % FORMATION_COLORS.length];
 
@@ -201,7 +231,7 @@ function FormationEditCard({ players, index, label, locked = false, teamMode, on
       </Box>
       <Box ref={setNodeRef} sx={{ px: 0.75, py: 0.5, minHeight: 54 }}>
         <SortableContext items={players.map(formationPlayerId)} strategy={verticalListSortingStrategy} disabled={locked}>
-          {players.map((player) => <SortableFormationPlayer key={formationPlayerId(player)} player={player} locked={locked} />)}
+          {players.map((player) => <SortableFormationPlayer key={formationPlayerId(player)} player={player} locked={locked} groupIndex={index} groupLabels={groupLabels} onMove={(targetGroupIndex) => onMove(index, targetGroupIndex, player)} onRemove={() => onRemove(index, player)} />)}
         </SortableContext>
         <Button
           size="small"
@@ -355,6 +385,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
   const [formationProgressTitle, setFormationProgressTitle] = useState("편성 적용 중");
   const [formationDraft, setFormationDraft] = useState<FormationPlayer[][]>([]);
   const [isFormationEditing, setIsFormationEditing] = useState(false);
+  const [pendingFormationRemoval, setPendingFormationRemoval] = useState<{ groupIndex: number; player: FormationPlayer } | null>(null);
   const [reshuffleConfirmOpen, setReshuffleConfirmOpen] = useState(false);
   const [pendingFormationSave, setPendingFormationSave] = useState<{
     program: StoredProgramOption;
@@ -1134,6 +1165,31 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
     ));
   };
 
+  const confirmFormationPlayerRemoval = () => {
+    if (!pendingFormationRemoval) return;
+    const { groupIndex, player } = pendingFormationRemoval;
+    setFormationDraft((previous) => previous.map((group, index) =>
+      index === groupIndex
+        ? group.filter((candidate) => formationPlayerId(candidate) !== formationPlayerId(player))
+        : group
+    ));
+    setPendingFormationRemoval(null);
+  };
+
+  const moveFormationPlayer = (sourceGroupIndex: number, targetGroupIndex: number, player: FormationPlayer) => {
+    if (sourceGroupIndex === targetGroupIndex) return;
+    setFormationDraft((previous) => {
+      if (!previous[sourceGroupIndex] || !previous[targetGroupIndex]) return previous;
+      const playerId = formationPlayerId(player);
+      const movingPlayer = previous[sourceGroupIndex].find((candidate) => formationPlayerId(candidate) === playerId);
+      if (!movingPlayer) return previous;
+      const next = previous.map((group) => [...group]);
+      next[sourceGroupIndex] = next[sourceGroupIndex].filter((candidate) => formationPlayerId(candidate) !== playerId);
+      next[targetGroupIndex].push(movingPlayer);
+      return next;
+    });
+  };
+
   const toggleTeamLock = async (teamIndex: number) => {
     if (!formationDialog || formationDialog.mode !== "team" || !storedProgram?.blocks) return;
     const { roundIndex } = formationDialog;
@@ -1692,7 +1748,9 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
                           <Button
                             variant="outlined"
                             size="small"
-                            onClick={() => round.groupFormationPublished ? setFormationDialog({ roundIndex: round.round - 1, mode: "group" }) : openGroupStructureDialog(round.round - 1, "group")}
+                            onClick={() => round.groupFormationPublished || round.finalAdvancementMode === "rank-groups"
+                              ? setFormationDialog({ roundIndex: round.round - 1, mode: "group" })
+                              : openGroupStructureDialog(round.round - 1, "group")}
                             sx={{
                               flex: 1,
                               height: 34,
@@ -1707,7 +1765,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
                               "&:hover": { borderColor: "#A78BFA", bgcolor: "#EDE9FE" },
                             }}
                           >
-                            {round.groupFormationPublished ? "조 편성 결과" : "조 편성하기"}
+                            {round.groupFormationPublished || round.finalAdvancementMode === "rank-groups" ? "조 편성 결과" : "조 편성하기"}
                           </Button>
                         )}
                       </Stack>
@@ -2171,11 +2229,14 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
                     key={index}
                     players={players}
                     index={index}
-                    label={formationDialog?.mode === "team" || formationDialog?.mode === "doubles" ? `${String.fromCharCode(65 + index)}팀` : `${index + 1}조`}
+                    label={formationDialog?.mode === "team" || formationDialog?.mode === "doubles" ? `${String.fromCharCode(65 + index)}팀` : formationGroups[index]?.name ?? `${index + 1}조`}
+                    groupLabels={formationDraft.map((_, groupIndex) => formationDialog?.mode === "team" || formationDialog?.mode === "doubles" ? `${String.fromCharCode(65 + groupIndex)}팀` : formationGroups[groupIndex]?.name ?? `${groupIndex + 1}조`)}
                     locked={formationDialog?.mode === "team" ? isTeamLocked(index) : formationDialog?.mode === "doubles" ? isDoublesLocked(index) : false}
                     teamMode={formationDialog?.mode === "team" ? teamFormationMode(index) : formationDialog?.mode === "doubles" ? doublesFormationMode(index) : undefined}
                     onAddBot={addBotToFormationDraft}
                     onAddWaiting={addWaitingPlayerToFormationDraft}
+                    onMove={moveFormationPlayer}
+                    onRemove={(groupIndex, player) => setPendingFormationRemoval({ groupIndex, player })}
                     hasWaitingPlayer={waitingFormationPlayers.length > 0}
                   />
                 ))}
@@ -2424,6 +2485,21 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
             취소
           </Button>
           <Button onClick={handleDelete} variant="contained" disableElevation sx={{ bgcolor: "#EF4444", "&:hover": { bgcolor: "#DC2626" }, fontWeight: 700, borderRadius: 1 }}>
+            삭제
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={Boolean(pendingFormationRemoval)} onClose={() => setPendingFormationRemoval(null)} slotProps={{ paper: { sx: { borderRadius: 2, mx: 2 } } }}>
+        <DialogTitle sx={{ fontWeight: 900, fontSize: 16 }}>참가자 삭제</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ fontSize: 14 }}>
+            {pendingFormationRemoval?.player.name} 님을 이 라운드 조 편성에서 삭제하시겠습니까?
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 2, pb: 2 }}>
+          <Button onClick={() => setPendingFormationRemoval(null)} sx={{ color: "text.secondary", fontWeight: 700 }}>취소</Button>
+          <Button onClick={confirmFormationPlayerRemoval} variant="contained" disableElevation sx={{ bgcolor: "#EF4444", "&:hover": { bgcolor: "#DC2626" }, fontWeight: 700 }}>
             삭제
           </Button>
         </DialogActions>

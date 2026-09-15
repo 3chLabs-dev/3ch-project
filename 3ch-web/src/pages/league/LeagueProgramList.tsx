@@ -105,6 +105,7 @@ type StoredProgramBlock = {
   doublesFormationPublished?: boolean;
   groupFormationPublished?: boolean;
   groupFormationCustomized?: boolean;
+  groupFormationSchemaVersion?: number;
   participantOrder?: string[];
   restoredMatchIds?: string[];
   deletedMatchIds?: string[];
@@ -1363,6 +1364,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
         ...block,
         groupAssignments: savedFormationDraft,
         groupFormationCustomized: true,
+        groupFormationSchemaVersion: 2,
         participantOrder,
         ...(block.type === "TEAM"
           ? { teamGroupSizes: savedFormationDraft.map((group) => group.length) }
@@ -1411,6 +1413,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
         ...round,
         groupAssignments: savedFormationDraft,
         groupFormationCustomized: true,
+        groupFormationSchemaVersion: 2,
         participantOrder,
         ...(activeFormationBlock?.type === "TEAM"
           ? { teamGroupSizes: savedFormationDraft.map((group) => group.length) }

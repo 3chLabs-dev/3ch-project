@@ -139,6 +139,8 @@ export interface ProgramBlock {
   groupAssignments?: FormationAssignmentPlayer[][];
   /** 본선 자동 편성을 관리자가 직접 수정했는지 여부. */
   groupFormationCustomized?: boolean;
+  /** 완전한 조 목록으로 저장된 수동 편성의 스키마 버전. */
+  groupFormationSchemaVersion?: number;
   teamAssignments?: FormationAssignmentPlayer[][];
   /** How each saved team was formed. Missing values are kept for older programs. */
   teamAssignmentModes?: Array<"manual" | "auto">;
@@ -252,6 +254,7 @@ export interface RoundConfig {
   teamShuffleSeed?: number;
   groupAssignments?: FormationAssignmentPlayer[][];
   groupFormationCustomized?: boolean;
+  groupFormationSchemaVersion?: number;
   teamAssignments?: FormationAssignmentPlayer[][];
   teamAssignmentModes?: Array<"manual" | "auto">;
   teamAssignmentLocks?: boolean[];

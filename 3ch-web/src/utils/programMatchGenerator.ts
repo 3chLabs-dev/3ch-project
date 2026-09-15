@@ -1854,6 +1854,7 @@ export function generateProgramRoundMatches(
         : null;
       const hasCompleteCustomizedFormation = Boolean(
         block.groupFormationCustomized
+        && block.groupFormationSchemaVersion === 2
         && block.groupAssignments?.length
         && (expectedRankGroupCount == null || block.groupAssignments.length === expectedRankGroupCount)
       );
@@ -1908,7 +1909,10 @@ export function generateProgramRoundMatches(
       : groupSizes;
     const canUseSavedGroupAssignments = Boolean(
       block.groupAssignments?.length
-      && (block.finalAdvancementMode !== "rank-groups" || block.groupFormationCustomized)
+      && (
+        block.finalAdvancementMode !== "rank-groups"
+        || (block.groupFormationCustomized && block.groupFormationSchemaVersion === 2)
+      )
     );
     const savedGroupAssignments = block.groupAssignments ?? [];
     const groups = canUseSavedGroupAssignments

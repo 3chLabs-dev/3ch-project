@@ -2022,6 +2022,7 @@ export default function LeagueGPTVisionSheet() {
         groupSizes: groupAssignments.map((group) => group.length),
         groupFormationPublished: true,
         groupFormationCustomized: true,
+        groupFormationSchemaVersion: 2,
         participantOrder,
       });
       const nextProgram: ProgramOption = {

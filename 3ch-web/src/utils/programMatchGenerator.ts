@@ -400,6 +400,24 @@ function getTournamentRoundLabel(bracketSize: number, bracketRound: number) {
   return roundSize <= 2 ? "결승" : `${roundSize}강`;
 }
 
+function assignedMatchUnits(
+  assignments: FormationAssignmentPlayer[][],
+  units: MatchUnit[],
+): MatchUnit[][] {
+  const remaining = [...units];
+  return assignments.map((group) => group.flatMap((assigned) => {
+    let unitIndex = remaining.findIndex((candidate) =>
+      candidate.name === assigned.name && (candidate.level ?? 0) === assigned.level
+    );
+    if (unitIndex < 0) {
+      unitIndex = remaining.findIndex((candidate) => candidate.name === assigned.name);
+    }
+    if (unitIndex < 0) return [];
+    const [unit] = remaining.splice(unitIndex, 1);
+    return [unit];
+  }));
+}
+
 function resolveTournamentMatchRule(
   baseRule: MatchRule,
   lateRule: MatchRule | undefined,
@@ -1829,7 +1847,13 @@ export function generateProgramRoundMatches(
       if (!finalPools) return [];
 
       let finalGroups: Array<{ name: string; players: MatchUnit[] }> = [];
-      if (finalMode === "upper-lower-groups") {
+      if (block.groupAssignments?.length) {
+        const assignedGroups = assignedMatchUnits(block.groupAssignments, selectedFinalUnits);
+        finalGroups = assignedGroups.map((groupPlayers, index) => ({
+          name: finalMode === "rank-groups" ? `${index + 1}위조` : `${index + 1}조`,
+          players: groupPlayers,
+        })).filter((group) => group.players.length > 0);
+      } else if (finalMode === "upper-lower-groups") {
         const upper = finalPools.flatMap((pool) => pool.slice(0, Math.ceil(pool.length / 2)));
         const lower = finalPools.flatMap((pool) => pool.slice(Math.ceil(pool.length / 2)));
         finalGroups = [

@@ -21,6 +21,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import ViewSidebarOutlinedIcon from "@mui/icons-material/ViewSidebarOutlined";
 import EditIcon from "@mui/icons-material/Edit";
 import CheckIcon from "@mui/icons-material/Check";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
@@ -332,6 +333,10 @@ function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, co
   totalCols: number;
   onProgramMatchUpdate?: (matchId: string, updates: ProgramMatchPatch) => void;
   onRestoreNoGame?: (matchId: string) => Promise<void>;
+  groupNames?: string[];
+  selectedGroup?: string | null;
+  onMoveGroup?: (participant: LeagueParticipantItem, targetGroup: string) => void;
+  onRemoveFromGroup?: (participant: LeagueParticipantItem) => void;
 }) {
   const [updateMatch] = useUpdateLeagueMatchMutation();
   const autoCompleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -606,6 +611,7 @@ interface BracketRowProps {
 const SortableBracketRow = memo(function SortableBracketRow({
   participant, teamRoster, aggregateDivision = false, rowIdx, n, localOrder, editMode, canManage, canScore, completedRound, landscape,
   matchLookup, wins, losses, setTotal, rank, tieSetDiff, hasPlayed, leagueId, winScore, isMe, isBot, rules, onProgramMatchUpdate, onRestoreNoGame,
+  groupNames = [], selectedGroup, onMoveGroup, onRemoveFromGroup,
 }: BracketRowProps) {
   const canDrag = editMode && canManage;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -698,6 +704,33 @@ const SortableBracketRow = memo(function SortableBracketRow({
               {participant.name}
             </Box>
             <DivBadge division={participant.division} aggregate={aggregateDivision} />
+            {editMode && canManage && selectedGroup && onMoveGroup && (
+              <Box
+                component="select"
+                aria-label={`${participant.name} 이동할 조`}
+                value=""
+                onPointerDown={(event) => event.stopPropagation()}
+                onChange={(event) => {
+                  const targetGroup = event.target.value;
+                  if (targetGroup) onMoveGroup(participant, targetGroup);
+                }}
+                sx={{ minWidth: 70, height: 28, px: 0.5, border: "1px solid #93C5FD", borderRadius: 1, bgcolor: "#EFF6FF", color: "#1D4ED8", fontSize: 10, fontWeight: 800 }}
+              >
+                <option value="">조 이동</option>
+                {groupNames.filter((name) => name !== selectedGroup).map((name) => <option key={name} value={name}>{name}</option>)}
+              </Box>
+            )}
+            {editMode && canManage && onRemoveFromGroup && (
+              <IconButton
+                size="small"
+                aria-label={`${participant.name} 조에서 삭제`}
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={() => onRemoveFromGroup(participant)}
+                sx={{ width: 28, height: 28, color: "#DC2626", bgcolor: "#FEF2F2" }}
+              >
+                <DeleteOutlineIcon sx={{ fontSize: 17 }} />
+              </IconButton>
+            )}
           </Box>
         )}
       </BodyHeaderCell>
@@ -1667,6 +1700,8 @@ export default function LeagueGPTVisionSheet() {
   // ── UI 상태 ───────────────────────────────────────────────────────────────
   // editMode: 시드 번호 순서 변경 모드 (점수 편집과는 별개)
   const [editMode, setEditMode]       = useState(false);
+  const [pendingGroupRemoval, setPendingGroupRemoval] = useState<LeagueParticipantItem | null>(null);
+  const [isUpdatingGroupAssignment, setIsUpdatingGroupAssignment] = useState(false);
   // rulesAnchor: 경기 규칙 Popover 앵커 (null이면 닫힘)
   const [rulesAnchor, setRulesAnchor] = useState<HTMLButtonElement | null>(null);
   // landscape: false=세로(writingMode 회전) / true=가로(일반 layout)
@@ -1940,6 +1975,80 @@ export default function LeagueGPTVisionSheet() {
       return arrayMove(prev, oldIdx, newIdx);
     });
   }, [setLocalOrder]);
+
+  const updateProgramGroupAssignment = useCallback(async (
+    participant: LeagueParticipantItem,
+    targetGroup: string | null,
+  ) => {
+    if (!id || !programOption || !currentProgramBlock || !selectedGroup || isUpdatingGroupAssignment) return;
+    setIsUpdatingGroupAssignment(true);
+    try {
+      const groupMemberIds = new Map(groupNames.map((groupName) => [groupName, [] as string[]]));
+      programMatchesAll.forEach((match) => {
+        const groupName = match.match_label;
+        const memberIds = groupName ? groupMemberIds.get(groupName) : undefined;
+        if (!memberIds) return;
+        [match.participant_a_id, match.participant_b_id].forEach((participantId) => {
+          if (participantId && !memberIds.includes(participantId)) memberIds.push(participantId);
+        });
+      });
+      groupMemberIds.forEach((memberIds) => {
+        const participantIndex = memberIds.indexOf(participant.id);
+        if (participantIndex >= 0) memberIds.splice(participantIndex, 1);
+      });
+      if (targetGroup) {
+        const targetIds = groupMemberIds.get(targetGroup);
+        if (!targetIds) throw new Error("이동할 조를 찾지 못했습니다.");
+        targetIds.push(participant.id);
+      }
+
+      const participantById = new Map(rawParticipants.map((item) => [item.id, item]));
+      const groupAssignments = groupNames.map((groupName) =>
+        (groupMemberIds.get(groupName) ?? []).flatMap((participantId) => {
+          const item = participantById.get(participantId);
+          if (!item) return [];
+          const level = Number.parseInt(String(item.division ?? "").replace(/[^0-9]/g, ""), 10);
+          return [{
+            name: item.name,
+            level: Number.isFinite(level) ? level : 0,
+            sourceGroupId: item.source_group_id ?? null,
+          }];
+        })
+      );
+      const participantOrder = groupNames.flatMap((groupName) => groupMemberIds.get(groupName) ?? []);
+      const applyAssignments = <T extends object>(round: T) => ({
+        ...round,
+        groupAssignments,
+        groupSizes: groupAssignments.map((group) => group.length),
+        groupFormationPublished: true,
+        participantOrder,
+      });
+      const nextProgram: ProgramOption = {
+        ...programOption,
+        blocks: programOption.blocks.map((block, index) => index === programRound - 1 ? applyAssignments(block) : block),
+        rounds: programOption.rounds?.map((round, index) => index === programRound - 1 ? applyAssignments(round) : round),
+      };
+      const nextMatches = generateProgramRoundMatches(
+        id,
+        nextProgram,
+        rawParticipants,
+        programRound,
+        programSourceMatches,
+      );
+      storeProgramOption(id, nextProgram);
+      await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
+      await syncProgramMatches({ leagueId: id, matches: nextMatches, resetResults: false }).unwrap();
+      await refetchMatches();
+      setEditOrder(null);
+      if (targetGroup) setSelectedGroup(targetGroup);
+      setVisionNotice({ type: "success", message: targetGroup ? `${participant.name} 님을 ${targetGroup}로 이동했습니다.` : `${participant.name} 님을 이 라운드에서 삭제했습니다.` });
+    } catch (error) {
+      setVisionNotice({ type: "error", message: getErrorMessage(error, targetGroup ? "조 이동에 실패했습니다." : "참가자 삭제에 실패했습니다.") });
+    } finally {
+      setIsUpdatingGroupAssignment(false);
+      setPendingGroupRemoval(null);
+    }
+  }, [currentProgramBlock, groupNames, id, isUpdatingGroupAssignment, programMatchesAll, programOption, programRound, programSourceMatches, rawParticipants, refetchMatches, saveLeagueProgram, selectedGroup, syncProgramMatches]);
 
   const finishEditing = useCallback(async () => {
     if (!editMode) {
@@ -3029,6 +3138,22 @@ export default function LeagueGPTVisionSheet() {
         </DialogActions>
       </Dialog>
 
+      <Dialog open={Boolean(pendingGroupRemoval)} onClose={() => !isUpdatingGroupAssignment && setPendingGroupRemoval(null)} fullWidth maxWidth="xs" sx={{ zIndex: 10004 }} slotProps={{ paper: { sx: { borderRadius: 3, ...mobileDialogPaperSx } } }}>
+        <DialogTitle sx={{ fontWeight: 900 }}>참가자 삭제</DialogTitle>
+        <DialogContent dividers>
+          <Typography sx={{ fontSize: 14, color: "#475569", lineHeight: 1.6 }}>
+            {pendingGroupRemoval?.name} 님을 {selectedGroup} 편성에서 삭제하시겠습니까?
+          </Typography>
+          <Typography sx={{ mt: 0.7, fontSize: 12, color: "#DC2626", fontWeight: 700 }}>
+            해당 라운드의 이 참가자 경기들도 대진표에서 제거됩니다.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 2, py: 1.5 }}>
+          <Button onClick={() => setPendingGroupRemoval(null)} disabled={isUpdatingGroupAssignment}>취소</Button>
+          <Button variant="contained" color="error" disabled={isUpdatingGroupAssignment || !pendingGroupRemoval} onClick={() => pendingGroupRemoval && void updateProgramGroupAssignment(pendingGroupRemoval, null)}>삭제</Button>
+        </DialogActions>
+      </Dialog>
+
       {landscape && groupNames.length > 0 && (
         <Box sx={{ px: 1, pt: 1, pb: 0.5, bgcolor: "#F0F2F5", borderBottom: "1px solid #E5E7EB" }}>
           <Stack ref={groupTabsRef} direction="row" spacing={1} sx={{ overflowX: "auto", '&::-webkit-scrollbar': { display: 'none' } }}>
@@ -3186,6 +3311,10 @@ export default function LeagueGPTVisionSheet() {
                         rules={getProgramRuleLabel(currentRule ?? "")}
                         onProgramMatchUpdate={isProgramMode ? updateProgramMatch : undefined}
                         onRestoreNoGame={isProgramMode && canManage ? restoreProgramNoGame : undefined}
+                        groupNames={isProgramMode && currentProgramBlock?.format === "GROUP" ? groupNames : undefined}
+                        selectedGroup={selectedGroup}
+                        onMoveGroup={isProgramMode && currentProgramBlock?.format === "GROUP" ? (participant, targetGroup) => void updateProgramGroupAssignment(participant, targetGroup) : undefined}
+                        onRemoveFromGroup={isProgramMode && currentProgramBlock?.format === "GROUP" ? setPendingGroupRemoval : undefined}
                       />
                     ))}
                     {editMode && canManage && (

@@ -1901,10 +1901,11 @@ export function generateProgramRoundMatches(
       block.groupAssignments?.length
       && (block.finalAdvancementMode !== "rank-groups" || block.groupFormationCustomized)
     );
+    const savedGroupAssignments = block.groupAssignments ?? [];
     const groups = canUseSavedGroupAssignments
       ? block.type === "DOUBLES" || block.type === "TEAM"
-        ? assignedTeamGroups(block.groupAssignments, matchUnits).map((groupPlayers, index) => ({ name: `${index + 1}조`, players: groupPlayers }))
-        : assignedPlayers(block.groupAssignments, players).map((groupPlayers, index) => ({ name: `${index + 1}조`, players: groupPlayers }))
+        ? assignedTeamGroups(savedGroupAssignments, matchUnits).map((groupPlayers, index) => ({ name: `${index + 1}조`, players: groupPlayers }))
+        : assignedPlayers(savedGroupAssignments, players).map((groupPlayers, index) => ({ name: `${index + 1}조`, players: groupPlayers }))
       : block.crossClubGrouping
         ? distributeClubAware(shuffledUnits, configuredGroupSizes).map((groupPlayers, index) => ({ name: `${index + 1}조`, players: groupPlayers }))
         : distributeSnake(shuffledUnits as ProgramPlayer[], configuredGroupSizes).map((group, index) => ({

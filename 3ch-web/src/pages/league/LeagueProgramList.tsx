@@ -471,8 +471,8 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
       setFormationRequiredMessage("팀 편성 전입니다");
       return;
     }
-    // 순위별 본선 조는 이전 라운드 순위를 바탕으로 매치 생성기가 자동 편성한다.
-    // 수동 조 편성의 publish 플래그가 없어도 이미 유효한 대진표이므로 이동을 막지 않는다.
+    // 순위별 본선 조는 이전 라운드 순위로 자동 편성되므로
+    // 수동 편성 완료 플래그가 없어도 대진표 이동을 허용한다.
     const isAutomaticallyRankedFinalGroup = round.format === "GROUP"
       && round.finalAdvancementMode === "rank-groups";
     if (round.format === "GROUP" && !isAutomaticallyRankedFinalGroup && !round.groupFormationPublished) {

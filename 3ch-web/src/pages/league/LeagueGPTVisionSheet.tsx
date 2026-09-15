@@ -2036,9 +2036,9 @@ export default function LeagueGPTVisionSheet() {
         programRound,
         programSourceMatches,
       );
-      storeProgramOption(id, nextProgram);
-      await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
       await syncProgramMatches({ leagueId: id, matches: nextMatches, resetResults: false }).unwrap();
+      await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
+      storeProgramOption(id, nextProgram);
       await refetchMatches();
       setEditOrder(null);
       if (targetGroup) setSelectedGroup(targetGroup);

@@ -1769,7 +1769,9 @@ export function generateProgramRoundMatches(
     : null;
   const finalMode = block.finalAdvancementMode ?? "top-n";
   const advanceCount = Math.max(1, block.advanceCount ?? 2);
-  const advancesEveryone = finalMode === "all";
+  // Rank-group finals need every saved rank from every source group. Treating
+  // advanceCount as a cutoff here silently removes every group below that rank.
+  const advancesEveryone = finalMode === "all" || finalMode === "rank-groups";
   const tournamentBuilder = block.tournamentMode === "upper-lower"
     ? buildUpperLowerTournamentMatches
     : buildTournamentMatches;

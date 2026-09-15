@@ -333,10 +333,6 @@ function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, co
   totalCols: number;
   onProgramMatchUpdate?: (matchId: string, updates: ProgramMatchPatch) => void;
   onRestoreNoGame?: (matchId: string) => Promise<void>;
-  groupNames?: string[];
-  selectedGroup?: string | null;
-  onMoveGroup?: (participant: LeagueParticipantItem, targetGroup: string) => void;
-  onRemoveFromGroup?: (participant: LeagueParticipantItem) => void;
 }) {
   const [updateMatch] = useUpdateLeagueMatchMutation();
   const autoCompleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -596,6 +592,10 @@ interface BracketRowProps {
   rules?: string;
   onProgramMatchUpdate?: (matchId: string, updates: ProgramMatchPatch) => void;
   onRestoreNoGame?: (matchId: string) => Promise<void>;
+  groupNames?: string[];
+  selectedGroup?: string | null;
+  onMoveGroup?: (participant: LeagueParticipantItem, targetGroup: string) => void;
+  onRemoveFromGroup?: (participant: LeagueParticipantItem) => void;
 }
 
 /**

@@ -1847,7 +1847,7 @@ export function generateProgramRoundMatches(
       if (!finalPools) return [];
 
       let finalGroups: Array<{ name: string; players: MatchUnit[] }> = [];
-      if (block.groupAssignments?.length) {
+      if (block.groupFormationCustomized && block.groupAssignments?.length) {
         const assignedGroups = assignedMatchUnits(block.groupAssignments, selectedFinalUnits);
         finalGroups = assignedGroups.map((groupPlayers, index) => ({
           name: finalMode === "rank-groups" ? `${index + 1}위조` : `${index + 1}조`,
@@ -1897,7 +1897,11 @@ export function generateProgramRoundMatches(
       : block.type === "DOUBLES" && groupSizes.reduce((sum, size) => sum + size, 0) !== matchUnits.length
         ? balancedSizes(matchUnits.length, Math.min(2, matchUnits.length))
       : groupSizes;
-    const groups = block.groupAssignments?.length
+    const canUseSavedGroupAssignments = Boolean(
+      block.groupAssignments?.length
+      && (block.finalAdvancementMode !== "rank-groups" || block.groupFormationCustomized)
+    );
+    const groups = canUseSavedGroupAssignments
       ? block.type === "DOUBLES" || block.type === "TEAM"
         ? assignedTeamGroups(block.groupAssignments, matchUnits).map((groupPlayers, index) => ({ name: `${index + 1}조`, players: groupPlayers }))
         : assignedPlayers(block.groupAssignments, players).map((groupPlayers, index) => ({ name: `${index + 1}조`, players: groupPlayers }))

@@ -1559,9 +1559,15 @@ export default function LeagueGPTVisionSheet() {
       const ids = new Set(
         selectedMatches.flatMap((match) => [match.participant_a_id, match.participant_b_id]).filter(Boolean) as string[],
       );
-      return applySavedParticipantOrder(sortParticipantsByDivision(
-        programDisplayParticipants.filter((participant) => ids.has(participant.id)),
-      ));
+      const selectedParticipants = programDisplayParticipants.filter((participant) => ids.has(participant.id));
+      // 본선 조별리그의 "순위대로" 정책은 생성기가 예선 조 순서대로
+      // 1조 n위 → 2조 n위 → 3조 n위 ... 순서를 이미 부여한다.
+      // 여기서 공통 부수 정렬이나 과거 수동 순서를 다시 적용하면 정책이
+      // 깨져 보이므로 생성 순서를 그대로 사용한다.
+      if (currentProgramBlock?.finalAdvancementMode === "rank-groups") {
+        return selectedParticipants;
+      }
+      return applySavedParticipantOrder(sortParticipantsByDivision(selectedParticipants));
     }
     if (isProgramMode) {
       return applySavedParticipantOrder(sortParticipantsByDivision(programDisplayParticipants));
@@ -2688,35 +2694,40 @@ export default function LeagueGPTVisionSheet() {
     setIsSavingVision(true);
     setVisionSaveProgress(0);
     try {
-      let saved = 0;
+      const batch = pendingMatches.map(({ match, scoreA, scoreB }) => ({
+        match_id: match.id,
+        ...(scoreA != null ? { score_a: scoreA } : {}),
+        ...(scoreB != null ? { score_b: scoreB } : {}),
+        ...(scoreA != null && scoreB != null ? { status: "done" as const } : {}),
+      }));
+
       if (isProgramMode) {
-        for (const { match, scoreA, scoreB } of pendingMatches) {
-          const updates: ProgramMatchPatch = {};
-          if (scoreA != null) updates.score_a = scoreA;
-          if (scoreB != null) updates.score_b = scoreB;
-          if (scoreA != null && scoreB != null) updates.status = "done";
-          if (Object.keys(updates).length === 0) continue;
-          await updateProgramMatch(match.id, updates);
-          saved += 1;
-          setVisionSaveProgress(Math.round((saved / pendingMatches.length) * 90));
+        const persistedMatchIds = new Set(serverProgramMatchesAll.map((match) => match.id));
+        const missingMatches = batch.filter((item) => !persistedMatchIds.has(item.match_id));
+        if (missingMatches.length > 0) {
+          throw new Error("서버에 생성되지 않은 경기가 있어 결과를 저장하지 않았습니다. 대진표를 새로고침한 뒤 다시 시도해 주세요.");
         }
-      } else {
-        const batch = pendingMatches.map(({ match, scoreA, scoreB }) => ({
-          match_id: match.id,
-          ...(scoreA != null ? { score_a: scoreA } : {}),
-          ...(scoreB != null ? { score_b: scoreB } : {}),
-          ...(scoreA != null && scoreB != null ? { status: "done" as const } : {}),
-        }));
-        const result = await updateMatchResultsBatch({ leagueId: id ?? "", matches: batch }).unwrap();
-        saved = result.updated;
-        setVisionSaveProgress(90);
+
       }
-      if (!isProgramMode || serverProgramMatchesAll.length > 0) {
-        await refetchMatches();
+
+      const result = await updateMatchResultsBatch({ leagueId: id ?? "", matches: batch }).unwrap();
+      if (result.updated !== batch.length) {
+        throw new Error("일부 경기 결과가 저장되지 않아 완료 처리하지 않았습니다.");
       }
+      if (isProgramMode) {
+        // The server transaction is authoritative. Update the generated-view cache
+        // only after every persisted result has been committed successfully.
+        batch.forEach((item) => {
+          const { match_id: matchId, ...updates } = item;
+          saveProgramMatchPatch(id ?? "", programRound, matchId, updates);
+        });
+        setProgramMatchStateVersion((version) => version + 1);
+      }
+      setVisionSaveProgress(90);
+      await refetchMatches();
       setVisionSaveProgress(100);
       setPreviewOpen(false);
-      setVisionNotice({ type: "success", message: `${saved}개 경기 결과를 저장했습니다.` });
+      setVisionNotice({ type: "success", message: `${result.updated}개 경기 결과를 저장했습니다.` });
       if (visionUsage) setUsageDialogOpen(true);
     } catch (error) {
       setVisionNotice({ type: "error", message: getErrorMessage(error, "인식 결과 저장에 실패했습니다.") });

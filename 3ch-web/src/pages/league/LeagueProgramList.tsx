@@ -432,6 +432,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
       bracketPath: string;
       teamFormationPublished?: boolean;
       groupFormationPublished?: boolean;
+      finalAdvancementMode?: StoredProgramBlock["finalAdvancementMode"];
     },
     destination: "matches" | "bracket",
   ) => {
@@ -439,7 +440,11 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
       setFormationRequiredMessage("팀 편성 전입니다");
       return;
     }
-    if (round.format === "GROUP" && !round.groupFormationPublished) {
+    // 순위별 본선 조는 이전 라운드 순위를 바탕으로 매치 생성기가 자동 편성한다.
+    // 수동 조 편성의 publish 플래그가 없어도 이미 유효한 대진표이므로 이동을 막지 않는다.
+    const isAutomaticallyRankedFinalGroup = round.format === "GROUP"
+      && round.finalAdvancementMode === "rank-groups";
+    if (round.format === "GROUP" && !isAutomaticallyRankedFinalGroup && !round.groupFormationPublished) {
       setFormationRequiredMessage("조 편성 전입니다");
       return;
     }

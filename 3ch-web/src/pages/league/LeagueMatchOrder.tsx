@@ -25,8 +25,6 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import SearchIcon from "@mui/icons-material/Search";
-import AddIcon from "@mui/icons-material/Add";
-import RemoveIcon from "@mui/icons-material/Remove";
 import {
   useGetLeagueQuery,
   useGetLeagueMatchesQuery,
@@ -122,9 +120,8 @@ function hasReachedAutomaticCompletion(
   return winScore !== null && (scoreA >= winScore || scoreB >= winScore);
 }
 
-// ─── 참가자 행 (번호 + 이름/부 + 점수) ──────────────────────────────────────
-/** 테두리 박스 안 참가자 행: [번호셀] | [배지+이름] [점수] */
-function ParticipantRow({
+// ─── 큰 터치형 점수판 ───────────────────────────────────────────────────────
+function ScoreboardPanel({
   name, division, seedLabel, orderLabel, isMe, score, wins, canEditScore, onMinus, onPlus,
 }: {
   name: string | null; division: string | null; seedLabel?: string; orderLabel?: string; isMe?: boolean;
@@ -133,41 +130,106 @@ function ParticipantRow({
 }) {
   const leftLabel = seedLabel ?? orderLabel ?? division ?? "";
   return (
-    <Stack direction="row" alignItems="stretch" sx={{ minHeight: 54 }}>
-      {/* 왼쪽 번호 셀 */}
-      <Box sx={{ width: 46, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", borderRight: "1.5px solid #E5E7EB" }}>
-        <Typography sx={{ fontSize: seedLabel ? 12 : 22, fontWeight: 900, color: seedLabel ? "#94A3B8" : "#C4C9D4" }}>
-          {leftLabel}
-        </Typography>
-      </Box>
-
-      {/* 배지 + 이름 */}
-      <Stack direction="row" alignItems="center" spacing={0.5} flex={1} px={1.5} minWidth={0}>
-        <Typography sx={{ fontWeight: !name || name === "미정" ? 600 : 700, fontSize: 14, lineHeight: 1.25, whiteSpace: "normal", color: !name || name === "미정" ? "#9CA3AF" : wins ? "#16A34A" : isMe ? "#2F80ED" : "#111827" }}>
-          {name ?? "미정"}
-        </Typography>
-        {division && <DivisionBadge division={division} />}
+    <Box
+      sx={{
+        flex: 1,
+        minWidth: 0,
+        p: 0.75,
+        border: `1.5px solid ${wins ? "#86EFAC" : "#D9DDE6"}`,
+        borderRadius: 2.5,
+        bgcolor: "#fff",
+        boxShadow: wins ? "0 2px 9px rgba(22, 163, 74, 0.14)" : "0 2px 7px rgba(15, 23, 42, 0.06)",
+      }}
+    >
+      <Stack
+        direction="row"
+        alignItems="center"
+        justifyContent="center"
+        sx={{ position: "relative", height: 48, px: 3.5, bgcolor: wins ? "#F0FDF4" : "#F9FAFB", borderRadius: 1.75, overflow: "hidden" }}
+      >
+        {leftLabel && (
+          <Typography sx={{ position: "absolute", left: 10, fontSize: seedLabel ? 12 : 17, fontWeight: 800, color: "#9CA3AF" }}>
+            {leftLabel}
+          </Typography>
+        )}
+        <Stack direction="row" alignItems="center" justifyContent="center" spacing={0.5} minWidth={0}>
+          <Typography
+            sx={{
+              minWidth: 0,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              fontWeight: 800,
+              fontSize: 15,
+              color: !name || name === "미정" ? "#9CA3AF" : wins ? "#15803D" : isMe ? "#374151" : "#111827",
+            }}
+          >
+            {name ?? "미정"}
+          </Typography>
+          {division && <DivisionBadge division={division} />}
+        </Stack>
       </Stack>
 
-      {/* -[점수]+ */}
-      <Stack direction="row" alignItems="center" sx={{ flexShrink: 0, pr: 1, gap: "4px" }}>
+      <Button
+        fullWidth
+        disableRipple={!canEditScore}
+        onClick={canEditScore ? onPlus : undefined}
+        aria-label={`${name ?? "미정"} 점수 1점 올리기`}
+        sx={{
+          mt: 0.75,
+          height: 132,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          borderRadius: 1.75,
+          bgcolor: wins ? "#F0FDF4" : "#F3F4F6",
+          color: wins ? "#16A34A" : "#4B5563",
+          cursor: canEditScore ? "pointer" : "default",
+          touchAction: "manipulation",
+          userSelect: "none",
+          "&:hover": { bgcolor: canEditScore ? (wins ? "#DCFCE7" : "#E5E7EB") : (wins ? "#F0FDF4" : "#F3F4F6") },
+          "&:active": canEditScore ? { transform: "scale(0.985)", bgcolor: wins ? "#BBF7D0" : "#D1D5DB" } : undefined,
+        }}
+      >
         <Box
-          onClick={canEditScore ? onMinus : undefined}
-          sx={{ width: 30, height: 30, border: "1.5px solid #E5E7EB", borderRadius: 1, display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "#fff", cursor: canEditScore ? "pointer" : "default", color: "#6B7280", userSelect: "none" }}
+          component="span"
+          sx={{
+            display: "block",
+            fontSize: "clamp(3.75rem, 18vw, 5.5rem)",
+            fontWeight: 600,
+            lineHeight: 1,
+            fontVariantNumeric: "tabular-nums",
+            transform: "translateY(-4px)",
+          }}
         >
-          <RemoveIcon sx={{ fontSize: 14 }} />
+          {score}
         </Box>
-        <Box sx={{ minWidth: 36, height: 30, border: "1.5px solid #E5E7EB", borderRadius: 1, display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "#fff" }}>
-          <Typography sx={{ fontWeight: 900, fontSize: 18, color: wins ? "#16A34A" : "#111827" }}>{score}</Typography>
-        </Box>
-        <Box
-          onClick={canEditScore ? onPlus : undefined}
-          sx={{ width: 30, height: 30, border: "1.5px solid #E5E7EB", borderRadius: 1, display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "#fff", cursor: canEditScore ? "pointer" : "default", color: "#2F80ED", userSelect: "none" }}
-        >
-          <AddIcon sx={{ fontSize: 14 }} />
-        </Box>
-      </Stack>
-    </Stack>
+      </Button>
+
+      <Button
+        fullWidth
+        variant="outlined"
+        disableElevation
+        disabled={!canEditScore || score <= 0}
+        onClick={onMinus}
+        aria-label={`${name ?? "미정"} 점수 1점 내리기`}
+        sx={{
+          mt: 0.75,
+          height: 48,
+          borderRadius: 1.75,
+          borderColor: "#D1D5DB",
+          bgcolor: "#fff",
+          color: "#6B7280",
+          fontSize: 18,
+          fontWeight: 900,
+          touchAction: "manipulation",
+          "&:hover": { borderColor: "#9CA3AF", bgcolor: "#F9FAFB" },
+          "&.Mui-disabled": { borderColor: "#E5E7EB", bgcolor: "#F9FAFB", color: "#C4C9D4" },
+        }}
+      >
+        −1
+      </Button>
+    </Box>
   );
 }
 
@@ -308,11 +370,12 @@ function MatchCard({
   }, [match, index, displayNameA, displayNameB]);
 
   const handleScore = useCallback((side: "a" | "b", delta: number) => {
-    const current = side === "a" ? (match.score_a ?? 0) : (match.score_b ?? 0);
+    const currentMatch = latestMatchRef.current;
+    const current = side === "a" ? (currentMatch.score_a ?? 0) : (currentMatch.score_b ?? 0);
     const next = Math.max(0, current + delta);
     updateCurrentMatch(side === "a" ? { score_a: next } : { score_b: next });
     scheduleAutoComplete();
-  }, [match, scheduleAutoComplete, updateCurrentMatch]);
+  }, [scheduleAutoComplete, updateCurrentMatch]);
 
   const handleCourtBlur = useCallback(() => {
     const val = courtRef.current?.value ?? "";
@@ -371,13 +434,17 @@ function MatchCard({
 
   const isPlaying = match.status === "playing";
   const isDone = match.status === "done";
-  const winScore = getWinScore(rules);
+  const isThreeSet = rules === "THREE_SET" || rules?.includes("3세트제") === true;
   const sa = match.score_a ?? 0;
   const sb = match.score_b ?? 0;
-  const aWins = (isDone && Boolean(match.participant_a_id) && !match.participant_b_id)
-    || (winScore !== null && isDone && sa === winScore);
-  const bWins = (isDone && Boolean(match.participant_b_id) && !match.participant_a_id)
-    || (winScore !== null && isDone && sb === winScore);
+  const aWins = !isThreeSet && (
+    (isDone && Boolean(match.participant_a_id) && !match.participant_b_id)
+    || (isDone && Boolean(match.participant_a_id && match.participant_b_id) && sa > sb)
+  );
+  const bWins = !isThreeSet && (
+    (isDone && Boolean(match.participant_b_id) && !match.participant_a_id)
+    || (isDone && Boolean(match.participant_a_id && match.participant_b_id) && sb > sa)
+  );
   const canEditScore = canMember
     && Boolean(match.participant_a_id && match.participant_b_id)
     && (isPlaying || isDone);
@@ -443,9 +510,9 @@ function MatchCard({
           )}
         </Stack>
 
-        {/* 참가자 박스 (직선 테두리) */}
-        <Box sx={{ border: "1.5px solid #E5E7EB", borderRadius: 0, overflow: "hidden" }}>
-          <ParticipantRow
+        {/* 좌우 대형 터치 점수판 */}
+        <Stack direction="row" spacing={1} alignItems="stretch">
+          <ScoreboardPanel
             name={displayNameA}
             division={match.participant_a_division}
             seedLabel={seedA}
@@ -455,11 +522,7 @@ function MatchCard({
             onMinus={() => handleScore("a", -1)}
             onPlus={() => handleScore("a", 1)}
           />
-          {/* vs 구분 */}
-          <Box sx={{ borderTop: "1.5px solid #E5E7EB", borderBottom: "1.5px solid #E5E7EB", py: 0.4, textAlign: "center", bgcolor: "#FAFAFA" }}>
-            <Typography sx={{ fontSize: 11, fontWeight: 700, color: "#C4C9D4" }}>vs</Typography>
-          </Box>
-          <ParticipantRow
+          <ScoreboardPanel
             name={displayNameB}
             division={match.participant_b_division}
             seedLabel={seedB}
@@ -469,7 +532,7 @@ function MatchCard({
             onMinus={() => handleScore("b", -1)}
             onPlus={() => handleScore("b", 1)}
           />
-        </Box>
+        </Stack>
 
         {/* Row 4: 코트 + 상태 버튼 */}
         <Stack direction="row" alignItems="center" spacing={1} mt={1.5}>

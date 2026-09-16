@@ -13,6 +13,7 @@ const { scanLeagueSheetWithOpenAIVision, scanParticipantNamesWithOpenAIVision, s
 const { FEATURES, consumeFeatureCredit, refundFeatureCredit } = require('../services/featureUsageService');
 const { getPointRanking, ensureDefaultRankingSeasons, normalizePointRules } = require('../services/pointRanking');
 const { winnerSide } = require('../utils/matchOutcome');
+const { resolveProgramParticipantId } = require('../utils/programParticipantResolver');
 
 const isWebPushConfigured = Boolean(
   process.env.VAPID_MAILTO && process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY,
@@ -62,7 +63,7 @@ function canCombineProgramRoundPoints(programData) {
 }
 
 async function getProgramUnitRankings(leagueId, programData, rules, adjustments = []) {
-  const result = await pool.query(`SELECT m.id,m.program_round,m.program_block_type,m.bracket,m.tournament_bracket_index,m.round_number,m.match_label,m.next_match_id,m.status,m.score_a,m.score_b,m.participant_a_id,m.participant_b_id,m.participant_a_roster_ids,m.participant_b_roster_ids FROM league_matches m WHERE m.league_id=$1 AND m.is_program=true ORDER BY m.program_round,m.match_order`, [leagueId]);
+  const result = await pool.query(`SELECT m.id,m.program_round,m.program_block_type,m.bracket,m.tournament_bracket_index,m.round_number,m.match_label,m.next_match_id,m.status,m.score_a,m.score_b,m.participant_a_id,m.participant_b_id,m.participant_a_roster_ids,m.participant_b_roster_ids,m.participant_a_seed_label,m.participant_b_seed_label,m.match_rule FROM league_matches m WHERE m.league_id=$1 AND m.is_program=true ORDER BY m.program_round,m.match_order`, [leagueId]);
   const participantResult = await pool.query(`
     SELECT lp.id,lp.name,lp.division,
            COALESCE(lp.member_id, CASE WHEN matched.matched_count=1 THEN matched.user_id END) AS member_id,
@@ -84,7 +85,15 @@ async function getProgramUnitRankings(leagueId, programData, rules, adjustments 
     const roundBlock = programData?.blocks?.[roundIndex] ?? programData?.rounds?.[roundIndex] ?? {};
     const type = match.program_block_type ?? roundBlock.type ?? roundBlock.program;
     if (!['SINGLES','DOUBLES','TEAM'].includes(type)) return;
-    const a=unit(type==='SINGLES'?[match.participant_a_id]:(match.participant_a_roster_ids||[])); const b=unit(type==='SINGLES'?[match.participant_b_id]:(match.participant_b_roster_ids||[]));
+    const resolvedAId = type === 'SINGLES'
+      ? resolveProgramParticipantId(programData, match.program_round, match.participant_a_seed_label) ?? match.participant_a_id
+      : match.participant_a_id;
+    const resolvedBId = type === 'SINGLES'
+      ? resolveProgramParticipantId(programData, match.program_round, match.participant_b_seed_label) ?? match.participant_b_id
+      : match.participant_b_id;
+    match._resolved_participant_a_id = resolvedAId;
+    match._resolved_participant_b_id = resolvedBId;
+    const a=unit(type==='SINGLES'?[resolvedAId]:(match.participant_a_roster_ids||[])); const b=unit(type==='SINGLES'?[resolvedBId]:(match.participant_b_roster_ids||[]));
     if (!a.key || !b.key) return;
     const groupKey=`${type}:${match.program_round}`; const map=groups.get(groupKey)??new Map(); groups.set(groupKey,map); const groupedMatches=matchesByGroup.get(groupKey)??[]; groupedMatches.push(match); matchesByGroup.set(groupKey,groupedMatches);
     [a,b].forEach((side) => { if(!map.has(side.key)) map.set(side.key,{ unit_key:side.key,name:side.name,members:side.members,member_id:type==='SINGLES'?(side.members[0]?.member_id??null):null,member_ids:side.members.map((member)=>member.member_id).filter(Boolean).map(Number),pre_member_id:type==='SINGLES'?(side.members[0]?.pre_member_id??null):null,is_pre_registered:type==='SINGLES'&&Boolean(side.members[0]?.pre_member_id),division:type==='SINGLES'?(side.members[0]?.division??null):null,matches_played:0,wins:0,losses:0,score_points:0,attendance_points:0,bonus_points:0,total_points:0 }); });
@@ -92,8 +101,10 @@ async function getProgramUnitRankings(leagueId, programData, rules, adjustments 
     const eventKey=type==='SINGLES'?'singles':type==='DOUBLES'?'doubles':'team';
     const formatKey=roundBlock.format==='TOURNAMENT'?'tournament':roundBlock.format==='GROUP'?'group':'league';
     const includeMatchPoints=rules.matchPoints.eventTypes[eventKey]&&rules.matchPoints.formats[formatKey];
-    if(includeMatchPoints){if(rules.matchPoints.mode==='win'){if(sa>sb)ar.score_points+=rules.matchPoints.winPoints;if(sb>sa)br.score_points+=rules.matchPoints.winPoints;}else{ar.score_points+=sa;br.score_points+=sb;}}
-    if(sa>sb){ar.wins++;br.losses++;}else if(sb>sa){br.wins++;ar.losses++;}
+    const effectiveRule = roundBlock.matchRule ?? match.match_rule;
+    const winner = winnerSide(sa, sb, effectiveRule);
+    if(includeMatchPoints){if(rules.matchPoints.mode==='win'){if(winner==='a')ar.score_points+=rules.matchPoints.winPoints;if(winner==='b')br.score_points+=rules.matchPoints.winPoints;}else{ar.score_points+=sa;br.score_points+=sb;}}
+    if(winner==='a'){ar.wins++;br.losses++;}else if(winner==='b'){br.wins++;ar.losses++;}
   });
   const sections=[];
   groups.forEach((map,key) => {
@@ -108,7 +119,7 @@ async function getProgramUnitRankings(leagueId, programData, rules, adjustments 
 
     if(block.format==='TOURNAMENT'){
       const matches=matchesByGroup.get(key)??[];
-      const side=(match,which)=>unit(type==='SINGLES'?[match[`participant_${which}_id`]]:(match[`participant_${which}_roster_ids`]||[]));
+      const side=(match,which)=>unit(type==='SINGLES'?[match[`_resolved_participant_${which}_id`] ?? match[`participant_${which}_id`]]:(match[`participant_${which}_roster_ids`]||[]));
       const outcome=(match)=>{
         if(!match||match.status!=='done'||Number(match.score_a)===Number(match.score_b))return null;
         const a=side(match,'a'),b=side(match,'b');

@@ -1,5 +1,6 @@
 const pool = require("../db/pool");
 const { winnerSide } = require('../utils/matchOutcome');
+const { resolveProgramParticipantId } = require('../utils/programParticipantResolver');
 
 const DEFAULT_POINT_RULES = Object.freeze({
   attendance: { league: 10, tournament: 20 },
@@ -689,6 +690,8 @@ async function getPointRanking(groupId, year, scope, seasonId, onlyLeagueId = nu
        m.loser_next_slot,
        m.status,
        m.match_rule,
+       m.participant_a_seed_label,
+       m.participant_b_seed_label,
        COALESCE(m.score_a, 0) AS score_a,
        COALESCE(m.score_b, 0) AS score_b,
        pa.id AS participant_a_id,
@@ -839,11 +842,17 @@ async function getPointRanking(groupId, year, scope, seasonId, onlyLeagueId = nu
     }
     match._rankingSection = section;
 
+    const resolvedParticipantAId = entryType === "singles"
+      ? resolveProgramParticipantId(match.program_data, match.program_round, match.participant_a_seed_label) ?? match.participant_a_id
+      : match.participant_a_id;
+    const resolvedParticipantBId = entryType === "singles"
+      ? resolveProgramParticipantId(match.program_data, match.program_round, match.participant_b_seed_label) ?? match.participant_b_id
+      : match.participant_b_id;
     const memberAIds = entryType === "singles"
-      ? [participantMembers.get(String(match.participant_a_id))].filter(Boolean)
+      ? [participantMembers.get(String(resolvedParticipantAId))].filter(Boolean)
       : (match.participant_a_roster_ids ?? []).map((id) => participantMembers.get(String(id))).filter(Boolean);
     const memberBIds = entryType === "singles"
-      ? [participantMembers.get(String(match.participant_b_id))].filter(Boolean)
+      ? [participantMembers.get(String(resolvedParticipantBId))].filter(Boolean)
       : (match.participant_b_roster_ids ?? []).map((id) => participantMembers.get(String(id))).filter(Boolean);
     const rankingMemberAIds = memberAIds.filter((memberId) => baseMembers.has(memberId));
     const rankingMemberBIds = memberBIds.filter((memberId) => baseMembers.has(memberId));

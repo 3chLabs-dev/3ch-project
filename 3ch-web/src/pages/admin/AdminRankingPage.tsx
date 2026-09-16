@@ -42,7 +42,9 @@ type AdminPointRankingResponse = {
 };
 
 type RatingRankingRow = {
-  member_id: number;
+  member_id: number | null;
+  pre_member_id?: string | null;
+  is_pre_registered?: boolean;
   name: string;
   division?: string | null;
   rank: number | null;
@@ -535,9 +537,9 @@ function RatingRankingSection({ title, rows }: { title: string; rows: RatingRank
               </TableRow>
             ) : (
               rows.map((row) => (
-                <TableRow key={`${title}-${row.member_id}`} hover>
+                <TableRow key={`${title}-${row.member_id ?? `pre-${row.pre_member_id}`}`} hover>
                   <TableCell sx={{ fontSize: 12, fontWeight: 800 }}>{row.rank ?? "-"}</TableCell>
-                  <TableCell sx={{ fontSize: 12, fontWeight: 700 }}>{row.name}</TableCell>
+                  <TableCell sx={{ fontSize: 12, fontWeight: 700 }}>{row.name}{row.is_pre_registered ? " · 사전등록" : ""}</TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{row.division ?? "-"}</TableCell>
                   <TableCell sx={{ fontSize: 12, fontWeight: 900, color: "#1D4ED8" }}>{row.rating}</TableCell>
                   <TableCell sx={{ fontSize: 12 }}>{row.matches_played}</TableCell>

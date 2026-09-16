@@ -168,17 +168,6 @@ export default function AppShell() {
                             <img src={logo} alt="우리리그" style={{ height: 32 }} />
                         </Box>
 
-                        {isMatchOrderPage && (
-                            <IconButton
-                                aria-label="경기 순서 새로고침"
-                                size="small"
-                                onClick={() => window.dispatchEvent(new Event("refresh-match-order"))}
-                                sx={{ ml: "auto", color: "#6B7280" }}
-                            >
-                                <RefreshIcon />
-                            </IconButton>
-                        )}
-
                         {/* 클럽 셀렉트 — 리그·대회 및 추첨 메인에서 표시 */}
                         {token && groups.length > 1 && (
                             location.pathname === "/league"
@@ -374,6 +363,28 @@ export default function AppShell() {
                 </Box>
 
                 {!isLeagueSheet && <SupportChat />}
+                {isMatchOrderPage && (
+                    <IconButton
+                        aria-label="경기 순서 새로고침"
+                        onClick={() => window.dispatchEvent(new Event("refresh-match-order"))}
+                        sx={{
+                            position: "absolute",
+                            right: 14,
+                            bottom: location.pathname.endsWith("/program/matches")
+                                ? "calc(132px + env(safe-area-inset-bottom))"
+                                : "calc(68px + env(safe-area-inset-bottom))",
+                            zIndex: 21,
+                            width: 45,
+                            height: 45,
+                            bgcolor: "#fff",
+                            color: "#6B7280",
+                            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+                            "&:hover": { bgcolor: "#F3F4F6" },
+                        }}
+                    >
+                        <RefreshIcon sx={{ fontSize: 20 }} />
+                    </IconButton>
+                )}
                 {!isLeagueSheet && <BottomTab />}
 
                 <Dialog

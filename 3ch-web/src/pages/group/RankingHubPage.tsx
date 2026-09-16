@@ -271,7 +271,7 @@ function RankingClubCard({
                 <Stack direction="row" spacing={0.55} sx={{ mt: 0.55, flexWrap: "wrap" }}>
                   {top3.length > 0 ? top3.map((row) => (
                     <Box
-                      key={row.member_id}
+                      key={row.member_id ?? `pre-${row.pre_member_id}`}
                       sx={{
                         display: "inline-flex",
                         alignItems: "center",
@@ -287,6 +287,7 @@ function RankingClubCard({
                         {row.rank}위 {row.name}
                       </Typography>
                       <DivisionBadge division={row.division} sx={{ minWidth: 15, height: 15, fontSize: 8 }} />
+                      {row.is_pre_registered && <Typography sx={{ fontSize: 9, color: "#64748B", fontWeight: 700 }}>사전등록</Typography>}
                     </Box>
                   )) : (
                     <Typography sx={{ fontSize: 10.5, color: "text.secondary", lineHeight: 1.35 }}>

@@ -252,7 +252,9 @@ export interface GroupMemberDetailResponse {
 }
 
 export interface GroupRankingRow {
-  member_id: number;
+  member_id: number | null;
+  pre_member_id?: string | null;
+  is_pre_registered?: boolean;
   name: string;
   division?: string | null;
   rank: number | null;

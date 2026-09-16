@@ -177,7 +177,7 @@ function ScoreboardPanel({
         aria-label={`${name ?? "미정"} 점수 1점 올리기`}
         sx={{
           mt: 0.75,
-          height: 132,
+          height: 116,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",

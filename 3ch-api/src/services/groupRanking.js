@@ -25,16 +25,19 @@ async function ensureGroupRankingTables() {
           k_tournament       INTEGER      NOT NULL DEFAULT 32,
           include_tournament BOOLEAN      NOT NULL DEFAULT true,
           exclude_guests     BOOLEAN      NOT NULL DEFAULT true,
+          rating_version     INTEGER      NOT NULL DEFAULT 1,
           created_at         TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
           updated_at         TIMESTAMPTZ  NOT NULL DEFAULT NOW()
         )
       `);
+      await pool.query(`ALTER TABLE group_ranking_settings ADD COLUMN IF NOT EXISTS rating_version INTEGER NOT NULL DEFAULT 1`);
 
       await pool.query(`
         CREATE TABLE IF NOT EXISTS group_rankings (
           id               TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
           group_id         TEXT         NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
-          member_id        INTEGER      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          member_id        INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          pre_member_id    TEXT REFERENCES group_pre_members(id) ON DELETE CASCADE,
           rating           INTEGER      NOT NULL DEFAULT 1500,
           rank             INTEGER,
           wins             INTEGER      NOT NULL DEFAULT 0,
@@ -49,7 +52,10 @@ async function ensureGroupRankingTables() {
         )
       `);
       await pool.query(`ALTER TABLE group_rankings ALTER COLUMN id SET DEFAULT gen_random_uuid()::text`);
+      await pool.query(`ALTER TABLE group_rankings ALTER COLUMN member_id DROP NOT NULL`);
+      await pool.query(`ALTER TABLE group_rankings ADD COLUMN IF NOT EXISTS pre_member_id TEXT REFERENCES group_pre_members(id) ON DELETE CASCADE`);
       await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS group_rankings_group_member_uidx ON group_rankings(group_id, member_id)`);
+      await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS group_rankings_group_id_pre_member_id_key ON group_rankings(group_id, pre_member_id)`);
       await pool.query(`CREATE INDEX IF NOT EXISTS group_rankings_group_rank_idx ON group_rankings(group_id, rank)`);
       await pool.query(`CREATE INDEX IF NOT EXISTS group_rankings_group_rating_idx ON group_rankings(group_id, rating DESC)`);
 
@@ -57,8 +63,10 @@ async function ensureGroupRankingTables() {
         CREATE TABLE IF NOT EXISTS group_ranking_events (
           id                 TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
           group_id           TEXT         NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
-          member_id          INTEGER      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          member_id          INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          pre_member_id      TEXT REFERENCES group_pre_members(id) ON DELETE CASCADE,
           opponent_member_id INTEGER,
+          opponent_pre_member_id TEXT REFERENCES group_pre_members(id) ON DELETE SET NULL,
           league_id          TEXT,
           league_match_id    TEXT,
           before_rating      INTEGER      NOT NULL,
@@ -70,6 +78,9 @@ async function ensureGroupRankingTables() {
         )
       `);
       await pool.query(`ALTER TABLE group_ranking_events ALTER COLUMN id SET DEFAULT gen_random_uuid()::text`);
+      await pool.query(`ALTER TABLE group_ranking_events ALTER COLUMN member_id DROP NOT NULL`);
+      await pool.query(`ALTER TABLE group_ranking_events ADD COLUMN IF NOT EXISTS pre_member_id TEXT REFERENCES group_pre_members(id) ON DELETE CASCADE`);
+      await pool.query(`ALTER TABLE group_ranking_events ADD COLUMN IF NOT EXISTS opponent_pre_member_id TEXT REFERENCES group_pre_members(id) ON DELETE SET NULL`);
       await pool.query(`CREATE INDEX IF NOT EXISTS group_ranking_events_member_idx ON group_ranking_events(group_id, member_id, created_at DESC)`);
       await pool.query(`CREATE INDEX IF NOT EXISTS group_ranking_events_match_idx ON group_ranking_events(league_match_id)`);
     })().catch((error) => {
@@ -111,6 +122,12 @@ function defaultState(baseRating) {
   };
 }
 
+function rankingIdentity(memberId, preMemberId) {
+  if (memberId != null) return `member:${memberId}`;
+  if (preMemberId != null) return `pre:${preMemberId}`;
+  return null;
+}
+
 async function rebuildGroupRanking(groupId) {
   await ensureGroupRankingTables();
 
@@ -134,10 +151,20 @@ async function rebuildGroupRanking(groupId) {
       [groupId],
     );
 
-    const members = memberResult.rows;
+    const preMemberResult = await client.query(
+      `SELECT id AS pre_member_id, name, division
+         FROM group_pre_members
+        WHERE group_id = $1 AND status = 'active'
+        ORDER BY created_at ASC, id ASC`,
+      [groupId],
+    );
+    const members = [
+      ...memberResult.rows.map((row) => ({ ...row, pre_member_id: null })),
+      ...preMemberResult.rows.map((row) => ({ ...row, member_id: null })),
+    ];
     const states = new Map();
     for (const member of members) {
-      states.set(Number(member.member_id), defaultState(baseRating));
+      states.set(rankingIdentity(member.member_id, member.pre_member_id), defaultState(baseRating));
     }
 
     const matchParams = [groupId];
@@ -150,18 +177,40 @@ async function rebuildGroupRanking(groupId) {
         m.score_b,
         m.match_rule,
         COALESCE(m.created_at, NOW()) AS played_at,
-        pa.member_id AS member_a_id,
-        pb.member_id AS member_b_id
+        COALESCE(pa.member_id, CASE WHEN pma.matched_count = 1 THEN pma.linked_user_id END) AS member_a_id,
+        COALESCE(pb.member_id, CASE WHEN pmb.matched_count = 1 THEN pmb.linked_user_id END) AS member_b_id,
+        CASE WHEN pa.member_id IS NULL AND pma.matched_count = 1 AND pma.linked_user_id IS NULL THEN pma.pre_member_id END AS pre_member_a_id,
+        CASE WHEN pb.member_id IS NULL AND pmb.matched_count = 1 AND pmb.linked_user_id IS NULL THEN pmb.pre_member_id END AS pre_member_b_id
       FROM league_matches m
       JOIN leagues l ON l.id = m.league_id
       JOIN league_participants pa ON pa.id = m.participant_a_id
       JOIN league_participants pb ON pb.id = m.participant_b_id
-      JOIN group_members gma ON gma.group_id = l.group_id AND gma.user_id = pa.member_id
-      JOIN group_members gmb ON gmb.group_id = l.group_id AND gmb.user_id = pb.member_id
+      LEFT JOIN LATERAL (
+        SELECT MIN(pm.id::text) AS pre_member_id,
+               MIN(pm.linked_user_id) AS linked_user_id,
+               COUNT(*)::int AS matched_count
+          FROM group_pre_members pm
+         WHERE pm.group_id = l.group_id
+           AND pm.status IN ('active', 'linked')
+           AND (pm.name = pa.name OR EXISTS (
+             SELECT 1 FROM jsonb_array_elements_text(COALESCE(pm.external_aliases, '[]'::jsonb)) alias_name
+              WHERE alias_name = pa.name
+           ))
+      ) pma ON pa.member_id IS NULL
+      LEFT JOIN LATERAL (
+        SELECT MIN(pm.id::text) AS pre_member_id,
+               MIN(pm.linked_user_id) AS linked_user_id,
+               COUNT(*)::int AS matched_count
+          FROM group_pre_members pm
+         WHERE pm.group_id = l.group_id
+           AND pm.status IN ('active', 'linked')
+           AND (pm.name = pb.name OR EXISTS (
+             SELECT 1 FROM jsonb_array_elements_text(COALESCE(pm.external_aliases, '[]'::jsonb)) alias_name
+              WHERE alias_name = pb.name
+           ))
+      ) pmb ON pb.member_id IS NULL
       WHERE l.group_id = $1
         AND m.status = 'done'
-        AND pa.member_id IS NOT NULL
-        AND pb.member_id IS NOT NULL
         AND m.score_a IS NOT NULL
         AND m.score_b IS NOT NULL
         AND m.score_a <> m.score_b
@@ -177,12 +226,16 @@ async function rebuildGroupRanking(groupId) {
     const events = [];
 
     for (const match of matchResult.rows) {
-      const memberAId = Number(match.member_a_id);
-      const memberBId = Number(match.member_b_id);
-      if (!states.has(memberAId) || !states.has(memberBId)) continue;
+      const memberAId = match.member_a_id == null ? null : Number(match.member_a_id);
+      const memberBId = match.member_b_id == null ? null : Number(match.member_b_id);
+      const preMemberAId = match.pre_member_a_id ?? null;
+      const preMemberBId = match.pre_member_b_id ?? null;
+      const keyA = rankingIdentity(memberAId, preMemberAId);
+      const keyB = rankingIdentity(memberBId, preMemberBId);
+      if (!keyA || !keyB || keyA === keyB || !states.has(keyA) || !states.has(keyB)) continue;
 
-      const stateA = states.get(memberAId);
-      const stateB = states.get(memberBId);
+      const stateA = states.get(keyA);
+      const stateB = states.get(keyB);
       const beforeA = stateA.rating;
       const beforeB = stateB.rating;
       const winner = winnerSide(match.score_a, match.score_b, match.match_rule);
@@ -220,7 +273,9 @@ async function rebuildGroupRanking(groupId) {
       events.push({
         group_id: groupId,
         member_id: memberAId,
+        pre_member_id: preMemberAId,
         opponent_member_id: memberBId,
+        opponent_pre_member_id: preMemberBId,
         league_id: match.league_id,
         league_match_id: match.id,
         before_rating: beforeA,
@@ -234,7 +289,9 @@ async function rebuildGroupRanking(groupId) {
       events.push({
         group_id: groupId,
         member_id: memberBId,
+        pre_member_id: preMemberBId,
         opponent_member_id: memberAId,
+        opponent_pre_member_id: preMemberAId,
         league_id: match.league_id,
         league_match_id: match.id,
         before_rating: beforeB,
@@ -247,13 +304,15 @@ async function rebuildGroupRanking(groupId) {
     }
 
     const rankingRows = members.map((member) => {
-      const memberId = Number(member.member_id);
-      const state = states.get(memberId) ?? defaultState(baseRating);
+      const memberId = member.member_id == null ? null : Number(member.member_id);
+      const preMemberId = member.pre_member_id ?? null;
+      const state = states.get(rankingIdentity(memberId, preMemberId)) ?? defaultState(baseRating);
       const winRate = state.matches_played > 0
         ? Number(((state.wins / state.matches_played) * 100).toFixed(1))
         : 0;
       return {
         member_id: memberId,
+        pre_member_id: preMemberId,
         division: member.division || null,
         name: member.name,
         rating: state.rating,
@@ -278,7 +337,7 @@ async function rebuildGroupRanking(groupId) {
 
     const rankMap = new Map();
     rankedRows.forEach((row, index) => {
-      rankMap.set(row.member_id, index + 1);
+      rankMap.set(rankingIdentity(row.member_id, row.pre_member_id), index + 1);
     });
 
     await client.query(`DELETE FROM group_ranking_events WHERE group_id = $1`, [groupId]);
@@ -287,12 +346,13 @@ async function rebuildGroupRanking(groupId) {
     if (rankingRows.length > 0) {
       const rankingValues = [];
       const rankingPlaceholders = rankingRows.map((row, index) => {
-        const base = index * 11;
+        const base = index * 12;
         rankingValues.push(
           groupId,
           row.member_id,
+          row.pre_member_id,
           row.rating,
-          rankMap.get(row.member_id) ?? null,
+          rankMap.get(rankingIdentity(row.member_id, row.pre_member_id)) ?? null,
           row.wins,
           row.losses,
           row.matches_played,
@@ -301,12 +361,12 @@ async function rebuildGroupRanking(groupId) {
           row.best_win_rating,
           row.last_match_at,
         );
-        return `($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5},$${base + 6},$${base + 7},$${base + 8},$${base + 9},$${base + 10},$${base + 11})`;
+        return `(${Array.from({ length: 12 }, (_, i) => `$${base + i + 1}`).join(',')})`;
       }).join(', ');
 
       await client.query(
         `INSERT INTO group_rankings
-          (group_id, member_id, rating, rank, wins, losses, matches_played, win_rate, streak, best_win_rating, last_match_at)
+          (group_id, member_id, pre_member_id, rating, rank, wins, losses, matches_played, win_rate, streak, best_win_rating, last_match_at)
          VALUES ${rankingPlaceholders}`,
         rankingValues,
       );
@@ -315,11 +375,13 @@ async function rebuildGroupRanking(groupId) {
     if (events.length > 0) {
       const eventValues = [];
       const eventPlaceholders = events.map((event, index) => {
-        const base = index * 10;
+        const base = index * 12;
         eventValues.push(
           event.group_id,
           event.member_id,
+          event.pre_member_id,
           event.opponent_member_id,
+          event.opponent_pre_member_id,
           event.league_id,
           event.league_match_id,
           event.before_rating,
@@ -328,18 +390,18 @@ async function rebuildGroupRanking(groupId) {
           event.result,
           event.match_type,
         );
-        return `($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5},$${base + 6},$${base + 7},$${base + 8},$${base + 9},$${base + 10})`;
+        return `(${Array.from({ length: 12 }, (_, i) => `$${base + i + 1}`).join(',')})`;
       }).join(', ');
 
       await client.query(
         `INSERT INTO group_ranking_events
-          (group_id, member_id, opponent_member_id, league_id, league_match_id, before_rating, after_rating, delta, result, match_type)
+          (group_id, member_id, pre_member_id, opponent_member_id, opponent_pre_member_id, league_id, league_match_id, before_rating, after_rating, delta, result, match_type)
          VALUES ${eventPlaceholders}`,
         eventValues,
       );
     }
 
-    await client.query(`UPDATE group_ranking_settings SET updated_at = NOW() WHERE group_id = $1`, [groupId]);
+    await client.query(`UPDATE group_ranking_settings SET rating_version = 2, updated_at = NOW() WHERE group_id = $1`, [groupId]);
     await client.query('COMMIT');
 
     return {
@@ -367,8 +429,9 @@ async function getGroupRanking(groupId) {
   const rowsResult = await pool.query(
     `SELECT
        gr.member_id,
-       COALESCE(gm.division, '') AS division,
-       COALESCE(u.name, u.email) AS name,
+       COALESCE(gm.division, pm.division, '') AS division,
+       COALESCE(u.name, u.email, pm.name) AS name,
+       gr.pre_member_id,
        gr.rank,
        gr.rating,
        gr.wins,
@@ -379,8 +442,9 @@ async function getGroupRanking(groupId) {
        gr.last_match_at,
        gr.updated_at
      FROM group_rankings gr
-     JOIN users u ON u.id = gr.member_id
+     LEFT JOIN users u ON u.id = gr.member_id
      LEFT JOIN group_members gm ON gm.group_id = gr.group_id AND gm.user_id = gr.member_id
+     LEFT JOIN group_pre_members pm ON pm.id = gr.pre_member_id
      WHERE gr.group_id = $1
      ORDER BY
        CASE WHEN gr.rank IS NULL THEN 1 ELSE 0 END,
@@ -390,15 +454,20 @@ async function getGroupRanking(groupId) {
     [groupId],
   );
 
-  if (rowsResult.rowCount === 0) {
+  const versionResult = await pool.query(
+    `SELECT rating_version FROM group_ranking_settings WHERE group_id = $1`,
+    [groupId],
+  );
+  if (rowsResult.rowCount === 0 || Number(versionResult.rows[0]?.rating_version ?? 0) < 2) {
     await rebuildGroupRanking(groupId);
   }
 
   const rankingResult = await pool.query(
     `SELECT
        gr.member_id,
-       COALESCE(gm.division, '') AS division,
-       COALESCE(u.name, u.email) AS name,
+       COALESCE(gm.division, pm.division, '') AS division,
+       COALESCE(u.name, u.email, pm.name) AS name,
+       gr.pre_member_id,
        gr.rank,
        gr.rating,
        gr.wins,
@@ -408,8 +477,9 @@ async function getGroupRanking(groupId) {
        gr.streak,
        gr.last_match_at
      FROM group_rankings gr
-     JOIN users u ON u.id = gr.member_id
+     LEFT JOIN users u ON u.id = gr.member_id
      LEFT JOIN group_members gm ON gm.group_id = gr.group_id AND gm.user_id = gr.member_id
+     LEFT JOIN group_pre_members pm ON pm.id = gr.pre_member_id
      WHERE gr.group_id = $1
      ORDER BY
        CASE WHEN gr.rank IS NULL THEN 1 ELSE 0 END,
@@ -421,7 +491,8 @@ async function getGroupRanking(groupId) {
 
   const summaryResult = await pool.query(
     `SELECT
-       (SELECT COUNT(*)::int FROM group_members WHERE group_id = $1) AS member_count,
+       ((SELECT COUNT(*)::int FROM group_members WHERE group_id = $1)
+         + (SELECT COUNT(*)::int FROM group_pre_members WHERE group_id = $1 AND status = 'active')) AS member_count,
        (SELECT COUNT(*)::int FROM group_rankings WHERE group_id = $1 AND matches_played > 0) AS ranked_count,
        MAX(updated_at) AS updated_at
      FROM group_rankings
@@ -450,7 +521,9 @@ async function getGroupRanking(groupId) {
       updated_at: summaryResult.rows[0]?.updated_at ?? null,
     },
     rankings: rankingResult.rows.map((row) => ({
-      member_id: Number(row.member_id),
+      member_id: row.member_id == null ? null : Number(row.member_id),
+      pre_member_id: row.pre_member_id ?? null,
+      is_pre_registered: row.pre_member_id != null,
       division: row.division || null,
       name: row.name,
       rank: row.rank == null ? null : Number(row.rank),
@@ -467,6 +540,13 @@ async function getGroupRanking(groupId) {
 
 async function getGroupRankingDetail(groupId, memberId) {
   await ensureGroupRankingTables();
+  const versionResult = await pool.query(
+    `SELECT rating_version FROM group_ranking_settings WHERE group_id = $1`,
+    [groupId],
+  );
+  if (Number(versionResult.rows[0]?.rating_version ?? 0) < 2) {
+    await rebuildGroupRanking(groupId);
+  }
 
   const rankingResult = await pool.query(
     `SELECT
@@ -526,9 +606,10 @@ async function getGroupRankingDetail(groupId, memberId) {
        e.result,
        e.match_type,
        e.created_at,
-       COALESCE(u.name, u.email) AS opponent_name
+       COALESCE(u.name, u.email, pm.name) AS opponent_name
      FROM group_ranking_events e
      LEFT JOIN users u ON u.id = e.opponent_member_id
+     LEFT JOIN group_pre_members pm ON pm.id = e.opponent_pre_member_id
      WHERE e.group_id = $1 AND e.member_id = $2
      ORDER BY e.created_at DESC
      LIMIT 20`,
@@ -637,4 +718,5 @@ module.exports = {
   getGroupRankingDetail,
   updateGroupRankingSettings,
   getGroupIdByLeagueId,
+  _test: { rankingIdentity },
 };

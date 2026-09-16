@@ -360,7 +360,7 @@ export default function Home() {
                                     <Stack direction="row" spacing={0.55} useFlexGap flexWrap="wrap">
                                         {clubTop3.map((row) => (
                                             <Box
-                                                key={row.member_id}
+                                                key={row.member_id ?? `pre-${row.pre_member_id}`}
                                                 sx={{
                                                     display: "inline-flex",
                                                     alignItems: "center",

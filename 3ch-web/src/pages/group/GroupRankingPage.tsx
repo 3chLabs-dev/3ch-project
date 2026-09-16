@@ -293,7 +293,18 @@ const THEME_META: Record<string, { title: string; description: string; suffix: s
 function ThemeRankingPanel({ theme, rows, currentUserId, onSelect }: { theme: string; rows: ThemeRankingRow[]; currentUserId: number; onSelect: (memberId: number) => void }) {
   const [visibleCount, setVisibleCount] = useState(10);
   const meta = THEME_META[theme] ?? THEME_META.attendance;
-  const winner = rows[0];
+  const topRank = rows[0]?.rank;
+  const winner = rows
+    .filter((row) => row.rank === topRank)
+    .reduce<ThemeRankingRow | undefined>((selected, row) => {
+      if (!selected) return row;
+      const divisionNumber = (division?: string | null) => {
+        const parsed = Number.parseInt(String(division ?? "").replace(/[^0-9]/g, ""), 10);
+        return Number.isFinite(parsed) ? parsed : -1;
+      };
+      return divisionNumber(row.division) > divisionNumber(selected.division) ? row : selected;
+    }, undefined);
+  const remainingRows = winner ? rows.filter((row) => row !== winner) : rows;
   const valueLabel = (row: ThemeRankingRow) => `${theme === "set_ratio" ? row.value.toFixed(1) : row.value}${meta.suffix}`;
   if (!winner) {
     return <Stack spacing={0.5}><Typography sx={{ fontSize: 18, fontWeight: 900 }}>{meta.title}</Typography><Typography sx={{ fontSize: 12, color: "text.secondary", fontWeight: 700 }}>{meta.description}</Typography><EmptyRankingCard /></Stack>;
@@ -314,7 +325,7 @@ function ThemeRankingPanel({ theme, rows, currentUserId, onSelect }: { theme: st
         </CardContent>
       </Card>
       <Stack spacing={0.7}>
-        {rows.slice(1, visibleCount).map((row) => {
+        {remainingRows.slice(0, Math.max(0, visibleCount - 1)).map((row) => {
           const isMine = row.member_id != null && row.member_id === currentUserId;
           return <Card key={row.member_id ?? `pre-${row.pre_member_id}`} elevation={0} onClick={() => row.member_id != null && onSelect(row.member_id)} sx={{ borderRadius: 1.2, cursor: row.member_id != null ? "pointer" : "default", bgcolor: isMine ? "#EEF2FF" : "#FFF", border: "1px solid #DCE5F0" }}>
             <CardContent sx={{ py: 1, px: 1.25, "&:last-child": { pb: 1 } }}>

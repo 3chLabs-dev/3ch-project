@@ -176,6 +176,7 @@ model GroupRankingSetting {
   k_tournament       Int      @default(32)
   include_tournament Boolean  @default(true)
   exclude_guests     Boolean  @default(true)
+  rating_version     Int      @default(1)
   created_at         DateTime @default(now())
   updated_at         DateTime @default(now()) @updatedAt
 
@@ -187,7 +188,8 @@ model GroupRankingSetting {
 model GroupRanking {
   id              String    @id @default(dbgenerated("gen_random_uuid()::text"))
   group_id        String
-  member_id       Int
+  member_id       Int?
+  pre_member_id   String?
   rating          Int       @default(1500)
   rank            Int?
   wins            Int       @default(0)
@@ -201,9 +203,11 @@ model GroupRanking {
   updated_at      DateTime  @default(now()) @updatedAt
 
   group  Group @relation(fields: [group_id], references: [id], onDelete: Cascade)
-  member User  @relation(fields: [member_id], references: [id], onDelete: Cascade)
+  member     User?           @relation(fields: [member_id], references: [id], onDelete: Cascade)
+  pre_member GroupPreMember? @relation(fields: [pre_member_id], references: [id], onDelete: Cascade)
 
   @@unique([group_id, member_id])
+  @@unique([group_id, pre_member_id])
   @@index([group_id, rank])
   @@index([group_id, rating])
   @@map("group_rankings")
@@ -212,8 +216,10 @@ model GroupRanking {
 model GroupRankingEvent {
   id                 String   @id @default(dbgenerated("gen_random_uuid()::text"))
   group_id           String
-  member_id          Int
+  member_id          Int?
+  pre_member_id      String?
   opponent_member_id Int?
+  opponent_pre_member_id String?
   league_id          String?
   league_match_id    String?
   before_rating      Int
@@ -224,7 +230,9 @@ model GroupRankingEvent {
   created_at         DateTime @default(now())
 
   group  Group @relation(fields: [group_id], references: [id], onDelete: Cascade)
-  member User  @relation("GroupRankingEventMember", fields: [member_id], references: [id], onDelete: Cascade)
+  member User? @relation("GroupRankingEventMember", fields: [member_id], references: [id], onDelete: Cascade)
+  pre_member GroupPreMember? @relation("GroupRankingEventPreMember", fields: [pre_member_id], references: [id], onDelete: Cascade)
+  opponent_pre_member GroupPreMember? @relation("GroupRankingEventOpponentPreMember", fields: [opponent_pre_member_id], references: [id], onDelete: SetNull)
 
   @@index([group_id, member_id, created_at])
   @@index([league_match_id])
@@ -619,6 +627,9 @@ model GroupPreMember {
   creator     User              @relation("GroupPreMemberCreator", fields: [created_by_id], references: [id])
   linked_user User?             @relation("GroupPreMemberLinkedUser", fields: [linked_user_id], references: [id], onDelete: SetNull)
   claim       GroupMemberClaim?
+  rankings    GroupRanking[]
+  ranking_events GroupRankingEvent[] @relation("GroupRankingEventPreMember")
+  opponent_ranking_events GroupRankingEvent[] @relation("GroupRankingEventOpponentPreMember")
 
   @@index([group_id, status])
   @@map("group_pre_members")

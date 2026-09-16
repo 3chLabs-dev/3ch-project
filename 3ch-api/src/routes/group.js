@@ -1288,7 +1288,9 @@ router.patch('/group/:id/pre-members/:preMemberId', requireAuth, requireGroupPer
     if (duplicate.rowCount) { await client.query('ROLLBACK'); return res.status(409).json({ message: '같은 이름의 사전등록 회원이 있습니다.' }); }
     const updated = await client.query(`UPDATE group_pre_members SET name=$1,division=$2,external_aliases=$3::jsonb,updated_at=NOW() WHERE id=$4 RETURNING id,name,division,external_aliases,status,created_at`, [name,division,JSON.stringify(aliases),req.params.preMemberId]);
     await client.query(`UPDATE league_participants lp SET name=$1,division=$2 FROM leagues l WHERE lp.league_id=l.id AND lp.member_id IS NULL AND (l.group_id=$3 OR lp.source_group_id=$3) AND lp.name=$4`, [name,division,req.params.id,current.rows[0].name]);
-    await client.query('COMMIT'); return res.json({ message: '사전등록 회원을 수정했습니다.', pre_member: updated.rows[0] });
+    await client.query('COMMIT');
+    await rebuildGroupRanking(req.params.id).catch((error) => console.error('사전등록 회원 수정 후 레이팅 재계산 실패:', error));
+    return res.json({ message: '사전등록 회원을 수정했습니다.', pre_member: updated.rows[0] });
   } catch (error) { await client.query('ROLLBACK').catch(() => {}); console.error(error); return res.status(500).json({ message: '사전등록 회원 수정에 실패했습니다.' }); }
   finally { client.release(); }
 });
@@ -1301,6 +1303,7 @@ router.delete('/group/:id/pre-members/:preMemberId', requireAuth, requireGroupPe
       [req.params.preMemberId, req.params.id]
     );
     if (!result.rowCount) return res.status(404).json({ message: '삭제할 사전등록 회원이 없습니다.' });
+    await rebuildGroupRanking(req.params.id).catch((error) => console.error('사전등록 회원 삭제 후 레이팅 재계산 실패:', error));
     res.json({ message: '사전등록 회원을 삭제했습니다.' });
   } catch (error) {
     console.error('Error deleting group pre-member:', error);
@@ -1395,6 +1398,7 @@ router.patch('/group/:id/pre-members/:preMemberId/claim-request', requireAuth, r
       [Number(req.user.sub), claim.id]
     );
     await client.query('COMMIT');
+    await rebuildGroupRanking(req.params.id).catch((error) => console.error('회원 전환 후 레이팅 재계산 실패:', error));
     res.json({
       message: '회원 전환을 승인했습니다.',
       member: { ...memberResult.rows[0], name: claim.requested_user_name },

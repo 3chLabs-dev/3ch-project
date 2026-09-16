@@ -17,3 +17,34 @@ export function generateRoundRobin(n: number): Array<[number, number]> {
   }
   return games;
 }
+
+/**
+ * 저장된 경기/결과는 그대로 둔 채 화면의 경기 순서만 현재 참가자 순서에
+ * 맞는 표준 라운드로빈 순서로 정렬한다.
+ */
+export function sortRoundRobinMatches<T extends {
+  participant_a_id: string | null;
+  participant_b_id: string | null;
+}>(matches: T[], participantIds: string[]): T[] {
+  const pairKey = (left: string, right: string) => [left, right].sort().join("|");
+  const orderByPair = new Map(
+    generateRoundRobin(participantIds.length).map(([leftIndex, rightIndex], index) => [
+      pairKey(participantIds[leftIndex], participantIds[rightIndex]),
+      index,
+    ]),
+  );
+
+  return matches
+    .map((match, originalIndex) => ({ match, originalIndex }))
+    .sort((left, right) => {
+      const leftOrder = left.match.participant_a_id && left.match.participant_b_id
+        ? orderByPair.get(pairKey(left.match.participant_a_id, left.match.participant_b_id))
+        : undefined;
+      const rightOrder = right.match.participant_a_id && right.match.participant_b_id
+        ? orderByPair.get(pairKey(right.match.participant_a_id, right.match.participant_b_id))
+        : undefined;
+      return (leftOrder ?? Number.MAX_SAFE_INTEGER) - (rightOrder ?? Number.MAX_SAFE_INTEGER)
+        || left.originalIndex - right.originalIndex;
+    })
+    .map(({ match }) => match);
+}

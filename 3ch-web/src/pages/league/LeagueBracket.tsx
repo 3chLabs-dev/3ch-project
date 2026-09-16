@@ -12,7 +12,7 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   Box, Button, CircularProgress, IconButton, Paper, Popover,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Tooltip, Typography, Stack,
+  Tooltip, Typography, Stack, Snackbar,
 } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -36,6 +36,7 @@ import PrintIcon from "@mui/icons-material/Print";
 import QRCode from "react-qr-code";
 import { formatLeagueDate } from "../../utils/dateUtils";
 import { calculateRoundRobinStandings } from "../../utils/roundRobinStandings";
+import { sortRoundRobinMatches } from "../../utils/leagueUtils";
 import { toggleFullscreen } from "../../utils/fullscreen";
 import {
   applyProgramMatchState,
@@ -860,12 +861,13 @@ function useMatchStats(
  * - landscape: 테이블 아래에 세로로 붙음 (mt: 1.5)
  * - portrait:  테이블 오른쪽에 가로로 붙음 (mr: 1.5)
  */
-function MatchSchedulePanel({ matches, localOrder, landscape, leagueId, onProgramMatchUpdate }: {
+function MatchSchedulePanel({ matches, localOrder, landscape, leagueId, onProgramMatchUpdate, onStartToast }: {
   matches: LeagueMatch[];
   localOrder: LeagueParticipantItem[];
   landscape: boolean;
   leagueId: string;
   onProgramMatchUpdate?: (matchId: string, updates: ProgramMatchPatch) => void;
+  onStartToast?: (message: string) => void;
 }) {
   const [updateMatch] = useUpdateLeagueMatchMutation();
 
@@ -878,8 +880,7 @@ function MatchSchedulePanel({ matches, localOrder, landscape, leagueId, onProgra
   const sb = match.score_b ?? 0;
 
   if (match.status === "pending") {
-    const msg = `${index + 1}경기\n${aDiv}${aName}(${sa}) VS (${sb})${bDiv}${bName}\n시작하겠습니까?`;
-    if (!window.confirm(msg)) return;
+    onStartToast?.(`${index + 1}경기 ${aName}${aDiv} vs ${bName}${bDiv} 경기 시작!`);
   } else if (match.status === "playing") {
     const msg = `${index + 1}경기\n${aDiv}${aName}(${sa}) VS (${sb})${bDiv}${bName}\n종료되었습니까?`;
     if (!window.confirm(msg)) return;
@@ -892,7 +893,7 @@ function MatchSchedulePanel({ matches, localOrder, landscape, leagueId, onProgra
     updateMatch({ leagueId, matchId: match.id, updates });
   }
 
-}, [leagueId, onProgramMatchUpdate, updateMatch]);
+}, [leagueId, onProgramMatchUpdate, onStartToast, updateMatch]);
   return (
     <Box sx={{ height: landscape ? "auto" : "100%" }}>
       <Box sx={{
@@ -1011,6 +1012,7 @@ export default function LeagueBracket() {
   const [isSavingTieBreak, setIsSavingTieBreak] = useState(false);
   const [localTieBreakOrder, setLocalTieBreakOrder] = useState<string[] | null>(null);
   const [programMatchStateVersion, setProgramMatchStateVersion] = useState(0);
+  const [startToast, setStartToast] = useState<string | null>(null);
   const programSourceMatches = useMemo(() => {
     if (!isProgramMode || !id || !programOption) return matchData?.matches ?? [];
 
@@ -1363,6 +1365,10 @@ export default function LeagueBracket() {
   // editOrder≠null: 사용자가 순서를 변경한 로컬 상태 (저장 버튼으로 서버에 확정)
   const [editOrder, setEditOrder] = useState<LeagueParticipantItem[] | null>(null);
   const localOrder = editOrder ?? targetParticipants;
+  const scheduleMatches = useMemo(
+    () => sortRoundRobinMatches(matches, localOrder.map((participant) => participant.id)),
+    [localOrder, matches],
+  );
   const targetParticipantKey = targetParticipants.map((participant) => participant.id).join("|");
 
   useEffect(() => {
@@ -2055,7 +2061,7 @@ export default function LeagueBracket() {
           position: "absolute", zIndex: 5, cursor: "pointer",
           bottom: 0, left: 0, right: 0,
         }}>
-          <MatchSchedulePanel matches={matches} localOrder={localOrder} landscape leagueId={id ?? ""} onProgramMatchUpdate={isProgramMode ? updateProgramMatch : undefined} />
+          <MatchSchedulePanel matches={scheduleMatches} localOrder={localOrder} landscape leagueId={id ?? ""} onProgramMatchUpdate={isProgramMode ? updateProgramMatch : undefined} onStartToast={setStartToast} />
         </Box>
 
         <Box
@@ -2172,6 +2178,13 @@ export default function LeagueBracket() {
         saving={isSavingTieBreak}
         onClose={() => setTieBreakDialogOpen(false)}
         onSave={handleSaveTieBreak}
+      />
+      <Snackbar
+        open={Boolean(startToast)}
+        autoHideDuration={3000}
+        onClose={() => setStartToast(null)}
+        message={startToast}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       />
     </Box>,
     document.body

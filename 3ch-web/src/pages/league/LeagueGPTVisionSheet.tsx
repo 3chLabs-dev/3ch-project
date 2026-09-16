@@ -12,7 +12,7 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, FormControlLabel, IconButton, LinearProgress, MenuItem, Paper, Popover, Radio, RadioGroup,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography, Stack,
+  TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography, Stack, Snackbar,
 } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -48,6 +48,7 @@ import "react-image-crop/dist/ReactCrop.css";
 import QRCode from "react-qr-code";
 import { formatLeagueDate } from "../../utils/dateUtils";
 import { calculateRoundRobinStandings } from "../../utils/roundRobinStandings";
+import { sortRoundRobinMatches } from "../../utils/leagueUtils";
 import { toggleFullscreen } from "../../utils/fullscreen";
 import {
   applyProgramMatchState,
@@ -1015,13 +1016,14 @@ function useMatchStats(
  * - landscape: 테이블 아래에 세로로 붙음 (mt: 1.5)
  * - portrait:  테이블 오른쪽에 가로로 붙음 (mr: 1.5)
  */
-function MatchSchedulePanel({ matches, localOrder, participantNumberMap, landscape, leagueId, onProgramMatchUpdate }: {
+function MatchSchedulePanel({ matches, localOrder, participantNumberMap, landscape, leagueId, onProgramMatchUpdate, onStartToast }: {
   matches: LeagueMatch[];
   localOrder: LeagueParticipantItem[];
   participantNumberMap: Map<string, string>;
   landscape: boolean;
   leagueId: string;
   onProgramMatchUpdate?: (matchId: string, updates: ProgramMatchPatch) => void;
+  onStartToast?: (message: string) => void;
 }) {
   const [updateMatch] = useUpdateLeagueMatchMutation();
 
@@ -1034,8 +1036,7 @@ function MatchSchedulePanel({ matches, localOrder, participantNumberMap, landsca
   const sb = match.score_b ?? 0;
 
   if (match.status === "pending") {
-    const msg = `${index + 1}경기\n${aDiv}${aName}(${sa}) VS (${sb})${bDiv}${bName}\n시작하겠습니까?`;
-    if (!window.confirm(msg)) return;
+    onStartToast?.(`${index + 1}경기 ${aName}${aDiv} vs ${bName}${bDiv} 경기 시작!`);
   } else if (match.status === "playing") {
     const msg = `${index + 1}경기\n${aDiv}${aName}(${sa}) VS (${sb})${bDiv}${bName}\n종료되었습니까?`;
     if (!window.confirm(msg)) return;
@@ -1048,7 +1049,7 @@ function MatchSchedulePanel({ matches, localOrder, participantNumberMap, landsca
     updateMatch({ leagueId, matchId: match.id, updates });
   }
 
-}, [leagueId, onProgramMatchUpdate, updateMatch]);
+}, [leagueId, onProgramMatchUpdate, onStartToast, updateMatch]);
   return (
     <Box sx={{ height: landscape ? "auto" : "100%" }}>
       <Box sx={{
@@ -1389,6 +1390,7 @@ export default function LeagueGPTVisionSheet() {
   const [visionSaveProgress, setVisionSaveProgress] = useState(0);
   const [visionError, setVisionError] = useState<string | null>(null);
   const [visionNotice, setVisionNotice] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
+  const [startToast, setStartToast] = useState<string | null>(null);
   const [visionUsage, setVisionUsage] = useState<{
     unlimited: boolean;
     remaining: number | null;
@@ -1695,6 +1697,10 @@ export default function LeagueGPTVisionSheet() {
   // editOrder≠null: 사용자가 순서를 변경한 로컬 상태 (저장 버튼으로 서버에 확정)
   const [editOrder, setEditOrder] = useState<LeagueParticipantItem[] | null>(null);
   const localOrder = editOrder ?? targetParticipants;
+  const scheduleMatches = useMemo(
+    () => sortRoundRobinMatches(matches, localOrder.map((participant) => participant.id)),
+    [localOrder, matches],
+  );
   const targetParticipantKey = targetParticipants.map((participant) => participant.id).join("|");
   useEffect(() => {
     setEditOrder(null);
@@ -3488,7 +3494,7 @@ export default function LeagueGPTVisionSheet() {
                 </Button>
               </Box>
             ) : (
-              <MatchSchedulePanel matches={matches} localOrder={localOrder} participantNumberMap={scheduleParticipantNumberMap} landscape leagueId={id ?? ""} onProgramMatchUpdate={isProgramMode ? updateProgramMatch : undefined} />
+              <MatchSchedulePanel matches={scheduleMatches} localOrder={localOrder} participantNumberMap={scheduleParticipantNumberMap} landscape leagueId={id ?? ""} onProgramMatchUpdate={isProgramMode ? updateProgramMatch : undefined} onStartToast={setStartToast} />
             )}
           </Box>
         </Box>
@@ -3617,6 +3623,13 @@ export default function LeagueGPTVisionSheet() {
       </Box>{/* /wrapperRef */}
 
       {visionNotice ? <Alert severity={visionNotice.type} onClose={() => setVisionNotice(null)} sx={{ position: "fixed", top: 64, left: "50%", transform: "translateX(-50%)", zIndex: 10001, minWidth: 280 }}>{visionNotice.message}</Alert> : null}
+      <Snackbar
+        open={Boolean(startToast)}
+        autoHideDuration={3000}
+        onClose={() => setStartToast(null)}
+        message={startToast}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      />
       <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" hidden onChange={handleVisionFile} />
       <input ref={fileInputRef} type="file" accept="image/*,.jpg,.jpeg,.png,.heic,.heif,.webp" hidden onChange={handleVisionFile} />
       <input ref={galleryInputRef} type="file" accept="image/*" hidden onChange={handleVisionFile} />

@@ -26,3 +26,22 @@ test('순위별 본선이 아니거나 시드 라벨이 없으면 저장된 참�
   assert.equal(resolveProgramParticipantId({ blocks: [{ format: 'GROUP' }] }, 1, '1-1'), null);
   assert.equal(resolveProgramParticipantId({ blocks: [{}, { finalAdvancementMode: 'rank-groups' }] }, 2, null), null);
 });
+
+test('수정모드로 저장한 조는 참가자 순서와 조 크기로 현재 위치의 참가자를 복원한다', () => {
+  const programData = {
+    blocks: [
+      {},
+      {
+        format: 'GROUP',
+        groupFormationCustomized: true,
+        groupFormationSchemaVersion: 2,
+        participantOrderCustomized: true,
+        participantOrder: ['first-1', 'first-2', 'first-3', 'first-4', 'second-1', 'second-2'],
+        groupSizes: [4, 2],
+      },
+    ],
+  };
+
+  assert.equal(resolveProgramParticipantId(programData, 2, '3', '1위조'), 'first-3');
+  assert.equal(resolveProgramParticipantId(programData, 2, '2', '2위조'), 'second-2');
+});

@@ -843,10 +843,10 @@ async function getPointRanking(groupId, year, scope, seasonId, onlyLeagueId = nu
     match._rankingSection = section;
 
     const resolvedParticipantAId = entryType === "singles"
-      ? resolveProgramParticipantId(match.program_data, match.program_round, match.participant_a_seed_label) ?? match.participant_a_id
+      ? resolveProgramParticipantId(match.program_data, match.program_round, match.participant_a_seed_label, match.match_label) ?? match.participant_a_id
       : match.participant_a_id;
     const resolvedParticipantBId = entryType === "singles"
-      ? resolveProgramParticipantId(match.program_data, match.program_round, match.participant_b_seed_label) ?? match.participant_b_id
+      ? resolveProgramParticipantId(match.program_data, match.program_round, match.participant_b_seed_label, match.match_label) ?? match.participant_b_id
       : match.participant_b_id;
     const memberAIds = entryType === "singles"
       ? [participantMembers.get(String(resolvedParticipantAId))].filter(Boolean)

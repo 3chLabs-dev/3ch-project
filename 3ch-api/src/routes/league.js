@@ -86,10 +86,10 @@ async function getProgramUnitRankings(leagueId, programData, rules, adjustments 
     const type = match.program_block_type ?? roundBlock.type ?? roundBlock.program;
     if (!['SINGLES','DOUBLES','TEAM'].includes(type)) return;
     const resolvedAId = type === 'SINGLES'
-      ? resolveProgramParticipantId(programData, match.program_round, match.participant_a_seed_label) ?? match.participant_a_id
+      ? resolveProgramParticipantId(programData, match.program_round, match.participant_a_seed_label, match.match_label) ?? match.participant_a_id
       : match.participant_a_id;
     const resolvedBId = type === 'SINGLES'
-      ? resolveProgramParticipantId(programData, match.program_round, match.participant_b_seed_label) ?? match.participant_b_id
+      ? resolveProgramParticipantId(programData, match.program_round, match.participant_b_seed_label, match.match_label) ?? match.participant_b_id
       : match.participant_b_id;
     match._resolved_participant_a_id = resolvedAId;
     match._resolved_participant_b_id = resolvedBId;

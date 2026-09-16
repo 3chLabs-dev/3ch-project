@@ -1018,8 +1018,27 @@ export function buildProgramRoundStandingsSnapshot(
   );
   if (roundMatches.length === 0) return null;
 
+  const resolveCustomizedParticipantId = (match: LeagueMatch, side: "a" | "b") => {
+    const storedId = side === "a" ? match.participant_a_id : match.participant_b_id;
+    if (block.participantOrderCustomized !== true || !block.participantOrder?.length) return storedId;
+    const seedLabel = side === "a" ? match.participant_a_seed_label : match.participant_b_seed_label;
+    const seedIndex = Number(seedLabel) - 1;
+    if (!Number.isInteger(seedIndex) || seedIndex < 0) return storedId;
+    const groupSizes = block.groupSizes?.length ? block.groupSizes : [block.participantOrder.length];
+    const groupMatched = String(match.match_label ?? "").match(/^(\d+)(?:위)?조$/);
+    const groupIndex = groupMatched ? Number(groupMatched[1]) - 1 : 0;
+    if (!Number.isInteger(groupIndex) || groupIndex < 0 || groupIndex >= groupSizes.length) return storedId;
+    const offset = groupSizes.slice(0, groupIndex).reduce((sum, size) => sum + size, 0);
+    return block.participantOrder[offset + seedIndex] ?? storedId;
+  };
+  const effectiveRoundMatches = roundMatches.map((match) => ({
+    ...match,
+    participant_a_id: resolveCustomizedParticipantId(match, "a"),
+    participant_b_id: resolveCustomizedParticipantId(match, "b"),
+  }));
+
   const unitById = new Map<string, MatchUnit>();
-  roundMatches.forEach((match) => {
+  effectiveRoundMatches.forEach((match) => {
     if (match.participant_a_id && !match.participant_a_id.startsWith("placeholder-")) {
       unitById.set(match.participant_a_id, {
         id: match.participant_a_id,
@@ -1042,7 +1061,7 @@ export function buildProgramRoundStandingsSnapshot(
 
   if (block.format === "GROUP") {
     const labels = [...new Set(
-      roundMatches.map((match) => match.match_label).filter(Boolean) as string[],
+      effectiveRoundMatches.map((match) => match.match_label).filter(Boolean) as string[],
     )].sort((left, right) =>
       (Number.parseInt(left, 10) || 0) - (Number.parseInt(right, 10) || 0)
     );
@@ -1051,7 +1070,7 @@ export function buildProgramRoundStandingsSnapshot(
     const rankingPlayers = asRankingPlayers([...unitById.values()]);
     const playerById = new Map(rankingPlayers.map((player) => [player.id, player]));
     const pools = labels.map((label) => {
-      const labelMatches = roundMatches.filter((match) => match.match_label === label);
+      const labelMatches = effectiveRoundMatches.filter((match) => match.match_label === label);
       const seedByParticipantId = new Map<string, number>();
       labelMatches.forEach((match) => {
         const aSeed = match.participant_a_seed_label == null
@@ -1106,7 +1125,7 @@ export function buildProgramRoundStandingsSnapshot(
 
   const rankedPools = getRankedUnitPools(
     [...unitById.values()],
-    roundMatches,
+    effectiveRoundMatches,
     round,
     block,
   );
@@ -1677,9 +1696,6 @@ export function generateProgramRoundMatches(
   round: number,
   sourceMatches: LeagueMatch[] = [],
 ): LeagueMatch[] {
-  // Kept in the public signature for callers that assemble prior-round matches.
-  // Final-round qualification now comes exclusively from persisted standings.
-  void sourceMatches;
   const storedBlock = option?.blocks?.[round - 1];
   const currentRound = option?.rounds?.[round - 1];
   if (!storedBlock || participants.length < 2) return [];
@@ -1777,8 +1793,20 @@ export function generateProgramRoundMatches(
   const previousBlock = option?.blocks?.[sourceRound - 1];
   // A later round never recalculates standings from its own generation path.
   // It only consumes the snapshot finalized and saved by the source round.
+  const refreshedSourceSnapshot = isFinalRound
+    ? buildProgramRoundStandingsSnapshot(option, sourceRound, sourceMatches)
+    : null;
+  const standingsOption = refreshedSourceSnapshot?.complete
+    ? {
+        ...option,
+        roundStandings: [
+          ...(option?.roundStandings ?? []).filter((snapshot) => snapshot.round !== sourceRound),
+          refreshedSourceSnapshot,
+        ],
+      }
+    : option;
   const rankedPools = isFinalRound
-    ? getSavedRankedUnitPools(option, sourceRound, matchUnits)
+    ? getSavedRankedUnitPools(standingsOption, sourceRound, matchUnits)
     : null;
   const finalMode = block.finalAdvancementMode ?? "top-n";
   const advanceCount = Math.max(1, block.advanceCount ?? 2);
@@ -1865,15 +1893,23 @@ export function generateProgramRoundMatches(
       const expectedRankGroupCount = finalMode === "rank-groups"
         ? Math.max(0, ...finalPools.map((pool) => pool.length))
         : null;
+      const customizedAssignedGroups = block.groupAssignments?.length
+        ? assignedMatchUnits(block.groupAssignments, selectedFinalUnits)
+        : [];
+      const customizedAssignedUnitCount = customizedAssignedGroups.reduce(
+        (sum, groupPlayers) => sum + groupPlayers.length,
+        0,
+      );
       const hasCompleteCustomizedFormation = Boolean(
         block.groupFormationCustomized
         && block.groupFormationSchemaVersion === 2
         && block.groupAssignments?.length
-        && (expectedRankGroupCount == null || block.groupAssignments.length === expectedRankGroupCount)
+        // 빈 조를 없애거나 6위조 선수를 5위조로 합치면 조 개수는 줄 수 있다.
+        // 조 개수가 아니라 모든 진출자가 정확히 배치됐는지를 기준으로 수동 편성을 보존한다.
+        && customizedAssignedUnitCount === selectedFinalUnits.length
       );
       if (hasCompleteCustomizedFormation && block.groupAssignments) {
-        const assignedGroups = assignedMatchUnits(block.groupAssignments, selectedFinalUnits);
-        finalGroups = assignedGroups.map((groupPlayers, index) => ({
+        finalGroups = customizedAssignedGroups.map((groupPlayers, index) => ({
           name: finalMode === "rank-groups" ? `${index + 1}위조` : `${index + 1}조`,
           players: groupPlayers,
         })).filter((group) => group.players.length > 0);

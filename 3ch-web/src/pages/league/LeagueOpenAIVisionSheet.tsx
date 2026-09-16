@@ -35,6 +35,7 @@ import { useGetGroupDetailQuery } from "../../features/group/groupApi";
 import { useAppSelector } from "../../app/hooks";
 import { toUTCDate } from "../../utils/dateUtils";
 import { isLocalDevToken } from "../../utils/localDevAuth";
+import { getRoundRobinWinScore } from "../../utils/roundRobinStandings";
 
 const SHEET_WIDTH = 900;
 const MATCH_ORDER_PAIRS = [
@@ -107,7 +108,7 @@ function getErrorMessage(error: unknown, fallback = "처리 중 오류가 발생
   return maybeError.status ? `${fallback} (HTTP ${maybeError.status})` : fallback;
 }
 
-function calculateStats(players: LeagueParticipantItem[], matches: LeagueMatch[]): Record<string, PlayerStat> {
+function calculateStats(players: LeagueParticipantItem[], matches: LeagueMatch[], rules?: string | null): Record<string, PlayerStat> {
   const totals = new Map<string, { wins: number; losses: number; setTotal: number; setLost: number }>();
   players.forEach((player) => totals.set(player.id, { wins: 0, losses: 0, setTotal: 0, setLost: 0 }));
 
@@ -122,14 +123,13 @@ function calculateStats(players: LeagueParticipantItem[], matches: LeagueMatch[]
     a.setLost += scoreB;
     b.setTotal += scoreB;
     b.setLost += scoreA;
-    if (scoreA !== scoreB) {
-      if (scoreA > scoreB) {
-        a.wins += 1;
-        b.losses += 1;
-      } else {
-        b.wins += 1;
-        a.losses += 1;
-      }
+    const winScore = getRoundRobinWinScore(match.match_rule ?? rules);
+    if (winScore !== null) {
+      if (scoreA >= winScore) a.wins += 1; else a.losses += 1;
+      if (scoreB >= winScore) b.wins += 1; else b.losses += 1;
+    } else if (scoreA !== scoreB) {
+      if (scoreA > scoreB) { a.wins += 1; b.losses += 1; }
+      else { b.wins += 1; a.losses += 1; }
     }
   });
 
@@ -271,7 +271,7 @@ export default function LeagueOpenAIVisionSheet() {
     [matchData?.matches],
   );
   const matchLookup = useMemo(() => buildMatchLookup(matches), [matches]);
-  const stats = useMemo(() => calculateStats(participants, matches), [participants, matches]);
+  const stats = useMemo(() => calculateStats(participants, matches, league?.rules), [participants, matches, league?.rules]);
   const loading = leagueLoading || groupLoading || participantsLoading || matchesLoading;
   const isBusy = isScanning || isSaving;
   const isCompleted = league?.status === "completed";

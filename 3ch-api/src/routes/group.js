@@ -3017,12 +3017,28 @@ router.get('/group/:id/member/:userId', requireAuth, async (req, res) => {
        match_stats AS (
          SELECT
            COUNT(CASE
-             WHEN (m.participant_a_id = mp.participant_id AND m.score_a > m.score_b) OR
-                  (m.participant_b_id = mp.participant_id AND m.score_b > m.score_a) THEN 1
+             WHEN (m.participant_a_id = mp.participant_id AND (
+                    (m.match_rule IN ('BEST_OF_5', '5전 3선승제') AND m.score_a >= 3) OR
+                    (m.match_rule IN ('BEST_OF_3', '3전 2선승제') AND m.score_a >= 2) OR
+                    (COALESCE(m.match_rule, '') NOT IN ('BEST_OF_5', '5전 3선승제', 'BEST_OF_3', '3전 2선승제') AND m.score_a > m.score_b)
+                  )) OR
+                  (m.participant_b_id = mp.participant_id AND (
+                    (m.match_rule IN ('BEST_OF_5', '5전 3선승제') AND m.score_b >= 3) OR
+                    (m.match_rule IN ('BEST_OF_3', '3전 2선승제') AND m.score_b >= 2) OR
+                    (COALESCE(m.match_rule, '') NOT IN ('BEST_OF_5', '5전 3선승제', 'BEST_OF_3', '3전 2선승제') AND m.score_b > m.score_a)
+                  )) THEN 1
            END)::int AS wins,
            COUNT(CASE
-             WHEN (m.participant_a_id = mp.participant_id AND m.score_a < m.score_b) OR
-                  (m.participant_b_id = mp.participant_id AND m.score_b < m.score_a) THEN 1
+             WHEN (m.participant_a_id = mp.participant_id AND (
+                    (m.match_rule IN ('BEST_OF_5', '5전 3선승제') AND m.score_a < 3) OR
+                    (m.match_rule IN ('BEST_OF_3', '3전 2선승제') AND m.score_a < 2) OR
+                    (COALESCE(m.match_rule, '') NOT IN ('BEST_OF_5', '5전 3선승제', 'BEST_OF_3', '3전 2선승제') AND m.score_a < m.score_b)
+                  )) OR
+                  (m.participant_b_id = mp.participant_id AND (
+                    (m.match_rule IN ('BEST_OF_5', '5전 3선승제') AND m.score_b < 3) OR
+                    (m.match_rule IN ('BEST_OF_3', '3전 2선승제') AND m.score_b < 2) OR
+                    (COALESCE(m.match_rule, '') NOT IN ('BEST_OF_5', '5전 3선승제', 'BEST_OF_3', '3전 2선승제') AND m.score_b < m.score_a)
+                  )) THEN 1
            END)::int AS losses
          FROM member_participants mp
          LEFT JOIN league_matches m
@@ -3051,8 +3067,16 @@ router.get('/group/:id/member/:userId', requireAuth, async (req, res) => {
        all_wins AS (
          SELECT lp.id AS participant_id, lp.league_id,
            COUNT(CASE
-             WHEN (m.participant_a_id = lp.id AND m.score_a > m.score_b) OR
-                  (m.participant_b_id = lp.id AND m.score_b > m.score_a) THEN 1
+             WHEN (m.participant_a_id = lp.id AND (
+                    (m.match_rule IN ('BEST_OF_5', '5전 3선승제') AND m.score_a >= 3) OR
+                    (m.match_rule IN ('BEST_OF_3', '3전 2선승제') AND m.score_a >= 2) OR
+                    (COALESCE(m.match_rule, '') NOT IN ('BEST_OF_5', '5전 3선승제', 'BEST_OF_3', '3전 2선승제') AND m.score_a > m.score_b)
+                  )) OR
+                  (m.participant_b_id = lp.id AND (
+                    (m.match_rule IN ('BEST_OF_5', '5전 3선승제') AND m.score_b >= 3) OR
+                    (m.match_rule IN ('BEST_OF_3', '3전 2선승제') AND m.score_b >= 2) OR
+                    (COALESCE(m.match_rule, '') NOT IN ('BEST_OF_5', '5전 3선승제', 'BEST_OF_3', '3전 2선승제') AND m.score_b > m.score_a)
+                  )) THEN 1
            END) AS wins
          FROM league_participants lp
          LEFT JOIN league_matches m ON (m.participant_a_id = lp.id OR m.participant_b_id = lp.id) AND m.status = 'done'
@@ -3279,13 +3303,25 @@ router.get('/group/:id/member/:userId/leagues', requireAuth, async (req, res) =>
          mp.participant_name,
          COUNT(CASE
            WHEN m.status = 'done'
-            AND ((m.participant_a_id = mp.participant_id AND m.score_a > m.score_b)
-              OR (m.participant_b_id = mp.participant_id AND m.score_b > m.score_a)) THEN 1
+            AND ((m.participant_a_id = mp.participant_id AND (
+                   (m.match_rule IN ('BEST_OF_5', '5전 3선승제') AND m.score_a >= 3) OR
+                   (m.match_rule IN ('BEST_OF_3', '3전 2선승제') AND m.score_a >= 2) OR
+                   (COALESCE(m.match_rule, '') NOT IN ('BEST_OF_5', '5전 3선승제', 'BEST_OF_3', '3전 2선승제') AND m.score_a > m.score_b)))
+              OR (m.participant_b_id = mp.participant_id AND (
+                   (m.match_rule IN ('BEST_OF_5', '5전 3선승제') AND m.score_b >= 3) OR
+                   (m.match_rule IN ('BEST_OF_3', '3전 2선승제') AND m.score_b >= 2) OR
+                   (COALESCE(m.match_rule, '') NOT IN ('BEST_OF_5', '5전 3선승제', 'BEST_OF_3', '3전 2선승제') AND m.score_b > m.score_a)))) THEN 1
          END)::int AS wins,
          COUNT(CASE
            WHEN m.status = 'done'
-            AND ((m.participant_a_id = mp.participant_id AND m.score_a < m.score_b)
-              OR (m.participant_b_id = mp.participant_id AND m.score_b < m.score_a)) THEN 1
+            AND ((m.participant_a_id = mp.participant_id AND (
+                   (m.match_rule IN ('BEST_OF_5', '5전 3선승제') AND m.score_a < 3) OR
+                   (m.match_rule IN ('BEST_OF_3', '3전 2선승제') AND m.score_a < 2) OR
+                   (COALESCE(m.match_rule, '') NOT IN ('BEST_OF_5', '5전 3선승제', 'BEST_OF_3', '3전 2선승제') AND m.score_a < m.score_b)))
+              OR (m.participant_b_id = mp.participant_id AND (
+                   (m.match_rule IN ('BEST_OF_5', '5전 3선승제') AND m.score_b < 3) OR
+                   (m.match_rule IN ('BEST_OF_3', '3전 2선승제') AND m.score_b < 2) OR
+                   (COALESCE(m.match_rule, '') NOT IN ('BEST_OF_5', '5전 3선승제', 'BEST_OF_3', '3전 2선승제') AND m.score_b < m.score_a)))) THEN 1
          END)::int AS losses,
          COUNT(CASE WHEN m.status = 'done' THEN 1 END)::int AS matches_played,
          BOOL_OR(m.bracket IS NULL) AS has_league_stage,

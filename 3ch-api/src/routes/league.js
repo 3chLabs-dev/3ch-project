@@ -12,6 +12,7 @@ const { scanOmrImageWithPython } = require('../services/omrScanner');
 const { scanLeagueSheetWithOpenAIVision, scanParticipantNamesWithOpenAIVision, scanLeagueResultImportWithOpenAIVision } = require('../services/openaiVisionScanner');
 const { FEATURES, consumeFeatureCredit, refundFeatureCredit } = require('../services/featureUsageService');
 const { getPointRanking, ensureDefaultRankingSeasons, normalizePointRules } = require('../services/pointRanking');
+const { winnerSide } = require('../utils/matchOutcome');
 
 const isWebPushConfigured = Boolean(
   process.env.VAPID_MAILTO && process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY,
@@ -756,9 +757,12 @@ async function reconcileTournamentMatches(db, leagueId, options = {}) {
       if (match.status === 'done') {
         const hasScoreA = typeof match.score_a === 'number';
         const hasScoreB = typeof match.score_b === 'number';
-        if (hasScoreA && hasScoreB && match.score_a !== match.score_b) {
-          const winnerId = match.score_a > match.score_b ? match.participant_a_id : match.participant_b_id;
-          const loserId = match.score_a > match.score_b ? match.participant_b_id : match.participant_a_id;
+        const winner = hasScoreA && hasScoreB
+          ? winnerSide(match.score_a, match.score_b, match.match_rule)
+          : null;
+        if (winner) {
+          const winnerId = winner === 'a' ? match.participant_a_id : match.participant_b_id;
+          const loserId = winner === 'a' ? match.participant_b_id : match.participant_a_id;
           outcome = { known: true, winnerId: winnerId ?? null, loserId: loserId ?? null, walkover: false };
         } else if (walkoverA) {
           outcome = { known: true, winnerId: a.participantId, loserId: null, walkover: true };
@@ -5760,8 +5764,16 @@ router.post('/league/:id/matches/init-tournament', requireAuth, async (req, res)
         `SELECT
            p.id,
            COALESCE(SUM(CASE
-             WHEN m.bracket IS NULL AND m.status = 'done' AND m.participant_a_id = p.id AND m.score_a > m.score_b THEN 1
-             WHEN m.bracket IS NULL AND m.status = 'done' AND m.participant_b_id = p.id AND m.score_b > m.score_a THEN 1
+             WHEN m.bracket IS NULL AND m.status = 'done' AND m.participant_a_id = p.id AND (
+               (m.match_rule IN ('BEST_OF_5', '5전 3선승제') AND m.score_a >= 3) OR
+               (m.match_rule IN ('BEST_OF_3', '3전 2선승제') AND m.score_a >= 2) OR
+               (COALESCE(m.match_rule, '') NOT IN ('BEST_OF_5', '5전 3선승제', 'BEST_OF_3', '3전 2선승제') AND m.score_a > m.score_b)
+             ) THEN 1
+             WHEN m.bracket IS NULL AND m.status = 'done' AND m.participant_b_id = p.id AND (
+               (m.match_rule IN ('BEST_OF_5', '5전 3선승제') AND m.score_b >= 3) OR
+               (m.match_rule IN ('BEST_OF_3', '3전 2선승제') AND m.score_b >= 2) OR
+               (COALESCE(m.match_rule, '') NOT IN ('BEST_OF_5', '5전 3선승제', 'BEST_OF_3', '3전 2선승제') AND m.score_b > m.score_a)
+             ) THEN 1
              ELSE 0 END), 0) AS wins,
            COALESCE(SUM(CASE
              WHEN m.bracket IS NULL AND m.status = 'done' AND m.participant_a_id = p.id THEN m.score_a

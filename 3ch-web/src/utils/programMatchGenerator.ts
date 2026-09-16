@@ -7,6 +7,7 @@ import type {
   ProgramOption,
   ProgramRoundStandingsSnapshot,
 } from "../features/league/types/tournament.types";
+import { getRoundRobinWinScore } from "./roundRobinStandings";
 import { generateRoundRobin } from "./leagueUtils";
 
 export type ProgramMatchPatch = Partial<Pick<
@@ -754,7 +755,13 @@ function getRankedPlayersFromPreviousRound(
     aStats.setTotal += scoreA;
     bStats.setTotal += scoreB;
 
-    if (scoreA > scoreB) {
+    const winScore = getRoundRobinWinScore(match.match_rule ?? matchRule);
+    if (winScore !== null) {
+      if (scoreA >= winScore) aStats.wins += 1;
+      else aStats.losses += 1;
+      if (scoreB >= winScore) bStats.wins += 1;
+      else bStats.losses += 1;
+    } else if (scoreA > scoreB) {
       aStats.wins += 1;
       bStats.losses += 1;
     } else if (scoreB > scoreA) {

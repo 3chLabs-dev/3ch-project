@@ -21,6 +21,12 @@ function divisionNumber(division?: string | null): number {
   return Number.isFinite(parsed) ? parsed : Number.MIN_SAFE_INTEGER;
 }
 
+export function getRoundRobinWinScore(rule?: string | null): number | null {
+  if (rule === "BEST_OF_5" || rule === "5전 3선승제") return 3;
+  if (rule === "BEST_OF_3" || rule === "3전 2선승제") return 2;
+  return null;
+}
+
 export function calculateRoundRobinStandings(
   players: LeagueParticipantItem[],
   matches: LeagueMatch[],
@@ -40,7 +46,11 @@ export function calculateRoundRobinStandings(
       const myScore = Number(isA ? match.score_a ?? 0 : match.score_b ?? 0);
       const opponentScore = Number(isA ? match.score_b ?? 0 : match.score_a ?? 0);
       setTotal += myScore;
-      if (myScore > opponentScore) wins += 1;
+      const winScore = getRoundRobinWinScore(match.match_rule ?? rules);
+      if (winScore !== null) {
+        if (myScore >= winScore) wins += 1;
+        else losses += 1;
+      } else if (myScore > opponentScore) wins += 1;
       else losses += 1;
     }
     return { wins, losses, setTotal, hasPlayed: wins + losses > 0 };

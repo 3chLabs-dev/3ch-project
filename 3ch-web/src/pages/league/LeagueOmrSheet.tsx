@@ -36,6 +36,7 @@ import {
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
 import { useAppSelector } from "../../app/hooks";
 import { toUTCDate } from "../../utils/dateUtils";
+import { getRoundRobinWinScore } from "../../utils/roundRobinStandings";
 
 const SCORE_OPTIONS = [0, 1, 2, 3];
 const SHEET_WIDTH = 900;
@@ -433,7 +434,7 @@ async function scanOmrImageOnDevice(file: File, sheetMarks: OmrMark[], tableMark
   return pickBestOmrResult(scanResults);
 }
 
-function calculateStats(players: LeagueParticipantItem[], matches: LeagueMatch[]): Record<string, PlayerStat> {
+function calculateStats(players: LeagueParticipantItem[], matches: LeagueMatch[], rules?: string | null): Record<string, PlayerStat> {
   const totals = new Map<string, { wins: number; losses: number; setTotal: number; setLost: number }>();
   players.forEach((player) => totals.set(player.id, { wins: 0, losses: 0, setTotal: 0, setLost: 0 }));
 
@@ -448,14 +449,13 @@ function calculateStats(players: LeagueParticipantItem[], matches: LeagueMatch[]
     a.setLost += scoreB;
     b.setTotal += scoreB;
     b.setLost += scoreA;
-    if (scoreA !== scoreB) {
-      if (scoreA > scoreB) {
-        a.wins += 1;
-        b.losses += 1;
-      } else {
-        b.wins += 1;
-        a.losses += 1;
-      }
+    const winScore = getRoundRobinWinScore(match.match_rule ?? rules);
+    if (winScore !== null) {
+      if (scoreA >= winScore) a.wins += 1; else a.losses += 1;
+      if (scoreB >= winScore) b.wins += 1; else b.losses += 1;
+    } else if (scoreA !== scoreB) {
+      if (scoreA > scoreB) { a.wins += 1; b.losses += 1; }
+      else { b.wins += 1; a.losses += 1; }
     }
   });
 
@@ -704,7 +704,7 @@ export default function LeagueOmrSheet() {
 
   const matches = useMemo(() => (matchData?.matches ?? []).filter((match) => !match.bracket), [matchData?.matches]);
   const matchLookup = useMemo(() => buildMatchLookup(matches), [matches]);
-  const stats = useMemo(() => calculateStats(participants, matches), [participants, matches]);
+  const stats = useMemo(() => calculateStats(participants, matches, league?.rules), [participants, matches, league?.rules]);
   const pageUrl = typeof window === "undefined" ? "" : window.location.href;
   const sheetTitle = `${formatSheetDate(league?.start_date)} / ${league?.type ?? "단식"} ${league?.format ?? "풀리그"} / ${league?.rules ?? ""}`;
   const isCompleted = league?.status === "completed";

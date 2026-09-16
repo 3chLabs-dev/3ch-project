@@ -1,4 +1,5 @@
 const pool = require("../db/pool");
+const { winnerSide } = require('../utils/matchOutcome');
 
 const DEFAULT_POINT_RULES = Object.freeze({
   attendance: { league: 10, tournament: 20 },
@@ -222,12 +223,13 @@ function eligibleTournamentBonusMemberIds(memberIds, tournamentOption, excludeUp
   return memberIds.filter((memberId) => !lowerMemberIds?.has(String(memberId)));
 }
 
-function applyMatchPoints(rowsA, rowsB, scoreA, scoreB, pointRules, memberACount, memberBCount) {
+function applyMatchPoints(rowsA, rowsB, scoreA, scoreB, pointRules, memberACount, memberBCount, matchRule = null) {
   [...rowsA, ...rowsB].forEach((row) => { row.matches_played += 1; });
+  const winner = winnerSide(scoreA, scoreB, matchRule);
   if (pointRules.matchPoints.mode === "win") {
-    if (scoreA > scoreB) {
+    if (winner === 'a') {
       rowsA.forEach((row) => { row.score_points = roundPoint(row.score_points + pointRules.matchPoints.winPoints / Math.max(1, memberACount)); });
-    } else if (scoreB > scoreA) {
+    } else if (winner === 'b') {
       rowsB.forEach((row) => { row.score_points = roundPoint(row.score_points + pointRules.matchPoints.winPoints / Math.max(1, memberBCount)); });
     }
   } else {
@@ -235,10 +237,10 @@ function applyMatchPoints(rowsA, rowsB, scoreA, scoreB, pointRules, memberACount
     rowsB.forEach((row) => { row.score_points = roundPoint(row.score_points + scoreB / Math.max(1, memberBCount)); });
   }
 
-  if (scoreA > scoreB) {
+  if (winner === 'a') {
     rowsA.forEach((row) => { row.wins += 1; });
     rowsB.forEach((row) => { row.losses += 1; });
-  } else if (scoreB > scoreA) {
+  } else if (winner === 'b') {
     rowsB.forEach((row) => { row.wins += 1; });
     rowsA.forEach((row) => { row.losses += 1; });
   }
@@ -673,6 +675,7 @@ async function getPointRanking(groupId, year, scope, seasonId, onlyLeagueId = nu
        m.loser_next_match_id,
        m.loser_next_slot,
        m.status,
+       m.match_rule,
        COALESCE(m.score_a, 0) AS score_a,
        COALESCE(m.score_b, 0) AS score_b,
        pa.id AS participant_a_id,
@@ -857,14 +860,15 @@ async function getPointRanking(groupId, year, scope, seasonId, onlyLeagueId = nu
     const scoreB = Number(match.score_b);
     const hasBothSides = Boolean(match.participant_a_id || match.participant_a_roster_ids?.length)
       && Boolean(match.participant_b_id || match.participant_b_roster_ids?.length);
-    if (hasBothSides && scoreA !== scoreB) {
+    const winner = winnerSide(scoreA, scoreB, match.match_rule);
+    if (hasBothSides && winner) {
       rankingMemberAIds.forEach((memberId) => {
         const stat = themeStats.get(String(memberId));
         if (!stat) return;
         stat.matches_played += 1;
         stat.sets_for += scoreA;
         stat.sets_against += scoreB;
-        if (scoreA > scoreB) stat.wins += 1;
+        if (winner === 'a') stat.wins += 1;
       });
       rankingMemberBIds.forEach((memberId) => {
         const stat = themeStats.get(String(memberId));
@@ -872,7 +876,7 @@ async function getPointRanking(groupId, year, scope, seasonId, onlyLeagueId = nu
         stat.matches_played += 1;
         stat.sets_for += scoreB;
         stat.sets_against += scoreA;
-        if (scoreB > scoreA) stat.wins += 1;
+        if (winner === 'b') stat.wins += 1;
       });
     }
     const targetRows = section === "league" ? leagueRows : tournamentRows;
@@ -883,7 +887,7 @@ async function getPointRanking(groupId, year, scope, seasonId, onlyLeagueId = nu
       .map((memberId) => ensureRow(targetRows, memberId, baseMembers.get(memberId), section))
       .filter(Boolean);
     if (includeMatchPoints) {
-      applyMatchPoints(rowsA, rowsB, scoreA, scoreB, rulesForLeague(match.league_id), memberAIds.length, memberBIds.length);
+      applyMatchPoints(rowsA, rowsB, scoreA, scoreB, rulesForLeague(match.league_id), memberAIds.length, memberBIds.length, match.match_rule);
     }
 
     if (scoreA === scoreB) return;
@@ -971,10 +975,11 @@ async function getPointRanking(groupId, year, scope, seasonId, onlyLeagueId = nu
       a.lost_points += scoreB;
       b.score_points += scoreB;
       b.lost_points += scoreA;
-      if (scoreA > scoreB) {
+      const winner = winnerSide(scoreA, scoreB, match.match_rule);
+      if (winner === 'a') {
         a.wins += 1;
         b.losses += 1;
-      } else {
+      } else if (winner === 'b') {
         b.wins += 1;
         a.losses += 1;
       }
@@ -1036,7 +1041,7 @@ async function getPointRanking(groupId, year, scope, seasonId, onlyLeagueId = nu
         max_round: Number(match.round_number) || 0,
       });
 
-      if (match.status !== "done" || Number(match.score_a) === Number(match.score_b)) return;
+      if (match.status !== "done") return;
 
       const scoreA = Number(match.score_a);
       const scoreB = Number(match.score_b);
@@ -1048,21 +1053,24 @@ async function getPointRanking(groupId, year, scope, seasonId, onlyLeagueId = nu
       b.score_points += scoreB;
       b.lost_points += scoreA;
       b.max_round = Math.max(b.max_round, Number(match.round_number) || 0);
-      if (scoreA > scoreB) {
+      const winner = winnerSide(scoreA, scoreB, match.match_rule);
+      if (winner === 'a') {
         a.wins += 1;
         b.losses += 1;
-      } else {
+      } else if (winner === 'b') {
         b.wins += 1;
         a.losses += 1;
       }
     });
 
     const completedOutcome = (match) => {
-      if (!match || match.status !== "done" || Number(match.score_a) === Number(match.score_b)) return null;
+      if (!match || match.status !== "done") return null;
       const aIds = match._memberAIds ?? [];
       const bIds = match._memberBIds ?? [];
       if (aIds.length === 0 || bIds.length === 0) return null;
-      return Number(match.score_a) > Number(match.score_b)
+      const winner = winnerSide(match.score_a, match.score_b, match.match_rule);
+      if (!winner) return null;
+      return winner === 'a'
         ? { winnerIds: aIds, loserIds: bIds }
         : { winnerIds: bIds, loserIds: aIds };
     };

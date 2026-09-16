@@ -19,6 +19,7 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
 import { DivisionBadge } from "../../components/ParticipantName";
 import type { LeagueMatch } from "../../features/league/leagueApi";
+import { getRoundRobinWinScore } from "../../utils/roundRobinStandings";
 import {
   useGetLeagueMatchesQuery,
   useGetLeagueProgramQuery,
@@ -72,7 +73,8 @@ function setRate(row: StandingRow) {
   return total ? `${((row.setsFor / total) * 100).toFixed(1)}%` : "-";
 }
 
-function roundRobinStandings(matches: LeagueMatch[], threeSet: boolean): StandingRow[] {
+function roundRobinStandings(matches: LeagueMatch[], rule?: string | null): StandingRow[] {
+  const threeSet = rule === "THREE_SET" || rule?.includes("3세트") === true;
   const stats = new Map<string, StandingRow>();
   const ensure = (unit: ResultUnit) => {
     if (!stats.has(unit.key)) stats.set(unit.key, { ...unit, rank: "", played: 0, wins: 0, losses: 0, setsFor: 0, setsAgainst: 0 });
@@ -92,8 +94,14 @@ function roundRobinStandings(matches: LeagueMatch[], threeSet: boolean): Standin
     aRow.setsAgainst += scoreB;
     bRow.setsFor += scoreB;
     bRow.setsAgainst += scoreA;
-    if (scoreA > scoreB) { aRow.wins += 1; bRow.losses += 1; }
-    if (scoreB > scoreA) { bRow.wins += 1; aRow.losses += 1; }
+    const winScore = getRoundRobinWinScore(match.match_rule ?? rule);
+    if (winScore !== null) {
+      if (scoreA >= winScore) aRow.wins += 1; else aRow.losses += 1;
+      if (scoreB >= winScore) bRow.wins += 1; else bRow.losses += 1;
+    } else {
+      if (scoreA > scoreB) { aRow.wins += 1; bRow.losses += 1; }
+      if (scoreB > scoreA) { bRow.wins += 1; aRow.losses += 1; }
+    }
   });
   return [...stats.values()]
     .sort((left, right) => (threeSet ? right.setsFor - left.setsFor : right.wins - left.wins) || (right.setsFor - right.setsAgainst) - (left.setsFor - left.setsAgainst) || right.setsFor - left.setsFor || left.name.localeCompare(right.name, "ko"))
@@ -222,10 +230,10 @@ export default function LeagueRoundResultPage() {
   const threeSet = block?.matchRule === "THREE_SET" || block?.matchRule?.includes("3세트") || matches.some((match) => match.match_rule === "THREE_SET" || match.match_rule?.includes("3세트"));
   const bracketPath = format === "TOURNAMENT" ? "tournament-bracket" : "bracket";
   const grouped = useMemo(() => {
-    if (format === "LEAGUE") return [{ key: "league", title: "전체 순위", rows: roundRobinStandings(matches, threeSet), awardMode: "league" as const }];
+    if (format === "LEAGUE") return [{ key: "league", title: "전체 순위", rows: roundRobinStandings(matches, block?.matchRule), awardMode: "league" as const }];
     if (format === "GROUP") {
       const labels = [...new Set(matches.map((match) => match.match_label).filter((label): label is string => Boolean(label)))].sort((left, right) => Number.parseInt(left, 10) - Number.parseInt(right, 10));
-      return labels.map((label) => ({ key: label, title: label, rows: roundRobinStandings(matches.filter((match) => match.match_label === label), threeSet), awardMode: "league" as const }));
+      return labels.map((label) => ({ key: label, title: label, rows: roundRobinStandings(matches.filter((match) => match.match_label === label), block?.matchRule), awardMode: "league" as const }));
     }
     const indexes = [...new Set(matches.map((match) => match.tournament_bracket_index || 1))].sort((a, b) => a - b);
     const brackets = [...new Set(matches.map((match) => match.bracket || "upper"))];
@@ -235,7 +243,7 @@ export default function LeagueRoundResultPage() {
       rows: tournamentStandings(matches.filter((match) => (match.tournament_bracket_index || 1) === index && (match.bracket || "upper") === bracket)),
       awardMode: (bracket === "lower" ? "lower" : "upper") as AwardMode,
     })).filter((section) => section.rows.length > 0));
-  }, [format, matches, threeSet]);
+  }, [block?.matchRule, format, matches, threeSet]);
   const activeGroup = format === "GROUP"
     ? grouped.some((section) => section.key === selectedGroup) ? selectedGroup : grouped[0]?.key
     : null;

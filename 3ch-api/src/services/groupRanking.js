@@ -1,4 +1,5 @@
 const pool = require('../db/pool');
+const { winnerSide } = require('../utils/matchOutcome');
 
 let ensureTablesPromise = null;
 
@@ -147,6 +148,7 @@ async function rebuildGroupRanking(groupId) {
         m.bracket,
         m.score_a,
         m.score_b,
+        m.match_rule,
         COALESCE(m.created_at, NOW()) AS played_at,
         pa.member_id AS member_a_id,
         pb.member_id AS member_b_id
@@ -183,7 +185,9 @@ async function rebuildGroupRanking(groupId) {
       const stateB = states.get(memberBId);
       const beforeA = stateA.rating;
       const beforeB = stateB.rating;
-      const isAWin = Number(match.score_a) > Number(match.score_b);
+      const winner = winnerSide(match.score_a, match.score_b, match.match_rule);
+      if (!winner) continue;
+      const isAWin = winner === 'a';
       const scoreA = isAWin ? 1 : 0;
       const scoreB = isAWin ? 0 : 1;
       const k = match.bracket ? (Number(settings.k_tournament) || 32) : (Number(settings.k_league) || 24);

@@ -1991,15 +1991,29 @@ export default function LeagueGPTVisionSheet() {
     if (!id || !programOption || !currentProgramBlock || !selectedGroup || isUpdatingGroupAssignment) return;
     setIsUpdatingGroupAssignment(true);
     try {
-      const groupMemberIds = new Map(groupNames.map((groupName) => [groupName, [] as string[]]));
+      const discoveredGroupMemberIds = new Map(groupNames.map((groupName) => [groupName, [] as string[]]));
       programMatchesAll.forEach((match) => {
         const groupName = match.match_label;
-        const memberIds = groupName ? groupMemberIds.get(groupName) : undefined;
+        const memberIds = groupName ? discoveredGroupMemberIds.get(groupName) : undefined;
         if (!memberIds) return;
         [match.participant_a_id, match.participant_b_id].forEach((participantId) => {
           if (participantId && !memberIds.includes(participantId)) memberIds.push(participantId);
         });
       });
+
+      // 경기 목록의 등장 순서는 라운드 로빈 매치 생성 순서일 뿐 조의 저장 순서가 아니다.
+      // 조 이동 때 그 순서를 그대로 저장하면 건드리지 않은 다른 조까지 뒤섞인다.
+      const savedParticipantOrder =
+        currentProgramRound?.participantOrder ?? currentProgramBlock.participantOrder ?? [];
+      const groupMemberIds = new Map(groupNames.map((groupName) => {
+        const discoveredIds = discoveredGroupMemberIds.get(groupName) ?? [];
+        const discoveredSet = new Set(discoveredIds);
+        const orderedIds = savedParticipantOrder.filter((participantId) => discoveredSet.has(participantId));
+        discoveredIds.forEach((participantId) => {
+          if (!orderedIds.includes(participantId)) orderedIds.push(participantId);
+        });
+        return [groupName, orderedIds] as const;
+      }));
       groupMemberIds.forEach((memberIds) => {
         const participantIndex = memberIds.indexOf(participant.id);
         if (participantIndex >= 0) memberIds.splice(participantIndex, 1);
@@ -2059,7 +2073,7 @@ export default function LeagueGPTVisionSheet() {
       setIsUpdatingGroupAssignment(false);
       setPendingGroupRemoval(null);
     }
-  }, [currentProgramBlock, groupNames, id, isUpdatingGroupAssignment, programMatchesAll, programOption, programRound, programSourceMatches, rawParticipants, refetchMatches, saveLeagueProgram, selectedGroup, syncProgramMatches]);
+  }, [currentProgramBlock, currentProgramRound, groupNames, id, isUpdatingGroupAssignment, programMatchesAll, programOption, programRound, programSourceMatches, rawParticipants, refetchMatches, saveLeagueProgram, selectedGroup, syncProgramMatches]);
 
   const finishEditing = useCallback(async () => {
     if (!editMode) {
@@ -2131,11 +2145,26 @@ export default function LeagueGPTVisionSheet() {
     if (!id || !programOption || !currentProgramBlock || hasStartedProgramMatch || isResettingStandard) return;
     setIsResettingStandard(true);
     try {
-      const clearSavedOrder = <T extends { participantOrder?: string[]; participantOrderCustomized?: boolean; halfSplitMatchOrder?: string[] }>(value: T): T => ({
+      const clearSavedOrder = <T extends {
+        participantOrder?: string[];
+        participantOrderCustomized?: boolean;
+        halfSplitMatchOrder?: string[];
+        groupAssignments?: unknown;
+        groupFormationCustomized?: boolean;
+        groupFormationSchemaVersion?: number;
+        finalAdvancementMode?: string;
+      }>(value: T): T => ({
         ...value,
         participantOrder: undefined,
         participantOrderCustomized: undefined,
         halfSplitMatchOrder: undefined,
+        // 본선 순위별 조의 수동 편성값도 함께 비워야 실제 표준 편성이
+        // 다시 계산된다. 이것을 남기면 꼬인 조 순서가 초기화 후에도 보존된다.
+        ...(value.finalAdvancementMode === "rank-groups" ? {
+          groupAssignments: undefined,
+          groupFormationCustomized: undefined,
+          groupFormationSchemaVersion: undefined,
+        } : {}),
       });
       const baseProgram = {
         ...programOption,

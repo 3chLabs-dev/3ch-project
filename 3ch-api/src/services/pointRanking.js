@@ -337,6 +337,20 @@ function getProgramEntryType(row) {
   return null;
 }
 
+function rankingParticipantId(match, entryType, side) {
+  const storedParticipantId = side === 'a' ? match.participant_a_id : match.participant_b_id;
+  if (entryType !== 'singles') return storedParticipantId;
+
+  // 결과가 입력된 경기는 그 당시 DB에 저장된 실제 참가자가 절대 기준이다.
+  // 이후 조 편성/participantOrder가 바뀌었다고 seedLabel로 다시 해석하면
+  // 다른 선수의 과거 승패가 현재 슬롯의 선수에게 넘어간다.
+  if (match.status === 'playing' || match.status === 'done') return storedParticipantId;
+
+  const seedLabel = side === 'a' ? match.participant_a_seed_label : match.participant_b_seed_label;
+  return storedParticipantId
+    ?? resolveProgramParticipantId(match.program_data, match.program_round, seedLabel, match.match_label);
+}
+
 function roundPoint(value) {
   return Math.round((Number(value) + Number.EPSILON) * 10) / 10;
 }
@@ -842,12 +856,8 @@ async function getPointRanking(groupId, year, scope, seasonId, onlyLeagueId = nu
     }
     match._rankingSection = section;
 
-    const resolvedParticipantAId = entryType === "singles"
-      ? resolveProgramParticipantId(match.program_data, match.program_round, match.participant_a_seed_label, match.match_label) ?? match.participant_a_id
-      : match.participant_a_id;
-    const resolvedParticipantBId = entryType === "singles"
-      ? resolveProgramParticipantId(match.program_data, match.program_round, match.participant_b_seed_label, match.match_label) ?? match.participant_b_id
-      : match.participant_b_id;
+    const resolvedParticipantAId = rankingParticipantId(match, entryType, 'a');
+    const resolvedParticipantBId = rankingParticipantId(match, entryType, 'b');
     const memberAIds = entryType === "singles"
       ? [participantMembers.get(String(resolvedParticipantAId))].filter(Boolean)
       : (match.participant_a_roster_ids ?? []).map((id) => participantMembers.get(String(id))).filter(Boolean);
@@ -1297,6 +1307,7 @@ module.exports = {
     getBonusRule,
     getMatchPhaseSection,
     getEffectiveMatchRule,
+    rankingParticipantId,
     getRankingSection,
     finalizeThemeRows,
     isFinalMatch,

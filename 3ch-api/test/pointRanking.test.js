@@ -76,6 +76,31 @@ test('예선 뒤 본선 토너먼트 경기는 리그 순위에 계속 합산한
   assert.equal(_test.getRankingSection(finalsMatch, leagueHasRegularPhase), 'league');
 });
 
+test('완료된 프로그램 경기는 편성 순서가 바뀌어도 저장 당시 참가자에게 귀속한다', () => {
+  const match = {
+    status: 'done',
+    participant_a_id: 'played-a',
+    participant_b_id: 'played-b',
+    participant_a_seed_label: '1',
+    participant_b_seed_label: '2',
+    match_label: '1위조',
+    program_round: 2,
+    program_data: {
+      blocks: [
+        {},
+        {
+          participantOrderCustomized: true,
+          participantOrder: ['current-slot-a', 'current-slot-b'],
+          groupSizes: [2],
+        },
+      ],
+    },
+  };
+
+  assert.equal(_test.rankingParticipantId(match, 'singles', 'a'), 'played-a');
+  assert.equal(_test.rankingParticipantId(match, 'singles', 'b'), 'played-b');
+});
+
 test('상대가 순위 대상이 아니어도 식별된 회원의 획득 세트는 반영한다', () => {
   const member = { matches_played: 0, score_points: 0, wins: 0, losses: 0 };
   const rules = { matchPoints: { mode: 'sets', winPoints: 3 } };

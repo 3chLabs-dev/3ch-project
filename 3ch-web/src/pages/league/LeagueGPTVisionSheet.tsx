@@ -1240,6 +1240,8 @@ export default function LeagueGPTVisionSheet() {
   );
   const currentProgramBlock = programOption?.blocks?.[programRound - 1];
   const currentProgramRound = programOption?.rounds?.[programRound - 1];
+  const currentFinalAdvancementMode =
+    currentProgramRound?.finalAdvancementMode ?? currentProgramBlock?.finalAdvancementMode;
   const currentRule = currentProgramBlock?.matchRule ?? league?.rules;
   const [programMatchStateVersion, setProgramMatchStateVersion] = useState(0);
   const matchStateResetAt = currentProgramRound?.matchStateResetAt ?? currentProgramBlock?.matchStateResetAt;
@@ -1565,6 +1567,10 @@ export default function LeagueGPTVisionSheet() {
   const targetParticipants = useMemo(() => {
     const savedParticipantOrder =
       currentProgramRound?.participantOrder ?? currentProgramBlock?.participantOrder;
+    const hasCustomizedParticipantOrder = Boolean(
+      currentProgramRound?.participantOrderCustomized
+      ?? currentProgramBlock?.participantOrderCustomized
+    );
     const applySavedParticipantOrder = <T extends { id: string }>(participants: T[]) => {
       if (!savedParticipantOrder?.length) return participants;
       const orderById = new Map(savedParticipantOrder.map((participantId, index) => [participantId, index]));
@@ -1597,8 +1603,10 @@ export default function LeagueGPTVisionSheet() {
       // 1조 n위 → 2조 n위 → 3조 n위 ... 순서를 이미 부여한다.
       // 여기서 공통 부수 정렬이나 과거 수동 순서를 다시 적용하면 정책이
       // 깨져 보이므로 생성 순서를 그대로 사용한다.
-      if (currentProgramBlock?.finalAdvancementMode === "rank-groups") {
-        return selectedParticipants;
+      if (currentFinalAdvancementMode === "rank-groups") {
+        return hasCustomizedParticipantOrder
+          ? applySavedParticipantOrder(selectedParticipants)
+          : selectedParticipants;
       }
       return applySavedParticipantOrder(sortParticipantsByDivision(selectedParticipants));
     }
@@ -1609,7 +1617,7 @@ export default function LeagueGPTVisionSheet() {
       return rawParticipants.filter(p => p.group_name === selectedGroup);
     }
     return rawParticipants;
-  }, [currentProgramBlock, currentProgramRound, isProgramTeamRound, programTeamParticipants, programDisplayParticipants, isProgramMode, programMatchesAll, rawParticipants, groupNames, selectedGroup]);
+  }, [currentFinalAdvancementMode, currentProgramBlock, currentProgramRound, isProgramTeamRound, programTeamParticipants, programDisplayParticipants, isProgramMode, programMatchesAll, rawParticipants, groupNames, selectedGroup]);
 
   // 4. 선택된 조의 경기만 필터링
   const matches = useMemo(() => {
@@ -2024,6 +2032,7 @@ export default function LeagueGPTVisionSheet() {
         groupFormationCustomized: true,
         groupFormationSchemaVersion: 2,
         participantOrder,
+        participantOrderCustomized: true,
       });
       const nextProgram: ProgramOption = {
         ...programOption,
@@ -2077,6 +2086,7 @@ export default function LeagueGPTVisionSheet() {
             ? {
                 ...block,
                 participantOrder,
+                participantOrderCustomized: true,
                 ...(shouldUpdateHalfSplitMatchOrder ? { halfSplitMatchOrder: participantOrder } : {}),
               }
             : block
@@ -2086,6 +2096,7 @@ export default function LeagueGPTVisionSheet() {
             ? {
                 ...round,
                 participantOrder,
+                participantOrderCustomized: true,
                 ...(shouldUpdateHalfSplitMatchOrder ? { halfSplitMatchOrder: participantOrder } : {}),
               }
             : round
@@ -2120,9 +2131,10 @@ export default function LeagueGPTVisionSheet() {
     if (!id || !programOption || !currentProgramBlock || hasStartedProgramMatch || isResettingStandard) return;
     setIsResettingStandard(true);
     try {
-      const clearSavedOrder = <T extends { participantOrder?: string[]; halfSplitMatchOrder?: string[] }>(value: T): T => ({
+      const clearSavedOrder = <T extends { participantOrder?: string[]; participantOrderCustomized?: boolean; halfSplitMatchOrder?: string[] }>(value: T): T => ({
         ...value,
         participantOrder: undefined,
+        participantOrderCustomized: undefined,
         halfSplitMatchOrder: undefined,
       });
       const baseProgram = {
@@ -2862,8 +2874,6 @@ export default function LeagueGPTVisionSheet() {
         blocks: programOption.blocks.map((block, index) => index === roundIndex ? { ...block, matchRule } : block),
         rounds: programOption.rounds?.map((round, index) => index === roundIndex ? { ...round, matchRule: roundMatchRule } : round),
       };
-      storeProgramOption(id, nextProgram);
-      await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
       const nextMatches = generateProgramRoundMatches(
         id,
         nextProgram,
@@ -2872,6 +2882,8 @@ export default function LeagueGPTVisionSheet() {
         programSourceMatches,
       );
       await syncProgramMatches({ leagueId: id, matches: nextMatches }).unwrap();
+      await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
+      storeProgramOption(id, nextProgram);
       await refetchMatches();
       setVisionRuleMismatch(null);
       setIsSavingVision(false);

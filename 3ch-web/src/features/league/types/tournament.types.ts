@@ -161,6 +161,8 @@ export interface ProgramBlock {
   halfSplitOnlyMatches?: boolean;
   unitClubMode?: UnitClubMode;
   participantOrder?: string[];
+  /** 수정 모드에서 관리자가 명시적으로 저장한 표시 순서인지 여부. */
+  participantOrderCustomized?: boolean;
   /** 상단vs하단 경기 구성을 고정할 때 사용하는 참가자 순서. */
   halfSplitMatchOrder?: string[];
   /** NO-GAME 정책에서 관리자가 수동 복구한 경기 ID. */
@@ -273,6 +275,7 @@ export interface RoundConfig {
   halfSplitOnlyMatches?: boolean;
   unitClubMode?: UnitClubMode;
   participantOrder?: string[];
+  participantOrderCustomized?: boolean;
   /** 상단vs하단 경기 구성을 고정할 때 사용하는 참가자 순서. */
   halfSplitMatchOrder?: string[];
   /** NO-GAME 정책에서 관리자가 수동 복구한 경기 ID. */

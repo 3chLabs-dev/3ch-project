@@ -293,7 +293,20 @@ function getProgramRoundMeta(programData, programRound) {
     option: round?.option ?? block?.option ?? "NONE",
     finalAdvancementMode: block?.finalAdvancementMode ?? round?.finalAdvancementMode ?? null,
     tournamentMode: block?.tournamentMode ?? round?.tournamentMode ?? null,
+    matchRule: block?.matchRule ?? round?.matchRule ?? null,
   };
+}
+
+function getEffectiveMatchRule(match) {
+  if (!match?.is_program) return match?.match_rule ?? null;
+  const roundMeta = getProgramRoundMeta(match.program_data, match.program_round);
+  // Program group/league rounds are edited and displayed from program_data.
+  // Old synchronized match rows can still contain the previous round rule,
+  // so using m.match_rule here can drop valid 3-set wins from season points.
+  if (getMatchPhaseSection(match) === "league" && roundMeta.matchRule) {
+    return roundMeta.matchRule;
+  }
+  return match.match_rule ?? roundMeta.matchRule ?? null;
 }
 
 function getMatchPhaseSection(match) {
@@ -860,7 +873,8 @@ async function getPointRanking(groupId, year, scope, seasonId, onlyLeagueId = nu
     const scoreB = Number(match.score_b);
     const hasBothSides = Boolean(match.participant_a_id || match.participant_a_roster_ids?.length)
       && Boolean(match.participant_b_id || match.participant_b_roster_ids?.length);
-    const winner = winnerSide(scoreA, scoreB, match.match_rule);
+    const effectiveMatchRule = getEffectiveMatchRule(match);
+    const winner = winnerSide(scoreA, scoreB, effectiveMatchRule);
     if (hasBothSides && winner) {
       rankingMemberAIds.forEach((memberId) => {
         const stat = themeStats.get(String(memberId));
@@ -887,7 +901,7 @@ async function getPointRanking(groupId, year, scope, seasonId, onlyLeagueId = nu
       .map((memberId) => ensureRow(targetRows, memberId, baseMembers.get(memberId), section))
       .filter(Boolean);
     if (includeMatchPoints) {
-      applyMatchPoints(rowsA, rowsB, scoreA, scoreB, rulesForLeague(match.league_id), memberAIds.length, memberBIds.length, match.match_rule);
+      applyMatchPoints(rowsA, rowsB, scoreA, scoreB, rulesForLeague(match.league_id), memberAIds.length, memberBIds.length, effectiveMatchRule);
     }
 
     if (scoreA === scoreB) return;
@@ -975,7 +989,7 @@ async function getPointRanking(groupId, year, scope, seasonId, onlyLeagueId = nu
       a.lost_points += scoreB;
       b.score_points += scoreB;
       b.lost_points += scoreA;
-      const winner = winnerSide(scoreA, scoreB, match.match_rule);
+      const winner = winnerSide(scoreA, scoreB, getEffectiveMatchRule(match));
       if (winner === 'a') {
         a.wins += 1;
         b.losses += 1;
@@ -1053,7 +1067,7 @@ async function getPointRanking(groupId, year, scope, seasonId, onlyLeagueId = nu
       b.score_points += scoreB;
       b.lost_points += scoreA;
       b.max_round = Math.max(b.max_round, Number(match.round_number) || 0);
-      const winner = winnerSide(scoreA, scoreB, match.match_rule);
+      const winner = winnerSide(scoreA, scoreB, getEffectiveMatchRule(match));
       if (winner === 'a') {
         a.wins += 1;
         b.losses += 1;
@@ -1068,7 +1082,7 @@ async function getPointRanking(groupId, year, scope, seasonId, onlyLeagueId = nu
       const aIds = match._memberAIds ?? [];
       const bIds = match._memberBIds ?? [];
       if (aIds.length === 0 || bIds.length === 0) return null;
-      const winner = winnerSide(match.score_a, match.score_b, match.match_rule);
+      const winner = winnerSide(match.score_a, match.score_b, getEffectiveMatchRule(match));
       if (!winner) return null;
       return winner === 'a'
         ? { winnerIds: aIds, loserIds: bIds }
@@ -1273,6 +1287,7 @@ module.exports = {
     applyMatchPoints,
     getBonusRule,
     getMatchPhaseSection,
+    getEffectiveMatchRule,
     getRankingSection,
     finalizeThemeRows,
     isFinalMatch,

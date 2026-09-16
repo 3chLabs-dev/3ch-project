@@ -163,3 +163,38 @@ test('프로그램 조별리그는 match_label을 조 이름으로 사용한다'
   assert.equal(_test.rankingGroupName(match, 'a', 'singles'), '3조');
   assert.equal(_test.rankingGroupName(match, 'b', 'singles'), '3조');
 });
+
+test('프로그램 조별리그는 동기화된 경기의 오래된 규칙보다 현재 라운드 규칙을 우선한다', () => {
+  const match = {
+    is_program: true,
+    program_round: 2,
+    program_data: {
+      blocks: [
+        { format: 'GROUP', matchRule: '5전 3선승제' },
+        { format: 'GROUP', matchRule: '3세트제' },
+      ],
+    },
+    match_rule: '5전 3선승제',
+    bracket: null,
+  };
+
+  const effectiveRule = _test.getEffectiveMatchRule(match);
+  assert.equal(effectiveRule, '3세트제');
+
+  const winner = { matches_played: 0, score_points: 0, wins: 0, losses: 0 };
+  const loser = { matches_played: 0, score_points: 0, wins: 0, losses: 0 };
+  _test.applyMatchPoints(
+    [winner],
+    [loser],
+    2,
+    1,
+    { matchPoints: { mode: 'win', winPoints: 1 } },
+    1,
+    1,
+    effectiveRule,
+  );
+
+  assert.equal(winner.wins, 1);
+  assert.equal(winner.score_points, 1);
+  assert.equal(loser.losses, 1);
+});

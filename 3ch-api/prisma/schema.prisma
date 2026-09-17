@@ -29,6 +29,8 @@ model User {
   created_groups                Group[]                  @relation("GroupCreator")
   group_memberships             GroupMember[]
   draws                         Draw[]                   @relation("DrawCreator")
+  after_party_settlements       AfterPartySettlement[]
+  after_party_share_links       AfterPartyShareLink[]
   league_programs               LeagueProgram[]          @relation("LeagueProgramCreator")
   league_program_templates      LeagueProgramTemplate[]
   group_rankings                GroupRanking[]
@@ -341,6 +343,8 @@ model League {
   participant_replacements LeagueParticipantReplacement[]
   program                  LeagueProgram?
   draws                    Draw[]
+  after_party_settlements  AfterPartySettlement[]
+  after_party_share_link  AfterPartyShareLink?
   invited_groups           LeagueInvitedGroup[]
 
   @@map("leagues")
@@ -575,6 +579,39 @@ model LeagueParticipant {
   @@index([league_id])
   @@index([source_group_id])
   @@map("league_participants")
+}
+
+model AfterPartySettlement {
+  id              String   @id @default(uuid()) @db.Uuid
+  league_id       String
+  league          League   @relation(fields: [league_id], references: [id], onDelete: Cascade)
+  round_no        Int
+  title           String   @db.VarChar(100)
+  status          String   @default("draft") @db.VarChar(12)
+  participants    Json     @default("[]")
+  items           Json     @default("[]")
+  contributions   Json     @default("[]")
+  calculation     Json     @default("{}")
+  version         Int      @default(1)
+  created_by_id   Int
+  creator         User     @relation(fields: [created_by_id], references: [id])
+  created_at      DateTime @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([league_id])
+  @@unique([league_id, round_no])
+  @@map("after_party_settlements")
+}
+
+model AfterPartyShareLink {
+  league_id     String   @id
+  league        League   @relation(fields: [league_id], references: [id], onDelete: Cascade)
+  token         String   @unique @db.Uuid
+  created_by_id Int
+  creator       User     @relation(fields: [created_by_id], references: [id])
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+
+  @@map("after_party_share_links")
 }
 
 model LeagueProgramTemplate {

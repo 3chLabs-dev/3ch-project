@@ -130,7 +130,7 @@ export default function ParticipantDetailDialog({
               />
               <FormControlLabel
                 control={<Checkbox checked={after} onChange={(e) => setAfter(e.target.checked)} />}
-                label={<Typography sx={{ fontWeight: 700 }}>뒷풀이 참여</Typography>}
+                label={<Typography sx={{ fontWeight: 700 }}>뒤풀이 참여</Typography>}
               />
             </Stack>
           </Box>

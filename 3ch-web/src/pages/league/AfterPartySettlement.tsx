@@ -1,0 +1,437 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Alert, Box, Button, Card, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Stack, TextField, Typography } from "@mui/material";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
+import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
+import LanguageIcon from "@mui/icons-material/Language";
+import SmsOutlinedIcon from "@mui/icons-material/SmsOutlined";
+import IosShareOutlinedIcon from "@mui/icons-material/IosShareOutlined";
+import QRCode from "react-qr-code";
+import CurvedShareIcon from "../../components/CurvedShareIcon";
+import { useAppSelector } from "../../app/hooks";
+import { useGetLeagueParticipantsQuery, useGetLeagueQuery, useUpdateLeagueMutation } from "../../features/league/leagueApi";
+import { useGetGroupDetailQuery } from "../../features/group/groupApi";
+
+type Person = { id: string; name: string; attending: boolean; drinking: boolean; excluded: boolean };
+type Item = { id: string; name: string; amount: number; category: "common" | "alcohol" | "nonalcohol" | "specific"; personIds: string[] };
+type Contribution = { id: string; name: string; amount: number; personId?: string };
+type Calculation = { total: number; contributed: number; distributable: number; shares: Record<string, number> };
+type Settlement = { id: string; round_no: number; title: string; status: "draft" | "final"; version: number; participants: Person[]; items: Item[]; contributions: Contribution[]; calculation: Calculation };
+type CombinedPerson = { participantId: string; name: string; total: number; rounds: Record<string, number> };
+type CombinedSummary = { total: number; people: CombinedPerson[] };
+type ListResponse = { settlements: Settlement[]; summary: CombinedSummary; canManage: boolean };
+const money = (value: number) => `${value.toLocaleString("ko-KR")}원`;
+const categories = { common: "음식", alcohol: "술", nonalcohol: "음료" };
+const samplePeople = ["참가자 1", "참가자 2", "참가자 3", "참가자 4"].map((name, index) => ({ id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`, name, attending: index < 2, drinking: false, excluded: false }));
+
+function preview(people: Person[], items: Item[], contributions: Contribution[]): Calculation | null {
+  const shares = Object.fromEntries(people.map((p) => [p.id, 0]));
+  const total = items.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const contributed = contributions.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+  if (contributed > total) return null;
+  let credit = contributed;
+  for (const item of [...items].sort((a, b) => Number(b.category === "common") - Number(a.category === "common"))) {
+    const applied = Math.min(credit, Number(item.amount || 0));
+    credit -= applied;
+    const amount = Number(item.amount || 0) - applied;
+    const targets = people.filter((p) => p.attending && !p.excluded && (
+      item.category === "common" || (item.category === "alcohol" && p.drinking) ||
+      (item.category === "nonalcohol" && !p.drinking) || (item.category === "specific" && item.personIds.includes(p.id))));
+    if (amount > 0 && !targets.length) return null;
+    targets.forEach((p, index) => { shares[p.id] += Math.floor(amount / targets.length) + (index < amount % targets.length ? 1 : 0); });
+  }
+  return { total, contributed, distributable: total - contributed, shares };
+}
+
+function summarizeRounds(settlements: Settlement[]): CombinedSummary {
+  const people = new Map<string, CombinedPerson>();
+  for (const settlement of settlements) for (const participant of settlement.participants) {
+    const amount = Number(settlement.calculation?.shares?.[participant.id] ?? 0);
+    if (!participant.attending && amount === 0) continue;
+    const person = people.get(participant.id) ?? { participantId: participant.id, name: participant.name, total: 0, rounds: {} };
+    person.name = participant.name;
+    person.total += amount;
+    person.rounds[String(settlement.round_no)] = amount;
+    people.set(participant.id, person);
+  }
+  const billable = [...people.values()].filter((person) => person.total > 0).sort((a, b) => a.name.localeCompare(b.name, "ko"));
+  return { total: billable.reduce((sum, person) => sum + person.total, 0), people: billable };
+}
+
+function localPreviewRequest(leagueId: string, url: string, method: string, body: unknown) {
+  const key = `after-party-preview:${leagueId}`;
+  const settlements: Settlement[] = JSON.parse(localStorage.getItem(key) || "[]").map((entry: Settlement, index: number) => ({ ...entry, round_no: entry.round_no ?? index + 1 }));
+  const parts = new URL(url, window.location.origin).pathname.split("/");
+  const id = parts[parts.indexOf("after-party") + 1];
+  const action = parts[parts.indexOf("after-party") + 2];
+  const current = settlements.find((entry) => entry.id === id);
+  const save = (entry: Settlement) => { localStorage.setItem(key, JSON.stringify(settlements.map((old) => old.id === entry.id ? entry : old))); return { settlement: entry }; };
+  if (method === "GET" && !id) return { settlements, summary: summarizeRounds(settlements), canManage: true };
+  if (method === "GET" && current) return { settlement: current, canManage: true };
+  if (method === "POST" && id === "share") {
+    const shareKey = `after-party-preview-share:${leagueId}`;
+    const token = localStorage.getItem(shareKey) || crypto.randomUUID();
+    localStorage.setItem(shareKey, token);
+    return { token, visibility: "link" };
+  }
+  if (method === "POST" && !id) {
+    const input = body as Pick<Settlement, "participants" | "items" | "contributions">;
+    if (!input.items.length || input.contributions.some((entry) => !entry.personId)) throw new Error("메뉴와 찬조자를 확인해 주세요.");
+    const calculation = preview(input.participants, input.items, input.contributions);
+    if (!calculation) throw new Error("정산 금액과 부담 대상을 확인해 주세요.");
+    const roundNo = Math.max(0, ...settlements.map((entry) => entry.round_no)) + 1;
+    const entry: Settlement = { id: crypto.randomUUID(), round_no: roundNo, title: `${roundNo}차`, status: "draft", version: 2, participants: input.participants, items: input.items, contributions: input.contributions, calculation };
+    localStorage.setItem(key, JSON.stringify([...settlements, entry]));
+    return { settlement: entry };
+  }
+  if (!current) throw new Error("미리보기 정산을 찾을 수 없습니다.");
+  if (method === "PUT") {
+    const next = body as Pick<Settlement, "title" | "participants" | "items" | "contributions" | "version">;
+    if (next.version !== current.version) throw new Error("정산을 새로고침해 주세요.");
+    for (const kind of ["participants", "items", "contributions"] as const) {
+      if (current[kind].some((old) => !next[kind].some((entry) => entry.id === old.id))) throw new Error("저장된 항목은 삭제 버튼으로 삭제해 주세요.");
+    }
+    if (next.items.some((entry) => entry.category === "specific" && !current.items.some((old) => old.id === entry.id && old.category === "specific"))) throw new Error("메뉴는 음식·주류·비주류 중 하나로 구분해 주세요.");
+    if (next.contributions.some((entry) => !entry.personId && !current.contributions.some((old) => old.id === entry.id))) throw new Error("찬조자를 선택해 주세요.");
+    const calculation = preview(next.participants, next.items, next.contributions);
+    if (!calculation) throw new Error("찬조금이나 항목의 부담 대상을 확인해 주세요.");
+    return save({ ...current, ...next, calculation, version: current.version + 1 });
+  }
+  if (method === "POST" && action === "remove-entry") {
+    const { kind, entryId, version, confirmationIntent } = body as { kind: "items" | "contributions"; entryId: string; version: number; confirmationIntent: string };
+    if (version !== current.version || confirmationIntent !== "REMOVE_AFTER_PARTY_ENTRY") throw new Error("삭제 요청을 확인해 주세요.");
+    const next = { ...current, [kind]: current[kind].filter((entry) => entry.id !== entryId) };
+    const calculation = preview(next.participants, next.items, next.contributions);
+    if (!calculation) throw new Error("남은 항목과 찬조금을 확인해 주세요.");
+    return save({ ...next, calculation, version: current.version + 1 });
+  }
+  throw new Error("지원되지 않는 미리보기 요청입니다.");
+}
+
+export default function AfterPartySettlement() {
+  const { id: leagueId, settlementId } = useParams<{ id: string; settlementId?: string }>();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const roundParam = searchParams.get("round");
+  const roundNo = roundParam && /^\d+$/.test(roundParam) ? Number(roundParam) : 0;
+  const shareToken = searchParams.get("share");
+  const token = useAppSelector((state) => state.auth.token);
+  const { data: participantData } = useGetLeagueParticipantsQuery(leagueId ?? "", { skip: !leagueId || !!shareToken });
+  const { data: leagueData } = useGetLeagueQuery(leagueId ?? "", { skip: !leagueId || !!shareToken });
+  const { data: groupData } = useGetGroupDetailQuery(leagueData?.league.group_id ?? "", { skip: !leagueData?.league.group_id || !!shareToken });
+  const [updateLeague] = useUpdateLeagueMutation();
+  const [list, setList] = useState<Settlement[]>([]);
+  const [summary, setSummary] = useState<CombinedSummary>({ total: 0, people: [] });
+  const [canManage, setCanManage] = useState(false);
+  const [selected, setSelected] = useState<Settlement | null>(null);
+  const [people, setPeople] = useState<Person[]>([]);
+  const [items, setItems] = useState<Item[]>([]);
+  const [draftCategory, setDraftCategory] = useState<"common" | "alcohol" | "nonalcohol">("common");
+  const [draftName, setDraftName] = useState("");
+  const [draftAmount, setDraftAmount] = useState("");
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const itemNameRef = useRef<HTMLInputElement>(null);
+  const [contributions, setContributions] = useState<Contribution[]>([]);
+  const [title, setTitle] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [localPreview, setLocalPreview] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [shareLink, setShareLink] = useState("");
+  const [downloading, setDownloading] = useState(false);
+  const exportRef = useRef<HTMLDivElement>(null);
+  const [bankAccount, setBankAccount] = useState("");
+  const [savedBankAccount, setSavedBankAccount] = useState("");
+  const [savingBankAccount, setSavingBankAccount] = useState(false);
+  const [accountAutoSaveFailed, setAccountAutoSaveFailed] = useState(false);
+  const [sharedLeagueName, setSharedLeagueName] = useState("");
+  const base = `${import.meta.env.VITE_API_BASE_URL ?? "/api"}/leagues/${leagueId}/after-party`;
+  const listPath = `/league/${leagueId}/after-party`;
+  const canEditAccount = canManage && (localPreview || groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.league === true));
+
+  const request = useCallback(async (url: string, method = "GET", body?: unknown) => {
+    if (import.meta.env.DEV && (localPreview || !token)) { setLocalPreview(true); return localPreviewRequest(leagueId!, url, method, body); }
+    try {
+      const response = await fetch(url, { method, headers: { Authorization: `Bearer ${token}`, ...(body ? { "Content-Type": "application/json" } : {}) }, body: body ? JSON.stringify(body) : undefined });
+      if (import.meta.env.DEV && (response.status >= 500 || !response.headers.get("content-type")?.includes("application/json"))) throw new TypeError("로컬 API에 연결할 수 없습니다.");
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "요청에 실패했습니다.");
+      return result;
+    } catch (cause) {
+      if (import.meta.env.DEV && cause instanceof TypeError) {
+        setLocalPreview(true);
+        return localPreviewRequest(leagueId!, url, method, body);
+      }
+      throw cause;
+    }
+  }, [token, localPreview, leagueId]);
+  const loadList = useCallback(async () => {
+    if (!leagueId || (!shareToken && !token && !import.meta.env.DEV)) return;
+    try {
+      if (shareToken) {
+        if (import.meta.env.DEV && localStorage.getItem(`after-party-preview-share:${leagueId}`) === shareToken) {
+          const result = localPreviewRequest(leagueId, base, "GET", undefined) as ListResponse;
+          setList(result.settlements); setSummary(result.summary); setCanManage(false); setLocalPreview(true);
+          const account = localStorage.getItem(`after-party-preview-bank:${leagueId}`) ?? "";
+          setBankAccount(account); setSavedBankAccount(account);
+          return;
+        }
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL ?? "/api"}/after-party/shared/${shareToken}`);
+        const result = await response.json();
+        if (!response.ok || result.league?.id !== leagueId) throw new Error(result.message || "공유 링크를 열 수 없습니다.");
+        setList(result.settlements); setSummary(result.summary); setCanManage(false); setSharedLeagueName(result.league.name);
+        setBankAccount(result.league.bank_account ?? ""); setSavedBankAccount(result.league.bank_account ?? "");
+        return;
+      }
+      const result: ListResponse = await request(base); setList(result.settlements); setSummary(result.summary); setCanManage(result.canManage);
+    }
+    catch (cause) { setError((cause as Error).message); }
+  }, [base, leagueId, request, token, shareToken]);
+  useEffect(() => { void loadList(); }, [loadList]);
+  useEffect(() => {
+    if (!leagueData?.league || localPreview || bankAccount !== savedBankAccount) return;
+    const value = leagueData.league.bank_account ?? "";
+    setBankAccount(value); setSavedBankAccount(value);
+  }, [leagueData?.league?.bank_account, localPreview]);
+  useEffect(() => {
+    if (!localPreview || bankAccount !== savedBankAccount || shareToken) return;
+    const value = localStorage.getItem(`after-party-preview-bank:${leagueId}`);
+    if (value === null) return;
+    setBankAccount(value); setSavedBankAccount(value);
+  }, [localPreview, leagueId]);
+  useEffect(() => {
+    if (!selected || !participantData?.participants) return;
+    setPeople((current) => {
+      const known = new Set(current.map((person) => person.id));
+      const added = participantData.participants.filter((person) => !person.is_bot && !known.has(person.id))
+        .map((person) => ({ id: person.id, name: person.name, attending: selected.participants.length === 0 && !!person.after, drinking: false, excluded: false }));
+      return added.length ? [...current, ...added] : current;
+    });
+  }, [selected, participantData?.participants]);
+
+  const open = useCallback((settlement: Settlement) => {
+    const existing = new Map(settlement.participants.map((p) => [p.id, p]));
+    const roster = (participantData?.participants ?? []).filter((p) => !p.is_bot).map((p) => existing.get(p.id) ?? { id: p.id, name: p.name, attending: settlement.participants.length === 0 && !!p.after, drinking: false, excluded: false });
+    const gone = settlement.participants.filter((p) => !roster.some((current) => current.id === p.id));
+    setSelected(settlement); setTitle(settlement.title); setPeople([...roster, ...gone]); setItems(settlement.items); setContributions(settlement.contributions); setDirty(false); setError("");
+    setDraftCategory("common"); setDraftName(""); setDraftAmount(""); setEditingItemId(null);
+  }, [participantData?.participants]);
+  const select = useCallback(async (id: string) => {
+    try { const result = await request(`${base}/${id}`); open(result.settlement); }
+    catch (cause) { setError((cause as Error).message); }
+  }, [request, base, open]);
+  useEffect(() => {
+    if (settlementId) return;
+    if (!roundNo) { setSelected(null); return; }
+    if (selected?.version === 0 && selected.round_no === roundNo) return;
+    const entry = list.find((item) => item.round_no === roundNo);
+    if (entry && selected?.id !== entry.id) void select(entry.id);
+  }, [roundNo, settlementId, list, selected?.id, selected?.version, selected?.round_no, select]);
+  useEffect(() => {
+    if (!settlementId) return;
+    const entry = list.find((item) => item.id === settlementId);
+    if (entry) navigate(`${listPath}?round=${entry.round_no}`, { replace: true });
+  }, [settlementId, list, listPath, navigate]);
+  const create = () => {
+    const nextRound = Math.max(0, ...list.map((entry) => entry.round_no)) + 1;
+    const roster = (participantData?.participants ?? []).filter((person) => !person.is_bot).map((person) => ({ id: person.id, name: person.name, attending: !!person.after, drinking: false, excluded: false }));
+    const draft: Settlement = { id: crypto.randomUUID(), round_no: nextRound, title: `${nextRound}차`, status: "draft", version: 0, participants: roster.length ? roster : import.meta.env.DEV ? samplePeople : [], items: [], contributions: [], calculation: { total: 0, contributed: 0, distributable: 0, shares: {} } };
+    open(draft);
+    navigate(`${listPath}?round=${nextRound}`);
+  };
+  const changePerson = (id: string, patch: Partial<Person>) => { setPeople((old) => old.map((p) => p.id === id ? { ...p, ...patch } : p)); setDirty(true); };
+  const editItem = (item: Item) => {
+    if (!editable) return;
+    setEditingItemId(item.id);
+    setDraftCategory(item.category === "specific" ? "common" : item.category);
+    setDraftName(item.name);
+    setDraftAmount(String(item.amount));
+    itemNameRef.current?.focus();
+  };
+  const addItem = () => {
+    if (!editable) return;
+    const name = draftName.trim();
+    const amount = Number(draftAmount);
+    if (!name || !Number.isInteger(amount) || amount <= 0 || amount > 1_000_000_000) { setError("메뉴와 0원보다 큰 금액을 입력해 주세요."); return; }
+    if (editingItemId) setItems((old) => old.map((item) => item.id === editingItemId ? { ...item, name, amount, category: draftCategory, personIds: [] } : item));
+    else setItems((old) => [...old, { id: crypto.randomUUID(), name, amount, category: draftCategory, personIds: [] }]);
+    setDraftName(""); setDraftAmount(""); setEditingItemId(null); setDirty(true); setError("");
+    itemNameRef.current?.focus();
+  };
+  const changeContribution = (id: string, patch: Partial<Contribution>) => { setContributions((old) => old.map((entry) => entry.id === id ? { ...entry, ...patch } : entry)); setDirty(true); };
+  const save = async () => {
+    if (!selected) return;
+    if (draftName.trim() || draftAmount.trim()) { setError("입력 중인 메뉴를 추가 버튼이나 Enter로 먼저 등록해 주세요."); return; }
+    if (!items.length) { setError("메뉴를 하나 이상 추가해 주세요."); return; }
+    if (contributions.some((entry) => !entry.personId && !selected.contributions.some((old) => old.id === entry.id))) { setError("찬조자를 참가자 명단에서 선택해 주세요."); return; }
+    setBusy(true); setError("");
+    try {
+      const body = { title, participants: people, items, contributions, version: selected.version };
+      if (selected.version === 0) await request(base, "POST", body);
+      else await request(`${base}/${selected.id}`, "PUT", body);
+      await loadList(); navigate(listPath);
+    } catch (cause) { setError((cause as Error).message); }
+    finally { setBusy(false); }
+  };
+  const remove = async (kind: "items" | "contributions", entryId: string, label: string) => {
+    if (!selected) return;
+    if (kind === "items" && editingItemId === entryId) { setEditingItemId(null); setDraftName(""); setDraftAmount(""); }
+    const persisted = selected[kind].some((entry) => entry.id === entryId);
+    if (!persisted) {
+      if (kind === "items") setItems((old) => old.filter((entry) => entry.id !== entryId));
+      else setContributions((old) => old.filter((entry) => entry.id !== entryId));
+      setDirty(true); return;
+    }
+    if (dirty) { setError("변경 내용을 먼저 저장한 뒤 항목을 삭제해 주세요."); return; }
+    if (!window.confirm(`'${label}' 항목을 삭제하시겠습니까? 저장된 금액과 분담금이 다시 계산됩니다.`)) return;
+    setBusy(true);
+    try { const result = await request(`${base}/${selected.id}/remove-entry`, "POST", { kind, entryId, version: selected.version, confirmationIntent: "REMOVE_AFTER_PARTY_ENTRY" }); open(result.settlement); await loadList(); }
+    catch (cause) { setError((cause as Error).message); }
+    finally { setBusy(false); }
+  };
+  const saveBankAccount = useCallback(async () => {
+    if (!leagueId || !canEditAccount || shareToken || savingBankAccount || bankAccount === savedBankAccount) return;
+    setSavingBankAccount(true);
+    try {
+      const value = bankAccount.trim();
+      if (localPreview) localStorage.setItem(`after-party-preview-bank:${leagueId}`, value);
+      else await updateLeague({ id: leagueId, updates: { bank_account: value } }).unwrap();
+      setBankAccount(value); setSavedBankAccount(value); setAccountAutoSaveFailed(false);
+    } catch { setAccountAutoSaveFailed(true); setError("입금 계좌 저장에 실패했습니다."); }
+    finally { setSavingBankAccount(false); }
+  }, [leagueId, canEditAccount, shareToken, savingBankAccount, bankAccount, savedBankAccount, localPreview, updateLeague]);
+  useEffect(() => {
+    if (!canEditAccount || shareToken || bankAccount === savedBankAccount || savingBankAccount || accountAutoSaveFailed) return;
+    const timer = window.setTimeout(() => { void saveBankAccount(); }, 4000);
+    return () => window.clearTimeout(timer);
+  }, [canEditAccount, shareToken, bankAccount, savedBankAccount, savingBankAccount, accountAutoSaveFailed, saveBankAccount]);
+  const downloadImage = async () => {
+    if (!exportRef.current || downloading) return;
+    setDownloading(true);
+    try {
+      const html2canvas = (await import("html2canvas")).default;
+      const canvas = await html2canvas(exportRef.current, { scale: 2, useCORS: true, backgroundColor: "#FFFFFF" });
+      const link = document.createElement("a");
+      link.href = canvas.toDataURL("image/png"); link.download = `뒤풀이정산_${leagueData?.league.name || sharedLeagueName || "리그"}.png`; link.click();
+    } catch { setError("정산 이미지 저장에 실패했습니다."); }
+    finally { setDownloading(false); }
+  };
+  const openShareDialog = async () => {
+    try {
+      const result = await request(`${base}/share`, "POST");
+      const appUrl = String(import.meta.env.VITE_APP_URL || window.location.origin).replace(/\/$/, "");
+      setShareLink(`${appUrl}${listPath}?share=${result.token}`); setShareDialogOpen(true);
+    } catch (cause) { setError((cause as Error).message); }
+  };
+  const copyShareLink = async () => {
+    try { await navigator.clipboard.writeText(shareLink); setShareDialogOpen(false); }
+    catch { setError("공유 링크 복사에 실패했습니다."); }
+  };
+  const calculation = useMemo(() => preview(people, items, contributions), [people, items, contributions]);
+  const editable = !!selected && canManage;
+  const leagueAfterIds = useMemo(() => {
+    const ids = new Set((participantData?.participants ?? []).filter((person) => person.after).map((person) => person.id));
+    if (localPreview && !participantData?.participants) samplePeople.slice(0, 2).forEach((person) => ids.add(person.id));
+    return ids;
+  }, [participantData?.participants, localPreview]);
+  const accountCard = <Card sx={{ p: 2, mt: 2 }}>
+    <Typography fontWeight={900} mb={1}>정산금 입금 계좌</Typography>
+    {canEditAccount && !shareToken ? <TextField fullWidth placeholder="은행명과 계좌번호를 입력해 주세요" value={bankAccount} onChange={(event) => { setBankAccount(event.target.value); setAccountAutoSaveFailed(false); }} /> : <Typography sx={{ p: 1.5, border: "1px solid #E5E7EB", borderRadius: 1, overflowWrap: "anywhere" }}>{bankAccount || "등록된 입금 계좌가 없습니다."}</Typography>}
+    <Stack direction="row" spacing={1} mt={1}>
+      <Button fullWidth variant="outlined" disabled={!bankAccount.trim()} startIcon={<ContentCopyOutlinedIcon />} onClick={() => { void navigator.clipboard.writeText(bankAccount.trim()).catch(() => setError("계좌번호 복사에 실패했습니다.")); }}>계좌번호 복사</Button>
+      {canEditAccount && !shareToken && bankAccount !== savedBankAccount && <Button fullWidth variant="contained" disabled={savingBankAccount} onClick={() => void saveBankAccount()}>{savingBankAccount ? "저장 중" : "저장"}</Button>}
+    </Stack>
+  </Card>;
+
+  return <Box sx={{ maxWidth: 720, mx: "auto", px: 2, py: 2, pb: 10 }}>
+    <Stack direction="row" alignItems="center" spacing={1} mb={2}><IconButton onClick={() => navigate(roundNo || settlementId ? listPath : `/league/${leagueId}`)}><ArrowBackIcon /></IconButton><Typography variant="h6" fontWeight={900}>{roundNo && selected ? `${title} 뒤풀이 정산` : "뒤풀이 정산"}</Typography></Stack>
+    {localPreview && <Alert severity="info" sx={{ mb: 2 }}>로컬 미리보기입니다. 이 브라우저에만 저장되며 실제 리그 정산이나 서버 데이터에는 반영되지 않습니다.</Alert>}
+    {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError("")}>{error}</Alert>}
+    {!roundNo && !settlementId ? <Stack spacing={1.5}>
+      <Stack direction="row" justifyContent="flex-end" spacing={0.5}>
+        <IconButton size="small" disabled={downloading || !list.length} onClick={() => void downloadImage()} aria-label="뒤풀이 정산 이미지 다운로드" sx={{ border: "1px solid #D1D5DB", borderRadius: 1 }}><DownloadOutlinedIcon sx={{ fontSize: 18 }} /></IconButton>
+        {canManage && <IconButton size="small" disabled={!list.length} onClick={() => void openShareDialog()} aria-label="뒤풀이 정산 공유" sx={{ border: "1px solid #D1D5DB", borderRadius: 1 }}><CurvedShareIcon sx={{ fontSize: 19 }} /></IconButton>}
+      </Stack>
+      {canManage && <Button variant="contained" disabled={busy} onClick={create}>+ 정산 추가</Button>}
+      <Box ref={exportRef} sx={{ bgcolor: "#FFFFFF", p: 1 }}>
+      <Typography fontWeight={900} fontSize={18} mb={1}>{sharedLeagueName || leagueData?.league.name || "리그"} 뒤풀이 정산</Typography>
+      <Stack spacing={1}>{list.map((entry) => <Card key={entry.id} onClick={() => { if (!shareToken) navigate(`${listPath}?round=${entry.round_no}`); }} sx={{ p: 2, cursor: shareToken ? "default" : "pointer", border: "1px solid #E5E7EB" }}><Typography fontWeight={800}>{entry.round_no}차</Typography><Typography color="text.secondary" fontSize={13} mt={1}>정산 금액 {money(entry.calculation?.distributable ?? 0)}</Typography></Card>)}</Stack>
+      {!list.length && <Typography color="text.secondary">아직 만든 정산이 없습니다.</Typography>}
+      <Card sx={{ p: 2, border: "1px solid #BFDBFE", bgcolor: "#F8FAFF" }}>
+        <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}><Typography fontWeight={900} fontSize={17}>전체 합산</Typography><Typography fontWeight={900} fontSize={18}>{money(summary.total)}</Typography></Stack>
+        <Typography color="text.secondary" fontSize={12} mt={0.5} mb={1}>모든 정산을 합하여 계산된 개인별 정산금입니다.</Typography>
+        {summary.people.length ? <Stack spacing={0.75}>{summary.people.map((person) => <Stack key={person.participantId} direction="row" justifyContent="space-between" alignItems="center" gap={1} sx={{ borderTop: "1px solid #E5E7EB", pt: 1 }}><Box minWidth={0}><Typography fontWeight={800}>{person.name}</Typography><Typography fontSize={12} color="text.secondary">{list.filter((entry) => person.rounds[String(entry.round_no)] != null).map((entry) => `${entry.round_no}차 ${money(person.rounds[String(entry.round_no)])}`).join(" · ")}</Typography></Box><Typography fontWeight={900} whiteSpace="nowrap">{money(person.total)}</Typography></Stack>)}</Stack> : <Typography color="text.secondary" fontSize={13}>청구할 금액이 아직 없습니다.</Typography>}
+      </Card>
+      {accountCard}
+      </Box>
+    </Stack> : selected?.round_no === roundNo ? <Stack spacing={2}>
+      <Card sx={{ p: 2 }}><Typography fontWeight={900} fontSize={18}>{title}</Typography><Typography fontSize={13} color="text.secondary">뒤풀이 정산</Typography></Card>
+      <Card sx={{ p: 2 }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}><Typography fontWeight={900}>메뉴</Typography><Typography fontSize={13} fontWeight={800}>합계 {money(items.reduce((sum, item) => sum + item.amount, 0))}</Typography></Stack>
+        {editable && <>
+          <Stack direction="row" gap={0.75} mb={1}>{Object.entries(categories).map(([key, label]) => <Button key={key} variant={draftCategory === key ? "contained" : "outlined"} size="small" onClick={() => setDraftCategory(key as typeof draftCategory)} sx={{ minWidth: 64, minHeight: 36, fontWeight: 800 }}>{label}</Button>)}</Stack>
+          <Box sx={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(92px, 120px) 58px", gap: 0.75 }}>
+            <TextField inputRef={itemNameRef} size="small" placeholder="메뉴" value={draftName} onChange={(event) => setDraftName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); addItem(); } }} inputProps={{ "aria-label": "메뉴" }} />
+            <TextField size="small" type="number" placeholder="금액" value={draftAmount} onChange={(event) => setDraftAmount(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); addItem(); } }} inputProps={{ min: 1, inputMode: "numeric", "aria-label": "금액" }} />
+            <Button variant="contained" onClick={addItem} sx={{ minWidth: 0, px: 0, fontWeight: 800 }}>{editingItemId ? "수정" : "추가"}</Button>
+          </Box>
+          {editingItemId && <Button size="small" sx={{ mt: 0.5 }} onClick={() => { setEditingItemId(null); setDraftName(""); setDraftAmount(""); setDraftCategory("common"); }}>수정 취소</Button>}
+        </>}
+        <Stack spacing={0.5} mt={items.length ? 1.5 : 0}>{items.map((item) => <Stack key={item.id} direction="row" alignItems="center" gap={0.75} onClick={() => editItem(item)} sx={{ py: 0.75, borderTop: "1px solid #E5E7EB", cursor: editable ? "pointer" : "default", bgcolor: editingItemId === item.id ? "#EFF6FF" : "transparent" }}>
+          <Chip size="small" label={categories[item.category as keyof typeof categories] ?? "기존 항목"} sx={{ fontWeight: 800, minWidth: 54 }} />
+          <Typography fontSize={14} fontWeight={700} sx={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.name}</Typography>
+          <Typography fontSize={14} fontWeight={800} whiteSpace="nowrap">{money(item.amount)}</Typography>
+          {editable && <Button size="small" color="error" onClick={(event) => { event.stopPropagation(); void remove("items", item.id, item.name); }} sx={{ minWidth: 38, px: 0 }}>삭제</Button>}
+        </Stack>)}</Stack>
+      </Card>
+      <Card sx={{ p: 2 }}>
+        <Typography fontWeight={900}>현금 찬조금</Typography>
+        <Typography fontSize={12} color="text.secondary" mb={1}>공통 음식부터 차감하며, 남은 금액은 다른 항목에서 차감합니다.</Typography>
+        <Stack spacing={2}>{contributions.map((entry) => <Box key={entry.id} sx={{ borderTop: "1px solid #eee", pt: 2 }}>
+          <Stack direction="row" spacing={1} alignItems="center"><TextField select fullWidth label="찬조자" value={entry.personId ?? ""} disabled={!editable} onChange={(event) => { const person = people.find((p) => p.id === event.target.value); if (person) changeContribution(entry.id, { personId: person.id, name: person.name }); }}><MenuItem value="" disabled>참가자 선택</MenuItem>{people.map((p) => <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>)}</TextField><Button color="error" disabled={!editable || busy} onClick={() => void remove("contributions", entry.id, entry.name)}>삭제</Button></Stack>
+          {!entry.personId && entry.name && <Typography fontSize={12} color="text.secondary" mt={0.5}>기존 기록: {entry.name}</Typography>}
+          <TextField fullWidth type="number" label="찬조 금액 (원)" value={entry.amount} disabled={!editable} onChange={(event) => changeContribution(entry.id, { amount: Number(event.target.value) })} inputProps={{ min: 0, inputMode: "numeric" }} sx={{ mt: 1.5, "& input": { fontSize: 20, fontWeight: 800 } }} />
+          {entry.personId && <FormControlLabel control={<Checkbox checked={!!people.find((p) => p.id === entry.personId)?.excluded} disabled={!editable} onChange={(event) => changePerson(entry.personId!, { excluded: event.target.checked })} />} label="정산에서 제외" />}
+        </Box>)}</Stack>
+        {editable && <Button fullWidth variant="outlined" sx={{ mt: 2, minHeight: 44 }} onClick={() => { setContributions((old) => [...old, { id: crypto.randomUUID(), name: "", amount: 0 }]); setDirty(true); }}>+ 찬조금 추가</Button>}
+      </Card>
+      <Card sx={{ p: 2 }}>
+        <Typography fontWeight={900} mb={0.5}>참가자 · 정산 대상 {people.filter((p) => p.attending).length}명</Typography>
+        <Typography fontSize={12} color="text.secondary" mb={1}>참가자 명단에서 뒤풀이 표시를 했으면 자동 선택됩니다.</Typography>
+        <Stack spacing={0.5}>{people.map((person) => <Box key={person.id} sx={{ borderTop: "1px solid #E5E7EB", py: 1 }}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}>
+            <Stack direction="row" alignItems="center" flexWrap="wrap"><FormControlLabel control={<Checkbox checked={person.attending} disabled={!editable} onChange={(event) => changePerson(person.id, { attending: event.target.checked })} />} label={person.name} />{leagueAfterIds.has(person.id) && <Chip label="뒤풀이" size="small" sx={{ bgcolor: "#F3E5F5", color: "#7B1FA2", fontWeight: 800 }} />}</Stack>
+            <Typography fontSize={12} fontWeight={800} whiteSpace="nowrap">{money(calculation?.shares[person.id] ?? 0)}</Typography>
+          </Stack>
+          <Stack direction="row" gap={1} flexWrap="wrap" sx={{ pl: 1, mt: 0.5 }}>
+            <Button size="small" variant={person.attending && person.drinking ? "contained" : "outlined"} disabled={!editable} onClick={() => changePerson(person.id, { attending: true, drinking: true })} sx={{ minWidth: 72, minHeight: 34, fontWeight: 800 }}>주류</Button>
+            <Button size="small" variant={person.attending && !person.drinking ? "contained" : "outlined"} disabled={!editable} onClick={() => changePerson(person.id, { attending: true, drinking: false })} sx={{ minWidth: 72, minHeight: 34, fontWeight: 800 }}>비주류</Button>
+            {person.attending && <FormControlLabel control={<Checkbox size="small" checked={person.excluded} disabled={!editable} onChange={(event) => changePerson(person.id, { excluded: event.target.checked })} />} label="정산에서 제외" />}
+          </Stack>
+        </Box>)}</Stack>
+      </Card>
+      <Card sx={{ p: 2, bgcolor: "#F8FAFF" }}><Typography fontWeight={900} mb={1}>정산 결과</Typography>{calculation ? <><Typography>결제 금액 {money(calculation.total)} - 찬조금 {money(calculation.contributed)}</Typography><Typography fontWeight={900} my={1}> = 정산 금액 {money(calculation.distributable)}</Typography>{people.filter((p) => p.attending).map((p) => <Stack key={p.id} direction="row" justifyContent="space-between"><Typography>{p.name}{p.excluded ? " (제외)" : ""}</Typography><Typography fontWeight={800}>{money(calculation.shares[p.id] ?? 0)}</Typography></Stack>)}</> : <Alert severity="warning">찬조금이 총비용보다 많거나 부담 대상이 없는 항목이 있습니다.</Alert>}</Card>
+      {editable && <Button fullWidth variant="contained" disabled={busy || !calculation || !dirty} onClick={() => void save()}>저장</Button>}
+      {accountCard}
+    </Stack> : <Typography color="text.secondary">{error || "정산을 불러오는 중..."}</Typography>}
+    <Dialog open={shareDialogOpen} onClose={() => setShareDialogOpen(false)} maxWidth="sm" fullWidth>
+      <DialogTitle fontWeight={900}>뒤풀이 정산 공유</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2.5} alignItems="center" sx={{ pt: 1 }}>
+          <Box width="100%"><Typography fontSize={12} color="text.secondary" fontWeight={700} mb={0.75}>열람 권한</Typography><Button fullWidth variant="outlined" startIcon={<LanguageIcon />} sx={{ color: "#111827", borderColor: "#D1D5DB" }}>링크가 있는 모든 사람</Button></Box>
+          {shareLink && <Box sx={{ p: 2, border: "1px solid #E5E7EB", borderRadius: 2 }}><QRCode value={shareLink} size={190} style={{ height: "auto", maxWidth: "100%", width: "100%" }} /></Box>}
+          <Box width="100%"><Typography fontSize={12} color="text.secondary" fontWeight={700} mb={0.75}>공유 링크</Typography><TextField value={shareLink} fullWidth size="small" slotProps={{ input: { readOnly: true } }} /></Box>
+          <Stack direction="row" justifyContent="space-around" width="100%">
+            <Button sx={{ display: "flex", flexDirection: "column", gap: 0.5, color: "#111827", fontSize: 12 }} onClick={() => { if (navigator.share) void navigator.share({ title: "뒤풀이 정산", url: shareLink }).catch(() => {}); else void copyShareLink(); }}><Box sx={{ width: 42, height: 42, borderRadius: "50%", bgcolor: "#EFF6FF", color: "#1565C0", display: "grid", placeItems: "center" }}><IosShareOutlinedIcon /></Box>공유하기</Button>
+            <Button sx={{ display: "flex", flexDirection: "column", gap: 0.5, color: "#111827", fontSize: 12 }} onClick={() => { window.location.href = `sms:?body=${encodeURIComponent(`뒤풀이 정산 ${shareLink}`)}`; }}><Box sx={{ width: 42, height: 42, borderRadius: "50%", bgcolor: "#4CAF50", color: "#fff", display: "grid", placeItems: "center" }}><SmsOutlinedIcon /></Box>문자</Button>
+            <Button sx={{ display: "flex", flexDirection: "column", gap: 0.5, color: "#111827", fontSize: 12 }} onClick={() => void copyShareLink()}><Box sx={{ width: 42, height: 42, borderRadius: "50%", bgcolor: "#E5E7EB", display: "grid", placeItems: "center" }}><ContentCopyOutlinedIcon /></Box>링크 복사</Button>
+          </Stack>
+          {localPreview && <Alert severity="info" sx={{ width: "100%" }}>로컬 미리보기 링크는 이 브라우저에서만 열 수 있습니다.</Alert>}
+        </Stack>
+      </DialogContent>
+      <DialogActions><Button onClick={() => setShareDialogOpen(false)}>닫기</Button></DialogActions>
+    </Dialog>
+  </Box>;
+}

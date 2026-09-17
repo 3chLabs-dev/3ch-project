@@ -197,7 +197,7 @@ export default function GroupLeagueManage() {
                             <Stack direction="row" spacing={0.5}>
                               {participant.paid && <Chip label="입금" size="small" color="success" sx={{ height: 20, fontSize: 10 }} />}
                               {participant.arrived && <Chip label="도착" size="small" color="primary" sx={{ height: 20, fontSize: 10 }} />}
-                              {participant.after && <Chip label="뒷풀이" size="small" color="secondary" sx={{ height: 20, fontSize: 10 }} />}
+                              {participant.after && <Chip label="뒤풀이" size="small" color="secondary" sx={{ height: 20, fontSize: 10 }} />}
                             </Stack>
                           </Box>
                         ))}

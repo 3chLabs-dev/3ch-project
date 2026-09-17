@@ -934,7 +934,7 @@ export default function GroupManage() {
                                                                         <Chip label="도착" size="small" color="primary" sx={{ height: 20, fontSize: 10 }} />
                                                                     )}
                                                                     {participant.after && (
-                                                                        <Chip label="뒷풀이" size="small" color="secondary" sx={{ height: 20, fontSize: 10 }} />
+                                                                        <Chip label="뒤풀이" size="small" color="secondary" sx={{ height: 20, fontSize: 10 }} />
                                                                     )}
                                                                 </Stack>
                                                             </Box>

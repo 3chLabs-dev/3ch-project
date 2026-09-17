@@ -42,6 +42,7 @@ import {
   import PrintIcon from "@mui/icons-material/Print";
   import EmojiEventsOutlinedIcon from "@mui/icons-material/EmojiEventsOutlined";
   import CardGiftcardOutlinedIcon from "@mui/icons-material/CardGiftcardOutlined";
+  import RestaurantOutlinedIcon from "@mui/icons-material/RestaurantOutlined";
   import {
     useGetLeagueQuery,
     useGetLeagueProgramQuery,
@@ -1685,6 +1686,27 @@ const handleSaveEdit = async () => {
                   경품 추첨
                 </Button>
               )}
+              {canInteract && (
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  disableElevation
+                  startIcon={<RestaurantOutlinedIcon fontSize="small" />}
+                  onClick={() => navigate(`/league/${id}/after-party`)}
+                  sx={{
+                    borderRadius: 1,
+                    height: 40,
+                    fontWeight: 700,
+                    color: "#0F766E",
+                    borderColor: "#5EEAD4",
+                    bgcolor: "#F0FDFA",
+                    "&:hover": { borderColor: "#14B8A6", bgcolor: "#CCFBF1" },
+                    "& .MuiSvgIcon-root": { color: "#0D9488" },
+                  }}
+                >
+                  뒤풀이 정산
+                </Button>
+              )}
             </Stack>
           </Box>
           <Divider sx={{ borderColor: "#F3F4F6" }} />
@@ -1925,7 +1947,7 @@ const handleSaveEdit = async () => {
                           [
                             { key: "paid", label: "입금", value: p.paid, on: { border: "#27AE60", bgcolor: "#ECFDF5", color: "#16A34A" } },
                             { key: "arrived", label: "도착", value: p.arrived, on: { border: "#2F80ED", bgcolor: "#EFF6FF", color: "#1D6FBF" } },
-                            { key: "after", label: "뒷풀이", value: p.after, on: { border: "#9C27B0", bgcolor: "#F3E5F5", color: "#7B1FA2" } },
+                            { key: "after", label: "뒤풀이", value: p.after, on: { border: "#9C27B0", bgcolor: "#F3E5F5", color: "#7B1FA2" } },
                           ] as const
                         ).map(({ key, label, value, on }) => (
                           <Box

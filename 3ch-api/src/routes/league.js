@@ -2947,7 +2947,7 @@ router.put('/league/:id', requireAuth, async (req, res) => {
  * /league/{leagueId}/participants/{participantId}:
  *   put:
  *     summary: 리그 참가자 정보 수정
- *     description: 참가자의 부수, 이름, 입금/도착/뒷풀이 상태를 수정합니다. 클럽의 owner 또는 admin만 가능합니다.
+ *     description: 참가자의 부수, 이름, 입금/도착/뒤풀이 상태를 수정합니다. 클럽의 owner 또는 admin만 가능합니다.
  *     tags: [리그]
  *     security:
  *       - bearerAuth: []
@@ -2987,7 +2987,7 @@ router.put('/league/:id', requireAuth, async (req, res) => {
  *                 description: 도착 완료 여부
  *               footPool:
  *                 type: boolean
- *                 description: 뒷풀이 참여 여부
+ *                 description: 뒤풀이 참여 여부
  *     responses:
  *       200:
  *         description: 참가자 정보 수정 성공

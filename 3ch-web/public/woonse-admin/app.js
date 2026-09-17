@@ -1,6 +1,7 @@
 const app = document.getElementById('app');
 const API = window.WOONSE_API_BASE_URL;
 const kinds = { notice: '공지사항', faq: '자주 하는 질문', inquiry: '1:1 문의', guide: '이용방법' };
+const providerNames = { EMAIL: '이메일', KAKAO: '카카오', NAVER: '네이버', GOOGLE: 'Google' };
 let token = sessionStorage.getItem('woonse_admin_token') || '';
 let user = null;
 let route = location.hash.slice(1) || '/admin';
@@ -11,6 +12,11 @@ let modal = null;
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const date = value => value ? new Date(value).toLocaleString('ko-KR') : '-';
+const providers = member => (member.providers?.length ? member.providers : [member.provider])
+  .map(value => providerNames[value] || value).join(' · ');
+const verification = member => member.emailVerificationApplicable === false
+  ? '<span class="muted">해당 없음</span>'
+  : `<span class="pill ${member.emailVerifiedAt?'on':''}">${member.emailVerifiedAt?'인증':'미인증'}</span>`;
 async function request(path, options = {}) {
   const response = await fetch(`${API}${path}`, {
     ...options,
@@ -54,12 +60,13 @@ function nav(path, label, sub = false) {
   return `<button class="nav-item ${sub?'sub':''} ${route===path?'active':''}" data-route="${path}">${label}</button>`;
 }
 function shell(content) {
-  const boardActive = route.startsWith('/admin/board/');
+  const boardActive = route.startsWith('/admin/board/') || route.startsWith('/admin/policies/');
   const paymentActive = route === '/admin/payments';
   app.innerHTML = `<div class="layout"><header class="header"><div class="header-brand" data-route="/admin">우리운세<span>관리자페이지</span></div><div class="header-right"><span>${esc(user?.nickname || user?.email)}</span><button class="secondary" id="logout">로그아웃</button></div></header>
     <div class="body"><aside class="sidebar">${nav('/admin','대시보드')}${nav('/admin/members','회원 관리')}<hr />
     <div class="nav-heading ${boardActive?'active':''}">게시판 관리</div>
     ${Object.entries(kinds).map(([key,label]) => nav(`/admin/board/${key}`,label,true)).join('')}
+    ${nav('/admin/policies/terms','이용약관',true)}${nav('/admin/policies/privacy','개인정보 처리방침',true)}
     <hr /><div class="nav-heading ${paymentActive?'active':''}">결제 관리</div>${nav('/admin/payments','결제내역',true)}</aside>
     <main class="content-wrap"><section class="panel">${content}</section></main></div></div>`;
   document.querySelectorAll('[data-route]').forEach(el => el.onclick = () => { location.hash = '#' + el.dataset.route; });
@@ -78,7 +85,7 @@ async function renderMembers() {
   shell(`<h1 class="page-title">회원 관리</h1><div class="toolbar"><span class="muted">총 <b>${data.total}</b>명</span>
     <form class="toolbar-group" id="search-form"><input class="field" name="search" placeholder="이메일 또는 닉네임" value="${esc(search)}"/><button class="secondary">검색</button></form></div>
     <div class="table-wrap"><table><thead><tr><th>No</th><th>이메일</th><th>닉네임</th><th>가입방식</th><th>이메일 인증</th><th>가입일시</th></tr></thead><tbody>
-    ${data.members.length ? data.members.map((member,index)=>`<tr><td>${(page-1)*20+index+1}</td><td>${esc(member.email||'-')}</td><td><b>${esc(member.nickname)}</b></td><td>${member.provider==='EMAIL'?'이메일':'소셜'}</td><td><span class="pill ${member.emailVerifiedAt?'on':''}">${member.emailVerifiedAt?'인증':'미인증'}</span></td><td>${date(member.createdAt)}</td></tr>`).join('') : '<tr><td colspan="6" class="empty">회원이 없습니다.</td></tr>'}
+    ${data.members.length ? data.members.map((member,index)=>`<tr><td>${(page-1)*20+index+1}</td><td>${esc(member.email||'-')}</td><td><b>${esc(member.nickname)}</b></td><td>${esc(providers(member))}</td><td>${verification(member)}</td><td>${date(member.createdAt)}</td></tr>`).join('') : '<tr><td colspan="6" class="empty">회원이 없습니다.</td></tr>'}
     </tbody></table></div><div class="pager"><button class="secondary" id="prev" ${page<=1?'disabled':''}>이전</button><span>${page} / ${Math.max(1,Math.ceil(data.total/20))}</span><button class="secondary" id="next" ${page*20>=data.total?'disabled':''}>다음</button></div>`);
   document.getElementById('search-form').onsubmit = event => { event.preventDefault(); search = event.currentTarget.elements.namedItem('search').value.trim(); page=1; renderMembers().catch(errorPage); };
   document.getElementById('prev').onclick = () => { page--; renderMembers().catch(errorPage); };
@@ -115,6 +122,63 @@ function openEditor(type, item) {
     catch(error){alert(error.message);}
   };
 }
+const policyTitles = { terms: '이용약관', privacy: '개인정보 처리방침' };
+async function renderPolicies(type) {
+  if (!policyTitles[type]) { shell('<div class="error">페이지를 찾을 수 없습니다.</div>'); return; }
+  const data = await request(`/admin/policies/${type}`);
+  shell(`<h1 class="page-title">${policyTitles[type]}</h1>
+    <div class="toolbar"><span class="muted">총 <b>${data.versions.length}</b>개 버전</span><button class="primary" id="add-policy">신규 버전 추가</button></div>
+    <div class="table-wrap"><table><thead><tr><th>No</th><th>버전 레이블</th><th>시행일</th><th>내용 미리보기</th><th>상태</th><th>등록일시</th><th>관리</th></tr></thead><tbody>
+    ${data.versions.length ? data.versions.map((version,index)=>`<tr class="${version.isCurrent?'current-row':''}"><td>${data.versions.length-index}</td><td><b>${esc(version.label)}</b></td><td>${esc(version.effectiveDate)}</td><td>${esc(version.preview)}</td><td><span class="pill ${version.isCurrent?'on':''}">${version.isCurrent?'현행':version.publishedAt?'이전':'미게시'}</span></td><td>${date(version.createdAt)}</td><td class="actions"><button class="link-button" data-view="${esc(version.id)}">보기</button>${version.publishedAt?'':`<button class="link-button" data-edit-policy="${esc(version.id)}">수정</button>`}${version.isCurrent?'':`<button class="link-button" data-publish="${esc(version.id)}">현행설정</button>`}${version.publishedAt?'':`<button class="link-button danger" data-delete-policy="${esc(version.id)}">삭제</button>`}</td></tr>`).join('') : '<tr><td colspan="7" class="empty">등록된 버전이 없습니다.</td></tr>'}
+    </tbody></table></div><p class="muted">현행 버전만 앱과 공개 페이지에 표시됩니다. 게시된 버전은 이력 보존을 위해 수정·삭제할 수 없습니다.</p>`);
+  document.getElementById('add-policy').onclick = () => openPolicyEditor(type);
+  document.querySelectorAll('[data-view]').forEach(el => el.onclick = () => openPolicyDetail(type, el.dataset.view));
+  document.querySelectorAll('[data-edit-policy]').forEach(el => el.onclick = () => openPolicyEditor(type, el.dataset.editPolicy));
+  document.querySelectorAll('[data-publish]').forEach(el => el.onclick = async () => {
+    if (!confirm('이 버전을 현행으로 설정하시겠습니까? 앱과 공개 페이지에 바로 반영됩니다.')) return;
+    try { await request(`/admin/policies/${type}/${encodeURIComponent(el.dataset.publish)}/publish`, {method:'POST'}); await renderPolicies(type); }
+    catch(error) { alert(error.message); }
+  });
+  document.querySelectorAll('[data-delete-policy]').forEach(el => el.onclick = async () => {
+    if (!confirm('게시하지 않은 이 버전을 삭제하시겠습니까?')) return;
+    try { await request(`/admin/policies/${type}/${encodeURIComponent(el.dataset.deletePolicy)}`, {method:'DELETE'}); await renderPolicies(type); }
+    catch(error) { alert(error.message); }
+  });
+}
+async function openPolicyDetail(type, id) {
+  try {
+    const version = await request(`/admin/policies/${type}/${encodeURIComponent(id)}`);
+    modal = document.createElement('div'); modal.className = 'modal-backdrop';
+    modal.innerHTML = `<div class="modal policy-modal"><h2>${policyTitles[type]} · ${esc(version.label)}</h2><p class="muted">${esc(version.effectiveDate)} 시행 · ${version.isCurrent?'현행':version.publishedAt?'이전':'미게시'}</p><div class="policy-body">${esc(version.content)}</div><div class="modal-actions"><button class="secondary" id="close-policy">닫기</button></div></div>`;
+    document.body.append(modal);
+    document.getElementById('close-policy').onclick = () => modal.remove();
+  } catch(error) { alert(error.message); }
+}
+async function openPolicyEditor(type, id) {
+  let version;
+  try { if (id) version = await request(`/admin/policies/${type}/${encodeURIComponent(id)}`); }
+  catch(error) { alert(error.message); return; }
+  modal = document.createElement('div'); modal.className = 'modal-backdrop';
+  modal.innerHTML = `<form class="modal policy-modal" id="policy-editor"><h2>${policyTitles[type]} ${id?'수정':'신규 버전 추가'}</h2>
+    <div class="form-row"><label>버전 레이블</label><input class="field" name="label" maxlength="120" value="${esc(version?.label||'')}" placeholder="예: 현행 ${policyTitles[type]}" required /></div>
+    <div class="form-row"><label>시행일</label><input class="field" name="effectiveDate" type="date" value="${esc(version?.effectiveDate||'')}" required /></div>
+    <div class="form-row"><label>내용</label><textarea name="content" maxlength="100000" required>${esc(version?.content||'')}</textarea></div>
+    ${id?'':'<div class="form-row"><label><input type="checkbox" name="publish" /> 저장 즉시 현행 버전으로 설정</label></div>'}
+    <div class="modal-actions"><button type="button" class="secondary" id="cancel-policy">취소</button><button class="primary" type="submit">${id?'수정':'등록'}</button></div></form>`;
+  document.body.append(modal);
+  document.getElementById('cancel-policy').onclick = () => modal.remove();
+  document.getElementById('policy-editor').onsubmit = async event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const payload = { label: form.elements.namedItem('label').value.trim(), effectiveDate: form.elements.namedItem('effectiveDate').value,
+      content: form.elements.namedItem('content').value.trim(), publish: !id && form.elements.namedItem('publish').checked };
+    const button = form.querySelector('button[type="submit"]'); button.disabled = true;
+    try {
+      await request(`/admin/policies/${type}${id?'/'+encodeURIComponent(id):''}`, { method:id?'PUT':'POST', body:JSON.stringify(payload) });
+      modal.remove(); await renderPolicies(type);
+    } catch(error) { alert(error.message); button.disabled = false; }
+  };
+}
 async function renderPayments() {
   const data = await request('/admin/payments');
   shell(`<h1 class="page-title">결제내역</h1><p class="muted">우리운세 포인트 결제 내역을 확인합니다.</p>
@@ -130,6 +194,7 @@ async function render() {
     if (route === '/admin') await renderDashboard();
     else if (route === '/admin/members') await renderMembers();
     else if (route.startsWith('/admin/board/')) await renderBoard(route.split('/')[3]);
+    else if (route.startsWith('/admin/policies/')) await renderPolicies(route.split('/')[3]);
     else if (route === '/admin/payments') await renderPayments();
     else shell('<div class="error">페이지를 찾을 수 없습니다.</div>');
   } catch(error) { if (token) errorPage(error); }

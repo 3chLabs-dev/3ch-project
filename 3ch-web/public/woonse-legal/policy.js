@@ -10,7 +10,8 @@ fetch(`https://0ynohfoee9.execute-api.ap-southeast-2.amazonaws.com/dev/api/publi
   })
   .then(policy => {
     effective.textContent = `${policy.label} · ${policy.effectiveDate} 시행`;
-    content.textContent = policy.content;
+    if (policy.format === 'html') content.innerHTML = policy.content;
+    else { content.textContent = policy.content; content.classList.add('plain'); }
     status.hidden = true;
     effective.hidden = false;
     content.hidden = false;

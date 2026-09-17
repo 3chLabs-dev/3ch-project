@@ -123,6 +123,25 @@ function openEditor(type, item) {
   };
 }
 const policyTitles = { terms: '이용약관', privacy: '개인정보 처리방침' };
+const policyTags = new Set(['p','br','strong','em','u','h1','h2','h3','ul','ol','li','table','thead','tbody','tr','th','td']);
+function policyHtml(node) {
+  if (node.nodeType === Node.TEXT_NODE) return esc(node.textContent);
+  if (node.nodeType !== Node.ELEMENT_NODE) return '';
+  let tag = node.tagName.toLowerCase();
+  if (tag === 'b') tag = 'strong';
+  if (tag === 'i') tag = 'em';
+  if (tag === 'div') tag = 'p';
+  if (tag === 'span' || tag === 'font') return [...node.childNodes].map(policyHtml).join('');
+  const children = [...node.childNodes].map(policyHtml).join('');
+  if (!policyTags.has(tag)) return children;
+  return tag === 'br' ? '<br/>' : `<${tag}>${children}</${tag}>`;
+}
+function policyDisplay(content, format) {
+  return format === 'html' ? content : esc(content).replace(/\n/g, '<br/>');
+}
+function policyTable(rows, cols) {
+  return `<table><tbody>${Array.from({length:rows},(_,r)=>`<tr>${Array.from({length:cols},()=>`<${r?'td':'th'}><br/></${r?'td':'th'}>`).join('')}</tr>`).join('')}</tbody></table><p><br/></p>`;
+}
 async function renderPolicies(type) {
   if (!policyTitles[type]) { shell('<div class="error">페이지를 찾을 수 없습니다.</div>'); return; }
   const data = await request(`/admin/policies/${type}`);
@@ -149,7 +168,7 @@ async function openPolicyDetail(type, id) {
   try {
     const version = await request(`/admin/policies/${type}/${encodeURIComponent(id)}`);
     modal = document.createElement('div'); modal.className = 'modal-backdrop';
-    modal.innerHTML = `<div class="modal policy-modal"><h2>${policyTitles[type]} · ${esc(version.label)}</h2><p class="muted">${esc(version.effectiveDate)} 시행 · ${version.isCurrent?'현행':version.publishedAt?'이전':'미게시'}</p><div class="policy-body">${esc(version.content)}</div><div class="modal-actions"><button class="secondary" id="close-policy">닫기</button></div></div>`;
+    modal.innerHTML = `<div class="modal policy-modal"><h2>${policyTitles[type]} · ${esc(version.label)}</h2><p class="muted">${esc(version.effectiveDate)} 시행 · ${version.isCurrent?'현행':version.publishedAt?'이전':'미게시'}</p><div class="policy-body">${policyDisplay(version.content,version.format)}</div><div class="modal-actions"><button class="secondary" id="close-policy">닫기</button></div></div>`;
     document.body.append(modal);
     document.getElementById('close-policy').onclick = () => modal.remove();
   } catch(error) { alert(error.message); }
@@ -162,16 +181,44 @@ async function openPolicyEditor(type, id) {
   modal.innerHTML = `<form class="modal policy-modal" id="policy-editor"><h2>${policyTitles[type]} ${id?'수정':'신규 버전 추가'}</h2>
     <div class="form-row"><label>버전 레이블</label><input class="field" name="label" maxlength="120" value="${esc(version?.label||'')}" placeholder="예: 현행 ${policyTitles[type]}" required /></div>
     <div class="form-row"><label>시행일</label><input class="field" name="effectiveDate" type="date" value="${esc(version?.effectiveDate||'')}" required /></div>
-    <div class="form-row"><label>내용</label><textarea name="content" maxlength="100000" required>${esc(version?.content||'')}</textarea></div>
+    <div class="form-row"><label>내용</label><div class="policy-editor-wrap"><div class="policy-toolbar" aria-label="편집 도구">
+      <button type="button" data-command="bold" title="굵게"><b>B</b></button><button type="button" data-command="italic" title="기울임"><i>I</i></button><button type="button" data-command="underline" title="밑줄"><u>U</u></button>
+      <button type="button" data-block="h1">H1</button><button type="button" data-block="h2">H2</button><button type="button" data-block="h3">H3</button>
+      <button type="button" data-command="insertUnorderedList" title="글머리 기호">• 목록</button><button type="button" data-command="insertOrderedList" title="번호 목록">1. 목록</button>
+      <button type="button" id="insert-policy-table" title="표 삽입">▦ 표</button><button type="button" id="add-policy-row" title="현재 표에 행 추가">+행</button><button type="button" id="add-policy-col" title="현재 표에 열 추가">+열</button><button type="button" id="remove-policy-table" title="현재 표 삭제">표 삭제</button>
+      </div><div id="policy-content" class="policy-editable" contenteditable="true" role="textbox" aria-multiline="true"></div></div></div>
     ${id?'':'<div class="form-row"><label><input type="checkbox" name="publish" /> 저장 즉시 현행 버전으로 설정</label></div>'}
     <div class="modal-actions"><button type="button" class="secondary" id="cancel-policy">취소</button><button class="primary" type="submit">${id?'수정':'등록'}</button></div></form>`;
   document.body.append(modal);
+  const editor = document.getElementById('policy-content');
+  editor.innerHTML = version?.format === 'html' ? version.content : esc(version?.content||'').replace(/\n/g,'<br/>');
+  document.querySelectorAll('.policy-toolbar button').forEach(button => button.onmousedown = event => event.preventDefault());
+  document.querySelectorAll('[data-command]').forEach(button => button.onclick = () => { editor.focus(); document.execCommand(button.dataset.command); });
+  document.querySelectorAll('[data-block]').forEach(button => button.onclick = () => { editor.focus(); document.execCommand('formatBlock',false,button.dataset.block); });
+  document.getElementById('insert-policy-table').onclick = () => {
+    const selection = getSelection();
+    const savedRange = selection?.rangeCount ? selection.getRangeAt(0).cloneRange() : null;
+    const rows = Number(prompt('행 수 (1~15)', '3'));
+    if (!rows) return;
+    const cols = Number(prompt('열 수 (1~10)', '3'));
+    if (!cols) return;
+    if (!Number.isInteger(rows) || !Number.isInteger(cols) || rows < 1 || rows > 15 || cols < 1 || cols > 10) { alert('행과 열의 범위를 확인해주세요.'); return; }
+    editor.focus();
+    if (savedRange) { selection.removeAllRanges(); selection.addRange(savedRange); }
+    document.execCommand('insertHTML', false, policyTable(rows, cols));
+  };
+  const currentCell = () => { const node = getSelection()?.anchorNode; return (node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement)?.closest?.('td,th'); };
+  document.getElementById('add-policy-row').onclick = () => { const cell=currentCell(); if (!cell) return alert('표 안에 커서를 놓아주세요.'); const row=cell.closest('tr'); const added=row.cloneNode(true); added.querySelectorAll('td,th').forEach(el=>el.innerHTML='<br/>'); row.after(added); };
+  document.getElementById('add-policy-col').onclick = () => { const cell=currentCell(); if (!cell) return alert('표 안에 커서를 놓아주세요.'); const index=[...cell.parentElement.children].indexOf(cell); cell.closest('table').querySelectorAll('tr').forEach(row=>{ const newCell=document.createElement(row.querySelector('th')?'th':'td'); newCell.innerHTML='<br/>'; row.children[index]?.after(newCell); }); };
+  document.getElementById('remove-policy-table').onclick = () => { const cell=currentCell(); if (!cell) return alert('표 안에 커서를 놓아주세요.'); cell.closest('table').remove(); };
+  editor.onpaste = event => { event.preventDefault(); document.execCommand('insertText', false, event.clipboardData.getData('text/plain')); };
   document.getElementById('cancel-policy').onclick = () => modal.remove();
   document.getElementById('policy-editor').onsubmit = async event => {
     event.preventDefault();
     const form = event.currentTarget;
     const payload = { label: form.elements.namedItem('label').value.trim(), effectiveDate: form.elements.namedItem('effectiveDate').value,
-      content: form.elements.namedItem('content').value.trim(), publish: !id && form.elements.namedItem('publish').checked };
+      content: [...editor.childNodes].map(policyHtml).join('').trim(), format: 'html', publish: !id && form.elements.namedItem('publish').checked };
+    if (!editor.textContent.trim()) { alert('본문을 입력해주세요.'); editor.focus(); return; }
     const button = form.querySelector('button[type="submit"]'); button.disabled = true;
     try {
       await request(`/admin/policies/${type}${id?'/'+encodeURIComponent(id):''}`, { method:id?'PUT':'POST', body:JSON.stringify(payload) });

@@ -1848,7 +1848,11 @@ export default function LeagueGPTVisionSheet() {
     try {
       const nextProgram = withProgramRoundStandingsSnapshot(programOption, programRound, programMatchesAll);
       storeProgramOption(id, nextProgram);
-      await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
+      // An unchanged standings snapshot is already persisted; do not make a
+      // redundant network write a prerequisite for opening the next round.
+      if (nextProgram !== programOption) {
+        await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
+      }
       const nextRound = programRound + 1;
       const nextBlock = nextProgram.blocks[nextRound - 1];
       if (!nextBlock) throw new Error("다음 라운드 설정을 찾을 수 없습니다.");
@@ -1872,11 +1876,18 @@ export default function LeagueGPTVisionSheet() {
       if (nextRoundMatches.length === 0) {
         throw new Error("다음 라운드 대진을 생성하지 못했습니다. 현재 라운드 결과를 확인해 주세요.");
       }
-      await syncProgramMatches({ leagueId: id, matches: nextRoundMatches, resetResults: false }).unwrap();
       const nextBracketPath = nextBlock?.format === "TOURNAMENT" ? "tournament-bracket" : "bracket";
       localStorage.setItem(`league-program-active-round-${id}`, String(nextRound));
       setFinishRoundConfirmOpen(false);
-      navigate(`/league/${id}/program/${nextBracketPath}?program=1&round=${nextRound}&format=${nextBlock?.format ?? ""}`);
+      // Tournament brackets already sync their generated matches on entry.
+      // Do not start a second, competing sync for that same round here.
+      const syncRequest = nextBlock.format === "TOURNAMENT"
+        ? null
+        : syncProgramMatches({ leagueId: id, matches: nextRoundMatches, resetResults: false }).unwrap();
+      navigate(`/league/${id}/program/${nextBracketPath}?program=1&round=${nextRound}&format=${nextBlock?.format ?? ""}&back=detail`);
+      void syncRequest?.catch((error) => {
+        window.alert(getErrorMessage(error, "다음 라운드 경기를 서버에 저장하지 못했습니다. 결과 입력 전 다시 확인해 주세요."));
+      });
     } catch (error) {
       setVisionNotice({ type: "error", message: getErrorMessage(error, "라운드 종료 처리에 실패했습니다.") });
     } finally {

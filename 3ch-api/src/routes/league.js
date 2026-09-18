@@ -3569,6 +3569,7 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
   const matches = Array.isArray(req.body?.matches) ? req.body.matches : [];
   const resetResults = req.body?.reset_results === true;
   const resetConfirmation = req.body?.reset_confirmation;
+  let client;
 
   // Result deletion is never an incidental side effect of synchronization.
   // It requires a separate, explicit intent supplied only by confirmed reset UI.
@@ -3643,7 +3644,10 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
       });
       });
 
-    await pool.query('BEGIN');
+    // A transaction must keep every read and write on one checked-out client.
+    client = await pool.connect();
+    await client.query('BEGIN');
+    await client.query('SELECT id FROM leagues WHERE id = $1 FOR UPDATE', [leagueId]);
     const targetProgramRounds = [...new Set(validMatches.map((match) => match.program_round).filter((round) => Number.isFinite(round)))];
     const existingState = new Map();
     const existingStateByParticipants = new Map();
@@ -3660,7 +3664,7 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
       return `${match.program_round ?? ''}|${match.program_block_type ?? ''}|${sides[0]}::${sides[1]}`;
     };
     if (targetProgramRounds.length > 0) {
-      const existingRows = await pool.query(
+      const existingRows = await client.query(
         `SELECT id, participant_a_id, participant_b_id, bracket, round_number, program_round, program_block_type,
                 participant_a_roster_ids, participant_b_roster_ids,
                 score_a, score_b, court, status, match_rule,
@@ -3701,7 +3705,7 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
     }
 
     if (targetProgramRounds.length > 0) {
-      await pool.query(
+      await client.query(
         `DELETE FROM league_matches WHERE league_id = $1 AND is_program = TRUE AND program_round = ANY($2::int[])`,
         [leagueId, targetProgramRounds],
       );
@@ -3777,7 +3781,7 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
         return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9}, $${base + 10}, $${base + 11}, $${base + 12}, $${base + 13}, $${base + 14}, $${base + 15}, $${base + 16}, TRUE, $${base + 17}, $${base + 18}, $${base + 19}::text[], $${base + 20}::text[], $${base + 21}, $${base + 22}, $${base + 23})`;
       });
 
-      await pool.query(
+      await client.query(
         `INSERT INTO league_matches
          (id, league_id, match_order, participant_a_id, participant_b_id, bracket, round_number, match_label,
           next_match_id, next_slot, loser_next_match_id, loser_next_slot, score_a, score_b, court, status,
@@ -3789,18 +3793,18 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
     }
 
     if (resetResults) {
-      await pool.query(
+      await client.query(
         `UPDATE leagues SET status = 'draft', updated_at = NOW() WHERE id = $1`,
         [leagueId],
       );
     }
 
-    await pool.query('COMMIT');
+    await client.query('COMMIT');
     await triggerRankingRebuildByLeagueId(leagueId);
 
     return res.json({ ok: true, inserted: validMatches.length });
   } catch (err) {
-    await pool.query('ROLLBACK').catch(() => {});
+    if (client) await client.query('ROLLBACK').catch(() => {});
     console.error('Error syncing league program matches:', err);
     const statusCode = Number.isInteger(err?.statusCode) ? err.statusCode : 500;
     return res.status(statusCode).json({
@@ -3808,6 +3812,8 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
       message: statusCode === 500 ? '프로그램 경기 동기화 중 서버 오류' : err.message,
       matchIds: err?.matchIds,
     });
+  } finally {
+    client?.release();
   }
 });
 

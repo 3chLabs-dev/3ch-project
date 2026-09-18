@@ -9,6 +9,22 @@ const { buildSummary } = require('../services/afterPartySummary');
 const router = express.Router();
 const uuid = z.string().uuid();
 const leagueCode = z.string().min(1).max(100);
+
+// 화면 URL의 리그 코드와 내부 ID를 동일하게 처리한다.
+router.param('leagueId', async (req, _res, next, value) => {
+  const raw = String(value ?? '').trim();
+  const normalized = raw.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  if (/^[A-Z]{3}\d{8}$/.test(normalized)) {
+    try {
+      const result = await pool.query(
+        `SELECT id FROM leagues WHERE league_code=$1 OR regexp_replace(upper(coalesce(league_code,'')), '[^A-Z0-9]', '', 'g')=$2 LIMIT 1`,
+        [raw, normalized],
+      );
+      if (result.rowCount) req.params.leagueId = result.rows[0].id;
+    } catch (error) { return next(error); }
+  }
+  next();
+});
 const person = z.object({ id: uuid, name: z.string().min(1), attending: z.boolean(), drinking: z.boolean(), excluded: z.boolean() });
 const item = z.object({ id: uuid, name: z.string().trim().min(1).max(100), amount: z.number().int().min(0).max(1000000000), category: z.enum(['common', 'alcohol', 'nonalcohol', 'specific']), personIds: z.array(uuid) });
 const contribution = z.object({ id: uuid, name: z.string().trim().min(1).max(100), amount: z.number().int().min(0).max(1000000000), personId: uuid.optional() });
@@ -35,7 +51,7 @@ router.get('/after-party/shared/:token', optionalAuth, async (req, res) => {
     res.set('Cache-Control', 'no-store');
     const token = req.params.token;
     if (!uuid.safeParse(token).success) return fail(res, 400, '공유 링크가 올바르지 않습니다.');
-    const found = await pool.query('SELECT l.id,l.name,l.start_date,l.bank_account,s.visibility,l.group_id FROM after_party_share_links s JOIN leagues l ON l.id=s.league_id WHERE s.token=$1', [token]);
+    const found = await pool.query('SELECT l.id,l.league_code,l.name,l.start_date,l.bank_account,s.visibility,l.group_id FROM after_party_share_links s JOIN leagues l ON l.id=s.league_id WHERE s.token=$1', [token]);
     if (!found.rowCount) return fail(res, 404, '공유 링크를 찾을 수 없습니다.');
     const league = found.rows[0];
     if (league.visibility === 'club_only') {
@@ -45,7 +61,7 @@ router.get('/after-party/shared/:token', optionalAuth, async (req, res) => {
     }
     const result = await pool.query(`SELECT id,round_no,title,status,version,created_at,updated_at,participants,calculation FROM after_party_settlements WHERE league_id=$1 AND ${visibleRounds} ORDER BY round_no`, [league.id]);
     const summary = buildSummary(result.rows);
-    return res.json({ league: { id: league.id, name: league.name, start_date: league.start_date, bank_account: league.bank_account }, settlements: result.rows, summary, canManage: false, visibility: league.visibility });
+    return res.json({ league: { id: league.id, league_code: league.league_code, name: league.name, start_date: league.start_date, bank_account: league.bank_account }, settlements: result.rows, summary, canManage: false, visibility: league.visibility });
   } catch (error) { console.error(error); return fail(res, 500, '공유 정산 조회에 실패했습니다.'); }
 });
 

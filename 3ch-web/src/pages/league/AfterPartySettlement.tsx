@@ -214,7 +214,9 @@ export default function AfterPartySettlement() {
         }
         const response = await fetch(`${import.meta.env.VITE_API_BASE_URL ?? "/api"}/after-party/shared/${shareToken}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
         const result = await response.json();
-        if (!response.ok || result.league?.id !== leagueId) throw new Error(result.message || "공유 링크를 열 수 없습니다.");
+        const requestedCode = leagueId.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+        const sharedCode = String(result.league?.league_code ?? "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+        if (!response.ok || (result.league?.id !== leagueId && sharedCode !== requestedCode)) throw new Error(result.message || "공유 링크를 열 수 없습니다.");
         setList(result.settlements); setSummary(result.summary); setPayments(result.payments ?? {}); setCanManage(false); setSharedLeagueName(result.league.name); setSharedLeagueDate(result.league.start_date ?? ""); setShareVisibility(result.visibility);
         setBankAccount(result.league.bank_account ?? ""); setSavedBankAccount(result.league.bank_account ?? "");
         return;

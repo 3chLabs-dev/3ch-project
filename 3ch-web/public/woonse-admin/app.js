@@ -148,8 +148,8 @@ async function renderPolicies(type) {
   shell(`<h1 class="page-title">${policyTitles[type]}</h1>
     <div class="toolbar"><span class="muted">총 <b>${data.versions.length}</b>개 버전</span><button class="primary" id="add-policy">신규 버전 추가</button></div>
     <div class="table-wrap"><table><thead><tr><th>No</th><th>버전 레이블</th><th>시행일</th><th>내용 미리보기</th><th>상태</th><th>등록일시</th><th>관리</th></tr></thead><tbody>
-    ${data.versions.length ? data.versions.map((version,index)=>`<tr class="${version.isCurrent?'current-row':''}"><td>${data.versions.length-index}</td><td><b>${esc(version.label)}</b></td><td>${esc(version.effectiveDate)}</td><td>${esc(version.preview)}</td><td><span class="pill ${version.isCurrent?'on':''}">${version.isCurrent?'현행':version.publishedAt?'이전':'미게시'}</span></td><td>${date(version.createdAt)}</td><td class="actions"><button class="link-button" data-view="${esc(version.id)}">보기</button>${version.publishedAt?'':`<button class="link-button" data-edit-policy="${esc(version.id)}">수정</button>`}${version.isCurrent?'':`<button class="link-button" data-publish="${esc(version.id)}">현행설정</button>`}${version.publishedAt?'':`<button class="link-button danger" data-delete-policy="${esc(version.id)}">삭제</button>`}</td></tr>`).join('') : '<tr><td colspan="7" class="empty">등록된 버전이 없습니다.</td></tr>'}
-    </tbody></table></div><p class="muted">현행 버전만 앱과 공개 페이지에 표시됩니다. 게시된 버전은 이력 보존을 위해 수정·삭제할 수 없습니다.</p>`);
+    ${data.versions.length ? data.versions.map((version,index)=>`<tr class="${version.isCurrent?'current-row':''}"><td>${data.versions.length-index}</td><td><b>${esc(version.label)}</b></td><td>${esc(version.effectiveDate)}</td><td>${esc(version.preview)}</td><td><span class="pill ${version.isCurrent?'on':''}">${version.isCurrent?'현행':version.publishedAt?'이전':'미게시'}</span></td><td>${date(version.createdAt)}</td><td class="actions"><button class="link-button" data-view="${esc(version.id)}">보기</button><button class="link-button" data-edit-policy="${esc(version.id)}">수정</button>${version.isCurrent?'':`<button class="link-button" data-publish="${esc(version.id)}">현행설정</button><button class="link-button danger" data-delete-policy="${esc(version.id)}">삭제</button>`}</td></tr>`).join('') : '<tr><td colspan="7" class="empty">등록된 버전이 없습니다.</td></tr>'}
+    </tbody></table></div><p class="muted">현행 버전을 수정하면 앱과 공개 페이지에 바로 반영됩니다. 이전 버전은 수정·삭제할 수 있으며, 현행 버전은 삭제할 수 없습니다.</p>`);
   document.getElementById('add-policy').onclick = () => openPolicyEditor(type);
   document.querySelectorAll('[data-view]').forEach(el => el.onclick = () => openPolicyDetail(type, el.dataset.view));
   document.querySelectorAll('[data-edit-policy]').forEach(el => el.onclick = () => openPolicyEditor(type, el.dataset.editPolicy));
@@ -159,7 +159,7 @@ async function renderPolicies(type) {
     catch(error) { alert(error.message); }
   });
   document.querySelectorAll('[data-delete-policy]').forEach(el => el.onclick = async () => {
-    if (!confirm('게시하지 않은 이 버전을 삭제하시겠습니까?')) return;
+    if (!confirm('이 버전을 삭제하시겠습니까? 삭제한 내용은 복구할 수 없습니다.')) return;
     try { await request(`/admin/policies/${type}/${encodeURIComponent(el.dataset.deletePolicy)}`, {method:'DELETE'}); await renderPolicies(type); }
     catch(error) { alert(error.message); }
   });

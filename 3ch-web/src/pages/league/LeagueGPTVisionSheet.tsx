@@ -1610,9 +1610,15 @@ export default function LeagueGPTVisionSheet() {
           ? applySavedParticipantOrder(selectedParticipants)
           : selectedParticipants;
       }
+      if (currentProgramRound?.halfSplitOnlyMatches ?? currentProgramBlock?.halfSplitOnlyMatches) {
+        return applySavedParticipantOrder(selectedParticipants);
+      }
       return applySavedParticipantOrder(sortParticipantsByDivision(selectedParticipants));
     }
     if (isProgramMode) {
+      if (currentProgramRound?.halfSplitOnlyMatches ?? currentProgramBlock?.halfSplitOnlyMatches) {
+        return applySavedParticipantOrder(programDisplayParticipants);
+      }
       return applySavedParticipantOrder(sortParticipantsByDivision(programDisplayParticipants));
     }
     if (groupNames.length > 0 && selectedGroup) {

@@ -19,6 +19,27 @@ import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import { clearProgramMatchState, generateProgramRoundMatches } from '../../utils/programMatchGenerator';
 import { toUTCDate } from '../../utils/dateUtils';
 
+// 부수순으로 앞/뒤 절반을 자르면 상위 부수가 한쪽에 몰린다.
+// 인접한 네 명마다 1·4번과 2·3번을 나눠 양쪽의 부수 분포를 맞춘다.
+const balanceHalfSplitParticipants = (participants: Array<{ id: string; division?: string | null; name: string }>) => {
+  const divisionRank = (division?: string | null) => {
+    const rank = Number.parseInt(String(division ?? ""), 10);
+    return Number.isFinite(rank) ? rank : Number.MAX_SAFE_INTEGER;
+  };
+  const ordered = [...participants].sort((left, right) =>
+    divisionRank(left.division) - divisionRank(right.division)
+    || left.name.localeCompare(right.name, "ko")
+    || left.id.localeCompare(right.id),
+  );
+  const upper: string[] = [];
+  const lower: string[] = [];
+  ordered.forEach((participant, index) => {
+    const preferredUpper = index % 4 === 0 || index % 4 === 3;
+    (preferredUpper || lower.length >= Math.floor(ordered.length / 2) ? upper : lower).push(participant.id);
+  });
+  return [...upper, ...lower];
+};
+
 const FORMATION_COLORS = [
   "#E53935", // 빨강
   "#F57C00", // 주황
@@ -1805,22 +1826,44 @@ const LeagueAlgorithmDemo = ({
         }
       : selectedOption;
 
+    // 기존 결과를 유지하는 "계속 진행"은 참가자와 경기 편성을 바꾸지 않는다.
+    // 새 프로그램이나 명시적 초기화에서만 상단/하단 균형 편성을 확정한다.
+    const shouldBalance = resetResults || !savedProgramData?.program?.program_data;
+    const balancedOrder = shouldBalance
+      ? balanceHalfSplitParticipants(participantData?.participants ?? [])
+      : [];
+    const balancedProgram: StoredProgramWithEditState = shouldBalance && balancedOrder.length > 1
+      ? {
+          ...programToSave,
+          blocks: programToSave.blocks.map((block) =>
+            block.type === "SINGLES" && block.format === "LEAGUE" && block.halfSplitOnlyMatches
+              ? { ...block, participantOrder: balancedOrder, halfSplitMatchOrder: balancedOrder }
+              : block,
+          ),
+          rounds: programToSave.rounds?.map((round) =>
+            round.program === "SINGLES" && round.format === "LEAGUE" && round.halfSplitOnlyMatches
+              ? { ...round, participantOrder: balancedOrder, halfSplitMatchOrder: balancedOrder }
+              : round,
+          ),
+        }
+      : programToSave;
+
     try {
       if (resetResults) {
-        programToSave.blocks.forEach((_, blockIndex) => {
+        balancedProgram.blocks.forEach((_, blockIndex) => {
           clearProgramMatchState(leagueId, blockIndex + 1);
         });
       }
 
-      localStorage.setItem(`league-program-${leagueId}`, JSON.stringify(programToSave));
+      localStorage.setItem(`league-program-${leagueId}`, JSON.stringify(balancedProgram));
       localStorage.setItem(`league-program-active-round-${leagueId}`, "1");
-      await saveLeagueProgram({ leagueId, program: programToSave }).unwrap();
+      await saveLeagueProgram({ leagueId, program: balancedProgram }).unwrap();
 
       if (syncMatches) {
-        const programMatches = programToSave.blocks.flatMap((block, blockIndex) =>
+        const programMatches = balancedProgram.blocks.flatMap((block, blockIndex) =>
           generateProgramRoundMatches(
             leagueId,
-            programToSave,
+            balancedProgram,
             participantData?.participants ?? [],
             blockIndex + 1,
           ).map((match) => ({

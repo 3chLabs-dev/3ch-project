@@ -100,7 +100,7 @@ function localPreviewRequest(leagueId: string, url: string, method: string, body
   }
   if (method === "POST" && !id) {
     const input = body as Pick<Settlement, "participants" | "items" | "contributions">;
-    if (!input.items.length || input.contributions.some((entry) => !entry.personId)) throw new Error("메뉴와 찬조자를 확인해 주세요.");
+    if (!input.items.length) throw new Error("메뉴를 확인해 주세요.");
     const calculation = preview(input.participants, input.items, input.contributions);
     if (!calculation) throw new Error("정산 금액과 부담 대상을 확인해 주세요.");
     const roundNo = Math.max(0, ...settlements.map((entry) => entry.round_no)) + 1;
@@ -122,7 +122,6 @@ function localPreviewRequest(leagueId: string, url: string, method: string, body
       if (current[kind].some((old) => !next[kind].some((entry) => entry.id === old.id))) throw new Error("저장된 항목은 삭제 버튼으로 삭제해 주세요.");
     }
     if (next.items.some((entry) => entry.category === "specific" && !current.items.some((old) => old.id === entry.id && old.category === "specific"))) throw new Error("메뉴는 음식·주류·비주류 중 하나로 구분해 주세요.");
-    if (next.contributions.some((entry) => !entry.personId && !current.contributions.some((old) => old.id === entry.id))) throw new Error("찬조자를 선택해 주세요.");
     const calculation = preview(next.participants, next.items, next.contributions);
     if (!calculation) throw new Error("찬조금이나 항목의 부담 대상을 확인해 주세요.");
     return save({ ...current, ...next, calculation, version: current.version + 1 });
@@ -167,6 +166,9 @@ export default function AfterPartySettlement() {
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const itemNameRef = useRef<HTMLInputElement>(null);
   const [contributions, setContributions] = useState<Contribution[]>([]);
+  const [contributorName, setContributorName] = useState("");
+  const [contributionAmount, setContributionAmount] = useState("");
+  const contributorNameRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -258,6 +260,7 @@ export default function AfterPartySettlement() {
     const gone = settlement.participants.filter((p) => !roster.some((current) => current.id === p.id));
     setSelected(settlement); setTitle(settlement.title); setPeople([...roster, ...gone]); setItems(settlement.items); setContributions(settlement.contributions); setDirty(false); setError("");
     setDraftCategory("common"); setDraftName(""); setDraftAmount(""); setEditingItemId(null);
+    setContributorName(""); setContributionAmount("");
     setGuestName(""); setGuestDivision("");
   }, [participantData?.participants]);
   const select = useCallback(async (id: string) => {
@@ -317,18 +320,26 @@ export default function AfterPartySettlement() {
     setDraftName(""); setDraftAmount(""); setEditingItemId(null); setDirty(true); setError("");
     itemNameRef.current?.focus();
   };
-  const changeContribution = (id: string, patch: Partial<Contribution>) => { setContributions((old) => old.map((entry) => entry.id === id ? { ...entry, ...patch } : entry)); setDirty(true); };
+  const addContribution = () => {
+    if (!editable) return;
+    const name = contributorName.trim();
+    const amount = Number(contributionAmount);
+    if (!name || name.length > 100 || !Number.isInteger(amount) || amount <= 0 || amount > 1_000_000_000) { setError("찬조자 이름과 0원보다 큰 금액을 입력해 주세요."); return; }
+    setContributions((old) => [...old, { id: crypto.randomUUID(), name, amount }]);
+    setContributorName(""); setContributionAmount(""); setDirty(true); setError("");
+    contributorNameRef.current?.focus();
+  };
   const save = async () => {
     if (!selected) return;
     if (draftName.trim() || draftAmount.trim()) { setError("입력 중인 메뉴를 추가 버튼이나 Enter로 먼저 등록해 주세요."); return; }
+    if (contributorName.trim() || contributionAmount.trim()) { setError("입력 중인 찬조금을 추가 버튼이나 Enter로 먼저 등록해 주세요."); return; }
     if (guestName.trim() || guestDivision.trim()) { setError("입력 중인 게스트를 추가 버튼이나 Enter로 먼저 등록해 주세요."); return; }
     if (!items.length) { setError("메뉴를 하나 이상 추가해 주세요."); return; }
-    if (contributions.some((entry) => !entry.personId && !selected.contributions.some((old) => old.id === entry.id))) { setError("찬조자를 참가자 명단에서 선택해 주세요."); return; }
     setBusy(true); setError("");
     try {
-      const body = { title, participants: people, items, contributions, version: selected.version };
+      const body = { title, participants: people, items, contributions };
       if (selected.version === 0) await request(base, "POST", body);
-      else await request(`${base}/${selected.id}`, "PUT", body);
+      else await request(`${base}/${selected.id}`, "PUT", { ...body, version: selected.version });
       await loadList(); navigate(listPath);
     } catch (cause) { setError((cause as Error).message); }
     finally { setBusy(false); }
@@ -497,13 +508,16 @@ export default function AfterPartySettlement() {
       <Card sx={{ p: 2 }}>
         <Typography fontWeight={900}>현금 찬조금</Typography>
         <Typography fontSize={12} color="text.secondary" mb={1}>공통 음식부터 차감하며, 남은 금액은 다른 항목에서 차감합니다.</Typography>
-        <Stack spacing={2}>{contributions.map((entry) => <Box key={entry.id} sx={{ borderTop: "1px solid #eee", pt: 2 }}>
-          <Stack direction="row" spacing={1} alignItems="center"><TextField select fullWidth label="찬조자" value={entry.personId ?? ""} disabled={!editable} onChange={(event) => { const person = people.find((p) => p.id === event.target.value); if (person) changeContribution(entry.id, { personId: person.id, name: person.name }); }}><MenuItem value="" disabled>참가자 선택</MenuItem>{people.map((p) => <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>)}</TextField><Button color="error" disabled={!editable || busy} onClick={() => void remove("contributions", entry.id, entry.name)}>삭제</Button></Stack>
-          {!entry.personId && entry.name && <Typography fontSize={12} color="text.secondary" mt={0.5}>기존 기록: {entry.name}</Typography>}
-          <TextField fullWidth type="number" label="찬조 금액 (원)" value={entry.amount} disabled={!editable} onChange={(event) => changeContribution(entry.id, { amount: Number(event.target.value) })} inputProps={{ min: 0, inputMode: "numeric" }} sx={{ mt: 1.5, "& input": { fontSize: 20, fontWeight: 800 } }} />
-          {entry.personId && <FormControlLabel control={<Checkbox checked={!!people.find((p) => p.id === entry.personId)?.excluded} disabled={!editable} onChange={(event) => changePerson(entry.personId!, { excluded: event.target.checked })} />} label="정산에서 제외" />}
-        </Box>)}</Stack>
-        {editable && <Button fullWidth variant="outlined" sx={{ mt: 2, minHeight: 44 }} onClick={() => { setContributions((old) => [...old, { id: crypto.randomUUID(), name: "", amount: 0 }]); setDirty(true); }}>+ 찬조금 추가</Button>}
+        {editable && <Box sx={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(92px, 120px) 58px", gap: 0.75 }}>
+          <TextField inputRef={contributorNameRef} size="small" placeholder="찬조자 이름" value={contributorName} onChange={(event) => setContributorName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); addContribution(); } }} inputProps={{ "aria-label": "찬조자 이름", maxLength: 100 }} />
+          <TextField size="small" type="number" placeholder="금액" value={contributionAmount} onChange={(event) => setContributionAmount(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); addContribution(); } }} inputProps={{ min: 1, inputMode: "numeric", "aria-label": "찬조 금액" }} />
+          <Button variant="contained" onClick={addContribution} sx={{ minWidth: 0, px: 0, fontWeight: 800 }}>추가</Button>
+        </Box>}
+        <Stack spacing={0.5} mt={contributions.length ? 1.5 : 0}>{contributions.map((entry) => <Stack key={entry.id} direction="row" alignItems="center" gap={0.75} sx={{ py: 0.75, borderTop: "1px solid #E5E7EB" }}>
+          <Typography fontSize={14} fontWeight={700} sx={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.name}</Typography>
+          <Typography fontSize={14} fontWeight={800} whiteSpace="nowrap">{money(entry.amount)}</Typography>
+          {editable && <Button size="small" color="error" disabled={busy} onClick={() => void remove("contributions", entry.id, entry.name)} sx={{ minWidth: 38, px: 0 }}>삭제</Button>}
+        </Stack>)}</Stack>
       </Card>
       <Card sx={{ p: 2 }}>
         <Typography fontWeight={900} mb={0.5}>참가자 · 정산 대상 {people.filter((p) => p.attending).length}명</Typography>

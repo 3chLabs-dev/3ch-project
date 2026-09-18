@@ -124,9 +124,9 @@ router.post('/leagues/:leagueId/after-party', requireAuth, async (req, res) => {
   if (!parsed.success || !parsed.data.items.length) return fail(res, 400, '메뉴와 정산 내용을 입력해 주세요.');
   const body = parsed.data;
   if (!unique(body.participants.map((p) => p.id)) || !unique(body.items.map((i) => i.id)) || !unique(body.contributions.map((c) => c.id))) return fail(res, 400, '중복된 항목 ID가 있습니다.');
-  if (body.items.some((entry) => entry.category === 'specific') || body.contributions.some((entry) => !entry.personId)) return fail(res, 400, '메뉴 구분과 찬조자를 확인해 주세요.');
+  if (body.items.some((entry) => entry.category === 'specific')) return fail(res, 400, '메뉴 구분을 확인해 주세요.');
   const personIds = new Set(body.participants.map((p) => p.id));
-  if (body.items.some((entry) => entry.personIds.some((personId) => !personIds.has(personId))) || body.contributions.some((entry) => !personIds.has(entry.personId))) return fail(res, 400, '부담 대상 또는 찬조자가 참가자 명단에 없습니다.');
+  if (body.items.some((entry) => entry.personIds.some((personId) => !personIds.has(personId))) || body.contributions.some((entry) => entry.personId && !personIds.has(entry.personId))) return fail(res, 400, '부담 대상 또는 연결된 찬조자가 참가자 명단에 없습니다.');
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -138,7 +138,7 @@ router.post('/leagues/:leagueId/after-party', requireAuth, async (req, res) => {
     let participants;
     try { participants = normalizeParticipants(body.participants, serverPeople.rows, savedRounds.rows); }
     catch (error) { await client.query('ROLLBACK'); return fail(res, 400, error.message); }
-    const contributions = body.contributions.map((entry) => ({ ...entry, name: participants.find((person) => person.id === entry.personId)?.name }));
+    const contributions = body.contributions.map((entry) => ({ ...entry, name: entry.personId ? participants.find((person) => person.id === entry.personId)?.name : entry.name }));
     let calculation;
     try { calculation = calculate(participants, body.items, contributions); }
     catch (error) { await client.query('ROLLBACK'); return fail(res, 400, error.message); }
@@ -176,7 +176,6 @@ router.put('/leagues/:leagueId/after-party/:id', requireAuth, async (req, res) =
       if (current[key].some((entry) => !nextIds.has(entry.id))) { await client.query('ROLLBACK'); return fail(res, 409, '저장된 참석자·항목·찬조금은 일반 저장에서 삭제할 수 없습니다.'); }
     }
     if (body.items.some((entry) => entry.category === 'specific' && !current.items.some((old) => old.id === entry.id && old.category === 'specific'))) { await client.query('ROLLBACK'); return fail(res, 400, '메뉴는 음식·주류·비주류 중 하나로 구분해 주세요.'); }
-    if (body.contributions.some((entry) => !entry.personId && !current.contributions.some((old) => old.id === entry.id))) { await client.query('ROLLBACK'); return fail(res, 400, '찬조자를 참가자 명단에서 선택해 주세요.'); }
     const serverPeople = await client.query('SELECT id,name,division FROM league_participants WHERE league_id=$1 AND is_bot=false', [leagueId]);
     const savedRounds = await client.query('SELECT participants FROM after_party_settlements WHERE league_id=$1 ORDER BY round_no', [leagueId]);
     let participants;

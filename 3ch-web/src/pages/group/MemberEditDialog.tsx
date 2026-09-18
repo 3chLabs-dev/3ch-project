@@ -53,7 +53,7 @@ const DEFAULT_MANAGEMENT_PERMISSIONS: ManagementPermissions = {
   settlement: true,
 };
 const memberPermissions = (value?: ManagementPermissions): ManagementPermissions => value
-  ? { ...DEFAULT_MANAGEMENT_PERMISSIONS, ...value, settlement: value.settlement ?? false }
+  ? { ...DEFAULT_MANAGEMENT_PERMISSIONS, ...value, settlement: value.settlement ?? true }
   : DEFAULT_MANAGEMENT_PERMISSIONS;
 
 export default function MemberEditDialog({

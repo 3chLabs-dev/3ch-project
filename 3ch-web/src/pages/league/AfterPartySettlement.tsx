@@ -13,6 +13,7 @@ import CurvedShareIcon from "../../components/CurvedShareIcon";
 import { useAppSelector } from "../../app/hooks";
 import { useGetLeagueParticipantsQuery, useGetLeagueQuery, useUpdateLeagueMutation } from "../../features/league/leagueApi";
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
+import { createTossTransferLink, isSmartphoneBrowser, parseBankAccount } from "../../utils/paymentDeepLink";
 
 type Person = { id: string; name: string; attending: boolean; drinking: boolean; excluded: boolean };
 type Item = { id: string; name: string; amount: number; category: "common" | "alcohol" | "nonalcohol" | "specific"; personIds: string[] };
@@ -177,6 +178,8 @@ export default function AfterPartySettlement() {
   const [accountAutoSaveFailed, setAccountAutoSaveFailed] = useState(false);
   const [sharedLeagueName, setSharedLeagueName] = useState("");
   const [sharedLeagueDate, setSharedLeagueDate] = useState("");
+  const [tossDialogOpen, setTossDialogOpen] = useState(false);
+  const [tossPersonId, setTossPersonId] = useState("");
   const base = `${import.meta.env.VITE_API_BASE_URL ?? "/api"}/leagues/${leagueId}/after-party`;
   const listPath = `/league/${leagueId}/after-party`;
   const canEditAccount = canManage && (localPreview || groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.league === true));
@@ -392,6 +395,20 @@ export default function AfterPartySettlement() {
     finally { setBusy(false); }
   };
   const leagueDate = String(leagueData?.league.start_date || sharedLeagueDate || "").slice(0, 10);
+  const tossPerson = summary.people.find((person) => person.participantId === tossPersonId);
+  const parsedAccount = parseBankAccount(bankAccount.trim());
+  const tossLink = parsedAccount && tossPerson ? createTossTransferLink(parsedAccount.bankName, parsedAccount.accountNumber, tossPerson.total) : null;
+  const startTossTransfer = () => {
+    if (!tossLink) { setError("송금할 사람과 입금 계좌를 확인해 주세요."); return; }
+    let appOpened = false;
+    const handleVisibilityChange = () => { if (document.hidden) appOpened = true; };
+    document.addEventListener("visibilitychange", handleVisibilityChange, { once: true });
+    window.location.href = tossLink;
+    window.setTimeout(() => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      if (!appOpened && !document.hidden) setError("토스 앱을 실행할 수 없습니다. 계좌번호를 복사해 은행 앱에서 송금해 주세요.");
+    }, 1800);
+  };
   const calculation = useMemo(() => preview(people, items, contributions), [people, items, contributions]);
   const editable = !!selected && canManage;
   const leagueAfterIds = useMemo(() => {
@@ -404,8 +421,9 @@ export default function AfterPartySettlement() {
     {canEditAccount && !shareToken ? <TextField fullWidth placeholder="은행명과 계좌번호를 입력해 주세요" value={bankAccount} onChange={(event) => { setBankAccount(event.target.value); setAccountAutoSaveFailed(false); }} /> : <Typography sx={{ p: 1.5, border: "1px solid #E5E7EB", borderRadius: 1, overflowWrap: "anywhere" }}>{bankAccount || "등록된 입금 계좌가 없습니다."}</Typography>}
     <Stack direction="row" spacing={1} mt={1}>
       <Button fullWidth variant="outlined" disabled={!bankAccount.trim()} startIcon={<ContentCopyOutlinedIcon />} onClick={() => { void navigator.clipboard.writeText(bankAccount.trim()).catch(() => setError("계좌번호 복사에 실패했습니다.")); }}>계좌번호 복사</Button>
-      {canEditAccount && !shareToken && bankAccount !== savedBankAccount && <Button fullWidth variant="contained" disabled={savingBankAccount} onClick={() => void saveBankAccount()}>{savingBankAccount ? "저장 중" : "저장"}</Button>}
+      <Button fullWidth variant="contained" disabled={!parsedAccount || !summary.people.length} onClick={() => { setTossPersonId(summary.people.length === 1 ? summary.people[0].participantId : ""); setTossDialogOpen(true); }} startIcon={<Box component="img" src="/images/payment/toss-symbol-mono-white.png" alt="" sx={{ width: 22, height: 22, objectFit: "contain" }} />} sx={{ bgcolor: "#0064FF", fontWeight: 800, whiteSpace: "nowrap", "&:hover": { bgcolor: "#0056DB" } }}>토스로 송금</Button>
     </Stack>
+    {canEditAccount && !shareToken && bankAccount !== savedBankAccount && <Button fullWidth variant="contained" disabled={savingBankAccount} onClick={() => void saveBankAccount()} sx={{ mt: 1 }}>{savingBankAccount ? "저장 중" : "저장"}</Button>}
   </Card>;
 
   return <Box sx={{ maxWidth: 720, mx: "auto", px: 2, py: 2, pb: 10 }}>
@@ -495,6 +513,20 @@ export default function AfterPartySettlement() {
         </Stack>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2.5 }}><Button variant="contained" onClick={() => setShareDialogOpen(false)} sx={{ fontWeight: 800 }}>닫기</Button></DialogActions>
+    </Dialog>
+    <Dialog open={tossDialogOpen} onClose={() => setTossDialogOpen(false)} fullWidth maxWidth="xs" slotProps={{ paper: { sx: { borderRadius: 2, mx: 2 } } }}>
+      <DialogTitle sx={{ fontWeight: 900, textAlign: "center" }}>토스로 송금</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ pt: 1 }}>
+          <Typography fontSize={13} color="text.secondary">본인의 이름을 선택하면 합산 정산금으로 송금 화면이 열립니다.</Typography>
+          <TextField select fullWidth label="송금할 사람" value={tossPersonId} onChange={(event) => setTossPersonId(event.target.value)}><MenuItem value="" disabled>이름 선택</MenuItem>{summary.people.map((person) => <MenuItem key={person.participantId} value={person.participantId}>{person.name} · {money(person.total)}</MenuItem>)}</TextField>
+          {tossPerson && <Typography fontWeight={800} textAlign="center">송금액 {money(tossPerson.total)}</Typography>}
+          {tossLink && !isSmartphoneBrowser() && <Box sx={{ display: "grid", placeItems: "center", p: 2, mx: "auto", border: "1px solid #E5E7EB", borderRadius: 2 }}><QRCode value={tossLink} size={196} level="M" /></Box>}
+          {tossLink && !isSmartphoneBrowser() && <Typography fontSize={12} color="text.secondary" textAlign="center">휴대폰 카메라로 QR코드를 스캔하면 토스 송금 화면으로 이동합니다.</Typography>}
+          {isSmartphoneBrowser() && <Button fullWidth variant="contained" disabled={!tossLink} onClick={startTossTransfer} sx={{ bgcolor: "#0064FF", fontWeight: 800, "&:hover": { bgcolor: "#0056DB" } }}>토스 앱 열기</Button>}
+        </Stack>
+      </DialogContent>
+      <DialogActions><Button onClick={() => setTossDialogOpen(false)}>닫기</Button></DialogActions>
     </Dialog>
   </Box>;
 }

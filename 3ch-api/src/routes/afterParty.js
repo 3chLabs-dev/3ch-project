@@ -15,10 +15,11 @@ const contribution = z.object({ id: uuid, name: z.string().trim().min(1).max(100
 const bodySchema = z.object({ title: z.string().trim().min(1).max(100), participants: z.array(person).max(300), items: z.array(item).max(200), contributions: z.array(contribution).max(100), version: z.number().int().positive().optional() });
 
 async function access(client, leagueId, userId) {
-  const result = await client.query(`SELECT gm.role, COALESCE((gm.management_permissions->>'settlement')::boolean,false) AS settlement_permission FROM leagues l JOIN group_members gm ON gm.group_id=l.group_id WHERE l.id=$1 AND gm.user_id=$2`, [leagueId, userId]);
+  const result = await client.query(`SELECT l.created_by_id,l.group_id,gm.role,COALESCE((gm.management_permissions->>'settlement')::boolean,true) AS settlement_permission FROM leagues l LEFT JOIN group_members gm ON gm.group_id=l.group_id AND gm.user_id=$2 WHERE l.id=$1`, [leagueId, userId]);
   if (!result.rowCount) return { allowed: false, manage: false };
-  const { role, settlement_permission: settlementPermission } = result.rows[0];
-  return { allowed: true, manage: role === 'owner' || (role === 'admin' && settlementPermission) };
+  const { created_by_id: creatorId, group_id: groupId, role, settlement_permission: settlementPermission } = result.rows[0];
+  const creator = !groupId && Number(creatorId) === userId;
+  return { allowed: creator || !!role, manage: creator || role === 'owner' || (role === 'admin' && settlementPermission) };
 }
 function unique(values) { return new Set(values).size === values.length; }
 function fail(res, status, message) { return res.status(status).json({ message }); }

@@ -42,6 +42,7 @@ export default function GroupDetail() {
 
   const [joinGroup, { isLoading: isJoining }] = useJoinGroupMutation();
   const [preMemberDialogOpen, setPreMemberDialogOpen] = useState(false);
+  const [justJoined, setJustJoined] = useState(false);
 
   const handleJoin = async () => {
     if (!isLoggedIn) {
@@ -51,8 +52,8 @@ export default function GroupDetail() {
 
     try {
       const result = await joinGroup(id!).unwrap();
-      if (result.claim_requested) window.alert(result.message);
-      navigate(`/club/${id}/manage`);
+      if (result.has_pre_members) { setJustJoined(true); setPreMemberDialogOpen(true); }
+      else navigate(`/club/${id}/manage`);
     } catch (error) {
       console.error("Failed to join group:", error);
     }
@@ -312,8 +313,9 @@ export default function GroupDetail() {
       )}
       <GroupPreMemberDialog
         open={preMemberDialogOpen}
-        onClose={() => setPreMemberDialogOpen(false)}
+        onClose={() => { setPreMemberDialogOpen(false); navigate(`/club/${id}/manage`); }}
         groupId={group.id}
+        justJoined={justJoined}
       />
     </Stack>
   );

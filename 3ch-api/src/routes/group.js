@@ -1228,6 +1228,7 @@ router.get('/group/:id/pre-members', requireAuth, async (req, res) => {
       [id, userId]
     );
     const myRole = roleResult.rows[0]?.role || null;
+    if (!myRole) return res.status(403).json({ message: '클럽 가입 후 확인할 수 있습니다.' });
     const result = await pool.query(
       `SELECT pm.id, pm.name, pm.division, pm.external_aliases, pm.status, pm.created_at,
               c.id AS claim_id, c.status AS claim_status, c.requested_by_id,
@@ -1315,6 +1316,11 @@ router.post('/group/:id/pre-members/:preMemberId/claim-request', requireAuth, as
   try {
     const { id, preMemberId } = req.params;
     const userId = Number(req.user.sub);
+    const membership = await pool.query(
+      `SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      [id, userId]
+    );
+    if (!membership.rowCount) return res.status(403).json({ message: '클럽 가입 후 전환을 신청할 수 있습니다.' });
     const preMember = await pool.query(
       `SELECT id FROM group_pre_members WHERE id = $1 AND group_id = $2 AND status = 'active'`,
       [preMemberId, id]
@@ -1350,6 +1356,9 @@ router.patch('/group/:id/pre-members/:preMemberId/claim-request', requireAuth, r
     if (!['approve', 'decline'].includes(action)) {
       return res.status(400).json({ message: '처리 방식을 확인해 주세요.' });
     }
+    if (action === 'approve' && req.body?.confirmation_intent !== 'link_pre_member_account') {
+      return res.status(400).json({ message: '회원 전환 대상을 확인해 주세요.' });
+    }
     await client.query('BEGIN');
     const claimResult = await client.query(
       `SELECT c.id, c.requested_by_id, pm.name, pm.division, u.name AS requested_user_name
@@ -1376,19 +1385,13 @@ router.patch('/group/:id/pre-members/:preMemberId/claim-request', requireAuth, r
     const memberResult = await client.query(
       `INSERT INTO group_members (id, group_id, user_id, role, division)
        VALUES ($1, $2, $3, 'member', $4)
-       ON CONFLICT (group_id, user_id) DO UPDATE SET division = EXCLUDED.division
+       ON CONFLICT (group_id, user_id) DO UPDATE
+         SET division = COALESCE(NULLIF(group_members.division, ''), EXCLUDED.division)
        RETURNING id, group_id, user_id, role, division, joined_at`,
       [randomUUID(), req.params.id, claim.requested_by_id, claim.division]
     );
-    await client.query(
-      `UPDATE league_participants lp
-       SET member_id = $1, division = COALESCE(NULLIF($2, ''), lp.division)
-       FROM leagues l
-       WHERE lp.league_id = l.id
-         AND (l.group_id = $3 OR lp.source_group_id = $3)
-         AND lp.member_id IS NULL AND lp.name = $4`,
-      [claim.requested_by_id, claim.division, req.params.id, claim.name]
-    );
+    // Historical participants may share a display name with another person.
+    // Account conversion must not silently assign their persisted results.
     await client.query(
       `UPDATE group_pre_members SET status = 'linked', linked_user_id = $1, updated_at = NOW() WHERE id = $2`,
       [claim.requested_by_id, req.params.preMemberId]
@@ -1398,9 +1401,8 @@ router.patch('/group/:id/pre-members/:preMemberId/claim-request', requireAuth, r
       [Number(req.user.sub), claim.id]
     );
     await client.query('COMMIT');
-    await rebuildGroupRanking(req.params.id).catch((error) => console.error('회원 전환 후 레이팅 재계산 실패:', error));
     res.json({
-      message: '회원 전환을 승인했습니다.',
+      message: '회원 전환을 승인했습니다. 과거 경기 기록과 순위는 자동 변경되지 않습니다.',
       member: { ...memberResult.rows[0], name: claim.requested_user_name },
     });
   } catch (error) {
@@ -1559,35 +1561,15 @@ router.post('/group/:id/join', requireAuth, async (req, res) => {
       [memberId, id, userId]
     );
 
-    const matchingPreMembers = await client.query(
-      `SELECT pm.id
-       FROM group_pre_members pm
-       JOIN users u ON u.id = $2
-       WHERE pm.group_id = $1 AND pm.status = 'active'
-         AND BTRIM(pm.name) = BTRIM(u.name)`,
-      [id, userId]
+    const preMemberCount = await client.query(
+      `SELECT COUNT(*)::int AS count FROM group_pre_members WHERE group_id = $1 AND status = 'active'`,
+      [id]
     );
-    const matchingPreMemberId = matchingPreMembers.rowCount === 1
-      ? matchingPreMembers.rows[0].id
-      : null;
-
-    if (matchingPreMemberId) {
-      await client.query(
-        `INSERT INTO group_member_claims (id, pre_member_id, requested_by_id)
-         VALUES ($1, $2, $3)
-         ON CONFLICT (pre_member_id) DO UPDATE
-         SET requested_by_id = EXCLUDED.requested_by_id, status = 'pending',
-             requested_at = NOW(), reviewed_by_id = NULL, reviewed_at = NULL`,
-        [randomUUID(), matchingPreMemberId, userId]
-      );
-    }
 
     await client.query('COMMIT');
     res.status(201).json({
-      message: matchingPreMemberId
-        ? '클럽에 가입되었습니다. 사전등록 회원 전환 승인을 기다려 주세요.'
-        : '클럽에 가입되었습니다',
-      claim_requested: Boolean(matchingPreMemberId),
+      message: '클럽에 가입되었습니다',
+      has_pre_members: Number(preMemberCount.rows[0]?.count || 0) > 0,
     });
   } catch (error) {
     await client.query('ROLLBACK');

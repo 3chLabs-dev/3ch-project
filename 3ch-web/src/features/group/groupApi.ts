@@ -666,7 +666,7 @@ export const groupApi = baseApi.injectEndpoints({
       query: (name) => `/group/check-name?name=${encodeURIComponent(name)}`,
     }),
 
-    joinGroup: builder.mutation<{ message: string; claim_requested?: boolean }, string>({
+    joinGroup: builder.mutation<{ message: string; has_pre_members?: boolean }, string>({
       query: (groupId) => ({
         url: `/group/${groupId}/join`,
         method: "POST",
@@ -796,7 +796,7 @@ export const groupApi = baseApi.injectEndpoints({
         const result = await fetchWithBQ({
           url: `/group/${groupId}/pre-members/${preMemberId}/claim-request`,
           method: "PATCH",
-          body: { action },
+          body: { action, ...(action === "approve" ? { confirmation_intent: "link_pre_member_account" } : {}) },
         });
         return result.error ? { error: result.error } : { data: result.data as { message: string } };
       },

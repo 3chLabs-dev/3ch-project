@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Alert, Box, Button, Card, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
@@ -140,6 +140,7 @@ function localPreviewRequest(leagueId: string, url: string, method: string, body
 export default function AfterPartySettlement() {
   const { id: leagueId, settlementId } = useParams<{ id: string; settlementId?: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const roundParam = searchParams.get("round");
   const roundNo = roundParam && /^\d+$/.test(roundParam) ? Number(roundParam) : 0;
@@ -150,6 +151,7 @@ export default function AfterPartySettlement() {
   const { data: groupData } = useGetGroupDetailQuery(leagueData?.league.group_id ?? "", { skip: !leagueData?.league.group_id || !!shareToken });
   const [updateLeague] = useUpdateLeagueMutation();
   const [list, setList] = useState<Settlement[]>([]);
+  const [listLoaded, setListLoaded] = useState(false);
   const [summary, setSummary] = useState<CombinedSummary>({ total: 0, people: [] });
   const [payments, setPayments] = useState<Record<string, boolean>>({});
   const [canManage, setCanManage] = useState(false);
@@ -206,7 +208,7 @@ export default function AfterPartySettlement() {
       if (shareToken) {
         if (import.meta.env.DEV && localStorage.getItem(`after-party-preview-share:${leagueId}`) === shareToken) {
           const result = localPreviewRequest(leagueId, base, "GET", undefined) as ListResponse;
-          setList(result.settlements); setSummary(result.summary); setPayments(result.payments); setCanManage(false); setLocalPreview(true);
+          setList(result.settlements); setSummary(result.summary); setPayments(result.payments); setCanManage(false); setLocalPreview(true); setListLoaded(true);
           setShareVisibility((localStorage.getItem(`after-party-preview-visibility:${leagueId}`) as "public" | "club_only") || "public");
           const account = localStorage.getItem(`after-party-preview-bank:${leagueId}`) ?? "";
           setBankAccount(account); setSavedBankAccount(account);
@@ -217,11 +219,11 @@ export default function AfterPartySettlement() {
         const requestedCode = leagueId.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
         const sharedCode = String(result.league?.league_code ?? "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
         if (!response.ok || (result.league?.id !== leagueId && sharedCode !== requestedCode)) throw new Error(result.message || "공유 링크를 열 수 없습니다.");
-        setList(result.settlements); setSummary(result.summary); setPayments(result.payments ?? {}); setCanManage(false); setSharedLeagueName(result.league.name); setSharedLeagueDate(result.league.start_date ?? ""); setShareVisibility(result.visibility);
+        setList(result.settlements); setSummary(result.summary); setPayments(result.payments ?? {}); setCanManage(false); setSharedLeagueName(result.league.name); setSharedLeagueDate(result.league.start_date ?? ""); setShareVisibility(result.visibility); setListLoaded(true);
         setBankAccount(result.league.bank_account ?? ""); setSavedBankAccount(result.league.bank_account ?? "");
         return;
       }
-      const result: ListResponse = await request(base); setList(result.settlements); setSummary(result.summary); setPayments(result.payments); setCanManage(result.canManage);
+      const result: ListResponse = await request(base); setList(result.settlements); setSummary(result.summary); setPayments(result.payments); setCanManage(result.canManage); setListLoaded(true);
     }
     catch (cause) { setError((cause as Error).message); }
   }, [base, leagueId, request, token, shareToken]);
@@ -261,10 +263,14 @@ export default function AfterPartySettlement() {
   useEffect(() => {
     if (settlementId) return;
     if (!roundNo) { setSelected(null); return; }
-    if (selected?.version === 0 && selected.round_no === roundNo) return;
+    const routeDraft = (location.state as { afterPartyDraft?: Settlement } | null)?.afterPartyDraft;
+    if (routeDraft?.version === 0 && routeDraft.round_no === roundNo) {
+      if (selected?.id !== routeDraft.id) open(routeDraft);
+      return;
+    }
     const entry = list.find((item) => item.round_no === roundNo);
     if (entry && selected?.id !== entry.id) void select(entry.id);
-  }, [roundNo, settlementId, list, selected?.id, selected?.version, selected?.round_no, select]);
+  }, [roundNo, settlementId, list, selected?.id, select, open, location.state]);
   useEffect(() => {
     if (!settlementId) return;
     const entry = list.find((item) => item.id === settlementId);
@@ -273,9 +279,8 @@ export default function AfterPartySettlement() {
   const create = () => {
     const nextRound = Math.max(0, ...list.map((entry) => entry.round_no)) + 1;
     const roster = (participantData?.participants ?? []).filter((person) => !person.is_bot).map((person) => ({ id: person.id, name: person.name, attending: !!person.after, drinking: false, excluded: false }));
-    const draft: Settlement = { id: crypto.randomUUID(), round_no: nextRound, title: `${nextRound}차`, status: "draft", version: 0, participants: roster.length ? roster : import.meta.env.DEV ? samplePeople : [], items: [], contributions: [], calculation: { total: 0, contributed: 0, distributable: 0, shares: {} } };
-    open(draft);
-    navigate(`${listPath}?round=${nextRound}`);
+    const draft: Settlement = { id: crypto.randomUUID(), round_no: nextRound, title: `${nextRound}차`, status: "draft", version: 0, participants: roster.length ? roster : localPreview ? samplePeople : [], items: [], contributions: [], calculation: { total: 0, contributed: 0, distributable: 0, shares: {} } };
+    navigate(`${listPath}?round=${nextRound}`, { state: { afterPartyDraft: draft } });
   };
   const changePerson = (id: string, patch: Partial<Person>) => { setPeople((old) => old.map((p) => p.id === id ? { ...p, ...patch } : p)); setDirty(true); };
   const editItem = (item: Item) => {
@@ -498,7 +503,7 @@ export default function AfterPartySettlement() {
       </Card>
       <Card sx={{ p: 2, bgcolor: "#F8FAFF" }}><Typography fontWeight={900} mb={1}>정산 결과</Typography>{calculation ? <><Typography>결제 금액 {money(calculation.total)} - 찬조금 {money(calculation.contributed)}</Typography><Typography fontWeight={900} my={1}> = 정산 금액 {money(calculation.distributable)}</Typography>{people.filter((p) => p.attending).map((p) => <Stack key={p.id} direction="row" justifyContent="space-between"><Typography>{p.name}{p.excluded ? " (제외)" : ""}</Typography><Typography fontWeight={800}>{money(calculation.shares[p.id] ?? 0)}</Typography></Stack>)}</> : <Alert severity="warning">찬조금이 총비용보다 많거나 부담 대상이 없는 항목이 있습니다.</Alert>}</Card>
       {editable && <Button fullWidth variant="contained" disabled={busy || !calculation || !dirty} onClick={() => void save()}>저장</Button>}
-    </Stack> : <Typography color="text.secondary">{error || "정산을 불러오는 중..."}</Typography>}
+    </Stack> : <Typography color="text.secondary">{error || (listLoaded ? "해당 차수의 정산을 찾을 수 없습니다." : "정산을 불러오는 중...")}</Typography>}
     <Dialog open={shareDialogOpen} onClose={() => setShareDialogOpen(false)} maxWidth="sm" fullWidth>
       <DialogTitle fontWeight={900}>뒤풀이 정산 공유</DialogTitle>
       <DialogContent>

@@ -13,15 +13,16 @@ import {
   useReviewGroupMemberClaimMutation,
 } from "../../features/group/groupApi";
 import ParticipantImageImportDialog, { type ImportedParticipant } from "../league/ParticipantImageImportDialog";
+import { useAppSelector } from "../../app/hooks";
 
-type Props = { open: boolean; onClose: () => void; groupId: string; manager?: boolean; onChanged?: () => void | Promise<void> };
+type Props = { open: boolean; onClose: () => void; groupId: string; manager?: boolean; justJoined?: boolean; onChanged?: () => void | Promise<void> };
 
 const errorMessage = (error: unknown) => {
   const value = error as { data?: { message?: string } };
   return value?.data?.message || "처리 중 오류가 발생했습니다.";
 };
 
-export default function GroupPreMemberDialog({ open, onClose, groupId, manager = false, onChanged }: Props) {
+export default function GroupPreMemberDialog({ open, onClose, groupId, manager = false, justJoined = false, onChanged }: Props) {
   const { data, isFetching } = useGetGroupPreMembersQuery(groupId, { skip: !open || !groupId });
   const [createMember, { isLoading: isCreating }] = useCreateGroupPreMemberMutation();
   const [deleteMember] = useDeleteGroupPreMemberMutation();
@@ -30,6 +31,8 @@ export default function GroupPreMemberDialog({ open, onClose, groupId, manager =
   const [division, setDivision] = useState("");
   const [name, setName] = useState("");
   const [selectedId, setSelectedId] = useState("");
+  const [memberSearch, setMemberSearch] = useState("");
+  const accountName = useAppSelector((state) => state.auth.user?.name ?? "");
   const [imageImportOpen, setImageImportOpen] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const members = useMemo(
@@ -40,6 +43,7 @@ export default function GroupPreMemberDialog({ open, onClose, groupId, manager =
     }),
     [data?.pre_members],
   );
+  const visibleMembers = manager ? members : members.filter((member) => member.name.includes(memberSearch.trim()));
 
   const addMember = async () => {
     if (!name.trim()) return;
@@ -82,6 +86,8 @@ export default function GroupPreMemberDialog({ open, onClose, groupId, manager =
 
   const submitClaim = async () => {
     if (!selectedId) return;
+    const selected = members.find((member) => member.id === selectedId);
+    if (!selected || !window.confirm(`가입 계정: ${accountName || "내 계정"}\n사전등록 기록: ${selected.name} · ${selected.division || "부수 미입력"}\n\n이 기록을 본인 기록으로 전환 신청하시겠습니까? 리더의 승인이 필요합니다.`)) return;
     try {
       const result = await requestClaim({ groupId, preMemberId: selectedId }).unwrap();
       window.alert(result.message); setSelectedId(""); onClose();
@@ -89,6 +95,12 @@ export default function GroupPreMemberDialog({ open, onClose, groupId, manager =
   };
 
   const review = async (preMemberId: string, action: "approve" | "decline") => {
+    const target = members.find((member) => member.id === preMemberId);
+    if (!target) return;
+    const message = action === "approve"
+      ? `가입 계정: ${target.requester_name || "확인 필요"}\n사전등록 기록: ${target.name} · ${target.division || "부수 미입력"}\n\n이 계정에 사전등록 기록을 연결하시겠습니까? 과거 경기 기록과 순위는 자동 변경되지 않습니다.`
+      : `${target.requester_name || "가입 회원"}님의 ${target.name} 사전등록 기록 전환 신청을 거절하시겠습니까?`;
+    if (!window.confirm(message)) return;
     try {
       await reviewClaim({ groupId, preMemberId, action }).unwrap();
       await onChanged?.();
@@ -123,13 +135,15 @@ export default function GroupPreMemberDialog({ open, onClose, groupId, manager =
           </Stack>
         )}
         {!manager && (
-          <Typography fontSize={13} color="text.secondary" sx={{ mb: 1.5 }}>
-            리더가 미리 등록한 본인을 선택해 전환을 신청해 주세요. 승인되면 클럽 기록이 계정에 연결됩니다.
-          </Typography>
+          <Stack spacing={1} sx={{ mb: 1.5 }}>
+            <Typography fontSize={13} color="text.secondary">{justJoined ? "클럽 가입이 완료되었습니다. " : ""}아래에서 본인의 사전등록 기록을 선택해 주세요. 이름이 달라도 선택할 수 있으며 리더 승인 전에는 연결되지 않습니다.</Typography>
+            <TextField size="small" label="사전등록 이름 검색" value={memberSearch} onChange={(event) => setMemberSearch(event.target.value)} placeholder="예: 이름A, 성을 뺀 이름" fullWidth />
+          </Stack>
         )}
         <List disablePadding sx={{ border: "1px solid #E1E5EB", borderRadius: 1, overflow: "hidden" }}>
           {!isFetching && members.length === 0 && <Typography color="text.secondary" textAlign="center" sx={{ py: 4 }}>사전등록된 회원이 없습니다.</Typography>}
-          {members.map((member, index) => (
+          {!isFetching && members.length > 0 && visibleMembers.length === 0 && <Typography color="text.secondary" textAlign="center" sx={{ py: 4 }}>일치하는 기록이 없습니다.</Typography>}
+          {visibleMembers.map((member, index) => (
             <Box key={member.id}>
               {index > 0 && <Divider />}
               <ListItemButton
@@ -142,7 +156,7 @@ export default function GroupPreMemberDialog({ open, onClose, groupId, manager =
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Stack direction="row" spacing={0.45} alignItems="center"><Typography fontWeight={800}>{member.name}</Typography><DivisionBadge division={member.division}/></Stack>
                   {member.claim_status === "pending" && (
-                    <Typography fontSize={12} color="primary.main">{member.requester_name}님의 전환 승인 대기 중</Typography>
+                    <Typography fontSize={12} color="primary.main">가입 계정 {member.requester_name} → 사전등록 {member.name} · {member.division || "부수 미입력"} 승인 대기</Typography>
                   )}
                   {member.status === "linked" && <Chip size="small" label="전환 완료" sx={{ mt: .5 }} />}
                 </Box>
@@ -168,6 +182,7 @@ export default function GroupPreMemberDialog({ open, onClose, groupId, manager =
         </List>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
+        {!manager && justJoined && <Button onClick={onClose}>내 기록 없음</Button>}
         <Button onClick={onClose}>닫기</Button>
         {!manager && <Button variant="contained" onClick={() => void submitClaim()} disabled={!selectedId || isRequesting}>전환 신청</Button>}
       </DialogActions>

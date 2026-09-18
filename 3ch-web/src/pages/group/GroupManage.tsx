@@ -241,6 +241,8 @@ export default function GroupManage() {
 
     const approvePreMember = async (preMemberId: string) => {
         if (!groupUuid) return;
+        const target = data?.members.find((member) => member.id === preMemberId && member.is_pre_member);
+        if (!target?.requester_name || !window.confirm(`가입 계정: ${target.requester_name}\n사전등록 기록: ${target.name} · ${target.division || "부수 미입력"}\n\n이 계정에 사전등록 기록을 연결하시겠습니까? 과거 리그 참가 기록은 자동으로 변경되지 않습니다.`)) return;
         try {
             await reviewMemberClaim({ groupId: groupUuid, preMemberId, action: "approve" }).unwrap();
             await refetchGroupDetail();
@@ -743,7 +745,7 @@ export default function GroupManage() {
                                                     onClick={() => void approvePreMember(member.id)}
                                                     sx={{ minWidth: 56, borderRadius: 1.5, fontWeight: 800 }}
                                                 >
-                                                    승인
+                                                    연결 승인
                                                 </Button>
                                             )}
                                             {canManage && (member.is_pre_member || member.user_id != null) && (
@@ -790,6 +792,11 @@ export default function GroupManage() {
                                             </Typography>
                                             <Box sx={{ display: "flex", justifyContent: "center" }}><DivisionBadge division={member.division} /></Box>
                                     </Box>
+                                    {canManage && member.is_pre_member && member.claim_status === "pending" && (
+                                        <Typography gridColumn="1 / -1" textAlign="center" fontSize={11} color="primary.main" sx={{ mt: 0.4 }}>
+                                            가입 계정 {member.requester_name || "확인 필요"} → 사전등록 {member.name} · {member.division || "부수 미입력"}
+                                        </Typography>
+                                    )}
                                 </ListItem>
                             </Box>
                         ))}

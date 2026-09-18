@@ -17,7 +17,7 @@ import { useGetGroupDetailQuery } from "../../features/group/groupApi";
 import { createTossTransferLink, isSmartphoneBrowser, parseBankAccount } from "../../utils/paymentDeepLink";
 
 type Person = { id: string; name: string; division?: string; guest?: boolean; attending: boolean; drinking: boolean; excluded: boolean };
-type Item = { id: string; name: string; amount: number; category: "common" | "alcohol" | "nonalcohol" | "specific"; personIds: string[] };
+type Item = { id: string; name: string; quantity?: number; amount: number; category: "common" | "alcohol" | "nonalcohol" | "specific"; personIds: string[] };
 type Contribution = { id: string; name: string; amount: number; personId?: string };
 type Calculation = { total: number; contributed: number; distributable: number; shares: Record<string, number> };
 type Settlement = { id: string; round_no: number; title: string; status: "draft" | "final"; version: number; participants: Person[]; items: Item[]; contributions: Contribution[]; calculation: Calculation };
@@ -26,7 +26,7 @@ type CombinedSummary = { total: number; people: CombinedPerson[] };
 type ListResponse = { settlements: Settlement[]; summary: CombinedSummary; canManage: boolean; payments: Record<string, boolean> };
 const money = (value: number) => `${value.toLocaleString("ko-KR")}원`;
 const categories = { common: "음식", alcohol: "술", nonalcohol: "음료" };
-const samplePeople = ["참가자 1", "참가자 2", "참가자 3", "참가자 4"].map((name, index) => ({ id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`, name, attending: index < 2, drinking: false, excluded: false }));
+const samplePeople = ["참가자 1", "참가자 2", "참가자 3", "참가자 4"].map((name, index) => ({ id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`, name, attending: index < 2, drinking: index < 2, excluded: false }));
 
 function preview(people: Person[], items: Item[], contributions: Contribution[]): Calculation | null {
   const shares = Object.fromEntries(people.map((p) => [p.id, 0]));
@@ -162,13 +162,13 @@ export default function AfterPartySettlement() {
   const [items, setItems] = useState<Item[]>([]);
   const [draftCategory, setDraftCategory] = useState<"common" | "alcohol" | "nonalcohol">("common");
   const [draftName, setDraftName] = useState("");
+  const [draftQuantity, setDraftQuantity] = useState(1);
   const [draftAmount, setDraftAmount] = useState("");
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const itemNameRef = useRef<HTMLInputElement>(null);
   const [contributions, setContributions] = useState<Contribution[]>([]);
-  const [contributorName, setContributorName] = useState("");
+  const [contributorId, setContributorId] = useState("");
   const [contributionAmount, setContributionAmount] = useState("");
-  const contributorNameRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -249,18 +249,18 @@ export default function AfterPartySettlement() {
     setPeople((current) => {
       const known = new Set(current.map((person) => person.id));
       const added = participantData.participants.filter((person) => !person.is_bot && !known.has(person.id))
-        .map((person) => ({ id: person.id, name: person.name, division: person.division ?? "", attending: selected.participants.length === 0 && !!person.after, drinking: false, excluded: false }));
+        .map((person) => ({ id: person.id, name: person.name, division: person.division ?? "", attending: selected.participants.length === 0 && !!person.after, drinking: selected.participants.length === 0 && !!person.after, excluded: false }));
       return added.length ? [...current, ...added] : current;
     });
   }, [selected, participantData?.participants]);
 
   const open = useCallback((settlement: Settlement) => {
     const existing = new Map(settlement.participants.map((p) => [p.id, p]));
-    const roster = (participantData?.participants ?? []).filter((p) => !p.is_bot).map((p) => existing.get(p.id) ?? { id: p.id, name: p.name, division: p.division ?? "", attending: settlement.participants.length === 0 && !!p.after, drinking: false, excluded: false });
+    const roster = (participantData?.participants ?? []).filter((p) => !p.is_bot).map((p) => existing.get(p.id) ?? { id: p.id, name: p.name, division: p.division ?? "", attending: settlement.participants.length === 0 && !!p.after, drinking: settlement.participants.length === 0 && !!p.after, excluded: false });
     const gone = settlement.participants.filter((p) => !roster.some((current) => current.id === p.id));
     setSelected(settlement); setTitle(settlement.title); setPeople([...roster, ...gone]); setItems(settlement.items); setContributions(settlement.contributions); setDirty(false); setError("");
-    setDraftCategory("common"); setDraftName(""); setDraftAmount(""); setEditingItemId(null);
-    setContributorName(""); setContributionAmount("");
+    setDraftCategory("common"); setDraftName(""); setDraftQuantity(1); setDraftAmount(""); setEditingItemId(null);
+    setContributorId(""); setContributionAmount("");
     setGuestName(""); setGuestDivision("");
   }, [participantData?.participants]);
   const select = useCallback(async (id: string) => {
@@ -285,13 +285,13 @@ export default function AfterPartySettlement() {
   }, [settlementId, list, listPath, navigate]);
   const create = () => {
     const nextRound = Math.max(0, ...list.map((entry) => entry.round_no)) + 1;
-    const roster = (participantData?.participants ?? []).filter((person) => !person.is_bot).map((person) => ({ id: person.id, name: person.name, division: person.division ?? "", attending: !!person.after, drinking: false, excluded: false }));
+    const roster = (participantData?.participants ?? []).filter((person) => !person.is_bot).map((person) => ({ id: person.id, name: person.name, division: person.division ?? "", attending: !!person.after, drinking: !!person.after, excluded: false }));
     const guests = new Map<string, Person>();
     list.forEach((entry) => entry.participants.filter((person) => person.guest).forEach((person) => guests.set(person.id, { ...person, attending: false, drinking: false, excluded: false })));
     const draft: Settlement = { id: crypto.randomUUID(), round_no: nextRound, title: `${nextRound}차`, status: "draft", version: 0, participants: [...(roster.length ? roster : localPreview ? samplePeople : []), ...guests.values()], items: [], contributions: [], calculation: { total: 0, contributed: 0, distributable: 0, shares: {} } };
     navigate(`${listPath}?round=${nextRound}`, { state: { afterPartyDraft: draft } });
   };
-  const changePerson = (id: string, patch: Partial<Person>) => { setPeople((old) => old.map((p) => p.id === id ? { ...p, ...patch } : p)); setDirty(true); };
+  const changePerson = (id: string, patch: Partial<Person>) => { setPeople((old) => old.map((p) => p.id === id ? { ...p, ...(patch.attending && !p.attending && patch.drinking === undefined ? { drinking: true } : {}), ...patch } : p)); setDirty(true); };
   const addGuest = () => {
     if (!editable) return;
     const name = guestName.trim();
@@ -299,7 +299,7 @@ export default function AfterPartySettlement() {
     if (!name) { setError("게스트 이름을 입력해 주세요."); return; }
     const existing = people.find((person) => person.guest && person.name === name && (person.division ?? "") === division);
     if (existing) changePerson(existing.id, { attending: true });
-    else { setPeople((current) => [...current, { id: crypto.randomUUID(), name, division, guest: true, attending: true, drinking: false, excluded: false }]); setDirty(true); }
+    else { setPeople((current) => [...current, { id: crypto.randomUUID(), name, division, guest: true, attending: true, drinking: true, excluded: false }]); setDirty(true); }
     setGuestName(""); setGuestDivision(""); setError("");
   };
   const editItem = (item: Item) => {
@@ -307,6 +307,7 @@ export default function AfterPartySettlement() {
     setEditingItemId(item.id);
     setDraftCategory(item.category === "specific" ? "common" : item.category);
     setDraftName(item.name);
+    setDraftQuantity(item.quantity ?? 1);
     setDraftAmount(String(item.amount));
     itemNameRef.current?.focus();
   };
@@ -314,25 +315,24 @@ export default function AfterPartySettlement() {
     if (!editable) return;
     const name = draftName.trim();
     const amount = Number(draftAmount);
-    if (!name || !Number.isInteger(amount) || amount <= 0 || amount > 1_000_000_000) { setError("메뉴와 0원보다 큰 금액을 입력해 주세요."); return; }
-    if (editingItemId) setItems((old) => old.map((item) => item.id === editingItemId ? { ...item, name, amount, category: draftCategory, personIds: [] } : item));
-    else setItems((old) => [...old, { id: crypto.randomUUID(), name, amount, category: draftCategory, personIds: [] }]);
-    setDraftName(""); setDraftAmount(""); setEditingItemId(null); setDirty(true); setError("");
+    if (!name || !Number.isInteger(draftQuantity) || draftQuantity < 1 || draftQuantity > 20 || !Number.isInteger(amount) || amount <= 0 || amount > 1_000_000_000) { setError("메뉴, 수량, 0원보다 큰 품목 합계금액을 입력해 주세요."); return; }
+    if (editingItemId) setItems((old) => old.map((item) => item.id === editingItemId ? { ...item, name, quantity: draftQuantity, amount, category: draftCategory, personIds: [] } : item));
+    else setItems((old) => [...old, { id: crypto.randomUUID(), name, quantity: draftQuantity, amount, category: draftCategory, personIds: [] }]);
+    setDraftName(""); setDraftQuantity(1); setDraftAmount(""); setEditingItemId(null); setDirty(true); setError("");
     itemNameRef.current?.focus();
   };
   const addContribution = () => {
     if (!editable) return;
-    const name = contributorName.trim();
+    const contributor = people.find((person) => person.id === contributorId);
     const amount = Number(contributionAmount);
-    if (!name || name.length > 100 || !Number.isInteger(amount) || amount <= 0 || amount > 1_000_000_000) { setError("찬조자 이름과 0원보다 큰 금액을 입력해 주세요."); return; }
-    setContributions((old) => [...old, { id: crypto.randomUUID(), name, amount }]);
-    setContributorName(""); setContributionAmount(""); setDirty(true); setError("");
-    contributorNameRef.current?.focus();
+    if (!contributor || !Number.isInteger(amount) || amount <= 0 || amount > 1_000_000_000) { setError("찬조자를 선택하고 0원보다 큰 금액을 입력해 주세요."); return; }
+    setContributions((old) => [...old, { id: crypto.randomUUID(), personId: contributor.id, name: contributor.name, amount }]);
+    setContributorId(""); setContributionAmount(""); setDirty(true); setError("");
   };
   const save = async () => {
     if (!selected) return;
     if (draftName.trim() || draftAmount.trim()) { setError("입력 중인 메뉴를 추가 버튼이나 Enter로 먼저 등록해 주세요."); return; }
-    if (contributorName.trim() || contributionAmount.trim()) { setError("입력 중인 찬조금을 추가 버튼이나 Enter로 먼저 등록해 주세요."); return; }
+    if (contributorId || contributionAmount.trim()) { setError("입력 중인 찬조금을 추가 버튼이나 Enter로 먼저 등록해 주세요."); return; }
     if (guestName.trim() || guestDivision.trim()) { setError("입력 중인 게스트를 추가 버튼이나 Enter로 먼저 등록해 주세요."); return; }
     if (!items.length) { setError("메뉴를 하나 이상 추가해 주세요."); return; }
     setBusy(true); setError("");
@@ -346,7 +346,7 @@ export default function AfterPartySettlement() {
   };
   const remove = async (kind: "items" | "contributions", entryId: string, label: string) => {
     if (!selected) return;
-    if (kind === "items" && editingItemId === entryId) { setEditingItemId(null); setDraftName(""); setDraftAmount(""); }
+    if (kind === "items" && editingItemId === entryId) { setEditingItemId(null); setDraftName(""); setDraftQuantity(1); setDraftAmount(""); }
     const persisted = selected[kind].some((entry) => entry.id === entryId);
     if (!persisted) {
       if (kind === "items") setItems((old) => old.filter((entry) => entry.id !== entryId));
@@ -491,16 +491,18 @@ export default function AfterPartySettlement() {
         <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}><Typography fontWeight={900}>메뉴</Typography><Typography fontSize={13} fontWeight={800}>합계 {money(items.reduce((sum, item) => sum + item.amount, 0))}</Typography></Stack>
         {editable && <>
           <Stack direction="row" gap={0.75} mb={1}>{Object.entries(categories).map(([key, label]) => <Button key={key} variant={draftCategory === key ? "contained" : "outlined"} size="small" onClick={() => setDraftCategory(key as typeof draftCategory)} sx={{ minWidth: 64, minHeight: 36, fontWeight: 800 }}>{label}</Button>)}</Stack>
-          <Box sx={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(92px, 120px) 58px", gap: 0.75 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 68px minmax(82px, 110px) 50px", gap: 0.5 }}>
             <TextField inputRef={itemNameRef} size="small" placeholder="메뉴" value={draftName} onChange={(event) => setDraftName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); addItem(); } }} inputProps={{ "aria-label": "메뉴" }} />
-            <TextField size="small" type="number" placeholder="금액" value={draftAmount} onChange={(event) => setDraftAmount(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); addItem(); } }} inputProps={{ min: 1, inputMode: "numeric", "aria-label": "금액" }} />
+            <TextField select size="small" value={draftQuantity} onChange={(event) => setDraftQuantity(Number(event.target.value))} SelectProps={{ native: false }} inputProps={{ "aria-label": "수량" }} sx={{ "& .MuiSelect-select": { px: 1 } }}>{Array.from({ length: 20 }, (_, index) => <MenuItem key={index + 1} value={index + 1}>{index + 1}개</MenuItem>)}</TextField>
+            <TextField size="small" type="number" placeholder="합계금액" value={draftAmount} onChange={(event) => setDraftAmount(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); addItem(); } }} inputProps={{ min: 1, inputMode: "numeric", "aria-label": "품목 합계금액" }} />
             <Button variant="contained" onClick={addItem} sx={{ minWidth: 0, px: 0, fontWeight: 800 }}>{editingItemId ? "수정" : "추가"}</Button>
           </Box>
-          {editingItemId && <Button size="small" sx={{ mt: 0.5 }} onClick={() => { setEditingItemId(null); setDraftName(""); setDraftAmount(""); setDraftCategory("common"); }}>수정 취소</Button>}
+          {editingItemId && <Button size="small" sx={{ mt: 0.5 }} onClick={() => { setEditingItemId(null); setDraftName(""); setDraftQuantity(1); setDraftAmount(""); setDraftCategory("common"); }}>수정 취소</Button>}
         </>}
         <Stack spacing={0.5} mt={items.length ? 1.5 : 0}>{items.map((item) => <Stack key={item.id} direction="row" alignItems="center" gap={0.75} onClick={() => editItem(item)} sx={{ py: 0.75, borderTop: "1px solid #E5E7EB", cursor: editable ? "pointer" : "default", bgcolor: editingItemId === item.id ? "#EFF6FF" : "transparent" }}>
           <Chip size="small" label={categories[item.category as keyof typeof categories] ?? "기존 항목"} sx={{ fontWeight: 800, minWidth: 54 }} />
           <Typography fontSize={14} fontWeight={700} sx={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.name}</Typography>
+          <Typography fontSize={12} color="text.secondary" whiteSpace="nowrap">{item.quantity ?? 1}개</Typography>
           <Typography fontSize={14} fontWeight={800} whiteSpace="nowrap">{money(item.amount)}</Typography>
           {editable && <Button size="small" color="error" onClick={(event) => { event.stopPropagation(); void remove("items", item.id, item.name); }} sx={{ minWidth: 38, px: 0 }}>삭제</Button>}
         </Stack>)}</Stack>
@@ -509,15 +511,22 @@ export default function AfterPartySettlement() {
         <Typography fontWeight={900}>현금 찬조금</Typography>
         <Typography fontSize={12} color="text.secondary" mb={1}>공통 음식부터 차감하며, 남은 금액은 다른 항목에서 차감합니다.</Typography>
         {editable && <Box sx={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(92px, 120px) 58px", gap: 0.75 }}>
-          <TextField inputRef={contributorNameRef} size="small" placeholder="찬조자 이름" value={contributorName} onChange={(event) => setContributorName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); addContribution(); } }} inputProps={{ "aria-label": "찬조자 이름", maxLength: 100 }} />
+          <TextField select size="small" value={contributorId} onChange={(event) => setContributorId(event.target.value)} inputProps={{ "aria-label": "찬조자" }} SelectProps={{ displayEmpty: true }} sx={{ "& .MuiSelect-select": { minWidth: 0 } }}>
+            <MenuItem value="" disabled>찬조자 선택</MenuItem>
+            {people.map((person) => <MenuItem key={person.id} value={person.id}>{person.name}{person.division ? ` · ${person.division}부` : ""}{person.guest ? " · 게스트" : ""}</MenuItem>)}
+          </TextField>
           <TextField size="small" type="number" placeholder="금액" value={contributionAmount} onChange={(event) => setContributionAmount(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); addContribution(); } }} inputProps={{ min: 1, inputMode: "numeric", "aria-label": "찬조 금액" }} />
           <Button variant="contained" onClick={addContribution} sx={{ minWidth: 0, px: 0, fontWeight: 800 }}>추가</Button>
         </Box>}
-        <Stack spacing={0.5} mt={contributions.length ? 1.5 : 0}>{contributions.map((entry) => <Stack key={entry.id} direction="row" alignItems="center" gap={0.75} sx={{ py: 0.75, borderTop: "1px solid #E5E7EB" }}>
-          <Typography fontSize={14} fontWeight={700} sx={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.name}</Typography>
-          <Typography fontSize={14} fontWeight={800} whiteSpace="nowrap">{money(entry.amount)}</Typography>
-          {editable && <Button size="small" color="error" disabled={busy} onClick={() => void remove("contributions", entry.id, entry.name)} sx={{ minWidth: 38, px: 0 }}>삭제</Button>}
-        </Stack>)}</Stack>
+        <Stack spacing={0.5} mt={contributions.length ? 1.5 : 0}>{contributions.map((entry) => <Box key={entry.id} sx={{ py: 0.75, borderTop: "1px solid #E5E7EB" }}>
+          <Stack direction="row" alignItems="center" gap={0.75}>
+            <Typography fontSize={14} fontWeight={700} sx={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.name}</Typography>
+            <Typography fontSize={14} fontWeight={800} whiteSpace="nowrap">{money(entry.amount)}</Typography>
+            {editable && <Button size="small" color="error" disabled={busy} onClick={() => void remove("contributions", entry.id, entry.name)} sx={{ minWidth: 38, px: 0 }}>삭제</Button>}
+          </Stack>
+          {!entry.personId && editable && <TextField select size="small" fullWidth value="" onChange={(event) => { const person = people.find((candidate) => candidate.id === event.target.value); if (!person) return; setContributions((current) => current.map((candidate) => candidate.id === entry.id ? { ...candidate, personId: person.id, name: person.name } : candidate)); setDirty(true); }} inputProps={{ "aria-label": `${entry.name} 참가자 연결` }} SelectProps={{ displayEmpty: true }} sx={{ mt: 0.5 }}><MenuItem value="" disabled>기존 찬조금의 참가자 연결</MenuItem>{people.map((person) => <MenuItem key={person.id} value={person.id}>{person.name}{person.division ? ` · ${person.division}부` : ""}{person.guest ? " · 게스트" : ""}</MenuItem>)}</TextField>}
+          {entry.personId && people.some((person) => person.id === entry.personId) && <FormControlLabel control={<Checkbox size="small" checked={!!people.find((person) => person.id === entry.personId)?.excluded} disabled={!editable} onChange={(event) => changePerson(entry.personId!, { excluded: event.target.checked })} />} label="정산에서 제외" sx={{ mt: 0.25 }} />}
+        </Box>)}</Stack>
       </Card>
       <Card sx={{ p: 2 }}>
         <Typography fontWeight={900} mb={0.5}>참가자 · 정산 대상 {people.filter((p) => p.attending).length}명</Typography>

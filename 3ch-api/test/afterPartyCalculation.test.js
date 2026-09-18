@@ -25,3 +25,9 @@ test('비용을 낼 사람이 없는 항목은 정산할 수 없다', () => {
 test('찬조금이 비용을 넘을 수 없다', () => {
   assert.throws(() => calculate(people, [], [{ id: 'gift', name: '찬조', amount: 1 }]), /초과/);
 });
+
+test('메뉴 금액은 수량을 곱하지 않은 품목 합계금액으로 계산한다', () => {
+  const result = calculate(people, [{ id: 'beer', name: '맥주', quantity: 3, amount: 15000, category: 'alcohol', personIds: [] }], []);
+  assert.equal(result.total, 15000);
+  assert.deepEqual(result.shares, { a: 15000, b: 0, c: 0 });
+});

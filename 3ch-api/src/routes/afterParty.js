@@ -27,7 +27,7 @@ router.param('leagueId', async (req, _res, next, value) => {
   next();
 });
 const person = z.object({ id: uuid, name: z.string().trim().min(1).max(100), division: z.string().trim().max(30).optional(), guest: z.boolean().optional(), attending: z.boolean(), drinking: z.boolean(), excluded: z.boolean() });
-const item = z.object({ id: uuid, name: z.string().trim().min(1).max(100), amount: z.number().int().min(0).max(1000000000), category: z.enum(['common', 'alcohol', 'nonalcohol', 'specific']), personIds: z.array(uuid) });
+const item = z.object({ id: uuid, name: z.string().trim().min(1).max(100), quantity: z.number().int().min(1).max(20).optional(), amount: z.number().int().min(0).max(1000000000), category: z.enum(['common', 'alcohol', 'nonalcohol', 'specific']), personIds: z.array(uuid) });
 const contribution = z.object({ id: uuid, name: z.string().trim().min(1).max(100), amount: z.number().int().min(0).max(1000000000), personId: uuid.optional() });
 const bodySchema = z.object({ title: z.string().trim().min(1).max(100), participants: z.array(person).max(300), items: z.array(item).max(200), contributions: z.array(contribution).max(100), version: z.number().int().positive().optional() });
 

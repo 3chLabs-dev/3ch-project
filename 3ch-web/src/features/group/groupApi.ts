@@ -103,6 +103,7 @@ export interface ManagementPermissions {
   ranking: boolean;
   league: boolean;
   draw: boolean;
+  settlement: boolean;
 }
 
 export interface GroupPreMember {

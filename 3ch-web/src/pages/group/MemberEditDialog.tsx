@@ -42,6 +42,7 @@ export type ManagementPermissions = {
   ranking: boolean;
   league: boolean;
   draw: boolean;
+  settlement: boolean;
 };
 
 const DEFAULT_MANAGEMENT_PERMISSIONS: ManagementPermissions = {
@@ -49,7 +50,11 @@ const DEFAULT_MANAGEMENT_PERMISSIONS: ManagementPermissions = {
   ranking: true,
   league: true,
   draw: true,
+  settlement: true,
 };
+const memberPermissions = (value?: ManagementPermissions): ManagementPermissions => value
+  ? { ...DEFAULT_MANAGEMENT_PERMISSIONS, ...value, settlement: value.settlement ?? false }
+  : DEFAULT_MANAGEMENT_PERMISSIONS;
 
 export default function MemberEditDialog({
   open,
@@ -64,7 +69,7 @@ export default function MemberEditDialog({
   const [division, setDivision] = useState(member.division || "");
   const [externalAliases, setExternalAliases] = useState<string[]>(member.externalAliases || []);
   const [managementPermissions, setManagementPermissions] = useState<ManagementPermissions>(
-    member.managementPermissions || DEFAULT_MANAGEMENT_PERMISSIONS,
+    memberPermissions(member.managementPermissions),
   );
 
   useEffect(() => {
@@ -73,7 +78,7 @@ export default function MemberEditDialog({
     setName(member.name);
     setDivision(member.division || "");
     setExternalAliases(member.externalAliases || []);
-    setManagementPermissions(member.managementPermissions || DEFAULT_MANAGEMENT_PERMISSIONS);
+    setManagementPermissions(memberPermissions(member.managementPermissions));
   }, [member, open]);
 
   const handleSave = () => {
@@ -164,6 +169,7 @@ export default function MemberEditDialog({
                   ["ranking", "순위 관리"],
                   ["league", "리그·대회 관리"],
                   ["draw", "추첨 관리"],
+                  ["settlement", "정산 관리"],
                 ] as const).map(([key, label]) => (
                   <Box key={key} sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", minHeight: 42 }}>
                     <Typography sx={{ fontSize: 14, fontWeight: 700 }}>{label}</Typography>

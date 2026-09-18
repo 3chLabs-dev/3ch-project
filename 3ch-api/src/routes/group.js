@@ -1734,7 +1734,7 @@ router.patch('/group/:id/member/:userId/role', requireAuth, requireGroupOwner, a
       return res.status(404).json({ message: '해당 멤버를 찾을 수 없습니다' });
     }
 
-    const permissionKeys = ['members', 'ranking', 'league', 'draw'];
+    const permissionKeys = ['members', 'ranking', 'league', 'draw', 'settlement'];
     if (role === 'admin' && (
       !managementPermissions
       || permissionKeys.some((key) => typeof managementPermissions[key] !== 'boolean')
@@ -1752,7 +1752,7 @@ router.patch('/group/:id/member/:userId/role', requireAuth, requireGroupOwner, a
        WHERE group_id = $3 AND user_id = $4`,
       [
         role,
-        JSON.stringify(role === 'admin' ? managementPermissions : { members: false, ranking: false, league: false, draw: false }),
+        JSON.stringify(role === 'admin' ? managementPermissions : { members: false, ranking: false, league: false, draw: false, settlement: false }),
         id,
         targetUserId,
       ]

@@ -31,6 +31,8 @@ model User {
   draws                         Draw[]                   @relation("DrawCreator")
   after_party_settlements       AfterPartySettlement[]
   after_party_share_links       AfterPartyShareLink[]
+  archived_after_party_settlements AfterPartySettlement[] @relation("AfterPartyArchivedBy")
+  after_party_payment_updates   AfterPartyPayment[]
   league_programs               LeagueProgram[]          @relation("LeagueProgramCreator")
   league_program_templates      LeagueProgramTemplate[]
   group_rankings                GroupRanking[]
@@ -345,6 +347,7 @@ model League {
   draws                    Draw[]
   after_party_settlements  AfterPartySettlement[]
   after_party_share_link  AfterPartyShareLink?
+  after_party_payments    AfterPartyPayment[]
   invited_groups           LeagueInvitedGroup[]
 
   @@map("leagues")
@@ -597,6 +600,9 @@ model AfterPartySettlement {
   creator         User     @relation(fields: [created_by_id], references: [id])
   created_at      DateTime @default(now()) @db.Timestamptz(6)
   updated_at      DateTime @default(now()) @db.Timestamptz(6)
+  archived_at     DateTime? @db.Timestamptz(6)
+  archived_by_id  Int?
+  archived_by     User?     @relation("AfterPartyArchivedBy", fields: [archived_by_id], references: [id])
 
   @@index([league_id])
   @@unique([league_id, round_no])
@@ -610,8 +616,22 @@ model AfterPartyShareLink {
   created_by_id Int
   creator       User     @relation(fields: [created_by_id], references: [id])
   created_at    DateTime @default(now()) @db.Timestamptz(6)
+  visibility    String   @default("public") @db.VarChar(12)
 
   @@map("after_party_share_links")
+}
+
+model AfterPartyPayment {
+  league_id      String
+  league         League   @relation(fields: [league_id], references: [id], onDelete: Cascade)
+  participant_id String
+  paid_amount    Int?
+  updated_by_id  Int
+  updated_by     User     @relation(fields: [updated_by_id], references: [id])
+  updated_at     DateTime @default(now()) @db.Timestamptz(6)
+
+  @@id([league_id, participant_id])
+  @@map("after_party_payments")
 }
 
 model LeagueProgramTemplate {

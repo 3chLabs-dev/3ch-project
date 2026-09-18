@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Alert, Box, Button, Card, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Stack, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, Card, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
 import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
 import LanguageIcon from "@mui/icons-material/Language";
 import SmsOutlinedIcon from "@mui/icons-material/SmsOutlined";
-import IosShareOutlinedIcon from "@mui/icons-material/IosShareOutlined";
+import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import QRCode from "react-qr-code";
 import CurvedShareIcon from "../../components/CurvedShareIcon";
 import { useAppSelector } from "../../app/hooks";
@@ -20,7 +21,7 @@ type Calculation = { total: number; contributed: number; distributable: number; 
 type Settlement = { id: string; round_no: number; title: string; status: "draft" | "final"; version: number; participants: Person[]; items: Item[]; contributions: Contribution[]; calculation: Calculation };
 type CombinedPerson = { participantId: string; name: string; total: number; rounds: Record<string, number> };
 type CombinedSummary = { total: number; people: CombinedPerson[] };
-type ListResponse = { settlements: Settlement[]; summary: CombinedSummary; canManage: boolean };
+type ListResponse = { settlements: Settlement[]; summary: CombinedSummary; canManage: boolean; payments: Record<string, boolean> };
 const money = (value: number) => `${value.toLocaleString("ko-KR")}원`;
 const categories = { common: "음식", alcohol: "술", nonalcohol: "음료" };
 const samplePeople = ["참가자 1", "참가자 2", "참가자 3", "참가자 4"].map((name, index) => ({ id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`, name, attending: index < 2, drinking: false, excluded: false }));
@@ -62,18 +63,38 @@ function summarizeRounds(settlements: Settlement[]): CombinedSummary {
 function localPreviewRequest(leagueId: string, url: string, method: string, body: unknown) {
   const key = `after-party-preview:${leagueId}`;
   const settlements: Settlement[] = JSON.parse(localStorage.getItem(key) || "[]").map((entry: Settlement, index: number) => ({ ...entry, round_no: entry.round_no ?? index + 1 }));
+  const visible = settlements.filter((entry) => !(entry as Settlement & { archived_at?: string }).archived_at);
+  const paymentKey = `after-party-preview-payments:${leagueId}`;
+  const paymentAmounts: Record<string, number | null> = JSON.parse(localStorage.getItem(paymentKey) || "{}");
+  const summary = summarizeRounds(visible);
+  const payments = Object.fromEntries(summary.people.map((person) => [person.participantId, paymentAmounts[person.participantId] === person.total]));
   const parts = new URL(url, window.location.origin).pathname.split("/");
   const id = parts[parts.indexOf("after-party") + 1];
   const action = parts[parts.indexOf("after-party") + 2];
-  const current = settlements.find((entry) => entry.id === id);
+  const current = visible.find((entry) => entry.id === id);
   const save = (entry: Settlement) => { localStorage.setItem(key, JSON.stringify(settlements.map((old) => old.id === entry.id ? entry : old))); return { settlement: entry }; };
-  if (method === "GET" && !id) return { settlements, summary: summarizeRounds(settlements), canManage: true };
+  if (method === "GET" && !id) return { settlements: visible, summary, canManage: true, payments };
   if (method === "GET" && current) return { settlement: current, canManage: true };
   if (method === "POST" && id === "share") {
     const shareKey = `after-party-preview-share:${leagueId}`;
     const token = localStorage.getItem(shareKey) || crypto.randomUUID();
     localStorage.setItem(shareKey, token);
-    return { token, visibility: "link" };
+    return { token, visibility: localStorage.getItem(`after-party-preview-visibility:${leagueId}`) || "public" };
+  }
+  if (method === "PATCH" && id === "share") {
+    const visibility = (body as { visibility: string }).visibility;
+    if (visibility !== "public" && visibility !== "club_only") throw new Error("열람 권한을 확인해 주세요.");
+    localStorage.setItem(`after-party-preview-visibility:${leagueId}`, visibility);
+    return { visibility };
+  }
+  if (method === "PUT" && id === "payments") {
+    const personId = action;
+    const person = summary.people.find((entry) => entry.participantId === personId);
+    if (!person) throw new Error("청구 대상자를 찾을 수 없습니다.");
+    const paid = (body as { paid: boolean }).paid;
+    paymentAmounts[personId] = paid ? person.total : null;
+    localStorage.setItem(paymentKey, JSON.stringify(paymentAmounts));
+    return { participantId: personId, paid, amount: person.total };
   }
   if (method === "POST" && !id) {
     const input = body as Pick<Settlement, "participants" | "items" | "contributions">;
@@ -86,6 +107,12 @@ function localPreviewRequest(leagueId: string, url: string, method: string, body
     return { settlement: entry };
   }
   if (!current) throw new Error("미리보기 정산을 찾을 수 없습니다.");
+  if (method === "POST" && action === "archive") {
+    const confirmation = body as { version: number; confirmationIntent: string };
+    if (confirmation.version !== current.version || confirmation.confirmationIntent !== "ARCHIVE_AFTER_PARTY_ROUND") throw new Error("삭제 요청을 확인해 주세요.");
+    save({ ...current, archived_at: new Date().toISOString() } as Settlement);
+    return { archived: true, round_no: current.round_no };
+  }
   if (method === "PUT") {
     const next = body as Pick<Settlement, "title" | "participants" | "items" | "contributions" | "version">;
     if (next.version !== current.version) throw new Error("정산을 새로고침해 주세요.");
@@ -123,6 +150,7 @@ export default function AfterPartySettlement() {
   const [updateLeague] = useUpdateLeagueMutation();
   const [list, setList] = useState<Settlement[]>([]);
   const [summary, setSummary] = useState<CombinedSummary>({ total: 0, people: [] });
+  const [payments, setPayments] = useState<Record<string, boolean>>({});
   const [canManage, setCanManage] = useState(false);
   const [selected, setSelected] = useState<Settlement | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
@@ -140,6 +168,7 @@ export default function AfterPartySettlement() {
   const [localPreview, setLocalPreview] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [shareLink, setShareLink] = useState("");
+  const [shareVisibility, setShareVisibility] = useState<"public" | "club_only">("public");
   const [downloading, setDownloading] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
   const [bankAccount, setBankAccount] = useState("");
@@ -147,6 +176,7 @@ export default function AfterPartySettlement() {
   const [savingBankAccount, setSavingBankAccount] = useState(false);
   const [accountAutoSaveFailed, setAccountAutoSaveFailed] = useState(false);
   const [sharedLeagueName, setSharedLeagueName] = useState("");
+  const [sharedLeagueDate, setSharedLeagueDate] = useState("");
   const base = `${import.meta.env.VITE_API_BASE_URL ?? "/api"}/leagues/${leagueId}/after-party`;
   const listPath = `/league/${leagueId}/after-party`;
   const canEditAccount = canManage && (localPreview || groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.league === true));
@@ -173,19 +203,20 @@ export default function AfterPartySettlement() {
       if (shareToken) {
         if (import.meta.env.DEV && localStorage.getItem(`after-party-preview-share:${leagueId}`) === shareToken) {
           const result = localPreviewRequest(leagueId, base, "GET", undefined) as ListResponse;
-          setList(result.settlements); setSummary(result.summary); setCanManage(false); setLocalPreview(true);
+          setList(result.settlements); setSummary(result.summary); setPayments(result.payments); setCanManage(false); setLocalPreview(true);
+          setShareVisibility((localStorage.getItem(`after-party-preview-visibility:${leagueId}`) as "public" | "club_only") || "public");
           const account = localStorage.getItem(`after-party-preview-bank:${leagueId}`) ?? "";
           setBankAccount(account); setSavedBankAccount(account);
           return;
         }
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL ?? "/api"}/after-party/shared/${shareToken}`);
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL ?? "/api"}/after-party/shared/${shareToken}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
         const result = await response.json();
         if (!response.ok || result.league?.id !== leagueId) throw new Error(result.message || "공유 링크를 열 수 없습니다.");
-        setList(result.settlements); setSummary(result.summary); setCanManage(false); setSharedLeagueName(result.league.name);
+        setList(result.settlements); setSummary(result.summary); setPayments(result.payments ?? {}); setCanManage(false); setSharedLeagueName(result.league.name); setSharedLeagueDate(result.league.start_date ?? ""); setShareVisibility(result.visibility);
         setBankAccount(result.league.bank_account ?? ""); setSavedBankAccount(result.league.bank_account ?? "");
         return;
       }
-      const result: ListResponse = await request(base); setList(result.settlements); setSummary(result.summary); setCanManage(result.canManage);
+      const result: ListResponse = await request(base); setList(result.settlements); setSummary(result.summary); setPayments(result.payments); setCanManage(result.canManage);
     }
     catch (cause) { setError((cause as Error).message); }
   }, [base, leagueId, request, token, shareToken]);
@@ -194,13 +225,13 @@ export default function AfterPartySettlement() {
     if (!leagueData?.league || localPreview || bankAccount !== savedBankAccount) return;
     const value = leagueData.league.bank_account ?? "";
     setBankAccount(value); setSavedBankAccount(value);
-  }, [leagueData?.league?.bank_account, localPreview]);
+  }, [leagueData?.league, localPreview, bankAccount, savedBankAccount]);
   useEffect(() => {
     if (!localPreview || bankAccount !== savedBankAccount || shareToken) return;
     const value = localStorage.getItem(`after-party-preview-bank:${leagueId}`);
     if (value === null) return;
     setBankAccount(value); setSavedBankAccount(value);
-  }, [localPreview, leagueId]);
+  }, [localPreview, leagueId, bankAccount, savedBankAccount, shareToken]);
   useEffect(() => {
     if (!selected || !participantData?.participants) return;
     setPeople((current) => {
@@ -322,13 +353,45 @@ export default function AfterPartySettlement() {
     try {
       const result = await request(`${base}/share`, "POST");
       const appUrl = String(import.meta.env.VITE_APP_URL || window.location.origin).replace(/\/$/, "");
-      setShareLink(`${appUrl}${listPath}?share=${result.token}`); setShareDialogOpen(true);
+      setShareLink(`${appUrl}${listPath}?share=${result.token}`); setShareVisibility(result.visibility === "club_only" ? "club_only" : "public"); setShareDialogOpen(true);
     } catch (cause) { setError((cause as Error).message); }
   };
   const copyShareLink = async () => {
     try { await navigator.clipboard.writeText(shareLink); setShareDialogOpen(false); }
     catch { setError("공유 링크 복사에 실패했습니다."); }
   };
+  const changeShareVisibility = async (visibility: "public" | "club_only") => {
+    try {
+      const result = await request(`${base}/share`, "PATCH", { visibility });
+      setShareVisibility(result.visibility);
+    } catch (cause) { setError((cause as Error).message); }
+  };
+  const shareKakao = () => {
+    const kakaoKey = import.meta.env.VITE_KAKAO_JS_KEY;
+    if (window.Kakao && kakaoKey && !window.Kakao.isInitialized()) window.Kakao.init(kakaoKey);
+    if (window.Kakao?.Share) {
+      const origin = new URL(shareLink).origin;
+      window.Kakao.Share.sendDefault({ objectType: "feed", content: { title: `${sharedLeagueName || leagueData?.league.name || "리그"} 뒤풀이 정산`, description: "뒤풀이 정산 내역과 입금 계좌를 확인하세요.", imageUrl: `${origin}/og-image.png`, link: { mobileWebUrl: shareLink, webUrl: shareLink } }, buttons: [{ title: "정산 보기", link: { mobileWebUrl: shareLink, webUrl: shareLink } }] });
+    } else void copyShareLink();
+  };
+  const archiveRound = async (entry: Settlement) => {
+    if (!window.confirm(`${entry.round_no}차 정산을 목록에서 삭제하시겠습니까?\n메뉴, 참가자, 찬조금, 개인별 정산 결과가 목록과 합계에서 빠집니다. 기록은 복구할 수 있도록 서버에 보존됩니다.`)) return;
+    setBusy(true); setError("");
+    try {
+      await request(`${base}/${entry.id}/archive`, "POST", { version: entry.version, confirmationIntent: "ARCHIVE_AFTER_PARTY_ROUND" });
+      await loadList();
+    } catch (cause) { setError((cause as Error).message); }
+    finally { setBusy(false); }
+  };
+  const togglePaid = async (person: CombinedPerson) => {
+    setBusy(true); setError("");
+    try {
+      await request(`${base}/payments/${person.participantId}`, "PUT", { paid: !payments[person.participantId] });
+      await loadList();
+    } catch (cause) { setError((cause as Error).message); }
+    finally { setBusy(false); }
+  };
+  const leagueDate = String(leagueData?.league.start_date || sharedLeagueDate || "").slice(0, 10);
   const calculation = useMemo(() => preview(people, items, contributions), [people, items, contributions]);
   const editable = !!selected && canManage;
   const leagueAfterIds = useMemo(() => {
@@ -346,23 +409,24 @@ export default function AfterPartySettlement() {
   </Card>;
 
   return <Box sx={{ maxWidth: 720, mx: "auto", px: 2, py: 2, pb: 10 }}>
-    <Stack direction="row" alignItems="center" spacing={1} mb={2}><IconButton onClick={() => navigate(roundNo || settlementId ? listPath : `/league/${leagueId}`)}><ArrowBackIcon /></IconButton><Typography variant="h6" fontWeight={900}>{roundNo && selected ? `${title} 뒤풀이 정산` : "뒤풀이 정산"}</Typography></Stack>
+    <Stack direction="row" alignItems="center" spacing={1} mb={2}><IconButton onClick={() => navigate(roundNo || settlementId ? listPath : `/league/${leagueId}`)}><ArrowBackIcon /></IconButton><Typography variant="h6" fontWeight={900}>{leagueDate ? `${leagueDate} ` : ""}뒤풀이 정산</Typography></Stack>
     {localPreview && <Alert severity="info" sx={{ mb: 2 }}>로컬 미리보기입니다. 이 브라우저에만 저장되며 실제 리그 정산이나 서버 데이터에는 반영되지 않습니다.</Alert>}
     {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError("")}>{error}</Alert>}
     {!roundNo && !settlementId ? <Stack spacing={1.5}>
-      <Stack direction="row" justifyContent="flex-end" spacing={0.5}>
+      <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={0.5}>
+        {canManage ? <Button variant="contained" size="small" disabled={busy} onClick={create} sx={{ borderRadius: 5, whiteSpace: "nowrap", fontWeight: 800 }}>+ 정산 추가</Button> : <Box />}
+        <Stack direction="row" spacing={0.5}>
         <IconButton size="small" disabled={downloading || !list.length} onClick={() => void downloadImage()} aria-label="뒤풀이 정산 이미지 다운로드" sx={{ border: "1px solid #D1D5DB", borderRadius: 1 }}><DownloadOutlinedIcon sx={{ fontSize: 18 }} /></IconButton>
         {canManage && <IconButton size="small" disabled={!list.length} onClick={() => void openShareDialog()} aria-label="뒤풀이 정산 공유" sx={{ border: "1px solid #D1D5DB", borderRadius: 1 }}><CurvedShareIcon sx={{ fontSize: 19 }} /></IconButton>}
+        </Stack>
       </Stack>
-      {canManage && <Button variant="contained" disabled={busy} onClick={create}>+ 정산 추가</Button>}
       <Box ref={exportRef} sx={{ bgcolor: "#FFFFFF", p: 1 }}>
-      <Typography fontWeight={900} fontSize={18} mb={1}>{sharedLeagueName || leagueData?.league.name || "리그"} 뒤풀이 정산</Typography>
-      <Stack spacing={1}>{list.map((entry) => <Card key={entry.id} onClick={() => { if (!shareToken) navigate(`${listPath}?round=${entry.round_no}`); }} sx={{ p: 2, cursor: shareToken ? "default" : "pointer", border: "1px solid #E5E7EB" }}><Typography fontWeight={800}>{entry.round_no}차</Typography><Typography color="text.secondary" fontSize={13} mt={1}>정산 금액 {money(entry.calculation?.distributable ?? 0)}</Typography></Card>)}</Stack>
+      <Stack spacing={1}>{list.map((entry) => <Card key={entry.id} sx={{ p: 2, border: "1px solid #E5E7EB" }}><Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}><Box onClick={() => { if (!shareToken) navigate(`${listPath}?round=${entry.round_no}`); }} sx={{ flex: 1, cursor: shareToken ? "default" : "pointer" }}><Typography fontWeight={800}>{entry.round_no}차</Typography><Typography color="text.secondary" fontSize={13} mt={1}>정산 금액 {money(entry.calculation?.distributable ?? 0)}</Typography></Box>{canManage && <IconButton data-html2canvas-ignore aria-label={`${entry.round_no}차 정산 삭제`} size="small" disabled={busy} onClick={() => void archiveRound(entry)}><DeleteOutlineIcon fontSize="small" /></IconButton>}</Stack></Card>)}</Stack>
       {!list.length && <Typography color="text.secondary">아직 만든 정산이 없습니다.</Typography>}
-      <Card sx={{ p: 2, border: "1px solid #BFDBFE", bgcolor: "#F8FAFF" }}>
+      <Card sx={{ p: 2, mt: 2, border: "1px solid #BFDBFE", bgcolor: "#F8FAFF" }}>
         <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}><Typography fontWeight={900} fontSize={17}>전체 합산</Typography><Typography fontWeight={900} fontSize={18}>{money(summary.total)}</Typography></Stack>
         <Typography color="text.secondary" fontSize={12} mt={0.5} mb={1}>모든 정산을 합하여 계산된 개인별 정산금입니다.</Typography>
-        {summary.people.length ? <Stack spacing={0.75}>{summary.people.map((person) => <Stack key={person.participantId} direction="row" justifyContent="space-between" alignItems="center" gap={1} sx={{ borderTop: "1px solid #E5E7EB", pt: 1 }}><Box minWidth={0}><Typography fontWeight={800}>{person.name}</Typography><Typography fontSize={12} color="text.secondary">{list.filter((entry) => person.rounds[String(entry.round_no)] != null).map((entry) => `${entry.round_no}차 ${money(person.rounds[String(entry.round_no)])}`).join(" · ")}</Typography></Box><Typography fontWeight={900} whiteSpace="nowrap">{money(person.total)}</Typography></Stack>)}</Stack> : <Typography color="text.secondary" fontSize={13}>청구할 금액이 아직 없습니다.</Typography>}
+        {summary.people.length ? <Stack spacing={0.75}>{summary.people.map((person) => <Stack key={person.participantId} direction="row" justifyContent="space-between" alignItems="center" gap={1} sx={{ borderTop: "1px solid #E5E7EB", pt: 1 }}><Box minWidth={0}><Stack direction="row" alignItems="center" spacing={0.5}><Typography fontWeight={800}>{person.name}</Typography>{canManage && <Button data-html2canvas-ignore size="small" variant={payments[person.participantId] ? "contained" : "outlined"} disabled={busy} onClick={() => void togglePaid(person)} sx={{ minWidth: 42, px: 0.5, py: 0, fontSize: 11 }}>입금</Button>}</Stack><Typography fontSize={12} color="text.secondary">{list.filter((entry) => person.rounds[String(entry.round_no)] != null).map((entry) => `${entry.round_no}차 ${money(person.rounds[String(entry.round_no)])}`).join(" + ")}</Typography></Box><Typography fontWeight={900} whiteSpace="nowrap">{money(person.total)}</Typography></Stack>)}</Stack> : <Typography color="text.secondary" fontSize={13}>청구할 금액이 아직 없습니다.</Typography>}
       </Card>
       {accountCard}
       </Box>
@@ -414,24 +478,23 @@ export default function AfterPartySettlement() {
       </Card>
       <Card sx={{ p: 2, bgcolor: "#F8FAFF" }}><Typography fontWeight={900} mb={1}>정산 결과</Typography>{calculation ? <><Typography>결제 금액 {money(calculation.total)} - 찬조금 {money(calculation.contributed)}</Typography><Typography fontWeight={900} my={1}> = 정산 금액 {money(calculation.distributable)}</Typography>{people.filter((p) => p.attending).map((p) => <Stack key={p.id} direction="row" justifyContent="space-between"><Typography>{p.name}{p.excluded ? " (제외)" : ""}</Typography><Typography fontWeight={800}>{money(calculation.shares[p.id] ?? 0)}</Typography></Stack>)}</> : <Alert severity="warning">찬조금이 총비용보다 많거나 부담 대상이 없는 항목이 있습니다.</Alert>}</Card>
       {editable && <Button fullWidth variant="contained" disabled={busy || !calculation || !dirty} onClick={() => void save()}>저장</Button>}
-      {accountCard}
     </Stack> : <Typography color="text.secondary">{error || "정산을 불러오는 중..."}</Typography>}
     <Dialog open={shareDialogOpen} onClose={() => setShareDialogOpen(false)} maxWidth="sm" fullWidth>
       <DialogTitle fontWeight={900}>뒤풀이 정산 공유</DialogTitle>
       <DialogContent>
-        <Stack spacing={2.5} alignItems="center" sx={{ pt: 1 }}>
-          <Box width="100%"><Typography fontSize={12} color="text.secondary" fontWeight={700} mb={0.75}>열람 권한</Typography><Button fullWidth variant="outlined" startIcon={<LanguageIcon />} sx={{ color: "#111827", borderColor: "#D1D5DB" }}>링크가 있는 모든 사람</Button></Box>
-          {shareLink && <Box sx={{ p: 2, border: "1px solid #E5E7EB", borderRadius: 2 }}><QRCode value={shareLink} size={190} style={{ height: "auto", maxWidth: "100%", width: "100%" }} /></Box>}
+        <Stack spacing={3} alignItems="center" sx={{ pt: 1 }}>
+          <Box width="100%"><Typography fontSize={12} color="text.secondary" fontWeight={700} mb={0.75}>열람 권한</Typography><ToggleButtonGroup value={shareVisibility} exclusive size="small" fullWidth onChange={(_event, value: "public" | "club_only" | null) => { if (value) void changeShareVisibility(value); }} sx={{ "& .MuiToggleButton-root": { fontWeight: 700, fontSize: 13, py: 0.8 } }}><ToggleButton value="club_only" sx={{ gap: 0.5 }}><LockOutlinedIcon sx={{ fontSize: 16 }} />클럽에 가입한 회원만</ToggleButton><ToggleButton value="public" sx={{ gap: 0.5 }}><LanguageIcon sx={{ fontSize: 16 }} />링크가 있는 모든 사람</ToggleButton></ToggleButtonGroup></Box>
+          {shareLink && <Box sx={{ p: 2, border: "1px solid #E0E0E0", borderRadius: 1 }}><QRCode value={shareLink} size={200} style={{ height: "auto", maxWidth: "100%", width: "100%" }} /></Box>}
           <Box width="100%"><Typography fontSize={12} color="text.secondary" fontWeight={700} mb={0.75}>공유 링크</Typography><TextField value={shareLink} fullWidth size="small" slotProps={{ input: { readOnly: true } }} /></Box>
           <Stack direction="row" justifyContent="space-around" width="100%">
-            <Button sx={{ display: "flex", flexDirection: "column", gap: 0.5, color: "#111827", fontSize: 12 }} onClick={() => { if (navigator.share) void navigator.share({ title: "뒤풀이 정산", url: shareLink }).catch(() => {}); else void copyShareLink(); }}><Box sx={{ width: 42, height: 42, borderRadius: "50%", bgcolor: "#EFF6FF", color: "#1565C0", display: "grid", placeItems: "center" }}><IosShareOutlinedIcon /></Box>공유하기</Button>
-            <Button sx={{ display: "flex", flexDirection: "column", gap: 0.5, color: "#111827", fontSize: 12 }} onClick={() => { window.location.href = `sms:?body=${encodeURIComponent(`뒤풀이 정산 ${shareLink}`)}`; }}><Box sx={{ width: 42, height: 42, borderRadius: "50%", bgcolor: "#4CAF50", color: "#fff", display: "grid", placeItems: "center" }}><SmsOutlinedIcon /></Box>문자</Button>
-            <Button sx={{ display: "flex", flexDirection: "column", gap: 0.5, color: "#111827", fontSize: 12 }} onClick={() => void copyShareLink()}><Box sx={{ width: 42, height: 42, borderRadius: "50%", bgcolor: "#E5E7EB", display: "grid", placeItems: "center" }}><ContentCopyOutlinedIcon /></Box>링크 복사</Button>
+            <Stack alignItems="center" spacing={0.7}><IconButton onClick={shareKakao} sx={{ width: 56, height: 56, bgcolor: "#FFEB3A", "&:hover": { bgcolor: "#FFEB3A" } }}><Box component="img" src="/kakao-logo.png" alt="카카오톡" sx={{ width: 38, height: 38 }} /></IconButton><Typography fontSize={11} fontWeight={700} color="text.secondary">카카오톡</Typography></Stack>
+            <Stack alignItems="center" spacing={0.7}><IconButton onClick={() => { window.location.href = `sms:?body=${encodeURIComponent(`뒤풀이 정산 ${shareLink}`)}`; }} sx={{ width: 56, height: 56, bgcolor: "#4CAF50", color: "#fff", "&:hover": { bgcolor: "#4CAF50" } }}><SmsOutlinedIcon /></IconButton><Typography fontSize={11} fontWeight={700} color="text.secondary">문자</Typography></Stack>
+            <Stack alignItems="center" spacing={0.7}><IconButton onClick={() => void copyShareLink()} sx={{ width: 56, height: 56, bgcolor: "#E5E7EB", color: "#374151", "&:hover": { bgcolor: "#E5E7EB" } }}><ContentCopyOutlinedIcon /></IconButton><Typography fontSize={11} fontWeight={700} color="text.secondary">링크 복사</Typography></Stack>
           </Stack>
           {localPreview && <Alert severity="info" sx={{ width: "100%" }}>로컬 미리보기 링크는 이 브라우저에서만 열 수 있습니다.</Alert>}
         </Stack>
       </DialogContent>
-      <DialogActions><Button onClick={() => setShareDialogOpen(false)}>닫기</Button></DialogActions>
+      <DialogActions sx={{ px: 3, pb: 2.5 }}><Button variant="contained" onClick={() => setShareDialogOpen(false)} sx={{ fontWeight: 800 }}>닫기</Button></DialogActions>
     </Dialog>
   </Box>;
 }

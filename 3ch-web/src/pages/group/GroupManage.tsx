@@ -465,7 +465,7 @@ export default function GroupManage() {
         }
         try {
             const currentPermissions = selectedMember.managementPermissions;
-            const permissionsChanged = updated.role === "admin" && (["members", "ranking", "league", "draw"] as const)
+            const permissionsChanged = updated.role === "admin" && (["members", "ranking", "league", "draw", "settlement"] as const)
                 .some((key) => updated.managementPermissions[key] !== currentPermissions?.[key]);
             const roleSettingsChanged = updated.role !== selectedMember.role || permissionsChanged;
 

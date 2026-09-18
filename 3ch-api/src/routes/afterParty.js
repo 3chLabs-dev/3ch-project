@@ -5,6 +5,7 @@ const pool = require('../db/pool');
 const { requireAuth, optionalAuth } = require('../middlewares/auth');
 const { calculate } = require('../services/afterPartyCalculation');
 const { buildSummary } = require('../services/afterPartySummary');
+const { normalizeParticipants } = require('../services/afterPartyParticipants');
 
 const router = express.Router();
 const uuid = z.string().uuid();
@@ -25,7 +26,7 @@ router.param('leagueId', async (req, _res, next, value) => {
   }
   next();
 });
-const person = z.object({ id: uuid, name: z.string().min(1), attending: z.boolean(), drinking: z.boolean(), excluded: z.boolean() });
+const person = z.object({ id: uuid, name: z.string().trim().min(1).max(100), division: z.string().trim().max(30).optional(), guest: z.boolean().optional(), attending: z.boolean(), drinking: z.boolean(), excluded: z.boolean() });
 const item = z.object({ id: uuid, name: z.string().trim().min(1).max(100), amount: z.number().int().min(0).max(1000000000), category: z.enum(['common', 'alcohol', 'nonalcohol', 'specific']), personIds: z.array(uuid) });
 const contribution = z.object({ id: uuid, name: z.string().trim().min(1).max(100), amount: z.number().int().min(0).max(1000000000), personId: uuid.optional() });
 const bodySchema = z.object({ title: z.string().trim().min(1).max(100), participants: z.array(person).max(300), items: z.array(item).max(200), contributions: z.array(contribution).max(100), version: z.number().int().positive().optional() });
@@ -132,11 +133,12 @@ router.post('/leagues/:leagueId/after-party', requireAuth, async (req, res) => {
     const rights = await access(client, leagueId, Number(req.user.sub));
     if (!rights.manage) { await client.query('ROLLBACK'); return fail(res, 403, '정산 생성 권한이 없습니다.'); }
     await client.query('SELECT id FROM leagues WHERE id=$1 FOR UPDATE', [leagueId]);
-    const serverPeople = await client.query('SELECT id,name FROM league_participants WHERE league_id=$1 AND is_bot=false', [leagueId]);
-    const allowed = new Map(serverPeople.rows.map((person) => [person.id, person.name]));
-    if (body.participants.some((person) => !allowed.has(person.id))) { await client.query('ROLLBACK'); return fail(res, 400, '리그 참가자 명단에 없는 사람이 포함됐습니다.'); }
-    const participants = body.participants.map((person) => ({ ...person, name: allowed.get(person.id) }));
-    const contributions = body.contributions.map((entry) => ({ ...entry, name: allowed.get(entry.personId) }));
+    const serverPeople = await client.query('SELECT id,name,division FROM league_participants WHERE league_id=$1 AND is_bot=false', [leagueId]);
+    const savedRounds = await client.query('SELECT participants FROM after_party_settlements WHERE league_id=$1 ORDER BY round_no', [leagueId]);
+    let participants;
+    try { participants = normalizeParticipants(body.participants, serverPeople.rows, savedRounds.rows); }
+    catch (error) { await client.query('ROLLBACK'); return fail(res, 400, error.message); }
+    const contributions = body.contributions.map((entry) => ({ ...entry, name: participants.find((person) => person.id === entry.personId)?.name }));
     let calculation;
     try { calculation = calculate(participants, body.items, contributions); }
     catch (error) { await client.query('ROLLBACK'); return fail(res, 400, error.message); }
@@ -175,10 +177,11 @@ router.put('/leagues/:leagueId/after-party/:id', requireAuth, async (req, res) =
     }
     if (body.items.some((entry) => entry.category === 'specific' && !current.items.some((old) => old.id === entry.id && old.category === 'specific'))) { await client.query('ROLLBACK'); return fail(res, 400, '메뉴는 음식·주류·비주류 중 하나로 구분해 주세요.'); }
     if (body.contributions.some((entry) => !entry.personId && !current.contributions.some((old) => old.id === entry.id))) { await client.query('ROLLBACK'); return fail(res, 400, '찬조자를 참가자 명단에서 선택해 주세요.'); }
-    const serverPeople = await client.query('SELECT id,name FROM league_participants WHERE league_id=$1 AND is_bot=false', [leagueId]);
-    const allowed = new Map(serverPeople.rows.map((p) => [p.id, p.name]));
-    if (body.participants.some((p) => !allowed.has(p.id) && !current.participants.some((old) => old.id === p.id))) { await client.query('ROLLBACK'); return fail(res, 400, '리그 참가자 명단에 없는 사람이 포함됐습니다.'); }
-    const participants = body.participants.map((p) => ({ ...p, name: current.participants.find((old) => old.id === p.id)?.name ?? allowed.get(p.id) }));
+    const serverPeople = await client.query('SELECT id,name,division FROM league_participants WHERE league_id=$1 AND is_bot=false', [leagueId]);
+    const savedRounds = await client.query('SELECT participants FROM after_party_settlements WHERE league_id=$1 ORDER BY round_no', [leagueId]);
+    let participants;
+    try { participants = normalizeParticipants(body.participants, serverPeople.rows, savedRounds.rows, current.participants); }
+    catch (error) { await client.query('ROLLBACK'); return fail(res, 400, error.message); }
     const contributions = body.contributions.map((entry) => ({ ...entry, name: entry.personId ? participants.find((person) => person.id === entry.personId)?.name : entry.name }));
     let calculation;
     try { calculation = calculate(participants, body.items, contributions); }

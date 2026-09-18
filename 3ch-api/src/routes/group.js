@@ -5,6 +5,7 @@ const pool = require('../db/pool');
 const { requireAuth, optionalAuth } = require('../middlewares/auth');
 const { requireGroupOwner, requireGroupPermission } = require('../middlewares/permissions');
 const { generateClubCode } = require('../utils/clubCodeUtils');
+const { findUniqueExactPreMember } = require('../utils/groupPreMemberMatch');
 const {
   rebuildGroupRanking,
   getGroupRanking,
@@ -1250,6 +1251,26 @@ router.get('/group/:id/pre-members', requireAuth, async (req, res) => {
   }
 });
 
+// Joining users may inspect only unclaimed names; claim details remain member-only.
+router.get('/group/:id/pre-member-options', requireAuth, async (req, res) => {
+  try {
+    const group = await pool.query('SELECT 1 FROM groups WHERE id = $1', [req.params.id]);
+    if (!group.rowCount) return res.status(404).json({ message: '클럽을 찾을 수 없습니다.' });
+    const result = await pool.query(
+      `SELECT pm.id, pm.name, pm.division
+       FROM group_pre_members pm
+       LEFT JOIN group_member_claims c ON c.pre_member_id = pm.id AND c.status = 'pending'
+       WHERE pm.group_id = $1 AND pm.status = 'active' AND c.id IS NULL
+       ORDER BY pm.created_at ASC`,
+      [req.params.id]
+    );
+    res.json({ pre_members: result.rows });
+  } catch (error) {
+    console.error('Error fetching group pre-member options:', error);
+    res.status(500).json({ message: '사전등록 회원을 불러오지 못했습니다.' });
+  }
+});
+
 router.post('/group/:id/pre-members', requireAuth, requireGroupPermission('members'), async (req, res) => {
   try {
     const name = String(req.body?.name || '').trim();
@@ -1498,7 +1519,7 @@ router.post('/group/:id/member', requireAuth, requireGroupPermission('members'),
  * /group/{id}/join:
  *   post:
  *     summary: 클럽 가입
- *     description: 사용자가 클럽에 가입합니다. 자동으로 member 역할이 부여됩니다.
+ *     description: 이름이 정확히 일치하는 사전등록 기록 하나가 있으면 가입과 전환 신청을 함께 처리합니다. 직접 선택이 필요하면 가입을 저장하지 않고 selection_required를 반환합니다.
  *     tags: [클럽]
  *     security:
  *       - bearerAuth: []
@@ -1509,7 +1530,19 @@ router.post('/group/:id/member', requireAuth, requireGroupPermission('members'),
  *         schema:
  *           type: string
  *         description: 가입할 클럽 ID
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               pre_member_id:
+ *                 type: string
+ *               join_without_claim:
+ *                 type: boolean
  *     responses:
+ *       200:
+ *         description: 사전등록 기록 선택이 필요하며 아직 가입되지 않음
  *       201:
  *         description: 클럽 가입 성공
  *         content:
@@ -1530,7 +1563,7 @@ router.post('/group/:id/join', requireAuth, async (req, res) => {
   const client = await pool.connect();
   try {
     const { id } = req.params;
-    const userId = req.user.sub;
+    const userId = Number(req.user.sub);
 
     await client.query('BEGIN');
 
@@ -1554,6 +1587,52 @@ router.post('/group/:id/join', requireAuth, async (req, res) => {
       return res.status(409).json({ message: '이미 가입된 클럽입니다' });
     }
 
+    const userResult = await client.query('SELECT name FROM users WHERE id = $1', [userId]);
+    const accountName = userResult.rows[0]?.name?.trim();
+    const preMembers = await client.query(
+      `SELECT pm.id, pm.name, c.status AS claim_status
+       FROM group_pre_members pm
+       LEFT JOIN group_member_claims c ON c.pre_member_id = pm.id
+       WHERE pm.group_id = $1 AND pm.status = 'active'
+       FOR UPDATE OF pm`,
+      [id]
+    );
+    const exactMatch = findUniqueExactPreMember(accountName, preMembers.rows);
+    const selectedId = req.body?.pre_member_id;
+    const skipClaim = req.body?.join_without_claim === true;
+    if (selectedId != null && (typeof selectedId !== 'string' || skipClaim)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: '사전등록 회원 선택을 확인해 주세요.' });
+    }
+
+    let claimTarget = null;
+    if (selectedId) {
+      claimTarget = preMembers.rows.find((member) => member.id === selectedId);
+      if (!claimTarget || claimTarget.claim_status === 'pending') {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ message: '선택한 사전등록 기록은 전환 신청할 수 없습니다. 목록을 다시 확인해 주세요.' });
+      }
+    } else if (exactMatch) {
+      claimTarget = exactMatch;
+    } else if (!skipClaim && preMembers.rowCount > 0) {
+      await client.query('ROLLBACK');
+      return res.status(200).json({ selection_required: true, has_pre_members: true });
+    }
+
+    if (claimTarget) {
+      const conflictingClaim = await client.query(
+        `SELECT 1 FROM group_member_claims c
+         JOIN group_pre_members pm ON pm.id = c.pre_member_id
+         WHERE pm.group_id = $1 AND c.requested_by_id = $2 AND c.status = 'pending'
+         LIMIT 1`,
+        [id, userId]
+      );
+      if (conflictingClaim.rowCount) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ message: '이미 처리 중인 전환 신청이 있습니다.' });
+      }
+    }
+
     const memberId = randomUUID();
     await client.query(
       `INSERT INTO group_members (id, group_id, user_id, role)
@@ -1561,15 +1640,28 @@ router.post('/group/:id/join', requireAuth, async (req, res) => {
       [memberId, id, userId]
     );
 
-    const preMemberCount = await client.query(
-      `SELECT COUNT(*)::int AS count FROM group_pre_members WHERE group_id = $1 AND status = 'active'`,
-      [id]
-    );
+    if (claimTarget) {
+      const claimResult = await client.query(
+        `INSERT INTO group_member_claims (id, pre_member_id, requested_by_id)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (pre_member_id) DO UPDATE
+         SET requested_by_id = EXCLUDED.requested_by_id, status = 'pending',
+             requested_at = NOW(), reviewed_by_id = NULL, reviewed_at = NULL
+         WHERE group_member_claims.status <> 'pending'
+         RETURNING id`,
+        [randomUUID(), claimTarget.id, userId]
+      );
+      if (!claimResult.rowCount) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ message: '다른 회원이 먼저 전환 신청했습니다. 다시 시도해 주세요.' });
+      }
+    }
 
     await client.query('COMMIT');
     res.status(201).json({
-      message: '클럽에 가입되었습니다',
-      has_pre_members: Number(preMemberCount.rows[0]?.count || 0) > 0,
+      message: claimTarget ? '클럽 가입과 사전등록 회원 전환 신청이 완료되었습니다. 리더 승인을 기다려 주세요.' : '클럽에 가입되었습니다',
+      claim_requested: Boolean(claimTarget),
+      has_pre_members: preMembers.rowCount > 0,
     });
   } catch (error) {
     await client.query('ROLLBACK');

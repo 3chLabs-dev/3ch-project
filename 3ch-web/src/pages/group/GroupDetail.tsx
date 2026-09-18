@@ -20,6 +20,7 @@ import { useGetGroupDetailQuery, useJoinGroupMutation } from "../../features/gro
 import { useAppSelector } from "../../app/hooks";
 import { getRoleLabel } from "../../utils/permissions";
 import GroupPreMemberDialog from "./GroupPreMemberDialog";
+import GroupJoinPreMemberDialog from "./GroupJoinPreMemberDialog";
 import { useState } from "react";
 
 const SPORT_EMOJI: Record<string, string> = {
@@ -42,7 +43,7 @@ export default function GroupDetail() {
 
   const [joinGroup, { isLoading: isJoining }] = useJoinGroupMutation();
   const [preMemberDialogOpen, setPreMemberDialogOpen] = useState(false);
-  const [justJoined, setJustJoined] = useState(false);
+  const [joinOptionsOpen, setJoinOptionsOpen] = useState(false);
 
   const handleJoin = async () => {
     if (!isLoggedIn) {
@@ -51,11 +52,16 @@ export default function GroupDetail() {
     }
 
     try {
-      const result = await joinGroup(id!).unwrap();
-      if (result.has_pre_members) { setJustJoined(true); setPreMemberDialogOpen(true); }
-      else navigate(`/club/${id}/manage`);
+      const result = await joinGroup({ groupId: id! }).unwrap();
+      if (result.selection_required) {
+        setJoinOptionsOpen(true);
+      } else {
+        if (result.claim_requested) window.alert(result.message);
+        navigate(`/club/${id}/manage`);
+      }
     } catch (error) {
       console.error("Failed to join group:", error);
+      window.alert((error as { data?: { message?: string } })?.data?.message || "클럽 가입에 실패했습니다.");
     }
   };
 
@@ -315,7 +321,12 @@ export default function GroupDetail() {
         open={preMemberDialogOpen}
         onClose={() => { setPreMemberDialogOpen(false); navigate(`/club/${id}/manage`); }}
         groupId={group.id}
-        justJoined={justJoined}
+      />
+      <GroupJoinPreMemberDialog
+        open={joinOptionsOpen}
+        onClose={() => setJoinOptionsOpen(false)}
+        onJoined={(message) => { window.alert(message); setJoinOptionsOpen(false); navigate(`/club/${id}/manage`); }}
+        groupId={group.id}
       />
     </Stack>
   );

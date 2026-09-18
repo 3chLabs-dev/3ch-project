@@ -666,12 +666,18 @@ export const groupApi = baseApi.injectEndpoints({
       query: (name) => `/group/check-name?name=${encodeURIComponent(name)}`,
     }),
 
-    joinGroup: builder.mutation<{ message: string; has_pre_members?: boolean }, string>({
-      query: (groupId) => ({
+    joinGroup: builder.mutation<{ message?: string; has_pre_members?: boolean; claim_requested?: boolean; selection_required?: boolean }, { groupId: string; preMemberId?: string; joinWithoutClaim?: boolean }>({
+      query: ({ groupId, preMemberId, joinWithoutClaim }) => ({
         url: `/group/${groupId}/join`,
         method: "POST",
+        body: { ...(preMemberId ? { pre_member_id: preMemberId } : {}), ...(joinWithoutClaim ? { join_without_claim: true } : {}) },
       }),
       invalidatesTags: ["Group"],
+    }),
+
+    getGroupPreMemberOptions: builder.query<{ pre_members: Pick<GroupPreMember, "id" | "name" | "division">[] }, string>({
+      query: (groupId) => `/group/${groupId}/pre-member-options`,
+      providesTags: (_result, _error, groupId) => [{ type: "Group", id: `pre-members-${groupId}` }],
     }),
 
     getGroupPreMembers: builder.query<GroupPreMembersResponse, string>({
@@ -1206,6 +1212,7 @@ export const {
   useSearchGroupsQuery,
   useLazyCheckGroupNameQuery,
   useJoinGroupMutation,
+  useGetGroupPreMemberOptionsQuery,
   useGetGroupPreMembersQuery,
   useCreateGroupPreMemberMutation,
   useDeleteGroupPreMemberMutation,

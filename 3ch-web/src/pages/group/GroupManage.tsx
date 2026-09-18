@@ -745,7 +745,7 @@ export default function GroupManage() {
                                                     onClick={() => void approvePreMember(member.id)}
                                                     sx={{ minWidth: 56, borderRadius: 1.5, fontWeight: 800 }}
                                                 >
-                                                    연결 승인
+                                                    승인
                                                 </Button>
                                             )}
                                             {canManage && (member.is_pre_member || member.user_id != null) && (

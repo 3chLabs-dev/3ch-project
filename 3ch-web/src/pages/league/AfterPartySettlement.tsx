@@ -158,7 +158,6 @@ export default function AfterPartySettlement() {
   const [selected, setSelected] = useState<Settlement | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
   const [guestName, setGuestName] = useState("");
-  const [guestDivision, setGuestDivision] = useState("");
   const [items, setItems] = useState<Item[]>([]);
   const [draftCategory, setDraftCategory] = useState<"common" | "alcohol" | "nonalcohol">("common");
   const [draftName, setDraftName] = useState("");
@@ -261,7 +260,7 @@ export default function AfterPartySettlement() {
     setSelected(settlement); setTitle(settlement.title); setPeople([...roster, ...gone]); setItems(settlement.items); setContributions(settlement.contributions); setDirty(false); setError("");
     setDraftCategory("common"); setDraftName(""); setDraftQuantity(1); setDraftAmount(""); setEditingItemId(null);
     setContributorId(""); setContributionAmount("");
-    setGuestName(""); setGuestDivision("");
+    setGuestName("");
   }, [participantData?.participants]);
   const select = useCallback(async (id: string) => {
     try { const result = await request(`${base}/${id}`); open(result.settlement); }
@@ -295,12 +294,11 @@ export default function AfterPartySettlement() {
   const addGuest = () => {
     if (!editable) return;
     const name = guestName.trim();
-    const division = guestDivision.trim();
     if (!name) { setError("게스트 이름을 입력해 주세요."); return; }
-    const existing = people.find((person) => person.guest && person.name === name && (person.division ?? "") === division);
+    const existing = people.find((person) => person.guest && person.name === name);
     if (existing) changePerson(existing.id, { attending: true });
-    else { setPeople((current) => [...current, { id: crypto.randomUUID(), name, division, guest: true, attending: true, drinking: true, excluded: false }]); setDirty(true); }
-    setGuestName(""); setGuestDivision(""); setError("");
+    else { setPeople((current) => [...current, { id: crypto.randomUUID(), name, guest: true, attending: true, drinking: true, excluded: false }]); setDirty(true); }
+    setGuestName(""); setError("");
   };
   const editItem = (item: Item) => {
     if (!editable) return;
@@ -333,7 +331,7 @@ export default function AfterPartySettlement() {
     if (!selected) return;
     if (draftName.trim() || draftAmount.trim()) { setError("입력 중인 메뉴를 추가 버튼이나 Enter로 먼저 등록해 주세요."); return; }
     if (contributorId || contributionAmount.trim()) { setError("입력 중인 찬조금을 추가 버튼이나 Enter로 먼저 등록해 주세요."); return; }
-    if (guestName.trim() || guestDivision.trim()) { setError("입력 중인 게스트를 추가 버튼이나 Enter로 먼저 등록해 주세요."); return; }
+    if (guestName.trim()) { setError("입력 중인 게스트를 추가 버튼이나 Enter로 먼저 등록해 주세요."); return; }
     if (!items.length) { setError("메뉴를 하나 이상 추가해 주세요."); return; }
     setBusy(true); setError("");
     try {
@@ -491,10 +489,10 @@ export default function AfterPartySettlement() {
         <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}><Typography fontWeight={900}>메뉴</Typography><Typography fontSize={13} fontWeight={800}>합계 {money(items.reduce((sum, item) => sum + item.amount, 0))}</Typography></Stack>
         {editable && <>
           <Stack direction="row" gap={0.75} mb={1}>{Object.entries(categories).map(([key, label]) => <Button key={key} variant={draftCategory === key ? "contained" : "outlined"} size="small" onClick={() => setDraftCategory(key as typeof draftCategory)} sx={{ minWidth: 64, minHeight: 36, fontWeight: 800 }}>{label}</Button>)}</Stack>
-          <Box sx={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 68px minmax(82px, 110px) 50px", gap: 0.5 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 54px 92px 50px", gap: 0.5 }}>
             <TextField inputRef={itemNameRef} size="small" placeholder="메뉴" value={draftName} onChange={(event) => setDraftName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); addItem(); } }} inputProps={{ "aria-label": "메뉴" }} />
-            <TextField select size="small" value={draftQuantity} onChange={(event) => setDraftQuantity(Number(event.target.value))} SelectProps={{ native: false }} inputProps={{ "aria-label": "수량" }} sx={{ "& .MuiSelect-select": { px: 1 } }}>{Array.from({ length: 20 }, (_, index) => <MenuItem key={index + 1} value={index + 1}>{index + 1}개</MenuItem>)}</TextField>
-            <TextField size="small" type="number" placeholder="합계금액" value={draftAmount} onChange={(event) => setDraftAmount(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); addItem(); } }} inputProps={{ min: 1, inputMode: "numeric", "aria-label": "품목 합계금액" }} />
+            <TextField select size="small" value={draftQuantity} onChange={(event) => setDraftQuantity(Number(event.target.value))} inputProps={{ "aria-label": "수량" }} sx={{ "& .MuiSelect-select": { pl: 0.75, pr: "20px !important" }, "& .MuiSelect-icon": { right: 1 } }}>{Array.from({ length: 20 }, (_, index) => <MenuItem key={index + 1} value={index + 1}>{index + 1}</MenuItem>)}</TextField>
+            <TextField size="small" type="text" placeholder="금액" value={draftAmount} onChange={(event) => setDraftAmount(event.target.value.replace(/\D/g, ""))} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); addItem(); } }} inputProps={{ inputMode: "numeric", pattern: "[0-9]*", "aria-label": "품목 합계금액" }} sx={{ "& .MuiInputBase-input": { px: 1 } }} />
             <Button variant="contained" onClick={addItem} sx={{ minWidth: 0, px: 0, fontWeight: 800 }}>{editingItemId ? "수정" : "추가"}</Button>
           </Box>
           {editingItemId && <Button size="small" sx={{ mt: 0.5 }} onClick={() => { setEditingItemId(null); setDraftName(""); setDraftQuantity(1); setDraftAmount(""); setDraftCategory("common"); }}>수정 취소</Button>}
@@ -515,7 +513,7 @@ export default function AfterPartySettlement() {
             <MenuItem value="" disabled>찬조자 선택</MenuItem>
             {people.map((person) => <MenuItem key={person.id} value={person.id}>{person.name}{person.division ? ` · ${person.division}부` : ""}{person.guest ? " · 게스트" : ""}</MenuItem>)}
           </TextField>
-          <TextField size="small" type="number" placeholder="금액" value={contributionAmount} onChange={(event) => setContributionAmount(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); addContribution(); } }} inputProps={{ min: 1, inputMode: "numeric", "aria-label": "찬조 금액" }} />
+          <TextField size="small" type="text" placeholder="금액" value={contributionAmount} onChange={(event) => setContributionAmount(event.target.value.replace(/\D/g, ""))} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); addContribution(); } }} inputProps={{ inputMode: "numeric", pattern: "[0-9]*", "aria-label": "찬조 금액" }} />
           <Button variant="contained" onClick={addContribution} sx={{ minWidth: 0, px: 0, fontWeight: 800 }}>추가</Button>
         </Box>}
         <Stack spacing={0.5} mt={contributions.length ? 1.5 : 0}>{contributions.map((entry) => <Box key={entry.id} sx={{ py: 0.75, borderTop: "1px solid #E5E7EB" }}>
@@ -531,9 +529,8 @@ export default function AfterPartySettlement() {
       <Card sx={{ p: 2 }}>
         <Typography fontWeight={900} mb={0.5}>참가자 · 정산 대상 {people.filter((p) => p.attending).length}명</Typography>
         <Typography fontSize={12} color="text.secondary" mb={1}>참가자 명단에서 뒤풀이 표시를 했으면 자동 선택됩니다.</Typography>
-        {editable && <Box sx={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 74px 58px", gap: 0.75, mb: 1.5 }}>
+        {editable && <Box sx={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 58px", gap: 0.75, mb: 1.5 }}>
           <TextField size="small" placeholder="게스트 이름" value={guestName} onChange={(event) => setGuestName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); addGuest(); } }} inputProps={{ "aria-label": "게스트 이름" }} />
-          <TextField size="small" placeholder="부수" value={guestDivision} onChange={(event) => setGuestDivision(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); addGuest(); } }} inputProps={{ "aria-label": "게스트 부수" }} />
           <Button variant="contained" onClick={addGuest} sx={{ minWidth: 0, px: 0, fontWeight: 800 }}>추가</Button>
         </Box>}
         <Stack spacing={0.5}>{people.map((person) => <Box key={person.id} sx={{ borderTop: "1px solid #E5E7EB", py: 1 }}>

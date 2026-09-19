@@ -60,7 +60,7 @@ router.get('/after-party/shared/:token', optionalAuth, async (req, res) => {
       const member = await pool.query('SELECT 1 FROM group_members WHERE group_id=$1 AND user_id=$2', [league.group_id, Number(req.user.sub)]);
       if (!member.rowCount) return fail(res, 403, '클럽 회원만 볼 수 있습니다.');
     }
-    const result = await pool.query(`SELECT id,round_no,title,status,version,created_at,updated_at,participants,calculation FROM after_party_settlements WHERE league_id=$1 AND ${visibleRounds} ORDER BY round_no`, [league.id]);
+    const result = await pool.query(`SELECT id,round_no,title,status,version,created_at,updated_at,participants,items,contributions,calculation FROM after_party_settlements WHERE league_id=$1 AND ${visibleRounds} ORDER BY round_no`, [league.id]);
     const summary = buildSummary(result.rows);
     return res.json({ league: { id: league.id, league_code: league.league_code, name: league.name, start_date: league.start_date, bank_account: league.bank_account }, settlements: result.rows, summary, canManage: false, visibility: league.visibility });
   } catch (error) { console.error(error); return fail(res, 500, '공유 정산 조회에 실패했습니다.'); }
@@ -99,7 +99,7 @@ router.get('/leagues/:leagueId/after-party', requireAuth, async (req, res) => {
     if (!leagueCode.safeParse(leagueId).success) return fail(res, 400, '리그 ID가 올바르지 않습니다.');
     const rights = await access(pool, leagueId, Number(req.user.sub));
     if (!rights.allowed) return fail(res, 403, '조회 권한이 없습니다.');
-    const result = await pool.query(`SELECT id,round_no,title,status,version,created_at,updated_at,participants,calculation FROM after_party_settlements WHERE league_id=$1 AND ${visibleRounds} ORDER BY round_no`, [leagueId]);
+    const result = await pool.query(`SELECT id,round_no,title,status,version,created_at,updated_at,participants,items,contributions,calculation FROM after_party_settlements WHERE league_id=$1 AND ${visibleRounds} ORDER BY round_no`, [leagueId]);
     const summary = buildSummary(result.rows);
     return res.json({ settlements: result.rows, summary, canManage: rights.manage, payments: await paymentStatus(pool, leagueId, summary) });
   } catch (error) { console.error(error); return fail(res, 500, '정산 목록 조회에 실패했습니다.'); }

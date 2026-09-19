@@ -1153,7 +1153,8 @@ export function buildProgramRoundStandingsSnapshot(
   // 계산한 뒤 팀을 거르는 것이 아니라, 청팀과 백팀을 각각 독립된 풀로
   // 계산한다. 따라서 양 팀 모두 1위부터 시작하는 스냅샷이 저장된다.
   if (
-    block.competitionMode === "blue-white"
+    block.format === "LEAGUE"
+    && block.competitionMode === "blue-white"
     && block.blueWhiteRankingMode === "by-team"
     && option?.blueWhiteTeams
   ) {

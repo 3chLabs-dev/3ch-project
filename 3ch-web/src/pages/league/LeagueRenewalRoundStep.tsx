@@ -258,17 +258,27 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
   const updateFormat = (index: number, format: RoundFormat) => {
     const multipleRounds = rounds.length > 1;
     const previousFormat = index > 0 ? rounds[index - 1]?.format : null;
+    const isBlueWhiteChampionship = rounds[index].competitionMode === "blue-white"
+      && index >= 2
+      && format === "TOURNAMENT";
     updateRound(index, {
       format,
       option: multipleRounds ? (index === 0 ? "PRELIM" : "FINAL") : "NONE",
       tournamentMode: format === "TOURNAMENT" ? "single" : undefined,
       tournamentSeeding: "seed",
       tournamentBracketCount:
-        format === "TOURNAMENT" ? rounds[index].tournamentBracketCount ?? 1 : 1,
-      thirdPlaceMatch: format === "TOURNAMENT" ? rounds[index].thirdPlaceMatch ?? true : undefined,
+        format === "TOURNAMENT"
+          ? isBlueWhiteChampionship ? 1 : rounds[index].tournamentBracketCount ?? 1
+          : 1,
+      thirdPlaceMatch: format === "TOURNAMENT"
+        ? isBlueWhiteChampionship ? false : rounds[index].thirdPlaceMatch ?? true
+        : undefined,
       finalAdvancementMode: "top-n",
-      advanceCount: previousFormat === "TOURNAMENT" ? 1 : rounds[index].advanceCount ?? 2,
+      advanceCount: previousFormat === "TOURNAMENT" || isBlueWhiteChampionship ? 1 : rounds[index].advanceCount ?? 2,
       sourceRoundId: index > 0 ? rounds[index - 1].id : undefined,
+      blueWhiteTournamentPlacement: isBlueWhiteChampionship
+        ? "mixed"
+        : rounds[index].blueWhiteTournamentPlacement,
     });
   };
 
@@ -354,12 +364,22 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
             onChange={(_, selectedValue: string | null) => {
               if (!selectedValue) return;
               const choice = parseTournamentChoice(selectedValue);
+              const isBlueWhiteChampionship = round.competitionMode === "blue-white"
+                && index >= 2
+                && choice.option === "FINAL";
               updateRound(index, {
                 ...choice,
                 tournamentSeeding:
                   choice.option === "FINAL"
                     ? "seed"
                     : round.tournamentSeeding ?? "seed",
+                ...(isBlueWhiteChampionship ? {
+                  blueWhiteTournamentPlacement: "mixed" as const,
+                  finalAdvancementMode: "top-n" as const,
+                  advanceCount: 1,
+                  thirdPlaceMatch: false,
+                  tournamentBracketCount: 1,
+                } : {}),
               });
             }}
             sx={{
@@ -439,6 +459,13 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
 
   const renderFinalOptions = (round: RenewalRoundConfig, index: number) => {
     if (index === 0 || round.option !== "FINAL") return null;
+    if (round.competitionMode === "blue-white" && index >= 2 && round.format === "TOURNAMENT") {
+      return (
+        <Typography sx={descriptionSx}>
+          청팀과 백팀의 본선 우승자가 결선에 모두 진출합니다.
+        </Typography>
+      );
+    }
     const previousFormat = rounds[index - 1]?.format;
     const advancementPrefix = previousFormat === "GROUP"
       ? "각 조 상위"
@@ -597,6 +624,15 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
                   halfSplitOnlyMatches: value === "blue-white",
                   blueWhiteRankingMode: round.blueWhiteRankingMode ?? "by-team",
                   blueWhiteTournamentPlacement: round.blueWhiteTournamentPlacement ?? "by-team",
+                  ...(value === "blue-white" && index >= 2 && round.format === "TOURNAMENT" && round.option === "FINAL"
+                    ? {
+                        blueWhiteTournamentPlacement: "mixed" as const,
+                        finalAdvancementMode: "top-n" as const,
+                        advanceCount: 1,
+                        thirdPlaceMatch: false,
+                        tournamentBracketCount: 1,
+                      }
+                    : {}),
                 });
               }}>
                 <ToggleButton value="standard">일반</ToggleButton>
@@ -730,7 +766,8 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
             </Box>
           )}
 
-          {round.competitionMode === "blue-white" && round.format === "TOURNAMENT" && (
+          {round.competitionMode === "blue-white" && round.format === "TOURNAMENT"
+            && !(index >= 2 && round.option === "FINAL") && (
             <>
               <Box sx={{ mt: 2 }}>
                 <Typography sx={{ fontWeight: 900, mb: 1 }}>배치 방식</Typography>
@@ -797,7 +834,8 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
               </Box>
             )}
 
-          {round.format === "TOURNAMENT" && (
+          {round.format === "TOURNAMENT"
+            && !(round.competitionMode === "blue-white" && index >= 2 && round.option === "FINAL") && (
             <Box sx={{ mt: 2 }}>
               <Typography sx={{ fontWeight: 900, mb: 0.5 }}>3·4위전</Typography>
               <RadioGroup

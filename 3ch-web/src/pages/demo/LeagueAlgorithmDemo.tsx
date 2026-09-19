@@ -4,7 +4,7 @@ import { distributeSnake } from '../../features/league/algorithms/distributeSnak
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { generateGroupOptions } from '../../features/league/algorithms/generateGroupOptions';
-import { useGetLeagueInvitedGroupsQuery, useGetLeagueParticipantsQuery, useGetLeagueProgramQuery, useGetLeagueQuery, useSaveLeagueProgramMutation, useSyncLeagueProgramMatchesMutation } from '../../features/league/leagueApi';
+import { useGetLeagueInvitedGroupsQuery, useGetLeagueMatchesQuery, useGetLeagueParticipantsQuery, useGetLeagueProgramQuery, useGetLeagueQuery, useSaveLeagueProgramMutation, useSyncLeagueProgramMatchesMutation } from '../../features/league/leagueApi';
 import type { ProgramBlock, ProgramOption, ProgramType, TeamMatchType, RoundConfig, FormationAssignmentPlayer, FinalAdvancementMode, RoundOption, TournamentMode } from '../../features/league/types/tournament.types';
 import { ToggleButton, ToggleButtonGroup, Button, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Chip, Radio, CircularProgress, Box, Typography, Stack, Divider, Tooltip, Switch, FormControlLabel, Alert, Snackbar } from "@mui/material";
 import { DndContext, PointerSensor, TouchSensor, useSensor, useSensors, closestCenter,
@@ -1246,6 +1246,9 @@ const LeagueAlgorithmDemo = ({
   const { data: savedProgramData } = useGetLeagueProgramQuery(leagueId ?? "", {
     skip: !leagueId || !isEditMode,
   });
+  const { data: savedMatchesData } = useGetLeagueMatchesQuery(leagueId ?? "", {
+    skip: !leagueId || !isEditMode,
+  });
   const { data: leagueData } = useGetLeagueQuery(leagueId ?? "", {
     skip: !leagueId || !isEditMode,
   });
@@ -1712,6 +1715,26 @@ const LeagueAlgorithmDemo = ({
       const currentEnd = currentLeague.end_date ? toUTCDate(currentLeague.end_date) : null;
 
       if (editState) {
+        // editState는 과거 UI 입력을 복원하기 위한 캐시다. 청백전처럼 이후에
+        // 추가되거나 상세 화면에서 갱신된 설정은 서버의 rounds/blocks가
+        // 권위 있으므로, 현재 저장값을 우선해 합친다.
+        const restoredRounds = editState.rounds.map((editRound, index) => {
+          const storedRound = storedProgram.rounds?.[index];
+          const storedBlock = storedProgram.blocks?.[index];
+          return {
+            ...editRound,
+            ...(storedRound ?? {}),
+            competitionMode: storedRound?.competitionMode
+              ?? storedBlock?.competitionMode
+              ?? editRound.competitionMode,
+            blueWhiteRankingMode: storedRound?.blueWhiteRankingMode
+              ?? storedBlock?.blueWhiteRankingMode
+              ?? editRound.blueWhiteRankingMode,
+            blueWhiteTournamentPlacement: storedRound?.blueWhiteTournamentPlacement
+              ?? storedBlock?.blueWhiteTournamentPlacement
+              ?? editRound.blueWhiteTournamentPlacement,
+          };
+        });
         skipNextResetRef.current = true;
         const restoredSelectedIndex =
           editState.selectedProgramOptionIndex ??
@@ -1725,7 +1748,7 @@ const LeagueAlgorithmDemo = ({
         setProgramMode(restoredProgramMode);
         setIsProgramGenerated(editState.isProgramGenerated);
         setIsCustomProgramCompleted(editState.isCustomProgramCompleted);
-        setRounds(editState.rounds);
+        setRounds(restoredRounds);
         setCustomProgramOptions({
           ...Object.fromEntries(
             editState.recommendationOptions.map((option, index) => [index, option])
@@ -1816,15 +1839,60 @@ const LeagueAlgorithmDemo = ({
     setProgramSaveError(null);
 
     const resetAt = new Date().toISOString();
+    const previousProgram = savedProgramData?.program?.program_data as StoredProgramWithEditState | undefined;
+    const preserveExistingProgramState = (
+      nextProgram: StoredProgramWithEditState,
+    ): StoredProgramWithEditState => {
+      if (resetResults || !previousProgram) return nextProgram;
+      const preserveBlockState = (block: ProgramBlock, index: number): ProgramBlock => {
+        const previousBlock = previousProgram.blocks?.[index];
+        if (!previousBlock) return block;
+        return {
+          ...block,
+          competitionMode: block.competitionMode ?? previousBlock.competitionMode,
+          blueWhiteRankingMode: block.blueWhiteRankingMode ?? previousBlock.blueWhiteRankingMode,
+          blueWhiteTournamentPlacement: block.blueWhiteTournamentPlacement ?? previousBlock.blueWhiteTournamentPlacement,
+          participantOrder: block.participantOrder ?? previousBlock.participantOrder,
+          halfSplitMatchOrder: block.halfSplitMatchOrder ?? previousBlock.halfSplitMatchOrder,
+          groupAssignments: block.groupAssignments ?? previousBlock.groupAssignments,
+          teamAssignments: block.teamAssignments ?? previousBlock.teamAssignments,
+          doublesAssignments: block.doublesAssignments ?? previousBlock.doublesAssignments,
+        };
+      };
+      const blueWhiteOrder = previousProgram.blocks?.find((block) =>
+        block.competitionMode === "blue-white"
+        && (block.halfSplitMatchOrder?.length || block.participantOrder?.length)
+      );
+      const orderedBlueWhiteParticipantIds = blueWhiteOrder?.halfSplitMatchOrder?.length
+        ? blueWhiteOrder.halfSplitMatchOrder
+        : blueWhiteOrder?.participantOrder ?? [];
+      const blueWhiteSplit = Math.ceil(orderedBlueWhiteParticipantIds.length / 2);
+      const recoveredBlueWhiteTeams = orderedBlueWhiteParticipantIds.length > 1
+        ? {
+            blueParticipantIds: orderedBlueWhiteParticipantIds.slice(0, blueWhiteSplit),
+            whiteParticipantIds: orderedBlueWhiteParticipantIds.slice(blueWhiteSplit),
+          }
+        : undefined;
+      return {
+        ...nextProgram,
+        blueWhiteTeams: nextProgram.blueWhiteTeams
+          ?? previousProgram.blueWhiteTeams
+          ?? recoveredBlueWhiteTeams,
+        roundStandings: previousProgram.roundStandings,
+        roundTieBreaks: previousProgram.roundTieBreaks,
+        blocks: nextProgram.blocks.map(preserveBlockState),
+      };
+    };
+    const preservedSelectedOption = preserveExistingProgramState(selectedOption);
     const programToSave: StoredProgramWithEditState = resetResults
       ? {
-          ...selectedOption,
-          blocks: selectedOption.blocks.map((block) => {
+          ...preservedSelectedOption,
+          blocks: preservedSelectedOption.blocks.map((block) => {
             const { restoredMatchIds: _restored, deletedMatchIds: _deleted, ...cleanBlock } = block;
             return { ...cleanBlock, matchStateResetAt: resetAt };
           }),
         }
-      : selectedOption;
+      : preservedSelectedOption;
 
     // 기존 결과를 유지하는 "계속 진행"은 참가자와 경기 편성을 바꾸지 않는다.
     // 새 프로그램이나 명시적 초기화에서만 상단/하단 균형 편성을 확정한다.
@@ -1860,18 +1928,20 @@ const LeagueAlgorithmDemo = ({
       await saveLeagueProgram({ leagueId, program: balancedProgram }).unwrap();
 
       if (syncMatches) {
-        const programMatches = balancedProgram.blocks.flatMap((block, blockIndex) =>
-          generateProgramRoundMatches(
+        const programMatches = balancedProgram.blocks.flatMap((block, blockIndex) => {
+          const generated = generateProgramRoundMatches(
             leagueId,
             balancedProgram,
             participantData?.participants ?? [],
             blockIndex + 1,
-          ).map((match) => ({
+            savedMatchesData?.matches ?? [],
+          );
+          return generated.map((match) => ({
             ...match,
             program_round: blockIndex + 1,
             program_block_type: block.type,
-          }))
-        );
+          }));
+        });
         await syncLeagueProgramMatches({
           leagueId,
           matches: programMatches,

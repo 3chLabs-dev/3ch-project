@@ -1867,7 +1867,29 @@ export function generateProgramRoundMatches(
       }));
 
   let players = toProgramPlayers(participants);
-  const blueWhiteTeams = option?.blueWhiteTeams;
+  const storedBlueWhiteOrder = block.halfSplitMatchOrder?.length
+    ? block.halfSplitMatchOrder
+    : block.participantOrder?.length
+      ? block.participantOrder
+      : option?.blocks?.find((candidate) =>
+          candidate.competitionMode === "blue-white"
+          && (candidate.halfSplitMatchOrder?.length || candidate.participantOrder?.length)
+        )?.halfSplitMatchOrder
+        ?? option?.blocks?.find((candidate) =>
+          candidate.competitionMode === "blue-white" && candidate.participantOrder?.length
+        )?.participantOrder;
+  const inferredBlueWhiteSplit = storedBlueWhiteOrder?.length
+    ? Math.ceil(storedBlueWhiteOrder.length / 2)
+    : 0;
+  // 초기 프로그램 수정 화면이 전역 팀 명단을 누락해 저장했던 리그를
+  // 기존 통합 편성 순서로 복구한다. 블록의 청백전 설정과 참가자 순서는
+  // 남아 있으므로 앞 절반=청팀, 뒤 절반=백팀이라는 원래 편성을 사용한다.
+  const blueWhiteTeams = option?.blueWhiteTeams ?? (inferredBlueWhiteSplit > 0
+    ? {
+        blueParticipantIds: storedBlueWhiteOrder!.slice(0, inferredBlueWhiteSplit),
+        whiteParticipantIds: storedBlueWhiteOrder!.slice(inferredBlueWhiteSplit),
+      }
+    : undefined);
   if (block.competitionMode === "blue-white" && blueWhiteTeams) {
     const blueOrder = new Map(blueWhiteTeams.blueParticipantIds.map((id, index) => [id, index]));
     const whiteOrder = new Map(blueWhiteTeams.whiteParticipantIds.map((id, index) => [id, index]));

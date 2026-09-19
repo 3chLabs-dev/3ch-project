@@ -1749,9 +1749,30 @@ export function generateProgramRoundMatches(
         program_block_type: block.type,
       }));
 
-  const players = toProgramPlayers(participants);
+  let players = toProgramPlayers(participants);
+  const blueWhiteTeams = option?.blueWhiteTeams;
+  if (block.competitionMode === "blue-white" && blueWhiteTeams) {
+    const blueOrder = new Map(blueWhiteTeams.blueParticipantIds.map((id, index) => [id, index]));
+    const whiteOrder = new Map(blueWhiteTeams.whiteParticipantIds.map((id, index) => [id, index]));
+    players = [...players].sort((left, right) => {
+      const leftBlue = blueOrder.get(left.id);
+      const rightBlue = blueOrder.get(right.id);
+      const leftWhite = whiteOrder.get(left.id);
+      const rightWhite = whiteOrder.get(right.id);
+      const leftSide = leftBlue != null ? 0 : leftWhite != null ? 1 : 2;
+      const rightSide = rightBlue != null ? 0 : rightWhite != null ? 1 : 2;
+      if (leftSide !== rightSide) return leftSide - rightSide;
+      return (leftBlue ?? leftWhite ?? Number.MAX_SAFE_INTEGER)
+        - (rightBlue ?? rightWhite ?? Number.MAX_SAFE_INTEGER);
+    });
+  }
   const defaultFormationSeed = round * 1000;
-  const teamFormationPlayers = shuffleWithinLevel(players, block.teamShuffleSeed ?? defaultFormationSeed + 101);
+  const teamFormationPlayers = block.competitionMode === "blue-white" && blueWhiteTeams
+    ? [
+        ...shuffleWithinLevel(players.filter((player) => blueWhiteTeams.blueParticipantIds.includes(player.id)), block.teamShuffleSeed ?? defaultFormationSeed + 101),
+        ...shuffleWithinLevel(players.filter((player) => blueWhiteTeams.whiteParticipantIds.includes(player.id)), block.teamShuffleSeed ?? defaultFormationSeed + 201),
+      ]
+    : shuffleWithinLevel(players, block.teamShuffleSeed ?? defaultFormationSeed + 101);
   const groupSizes = block.groupSizes?.length ? block.groupSizes : option?.groupSizes ?? [players.length];
   const teamFormationSizes = block.teamFormationSizes?.length
     ? block.teamFormationSizes

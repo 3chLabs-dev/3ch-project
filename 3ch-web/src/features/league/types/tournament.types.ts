@@ -86,6 +86,11 @@ export interface ProgramOption {
   rounds?: RoundConfig[];
   roundStandings?: ProgramRoundStandingsSnapshot[];
   roundTieBreaks?: ProgramRoundTieBreak[];
+  /** 모든 청백전 라운드가 공유하는 리그 단위 팀 편성. */
+  blueWhiteTeams?: {
+    blueParticipantIds: string[];
+    whiteParticipantIds: string[];
+  };
 }
 
 export interface ProgramRoundTieBreak {

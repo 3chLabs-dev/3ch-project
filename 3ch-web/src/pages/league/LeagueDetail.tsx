@@ -217,6 +217,8 @@ import {
     const [invitedGroupsOpen, setInvitedGroupsOpen] = useState(false);
     const [teamBuilderOpen, setTeamBuilderOpen] = useState(false);
     const [teamBuilderParticipantIds, setTeamBuilderParticipantIds] = useState<string[]>([]);
+    const [blueWhiteFormationOpen, setBlueWhiteFormationOpen] = useState(false);
+    const [blueWhiteBlueIds, setBlueWhiteBlueIds] = useState<string[]>([]);
     const authUser = useAppSelector((state) => state.auth.user);
 
     const { data: leagueData, isLoading: leagueLoading, refetch: refetchLeague } = useGetLeagueQuery(id ?? "", {
@@ -368,8 +370,14 @@ import {
         doublesAssignmentModes?: Array<"manual" | "auto">;
         doublesAssignmentLocks?: boolean[];
         participantOrder?: string[];
+        halfSplitMatchOrder?: string[];
+        competitionMode?: "standard" | "blue-white";
       }>;
       rounds?: Array<Record<string, unknown>>;
+      blueWhiteTeams?: {
+        blueParticipantIds: string[];
+        whiteParticipantIds: string[];
+      };
     } | null;
     const firstFormationBlockIndex = teamProgram?.blocks?.findIndex((block) => block.type === "TEAM" || block.type === "DOUBLES") ?? -1;
     const firstFormationBlock = firstFormationBlockIndex >= 0 ? teamProgram?.blocks?.[firstFormationBlockIndex] : undefined;
@@ -512,6 +520,56 @@ import {
         return a.name.localeCompare(b.name, "ko");
       });
     }, [participantData?.participants]);
+    const hasBlueWhiteProgram = Boolean(
+      teamProgram?.blocks?.some((block) => block.competitionMode === "blue-white")
+      || teamProgram?.rounds?.some((round) => round.competitionMode === "blue-white"),
+    );
+    const hasStartedProgramMatch = Boolean(
+      leagueMatchesData?.matches?.some((match) => match.status === "playing" || match.status === "done"),
+    );
+    const openBlueWhiteFormation = () => {
+      const participantIds = new Set(participants.map((participant) => participant.id));
+      const savedBlueIds = (teamProgram?.blueWhiteTeams?.blueParticipantIds ?? [])
+        .filter((participantId) => participantIds.has(participantId));
+      if (savedBlueIds.length > 0) {
+        setBlueWhiteBlueIds(savedBlueIds);
+      } else {
+        setBlueWhiteBlueIds(participants.filter((_, index) => index % 2 === 0).map((participant) => participant.id));
+      }
+      setBlueWhiteFormationOpen(true);
+    };
+    const saveBlueWhiteFormation = async () => {
+      if (!id || !teamProgram?.blocks || hasStartedProgramMatch) return;
+      const participantIds = participants.map((participant) => participant.id);
+      const blueSet = new Set(blueWhiteBlueIds.filter((participantId) => participantIds.includes(participantId)));
+      const blueParticipantIds = participantIds.filter((participantId) => blueSet.has(participantId));
+      const whiteParticipantIds = participantIds.filter((participantId) => !blueSet.has(participantId));
+      if (blueParticipantIds.length === 0 || whiteParticipantIds.length === 0) {
+        setAlertSeverity("warning");
+        setAlertMsg("청팀과 백팀에 각각 한 명 이상 편성해 주세요.");
+        return;
+      }
+      const sharedOrder = [...blueParticipantIds, ...whiteParticipantIds];
+      const applyFormation = <T extends Record<string, unknown>>(round: T) =>
+        round.competitionMode === "blue-white"
+          ? { ...round, participantOrder: sharedOrder, halfSplitMatchOrder: sharedOrder }
+          : round;
+      const nextProgram = {
+        ...teamProgram,
+        blueWhiteTeams: { blueParticipantIds, whiteParticipantIds },
+        blocks: teamProgram.blocks.map((block) => applyFormation(block as unknown as Record<string, unknown>)),
+        rounds: teamProgram.rounds?.map(applyFormation),
+      };
+      try {
+        await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
+        setBlueWhiteFormationOpen(false);
+        setAlertSeverity("success");
+        setAlertMsg("청팀·백팀 편성을 저장했습니다. 모든 청백전 라운드에 공통 적용됩니다.");
+      } catch {
+        setAlertSeverity("error");
+        setAlertMsg("청팀·백팀 편성 저장에 실패했습니다.");
+      }
+    };
     const prebuiltParticipantKeys = useMemo(() => {
       if (!firstFormationBlock) return new Set<string>();
       const assignments = isDoublesBuilder
@@ -644,6 +702,9 @@ import {
           : generateGroupOptions(unitCount)[0]?.groups ?? [unitCount];
         return {
           ...block,
+          ...(block.competitionMode === "blue-white"
+            ? { participantOrder: undefined, halfSplitMatchOrder: undefined }
+            : {}),
           ...(block.type !== "TEAM" && block.format === "GROUP" ? { groupSizes: nextGroupSizes } : {}),
           ...(block.type === "TEAM" ? { teamFormationSizes: undefined, teamGroupSizes: undefined } : {}),
           groupAssignments: undefined,
@@ -660,6 +721,9 @@ import {
       };
       const nextProgram = {
         ...teamProgram,
+        // 참가자 명단이 바뀌면 이전 청·백 편성은 더 이상 완전하지 않다.
+        // 경기 시작 전 재구성 경로에서만 비워 다음 편성 시 전원을 다시 지정한다.
+        blueWhiteTeams: undefined,
         blocks: teamProgram.blocks.map(resetBlock),
         rounds: teamProgram.rounds?.map((round, index) => ({
           ...round,
@@ -1761,6 +1825,17 @@ const handleSaveEdit = async () => {
               )}
             </Stack>
             <Stack direction="row" spacing={0.8}>
+            {hasBlueWhiteProgram && canManage && (
+              <Button
+                variant="contained"
+                disableElevation
+                size="small"
+                onClick={openBlueWhiteFormation}
+                sx={{ borderRadius: 1, height: 28, px: 1.2, fontWeight: 800, fontSize: 12, bgcolor: "#1D6FBF", "&:hover": { bgcolor: "#185E9F" } }}
+              >
+                청·백팀 편성
+              </Button>
+            )}
             {canBuildTeam && (
               <Button
                 variant="contained"
@@ -2008,6 +2083,95 @@ const handleSaveEdit = async () => {
               </Button>
             )}
           </Box>
+
+          <Dialog
+            open={blueWhiteFormationOpen}
+            onClose={() => setBlueWhiteFormationOpen(false)}
+            fullWidth
+            maxWidth="sm"
+          >
+            <DialogTitle sx={{ fontWeight: 900 }}>청팀·백팀 편성</DialogTitle>
+            <DialogContent>
+              <Typography fontSize={13} color="text.secondary" sx={{ mb: 1.5 }}>
+                여기서 정한 편성은 라운드별 설정이 아니라 이 리그의 모든 청백전 라운드에 공통 적용됩니다.
+              </Typography>
+              {hasStartedProgramMatch && (
+                <Alert severity="warning" sx={{ mb: 1.5 }}>
+                  이미 시작하거나 완료된 경기가 있어 기존 결과 보호를 위해 팀 편성을 변경할 수 없습니다.
+                </Alert>
+              )}
+              <Stack direction="row" spacing={1} sx={{ mb: 1.2 }}>
+                <Chip
+                  label={`청팀 ${blueWhiteBlueIds.length}명`}
+                  sx={{ flex: 1, bgcolor: "#E8F1FF", color: "#1D6FBF", fontWeight: 900 }}
+                />
+                <Chip
+                  label={`백팀 ${Math.max(0, participants.length - blueWhiteBlueIds.length)}명`}
+                  sx={{ flex: 1, bgcolor: "#F3F4F6", color: "#374151", fontWeight: 900 }}
+                />
+              </Stack>
+              {!hasStartedProgramMatch && participants.length >= 2 && (
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  onClick={() => {
+                    const shuffledIds = participants
+                      .map((participant) => participant.id)
+                      .map((participantId) => ({ participantId, order: Math.random() }))
+                      .sort((left, right) => left.order - right.order)
+                      .map(({ participantId }) => participantId);
+                    setBlueWhiteBlueIds(shuffledIds.slice(0, Math.ceil(shuffledIds.length / 2)));
+                  }}
+                  sx={{ mb: 1.2, fontWeight: 800 }}
+                >
+                  자동 재편성
+                </Button>
+              )}
+              <Stack spacing={0.7}>
+                {participants.map((participant) => {
+                  const isBlue = blueWhiteBlueIds.includes(participant.id);
+                  return (
+                    <Box
+                      key={participant.id}
+                      sx={{ display: "grid", gridTemplateColumns: "1fr auto", alignItems: "center", gap: 1, p: 1, border: "1px solid #E5E7EB", borderRadius: 1 }}
+                    >
+                      <Stack direction="row" spacing={1} alignItems="center" minWidth={0}>
+                        <Typography fontSize={13} fontWeight={800} noWrap>{participant.name}</Typography>
+                        <DivisionBadge division={participant.division} />
+                      </Stack>
+                      <ToggleButtonGroup
+                        exclusive
+                        size="small"
+                        value={isBlue ? "blue" : "white"}
+                        disabled={hasStartedProgramMatch}
+                        onChange={(_, value: "blue" | "white" | null) => {
+                          if (!value) return;
+                          setBlueWhiteBlueIds((current) => value === "blue"
+                            ? [...new Set([...current, participant.id])]
+                            : current.filter((participantId) => participantId !== participant.id));
+                        }}
+                        sx={{ "& .MuiToggleButton-root": { px: 1.4, py: 0.45, fontSize: 12, fontWeight: 800 } }}
+                      >
+                        <ToggleButton value="blue" sx={{ "&.Mui-selected": { bgcolor: "#DCEBFF", color: "#1D6FBF" } }}>청팀</ToggleButton>
+                        <ToggleButton value="white" sx={{ "&.Mui-selected": { bgcolor: "#F3F4F6", color: "#111827" } }}>백팀</ToggleButton>
+                      </ToggleButtonGroup>
+                    </Box>
+                  );
+                })}
+              </Stack>
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 2 }}>
+              <Button onClick={() => setBlueWhiteFormationOpen(false)} color="inherit">닫기</Button>
+              <Button
+                variant="contained"
+                disableElevation
+                disabled={hasStartedProgramMatch || savingTeam || participants.length < 2}
+                onClick={saveBlueWhiteFormation}
+              >
+                저장
+              </Button>
+            </DialogActions>
+          </Dialog>
 
           <MemberEditDialog
             open={openMemberEditDialog}

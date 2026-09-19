@@ -917,7 +917,9 @@ function getRankedTournamentPools(
     ) ?? finalRoundMatches.find(
       (match) => !/3\s*[·.]?\s*4위전/.test(match.match_label ?? ""),
     );
-    if (!finalMatch || finalMatch.status !== "done") return [];
+    // 점수는 저장됐지만 상태 갱신이 지연된 경우에도 사용자 입력 결과가
+    // 더 권위 있다. 실제 승패가 확정된 결승이면 진출자로 인정한다.
+    if (!finalMatch || !hasCompletedResult(finalMatch)) return [];
 
     const winner = getTournamentWinner(finalMatch);
     const runnerUp = getTournamentLoser(finalMatch);
@@ -925,12 +927,19 @@ function getRankedTournamentPools(
       .filter((match) => (match.round_number ?? 0) === finalRound - 1)
       .map(getTournamentLoser)
       .filter(Boolean);
-    const rankedIds = [winner, runnerUp, ...semifinalLosers]
-      .flatMap((result) => result?.id ? [result.id] : []);
-    const rankedUnits = rankedIds.flatMap((id) => {
-      const unit = unitById.get(id);
-      return unit ? [unit] : [];
-    });
+    const rankedUnits = [winner, runnerUp, ...semifinalLosers]
+      .flatMap((result) => {
+        if (!result?.id) return [];
+        // 상위 경기 참가자가 클라이언트에서 전파된 직후에는 unitById에
+        // 아직 없을 수 있다. 결승전에 저장된 실제 참가자 ID/이름을 직접
+        // 사용해 가상 순위 슬롯이 남지 않도록 한다.
+        return [unitById.get(result.id) ?? {
+          id: result.id,
+          name: result.name,
+          division: result.division,
+          seedLabel: result.seedLabel,
+        }];
+      });
     return rankedUnits.length > 0 ? [rankedUnits] : [];
   });
 

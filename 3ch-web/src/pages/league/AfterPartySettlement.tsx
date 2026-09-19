@@ -33,6 +33,14 @@ const roundTotals = (entry: Settlement) => ({
   nonalcohol: (entry.items ?? []).filter((item) => item.category === "nonalcohol").reduce((sum, item) => sum + Number(item.amount || 0), 0),
   contributed: (entry.contributions ?? []).reduce((sum, contribution) => sum + Number(contribution.amount || 0), 0),
 });
+const costBreakdown = (totals: { food: number; alcohol: number; nonalcohol: number }, contributed: number) => {
+  const costs = [
+    ["음식", totals.food],
+    ["술", totals.alcohol],
+    ["음료", totals.nonalcohol],
+  ].filter((entry): entry is [string, number] => Number(entry[1]) > 0).map(([label, amount]) => `${label} ${money(amount)}`);
+  return `${costs.length ? `(${costs.join(" + ")})` : ""}${contributed > 0 ? `${costs.length ? " - " : ""}찬조금 ${money(contributed)}` : ""}`;
+};
 const samplePeople = ["참가자 1", "참가자 2", "참가자 3", "참가자 4"].map((name, index) => ({ id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`, name, attending: index < 2, drinking: index < 2, excluded: false }));
 
 function preview(people: Person[], items: Item[], contributions: Contribution[]): Calculation | null {
@@ -450,6 +458,11 @@ export default function AfterPartySettlement() {
     }, 1800);
   };
   const calculation = useMemo(() => preview(people, items, contributions), [people, items, contributions]);
+  const currentTotals = useMemo(() => ({
+    food: items.filter((item) => item.category === "common").reduce((sum, item) => sum + Number(item.amount || 0), 0),
+    alcohol: items.filter((item) => item.category === "alcohol").reduce((sum, item) => sum + Number(item.amount || 0), 0),
+    nonalcohol: items.filter((item) => item.category === "nonalcohol").reduce((sum, item) => sum + Number(item.amount || 0), 0),
+  }), [items]);
   const editable = !!selected && canManage;
   const leagueAfterIds = useMemo(() => {
     const ids = new Set((participantData?.participants ?? []).filter((person) => person.after).map((person) => person.id));
@@ -481,7 +494,7 @@ export default function AfterPartySettlement() {
         </Stack>
       </Stack>
       <Box ref={exportRef} sx={{ bgcolor: "#FFFFFF", p: 1 }}>
-      <Stack spacing={1}>{list.map((entry) => { const totals = roundTotals(entry); return <Card key={entry.id} sx={{ p: 2, border: "1px solid #E5E7EB" }}><Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}><Box onClick={() => { if (!shareToken) navigate(`${listPath}?round=${entry.round_no}`); }} sx={{ flex: 1, minWidth: 0, cursor: shareToken ? "default" : "pointer" }}><Stack direction="row" justifyContent="space-between" alignItems="center"><Typography fontWeight={900}>{entry.round_no}차</Typography><Typography fontWeight={800}>{totals.attendees}명</Typography></Stack><Typography color="text.secondary" fontSize={12} mt={1} sx={{ overflowWrap: "anywhere" }}>({`음식 ${money(totals.food)} + 술 ${money(totals.alcohol)} + 음료 ${money(totals.nonalcohol)}`}) - 찬조 {money(totals.contributed)}</Typography><Typography fontSize={14} fontWeight={900} mt={0.5}>= 정산 금액 {money(entry.calculation?.distributable ?? 0)}</Typography></Box>{canManage && <IconButton data-html2canvas-ignore aria-label={`${entry.round_no}차 정산 삭제`} size="small" disabled={busy} onClick={() => void archiveRound(entry)}><DeleteOutlineIcon fontSize="small" /></IconButton>}</Stack></Card>; })}</Stack>
+      <Stack spacing={1}>{list.map((entry) => { const totals = roundTotals(entry); return <Card key={entry.id} sx={{ p: 2, border: "1px solid #E5E7EB" }}><Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}><Box onClick={() => { if (!shareToken) navigate(`${listPath}?round=${entry.round_no}`); }} sx={{ flex: 1, minWidth: 0, cursor: shareToken ? "default" : "pointer" }}><Stack direction="row" justifyContent="space-between" alignItems="center"><Typography fontWeight={900}>{entry.round_no}차</Typography><Typography fontWeight={800}>{totals.attendees}명</Typography></Stack><Typography color="text.secondary" fontSize={12} mt={1} sx={{ overflowWrap: "anywhere" }}>{costBreakdown(totals, totals.contributed)}</Typography><Typography fontSize={14} fontWeight={900} mt={0.5}>= 정산 금액 {money(entry.calculation?.distributable ?? 0)}</Typography></Box>{canManage && <IconButton data-html2canvas-ignore aria-label={`${entry.round_no}차 정산 삭제`} size="small" disabled={busy} onClick={() => void archiveRound(entry)}><DeleteOutlineIcon fontSize="small" /></IconButton>}</Stack></Card>; })}</Stack>
       {!list.length && <Typography color="text.secondary">아직 만든 정산이 없습니다.</Typography>}
       <Card sx={{ p: 2, mt: 2, border: "1px solid #BFDBFE", bgcolor: "#F8FAFF" }}>
         <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}><Typography fontWeight={900} fontSize={17}>전체 합산</Typography><Typography fontWeight={900} fontSize={18}>{money(summary.total)}</Typography></Stack>
@@ -553,7 +566,7 @@ export default function AfterPartySettlement() {
           </Stack>
         </Box>)}</Stack>
       </Card>
-      <Card sx={{ p: 2, bgcolor: "#F8FAFF" }}><Typography fontWeight={900} mb={1}>정산 결과</Typography>{calculation ? <><Typography>결제 금액 {money(calculation.total)} - 찬조금 {money(calculation.contributed)}</Typography><Typography fontWeight={900} my={1}> = 정산 금액 {money(calculation.distributable)}</Typography>{people.filter((p) => p.attending).map((p) => <Stack key={p.id} direction="row" justifyContent="space-between"><Typography>{p.name}{p.excluded ? " (제외)" : ""}</Typography><Typography fontWeight={800}>{money(calculation.shares[p.id] ?? 0)}</Typography></Stack>)}</> : <Alert severity="warning">찬조금이 총비용보다 많거나 부담 대상이 없는 항목이 있습니다.</Alert>}</Card>
+      <Card sx={{ p: 2, bgcolor: "#F8FAFF" }}><Typography fontWeight={900} mb={1}>정산 결과</Typography>{calculation ? <><Typography fontSize={13} color="text.secondary" sx={{ overflowWrap: "anywhere" }}>{costBreakdown(currentTotals, calculation.contributed)}</Typography><Typography fontWeight={900} my={1}>= 정산 금액 {money(calculation.distributable)}</Typography>{people.filter((p) => p.attending).map((p) => <Stack key={p.id} direction="row" justifyContent="space-between"><Typography>{p.name}{p.excluded ? " (제외)" : ""}</Typography><Typography fontWeight={800}>{money(calculation.shares[p.id] ?? 0)}</Typography></Stack>)}</> : <Alert severity="warning">찬조금이 총비용보다 많거나 부담 대상이 없는 항목이 있습니다.</Alert>}</Card>
       {editable && <Button fullWidth variant="contained" disabled={busy || !calculation || !dirty} onClick={() => void save()}>저장</Button>}
     </Stack> : <Typography color="text.secondary">{error || (listLoaded ? "해당 차수의 정산을 찾을 수 없습니다." : "정산을 불러오는 중...")}</Typography>}
     <Dialog open={shareDialogOpen} onClose={() => setShareDialogOpen(false)} maxWidth="sm" fullWidth>

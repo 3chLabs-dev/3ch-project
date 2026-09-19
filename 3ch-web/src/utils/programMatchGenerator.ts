@@ -1867,7 +1867,18 @@ export function generateProgramRoundMatches(
       ));
     }
 
-    return withoutDeleted(splitTournamentUnits(matchUnits, block.tournamentBracketCount ?? 1).flatMap((bracketPlayers, bracketIndex) =>
+    // 청백전의 "같은 팀끼리"는 화면상 앞/뒤 절반을 각각 독립된
+    // 토너먼트로 만든다. tournament_bracket_index가 다르므로 서버의
+    // 입상 포인트 계산도 청팀과 백팀을 각각 하나의 대회로 집계한다.
+    const tournamentUnits = block.competitionMode === "blue-white"
+      && block.blueWhiteTournamentPlacement === "by-team"
+      ? [
+          matchUnits.slice(0, Math.ceil(matchUnits.length / 2)),
+          matchUnits.slice(Math.ceil(matchUnits.length / 2)),
+        ].filter((units) => units.length > 0)
+      : splitTournamentUnits(matchUnits, block.tournamentBracketCount ?? 1);
+
+    return withoutDeleted(tournamentUnits.flatMap((bracketPlayers, bracketIndex) =>
       tournamentBuilder(leagueId, round - 1, block, bracketPlayers, undefined, bracketIndex + 1),
     ));
   }

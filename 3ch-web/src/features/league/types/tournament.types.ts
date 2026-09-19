@@ -159,6 +159,10 @@ export interface ProgramBlock {
   crossClubGrouping?: boolean;
   crossClubOnlyMatches?: boolean;
   halfSplitOnlyMatches?: boolean;
+  /** 일반 경기인지 청팀 대 백팀 경기인지 구분한다. 누락된 기존 데이터는 일반 경기다. */
+  competitionMode?: CompetitionMode;
+  blueWhiteRankingMode?: BlueWhiteRankingMode;
+  blueWhiteTournamentPlacement?: BlueWhiteTournamentPlacement;
   unitClubMode?: UnitClubMode;
   participantOrder?: string[];
   /** 수정 모드에서 관리자가 명시적으로 저장한 표시 순서인지 여부. */
@@ -206,6 +210,10 @@ export type TournamentSeedingType =
 export type TournamentMode =
   | "single"
   | "upper-lower";
+
+export type CompetitionMode = "standard" | "blue-white";
+export type BlueWhiteRankingMode = "by-team" | "combined";
+export type BlueWhiteTournamentPlacement = "by-team" | "mixed";
 
 export type FinalAdvancementMode =
   | "top-n"
@@ -273,6 +281,10 @@ export interface RoundConfig {
   crossClubGrouping?: boolean;
   crossClubOnlyMatches?: boolean;
   halfSplitOnlyMatches?: boolean;
+  /** 일반 경기인지 청팀 대 백팀 경기인지 구분한다. 누락된 기존 데이터는 일반 경기다. */
+  competitionMode?: CompetitionMode;
+  blueWhiteRankingMode?: BlueWhiteRankingMode;
+  blueWhiteTournamentPlacement?: BlueWhiteTournamentPlacement;
   unitClubMode?: UnitClubMode;
   participantOrder?: string[];
   participantOrderCustomized?: boolean;

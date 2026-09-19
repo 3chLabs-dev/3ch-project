@@ -50,6 +50,8 @@ const DEFAULT_POINT_RULES: GroupRankingPointRules = {
     group: { enabled: true, first: 30, second: 20, third: 15, fourth: 10 },
     tournamentUpper: { enabled: true, first: 50, second: 30, third: 20, fourth: 15 },
     tournamentLower: { enabled: true, first: 20, second: 15, third: 10, fourth: 5 },
+    tournamentFinalUpper: { enabled: true, first: 50, second: 30, third: 20, fourth: 15 },
+    tournamentFinalLower: { enabled: true, first: 20, second: 15, third: 10, fourth: 5 },
   },
 };
 
@@ -59,9 +61,14 @@ const TOURNAMENT_ELIMINATION_ROUNDS: TournamentEliminationRound[] = ["8", "16", 
 const normalizeRankingRules = (
   saved: Partial<GroupRankingPointRules["rankings"]> | undefined,
 ): GroupRankingPointRules["rankings"] => {
-  const keys: RankingRuleKey[] = ["league", "group", "tournamentUpper", "tournamentLower"];
+  const keys: RankingRuleKey[] = ["league", "group", "tournamentUpper", "tournamentLower", "tournamentFinalUpper", "tournamentFinalLower"];
   return keys.reduce((result, key) => {
-    const fallback = DEFAULT_POINT_RULES.rankings[key];
+    const inheritedKey = key === "tournamentFinalUpper"
+      ? "tournamentUpper"
+      : key === "tournamentFinalLower"
+        ? "tournamentLower"
+        : key;
+    const fallback = saved?.[inheritedKey] ?? DEFAULT_POINT_RULES.rankings[key];
     const rule = saved?.[key];
     const legacyThirdFourth = rule?.thirdFourth;
     result[key] = {
@@ -197,7 +204,7 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
   };
 
   const updateEliminationRound = (
-    key: "tournamentUpper" | "tournamentLower",
+    key: "tournamentUpper" | "tournamentLower" | "tournamentFinalUpper" | "tournamentFinalLower",
     round: TournamentEliminationRound,
     value: number,
   ) => {
@@ -431,8 +438,10 @@ export default function GroupRankingSeasonDialog({ open, groupId, seasonId, onCl
           <Stack spacing={1.5}>
             <RankingPointRow label="풀리그" values={pointRules.rankings.league} onEnabledChange={(enabled) => updateRankingEnabled("league", enabled)} onChange={(rank, value) => updateRanking("league", rank, value)} />
             <RankingPointRow label="조별리그" values={pointRules.rankings.group} onEnabledChange={(enabled) => updateRankingEnabled("group", enabled)} onChange={(rank, value) => updateRanking("group", rank, value)} />
-            <RankingPointRow label="토너먼트(상위)" values={pointRules.rankings.tournamentUpper} onEnabledChange={(enabled) => updateRankingEnabled("tournamentUpper", enabled)} onChange={(rank, value) => updateRanking("tournamentUpper", rank, value)} onEliminationChange={(round, value) => updateEliminationRound("tournamentUpper", round, value)} />
-            <RankingPointRow label="토너먼트(하위)" values={pointRules.rankings.tournamentLower} onEnabledChange={(enabled) => updateRankingEnabled("tournamentLower", enabled)} onChange={(rank, value) => updateRanking("tournamentLower", rank, value)} onEliminationChange={(round, value) => updateEliminationRound("tournamentLower", round, value)} />
+            <RankingPointRow label="토너먼트 - 본선(상위)" values={pointRules.rankings.tournamentUpper} onEnabledChange={(enabled) => updateRankingEnabled("tournamentUpper", enabled)} onChange={(rank, value) => updateRanking("tournamentUpper", rank, value)} onEliminationChange={(round, value) => updateEliminationRound("tournamentUpper", round, value)} />
+            <RankingPointRow label="토너먼트 - 본선(하위)" values={pointRules.rankings.tournamentLower} onEnabledChange={(enabled) => updateRankingEnabled("tournamentLower", enabled)} onChange={(rank, value) => updateRanking("tournamentLower", rank, value)} onEliminationChange={(round, value) => updateEliminationRound("tournamentLower", round, value)} />
+            <RankingPointRow label="토너먼트 - 결선(상위)" values={pointRules.rankings.tournamentFinalUpper} onEnabledChange={(enabled) => updateRankingEnabled("tournamentFinalUpper", enabled)} onChange={(rank, value) => updateRanking("tournamentFinalUpper", rank, value)} onEliminationChange={(round, value) => updateEliminationRound("tournamentFinalUpper", round, value)} />
+            <RankingPointRow label="토너먼트 - 결선(하위)" values={pointRules.rankings.tournamentFinalLower} onEnabledChange={(enabled) => updateRankingEnabled("tournamentFinalLower", enabled)} onChange={(rank, value) => updateRanking("tournamentFinalLower", rank, value)} onEliminationChange={(round, value) => updateEliminationRound("tournamentFinalLower", round, value)} />
             <FormControlLabel
               control={(
                 <Checkbox

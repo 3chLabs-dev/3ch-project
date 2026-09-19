@@ -61,6 +61,9 @@ const newRound = (id: number): RenewalRoundConfig => ({
   tournamentSeeding: "seed",
   tournamentBracketCount: 1,
   thirdPlaceMatch: true,
+  competitionMode: "standard",
+  blueWhiteRankingMode: "by-team",
+  blueWhiteTournamentPlacement: "by-team",
   tournamentMode: "single",
   finalAdvancementMode: "top-n",
   advanceCount: 2,
@@ -254,16 +257,17 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
 
   const updateFormat = (index: number, format: RoundFormat) => {
     const multipleRounds = rounds.length > 1;
+    const previousFormat = index > 0 ? rounds[index - 1]?.format : null;
     updateRound(index, {
       format,
-      option: multipleRounds ? (index === 0 ? "PRELIM" : "PRELIM") : "NONE",
+      option: multipleRounds ? (index === 0 ? "PRELIM" : "FINAL") : "NONE",
       tournamentMode: format === "TOURNAMENT" ? "single" : undefined,
       tournamentSeeding: "seed",
       tournamentBracketCount:
         format === "TOURNAMENT" ? rounds[index].tournamentBracketCount ?? 1 : 1,
       thirdPlaceMatch: format === "TOURNAMENT" ? rounds[index].thirdPlaceMatch ?? true : undefined,
       finalAdvancementMode: "top-n",
-      advanceCount: rounds[index].advanceCount ?? 2,
+      advanceCount: previousFormat === "TOURNAMENT" ? 1 : rounds[index].advanceCount ?? 2,
       sourceRoundId: index > 0 ? rounds[index - 1].id : undefined,
     });
   };
@@ -339,6 +343,7 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
 
     if (round.format === "TOURNAMENT") {
       const value = `${round.option ?? "PRELIM"}:${round.tournamentMode ?? "single"}`;
+      const finalLabel = index >= 2 ? "결선" : "본선";
       return (
         <Box sx={{ mt: 2 }}>
           <Typography sx={{ fontWeight: 900, mb: 1 }}>라운드 구분</Typography>
@@ -380,15 +385,22 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
               },
             }}
           >
+            {index > 0 && <ToggleButton value="FINAL:single">{finalLabel}(일반)</ToggleButton>}
+            {index > 0 && <ToggleButton value="FINAL:upper-lower">{finalLabel}(상·하위)</ToggleButton>}
             <ToggleButton value="PRELIM:single">예선(일반)</ToggleButton>
             <ToggleButton value="PRELIM:upper-lower">예선(상·하위)</ToggleButton>
-            {index > 0 && <ToggleButton value="FINAL:single">본선(일반)</ToggleButton>}
-            {index > 0 && <ToggleButton value="FINAL:upper-lower">본선(상·하위)</ToggleButton>}
           </ToggleButtonGroup>
           <Typography sx={descriptionSx}>
             {round.tournamentMode === "upper-lower"
               ? "첫 경기에서 이기면 상위부로, 지면 하위부로 진출하는 토너먼트입니다."
               : "경기에서 이긴 참가자가 다음 단계로 진출하는 일반적인 토너먼트입니다."}
+          </Typography>
+          <Typography sx={descriptionSx}>
+            {round.option === "PRELIM"
+              ? "이전 라운드의 결과와 상관 없이 새로운 라운드를 진행합니다."
+              : index >= 2
+                ? "본선 우승자만 결선 라운드를 진행합니다."
+                : "이전 라운드의 순위 결과에 따라 본선 라운드를 진행합니다."}
           </Typography>
         </Box>
       );
@@ -411,9 +423,16 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
             });
           }}
         >
+          <ToggleButton value="FINAL">{index >= 2 ? "결선" : "본선"}</ToggleButton>
           <ToggleButton value="PRELIM">예선</ToggleButton>
-          <ToggleButton value="FINAL">본선</ToggleButton>
         </ToggleButtonGroup>
+        <Typography sx={descriptionSx}>
+          {round.option === "PRELIM"
+            ? "이전 라운드의 결과와 상관 없이 새로운 라운드를 진행합니다."
+            : index >= 2
+              ? "본선 우승자만 결선 라운드를 진행합니다."
+              : "이전 라운드의 순위 결과에 따라 본선 라운드를 진행합니다."}
+        </Typography>
       </Box>
     );
   };
@@ -421,7 +440,12 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
   const renderFinalOptions = (round: RenewalRoundConfig, index: number) => {
     if (index === 0 || round.option !== "FINAL") return null;
     const previousFormat = rounds[index - 1]?.format;
-    const advancementPrefix = previousFormat === "GROUP" ? "각 조 상위" : "전체 상위";
+    const advancementPrefix = previousFormat === "GROUP"
+      ? "각 조 상위"
+      : previousFormat === "TOURNAMENT"
+        ? "각 대진표 상위"
+        : "전체 상위";
+    const finalLabel = index >= 2 ? "결선" : "본선";
 
     if (round.format === "LEAGUE") {
       return (
@@ -438,7 +462,7 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
             }
           />
           <Typography sx={descriptionSx}>
-            예선 순위 결과에 따라 상위 순위권 참가자만 본선 라운드를 진행합니다.
+            이전 라운드 결과에 따라 상위 순위권 참가자만 {finalLabel} 라운드를 진행합니다.
           </Typography>
         </>
       );
@@ -448,7 +472,7 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
       const mode = round.finalAdvancementMode ?? "top-n";
       return (
         <Box sx={{ mt: 2 }}>
-          <Typography sx={{ fontWeight: 900, mb: 1 }}>본선 편성</Typography>
+          <Typography sx={{ fontWeight: 900, mb: 1 }}>{finalLabel} 편성</Typography>
           <ToggleButtonGroup
             exclusive
             fullWidth
@@ -476,10 +500,10 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
           )}
           <Typography sx={descriptionSx}>
             {mode === "upper-lower-groups"
-              ? "예선 순위 결과에 따라 상위부와 하위부로 나누어 본선 라운드를 진행합니다."
+              ? `이전 라운드 순위 결과에 따라 상위부와 하위부로 나누어 ${finalLabel} 라운드를 진행합니다.`
               : mode === "rank-groups"
-                ? "예선 순위 결과에 따라 같은 순위끼리 각 순위조에 배정하여 본선 라운드를 진행합니다."
-                : "예선 순위 결과에 따라 상위 순위권 참가자만 본선 라운드를 진행합니다."}
+                ? `이전 라운드 순위 결과에 따라 같은 순위끼리 각 순위조에 배정하여 ${finalLabel} 라운드를 진행합니다.`
+                : `이전 라운드 순위 결과에 따라 상위 순위권 참가자만 ${finalLabel} 라운드를 진행합니다.`}
           </Typography>
         </Box>
       );
@@ -513,8 +537,12 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
             />
           )}
           <Typography sx={descriptionSx}>
-            {mode === "all"
-              ? "예선 참가자 모두가 본선에 진출하며, 전체 인원에 맞춰 토너먼트 시작 단계와 BYE를 자동으로 구성합니다."
+            {previousFormat === "TOURNAMENT"
+              ? mode === "all"
+                ? `각 대진표의 입상자가 모두 ${finalLabel}에 진출합니다.`
+                : `각 대진표의 상위 ${round.advanceCount ?? 1}명이 ${finalLabel}에 진출합니다.`
+              : mode === "all"
+              ? `이전 라운드 참가자 모두가 ${finalLabel}에 진출하며, 전체 인원에 맞춰 토너먼트 시작 단계와 BYE를 자동으로 구성합니다.`
               : previousFormat === "GROUP"
               ? "각 조의 상위 순위 참가자가 진출하며, 총 진출 인원에 맞춰 토너먼트 시작 단계와 BYE를 자동으로 구성합니다."
               : "전체 순위의 상위 참가자가 진출하며, 진출 인원에 맞춰 토너먼트 시작 단계와 BYE를 자동으로 구성합니다."}
@@ -559,6 +587,28 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
               </Stack>
             </RadioGroup>
           </FormControl>
+          {round.program && (
+            <Box sx={{ mt: 2 }}>
+              <Typography sx={{ fontWeight: 900, mb: 1 }}>경기 구분</Typography>
+              <ToggleButtonGroup exclusive fullWidth value={round.competitionMode ?? "standard"} onChange={(_, value: RenewalRoundConfig["competitionMode"] | null) => {
+                if (!value) return;
+                updateRound(index, {
+                  competitionMode: value,
+                  halfSplitOnlyMatches: value === "blue-white",
+                  blueWhiteRankingMode: round.blueWhiteRankingMode ?? "by-team",
+                  blueWhiteTournamentPlacement: round.blueWhiteTournamentPlacement ?? "by-team",
+                });
+              }}>
+                <ToggleButton value="standard">일반</ToggleButton>
+                <ToggleButton value="blue-white">청백전</ToggleButton>
+              </ToggleButtonGroup>
+              <Typography sx={descriptionSx}>
+                {(round.competitionMode ?? "standard") === "blue-white"
+                  ? "참가자를 청팀과 백팀으로 나누어 두 팀 사이의 경기만 진행합니다."
+                  : "모든 참가자가 같은 구분에서 경기하는 일반 방식입니다."}
+              </Typography>
+            </Box>
+          )}
           {round.program === "TEAM" && (
             <Box sx={{ mt: 2 }}>
               {index > 0 && rounds[index - 1]?.program === "TEAM" && (
@@ -662,6 +712,42 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
           </FormControl>
 
           {renderRoundDivision(round, index)}
+
+          {round.competitionMode === "blue-white" && (round.format === "LEAGUE" || round.format === "GROUP") && (
+            <Box sx={{ mt: 2 }}>
+              <Typography sx={{ fontWeight: 900, mb: 1 }}>순위 집계</Typography>
+              <ToggleButtonGroup exclusive fullWidth value={round.blueWhiteRankingMode ?? "by-team"} onChange={(_, value: RenewalRoundConfig["blueWhiteRankingMode"] | null) => {
+                if (value) updateRound(index, { blueWhiteRankingMode: value });
+              }}>
+                <ToggleButton value="by-team">같은 팀끼리</ToggleButton>
+                <ToggleButton value="combined">합산 순위</ToggleButton>
+              </ToggleButtonGroup>
+              <Typography sx={descriptionSx}>
+                {(round.blueWhiteRankingMode ?? "by-team") === "by-team"
+                  ? "청팀과 백팀의 순위를 각각 1위부터 집계합니다."
+                  : "청팀과 백팀 참가자를 합쳐 하나의 순위로 집계합니다."}
+              </Typography>
+            </Box>
+          )}
+
+          {round.competitionMode === "blue-white" && round.format === "TOURNAMENT" && (
+            <>
+              <Box sx={{ mt: 2 }}>
+                <Typography sx={{ fontWeight: 900, mb: 1 }}>배치 방식</Typography>
+                <ToggleButtonGroup exclusive fullWidth value={round.blueWhiteTournamentPlacement ?? "by-team"} onChange={(_, value: RenewalRoundConfig["blueWhiteTournamentPlacement"] | null) => {
+                  if (value) updateRound(index, { blueWhiteTournamentPlacement: value });
+                }}>
+                  <ToggleButton value="by-team">같은 팀끼리</ToggleButton>
+                  <ToggleButton value="mixed">혼합 배치</ToggleButton>
+                </ToggleButtonGroup>
+                <Typography sx={descriptionSx}>
+                  {(round.blueWhiteTournamentPlacement ?? "by-team") === "by-team"
+                    ? "청팀과 백팀의 토너먼트 대진표를 각각 생성합니다."
+                    : "청팀과 백팀 참가자를 섞어 하나의 토너먼트 대진표를 생성합니다."}
+                </Typography>
+              </Box>
+            </>
+          )}
 
           {round.format === "TOURNAMENT" && round.option !== "FINAL" && (
             <Box sx={{ mt: 2 }}>

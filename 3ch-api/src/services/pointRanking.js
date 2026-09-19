@@ -15,6 +15,8 @@ const DEFAULT_POINT_RULES = Object.freeze({
     group: { enabled: true, first: 30, second: 20, third: 15, fourth: 10 },
     tournamentUpper: { enabled: true, first: 50, second: 30, third: 20, fourth: 15 },
     tournamentLower: { enabled: true, first: 20, second: 15, third: 10, fourth: 5 },
+    tournamentFinalUpper: { enabled: true, first: 50, second: 30, third: 20, fourth: 15 },
+    tournamentFinalLower: { enabled: true, first: 20, second: 15, third: 10, fourth: 5 },
   },
 });
 
@@ -40,6 +42,8 @@ function normalizePointRules(value) {
     ),
     excludeUpperPointsOnLowerAdvance: rule?.excludeUpperPointsOnLowerAdvance === true,
   });
+  const tournamentUpper = normalizeRankRule(rankings.tournamentUpper, DEFAULT_POINT_RULES.rankings.tournamentUpper);
+  const tournamentLower = normalizeRankRule(rankings.tournamentLower, DEFAULT_POINT_RULES.rankings.tournamentLower);
   return {
     combineAllRounds: input.combineAllRounds === true,
     attendance: {
@@ -63,8 +67,11 @@ function normalizePointRules(value) {
     rankings: {
       league: normalizeRankRule(rankings.league, DEFAULT_POINT_RULES.rankings.league),
       group: normalizeRankRule(rankings.group, DEFAULT_POINT_RULES.rankings.group),
-      tournamentUpper: normalizeRankRule(rankings.tournamentUpper, DEFAULT_POINT_RULES.rankings.tournamentUpper),
-      tournamentLower: normalizeRankRule(rankings.tournamentLower, DEFAULT_POINT_RULES.rankings.tournamentLower),
+      tournamentUpper,
+      tournamentLower,
+      // 기존 시즌은 결선 규칙이 없으므로 현재 본선 규칙을 그대로 상속한다.
+      tournamentFinalUpper: normalizeRankRule(rankings.tournamentFinalUpper, tournamentUpper),
+      tournamentFinalLower: normalizeRankRule(rankings.tournamentFinalLower, tournamentLower),
     },
   };
 }
@@ -83,8 +90,13 @@ function rankingGroupName(match, side, entryType) {
   return toKey(match.match_label);
 }
 
-function getBonusRule(pointRules, section, format, option) {
+function getBonusRule(pointRules, section, format, option, isChampionship = false) {
   if (section === "tournament") {
+    if (isChampionship) {
+      return option === "LOWER"
+        ? pointRules.rankings.tournamentFinalLower
+        : pointRules.rankings.tournamentFinalUpper;
+    }
     return option === "LOWER"
       ? pointRules.rankings.tournamentLower
       : pointRules.rankings.tournamentUpper;
@@ -362,6 +374,15 @@ function rankingUnitKey(memberIds) {
     if (Number.isFinite(numericA) && Number.isFinite(numericB)) return numericA - numericB;
     return a.localeCompare(b);
   }).join(",");
+}
+
+function tournamentRankingGroupKey(match) {
+  return `${match.league_id}:${match.program_round ?? 0}:${match._rankingOption}:${match.bracket ?? "main"}:${match.tournament_bracket_index ?? 1}`;
+}
+
+function shouldApplyMatchPoints(pointRules, entryType, matchFormat) {
+  return pointRules.matchPoints.eventTypes[entryType] === true
+    && pointRules.matchPoints.formats[matchFormat] === true;
 }
 
 function rankingMemberKey(row) {
@@ -847,9 +868,12 @@ async function getPointRanking(groupId, year, scope, seasonId, onlyLeagueId = nu
     const matchFormat = phaseSection === "tournament"
       ? "tournament"
       : match._rankingFormat === "GROUP" ? "group" : "league";
-    const includeMatchPoints = pointRules.matchPoints.eventTypes[entryType] === true
-      && pointRules.matchPoints.formats[matchFormat] === true;
+    // 경기당 승점은 대진표별 입상 포인트와 달리 완료 경기마다 적용한다.
+    // 따라서 tournament_bracket_index(A/B/청/백)는 이 필터에 포함하지 않는다.
+    const includeMatchPoints = shouldApplyMatchPoints(pointRules, entryType, matchFormat);
     match._rankingOption = roundMeta.option;
+    match._rankingIsChampionship = roundMeta.option === "FINAL"
+      && Number(match.program_round ?? 0) >= 3;
     if (String(match.bracket ?? "").toLowerCase().includes("lower")
         || String(match.bracket ?? "").includes("하위")) {
       match._rankingOption = "LOWER";
@@ -949,7 +973,7 @@ async function getPointRanking(groupId, year, scope, seasonId, onlyLeagueId = nu
         leagueGroups.set(otherKey, otherExisting);
       }
     } else {
-      const tournamentKey = `${leagueKey}:${match.program_round ?? 0}:${match._rankingOption}:${match.bracket ?? "main"}:${match.tournament_bracket_index ?? 1}`;
+      const tournamentKey = tournamentRankingGroupKey(match);
       const existing = tournamentGroups.get(tournamentKey) ?? [];
       existing.push(match);
       tournamentGroups.set(tournamentKey, existing);
@@ -1115,7 +1139,13 @@ async function getPointRanking(groupId, year, scope, seasonId, onlyLeagueId = nu
         if (row) awardBonus(row, rank, rule, divisor);
       });
     };
-    const bonusRule = getBonusRule(leagueRules, "tournament", sample._rankingFormat, sample._rankingOption);
+    const bonusRule = getBonusRule(
+      leagueRules,
+      "tournament",
+      sample._rankingFormat,
+      sample._rankingOption,
+      sample._rankingIsChampionship,
+    );
     if (bonusRule.enabled !== false) {
       matches.forEach((match) => {
         const eliminationRound = tournamentEliminationRound(match);
@@ -1298,6 +1328,7 @@ module.exports = {
   ensureDefaultRankingSeasons,
   normalizePointRules,
   _test: {
+    normalizePointRules,
     awardBonus,
     awardChampionship,
     awardEliminationBonus,
@@ -1315,6 +1346,8 @@ module.exports = {
     rankingMemberKey,
     rankingGroupName,
     rankingUnitKey,
+    tournamentRankingGroupKey,
+    shouldApplyMatchPoints,
     tournamentEliminationRound,
   },
 };

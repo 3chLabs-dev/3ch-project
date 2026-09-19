@@ -2259,7 +2259,13 @@ export default function LeagueTournamentBracket() {
           sx={{ minHeight: 40, borderBottom: "1px solid #E5E7EB", flexShrink: 0, "& .MuiTab-root": { minHeight: 40, py: 0.5, fontSize: 13, fontWeight: 800 } }}
         >
           {tournamentBracketIndexes.map((index) => (
-            <Tab key={index} value={index} label={`본선 ${String.fromCharCode(64 + index)}`} />
+            <Tab
+              key={index}
+              value={index}
+              label={programBlock?.competitionMode === "blue-white" && programBlock.blueWhiteTournamentPlacement === "by-team"
+                ? index === 1 ? "청팀" : "백팀"
+                : `본선 ${String.fromCharCode(64 + index)}`}
+            />
           ))}
         </Tabs>
       )}

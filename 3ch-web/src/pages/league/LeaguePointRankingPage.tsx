@@ -15,7 +15,7 @@ import type { GroupRankingPointRules } from "../../features/group/groupApi";
 import { DivisionBadge } from "../../components/ParticipantName";
 import CurvedShareIcon from "../../components/CurvedShareIcon";
 
-const rankingLabels = { league: "풀리그", group: "조별리그", tournamentUpper: "토너먼트(상위)", tournamentLower: "토너먼트(하위)" } as const;
+const rankingLabels = { league: "풀리그", group: "조별리그", tournamentUpper: "토너먼트 - 본선(상위)", tournamentLower: "토너먼트 - 본선(하위)", tournamentFinalUpper: "토너먼트 - 결선(상위)", tournamentFinalLower: "토너먼트 - 결선(하위)" } as const;
 const rankLabels = { first: "1위", second: "2위", third: "3위", fourth: "4위" } as const;
 
 export default function LeaguePointRankingPage() {

@@ -15,10 +15,26 @@ test('하위 브래킷에는 하위 토너먼트 점수표를 사용한다', () 
     rankings: {
       tournamentUpper: { first: 50, second: 30, third: 20, fourth: 15 },
       tournamentLower: { first: 20, second: 15, third: 10, fourth: 5 },
+      tournamentFinalUpper: { first: 70, second: 40, third: 25, fourth: 15 },
+      tournamentFinalLower: { first: 30, second: 20, third: 10, fourth: 5 },
     },
   };
   assert.equal(_test.getBonusRule(rules, 'tournament', 'TOURNAMENT', 'LOWER').first, 20);
   assert.equal(_test.getBonusRule(rules, 'tournament', 'TOURNAMENT', 'UPPER').first, 50);
+  assert.equal(_test.getBonusRule(rules, 'tournament', 'TOURNAMENT', 'UPPER', true).first, 70);
+  assert.equal(_test.getBonusRule(rules, 'tournament', 'TOURNAMENT', 'LOWER', true).first, 30);
+});
+
+test('기존 시즌의 결선 포인트는 저장된 본선 포인트를 상속한다', () => {
+  const normalized = _test.normalizePointRules({
+    rankings: {
+      tournamentUpper: { first: 9, second: 7, third: 5, fourth: 3 },
+      tournamentLower: { first: 4, second: 3, third: 2, fourth: 1 },
+    },
+  });
+
+  assert.equal(normalized.rankings.tournamentFinalUpper.first, 9);
+  assert.equal(normalized.rankings.tournamentFinalLower.first, 4);
 });
 
 test('복식·단체전 순위 점수는 실제 팀원 수로 나눠 개인에게 지급한다', () => {
@@ -48,6 +64,36 @@ test('우승 횟수는 입상자 포인트와 별개로 팀의 실제 구성원 
 test('팀원 순서와 무관하게 같은 순위 집계 단위로 묶는다', () => {
   assert.equal(_test.rankingUnitKey([12, 3, 8]), '3,8,12');
   assert.equal(_test.rankingUnitKey([8, 12, 3]), '3,8,12');
+});
+
+test('청팀과 백팀 토너먼트는 독립된 입상 포인트 집계 단위다', () => {
+  const base = {
+    league_id: 'blue-white-league',
+    program_round: 1,
+    _rankingOption: 'UPPER',
+    bracket: 'upper',
+  };
+
+  assert.notEqual(
+    _test.tournamentRankingGroupKey({ ...base, tournament_bracket_index: 1 }),
+    _test.tournamentRankingGroupKey({ ...base, tournament_bracket_index: 2 }),
+  );
+});
+
+test('경기당 승점의 토너먼트 설정은 모든 복수·청백 대진표에 동일하게 적용된다', () => {
+  const rules = {
+    matchPoints: {
+      eventTypes: { singles: true, doubles: false, team: false },
+      formats: { league: false, group: false, tournament: true },
+    },
+  };
+
+  // 대진표 번호와 무관하게 종목과 경기 방식만으로 적용 여부를 결정한다.
+  [1, 2].forEach(() => {
+    assert.equal(_test.shouldApplyMatchPoints(rules, 'singles', 'tournament'), true);
+  });
+  assert.equal(_test.shouldApplyMatchPoints(rules, 'singles', 'group'), false);
+  assert.equal(_test.shouldApplyMatchPoints(rules, 'doubles', 'tournament'), false);
 });
 
 test('일반 회원과 사전등록 회원을 서로 다른 순위 식별자로 구분한다', () => {

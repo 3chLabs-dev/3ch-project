@@ -81,7 +81,7 @@ const initialState: RenewalLeagueCreationState = {
   },
   compositionMode: null,
   selectedProgram: null,
-  rounds: [{ id: 1, expanded: true, program: null, format: null, option: null, matchRule: null, teamPlayerCount: null, teamMatchType: null, tournamentSeeding: "seed", tournamentBracketCount: 1, thirdPlaceMatch: true }],
+  rounds: [{ id: 1, expanded: true, program: null, format: null, option: null, matchRule: null, teamPlayerCount: null, teamMatchType: null, tournamentSeeding: "seed", tournamentBracketCount: 1, thirdPlaceMatch: true, competitionMode: "standard", blueWhiteRankingMode: "by-team", blueWhiteTournamentPlacement: "by-team" }],
   participants: [],
   invitedGroupIds: [],
   invitedGroupOptions: [],

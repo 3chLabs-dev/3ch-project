@@ -382,6 +382,8 @@ export interface GroupRankingPointRules {
     group: RankingPointRule;
     tournamentUpper: RankingPointRule;
     tournamentLower: RankingPointRule;
+    tournamentFinalUpper: RankingPointRule;
+    tournamentFinalLower: RankingPointRule;
   };
 }
 
@@ -442,6 +444,8 @@ const LOCAL_DEFAULT_POINT_RULES: GroupRankingPointRules = {
     group: { enabled: true, first: 30, second: 20, third: 15, fourth: 10 },
     tournamentUpper: { enabled: true, first: 50, second: 30, third: 20, fourth: 15 },
     tournamentLower: { enabled: true, first: 20, second: 15, third: 10, fourth: 5 },
+    tournamentFinalUpper: { enabled: true, first: 50, second: 30, third: 20, fourth: 15 },
+    tournamentFinalLower: { enabled: true, first: 20, second: 15, third: 10, fourth: 5 },
   },
 };
 

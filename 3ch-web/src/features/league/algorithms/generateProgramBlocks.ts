@@ -17,12 +17,12 @@ type UnscheduledProgramBlock = Omit<
   "startMinutes" | "endMinutes"
 >;
 
-function getOptionLabel(option: string) {
+function getOptionLabel(option: string, roundIndex: number) {
   switch (option) {
     case "PRELIM":
       return "예선";
     case "FINAL":
-      return "본선";
+      return roundIndex >= 2 ? "결선" : "본선";
     case "UPPER":
       return "상위";
     case "LOWER":
@@ -197,7 +197,7 @@ export function generateProgramBlocks(
     );
 
   blocks.push({
-    title: `${blocks.length + 1}라운드 ${getOptionLabel(round.option)} 단식`,
+    title: `${blocks.length + 1}라운드 ${getOptionLabel(round.option, roundIndex)} 단식`,
     roundOption: round.option,
     type: "SINGLES",
     matchRule: getMatchRuleLabel(round.matchRule),
@@ -227,6 +227,9 @@ export function generateProgramBlocks(
       crossClubGrouping: round.crossClubGrouping,
       crossClubOnlyMatches: round.crossClubOnlyMatches,
       halfSplitOnlyMatches: round.halfSplitOnlyMatches,
+      competitionMode: round.competitionMode,
+      blueWhiteRankingMode: round.blueWhiteRankingMode,
+      blueWhiteTournamentPlacement: round.blueWhiteTournamentPlacement,
       unitClubMode: round.unitClubMode,
 	  });
 }
@@ -256,7 +259,7 @@ export function generateProgramBlocks(
       );
 
     blocks.push({
-      title: `${blocks.length + 1}라운드 ${getOptionLabel(round.option)} 복식`,
+      title: `${blocks.length + 1}라운드 ${getOptionLabel(round.option, roundIndex)} 복식`,
       roundOption: round.option,
       type: "DOUBLES",
       matchRule: getMatchRuleLabel(round.matchRule),
@@ -287,6 +290,9 @@ export function generateProgramBlocks(
         crossClubGrouping: round.crossClubGrouping,
         crossClubOnlyMatches: round.crossClubOnlyMatches,
         halfSplitOnlyMatches: round.halfSplitOnlyMatches,
+        competitionMode: round.competitionMode,
+        blueWhiteRankingMode: round.blueWhiteRankingMode,
+        blueWhiteTournamentPlacement: round.blueWhiteTournamentPlacement,
         unitClubMode: round.unitClubMode,
 	    });
   }
@@ -335,7 +341,7 @@ export function generateProgramBlocks(
       );
 
     blocks.push({
-      title: `${blocks.length + 1}라운드 ${getOptionLabel(round.option)} 단체전`,
+      title: `${blocks.length + 1}라운드 ${getOptionLabel(round.option, roundIndex)} 단체전`,
       roundOption: round.option,
       type: "TEAM",
       matchRule: getMatchRuleLabel(round.matchRule),
@@ -370,6 +376,9 @@ export function generateProgramBlocks(
         crossClubGrouping: round.crossClubGrouping,
         crossClubOnlyMatches: round.crossClubOnlyMatches,
         halfSplitOnlyMatches: round.halfSplitOnlyMatches,
+        competitionMode: round.competitionMode,
+        blueWhiteRankingMode: round.blueWhiteRankingMode,
+        blueWhiteTournamentPlacement: round.blueWhiteTournamentPlacement,
         unitClubMode: round.unitClubMode,
         teamSinglesCount: teamInfo.singles,
         teamDoublesCount: teamInfo.doubles,

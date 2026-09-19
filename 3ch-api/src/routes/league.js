@@ -128,7 +128,10 @@ async function getProgramUnitRankings(leagueId, programData, rules, adjustments 
       const isLower=(match)=>{const bracket=String(match.bracket??'').toLowerCase();return bracket.includes('lower')||bracket.includes('하위');};
       const lowerKeys=new Set(matches.filter(isLower).flatMap((match)=>[side(match,'a').key,side(match,'b').key]).filter(Boolean));
       const award=(entry,points,isUpper)=>{if(!entry?.key||!Number.isFinite(Number(points)))return;if(isUpper&&rules.rankings.tournamentLower.excludeUpperPointsOnLowerAdvance&&lowerKeys.has(entry.key))return;const row=map.get(entry.key);if(row)row.bonus_points+=Number(points);};
-      [[false,rules.rankings.tournamentUpper],[true,rules.rankings.tournamentLower]].forEach(([lower,rule])=>{
+      const isChampionship = (block.roundOption ?? block.option) === 'FINAL' && round >= 3;
+      const upperRule = isChampionship ? rules.rankings.tournamentFinalUpper : rules.rankings.tournamentUpper;
+      const lowerRule = isChampionship ? rules.rankings.tournamentFinalLower : rules.rankings.tournamentLower;
+      [[false,upperRule],[true,lowerRule]].forEach(([lower,rule])=>{
         if(rule.enabled===false)return;
         const bracketMatches=matches.filter((match)=>isLower(match)===lower);
         bracketMatches.forEach((match)=>{const elimination=String(match.match_label??'').match(/(?:^|\s)(8|16|32|64|128)강(?:$|\s)/);const points=elimination?rule.eliminationRounds?.[elimination[1]]:null;const result=points==null?null:outcome(match);if(result)award(result.loser,points,!lower);});
@@ -3635,6 +3638,9 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
         loser_next_slot: match.loser_next_slot ?? null,
         program_round: match.program_round == null ? null : Number(match.program_round),
         program_block_type: match.program_block_type,
+        tournament_bracket_index: Number.isFinite(Number(match.tournament_bracket_index))
+          ? Math.max(1, Number(match.tournament_bracket_index))
+          : 1,
         match_rule: match.match_rule ?? null,
         participant_a_roster_ids: isSingles ? [] : rosterIds(match.participant_a_id),
         participant_b_roster_ids: isSingles ? [] : rosterIds(match.participant_b_id),
@@ -3665,7 +3671,7 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
     };
     if (targetProgramRounds.length > 0) {
       const existingRows = await client.query(
-        `SELECT id, participant_a_id, participant_b_id, bracket, round_number, program_round, program_block_type,
+        `SELECT id, participant_a_id, participant_b_id, bracket, tournament_bracket_index, round_number, program_round, program_block_type,
                 participant_a_roster_ids, participant_b_roster_ids,
                 score_a, score_b, court, status, match_rule,
                 participant_a_seed_label, participant_b_seed_label
@@ -3714,7 +3720,7 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
     if (validMatches.length > 0) {
       const values = [];
       const placeholders = validMatches.map((match, index) => {
-        const base = index * 23;
+        const base = index * 24;
         // Generated round-robin IDs contain a group/order index. If participant
         // ordering changes after a deploy, retain an already-started match by its
         // actual pairing instead of treating it as a new match.
@@ -3777,8 +3783,9 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
           match.participant_a_seed_label,
           match.participant_b_seed_label,
           match.match_rule ?? (canPreserveState ? previous.match_rule : null),
+          match.tournament_bracket_index,
         );
-        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9}, $${base + 10}, $${base + 11}, $${base + 12}, $${base + 13}, $${base + 14}, $${base + 15}, $${base + 16}, TRUE, $${base + 17}, $${base + 18}, $${base + 19}::text[], $${base + 20}::text[], $${base + 21}, $${base + 22}, $${base + 23})`;
+        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9}, $${base + 10}, $${base + 11}, $${base + 12}, $${base + 13}, $${base + 14}, $${base + 15}, $${base + 16}, TRUE, $${base + 17}, $${base + 18}, $${base + 19}::text[], $${base + 20}::text[], $${base + 21}, $${base + 22}, $${base + 23}, $${base + 24})`;
       });
 
       await client.query(
@@ -3786,7 +3793,7 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
          (id, league_id, match_order, participant_a_id, participant_b_id, bracket, round_number, match_label,
           next_match_id, next_slot, loser_next_match_id, loser_next_slot, score_a, score_b, court, status,
           is_program, program_round, program_block_type, participant_a_roster_ids, participant_b_roster_ids,
-          participant_a_seed_label, participant_b_seed_label, match_rule)
+          participant_a_seed_label, participant_b_seed_label, match_rule, tournament_bracket_index)
          VALUES ${placeholders.join(', ')}`,
         values,
       );

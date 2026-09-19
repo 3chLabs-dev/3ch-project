@@ -1140,6 +1140,8 @@ const defaultRankingPointRules = {
     group: { enabled: true, first: 30, second: 20, third: 15, fourth: 10 },
     tournamentUpper: { enabled: true, first: 50, second: 30, third: 20, fourth: 15 },
     tournamentLower: { enabled: true, first: 20, second: 15, third: 10, fourth: 5 },
+    tournamentFinalUpper: { enabled: true, first: 50, second: 30, third: 20, fourth: 15 },
+    tournamentFinalLower: { enabled: true, first: 20, second: 15, third: 10, fourth: 5 },
   },
 };
 
@@ -1212,6 +1214,35 @@ const rankingSeasonSchema = z.object({
         }).optional().default({}),
         excludeUpperPointsOnLowerAdvance: z.boolean().optional().default(false),
       }),
+      tournamentFinalUpper: z.object({
+        enabled: z.boolean().optional().default(true),
+        first: z.number().int().min(0).max(10000),
+        second: z.number().int().min(0).max(10000),
+        third: z.number().int().min(0).max(10000),
+        fourth: z.number().int().min(0).max(10000),
+        eliminationRounds: z.object({
+          '8': z.number().int().min(0).max(10000).optional(),
+          '16': z.number().int().min(0).max(10000).optional(),
+          '32': z.number().int().min(0).max(10000).optional(),
+          '64': z.number().int().min(0).max(10000).optional(),
+          '128': z.number().int().min(0).max(10000).optional(),
+        }).optional().default({}),
+      }).optional(),
+      tournamentFinalLower: z.object({
+        enabled: z.boolean().optional().default(true),
+        first: z.number().int().min(0).max(10000),
+        second: z.number().int().min(0).max(10000),
+        third: z.number().int().min(0).max(10000),
+        fourth: z.number().int().min(0).max(10000),
+        eliminationRounds: z.object({
+          '8': z.number().int().min(0).max(10000).optional(),
+          '16': z.number().int().min(0).max(10000).optional(),
+          '32': z.number().int().min(0).max(10000).optional(),
+          '64': z.number().int().min(0).max(10000).optional(),
+          '128': z.number().int().min(0).max(10000).optional(),
+        }).optional().default({}),
+        excludeUpperPointsOnLowerAdvance: z.boolean().optional().default(false),
+      }).optional(),
     }),
   }).optional().default(defaultRankingPointRules),
 }).refine((value) => value.end_date >= value.start_date, {

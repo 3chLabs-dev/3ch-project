@@ -41,12 +41,13 @@ async function invokeSync({ initial = [], matches = [], reset = false, confirmat
       if (command === 'DELETE') { for (const [id, row] of working) if (row.program_round === 1) working.delete(id); return {}; }
       if (command === 'INSERT') {
         if (failInsert) throw new Error('simulated insert failure');
-        for (let offset = 0; offset < values.length; offset += 23) {
-          const row = values.slice(offset, offset + 23);
+        for (let offset = 0; offset < values.length; offset += 24) {
+          const row = values.slice(offset, offset + 24);
           working.set(row[0], {
             id: row[0], participant_a_id: row[3], participant_b_id: row[4],
             score_a: row[12], score_b: row[13], court: row[14], status: row[15],
             program_round: row[16], program_block_type: row[17],
+            tournament_bracket_index: row[23],
           });
         }
         return {};
@@ -85,6 +86,15 @@ test('완료된 경기 결과는 일반 동기화와 경기 ID 변경 뒤에도 
   assert.equal(persisted.get('new-match').status, 'done');
   assert.deepEqual(commands.at(-1), 'COMMIT');
   assert.equal(released, true);
+});
+
+test('여러 토너먼트의 대진표 번호를 순위 집계용으로 보존한다', async () => {
+  const { response, persisted } = await invokeSync({
+    matches: [{ ...incomingMatch('bracket-b-match'), bracket: 'upper', tournament_bracket_index: 2 }],
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(persisted.get('bracket-b-match').tournament_bracket_index, 2);
 });
 
 test('완료된 경기가 누락되면 전체 동기화를 거부하고 같은 연결에서 롤백한다', async () => {

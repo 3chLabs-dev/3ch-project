@@ -905,7 +905,18 @@ function getRankedTournamentPools(
     );
     const upperMatches = bracketMatches.filter((match) => match.bracket === "upper");
     const finalRound = Math.max(...upperMatches.map((match) => match.round_number ?? 0));
-    const finalMatch = upperMatches.find((match) => (match.round_number ?? 0) === finalRound);
+    const finalRoundMatches = upperMatches.filter(
+      (match) => (match.round_number ?? 0) === finalRound,
+    );
+    // 3·4위전은 결승과 같은 bracket round 번호를 사용한다. 배열에서 먼저
+    // 발견되는 경기를 택하면 미진행 3·4위전을 결승으로 오인해, 실제 결승이
+    // 끝났어도 다음 라운드 진출자가 비게 된다. 결승 라벨을 우선하고
+    // 3·4위전은 명시적으로 제외한다.
+    const finalMatch = finalRoundMatches.find(
+      (match) => /결승/.test(match.match_label ?? "") && !/3\s*[·.]?\s*4위전/.test(match.match_label ?? ""),
+    ) ?? finalRoundMatches.find(
+      (match) => !/3\s*[·.]?\s*4위전/.test(match.match_label ?? ""),
+    );
     if (!finalMatch || finalMatch.status !== "done") return [];
 
     const winner = getTournamentWinner(finalMatch);

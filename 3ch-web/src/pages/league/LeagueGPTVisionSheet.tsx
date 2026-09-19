@@ -2986,6 +2986,43 @@ export default function LeagueGPTVisionSheet() {
     unresolvedTieGroups,
     rankingOrder,
   } = useMatchStats(localOrder, matches, currentRule, manualTieBreakOrder);
+  const displayRankings = useMemo(() => {
+    const rankingMode = currentProgramRound?.blueWhiteRankingMode
+      ?? currentProgramBlock?.blueWhiteRankingMode;
+    const teams = programOption?.blueWhiteTeams;
+    if (
+      !isProgramMode
+      || currentProgramBlock?.competitionMode !== "blue-white"
+      || rankingMode !== "by-team"
+      || !teams
+    ) {
+      return rankings;
+    }
+
+    // 경기 결과의 비교 순서는 그대로 유지하되 청팀과 백팀 안에서 각각
+    // 1위부터 다시 번호를 붙인다. 교차 경기 결과를 버리면 안 되므로 팀별로
+    // 경기를 재계산하지 않고, 계산 완료된 전체 정렬을 팀별로 필터링한다.
+    const blueIds = new Set(teams.blueParticipantIds);
+    const whiteIds = new Set(teams.whiteParticipantIds);
+    const rankByParticipantId = new Map<string, number>();
+    [blueIds, whiteIds].forEach((teamIds) => {
+      rankingOrder
+        .filter((participantId) => teamIds.has(participantId))
+        .forEach((participantId, index) => rankByParticipantId.set(participantId, index + 1));
+    });
+    return localOrder.map((participant, index) =>
+      rankByParticipantId.get(participant.id) ?? rankings[index] ?? 0
+    );
+  }, [
+    currentProgramBlock?.blueWhiteRankingMode,
+    currentProgramBlock?.competitionMode,
+    currentProgramRound?.blueWhiteRankingMode,
+    isProgramMode,
+    localOrder,
+    programOption?.blueWhiteTeams,
+    rankingOrder,
+    rankings,
+  ]);
 
   const handleSaveTieBreak = useCallback(async (participantIds: string[]) => {
     if (!id || !programOption || !selectedGroup) return;
@@ -3383,7 +3420,7 @@ export default function LeagueGPTVisionSheet() {
                         wins={playerStats[rowIdx]?.wins ?? 0}
                         losses={playerStats[rowIdx]?.losses ?? 0}
                         setTotal={playerStats[rowIdx]?.setTotal ?? 0}
-                        rank={rankings[rowIdx] ?? 0}
+                        rank={displayRankings[rowIdx] ?? 0}
                         tieSetDiff={tieSetDiffs[rowIdx] ?? ""}
                         hasPlayed={playerStats[rowIdx]?.hasPlayed ?? false}
                         leagueId={id ?? ""}

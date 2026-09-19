@@ -982,6 +982,10 @@ function getSavedRankedUnitPools(
     units.flatMap((unit) => unit.id ? [[unit.id, unit] as const] : []),
   );
   const orderedSnapshotPools = [...snapshot.pools].sort((left, right) => {
+    const teamOrder = (label: string) => label === "청팀" ? 0 : label === "백팀" ? 1 : 2;
+    const leftTeamOrder = teamOrder(left.label);
+    const rightTeamOrder = teamOrder(right.label);
+    if (leftTeamOrder !== rightTeamOrder) return leftTeamOrder - rightTeamOrder;
     const leftNumber = Number.parseInt(left.label, 10);
     const rightNumber = Number.parseInt(right.label, 10);
     if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) return leftNumber - rightNumber;
@@ -989,6 +993,8 @@ function getSavedRankedUnitPools(
   });
   const placeholderPools = buildRankPlaceholderPools(
     orderedSnapshotPools.map((pool) => pool.participantIds.length),
+    undefined,
+    orderedSnapshotPools.map((pool) => pool.label),
   );
   const pools = orderedSnapshotPools.map((pool, poolIndex) => {
     if (!pool.complete) return placeholderPools[poolIndex] ?? [];
@@ -1583,11 +1589,12 @@ function distributeQualifiedPoolsToFinalGroups(
 function buildRankPlaceholderPools(
   groupSizes: number[],
   maxRank?: number,
+  labels?: string[],
 ): MatchUnit[][] {
   return groupSizes.map((size, groupIndex) =>
     Array.from({ length: Math.min(size, maxRank ?? size) }, (_, rankIndex) => ({
       id: `placeholder-${groupIndex + 1}-${rankIndex + 1}`,
-      name: `${groupIndex + 1}조 ${rankIndex + 1}위`,
+      name: `${labels?.[groupIndex] ?? `${groupIndex + 1}조`} ${rankIndex + 1}위`,
       division: null,
       level: rankIndex + 1,
       seedLabel: `${groupIndex + 1}-${rankIndex + 1}`,
@@ -1927,11 +1934,20 @@ export function generateProgramRoundMatches(
     ? buildUpperLowerTournamentMatches
     : buildTournamentMatches;
   const previousGroupSizes = previousBlock?.groupSizes ?? option?.groupSizes ?? [];
+  const isBlueWhiteTeamRankSource = previousBlock?.competitionMode === "blue-white"
+    && previousBlock.blueWhiteRankingMode === "by-team"
+    && Boolean(blueWhiteTeams);
   const placeholderPools = isFinalRound && !rankedPools
     ? previousBlock?.format === "GROUP" && previousGroupSizes.length > 0
       ? buildRankPlaceholderPools(previousGroupSizes)
       : previousBlock?.format === "LEAGUE"
-        ? buildSingleLeagueRankPlaceholderPool(matchUnits.length)
+        ? isBlueWhiteTeamRankSource && blueWhiteTeams
+          ? buildRankPlaceholderPools(
+              [blueWhiteTeams.blueParticipantIds.length, blueWhiteTeams.whiteParticipantIds.length],
+              undefined,
+              ["청팀", "백팀"],
+            )
+          : buildSingleLeagueRankPlaceholderPool(matchUnits.length)
         : previousBlock?.format === "TOURNAMENT"
           ? buildTournamentRankPlaceholderPool(sourceRound, advanceCount)
           : null
@@ -1968,6 +1984,20 @@ export function generateProgramRoundMatches(
         && blueWhiteTeams
         && qualifiedPools?.length
       ) {
+        // 팀별 순위로 저장된 풀은 이미 [청팀, 백팀] 순서다. 결과 확정 전의
+        // 가상 시드도 같은 구조이므로 통합 참가자 ID로 다시 분류하지 않는다.
+        if (isBlueWhiteTeamRankSource && qualifiedPools.length >= 2) {
+          return withoutDeleted(qualifiedPools.slice(0, 2).flatMap((bracketPlayers, bracketIndex) =>
+            tournamentBuilder(
+              leagueId,
+              round - 1,
+              block,
+              bracketPlayers,
+              "seed",
+              bracketIndex + 1,
+            ),
+          ));
+        }
         const blueIds = new Set(blueWhiteTeams.blueParticipantIds);
         const whiteIds = new Set(blueWhiteTeams.whiteParticipantIds);
         const blueUnits: MatchUnit[] = [];

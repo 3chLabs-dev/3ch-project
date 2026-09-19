@@ -27,6 +27,9 @@ import {
     ToggleButton,
     Switch,
   } from "@mui/material";
+  import { DndContext, PointerSensor, TouchSensor, closestCenter, useDroppable, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+  import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+  import { CSS } from "@dnd-kit/utilities";
   import QRCode from "react-qr-code";
   import ArrowBackIcon from "@mui/icons-material/ArrowBack";
   import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
@@ -44,6 +47,7 @@ import {
   import EmojiEventsOutlinedIcon from "@mui/icons-material/EmojiEventsOutlined";
   import CardGiftcardOutlinedIcon from "@mui/icons-material/CardGiftcardOutlined";
   import RestaurantOutlinedIcon from "@mui/icons-material/RestaurantOutlined";
+  import DragHandleIcon from "@mui/icons-material/DragHandle";
   import {
     useGetLeagueQuery,
     useGetLeagueProgramQuery,
@@ -157,6 +161,25 @@ import {
   const MINUTE_OPTIONS = ["00", "10", "20", "30", "40", "50"];
     const RECRUIT_OPTIONS = [0, 4, 6, 8, 10, 12, 16, 20, 24, 32];
 
+  type BlueWhiteDraftParticipant = { id: string; name: string; division?: string | null; is_bot?: boolean };
+
+  function BlueWhiteDropCard({ side, children }: { side: "blue" | "white"; children: React.ReactNode }) {
+    const { setNodeRef, isOver } = useDroppable({ id: `blue-white-${side}` });
+    return <Box ref={setNodeRef} sx={{ minHeight: 80, bgcolor: isOver ? "#EFF6FF" : "transparent" }}>{children}</Box>;
+  }
+
+  function SortableBlueWhiteParticipant({ participant, editing, onDelete }: { participant: BlueWhiteDraftParticipant; editing: boolean; onDelete: () => void }) {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: `blue-white-player-${participant.id}`, disabled: !editing });
+    return (
+      <Box ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} {...attributes} {...(editing ? listeners : {})} sx={{ display: "flex", alignItems: "center", gap: 0.5, minHeight: 30, px: 0.25, borderRadius: 1, cursor: editing ? "grab" : "default", touchAction: "none", opacity: isDragging ? 0.45 : 1, bgcolor: isDragging ? "#EFF6FF" : "transparent" }}>
+        {editing && <DragHandleIcon sx={{ flexShrink: 0, color: "#94A3B8", fontSize: 17 }} />}
+        <Typography sx={{ minWidth: 0, fontSize: 13, fontWeight: 800 }} noWrap>{participant.is_bot ? participant.name.replace(/^BOT/i, "BYE") : participant.name}</Typography>
+        {!participant.is_bot && <DivisionBadge division={participant.division} />}
+        {editing && participant.is_bot && <Button size="small" color="error" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onDelete(); }} sx={{ ml: "auto", minWidth: 0, px: 0.7, fontSize: 10, fontWeight: 800 }}>삭제</Button>}
+      </Box>
+    );
+  }
+
   export default function LeagueDetail() {
     const programListRef = useRef<LeagueProgramListHandle | null>(null);
     const { id } = useParams<{ id: string }>();
@@ -220,10 +243,15 @@ import {
     const [teamBuilderParticipantIds, setTeamBuilderParticipantIds] = useState<string[]>([]);
     const [blueWhiteFormationOpen, setBlueWhiteFormationOpen] = useState(false);
     const [blueWhiteBlueIds, setBlueWhiteBlueIds] = useState<string[]>([]);
+    const [blueWhiteDraftOrder, setBlueWhiteDraftOrder] = useState<string[]>([]);
     const [blueWhiteFormationEditing, setBlueWhiteFormationEditing] = useState(false);
     const [addingBlueWhiteBot, setAddingBlueWhiteBot] = useState(false);
     const [blueWhitePendingBots, setBlueWhitePendingBots] = useState<Array<{ name: string; side: "blue" | "white" }>>([]);
     const [blueWhiteDeletedBotIds, setBlueWhiteDeletedBotIds] = useState<string[]>([]);
+    const blueWhiteSensors = useSensors(
+      useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+      useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
+    );
     const authUser = useAppSelector((state) => state.auth.user);
 
     const { data: leagueData, isLoading: leagueLoading, refetch: refetchLeague } = useGetLeagueQuery(id ?? "", {
@@ -548,9 +576,17 @@ import {
         .filter((participantId) => participantIds.has(participantId));
       if (savedBlueIds.length > 0) {
         setBlueWhiteBlueIds(savedBlueIds);
+        setBlueWhiteDraftOrder([
+          ...savedBlueIds,
+          ...(teamProgram?.blueWhiteTeams?.whiteParticipantIds ?? []).filter((participantId) => participantIds.has(participantId)),
+          ...blueWhiteParticipants.map((participant) => participant.id).filter((participantId) =>
+            !savedBlueIds.includes(participantId) && !(teamProgram?.blueWhiteTeams?.whiteParticipantIds ?? []).includes(participantId)
+          ),
+        ]);
         setBlueWhiteFormationEditing(false);
       } else {
         setBlueWhiteBlueIds(blueWhiteParticipants.filter((_, index) => index % 2 === 0).map((participant) => participant.id));
+        setBlueWhiteDraftOrder(blueWhiteParticipants.map((participant) => participant.id));
         setBlueWhiteFormationEditing(true);
       }
       setBlueWhitePendingBots([]);
@@ -564,6 +600,27 @@ import {
         .map((participant) => Number.parseInt(participant.name.match(/\d+/)?.[0] ?? "0", 10));
       const botName = `BYE ${Math.max(0, ...usedNumbers) + 1}`;
       setBlueWhitePendingBots((current) => [...current, { name: botName, side }]);
+    };
+    const handleBlueWhiteDragEnd = ({ active, over }: DragEndEvent) => {
+      if (!over) return;
+      const activeId = String(active.id).replace("blue-white-player-", "");
+      const overValue = String(over.id);
+      const overId = overValue.startsWith("blue-white-player-") ? overValue.replace("blue-white-player-", "") : null;
+      const targetSide = overValue === "blue-white-blue"
+        ? "blue"
+        : overValue === "blue-white-white"
+          ? "white"
+          : overId && blueWhiteBlueIds.includes(overId) ? "blue" : "white";
+      setBlueWhiteBlueIds((current) => targetSide === "blue"
+        ? [...new Set([...current, activeId])]
+        : current.filter((participantId) => participantId !== activeId));
+      if (overId && overId !== activeId) {
+        setBlueWhiteDraftOrder((current) => {
+          const oldIndex = current.indexOf(activeId);
+          const newIndex = current.indexOf(overId);
+          return oldIndex >= 0 && newIndex >= 0 ? arrayMove(current, oldIndex, newIndex) : current;
+        });
+      }
     };
     const saveBlueWhiteFormation = async () => {
       if (!id || !teamProgram?.blocks || hasStartedProgramMatch) return;
@@ -602,10 +659,12 @@ import {
         setAlertMsg((error as { data?: { message?: string } })?.data?.message ?? "BYE 변경사항 저장에 실패했습니다.");
         return;
       }
+      const existingParticipantIds = blueWhiteParticipants
+        .filter((participant) => !blueWhiteDeletedBotIds.includes(participant.id))
+        .map((participant) => participant.id);
       const participantIds = [
-        ...blueWhiteParticipants
-          .filter((participant) => !blueWhiteDeletedBotIds.includes(participant.id))
-          .map((participant) => participant.id),
+        ...blueWhiteDraftOrder.filter((participantId) => existingParticipantIds.includes(participantId)),
+        ...existingParticipantIds.filter((participantId) => !blueWhiteDraftOrder.includes(participantId)),
         ...pendingBotIds.map((bot) => bot.id),
       ];
       const blueSet = new Set([
@@ -2183,15 +2242,16 @@ const handleSaveEdit = async () => {
                   참가자를 반대 팀으로 이동하거나 각 팀에 BYE를 추가한 뒤 완료를 눌러 주세요.
                 </Typography>
               )}
+              <DndContext sensors={blueWhiteSensors} collisionDetection={closestCenter} onDragEnd={handleBlueWhiteDragEnd}>
               <Box sx={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 1.25 }}>
                 {(["blue", "white"] as const).map((side) => {
                   const isBlueSide = side === "blue";
                   const teamIds = new Set(blueWhiteParticipants
                     .filter((participant) => blueWhiteBlueIds.includes(participant.id) === isBlueSide)
                     .map((participant) => participant.id));
-                  const teamParticipants = blueWhiteParticipants.filter((participant) =>
-                    teamIds.has(participant.id) && !blueWhiteDeletedBotIds.includes(participant.id)
-                  );
+                  const orderIndex = new Map(blueWhiteDraftOrder.map((participantId, index) => [participantId, index]));
+                  const teamParticipants = blueWhiteParticipants.filter((participant) => teamIds.has(participant.id) && !blueWhiteDeletedBotIds.includes(participant.id))
+                    .sort((left, right) => (orderIndex.get(left.id) ?? Number.MAX_SAFE_INTEGER) - (orderIndex.get(right.id) ?? Number.MAX_SAFE_INTEGER));
                   const pendingTeamBots = blueWhitePendingBots.filter((bot) => bot.side === side);
                   const accent = isBlueSide ? "#2563EB" : "#F97316";
                   return (
@@ -2204,40 +2264,21 @@ const handleSaveEdit = async () => {
                         <Typography sx={{ fontSize: 12, color: "text.secondary", fontWeight: 800 }}>{teamParticipants.length + pendingTeamBots.length}명</Typography>
                       </Box>
                       <Stack spacing={0.4} sx={{ px: 1.25, py: 1, minHeight: 80 }}>
+                        <BlueWhiteDropCard side={side}>
+                        <SortableContext items={teamParticipants.map((participant) => `blue-white-player-${participant.id}`)} strategy={verticalListSortingStrategy}>
                         {teamParticipants.map((participant) => (
-                          <Box key={participant.id} sx={{ display: "flex", alignItems: "center", gap: 0.5, minHeight: 30 }}>
-                            <Typography sx={{ minWidth: 0, fontSize: 13, fontWeight: 800 }} noWrap>{participant.is_bot ? participant.name.replace(/^BOT/i, "BYE") : participant.name}</Typography>
-                            {!participant.is_bot && <DivisionBadge division={participant.division} />}
-                            {blueWhiteFormationEditing && (
-                              participant.is_bot ? (
-                                <Button
-                                  size="small"
-                                  color="error"
-                                  disabled={hasStartedProgramMatch}
-                                  onClick={() => {
-                                    if (!window.confirm(`${participant.name}을 참가자 명단과 청백전 편성에서 삭제합니다. 계속하시겠습니까?`)) return;
-                                    setBlueWhiteDeletedBotIds((current) => [...new Set([...current, participant.id])]);
-                                    setBlueWhiteBlueIds((current) => current.filter((participantId) => participantId !== participant.id));
-                                  }}
-                                  sx={{ ml: "auto", minWidth: 0, px: 0.7, fontSize: 10, fontWeight: 800 }}
-                                >
-                                  삭제
-                                </Button>
-                              ) : (
-                                <Button
-                                  size="small"
-                                  disabled={hasStartedProgramMatch}
-                                  onClick={() => setBlueWhiteBlueIds((current) => isBlueSide
-                                    ? current.filter((participantId) => participantId !== participant.id)
-                                    : [...new Set([...current, participant.id])])}
-                                  sx={{ ml: "auto", minWidth: 0, px: 0.7, fontSize: 10, fontWeight: 800 }}
-                                >
-                                  {isBlueSide ? "백팀 이동" : "청팀 이동"}
-                                </Button>
-                              )
-                            )}
-                          </Box>
+                          <SortableBlueWhiteParticipant
+                            key={participant.id}
+                            participant={participant}
+                            editing={blueWhiteFormationEditing && !hasStartedProgramMatch}
+                            onDelete={() => {
+                              if (!window.confirm(`${participant.name.replace(/^BOT/i, "BYE")}을 참가자 명단과 청백전 편성에서 삭제합니다. 계속하시겠습니까?`)) return;
+                              setBlueWhiteDeletedBotIds((current) => [...new Set([...current, participant.id])]);
+                              setBlueWhiteBlueIds((current) => current.filter((participantId) => participantId !== participant.id));
+                            }}
+                          />
                         ))}
+                        </SortableContext>
                         {pendingTeamBots.map((bot) => (
                           <Box key={bot.name} sx={{ display: "flex", alignItems: "center", gap: 0.5, minHeight: 30 }}>
                             <Typography sx={{ fontSize: 13, fontWeight: 800 }}>{bot.name}</Typography>
@@ -2263,6 +2304,7 @@ const handleSaveEdit = async () => {
                             BYE 추가
                           </Button>
                         )}
+                        </BlueWhiteDropCard>
                       </Stack>
                       <Box sx={{ borderTop: "1px solid #E5E7EB", px: 1.5, py: 0.9 }}>
                         <Typography sx={{ fontSize: 12, color: "text.secondary", fontWeight: 700 }}>
@@ -2273,6 +2315,7 @@ const handleSaveEdit = async () => {
                   );
                 })}
               </Box>
+              </DndContext>
             </DialogContent>
             <DialogActions sx={{ px: 2.5, py: 2 }}>
               {blueWhiteFormationEditing ? (
@@ -2291,6 +2334,7 @@ const handleSaveEdit = async () => {
                           .sort((left, right) => left.order - right.order)
                           .map(({ participantId }) => participantId);
                         setBlueWhiteBlueIds(shuffledIds.slice(0, Math.ceil(shuffledIds.length / 2)));
+                        setBlueWhiteDraftOrder(shuffledIds);
                         setBlueWhiteFormationEditing(true);
                       }}
                     >

@@ -1123,6 +1123,52 @@ export function buildProgramRoundStandingsSnapshot(
     };
   }
 
+  // 청백전 풀리그에서 "같은 팀끼리" 순위를 선택한 경우 전체 순위를
+  // 계산한 뒤 팀을 거르는 것이 아니라, 청팀과 백팀을 각각 독립된 풀로
+  // 계산한다. 따라서 양 팀 모두 1위부터 시작하는 스냅샷이 저장된다.
+  if (
+    block.competitionMode === "blue-white"
+    && block.blueWhiteRankingMode === "by-team"
+    && option?.blueWhiteTeams
+  ) {
+    const rankingPlayers = asRankingPlayers([...unitById.values()]);
+    const rankedAllPlayers = getRankedPlayersFromPreviousRound(
+      rankingPlayers,
+      effectiveRoundMatches,
+      round,
+      block.matchRule,
+    );
+    const buildTeamPool = (label: string, participantIds: string[]) => {
+      const participantIdSet = new Set(participantIds);
+      const teamPlayers = (rankedAllPlayers ?? rankingPlayers).filter((player) => participantIdSet.has(player.id));
+      const manualOrder = option.roundTieBreaks?.find(
+        (tieBreak) => tieBreak.round === round && tieBreak.poolLabel === label,
+      )?.participantIds;
+      const manualIndex = new Map((manualOrder ?? []).map((id, index) => [id, index]));
+      const rankedPlayers = manualOrder?.length
+        ? [...teamPlayers].sort((left, right) =>
+            (manualIndex.get(left.id) ?? Number.MAX_SAFE_INTEGER)
+            - (manualIndex.get(right.id) ?? Number.MAX_SAFE_INTEGER)
+          )
+        : teamPlayers;
+      return {
+        label,
+        complete: rankedAllPlayers !== null,
+        participantIds: rankedPlayers.map((player) => player.id),
+      };
+    };
+    const pools = [
+      buildTeamPool("청팀", option.blueWhiteTeams.blueParticipantIds),
+      buildTeamPool("백팀", option.blueWhiteTeams.whiteParticipantIds),
+    ];
+    return {
+      round,
+      complete: pools.every((pool) => pool.complete),
+      pools,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
   const rankedPools = getRankedUnitPools(
     [...unitById.values()],
     effectiveRoundMatches,
@@ -1903,8 +1949,11 @@ export function generateProgramRoundMatches(
   if (block.format === "TOURNAMENT") {
     if (isFinalRound) {
       const bracketCount = block.tournamentBracketCount ?? 1;
+      const isBlueWhiteChampionship = block.competitionMode === "blue-white"
+        && round >= 3
+        && (currentRound?.option === "FINAL" || block.roundOption === "FINAL");
       const qualifiedPools = finalPools?.map((pool) =>
-        (advancesEveryone ? pool : pool.slice(0, advanceCount)).map((unit) =>
+        (isBlueWhiteChampionship ? pool.slice(0, 1) : advancesEveryone ? pool : pool.slice(0, advanceCount)).map((unit) =>
           unit.isBot
             ? { id: null, name: null, division: null, isBot: true }
             : unit

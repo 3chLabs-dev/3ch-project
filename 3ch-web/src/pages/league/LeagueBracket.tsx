@@ -1524,9 +1524,9 @@ export default function LeagueBracket() {
   const handleAddBot = useCallback(async () => {
     if (!id || isAddingBot) return;
     const botNumbers = rawParticipants
-      .filter((participant) => participant.is_bot || /^BOT\s+\d+$/.test(participant.name))
+      .filter((participant) => participant.is_bot || /^(?:BOT|BYE)\s+\d+$/.test(participant.name))
       .map((participant) => Number.parseInt(participant.name.match(/\d+/)?.[0] ?? "0", 10));
-    const botName = `BOT ${Math.max(0, ...botNumbers) + 1}`;
+    const botName = `BYE ${Math.max(0, ...botNumbers) + 1}`;
     try {
       const result = await addParticipants({ leagueId: id, participants: [{ name: botName, division: "", member_id: null, is_bot: true }] }).unwrap();
       const bot = result.participants[0];
@@ -1560,7 +1560,7 @@ export default function LeagueBracket() {
       setEditOrder(null);
     } catch (error: unknown) {
       const message = (error as { data?: { message?: string } })?.data?.message;
-      window.alert(message ?? "BOT 추가에 실패했습니다.");
+      window.alert(message ?? "BYE 추가에 실패했습니다.");
     }
   }, [addParticipants, currentProgramBlock, id, isAddingBot, isProgramMode, localOrder, programOption, programRound, programSourceMatches, rawParticipants, refetchMatches, refetchParticipants, saveLeagueProgram, selectedGroup, syncProgramMatches]);
 
@@ -2039,7 +2039,7 @@ export default function LeagueBracket() {
                       <TableRow>
                         <TableCell colSpan={2} sx={{ p: 0.5, border: 0 }}>
                           <Button fullWidth size="small" variant="outlined" startIcon={<AddIcon />} onClick={() => void handleAddBot()} disabled={isAddingBot} sx={{ minHeight: 34, borderStyle: "dashed", fontSize: 11, fontWeight: 900 }}>
-                            BOT 추가
+                            BYE 추가
                           </Button>
                         </TableCell>
                         <TableCell colSpan={n + 3} sx={{ p: 0, border: 0 }} />

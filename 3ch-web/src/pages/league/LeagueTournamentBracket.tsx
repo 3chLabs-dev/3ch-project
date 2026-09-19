@@ -2228,7 +2228,7 @@ export default function LeagueTournamentBracket() {
           </Button>
         )}
 
-        {canManage && (!isCompleted || isDoubleElim) && (!isProgramMode || manualSeeding || isDoubleElim) && (
+        {canManage && (!isCompleted || isProgramMode) && (
           <Button
             size="small"
             variant="contained"
@@ -2367,7 +2367,7 @@ export default function LeagueTournamentBracket() {
               )}
 
               {positions.map((pos) => {
-                const visibleSlotActions = (canManage && (!isCompleted || isDoubleElim)) || (isProgramMode && (manualSeeding || isDoubleElim))
+                const visibleSlotActions = canManage && (!isCompleted || isProgramMode)
                   ? slotActions
                   : undefined;
                 return (

@@ -2271,9 +2271,9 @@ export default function LeagueGPTVisionSheet() {
   const handleAddBot = useCallback(async () => {
     if (!id || isAddingBot) return;
     const botNumbers = rawParticipants
-      .filter((participant) => participant.is_bot || /^BOT\s+\d+$/.test(participant.name))
+      .filter((participant) => participant.is_bot || /^(?:BOT|BYE)\s+\d+$/.test(participant.name))
       .map((participant) => Number.parseInt(participant.name.match(/\d+/)?.[0] ?? "0", 10));
-    const botName = `BOT ${Math.max(0, ...botNumbers) + 1}`;
+    const botName = `BYE ${Math.max(0, ...botNumbers) + 1}`;
     try {
       const result = await addParticipants({
         leagueId: id,
@@ -2314,7 +2314,7 @@ export default function LeagueGPTVisionSheet() {
       setEditOrder(null);
     } catch (error: unknown) {
       const message = (error as { data?: { message?: string } })?.data?.message;
-      window.alert(message ?? "BOT 추가에 실패했습니다.");
+      window.alert(message ?? "BYE 추가에 실패했습니다.");
     }
   }, [addParticipants, currentProgramBlock, id, isAddingBot, isProgramMode, localOrder, programOption, programRound, programSourceMatches, rawParticipants, refetchMatches, refetchParticipants, saveLeagueProgram, selectedGroup, syncProgramMatches]);
 
@@ -2838,6 +2838,7 @@ export default function LeagueGPTVisionSheet() {
 
   const saveVisionPreview = async (skipRuleCheck = false) => {
     if (isSavingVision) return;
+    setVisionError(null);
     if (!skipRuleCheck) {
       const mismatch = getVisionRuleMismatch();
       if (mismatch) {
@@ -2862,7 +2863,9 @@ export default function LeagueGPTVisionSheet() {
 
     const pendingMatches = Array.from(grouped.values());
     if (pendingMatches.length === 0) {
-      setVisionNotice({ type: "error", message: "저장할 경기 결과가 없습니다." });
+      const message = "저장할 경기 결과가 없습니다. 인식된 점수와 대진 참가자가 일치하는지 확인해 주세요.";
+      setVisionNotice({ type: "error", message });
+      setVisionError(message);
       return;
     }
 
@@ -2880,7 +2883,18 @@ export default function LeagueGPTVisionSheet() {
         const persistedMatchIds = new Set(serverProgramMatchesAll.map((match) => match.id));
         const missingMatches = batch.filter((item) => !persistedMatchIds.has(item.match_id));
         if (missingMatches.length > 0) {
-          throw new Error("서버에 생성되지 않은 경기가 있어 결과를 저장하지 않았습니다. 대진표를 새로고침한 뒤 다시 시도해 주세요.");
+          // 다음 라운드로 막 진입했거나 대진 구성이 변경된 직후에는 화면의
+          // 생성 대진이 서버 동기화보다 먼저 보일 수 있다. 결과 저장 전에
+          // 비파괴 동기화를 완료해 사용자가 다시 업로드하지 않아도 저장되게 한다.
+          await syncProgramMatches({
+            leagueId: id ?? "",
+            matches: generatedProgramMatchesAll.map((match) => ({
+              ...match,
+              program_round: programRound,
+              program_block_type: programRoundBlock?.type,
+            })),
+            resetResults: false,
+          }).unwrap();
         }
 
       }
@@ -2905,7 +2919,9 @@ export default function LeagueGPTVisionSheet() {
       setVisionNotice({ type: "success", message: `${result.updated}개 경기 결과를 저장했습니다.` });
       if (visionUsage) setUsageDialogOpen(true);
     } catch (error) {
-      setVisionNotice({ type: "error", message: getErrorMessage(error, "인식 결과 저장에 실패했습니다.") });
+      const message = getErrorMessage(error, "인식 결과 저장에 실패했습니다.");
+      setVisionNotice({ type: "error", message });
+      setVisionError(message);
     } finally {
       setIsSavingVision(false);
     }
@@ -3395,7 +3411,7 @@ export default function LeagueGPTVisionSheet() {
                             disabled={isAddingBot}
                             sx={{ minHeight: 34, borderStyle: "dashed", fontSize: 11, fontWeight: 900 }}
                           >
-                            BOT 추가
+                            BYE 추가
                           </Button>
                         </TableCell>
                         <TableCell colSpan={n + 3} sx={{ p: 0, border: 0 }} />
@@ -3813,7 +3829,7 @@ export default function LeagueGPTVisionSheet() {
         </DialogActions>
       </Dialog>
 
-      <Dialog open={Boolean(visionError)} onClose={() => setVisionError(null)} maxWidth="xs" fullWidth sx={{ zIndex: 10002 }} slotProps={{ paper: { sx: mobileDialogPaperSx } }}>
+      <Dialog open={Boolean(visionError)} onClose={() => setVisionError(null)} maxWidth="xs" fullWidth sx={{ zIndex: 10006 }} slotProps={{ paper: { sx: mobileDialogPaperSx } }}>
         <DialogTitle sx={{ fontWeight: 900 }}>사진 인식 실패</DialogTitle>
         <DialogContent dividers><Typography>{visionError}</Typography></DialogContent>
         <DialogActions><Button onClick={() => setVisionError(null)}>확인</Button></DialogActions>

@@ -40,6 +40,7 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   useDeleteAllLeagueMatchesMutation,
   useAddParticipantsMutation,
+  useDeleteParticipantMutation,
   useDeleteLeagueProgramMutation,
   useGetLeagueProgramQuery,
   useGetLeagueMatchesQuery,
@@ -243,7 +244,7 @@ function FormationEditCard({ players, index, label, groupLabels, locked = false,
           disabled={locked}
           sx={{ mt: 0.5, width: "100%", minHeight: 30, border: "1px dashed #94A3B8", color: "#475569", fontSize: 11, fontWeight: 800 }}
         >
-          BOT 추가
+          BYE 추가
         </Button>
         {hasWaitingPlayer && (
           <Button
@@ -371,6 +372,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
   const [saveLeagueProgram, { isLoading: isSavingFormation }] = useSaveLeagueProgramMutation();
   const [syncLeagueProgramMatches] = useSyncLeagueProgramMatchesMutation();
   const [addParticipants] = useAddParticipantsMutation();
+  const [deleteParticipant] = useDeleteParticipantMutation();
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [storedProgram, setStoredProgram] = useState<StoredProgramOption | null>(null);
@@ -389,6 +391,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
   const [formationDraft, setFormationDraft] = useState<FormationPlayer[][]>([]);
   const [isFormationEditing, setIsFormationEditing] = useState(false);
   const [pendingFormationRemoval, setPendingFormationRemoval] = useState<{ groupIndex: number; player: FormationPlayer } | null>(null);
+  const [deletedFormationBotIds, setDeletedFormationBotIds] = useState<string[]>([]);
   const [reshuffleConfirmOpen, setReshuffleConfirmOpen] = useState(false);
   const [pendingFormationSave, setPendingFormationSave] = useState<{
     program: StoredProgramOption;
@@ -403,6 +406,9 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
   );
 
   const league = leagueData?.league;
+  const hasStartedMatches = Boolean(matchesData?.matches?.some((match) =>
+    match.status === "playing" || match.status === "done" || match.score_a != null || match.score_b != null
+  ));
   const matches = matchesData?.matches ?? [];
   const participants = participantsData?.participants ?? [];
   const hasProgram = Boolean(storedProgram?.blocks?.length);
@@ -617,8 +623,10 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
       .flatMap((level) => rotateBySeed(buckets.get(level) ?? [], seed + level * 997));
   };
 
-  const formatFormationName = (name: string, level?: number) =>
-    level == null ? name : name.replace(new RegExp(`\\s*\\(${level}\\)$`), "");
+  const formatFormationName = (name: string, level?: number) => {
+    const withoutLevel = level == null ? name : name.replace(new RegExp(`\\s*\\(${level}\\)$`), "");
+    return withoutLevel.replace(/^BOT(?=\\s+\\d+$)/i, "BYE");
+  };
 
   const splitIntoTwoGroups = (count: number) => {
     if (count <= 0) return [];
@@ -1013,6 +1021,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
     setFormationDraft([]);
     setIsFormationEditing(false);
     setReshuffleConfirmOpen(false);
+    setDeletedFormationBotIds([]);
   };
 
   const persistFormation = async (
@@ -1091,7 +1100,14 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
     // immediately and let the progress dialog communicate the ongoing work.
     setPendingFormationSave(null);
     try {
-      await runFormationProgress(() => persistFormation(pending.program, pending.roundIndex, resetMatches));
+      await runFormationProgress(async () => {
+        for (const participantId of deletedFormationBotIds) {
+          await deleteParticipant({ leagueId: id!, participantId }).unwrap();
+        }
+        if (deletedFormationBotIds.length > 0) await refetchParticipants();
+        await persistFormation(pending.program, pending.roundIndex, resetMatches);
+        setDeletedFormationBotIds([]);
+      });
       closeFormationDialog();
     } catch (error) {
       // Do not reopen the choice dialog after a failure. Keep the underlying
@@ -1102,6 +1118,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
 
   const beginFormationEditing = () => {
     setFormationDraft(formationGroups.map((group) => group.players.map((player) => ({ ...player }))));
+    setDeletedFormationBotIds([]);
     setIsFormationEditing(true);
   };
 
@@ -1142,12 +1159,12 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
       .filter((participant) =>
         ("is_bot" in participant && participant.is_bot)
         || ("isBot" in participant && participant.isBot)
-        || /^BOT\s+\d+$/.test(participant.name)
+        || /^(?:BOT|BYE)\s+\d+$/.test(participant.name)
       )
       .map((participant) => Number.parseInt(participant.name.match(/\d+/)?.[0] ?? "0", 10));
     const nextNumber = Math.max(0, ...usedNumbers) + 1;
     setFormationDraft((previous) => previous.map((group, index) =>
-      index === groupIndex ? [...group, { name: `BOT ${nextNumber}`, level: 0, isBot: true }] : group
+      index === groupIndex ? [...group, { name: `BYE ${nextNumber}`, level: 0, isBot: true }] : group
     ));
   };
 
@@ -1171,6 +1188,15 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
   const confirmFormationPlayerRemoval = () => {
     if (!pendingFormationRemoval) return;
     const { groupIndex, player } = pendingFormationRemoval;
+    if (player.isBot || /^(?:BOT|BYE)\s+\d+$/i.test(player.name)) {
+      if (hasStartedMatches) {
+        setPendingFormationRemoval(null);
+        setFormationRequiredMessage("이미 시작하거나 완료된 경기가 있어 BYE를 참가자 명단에서 삭제할 수 없습니다.");
+        return;
+      }
+      const persistedBot = participants.find((participant) => participant.is_bot && participant.name === player.name);
+      if (persistedBot) setDeletedFormationBotIds((current) => [...new Set([...current, persistedBot.id])]);
+    }
     setFormationDraft((previous) => previous.map((group, index) =>
       index === groupIndex
         ? group.filter((candidate) => formationPlayerId(candidate) !== formationPlayerId(player))
@@ -2350,7 +2376,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
         <DialogActions sx={{ px: 2, pb: 2 }}>
           {isFormationEditing ? (
             <>
-              <Button onClick={() => { setIsFormationEditing(false); setFormationDraft([]); }} disabled={isSavingFormation}>취소</Button>
+              <Button onClick={() => { setIsFormationEditing(false); setFormationDraft([]); setDeletedFormationBotIds([]); }} disabled={isSavingFormation}>취소</Button>
               <Button
                 variant="contained"
                 onClick={() => void saveManualFormation()}
@@ -2503,7 +2529,9 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
         <DialogTitle sx={{ fontWeight: 900, fontSize: 16 }}>참가자 삭제</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ fontSize: 14 }}>
-            {pendingFormationRemoval?.player.name} 님을 이 라운드 조 편성에서 삭제하시겠습니까?
+            {pendingFormationRemoval?.player.isBot || /^(?:BOT|BYE)\s+\d+$/i.test(pendingFormationRemoval?.player.name ?? "")
+              ? `${pendingFormationRemoval?.player.name}을 참가자 명단과 편성에서 삭제하시겠습니까?`
+              : `${pendingFormationRemoval?.player.name} 님을 이 라운드 편성에서 제외하시겠습니까?`}
           </DialogContentText>
         </DialogContent>
         <DialogActions sx={{ px: 2, pb: 2 }}>

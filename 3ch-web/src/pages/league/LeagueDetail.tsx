@@ -29,7 +29,8 @@ import {
   } from "@mui/material";
   import QRCode from "react-qr-code";
   import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-  // import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+  import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+  import AddIcon from "@mui/icons-material/Add";
   import CurvedShareIcon from "../../components/CurvedShareIcon";
   import SearchIcon from "@mui/icons-material/Search";
   import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
@@ -219,6 +220,10 @@ import {
     const [teamBuilderParticipantIds, setTeamBuilderParticipantIds] = useState<string[]>([]);
     const [blueWhiteFormationOpen, setBlueWhiteFormationOpen] = useState(false);
     const [blueWhiteBlueIds, setBlueWhiteBlueIds] = useState<string[]>([]);
+    const [blueWhiteFormationEditing, setBlueWhiteFormationEditing] = useState(false);
+    const [addingBlueWhiteBot, setAddingBlueWhiteBot] = useState(false);
+    const [blueWhitePendingBots, setBlueWhitePendingBots] = useState<Array<{ name: string; side: "blue" | "white" }>>([]);
+    const [blueWhiteDeletedBotIds, setBlueWhiteDeletedBotIds] = useState<string[]>([]);
     const authUser = useAppSelector((state) => state.auth.user);
 
     const { data: leagueData, isLoading: leagueLoading, refetch: refetchLeague } = useGetLeagueQuery(id ?? "", {
@@ -527,21 +532,86 @@ import {
     const hasStartedProgramMatch = Boolean(
       leagueMatchesData?.matches?.some((match) => match.status === "playing" || match.status === "done"),
     );
+    const blueWhiteParticipants = useMemo(() => [...rawParticipants].sort((left, right) => {
+      if (Boolean(left.is_bot) !== Boolean(right.is_bot)) return left.is_bot ? 1 : -1;
+      const leftLevel = Number.parseInt(left.division ?? "", 10) || 999;
+      const rightLevel = Number.parseInt(right.division ?? "", 10) || 999;
+      return leftLevel - rightLevel || left.name.localeCompare(right.name, "ko");
+    }), [rawParticipants]);
+    const blueWhiteLevelSum = (participantIds: Set<string>) => blueWhiteParticipants.reduce((sum, participant) => {
+      if (!participantIds.has(participant.id) || participant.is_bot) return sum;
+      return sum + (Number.parseInt(participant.division ?? "", 10) || 0);
+    }, 0);
     const openBlueWhiteFormation = () => {
-      const participantIds = new Set(participants.map((participant) => participant.id));
+      const participantIds = new Set(blueWhiteParticipants.map((participant) => participant.id));
       const savedBlueIds = (teamProgram?.blueWhiteTeams?.blueParticipantIds ?? [])
         .filter((participantId) => participantIds.has(participantId));
       if (savedBlueIds.length > 0) {
         setBlueWhiteBlueIds(savedBlueIds);
+        setBlueWhiteFormationEditing(false);
       } else {
-        setBlueWhiteBlueIds(participants.filter((_, index) => index % 2 === 0).map((participant) => participant.id));
+        setBlueWhiteBlueIds(blueWhiteParticipants.filter((_, index) => index % 2 === 0).map((participant) => participant.id));
+        setBlueWhiteFormationEditing(true);
       }
+      setBlueWhitePendingBots([]);
+      setBlueWhiteDeletedBotIds([]);
       setBlueWhiteFormationOpen(true);
+    };
+    const addBlueWhiteBot = async (side: "blue" | "white") => {
+      if (!id || hasStartedProgramMatch || addingBlueWhiteBot) return;
+      const usedNumbers = [...rawParticipants, ...blueWhitePendingBots]
+        .filter((participant) => ("is_bot" in participant && participant.is_bot) || /^(?:BOT|BYE)\s+\d+$/i.test(participant.name))
+        .map((participant) => Number.parseInt(participant.name.match(/\d+/)?.[0] ?? "0", 10));
+      const botName = `BYE ${Math.max(0, ...usedNumbers) + 1}`;
+      setBlueWhitePendingBots((current) => [...current, { name: botName, side }]);
     };
     const saveBlueWhiteFormation = async () => {
       if (!id || !teamProgram?.blocks || hasStartedProgramMatch) return;
-      const participantIds = participants.map((participant) => participant.id);
-      const blueSet = new Set(blueWhiteBlueIds.filter((participantId) => participantIds.includes(participantId)));
+      const remainingExistingIds = blueWhiteParticipants
+        .filter((participant) => !blueWhiteDeletedBotIds.includes(participant.id))
+        .map((participant) => participant.id);
+      const projectedBlueCount = remainingExistingIds.filter((participantId) => blueWhiteBlueIds.includes(participantId)).length
+        + blueWhitePendingBots.filter((bot) => bot.side === "blue").length;
+      const projectedWhiteCount = remainingExistingIds.length
+        - remainingExistingIds.filter((participantId) => blueWhiteBlueIds.includes(participantId)).length
+        + blueWhitePendingBots.filter((bot) => bot.side === "white").length;
+      if (projectedBlueCount === 0 || projectedWhiteCount === 0) {
+        setAlertSeverity("warning");
+        setAlertMsg("청팀과 백팀에 각각 한 명 이상 편성해 주세요.");
+        return;
+      }
+      setAddingBlueWhiteBot(true);
+      let pendingBotIds: Array<{ id: string; side: "blue" | "white" }> = [];
+      try {
+        for (const botId of blueWhiteDeletedBotIds) {
+          await deleteParticipant({ leagueId: id, participantId: botId }).unwrap();
+        }
+        if (blueWhitePendingBots.length > 0) {
+          const result = await addParticipants({
+            leagueId: id,
+            participants: blueWhitePendingBots.map((bot) => ({ name: bot.name, division: "", member_id: null, is_bot: true })),
+          }).unwrap();
+          pendingBotIds = result.participants.flatMap((participant, index) => participant.id
+            ? [{ id: participant.id, side: blueWhitePendingBots[index].side }]
+            : []);
+          await refetchParticipants();
+        }
+      } catch (error: unknown) {
+        setAddingBlueWhiteBot(false);
+        setAlertSeverity("error");
+        setAlertMsg((error as { data?: { message?: string } })?.data?.message ?? "BYE 변경사항 저장에 실패했습니다.");
+        return;
+      }
+      const participantIds = [
+        ...blueWhiteParticipants
+          .filter((participant) => !blueWhiteDeletedBotIds.includes(participant.id))
+          .map((participant) => participant.id),
+        ...pendingBotIds.map((bot) => bot.id),
+      ];
+      const blueSet = new Set([
+        ...blueWhiteBlueIds.filter((participantId) => participantIds.includes(participantId)),
+        ...pendingBotIds.filter((bot) => bot.side === "blue").map((bot) => bot.id),
+      ]);
       const blueParticipantIds = participantIds.filter((participantId) => blueSet.has(participantId));
       const whiteParticipantIds = participantIds.filter((participantId) => !blueSet.has(participantId));
       if (blueParticipantIds.length === 0 || whiteParticipantIds.length === 0) {
@@ -562,12 +632,16 @@ import {
       };
       try {
         await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
-        setBlueWhiteFormationOpen(false);
+        setBlueWhiteFormationEditing(false);
+        setBlueWhitePendingBots([]);
+        setBlueWhiteDeletedBotIds([]);
         setAlertSeverity("success");
         setAlertMsg("청팀·백팀 편성을 저장했습니다. 모든 청백전 라운드에 공통 적용됩니다.");
       } catch {
         setAlertSeverity("error");
         setAlertMsg("청팀·백팀 편성 저장에 실패했습니다.");
+      } finally {
+        setAddingBlueWhiteBot(false);
       }
     };
     const prebuiltParticipantKeys = useMemo(() => {
@@ -923,11 +997,11 @@ import {
         setBotPlacementOpen(false);
         await Promise.all([refetchParticipants(), refetchLeague()]);
         setAlertSeverity("success");
-        setAlertMsg("새 참가자를 BOT 자리에 배치했습니다. 기존 대진 위치는 유지됩니다.");
+        setAlertMsg("새 참가자를 BYE 자리에 배치했습니다. 기존 대진 위치는 유지됩니다.");
       } catch (error: unknown) {
         const message = (error as { data?: { message?: string } })?.data?.message;
         setAlertSeverity("error");
-        setAlertMsg(message ?? "BOT 대체에 실패했습니다.");
+        setAlertMsg(message ?? "BYE 대체에 실패했습니다.");
       }
     };
 
@@ -2090,86 +2164,142 @@ const handleSaveEdit = async () => {
             fullWidth
             maxWidth="sm"
           >
-            <DialogTitle sx={{ fontWeight: 900 }}>청팀·백팀 편성</DialogTitle>
-            <DialogContent>
-              <Typography fontSize={13} color="text.secondary" sx={{ mb: 1.5 }}>
-                여기서 정한 편성은 라운드별 설정이 아니라 이 리그의 모든 청백전 라운드에 공통 적용됩니다.
-              </Typography>
+            <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontWeight: 900 }}>
+              청백전 팀 편성 결과
+              {canManage && !blueWhiteFormationEditing && !hasStartedProgramMatch && (
+                <IconButton size="small" onClick={() => setBlueWhiteFormationEditing(true)} aria-label="청백전 팀 수동 편집">
+                  <EditOutlinedIcon />
+                </IconButton>
+              )}
+            </DialogTitle>
+            <DialogContent dividers>
               {hasStartedProgramMatch && (
                 <Alert severity="warning" sx={{ mb: 1.5 }}>
                   이미 시작하거나 완료된 경기가 있어 기존 결과 보호를 위해 팀 편성을 변경할 수 없습니다.
                 </Alert>
               )}
-              <Stack direction="row" spacing={1} sx={{ mb: 1.2 }}>
-                <Chip
-                  label={`청팀 ${blueWhiteBlueIds.length}명`}
-                  sx={{ flex: 1, bgcolor: "#E8F1FF", color: "#1D6FBF", fontWeight: 900 }}
-                />
-                <Chip
-                  label={`백팀 ${Math.max(0, participants.length - blueWhiteBlueIds.length)}명`}
-                  sx={{ flex: 1, bgcolor: "#F3F4F6", color: "#374151", fontWeight: 900 }}
-                />
-              </Stack>
-              {!hasStartedProgramMatch && participants.length >= 2 && (
-                <Button
-                  fullWidth
-                  variant="outlined"
-                  onClick={() => {
-                    const shuffledIds = participants
-                      .map((participant) => participant.id)
-                      .map((participantId) => ({ participantId, order: Math.random() }))
-                      .sort((left, right) => left.order - right.order)
-                      .map(({ participantId }) => participantId);
-                    setBlueWhiteBlueIds(shuffledIds.slice(0, Math.ceil(shuffledIds.length / 2)));
-                  }}
-                  sx={{ mb: 1.2, fontWeight: 800 }}
-                >
-                  자동 재편성
-                </Button>
+              {blueWhiteFormationEditing && (
+                <Typography sx={{ mb: 1.5, fontSize: 12, color: "text.secondary" }}>
+                  참가자를 반대 팀으로 이동하거나 각 팀에 BYE를 추가한 뒤 완료를 눌러 주세요.
+                </Typography>
               )}
-              <Stack spacing={0.7}>
-                {participants.map((participant) => {
-                  const isBlue = blueWhiteBlueIds.includes(participant.id);
+              <Box sx={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 1.25 }}>
+                {(["blue", "white"] as const).map((side) => {
+                  const isBlueSide = side === "blue";
+                  const teamIds = new Set(blueWhiteParticipants
+                    .filter((participant) => blueWhiteBlueIds.includes(participant.id) === isBlueSide)
+                    .map((participant) => participant.id));
+                  const teamParticipants = blueWhiteParticipants.filter((participant) =>
+                    teamIds.has(participant.id) && !blueWhiteDeletedBotIds.includes(participant.id)
+                  );
+                  const pendingTeamBots = blueWhitePendingBots.filter((bot) => bot.side === side);
+                  const accent = isBlueSide ? "#2563EB" : "#F97316";
                   return (
                     <Box
-                      key={participant.id}
-                      sx={{ display: "grid", gridTemplateColumns: "1fr auto", alignItems: "center", gap: 1, p: 1, border: "1px solid #E5E7EB", borderRadius: 1 }}
+                      key={side}
+                      sx={{ border: "1px solid #E5E7EB", borderTop: `3px solid ${accent}`, borderRadius: 1.5, bgcolor: "#fff", overflow: "hidden" }}
                     >
-                      <Stack direction="row" spacing={1} alignItems="center" minWidth={0}>
-                        <Typography fontSize={13} fontWeight={800} noWrap>{participant.name}</Typography>
-                        <DivisionBadge division={participant.division} />
+                      <Box sx={{ px: 1.5, py: 1.1, bgcolor: "#F8FAFC", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <Typography sx={{ fontSize: 15, fontWeight: 900 }}>{isBlueSide ? "청팀" : "백팀"}</Typography>
+                        <Typography sx={{ fontSize: 12, color: "text.secondary", fontWeight: 800 }}>{teamParticipants.length + pendingTeamBots.length}명</Typography>
+                      </Box>
+                      <Stack spacing={0.4} sx={{ px: 1.25, py: 1, minHeight: 80 }}>
+                        {teamParticipants.map((participant) => (
+                          <Box key={participant.id} sx={{ display: "flex", alignItems: "center", gap: 0.5, minHeight: 30 }}>
+                            <Typography sx={{ minWidth: 0, fontSize: 13, fontWeight: 800 }} noWrap>{participant.is_bot ? participant.name.replace(/^BOT/i, "BYE") : participant.name}</Typography>
+                            {!participant.is_bot && <DivisionBadge division={participant.division} />}
+                            {blueWhiteFormationEditing && (
+                              participant.is_bot ? (
+                                <Button
+                                  size="small"
+                                  color="error"
+                                  disabled={hasStartedProgramMatch}
+                                  onClick={() => {
+                                    if (!window.confirm(`${participant.name}을 참가자 명단과 청백전 편성에서 삭제합니다. 계속하시겠습니까?`)) return;
+                                    setBlueWhiteDeletedBotIds((current) => [...new Set([...current, participant.id])]);
+                                    setBlueWhiteBlueIds((current) => current.filter((participantId) => participantId !== participant.id));
+                                  }}
+                                  sx={{ ml: "auto", minWidth: 0, px: 0.7, fontSize: 10, fontWeight: 800 }}
+                                >
+                                  삭제
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="small"
+                                  disabled={hasStartedProgramMatch}
+                                  onClick={() => setBlueWhiteBlueIds((current) => isBlueSide
+                                    ? current.filter((participantId) => participantId !== participant.id)
+                                    : [...new Set([...current, participant.id])])}
+                                  sx={{ ml: "auto", minWidth: 0, px: 0.7, fontSize: 10, fontWeight: 800 }}
+                                >
+                                  {isBlueSide ? "백팀 이동" : "청팀 이동"}
+                                </Button>
+                              )
+                            )}
+                          </Box>
+                        ))}
+                        {pendingTeamBots.map((bot) => (
+                          <Box key={bot.name} sx={{ display: "flex", alignItems: "center", gap: 0.5, minHeight: 30 }}>
+                            <Typography sx={{ fontSize: 13, fontWeight: 800 }}>{bot.name}</Typography>
+                            <Chip label="추가 예정" size="small" sx={{ height: 19, fontSize: 9, fontWeight: 800 }} />
+                            <IconButton
+                              size="small"
+                              aria-label={`${bot.name} 취소`}
+                              onClick={() => setBlueWhitePendingBots((current) => current.filter((candidate) => candidate.name !== bot.name))}
+                              sx={{ ml: "auto", width: 26, height: 26, color: "#DC2626" }}
+                            >
+                              ×
+                            </IconButton>
+                          </Box>
+                        ))}
+                        {blueWhiteFormationEditing && (
+                          <Button
+                            size="small"
+                            startIcon={<AddIcon />}
+                            disabled={hasStartedProgramMatch || addingBlueWhiteBot}
+                            onClick={() => void addBlueWhiteBot(side)}
+                            sx={{ mt: 0.5, width: "100%", border: "1px dashed #94A3B8", color: "#475569", fontSize: 11, fontWeight: 800 }}
+                          >
+                            BYE 추가
+                          </Button>
+                        )}
                       </Stack>
-                      <ToggleButtonGroup
-                        exclusive
-                        size="small"
-                        value={isBlue ? "blue" : "white"}
-                        disabled={hasStartedProgramMatch}
-                        onChange={(_, value: "blue" | "white" | null) => {
-                          if (!value) return;
-                          setBlueWhiteBlueIds((current) => value === "blue"
-                            ? [...new Set([...current, participant.id])]
-                            : current.filter((participantId) => participantId !== participant.id));
-                        }}
-                        sx={{ "& .MuiToggleButton-root": { px: 1.4, py: 0.45, fontSize: 12, fontWeight: 800 } }}
-                      >
-                        <ToggleButton value="blue" sx={{ "&.Mui-selected": { bgcolor: "#DCEBFF", color: "#1D6FBF" } }}>청팀</ToggleButton>
-                        <ToggleButton value="white" sx={{ "&.Mui-selected": { bgcolor: "#F3F4F6", color: "#111827" } }}>백팀</ToggleButton>
-                      </ToggleButtonGroup>
+                      <Box sx={{ borderTop: "1px solid #E5E7EB", px: 1.5, py: 0.9 }}>
+                        <Typography sx={{ fontSize: 12, color: "text.secondary", fontWeight: 700 }}>
+                          합 <Box component="span" sx={{ color: accent, fontWeight: 900 }}>{blueWhiteLevelSum(teamIds)}부</Box>
+                        </Typography>
+                      </Box>
                     </Box>
                   );
                 })}
-              </Stack>
+              </Box>
             </DialogContent>
-            <DialogActions sx={{ px: 3, pb: 2 }}>
-              <Button onClick={() => setBlueWhiteFormationOpen(false)} color="inherit">닫기</Button>
-              <Button
-                variant="contained"
-                disableElevation
-                disabled={hasStartedProgramMatch || savingTeam || participants.length < 2}
-                onClick={saveBlueWhiteFormation}
-              >
-                저장
-              </Button>
+            <DialogActions sx={{ px: 2.5, py: 2 }}>
+              {blueWhiteFormationEditing ? (
+                <>
+                  <Button onClick={() => { setBlueWhiteFormationEditing(false); openBlueWhiteFormation(); }} disabled={savingTeam || addingBlueWhiteBot}>취소</Button>
+                  <Button variant="contained" disabled={hasStartedProgramMatch || savingTeam || addingBlueWhiteBot || blueWhiteParticipants.length < 2} onClick={saveBlueWhiteFormation}>완료</Button>
+                </>
+              ) : (
+                <>
+                  {canManage && !hasStartedProgramMatch && (
+                    <Button
+                      variant="outlined"
+                      onClick={() => {
+                        const shuffledIds = blueWhiteParticipants.map((participant) => participant.id)
+                          .map((participantId) => ({ participantId, order: Math.random() }))
+                          .sort((left, right) => left.order - right.order)
+                          .map(({ participantId }) => participantId);
+                        setBlueWhiteBlueIds(shuffledIds.slice(0, Math.ceil(shuffledIds.length / 2)));
+                        setBlueWhiteFormationEditing(true);
+                      }}
+                    >
+                      재편성
+                    </Button>
+                  )}
+                  <Button onClick={() => setBlueWhiteFormationOpen(false)} sx={{ fontWeight: 700 }}>닫기</Button>
+                </>
+              )}
             </DialogActions>
           </Dialog>
 
@@ -2478,7 +2608,7 @@ const handleSaveEdit = async () => {
           <DialogTitle sx={{ fontWeight: 900, fontSize: 17 }}>참가자 배치 방법</DialogTitle>
           <DialogContent>
             <Typography sx={{ mb: 2, fontSize: 14, lineHeight: 1.6 }}>
-              새 참가자를 BOT 자리에 배치하시겠습니까?<br />새 참가자로 마지막에 추가하시겠습니까?
+              새 참가자를 BYE 자리에 배치하시겠습니까?<br />새 참가자로 마지막에 추가하시겠습니까?
             </Typography>
             {rawParticipants.filter((participant) => participant.is_bot).length > 1 && (
               <Select
@@ -2496,7 +2626,7 @@ const handleSaveEdit = async () => {
           <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
             <Button onClick={() => setBotPlacementOpen(false)}>취소</Button>
             <Button variant="outlined" onClick={() => void replaceBotWithAddedParticipant()} disabled={!selectedBotId}>
-              BOT 대체
+              BYE 대체
             </Button>
             <Button variant="contained" disableElevation onClick={() => void addParticipantBesideBot()}>
               새 참가자

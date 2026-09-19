@@ -58,7 +58,7 @@ function toProgramPlayers(participants: LeagueParticipantItem[]): ProgramPlayer[
         division: participant.division ?? null,
         level: Number.isNaN(level) ? 0 : level,
         sourceGroupId: participant.source_group_id ?? null,
-        isBot: participant.is_bot === true || /^BOT\s+\d+$/i.test(participant.name),
+        isBot: participant.is_bot === true || /^(?:BOT|BYE)\s+\d+$/i.test(participant.name),
       };
     })
     .sort((a, b) => (a.level || Number.MAX_SAFE_INTEGER) - (b.level || Number.MAX_SAFE_INTEGER) || a.name.localeCompare(b.name));
@@ -1045,7 +1045,7 @@ export function buildProgramRoundStandingsSnapshot(
         name: match.participant_a_name,
         division: match.participant_a_division,
         seedLabel: match.participant_a_seed_label ?? undefined,
-        isBot: /^BOT\s+\d+$/i.test(match.participant_a_name ?? ""),
+        isBot: /^(?:BOT|BYE)\s+\d+$/i.test(match.participant_a_name ?? ""),
       });
     }
     if (match.participant_b_id && !match.participant_b_id.startsWith("placeholder-")) {
@@ -1054,7 +1054,7 @@ export function buildProgramRoundStandingsSnapshot(
         name: match.participant_b_name,
         division: match.participant_b_division,
         seedLabel: match.participant_b_seed_label ?? undefined,
-        isBot: /^BOT\s+\d+$/i.test(match.participant_b_name ?? ""),
+        isBot: /^(?:BOT|BYE)\s+\d+$/i.test(match.participant_b_name ?? ""),
       });
     }
   });
@@ -1240,6 +1240,46 @@ function buildFourGroupSixteenSeedOrder(rankedPools: MatchUnit[][]): MatchUnit[]
   return seedOrder;
 }
 
+function officialSeedLineOrder(size: number): number[] {
+  if (size === 2) return [1, 2];
+  const previous = officialSeedLineOrder(size / 2);
+  return previous.flatMap((seed, index) =>
+    index % 2 === 0
+      ? [seed, size + 1 - seed]
+      : [size + 1 - seed, seed]
+  );
+}
+
+function buildTwoGroupOfficialSeedOrder(rankedPools: MatchUnit[][]): MatchUnit[] | null {
+  if (rankedPools.length !== 2 || rankedPools.every((pool) => pool.length === 0)) {
+    return null;
+  }
+
+  // 두 조의 동일 순위를 하나의 시드 밴드로 보고 A1, B1, A2, B2 ...
+  // 순서로 전체 시드를 부여한다. 공식 토너먼트 라인에 배치하면
+  // A1-B4 / A3-B2 / A2-B3 / A4-B1 같은 교차 대진과 상위 시드의
+  // 균등한 BYE가 대진 크기에 맞춰 자동으로 만들어진다.
+  const maxRank = Math.max(...rankedPools.map((pool) => pool.length));
+  const bye = (): MatchUnit => ({ id: null, name: null, division: null });
+  const seededUnits = Array.from({ length: maxRank }, (_, rankIndex) => rankIndex)
+    // 한 조의 진출자가 한 명 적더라도 그 조의 해당 순위 자리를 없애고
+    // 뒤 시드를 당기지 않는다. 빈 교차 상대를 BYE로 유지해야 홀수 인원에서도
+    // 같은 조 선수끼리 1회전에 붙지 않는다.
+    .flatMap((rankIndex) => rankedPools.map((pool) => pool[rankIndex] ?? bye()));
+  const bracketSize = 2 ** Math.ceil(Math.log2(Math.max(2, seededUnits.length)));
+  const bracketSlots = officialSeedLineOrder(bracketSize).map(
+    (seed) => seededUnits[seed - 1] ?? bye(),
+  );
+
+  // buildTournamentSlots가 사용하는 내부 슬롯 순서로 역변환한다.
+  const seedAtSlot = seededBracket(bracketSize);
+  const seedOrder = Array<MatchUnit>(bracketSize);
+  bracketSlots.forEach((entry, slotIndex) => {
+    seedOrder[seedAtSlot[slotIndex] - 1] = entry;
+  });
+  return seedOrder;
+}
+
 function buildThreeGroupEightRankSeedOrder(rankedPools: MatchUnit[][]): MatchUnit[] | null {
   if (rankedPools.length !== 3 || rankedPools.some((pool) => pool.length !== 8)) {
     return null;
@@ -1401,6 +1441,9 @@ export function buildCrossGroupTournamentSeedOrder(rankedPools: MatchUnit[][]): 
 
   const exactFourGroupOrder = buildFourGroupSixteenSeedOrder(labeledPools);
   if (exactFourGroupOrder) return exactFourGroupOrder;
+
+  const exactTwoGroupOrder = buildTwoGroupOfficialSeedOrder(labeledPools);
+  if (exactTwoGroupOrder) return exactTwoGroupOrder;
 
   const exactThreeGroupOrder = buildThreeGroupEightRankSeedOrder(labeledPools);
   if (exactThreeGroupOrder) return exactThreeGroupOrder;
@@ -1867,6 +1910,47 @@ export function generateProgramRoundMatches(
             : unit
         )
       );
+      // 2라운드 본선도 이전 라운드의 진출자를 소비하는 final 경로를 탄다.
+      // 청백전 "같은 팀끼리"에서는 이 경로에서도 저장된 통합 팀 편성을
+      // 기준으로 청팀/백팀 대진표를 반드시 분리해야 한다.
+      if (
+        block.competitionMode === "blue-white"
+        && block.blueWhiteTournamentPlacement === "by-team"
+        && blueWhiteTeams
+        && qualifiedPools?.length
+      ) {
+        const blueIds = new Set(blueWhiteTeams.blueParticipantIds);
+        const whiteIds = new Set(blueWhiteTeams.whiteParticipantIds);
+        const blueUnits: MatchUnit[] = [];
+        const whiteUnits: MatchUnit[] = [];
+        const unassignedUnits: MatchUnit[] = [];
+        qualifiedPools.flat().forEach((unit) => {
+          const memberIds = unit.id?.split("+").filter(Boolean) ?? [];
+          if (memberIds.length > 0 && memberIds.every((participantId) => blueIds.has(participantId))) {
+            blueUnits.push(unit);
+          } else if (memberIds.length > 0 && memberIds.every((participantId) => whiteIds.has(participantId))) {
+            whiteUnits.push(unit);
+          } else {
+            unassignedUnits.push(unit);
+          }
+        });
+        // 과거 프로그램처럼 편성 정보가 불완전한 단위는 임의로 상대 팀에
+        // 섞지 않고 더 적은 쪽에 배치한다. 정상 편성 데이터에서는 발생하지 않는다.
+        unassignedUnits.forEach((unit) => {
+          (blueUnits.length <= whiteUnits.length ? blueUnits : whiteUnits).push(unit);
+        });
+        const teamBrackets = [blueUnits, whiteUnits].filter((units) => units.length > 0);
+        return withoutDeleted(teamBrackets.flatMap((bracketPlayers, bracketIndex) =>
+          tournamentBuilder(
+            leagueId,
+            round - 1,
+            block,
+            bracketPlayers,
+            finalPools ? "seed" : undefined,
+            bracketIndex + 1,
+          ),
+        ));
+      }
       const crossGroupSeedOrder =
         bracketCount === 1 && qualifiedPools
           ? buildCrossGroupTournamentSeedOrder(qualifiedPools)

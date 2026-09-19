@@ -1937,6 +1937,9 @@ export function generateProgramRoundMatches(
   const isBlueWhiteTeamRankSource = previousBlock?.competitionMode === "blue-white"
     && previousBlock.blueWhiteRankingMode === "by-team"
     && Boolean(blueWhiteTeams);
+  const isBlueWhiteSeparatedTournamentSource = previousBlock?.format === "TOURNAMENT"
+    && previousBlock.competitionMode === "blue-white"
+    && previousBlock.blueWhiteTournamentPlacement === "by-team";
   const placeholderPools = isFinalRound && !rankedPools
     ? previousBlock?.format === "GROUP" && previousGroupSizes.length > 0
       ? buildRankPlaceholderPools(previousGroupSizes)
@@ -1949,7 +1952,11 @@ export function generateProgramRoundMatches(
             )
           : buildSingleLeagueRankPlaceholderPool(matchUnits.length)
         : previousBlock?.format === "TOURNAMENT"
-          ? buildTournamentRankPlaceholderPool(sourceRound, advanceCount)
+          ? isBlueWhiteSeparatedTournamentSource
+            // 청·백 분리 토너먼트의 결선은 결과 확정 전에도 양쪽
+            // 대진표 우승자 한 명씩이 맞붙는 구조를 그대로 보여준다.
+            ? buildRankPlaceholderPools([1, 1], 1, ["청팀", "백팀"])
+            : buildTournamentRankPlaceholderPool(sourceRound, advanceCount)
           : null
     : null;
   const finalPools = rankedPools ?? placeholderPools;

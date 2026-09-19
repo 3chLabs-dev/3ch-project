@@ -25,6 +25,7 @@ import {
   useGetLeagueMatchesQuery,
   useGetLeagueParticipantsQuery,
   useGetLeagueProgramQuery,
+  useSaveLeagueProgramMutation,
   useAssignMatchParticipantMutation,
   useSyncLeagueProgramMatchesMutation,
   useUpdateLeagueMatchMutation,
@@ -33,7 +34,7 @@ import {
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
 import { formatLeagueDate } from "../../utils/dateUtils";
 import { DivisionBadge } from "../../components/ParticipantName";
-import { applyProgramMatchState, applyProgramTournamentAdvancement, clearProgramMatchState, generateProgramRoundMatches, getStoredProgramOption, isAutomaticProgramWalkover, saveProgramMatchPatch, type ProgramMatchPatch } from "../../utils/programMatchGenerator";
+import { applyProgramMatchState, applyProgramTournamentAdvancement, clearProgramMatchState, generateProgramRoundMatches, getStoredProgramOption, isAutomaticProgramWalkover, saveProgramMatchPatch, withProgramRoundStandingsSnapshot, type ProgramMatchPatch } from "../../utils/programMatchGenerator";
 
 // ─── 단일 토너먼트 레이아웃 상수 ────────────────────────────────────────────
 // 단일 토너먼트(라운드로빈 등)에서 매치 박스를 좌→우 방향으로 나열할 때 사용
@@ -1404,6 +1405,7 @@ export default function LeagueTournamentBracket() {
 
   const [assignParticipant, { isLoading: isAssigning }] = useAssignMatchParticipantMutation();
   const [updateTournamentMatch] = useUpdateLeagueMatchMutation();
+  const [saveLeagueProgram] = useSaveLeagueProgramMutation();
 
   const handleRefresh = () => {
     refetchLeague();
@@ -1411,11 +1413,23 @@ export default function LeagueTournamentBracket() {
   };
 
   const handleReseedProgramBracket = async () => {
-    if (!id || !programBlock || canonicalProgramMatches.length === 0) return;
+    if (!id || !programBlock || !programOption) return;
+    const sourceRound = programBlock.sourceRoundId ?? programRound - 1;
+    const refreshedProgram = sourceRound > 0
+      ? withProgramRoundStandingsSnapshot(programOption, sourceRound, programSourceMatches)
+      : programOption;
+    const reseededMatches = generateProgramRoundMatches(
+      id,
+      refreshedProgram,
+      participants,
+      programRound,
+      programSourceMatches,
+    );
+    if (reseededMatches.length === 0) return;
     clearProgramMatchState(id, programRound);
     await syncLeagueProgramMatches({
       leagueId: id,
-      matches: canonicalProgramMatches.map((match) => ({
+      matches: reseededMatches.map((match) => ({
         ...match,
         program_round: programRound,
         program_block_type: programBlock.type,
@@ -1423,6 +1437,9 @@ export default function LeagueTournamentBracket() {
       resetResults: true,
       resetConfirmation: "RESET_PROGRAM_RESULTS",
     }).unwrap();
+    if (refreshedProgram !== programOption) {
+      await saveLeagueProgram({ leagueId: id, program: refreshedProgram }).unwrap();
+    }
     programSyncKeyRef.current = null;
     await refetchMatches();
     setSwapFirst(null);

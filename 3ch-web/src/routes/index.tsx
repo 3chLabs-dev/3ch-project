@@ -1,4 +1,5 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
+import WoonsePolicyPage from "../pages/wooriwoonse/WoonsePolicyPage";
 import AppShell from "../components/AppShell";
 import AdminGuard from "../components/AdminGuard";
 import AdminLogin from "../pages/admin/AdminLogin";
@@ -100,6 +101,8 @@ import { NoIndex } from "../components/SearchVisibility";
 // import Login from "../pages/Login";
 
 export const router = createBrowserRouter([
+  { path: "/wooriwoonse/terms", element: <WoonsePolicyPage type="terms" /> },
+  { path: "/wooriwoonse/privacy", element: <WoonsePolicyPage type="privacy" /> },
   { path: "/auth/success", element: <><NoIndex /><AuthSuccess /></> },
   { path: "/auth/fail", element: <><NoIndex /><AuthFail /></> },
   {

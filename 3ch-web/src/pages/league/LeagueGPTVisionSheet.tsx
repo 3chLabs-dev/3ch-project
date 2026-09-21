@@ -56,6 +56,7 @@ import {
   generateProgramRoundMatches,
   getStoredProgramOption,
   isAutomaticProgramWalkover,
+  resolveProgramBlueWhiteTeams,
   saveProgramMatchPatch,
   storeProgramOption,
   withProgramRoundStandingsSnapshot,
@@ -2989,7 +2990,7 @@ export default function LeagueGPTVisionSheet() {
   const displayRankings = useMemo(() => {
     const rankingMode = currentProgramRound?.blueWhiteRankingMode
       ?? currentProgramBlock?.blueWhiteRankingMode;
-    const teams = programOption?.blueWhiteTeams;
+    const teams = resolveProgramBlueWhiteTeams(programOption, currentProgramBlock);
     if (
       !isProgramMode
       || currentProgramBlock?.competitionMode !== "blue-white"
@@ -3019,7 +3020,7 @@ export default function LeagueGPTVisionSheet() {
     currentProgramRound?.blueWhiteRankingMode,
     isProgramMode,
     localOrder,
-    programOption?.blueWhiteTeams,
+    programOption,
     rankingOrder,
     rankings,
   ]);

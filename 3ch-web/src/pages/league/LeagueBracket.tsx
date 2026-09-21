@@ -43,6 +43,7 @@ import {
   generateProgramRoundMatches,
   getStoredProgramOption,
   isAutomaticProgramWalkover,
+  resolveProgramBlueWhiteTeams,
   saveProgramMatchPatch,
   storeProgramOption,
   withProgramRoundStandingsSnapshot,
@@ -1751,6 +1752,39 @@ export default function LeagueBracket() {
     unresolvedTieGroups,
     rankingOrder,
   } = useMatchStats(localOrder, matches, currentRule, manualTieBreakOrder);
+  const displayRankings = useMemo(() => {
+    const rankingMode = currentProgramRound?.blueWhiteRankingMode
+      ?? currentProgramBlock?.blueWhiteRankingMode;
+    const teams = resolveProgramBlueWhiteTeams(programOption, currentProgramBlock);
+    if (
+      !isProgramMode
+      || currentProgramBlock?.competitionMode !== "blue-white"
+      || rankingMode !== "by-team"
+      || !teams
+    ) {
+      return rankings;
+    }
+
+    const blueIds = new Set(teams.blueParticipantIds);
+    const whiteIds = new Set(teams.whiteParticipantIds);
+    const rankByParticipantId = new Map<string, number>();
+    [blueIds, whiteIds].forEach((teamIds) => {
+      rankingOrder
+        .filter((participantId) => teamIds.has(participantId))
+        .forEach((participantId, index) => rankByParticipantId.set(participantId, index + 1));
+    });
+    return localOrder.map((participant, index) =>
+      rankByParticipantId.get(participant.id) ?? rankings[index] ?? 0
+    );
+  }, [
+    currentProgramBlock,
+    currentProgramRound?.blueWhiteRankingMode,
+    isProgramMode,
+    localOrder,
+    programOption,
+    rankingOrder,
+    rankings,
+  ]);
 
   const handleSaveTieBreak = useCallback(async (participantIds: string[]) => {
     if (!id || !programOption || !selectedGroup) return;
@@ -2024,7 +2058,7 @@ export default function LeagueBracket() {
                         wins={playerStats[rowIdx]?.wins ?? 0}
                         losses={playerStats[rowIdx]?.losses ?? 0}
                         setTotal={playerStats[rowIdx]?.setTotal ?? 0}
-                        rank={rankings[rowIdx] ?? 0}
+                        rank={displayRankings[rowIdx] ?? 0}
                         tieSetDiff={tieSetDiffs[rowIdx] ?? ""}
                         hasPlayed={playerStats[rowIdx]?.hasPlayed ?? false}
                         leagueId={id ?? ""}

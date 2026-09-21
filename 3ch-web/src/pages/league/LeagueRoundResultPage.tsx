@@ -27,7 +27,7 @@ import {
   useGetLeagueQuery,
 } from "../../features/league/leagueApi";
 import type { ProgramOption } from "../../features/league/types/tournament.types";
-import { hydrateProgramNoGamePolicy } from "../../utils/programMatchGenerator";
+import { hydrateProgramNoGamePolicy, resolveProgramBlueWhiteTeams } from "../../utils/programMatchGenerator";
 
 type RoundFormat = "LEAGUE" | "GROUP" | "TOURNAMENT";
 type RoundType = "SINGLES" | "DOUBLES" | "TEAM";
@@ -38,6 +38,10 @@ type ProgramBlock = {
   type?: RoundType;
   format?: RoundFormat;
   matchRule?: string;
+  competitionMode?: "standard" | "blue-white";
+  blueWhiteRankingMode?: "by-team" | "combined";
+  blueWhiteTournamentPlacement?: "by-team" | "mixed";
+  tournamentMode?: "single" | "upper-lower";
 };
 
 const rankCellSx = { width: 52, px: 0.75, py: 1, textAlign: "center", fontSize: 12, fontWeight: 900 } as const;
@@ -242,21 +246,45 @@ export default function LeagueRoundResultPage() {
   const complete = matches.length > 0 && matches.every((match) => match.is_no_game || match.status === "done");
   const threeSet = block?.matchRule === "THREE_SET" || block?.matchRule?.includes("3세트") || matches.some((match) => match.match_rule === "THREE_SET" || match.match_rule?.includes("3세트"));
   const bracketPath = format === "TOURNAMENT" ? "tournament-bracket" : "bracket";
+  const blueWhiteTeams = resolveProgramBlueWhiteTeams(programOption, programOption?.blocks?.[round - 1]);
   const grouped = useMemo(() => {
-    if (format === "LEAGUE") return [{ key: "league", title: "전체 순위", rows: roundRobinStandings(matches, block?.matchRule), awardMode: "league" as const }];
+    if (format === "LEAGUE") {
+      const rows = roundRobinStandings(matches, block?.matchRule);
+      if (
+        block?.competitionMode === "blue-white"
+        && block.blueWhiteRankingMode === "by-team"
+        && blueWhiteTeams
+      ) {
+        const makeTeamRows = (participantIds: string[]) => {
+          const participantIdSet = new Set(participantIds);
+          return rows
+            .filter((row) => participantIdSet.has(row.key))
+            .map((row, index) => ({ ...row, rank: String(index + 1) }));
+        };
+        return [
+          { key: "blue", title: "청팀 순위", rows: makeTeamRows(blueWhiteTeams.blueParticipantIds), awardMode: "league" as const },
+          { key: "white", title: "백팀 순위", rows: makeTeamRows(blueWhiteTeams.whiteParticipantIds), awardMode: "league" as const },
+        ];
+      }
+      return [{ key: "league", title: "전체 순위", rows, awardMode: "league" as const }];
+    }
     if (format === "GROUP") {
       const labels = [...new Set(matches.map((match) => match.match_label).filter((label): label is string => Boolean(label)))].sort((left, right) => Number.parseInt(left, 10) - Number.parseInt(right, 10));
       return labels.map((label) => ({ key: label, title: label, rows: roundRobinStandings(matches.filter((match) => match.match_label === label), block?.matchRule), awardMode: "league" as const }));
     }
     const indexes = [...new Set(matches.map((match) => match.tournament_bracket_index || 1))].sort((a, b) => a - b);
     const brackets = [...new Set(matches.map((match) => match.bracket || "upper"))];
+    const isBlueWhiteTeamTournament = block?.competitionMode === "blue-white"
+      && block.blueWhiteTournamentPlacement === "by-team";
     return indexes.flatMap((index) => brackets.map((bracket) => ({
       key: `${index}-${bracket}`,
-      title: `${bracket === "lower" ? "하위부" : "상위부"}${indexes.length > 1 ? ` ${index}조` : ""}`,
+      title: isBlueWhiteTeamTournament
+        ? `${index === 1 ? "청팀" : index === 2 ? "백팀" : `${index}조`}${block.tournamentMode === "upper-lower" ? ` ${bracket === "lower" ? "하위부" : "상위부"}` : ""}`
+        : `${bracket === "lower" ? "하위부" : "상위부"}${indexes.length > 1 ? ` ${index}조` : ""}`,
       rows: tournamentStandings(matches.filter((match) => (match.tournament_bracket_index || 1) === index && (match.bracket || "upper") === bracket)),
       awardMode: (bracket === "lower" ? "lower" : "upper") as AwardMode,
     })).filter((section) => section.rows.length > 0));
-  }, [block?.matchRule, format, matches, threeSet]);
+  }, [block, blueWhiteTeams, format, matches]);
   const activeGroup = format === "GROUP"
     ? grouped.some((section) => section.key === selectedGroup) ? selectedGroup : grouped[0]?.key
     : null;

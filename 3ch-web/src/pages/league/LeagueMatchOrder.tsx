@@ -812,20 +812,12 @@ export default function LeagueMatchOrder() {
         ordered = ordered.filter((m) => m.match_label === selectedGroup);
       }
 
-      const sorted = [...ordered].sort((a, b) => {
-        const aStartedIndex = startedMatchIds.indexOf(a.id);
-        const bStartedIndex = startedMatchIds.indexOf(b.id);
-        if (aStartedIndex !== -1 || bStartedIndex !== -1) {
-          if (aStartedIndex === -1) return 1;
-          if (bStartedIndex === -1) return -1;
-          return aStartedIndex - bStartedIndex;
-        }
-        if (a.status === "playing" && b.status !== "playing") return -1;
-        if (a.status !== "playing" && b.status === "playing") return 1;
-        return 0;
-      });
-
-      return sorted;
+      // 프로그램 풀리그/조별리그는 생성된 표준 라운드로빈 순서를 유지한다.
+      // 경기 시작 시 해당 경기를 목록 맨 위로 이동시키면 1-12, 2-11 같은
+      // 같은 회차 묶음이 흩어져 경기순서가 뒤섞인 것처럼 보인다.
+      return localOrder
+        ? ordered
+        : [...ordered].sort((a, b) => a.match_order - b.match_order);
     }
 
     // bracket이 있는 경기(토너먼트 경기)는 리그 경기 순서 뷰에서 제외

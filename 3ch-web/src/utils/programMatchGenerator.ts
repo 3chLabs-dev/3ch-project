@@ -2238,3 +2238,59 @@ export function generateProgramRoundMatches(
 
   return [];
 }
+
+/**
+ * `is_no_game`은 프로그램 생성 정책에서 계산되는 표시 상태이며 서버 경기
+ * 행에는 저장되지 않는다. 목록/결과 화면에서도 대진표와 같은 정책을
+ * 사용하도록 서버 경기 위에 이 값만 안전하게 복원한다.
+ *
+ * 사용자 입력이 있는 playing/done 경기는 생성 정책보다 우선하므로 절대
+ * NO-GAME으로 바꾸지 않는다.
+ */
+export function hydrateProgramNoGamePolicy(
+  leagueId: string,
+  option: ProgramOption | null,
+  participants: LeagueParticipantItem[],
+  serverMatches: LeagueMatch[],
+): LeagueMatch[] {
+  if (!option?.blocks?.length || participants.length < 2) return serverMatches;
+
+  let sourceMatches = [...serverMatches];
+  const noGameById = new Map<string, boolean>();
+
+  option.blocks.forEach((_block, index) => {
+    const round = index + 1;
+    const generated = generateProgramRoundMatches(
+      leagueId,
+      option,
+      participants,
+      round,
+      sourceMatches,
+    );
+    const generatedById = new Map(generated.map((match) => [match.id, match]));
+    generated.forEach((match) => noGameById.set(match.id, Boolean(match.is_no_game)));
+
+    sourceMatches = sourceMatches.map((serverMatch) => {
+      if (!serverMatch.is_program || serverMatch.program_round !== round) return serverMatch;
+      const generatedMatch = generatedById.get(serverMatch.id);
+      if (!generatedMatch) return serverMatch;
+      const hasPersistedPlay = serverMatch.status === "playing" || serverMatch.status === "done"
+        || serverMatch.score_a != null || serverMatch.score_b != null;
+      return {
+        ...generatedMatch,
+        ...serverMatch,
+        is_no_game: hasPersistedPlay ? false : Boolean(generatedMatch.is_no_game),
+      };
+    });
+  });
+
+  return serverMatches.map((match) => {
+    if (!match.is_program) return match;
+    const hasPersistedPlay = match.status === "playing" || match.status === "done"
+      || match.score_a != null || match.score_b != null;
+    return {
+      ...match,
+      is_no_game: hasPersistedPlay ? false : Boolean(noGameById.get(match.id)),
+    };
+  });
+}

@@ -22,9 +22,12 @@ import type { LeagueMatch } from "../../features/league/leagueApi";
 import { getRoundRobinWinScore } from "../../utils/roundRobinStandings";
 import {
   useGetLeagueMatchesQuery,
+  useGetLeagueParticipantsQuery,
   useGetLeagueProgramQuery,
   useGetLeagueQuery,
 } from "../../features/league/leagueApi";
+import type { ProgramOption } from "../../features/league/types/tournament.types";
+import { hydrateProgramNoGamePolicy } from "../../utils/programMatchGenerator";
 
 type RoundFormat = "LEAGUE" | "GROUP" | "TOURNAMENT";
 type RoundType = "SINGLES" | "DOUBLES" | "TEAM";
@@ -222,10 +225,20 @@ export default function LeagueRoundResultPage() {
   const round = Math.max(1, Number(searchParams.get("round") || 1));
   const { data: leagueData, isLoading: leagueLoading } = useGetLeagueQuery(id, { skip: !id });
   const { data: matchData, isLoading: matchLoading } = useGetLeagueMatchesQuery(id, { skip: !id });
+  const { data: participantData, isLoading: participantLoading } = useGetLeagueParticipantsQuery(id, { skip: !id });
   const { data: programData, isLoading: programLoading } = useGetLeagueProgramQuery(id, { skip: !id });
-  const block = ((programData?.program?.program_data as { blocks?: ProgramBlock[] } | undefined)?.blocks || [])[round - 1];
+  const programOption = programData?.program?.program_data as ProgramOption | undefined;
+  const block = ((programOption as { blocks?: ProgramBlock[] } | undefined)?.blocks || [])[round - 1];
   const format: RoundFormat = block?.format || "GROUP";
-  const matches = useMemo(() => (matchData?.matches || []).filter((match) => match.is_program && match.program_round === round), [matchData?.matches, round]);
+  const matches = useMemo(
+    () => hydrateProgramNoGamePolicy(
+      id,
+      programOption ?? null,
+      participantData?.participants ?? [],
+      matchData?.matches ?? [],
+    ).filter((match) => match.is_program && match.program_round === round),
+    [id, matchData?.matches, participantData?.participants, programOption, round],
+  );
   const complete = matches.length > 0 && matches.every((match) => match.is_no_game || match.status === "done");
   const threeSet = block?.matchRule === "THREE_SET" || block?.matchRule?.includes("3세트") || matches.some((match) => match.match_rule === "THREE_SET" || match.match_rule?.includes("3세트"));
   const bracketPath = format === "TOURNAMENT" ? "tournament-bracket" : "bracket";
@@ -249,7 +262,7 @@ export default function LeagueRoundResultPage() {
     : null;
   const visibleSections = format === "GROUP" ? grouped.filter((section) => section.key === activeGroup) : grouped;
 
-  if (leagueLoading || matchLoading || programLoading) return <Box sx={{ display: "flex", justifyContent: "center", py: 10 }}><CircularProgress /></Box>;
+  if (leagueLoading || matchLoading || participantLoading || programLoading) return <Box sx={{ display: "flex", justifyContent: "center", py: 10 }}><CircularProgress /></Box>;
   return (
     <Stack spacing={2.5} sx={{ pb: 5 }}>
       <Stack direction="row" alignItems="center" spacing={1}>

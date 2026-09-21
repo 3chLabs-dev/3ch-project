@@ -53,7 +53,7 @@ import { useGetGroupDetailQuery } from "../../features/group/groupApi";
 import { formatLeagueDate } from "../../utils/dateUtils";
 import { distributeSnake } from "../../features/league/algorithms/distributeSnake";
 import { generateGroupOptions } from "../../features/league/algorithms/generateGroupOptions";
-import { clearProgramMatchState, generateProgramRoundMatches } from "../../utils/programMatchGenerator";
+import { clearProgramMatchState, generateProgramRoundMatches, hydrateProgramNoGamePolicy } from "../../utils/programMatchGenerator";
 import type { ProgramOption } from "../../features/league/types/tournament.types";
 
 const ADVANCEMENT_LABEL: Record<string, string> = {
@@ -409,10 +409,14 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
   const hasStartedMatches = Boolean(matchesData?.matches?.some((match) =>
     match.status === "playing" || match.status === "done" || match.score_a != null || match.score_b != null
   ));
-  const matches = matchesData?.matches ?? [];
+  const rawMatches = matchesData?.matches ?? [];
   const participants = participantsData?.participants ?? [];
   const hasProgram = Boolean(storedProgram?.blocks?.length);
   const canManage = !groupLoading && (groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.league === true));
+  const matches = useMemo(
+    () => hydrateProgramNoGamePolicy(id ?? "", storedProgram as ProgramOption | null, participants, rawMatches),
+    [id, participants, rawMatches, storedProgram],
+  );
 
   const programRounds = storedProgram?.blocks?.length
     ? storedProgram.blocks.map((block, index) => {

@@ -3429,7 +3429,7 @@ export default function LeagueGPTVisionSheet() {
                         isBot={rowPlayer.is_bot}
                         rules={getProgramRuleLabel(currentRule ?? "")}
                         onProgramMatchUpdate={isProgramMode ? updateProgramMatch : undefined}
-                        onRestoreNoGame={isProgramMode && canManage ? restoreProgramNoGame : undefined}
+                        onRestoreNoGame={isProgramMode && canManage && editMode ? restoreProgramNoGame : undefined}
                         groupNames={isProgramMode && currentProgramBlock?.format === "GROUP" ? groupNames : undefined}
                         selectedGroup={selectedGroup}
                         onMoveGroup={isProgramMode && currentProgramBlock?.format === "GROUP" ? (participant, targetGroup) => void updateProgramGroupAssignment(participant, targetGroup) : undefined}

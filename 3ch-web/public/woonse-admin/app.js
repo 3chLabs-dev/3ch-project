@@ -83,13 +83,37 @@ async function renderDashboard() {
 async function renderMembers() {
   const data = await request(`/admin/members?page=${page}&search=${encodeURIComponent(search)}`);
   shell(`<h1 class="page-title">회원 관리</h1><div class="toolbar"><span class="muted">총 <b>${data.total}</b>명</span>
-    <form class="toolbar-group" id="search-form"><input class="field" name="search" placeholder="이메일 또는 닉네임" value="${esc(search)}"/><button class="secondary">검색</button></form></div>
-    <div class="table-wrap"><table><thead><tr><th>No</th><th>이메일</th><th>닉네임</th><th>가입방식</th><th>이메일 인증</th><th>가입일시</th></tr></thead><tbody>
-    ${data.members.length ? data.members.map((member,index)=>`<tr><td>${(page-1)*20+index+1}</td><td>${esc(member.email||'-')}</td><td><b>${esc(member.nickname)}</b></td><td>${esc(providers(member))}</td><td>${verification(member)}</td><td>${date(member.createdAt)}</td></tr>`).join('') : '<tr><td colspan="6" class="empty">회원이 없습니다.</td></tr>'}
+    <form class="toolbar-group" id="search-form"><input class="field" name="search" placeholder="회원코드 또는 이메일" value="${esc(search)}"/><button class="secondary">검색</button></form></div>
+    <div class="table-wrap"><table><thead><tr><th>No</th><th>회원코드</th><th>이메일</th><th>가입방식</th><th>사주정보</th><th>이메일 인증</th><th>가입일시</th></tr></thead><tbody>
+    ${data.members.length ? data.members.map((member,index)=>`<tr><td>${(page-1)*20+index+1}</td><td><button class="link-button member-code" data-member-id="${esc(member.id)}">${esc(member.memberCode||'-')}</button></td><td>${esc(member.email||'제공되지 않음')}</td><td>${esc(providers(member))}</td><td><span class="pill ${member.sajuRegistered?'on':''}">${member.sajuRegistered?'등록':'미등록'}</span></td><td>${verification(member)}</td><td>${date(member.createdAt)}</td></tr>`).join('') : '<tr><td colspan="7" class="empty">회원이 없습니다.</td></tr>'}
     </tbody></table></div><div class="pager"><button class="secondary" id="prev" ${page<=1?'disabled':''}>이전</button><span>${page} / ${Math.max(1,Math.ceil(data.total/20))}</span><button class="secondary" id="next" ${page*20>=data.total?'disabled':''}>다음</button></div>`);
   document.getElementById('search-form').onsubmit = event => { event.preventDefault(); search = event.currentTarget.elements.namedItem('search').value.trim(); page=1; renderMembers().catch(errorPage); };
   document.getElementById('prev').onclick = () => { page--; renderMembers().catch(errorPage); };
   document.getElementById('next').onclick = () => { page++; renderMembers().catch(errorPage); };
+  document.querySelectorAll('[data-member-id]').forEach(el => el.onclick = () => openMemberDetail(el.dataset.memberId));
+}
+async function openMemberDetail(id) {
+  try {
+    const member = await request(`/admin/members/${encodeURIComponent(id)}`);
+    const saju = member.saju;
+    const calendar = saju?.calendarType === 'LUNAR' ? `음력${saju.isLeapMonth?' (윤달)':''}` : '양력';
+    const gender = { FEMALE:'여성', MALE:'남성', OTHER:'기타' }[saju?.gender] || '미입력';
+    const birthTime = saju?.birthTimeUnknown ? '모름' : saju?.birthHour == null ? '미입력' : `${String(saju.birthHour).padStart(2,'0')}:${String(saju.birthMinute??0).padStart(2,'0')}`;
+    modal = document.createElement('div'); modal.className = 'modal-backdrop';
+    modal.innerHTML = `<div class="modal member-modal"><h2>회원 상세 · ${esc(member.memberCode)}</h2>
+      <div class="member-detail"><div><b>이메일</b><span>${esc(member.email||'제공되지 않음')}</span></div>
+      <div><b>가입방식</b><span>${esc(providers(member))}</span></div>
+      <div><b>사주정보</b><span><span class="pill ${saju?'on':''}">${saju?'등록':'미등록'}</span></span></div>
+      ${saju ? `<div><b>생년월일</b><span>${esc(saju.birthDate||'-')} · ${esc(calendar)}</span></div>
+      <div><b>출생시간</b><span>${esc(birthTime)}</span></div>
+      <div><b>성별</b><span>${esc(gender)}</span></div>
+      <div><b>출생지역</b><span>${esc(saju.birthLocationName||'미입력')}</span></div>` : '<p class="muted">등록된 사주정보가 없습니다.</p>'}
+      <div class="member-joined"><b>가입일시</b><span>${esc(date(member.createdAt))}</span></div></div>
+      <div class="modal-actions"><button class="secondary" id="close-member">닫기</button></div></div>`;
+    document.body.append(modal);
+    document.getElementById('close-member').onclick = () => modal.remove();
+    modal.onclick = event => { if (event.target === modal) modal.remove(); };
+  } catch(error) { alert(error.message); }
 }
 async function renderBoard(type) {
   if (!kinds[type]) { shell('<div class="error">페이지를 찾을 수 없습니다.</div>'); return; }
@@ -202,7 +226,7 @@ async function openPolicyEditor(type, id) {
     if (!rows) return;
     const cols = Number(prompt('열 수 (1~10)', '3'));
     if (!cols) return;
-    if (!Number.isInteger(rows) || !Number.isInteger(cols) || rows < 1 || rows > 15 || cols < 1 || cols > 10) { alert('행과 열의 범위를 확인해주세요.'); return; }
+    if (!Number.isInteger(rows) || !Number.isInteger(cols) || rows < 1 || rows > 15 || cols < 1 || cols > 10) { alert('행과 열의 범위를 확인해 주세요.'); return; }
     editor.focus();
     if (savedRange) { selection.removeAllRanges(); selection.addRange(savedRange); }
     document.execCommand('insertHTML', false, policyTable(rows, cols));
@@ -218,7 +242,7 @@ async function openPolicyEditor(type, id) {
     const form = event.currentTarget;
     const payload = { label: form.elements.namedItem('label').value.trim(), effectiveDate: form.elements.namedItem('effectiveDate').value,
       content: [...editor.childNodes].map(policyHtml).join('').trim(), format: 'html', publish: !id && form.elements.namedItem('publish').checked };
-    if (!editor.textContent.trim()) { alert('본문을 입력해주세요.'); editor.focus(); return; }
+    if (!editor.textContent.trim()) { alert('본문을 입력해 주세요.'); editor.focus(); return; }
     const button = form.querySelector('button[type="submit"]'); button.disabled = true;
     try {
       await request(`/admin/policies/${type}${id?'/'+encodeURIComponent(id):''}`, { method:id?'PUT':'POST', body:JSON.stringify(payload) });

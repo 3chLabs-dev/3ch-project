@@ -9,6 +9,7 @@ const { rateLimit } = require("express-rate-limit");
 const testRoutes = require("./routes/test");
 const authRouter = require("./routes/auth");
 const leagueRouter = require("./routes/league");
+const tournamentRouter = require("./routes/tournament");
 const groupRouter = require("./routes/group");
 const drawRouter = require("./routes/draw");
 const afterPartyRouter = require("./routes/afterParty");
@@ -132,6 +133,7 @@ app.use([
 ], authRateLimiter);
 app.use("/api/auth", authRouter);
 app.use("/api", leagueRouter);
+app.use("/api", tournamentRouter);
 app.use("/api", groupRouter);
 app.use("/api", drawRouter);
 app.use("/api", afterPartyRouter);

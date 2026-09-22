@@ -1,0 +1,15 @@
+.deletion-main{max-width:860px;margin:0 auto;padding:72px 28px 100px}
+.deletion-main h1{font-size:clamp(36px,5vw,54px);line-height:1.3;margin:16px 0 20px}
+.deletion-lead{color:var(--muted);font-size:17px;line-height:1.8;margin:0 0 36px}
+.deletion-card,.deletion-data{background:#fff;border:1px solid var(--line);border-radius:18px;padding:30px 34px;margin-top:18px}
+.deletion-step{color:var(--purple);font-size:12px;font-weight:800;letter-spacing:.14em}
+.deletion-main h2{font-family:'Gowun Batang',serif;font-size:25px;margin:12px 0 16px}
+.deletion-main p{line-height:1.85}
+.deletion-card p{margin:10px 0;color:var(--muted)}
+.deletion-card strong{color:var(--ink)}
+.deletion-email{display:inline-flex;gap:18px;align-items:center;background:var(--purple);color:#fff;border-radius:999px;padding:14px 20px;margin:14px 0 2px;font-weight:700}
+.deletion-email:hover,.deletion-email:focus-visible{background:var(--purple-dark)}
+.deletion-note{font-size:13px}
+.deletion-data{background:var(--sand)}
+.deletion-data p{color:var(--muted);margin-bottom:0}
+@media(max-width:600px){.deletion-main{padding:44px 20px 72px}.deletion-card,.deletion-data{padding:24px 20px}.deletion-lead{font-size:15px}}

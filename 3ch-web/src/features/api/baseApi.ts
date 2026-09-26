@@ -40,6 +40,6 @@ const baseQueryWithAuthExpiry: BaseQueryFn<
 export const baseApi = createApi({
   reducerPath: "api",
   baseQuery: baseQueryWithAuthExpiry,
-  tagTypes: ["Group", "League", "Draw", "Policy", "UserPreferences", "UserRanking", "HomeSummary"],
+  tagTypes: ["Group", "League", "Tournament", "Draw", "Policy", "UserPreferences", "UserRanking", "HomeSummary"],
   endpoints: () => ({}),
 });

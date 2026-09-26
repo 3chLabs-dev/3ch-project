@@ -19,6 +19,7 @@ import LeagueFilterDialog from "../../components/LeagueFilterDialog.tsx";
 import { getLocalDevProfileByToken } from "../../utils/localDevAuth";
 import LeagueCalendarDialog from "../../components/LeagueCalendarDialog";
 import { getLeagueClubColor } from "../../features/league/leagueScheduleColors";
+import { useGetTournamentEligibilityQuery } from "../../features/tournament/tournamentApi";
 
 type LeagueStatus = "scheduled" | "active" | "completed";
 
@@ -28,6 +29,7 @@ export default function LeagueMainBody() {
   const token = useAppSelector((s) => s.auth.token);
   const preferredGroupId = useAppSelector((s) => s.leagueCreation.preferredGroupId);
   const isLoggedIn = !!token;
+  const { data: tournamentEligibility } = useGetTournamentEligibilityQuery(undefined, { skip: !isLoggedIn });
 
   //리그 필터
   const [filterOpen, setFilterOpen] = useState(false);
@@ -486,8 +488,15 @@ export default function LeagueMainBody() {
             onClick={handleCreateNewLeague}
             sx={{ borderRadius: 1, fontWeight: 700 }}
           >
-            신규 생성
+            리그 생성
           </Button>
+          {tournamentEligibility?.can_create && <Button
+            fullWidth variant="contained" color="secondary" disableElevation
+            onClick={() => navigate("/tournament/new")}
+            sx={{ borderRadius: 1, fontWeight: 800 }}
+          >
+            대회 생성
+          </Button>}
         </Stack>
       )}
 

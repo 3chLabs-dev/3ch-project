@@ -362,6 +362,10 @@ model Tournament {
   id              String   @id @default(uuid()) @db.Uuid
   title           String   @db.VarChar(160)
   description     String?
+  sport           String   @default("탁구") @db.VarChar(40)
+  venue_name      String?  @db.VarChar(120)
+  venue_address   String?
+  notice          String?
   starts_at       DateTime @db.Timestamptz(6)
   ends_at         DateTime? @db.Timestamptz(6)
   status          String   @default("draft") @db.VarChar(20)
@@ -386,8 +390,8 @@ model TournamentDivision {
   tournament_id String @db.Uuid
   name          String @db.VarChar(80)
   sort_order    Int @default(0)
-  league_type   String? @db.VarChar(40)
-  format        String? @db.VarChar(40)
+  league_type   String @db.VarChar(40)
+  format        String @db.VarChar(40)
   rules         Json @default("{}")
   recruit_count Int?
   status        String @default("draft") @db.VarChar(20)

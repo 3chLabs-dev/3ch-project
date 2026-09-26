@@ -93,6 +93,7 @@ import DemoLeaguePage from "../pages/demo/DemoLeaguePage";
 import DemoClubPage from "../pages/demo/DemoClubPage";
 import DemoDrawPage from "../pages/demo/DemoDrawPage";
 import LeagueQuickResult from "../pages/league/LeagueQuickResult";
+import TournamentCreate from "../pages/tournament/TournamentCreate";
 import NotFoundPage from "../pages/util/NotFoundPage";
 import { NoIndex } from "../components/SearchVisibility";
 // import League from "../pages/League";
@@ -113,6 +114,7 @@ export const router = createBrowserRouter([
       { path: "/signup", element: <SignUp />},
       { path: "/league", element: <LeagueMain /> },
       { path: "/league/new", element: <LeagueRenewalCreationWizard /> },
+      { path: "/tournament/new", element: <TournamentCreate /> },
       { path: "/league/quick-result", element: <LeagueQuickResult /> },
       { path: "/league/result-import", element: <Navigate to="/league/quick-result" replace /> },
       { path: "/league/renewal", element: <LeagueRenewalCreationWizard /> },

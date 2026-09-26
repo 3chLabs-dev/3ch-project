@@ -33,6 +33,8 @@ const createSchema = z.object({
   venue_name: z.string().trim().max(120).nullable().optional(),
   venue_address: z.string().trim().nullable().optional(),
   notice: z.string().trim().nullable().optional(),
+  court_count: z.number().int().positive().nullable().optional(),
+  recruit_count: z.number().int().positive().nullable().optional(),
   starts_at: z.iso.datetime({ offset: true }),
   ends_at: z.iso.datetime({ offset: true }).nullable().optional(),
   host_group_id: z.string().uuid(),
@@ -75,11 +77,12 @@ router.post('/tournaments', requireAuth, async (req, res) => {
     }
     const created = await client.query(
       `INSERT INTO tournaments
-         (title, description, sport, venue_name, venue_address, notice, starts_at, ends_at,
-          host_group_id, created_by_id, premium_visible)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+         (title, description, sport, venue_name, venue_address, notice, court_count, recruit_count,
+          starts_at, ends_at, host_group_id, created_by_id, premium_visible)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
       [data.title, data.description ?? null, data.sport, data.venue_name ?? null,
-        data.venue_address ?? null, data.notice ?? null, data.starts_at, data.ends_at ?? null,
+        data.venue_address ?? null, data.notice ?? null, data.court_count ?? null, data.recruit_count ?? null,
+        data.starts_at, data.ends_at ?? null,
         data.host_group_id, userId, data.premium_visible],
     );
     for (const [index, division] of data.divisions.entries()) {

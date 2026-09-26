@@ -14,10 +14,12 @@ export interface TournamentDivisionInput {
 export interface CreateTournamentRequest {
   title: string;
   description?: string | null;
-  sport: string;
+  sport?: string;
   venue_name?: string | null;
   venue_address?: string | null;
   notice?: string | null;
+  court_count?: number | null;
+  recruit_count?: number | null;
   starts_at: string;
   ends_at?: string | null;
   host_group_id: string;

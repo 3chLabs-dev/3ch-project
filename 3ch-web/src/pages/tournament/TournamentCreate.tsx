@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Alert, Box, Button, CircularProgress, FormControl, FormControlLabel, IconButton, MenuItem, Radio, RadioGroup, Stack, TextField, Typography } from "@mui/material";
+import { useMemo, useRef, useState } from "react";
+import { Alert, Box, Button, CircularProgress, Divider, FormControl, FormControlLabel, IconButton, MenuItem, Radio, RadioGroup, Select, Stack, TextField, Typography } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import PlaceSearchDialog from "../../components/PlaceSearchDialog";
 import { useNavigate } from "react-router-dom";
@@ -11,38 +11,56 @@ type DivisionDraft = TournamentDivisionInput & { key: number; matchRule: string 
 const makeDivision = (key: number, name = ""): DivisionDraft => ({ key, name, league_type: "SINGLES", format: "GROUP_TOURNAMENT", matchRule: "BEST_OF_3", rules: { match_rule: "BEST_OF_3" }, recruit_count: null });
 const rowSx = { display: "grid", gridTemplateColumns: "72px 1fr", alignItems: "center", gap: 2, py: 1.2, borderBottom: "1px solid #D9DDE6" };
 const fieldSx = { "& .MuiOutlinedInput-root": { borderRadius: 0.6, bgcolor: "#fff", height: 32 }, "& .MuiOutlinedInput-input": { py: 0.5, fontSize: "0.95rem" } };
+const selectSx = { height: 32, flex: 1, borderRadius: 0.6, bgcolor: "#fff", fontSize: "0.95rem" };
+const hours = Array.from({ length: 24 }, (_, value) => String(value).padStart(2, "0"));
+const minutes = ["00", "10", "20", "30", "40", "50"];
 const optionSx = { m: 0, px: 2, minHeight: 66, border: "1px solid #D9DDE6", borderRadius: 1, bgcolor: "#fff", boxShadow: "0 2px 2px rgba(0,0,0,0.18)", "& .MuiFormControlLabel-label": { fontSize: 20, fontWeight: 800 } };
 const steps = ["", "대회 정보", "대회 구성", "참가 부문", "대회 유형", "대회 방식", "대회 규칙", "대회 생성"];
 const typeOptions: Array<{ value: TournamentLeagueType; label: string }> = [{ value: "SINGLES", label: "단식" }, { value: "DOUBLES", label: "복식" }, { value: "TEAM", label: "단체전" }];
 const formatOptions: Array<{ value: TournamentFormat; label: string }> = [{ value: "LEAGUE", label: "풀리그" }, { value: "GROUP", label: "조별리그" }, { value: "TOURNAMENT", label: "토너먼트" }, { value: "GROUP_TOURNAMENT", label: "조별리그 + 토너먼트" }];
 const ruleOptions = [{ value: "BEST_OF_3", label: "3전 2선승제" }, { value: "BEST_OF_5", label: "5전 3선승제" }, { value: "THREE_SET", label: "3세트제" }];
 
+function OptionalNumberStepper({ value, onChange }: { value: number | ""; onChange: (value: number | "") => void }) {
+  const numericValue = value === "" ? 1 : value;
+  return <Stack direction="row" alignItems="center" justifyContent="flex-end" spacing={0.7} sx={{ width: "100%" }}>
+    <IconButton aria-label="수량 감소" disabled={value === "" || numericValue <= 1} onClick={() => onChange(Math.max(1, numericValue - 1))} sx={{ width: 36, height: 36, border: "1px solid #90CAF9", color: "#1976D2", fontSize: 21 }}>−</IconButton>
+    <TextField type="text" value={value} placeholder="선택" onFocus={(event) => event.currentTarget.select()} onChange={(event) => { const digits = event.target.value.replace(/\D/g, ""); onChange(digits ? Math.min(999, Math.max(1, Number(digits))) : ""); }} inputProps={{ inputMode: "numeric", "aria-label": "수량" }} size="small" sx={{ width: 66, "& .MuiInputBase-root": { height: 36, borderRadius: 1 }, "& input": { p: 0, textAlign: "center", fontWeight: 800, MozAppearance: "textfield" }, "& input::placeholder": { color: "#B0B5BD", opacity: 1, fontWeight: 500 }, "& input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button": { m: 0, WebkitAppearance: "none" } }} />
+    <IconButton aria-label="수량 증가" disabled={value !== "" && numericValue >= 999} onClick={() => onChange(value === "" ? 1 : Math.min(999, numericValue + 1))} sx={{ width: 36, height: 36, border: "1px solid #90CAF9", color: "#1976D2", fontSize: 21 }}>+</IconButton>
+  </Stack>;
+}
+
 export default function TournamentCreate() {
   const navigate = useNavigate();
   const token = useAppSelector((state) => state.auth.token);
+  const preferredGroupId = useAppSelector((state) => state.leagueCreation.preferredGroupId);
   const { data: eligibility, isLoading: checkingEligibility } = useGetTournamentEligibilityQuery(undefined, { skip: !token });
   const { data: groupData, isLoading: checkingGroups } = useGetMyGroupsQuery(undefined, { skip: !token });
   const [createTournament, { isLoading: isCreating }] = useCreateTournamentMutation();
   const groups = useMemo(() => (groupData?.groups ?? []).filter((group) => group.role === "owner" || (group.role === "admin" && group.management_permissions?.league === true)), [groupData]);
   const [step, setStep] = useState(1);
+  const dateRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState("");
-  const [sport, setSport] = useState("탁구");
+  const today = new Date();
+  const defaultTournamentTitle = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")} 대회`;
   const [date, setDate] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [location, setLocation] = useState("");
   const [venueAddress, setVenueAddress] = useState("");
   const [placeOpen, setPlaceOpen] = useState(false);
-  const [hostGroupId, setHostGroupId] = useState("");
-  const [premiumVisible, setPremiumVisible] = useState(false);
-  const [description, setDescription] = useState("");
-  const [notice, setNotice] = useState("");
+  const [premiumVisible, setPremiumVisible] = useState(true);
+  const [courtCount, setCourtCount] = useState<number | "">("");
+  const [participantCount, setParticipantCount] = useState<number | "">("");
   const [divisions, setDivisions] = useState<DivisionDraft[]>([makeDivision(1, "3~4부"), makeDivision(2, "5~6부"), makeDivision(3, "7~8부"), makeDivision(4, "희망부")]);
   const [error, setError] = useState("");
-  const effectiveGroupId = hostGroupId || groups[0]?.id || "";
+  const effectiveGroupId = groups.find((group) => group.id === preferredGroupId)?.id || groups[0]?.id || "";
+  const [startHour, startMinute] = startTime ? startTime.split(":") : ["", ""];
+  const [endHour, endMinute] = endTime ? endTime.split(":") : ["", ""];
+  const timeSelect = (value: string, placeholder: string, onChange: (value: string) => void, options: string[]) => <Select displayEmpty value={value} onChange={(event) => onChange(String(event.target.value))} sx={selectSx}><MenuItem value="" disabled>{placeholder}</MenuItem>{options.map((option) => <MenuItem key={option} value={option}>{option}</MenuItem>)}</Select>;
   const updateDivision = (key: number, patch: Partial<DivisionDraft>) => setDivisions((current) => current.map((division) => division.key === key ? { ...division, ...patch } : division));
   const validate = () => {
-    if (step === 1 && (!date || !startTime || !effectiveGroupId)) return "날짜, 시작 시간, 주최 클럽을 입력해주세요.";
+    if (step === 1 && (!date || !startTime || !effectiveGroupId)) return "날짜와 시작 시간을 입력해주세요.";
+    if (step === 1 && participantCount === 1) return "참가자 수는 2명 이상 입력해주세요.";
     if (step === 1 && endTime && endTime <= startTime) return "종료 시간은 시작 시간보다 늦어야 합니다.";
     if (step === 3 && divisions.some((division) => !division.name.trim())) return "모든 부문에 이름을 입력해주세요.";
     if (step === 3 && new Set(divisions.map((division) => division.name.trim())).size !== divisions.length) return "부문 이름은 중복될 수 없습니다.";
@@ -58,9 +76,11 @@ export default function TournamentCreate() {
     if (!Number.isFinite(startsAt.getTime()) || (endsAt && (!Number.isFinite(endsAt.getTime()) || endsAt <= startsAt))) { setError("대회 시간을 확인해주세요."); return; }
     try {
       await createTournament({
-        title: title.trim() || `${date} 대회`, sport, description: description.trim() || null,
+        title: title.trim() || defaultTournamentTitle,
         venue_name: location.trim() || null, venue_address: venueAddress.trim() || null,
-        notice: notice.trim() || null, starts_at: startsAt.toISOString(), ends_at: endsAt?.toISOString() ?? null,
+        court_count: courtCount === "" ? null : courtCount,
+        recruit_count: participantCount === "" ? null : participantCount,
+        starts_at: startsAt.toISOString(), ends_at: endsAt?.toISOString() ?? null,
         host_group_id: effectiveGroupId, premium_visible: premiumVisible,
         divisions: divisions.map(({ name, league_type, format, matchRule, recruit_count }) => ({ name: name.trim(), league_type, format, rules: { match_rule: matchRule }, recruit_count })),
       }).unwrap();
@@ -76,23 +96,30 @@ export default function TournamentCreate() {
     <Typography sx={{ fontSize: 22, fontWeight: 900, mb: 2 }}>{steps[step]}</Typography>
     {step === 1 && <>
       <Box sx={{ borderTop: "1px solid #D9DDE6" }}>
-        <Box sx={rowSx}><Typography fontWeight={900}>대회명 *</Typography><TextField value={title} placeholder={`${date || new Date().toISOString().slice(0, 10)} 대회`} onChange={(event) => setTitle(event.target.value)} sx={fieldSx} /></Box>
-        <Box sx={rowSx}><Typography fontWeight={900}>날짜 *</Typography><TextField type="date" value={date} onChange={(event) => setDate(event.target.value)} sx={fieldSx} /></Box>
+        <Box sx={rowSx}><Typography fontWeight={900}>대회명 <Box component="span" sx={{ color: "#EF4444" }}>*</Box></Typography><TextField value={title} placeholder={defaultTournamentTitle} onChange={(event) => setTitle(event.target.value)} sx={fieldSx} /></Box>
+        <Box sx={{ ...rowSx, cursor: "pointer" }} onClick={() => dateRef.current?.showPicker()}><Typography fontWeight={900}>날짜 <Box component="span" sx={{ color: "#EF4444" }}>*</Box></Typography><TextField inputRef={dateRef} type="date" value={date} onChange={(event) => setDate(event.target.value)} sx={fieldSx} /></Box>
         <Box sx={rowSx}><Typography fontWeight={900}>시간 *</Typography><Stack spacing={1}>
-          <Stack direction="row" spacing={0.8} alignItems="center"><Typography sx={{ width: 34, fontWeight: 700 }}>시작</Typography><TextField type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} sx={fieldSx} /></Stack>
-          <Stack direction="row" spacing={0.8} alignItems="center"><Typography sx={{ width: 34, fontWeight: 700 }}>종료</Typography><TextField type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} sx={fieldSx} /></Stack>
+          <Stack direction="row" spacing={0.8} alignItems="center"><Typography sx={{ width: 34, fontWeight: 700 }}>시작</Typography>{timeSelect(startHour, "시", (value) => setStartTime(`${value}:${startMinute || "00"}`), hours)}<Typography>:</Typography>{timeSelect(startMinute, "분", (value) => setStartTime(`${startHour || "00"}:${value}`), minutes)}</Stack>
+          <Stack direction="row" spacing={0.8} alignItems="center"><Typography sx={{ width: 34, fontWeight: 700 }}>종료</Typography>{timeSelect(endHour, "시", (value) => setEndTime(`${value}:${endMinute || "00"}`), hours)}<Typography>:</Typography>{timeSelect(endMinute, "분", (value) => setEndTime(`${endHour || "00"}:${value}`), minutes)}</Stack>
         </Stack></Box>
         <Box sx={rowSx}><Typography fontWeight={900}>장소</Typography><Stack direction="row" spacing={0.8}><TextField value={location} onChange={(event) => setLocation(event.target.value)} placeholder="장소명 또는 주소" sx={{ ...fieldSx, flex: 1 }} /><Button variant="outlined" size="small" startIcon={<SearchIcon />} onClick={() => setPlaceOpen(true)} sx={{ whiteSpace: "nowrap", fontWeight: 800 }}>주소 검색</Button></Stack></Box>
         {venueAddress && <Box sx={rowSx}><Typography fontWeight={900}>주소</Typography><Typography fontSize={13}>{venueAddress}</Typography></Box>}
-        <Box sx={rowSx}><Typography fontWeight={900}>주최 클럽 *</Typography><TextField select value={effectiveGroupId} onChange={(event) => setHostGroupId(event.target.value)} sx={fieldSx}>{groups.map((group) => <MenuItem key={group.id} value={group.id}>{group.name}</MenuItem>)}</TextField></Box>
-        <Box sx={rowSx}><Typography fontWeight={900}>종목</Typography><TextField select value={sport} onChange={(event) => setSport(event.target.value)} sx={fieldSx}>{["탁구", "배드민턴", "테니스", "볼링", "기타"].map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}</TextField></Box>
-        <Box sx={rowSx}><Typography fontWeight={900}>소개</Typography><TextField multiline minRows={2} value={description} onChange={(event) => setDescription(event.target.value)} /></Box>
-        <Box sx={rowSx}><Typography fontWeight={900}>공지사항</Typography><TextField multiline minRows={2} value={notice} onChange={(event) => setNotice(event.target.value)} /></Box>
+        <Box sx={rowSx}><Typography fontWeight={900}>코트 수</Typography><OptionalNumberStepper value={courtCount} onChange={setCourtCount} /></Box>
+        <Box sx={rowSx}><Typography fontWeight={900}>참가자 수</Typography><Box><OptionalNumberStepper value={participantCount} onChange={setParticipantCount} /><Typography sx={{ mt: 0.5, textAlign: "right", color: "text.secondary", fontSize: 11.5 }}>모든 부문 합계</Typography></Box></Box>
       </Box>
-      <Box sx={{ mt: 3, p: 2, border: "1px solid #90CAF9", borderRadius: 1, bgcolor: "#EFF6FF" }}>
-        <Typography fontWeight={900}>프리미엄 노출</Typography>
-        <Typography sx={{ mt: 0.5, mb: 1.5, color: "text.secondary", fontSize: 13 }}>대회 목록에 공개합니다. 사용 안 함이어도 참여 클럽은 대회를 볼 수 있습니다.</Typography>
-        <Stack direction="row" spacing={1}><Button fullWidth variant={premiumVisible ? "outlined" : "contained"} onClick={() => setPremiumVisible(false)}>사용 안 함</Button><Button fullWidth variant={premiumVisible ? "contained" : "outlined"} onClick={() => setPremiumVisible(true)}>프리미엄으로 홍보</Button></Stack>
+      <Divider sx={{ my: 3, borderColor: "#D8B4FE" }} />
+      <Typography sx={{ fontSize: 12, fontWeight: 950, color: "#6D28D9", letterSpacing: 1.2, mb: 1 }}>PREMIUM OPTION · 프리미엄 전용</Typography>
+      <Box sx={{ position: "relative", overflow: "hidden", borderRadius: 2, border: premiumVisible ? "2px solid #F2C94C" : "1px solid #D9B95B", background: "linear-gradient(135deg, #5B21B6 0%, #7C3AED 58%, #9333EA 100%)", boxShadow: premiumVisible ? "0 14px 32px rgba(91,33,182,0.34), inset 0 0 0 1px rgba(255,238,170,0.28)" : "0 10px 26px rgba(91,33,182,0.24)", p: 2.2 }}>
+        <Box sx={{ position: "absolute", width: 170, height: 170, borderRadius: "50%", bgcolor: "rgba(255,255,255,0.10)", right: -55, top: -80 }} />
+        <Stack spacing={1.6} sx={{ position: "relative" }}>
+          <Box><Stack direction="row" spacing={0.8} alignItems="center" sx={{ mb: 0.8 }}><Typography component="span" sx={{ fontSize: 19, lineHeight: 1 }}>👑</Typography><Typography sx={{ color: "#FFE38A", fontSize: 12, fontWeight: 950, letterSpacing: 1.4 }}>PREMIUM</Typography></Stack><Typography sx={{ color: "#fff", fontSize: 18, fontWeight: 950 }}>프리미엄 노출</Typography><Typography sx={{ color: "#F3E8FF", fontSize: 12.5, mt: 0.55, lineHeight: 1.55 }}>주변 사용자에게 대회를 소개하고 프리미엄 일정 영역에 우선 노출합니다.</Typography></Box>
+          <Stack direction="row" spacing={1}>
+            <Button fullWidth variant="contained" onClick={() => setPremiumVisible(false)} sx={{ fontWeight: 950, border: !premiumVisible ? "3px solid #fff" : "1px solid #D1D5DB", bgcolor: !premiumVisible ? "#E5E7EB" : "#F3F4F6", color: "#374151", opacity: !premiumVisible ? 1 : 0.62, transform: !premiumVisible ? "translateY(-2px)" : "none", boxShadow: !premiumVisible ? "0 6px 16px rgba(17,24,39,0.3), 0 0 0 2px rgba(255,255,255,0.35)" : "none", "&:hover": { bgcolor: "#DDE0E5", opacity: 1 } }}>{!premiumVisible ? "✓ 사용 안 함" : "사용 안 함"}</Button>
+            <Button fullWidth variant="contained" startIcon={<Typography component="span" sx={{ fontSize: 16 }}>👑</Typography>} onClick={() => setPremiumVisible(true)} sx={{ fontWeight: 950, border: premiumVisible ? "3px solid #fff" : "1px solid #FFD24A", color: "#4A2A00", background: premiumVisible ? "linear-gradient(135deg, #FFF09A 0%, #FFC107 100%)" : "linear-gradient(135deg, #FFF3AE 0%, #FFD75C 100%)", opacity: premiumVisible ? 1 : 0.68, transform: premiumVisible ? "translateY(-2px)" : "none", boxShadow: premiumVisible ? "0 7px 20px rgba(255,184,0,0.58), 0 0 0 2px rgba(255,238,138,0.4)" : "none", "&:hover": { background: "linear-gradient(135deg, #FFE36A 0%, #FFBC0A 100%)", opacity: 1 } }}>{premiumVisible ? "✓ 프리미엄으로 홍보" : "프리미엄으로 홍보"}</Button>
+          </Stack>
+          <Stack spacing={0.65}>{["전체 일정에 공개", "주변 일정 추천 영역 노출", "프리미엄 일정 우선 배치"].map((label) => <Typography key={label} sx={{ color: "#fff", fontSize: 12.5, fontWeight: 800 }}>✓ {label}</Typography>)}</Stack>
+          <Typography sx={{ color: "#FFE38A", fontSize: 11.5, fontWeight: 900 }}>프리미엄 구독 혜택</Typography>
+        </Stack>
       </Box>
       <PlaceSearchDialog open={placeOpen} initialQuery={location} onClose={() => setPlaceOpen(false)} allowDirectInput onDirectInput={(value) => { setLocation(value); setVenueAddress(""); setPlaceOpen(false); }} onSelect={(place) => { setLocation(place.name); setVenueAddress(place.address); setPlaceOpen(false); }} />
     </>}
@@ -115,6 +142,8 @@ export default function TournamentCreate() {
     {step === 7 && <Box sx={{ borderTop: "1px solid #D9DDE6" }}>
       <Box sx={rowSx}><Typography fontWeight={900}>대회명</Typography><Typography>{title.trim() || `${date} 대회`}</Typography></Box>
       <Box sx={rowSx}><Typography fontWeight={900}>일정</Typography><Typography>{date} {startTime}{endTime ? ` ~ ${endTime}` : ""}</Typography></Box>
+      <Box sx={rowSx}><Typography fontWeight={900}>코트 수</Typography><Typography>{courtCount === "" ? "미설정" : `${courtCount}개`}</Typography></Box>
+      <Box sx={rowSx}><Typography fontWeight={900}>참가자 수</Typography><Typography>{participantCount === "" ? "미설정" : `전체 ${participantCount}명`}</Typography></Box>
       <Box sx={rowSx}><Typography fontWeight={900}>부문</Typography><Stack spacing={0.6}>{divisions.map((division) => <Typography key={division.key} fontWeight={700}>{division.name} · {typeOptions.find((item) => item.value === division.league_type)?.label} · {formatOptions.find((item) => item.value === division.format)?.label}</Typography>)}</Stack></Box>
       <Box sx={rowSx}><Typography fontWeight={900}>노출</Typography><Typography>{premiumVisible ? "프리미엄 노출" : "사용 안 함"}</Typography></Box>
     </Box>}

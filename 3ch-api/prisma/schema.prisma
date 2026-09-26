@@ -366,6 +366,8 @@ model Tournament {
   venue_name      String?  @db.VarChar(120)
   venue_address   String?
   notice          String?
+  court_count     Int?
+  recruit_count   Int?
   starts_at       DateTime @db.Timestamptz(6)
   ends_at         DateTime? @db.Timestamptz(6)
   status          String   @default("draft") @db.VarChar(20)

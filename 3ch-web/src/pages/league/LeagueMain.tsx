@@ -490,13 +490,6 @@ export default function LeagueMainBody() {
           >
             리그 생성
           </Button>
-          {tournamentEligibility?.can_create && <Button
-            fullWidth variant="contained" color="secondary" disableElevation
-            onClick={() => navigate("/tournament/new")}
-            sx={{ borderRadius: 1, fontWeight: 800 }}
-          >
-            대회 생성
-          </Button>}
         </Stack>
       )}
 
@@ -509,12 +502,13 @@ export default function LeagueMainBody() {
         </Typography>
       </SoftCard>
 
-      {isLoggedIn && (
+      {canCreate && tournamentEligibility?.can_create && (
         <Button
           fullWidth variant="contained" disableElevation
+          onClick={() => navigate("/tournament/new")}
           sx={{ borderRadius: 1, fontWeight: 700 }}
         >
-          신규 생성
+          대회 생성
         </Button>
       )}
     </Stack>

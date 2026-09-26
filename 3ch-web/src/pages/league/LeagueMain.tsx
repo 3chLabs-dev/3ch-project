@@ -19,7 +19,7 @@ import LeagueFilterDialog from "../../components/LeagueFilterDialog.tsx";
 import { getLocalDevProfileByToken } from "../../utils/localDevAuth";
 import LeagueCalendarDialog from "../../components/LeagueCalendarDialog";
 import { getLeagueClubColor } from "../../features/league/leagueScheduleColors";
-import { useGetTournamentEligibilityQuery } from "../../features/tournament/tournamentApi";
+import { useGetTournamentEligibilityQuery, useGetTournamentsQuery } from "../../features/tournament/tournamentApi";
 
 type LeagueStatus = "scheduled" | "active" | "completed";
 
@@ -30,6 +30,7 @@ export default function LeagueMainBody() {
   const preferredGroupId = useAppSelector((s) => s.leagueCreation.preferredGroupId);
   const isLoggedIn = !!token;
   const { data: tournamentEligibility } = useGetTournamentEligibilityQuery(undefined, { skip: !isLoggedIn });
+  const { data: tournamentList } = useGetTournamentsQuery();
 
   //리그 필터
   const [filterOpen, setFilterOpen] = useState(false);
@@ -496,11 +497,7 @@ export default function LeagueMainBody() {
       {/* 대회 일정 */}
       <SectionHeader title="대회 일정" />
 
-      <SoftCard>
-        <Typography textAlign="center" color="text.secondary" fontWeight={700}>
-          {!isLoggedIn ? "로그인 후 확인할 수 있습니다." : "개설된 대회가 없습니다."}
-        </Typography>
-      </SoftCard>
+      {(tournamentList?.tournaments ?? []).length > 0 ? <Stack spacing={1}>{tournamentList!.tournaments.map((tournament) => <Card key={tournament.id} elevation={2} onClick={() => navigate(`/tournament/${tournament.id}`)} sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)", cursor: "pointer" }}><CardContent sx={{ py: 1.8, px: 2.5, "&:last-child": { pb: 1.8 } }}><Stack direction="row" justifyContent="space-between" alignItems="center"><Box><Typography fontWeight={700} fontSize={15}>{tournament.title}</Typography><Typography fontSize={12} color="text.secondary">{formatLeagueDateTime(tournament.starts_at)}</Typography></Box><Typography fontSize={12} color="text.secondary">{tournament.recruit_count ? `${tournament.recruit_count}명` : ""}</Typography></Stack></CardContent></Card>)}</Stack> : <SoftCard><Typography textAlign="center" color="text.secondary" fontWeight={700}>{!isLoggedIn ? "로그인 후 확인할 수 있습니다." : "개설된 대회가 없습니다."}</Typography></SoftCard>}
 
       {canCreate && tournamentEligibility?.can_create && (
         <Button

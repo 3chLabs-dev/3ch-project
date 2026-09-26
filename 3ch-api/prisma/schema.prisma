@@ -370,6 +370,7 @@ model Tournament {
   recruit_count   Int?
   starts_at       DateTime @db.Timestamptz(6)
   ends_at         DateTime? @db.Timestamptz(6)
+  application_deadline_at DateTime? @db.Timestamptz(6)
   status          String   @default("draft") @db.VarChar(20)
   premium_visible Boolean  @default(false)
   host_group_id   String
@@ -403,10 +404,54 @@ model TournamentDivision {
   tournament Tournament @relation(fields: [tournament_id], references: [id], onDelete: Restrict)
   participants TournamentParticipant[]
   matches TournamentMatch[]
+  rounds TournamentDivisionRound[]
+  pools TournamentPool[]
 
   @@unique([tournament_id, name])
   @@index([tournament_id, sort_order])
   @@map("tournament_divisions")
+}
+
+model TournamentDivisionRound {
+  id            String   @id @default(uuid()) @db.Uuid
+  division_id   String   @db.Uuid
+  round_no      Int
+  league_type   String   @db.VarChar(40)
+  format        String   @db.VarChar(40)
+  rules         Json     @default("{}")
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
+  division TournamentDivision @relation(fields: [division_id], references: [id], onDelete: Restrict)
+
+  @@unique([division_id, round_no])
+  @@map("tournament_division_rounds")
+}
+
+model TournamentPool {
+  id String @id @default(uuid()) @db.Uuid
+  division_id String @db.Uuid
+  round_no Int
+  pool_no Int
+  bracket_slot Int
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  division TournamentDivision @relation(fields: [division_id], references: [id], onDelete: Restrict)
+  members TournamentPoolMember[]
+  @@unique([division_id, round_no, pool_no])
+  @@unique([division_id, round_no, bracket_slot])
+  @@map("tournament_pools")
+}
+
+model TournamentPoolMember {
+  pool_id String @db.Uuid
+  participant_id String @db.Uuid
+  slot_no Int
+  pool TournamentPool @relation(fields: [pool_id], references: [id], onDelete: Restrict)
+  participant TournamentParticipant @relation(fields: [participant_id], references: [id], onDelete: Restrict)
+  @@id([pool_id, participant_id])
+  @@unique([pool_id, slot_no])
+  @@index([participant_id])
+  @@map("tournament_pool_members")
 }
 
 model TournamentInvitedGroup {
@@ -425,6 +470,7 @@ model TournamentParticipant {
   id String @id @default(uuid()) @db.Uuid
   division_id String @db.Uuid
   member_id Int?
+  pre_member_id String?
   source_group_id String?
   name String @db.VarChar(120)
   member_division String? @db.VarChar(40)
@@ -432,11 +478,14 @@ model TournamentParticipant {
   created_at DateTime @default(now()) @db.Timestamptz(6)
   division TournamentDivision @relation(fields: [division_id], references: [id], onDelete: Restrict)
   member User? @relation(fields: [member_id], references: [id], onDelete: Restrict)
+  pre_member GroupPreMember? @relation(fields: [pre_member_id], references: [id], onDelete: Restrict)
   source_group Group? @relation("TournamentParticipantSourceGroup", fields: [source_group_id], references: [id], onDelete: Restrict)
   matches_a TournamentMatch[] @relation("TournamentMatchA")
   matches_b TournamentMatch[] @relation("TournamentMatchB")
+  pool_members TournamentPoolMember[]
   @@index([division_id, status])
   @@unique([division_id, member_id])
+  @@unique([division_id, pre_member_id])
   @@map("tournament_participants")
 }
 
@@ -792,6 +841,7 @@ model GroupPreMember {
   linked_user User?             @relation("GroupPreMemberLinkedUser", fields: [linked_user_id], references: [id], onDelete: SetNull)
   claim       GroupMemberClaim?
   rankings    GroupRanking[]
+  tournament_participations TournamentParticipant[]
   ranking_events GroupRankingEvent[] @relation("GroupRankingEventPreMember")
   opponent_ranking_events GroupRankingEvent[] @relation("GroupRankingEventOpponentPreMember")
 

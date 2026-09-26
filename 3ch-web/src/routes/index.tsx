@@ -94,6 +94,10 @@ import DemoClubPage from "../pages/demo/DemoClubPage";
 import DemoDrawPage from "../pages/demo/DemoDrawPage";
 import LeagueQuickResult from "../pages/league/LeagueQuickResult";
 import TournamentCreate from "../pages/tournament/TournamentCreate";
+import TournamentDetail from "../pages/tournament/TournamentDetail";
+import TournamentProgramEdit from "../pages/tournament/TournamentProgramEdit";
+import TournamentGroups from "../pages/tournament/TournamentGroups";
+import TournamentApply from "../pages/tournament/TournamentApply";
 import NotFoundPage from "../pages/util/NotFoundPage";
 import { NoIndex } from "../components/SearchVisibility";
 // import League from "../pages/League";
@@ -115,6 +119,10 @@ export const router = createBrowserRouter([
       { path: "/league", element: <LeagueMain /> },
       { path: "/league/new", element: <LeagueRenewalCreationWizard /> },
       { path: "/tournament/new", element: <TournamentCreate /> },
+      { path: "/tournament/:id", element: <TournamentDetail /> },
+      { path: "/tournament/:id/apply", element: <TournamentApply /> },
+      { path: "/tournament/:id/divisions/:divisionId/program", element: <TournamentProgramEdit /> },
+      { path: "/tournament/:id/divisions/:divisionId/groups", element: <TournamentGroups /> },
       { path: "/league/quick-result", element: <LeagueQuickResult /> },
       { path: "/league/result-import", element: <Navigate to="/league/quick-result" replace /> },
       { path: "/league/renewal", element: <LeagueRenewalCreationWizard /> },

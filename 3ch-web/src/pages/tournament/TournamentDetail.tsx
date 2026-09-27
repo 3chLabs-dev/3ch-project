@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Box, Button, CircularProgress, Divider, IconButton, Stack, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, CircularProgress, Divider, IconButton, MenuItem, Select, Stack, TextField, Typography } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useNavigate, useParams } from "react-router-dom";
 import { useGetTournamentQuery, useUpdateTournamentMutation } from "../../features/tournament/tournamentApi";
@@ -8,6 +8,10 @@ import TournamentParticipants from "./TournamentParticipants";
 const rowSx = { display: "grid", gridTemplateColumns: "72px 1fr", alignItems: "center", py: 0.8 };
 const labelSx = { fontSize: 13, fontWeight: 700, color: "#6B7280" };
 const valueSx = { fontSize: 13, fontWeight: 700 };
+const inputSx = { "& .MuiInput-underline:before": { display: "none" }, "& .MuiInput-underline:after": { display: "none" }, "& input": { fontSize: 13, fontWeight: 700, p: 0 } };
+const selectSx = { fontSize: 13, fontWeight: 700, "&:before": { display: "none" }, "&:after": { display: "none" }, "& .MuiSelect-select": { py: 0.2, pl: 0 } };
+const hours = Array.from({ length: 24 }, (_, index) => String(index).padStart(2, "0"));
+const minutes = Array.from({ length: 60 }, (_, index) => String(index).padStart(2, "0"));
 const typeNames: Record<string, string> = { SINGLES: "단식", DOUBLES: "복식", TEAM: "단체전" };
 const formatNames: Record<string, string> = { LEAGUE: "풀리그", GROUP: "조별리그", TOURNAMENT: "토너먼트", GROUP_TOURNAMENT: "조별리그 + 토너먼트" };
 const ruleNames: Record<string, string> = { BEST_OF_3: "3전 2선승제", BEST_OF_5: "5전 3선승제", THREE_SET: "3세트제" };
@@ -55,27 +59,32 @@ export default function TournamentDetail() {
   }, [draft, hasChanges, saving, tournament?.can_manage]);
   if (isLoading) return <Box sx={{ display: "flex", justifyContent: "center", pt: 8 }}><CircularProgress /></Box>;
   if (!tournament) return <Box sx={{ p: 2 }}><Alert severity="error">{(loadError as { data?: { message?: string } })?.data?.message ?? "대회를 불러올 수 없습니다."}</Alert></Box>;
-  const field = (name: keyof DetailDraft, type = "text") => <TextField size="small" variant="standard" type={type} value={draft?.[name] ?? ""} onChange={(event) => setDraft((current) => current ? ({ ...current, [name]: event.target.value }) : current)} inputProps={type === "number" ? { min: 1 } : undefined} />;
+  const field = (name: keyof DetailDraft, type = "text") => <TextField fullWidth size="small" variant="standard" type={type} value={draft?.[name] ?? ""} onChange={(event) => setDraft((current) => current ? ({ ...current, [name]: event.target.value }) : current)} inputProps={type === "number" ? { min: 1 } : undefined} sx={inputSx} />;
+  const timeField = (name: "start" | "end") => <Stack direction="row" alignItems="center" spacing={0.5}>
+    <Select variant="standard" displayEmpty value={(draft?.[name] ?? "").split(":")[0] ?? ""} onChange={(event) => setDraft((current) => current ? { ...current, [name]: `${event.target.value}:${current[name].split(":")[1] || "00"}` } : current)} sx={selectSx}><MenuItem value="">시</MenuItem>{hours.map((hour) => <MenuItem key={hour} value={hour}>{hour}</MenuItem>)}</Select>
+    <Typography sx={labelSx}>:</Typography>
+    <Select variant="standard" displayEmpty value={(draft?.[name] ?? "").split(":")[1] ?? ""} onChange={(event) => setDraft((current) => current ? { ...current, [name]: `${current[name].split(":")[0] || "00"}:${event.target.value}` } : current)} sx={selectSx}><MenuItem value="">분</MenuItem>{minutes.map((minute) => <MenuItem key={minute} value={minute}>{minute}</MenuItem>)}</Select>
+  </Stack>;
   return <Box sx={{ pb: 4 }}>
     <Stack direction="row" alignItems="center" sx={{ mb: 2 }}><IconButton onClick={() => navigate("/league")} size="small" sx={{ mr: 0.5 }}><ArrowBackIcon /></IconButton><Typography fontWeight={900} fontSize={18} sx={{ flex: 1 }}>{tournament.title}</Typography></Stack>
     {error && <Alert severity="error" sx={{ mb: 1 }}>{error}</Alert>}
     <Box sx={{ bgcolor: "#fff", borderRadius: 1, border: "1px solid #E5E7EB", px: 2, py: 1, mb: 2.5 }}>
       <Box sx={rowSx}><Typography sx={labelSx}>대회명</Typography>{tournament.can_manage ? field("title") : <Typography sx={valueSx}>{tournament.title}</Typography>}</Box><Divider />
       <Box sx={rowSx}><Typography sx={labelSx}>날 짜</Typography>{tournament.can_manage ? field("date", "date") : <Typography sx={valueSx}>{localDate(tournament.starts_at)}</Typography>}</Box><Divider />
-      <Box sx={rowSx}><Typography sx={labelSx}>시 간</Typography>{tournament.can_manage ? <Stack direction="row" spacing={1} alignItems="center">{field("start", "time")}<Typography>~</Typography>{field("end", "time")}</Stack> : <Typography sx={valueSx}>{localTime(tournament.starts_at)}{tournament.ends_at ? ` ~ ${localTime(tournament.ends_at)}` : ""}</Typography>}</Box><Divider />
+      <Box sx={rowSx}><Typography sx={labelSx}>시 간</Typography>{tournament.can_manage ? <Stack direction="row" spacing={1} alignItems="center">{timeField("start")}<Typography>~</Typography>{timeField("end")}</Stack> : <Typography sx={valueSx}>{localTime(tournament.starts_at)}{tournament.ends_at ? ` ~ ${localTime(tournament.ends_at)}` : ""}</Typography>}</Box><Divider />
       <Box sx={rowSx}><Typography sx={labelSx}>신청 마감</Typography>{tournament.can_manage ? field("application_deadline_at", "datetime-local") : <Typography sx={valueSx}>{tournament.application_deadline_at ? new Date(tournament.application_deadline_at).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" }) : "미설정"}</Typography>}</Box><Divider />
       <Box sx={rowSx}><Typography sx={labelSx}>장 소</Typography>{tournament.can_manage ? field("venue_name") : <Typography sx={valueSx}>{tournament.venue_name || "미정"}</Typography>}</Box><Divider />
       <Box sx={rowSx}><Typography sx={labelSx}>코트 수</Typography>{tournament.can_manage ? field("court_count", "number") : <Typography sx={valueSx}>{tournament.court_count ? `${tournament.court_count}개` : "미정"}</Typography>}</Box><Divider />
       <Box sx={rowSx}><Typography sx={labelSx}>참가자 수</Typography>{tournament.can_manage ? field("recruit_count", "number") : <Typography sx={valueSx}>{tournament.recruit_count ? `${tournament.recruit_count}명 (전체 부문 합계)` : "미정"}</Typography>}</Box><Divider />
       <Box sx={rowSx}><Typography sx={labelSx}>주최 클럽</Typography><Typography sx={valueSx}>{tournament.host_group_name ?? ""}</Typography></Box><Divider />
       {tournament.can_manage && hasChanges && <Stack direction="row" justifyContent="flex-end" sx={{ py: 1 }}><Button size="small" variant="contained" disabled={saving} onClick={() => void save()}>저장</Button></Stack>}
+      <Divider sx={{ borderColor: "#F3F4F6" }} />
+      <Box sx={{ py: 1 }}><Typography sx={labelSx}>프로그램</Typography></Box>
+      {(tournament.divisions ?? []).map((division) => <Box key={division.id} sx={{ mb: 1.2 }}>
+        <Stack direction="row" alignItems="center" sx={{ mb: 0.7 }}><Typography fontWeight={900} fontSize={14} sx={{ flex: 1 }}>{division.name} <Typography component="span" sx={{ fontSize: 12, fontWeight: 600, color: "text.secondary" }}>신청 {division.applicant_count}명 · 확정 {division.confirmed_count}명</Typography></Typography>{tournament.can_manage && <Button size="small" variant="outlined" onClick={() => navigate(`/tournament/${id}/divisions/${division.id}/program`)} sx={{ minWidth: 44, height: 24, borderRadius: 1, px: 1.25, fontSize: 11, fontWeight: 800 }}>수정</Button>}</Stack>
+        <Stack spacing={0.8}>{(division.rounds ?? []).map((round) => <Box key={round.id} sx={{ border: "1px solid #E5E7EB", borderRadius: 2, bgcolor: "#F9FAFB", p: 1.2 }}><Stack direction="row" alignItems="center" spacing={0.5} sx={{ flexWrap: "wrap", rowGap: 0.5 }}><Typography sx={{ fontSize: 13, fontWeight: 900, mr: 0.3 }}>{round.round_no}라운드</Typography><Box sx={{ px: 0.8, py: 0.25, borderRadius: 3, bgcolor: "#ECFDF5", color: "#047857", border: "1px solid #A7F3D0", fontSize: 11, fontWeight: 800 }}>{typeNames[round.league_type] ?? round.league_type}</Box><Box sx={{ px: 0.8, py: 0.25, borderRadius: 3, bgcolor: "#EFF6FF", color: "#1D4ED8", border: "1px solid #BFDBFE", fontSize: 11, fontWeight: 800 }}>{formatNames[round.format] ?? round.format}</Box><Box sx={{ px: 0.8, py: 0.25, borderRadius: 3, bgcolor: "#FFF7ED", color: "#C2410C", border: "1px solid #FED7AA", fontSize: 11, fontWeight: 800 }}>{ruleNames[String(round.rules?.match_rule)] ?? String(round.rules?.match_rule ?? "규칙 미정")}</Box></Stack></Box>)}</Stack>
+      </Box>)}
     </Box>
-    <Typography fontWeight={900} fontSize={17} sx={{ mb: 1 }}>부문별 프로그램</Typography>
-    {(tournament.divisions ?? []).map((division) => <Box key={division.id} sx={{ bgcolor: "#fff", borderRadius: 1, border: "1px solid #E5E7EB", px: 2, py: 1, mb: 1.5 }}>
-      <Stack direction="row" alignItems="center" sx={{ py: 0.8 }}><Typography fontWeight={800} fontSize={15} sx={{ flex: 1 }}>{division.name}</Typography>{tournament.can_manage && <Button size="small" variant="outlined" onClick={() => navigate(`/tournament/${id}/divisions/${division.id}/program`)} sx={{ minWidth: 44, height: 24, borderRadius: 1, px: 1.25, fontSize: 11, fontWeight: 800 }}>수정</Button>}</Stack><Divider />
-      <Box sx={rowSx}><Typography sx={labelSx}>참가자</Typography><Typography sx={valueSx}>신청 {division.applicant_count}명 · 확정 {division.confirmed_count}명</Typography></Box>
-      {(division.rounds ?? []).map((round) => <Box key={round.id}><Divider /><Box sx={rowSx}><Typography sx={labelSx}>{round.round_no}라운드</Typography><Typography sx={valueSx}>{typeNames[round.league_type] ?? round.league_type} · {formatNames[round.format] ?? round.format} · {ruleNames[String(round.rules?.match_rule)] ?? String(round.rules?.match_rule ?? "규칙 미정")}</Typography></Box></Box>)}
-    </Box>)}
     <Typography fontWeight={900} fontSize={17} sx={{ mb: 1, mt: 2 }}>참가 신청 · 조 편성</Typography>
     <TournamentParticipants tournament={tournament} />
   </Box>;

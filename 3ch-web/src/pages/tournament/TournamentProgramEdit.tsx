@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Alert, Box, Button, CircularProgress, Divider, FormControlLabel, IconButton, Radio, RadioGroup, Stack, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, CircularProgress, Divider, FormControlLabel, IconButton, Radio, RadioGroup, Stack, Typography } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useNavigate, useParams } from "react-router-dom";
 import { useGetTournamentQuery, useSaveTournamentProgramMutation, type TournamentFormat, type TournamentLeagueType } from "../../features/tournament/tournamentApi";
@@ -15,34 +15,32 @@ export default function TournamentProgramEdit() {
   const { data, isLoading } = useGetTournamentQuery(id, { skip: !id });
   const [saveProgram, { isLoading: saving }] = useSaveTournamentProgramMutation();
   const division = data?.tournament.divisions?.find((item) => item.id === divisionId);
-  const [name, setName] = useState("");
   const [step, setStep] = useState(1);
   const [rounds, setRounds] = useState<DraftRound[]>([]);
   const [error, setError] = useState("");
-  useEffect(() => { if (division) { setName(division.name); setRounds(division.rounds.map((round) => ({ id: round.id, league_type: round.league_type, format: round.format, match_rule: String(round.rules?.match_rule ?? "BEST_OF_3") }))); } }, [division]);
+  useEffect(() => { if (division) setRounds(division.rounds.map((round) => ({ id: round.id, league_type: round.league_type, format: round.format, match_rule: String(round.rules?.match_rule ?? "BEST_OF_3") }))); }, [division]);
   const changeRound = (index: number, patch: Partial<DraftRound>) => setRounds((current) => current.map((round, offset) => offset === index ? { ...round, ...patch } : round));
   const save = async () => {
-    if (!division || !name.trim()) { setError("부문 이름을 입력해주세요."); return; }
+    if (!division || !rounds.length) { setError("라운드 설정을 확인해주세요."); return; }
     setError("");
     try {
-      await saveProgram({ id, divisionId, body: { name: name.trim(), recruit_count: division.recruit_count ?? null, rounds: rounds.map((draft) => ({ id: draft.id, league_type: draft.league_type, format: draft.format, rules: { ...(division.rounds.find((round) => round.id === draft.id)?.rules ?? {}), match_rule: draft.match_rule } })) } }).unwrap();
+      await saveProgram({ id, divisionId, body: { name: division.name, recruit_count: division.recruit_count ?? null, rounds: rounds.map((draft) => ({ id: draft.id, league_type: draft.league_type, format: draft.format, rules: { ...(division.rounds.find((round) => round.id === draft.id)?.rules ?? {}), match_rule: draft.match_rule } })) } }).unwrap();
       navigate(`/tournament/${id}`, { replace: true });
     } catch (reason) { setError((reason as { data?: { message?: string } }).data?.message ?? "프로그램을 저장하지 못했습니다."); }
   };
   if (isLoading) return <Box sx={{ display: "flex", justifyContent: "center", pt: 8 }}><CircularProgress /></Box>;
   if (!division || !data?.tournament.can_manage) return <Box sx={{ p: 2 }}><Alert severity="error">프로그램을 수정할 수 없습니다.</Alert></Box>;
   return <Box sx={{ px: 2.5, pt: 2, pb: 4 }}>
-    <Stack direction="row" alignItems="center" sx={{ mb: 2 }}><IconButton onClick={() => navigate(`/tournament/${id}`)} size="small"><ArrowBackIcon /></IconButton><Typography fontWeight={900} fontSize={18}>{["", "참가 부문", "대회 유형", "대회 방식", "대회 규칙"][step]}</Typography></Stack>
+    <Stack direction="row" alignItems="center" sx={{ mb: 2 }}><IconButton onClick={() => navigate(`/tournament/${id}`)} size="small"><ArrowBackIcon /></IconButton><Typography fontWeight={900} fontSize={18}>{division?.name} · {["", "대회 유형", "대회 방식", "대회 규칙"][step]}</Typography></Stack>
     {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-    {step === 1 && <Box sx={{ mb: 3, pt: 1, borderTop: "1px solid #D9DDE6" }}><TextField fullWidth size="small" label="부문명" value={name} onChange={(event) => setName(event.target.value)} /></Box>}
-    {step > 1 && rounds.map((round, index) => <Box key={round.id ?? `new-${index}`} sx={{ mb: 3 }}>
+    {rounds.map((round, index) => <Box key={round.id ?? `new-${index}`} sx={{ mb: 3 }}>
       <Typography fontWeight={900} fontSize={18} sx={{ mb: 1 }}>{index + 1}라운드</Typography>
-      {step === 2 && <RadioGroup value={round.league_type} onChange={(event) => changeRound(index, { league_type: event.target.value as TournamentLeagueType })} sx={{ gap: 1, mb: 2 }}>{typeOptions.map(([value, label]) => <FormControlLabel key={value} value={value} control={<Radio />} label={label} sx={{ ...optionSx, borderColor: round.league_type === value ? "#2F80ED" : "#D9DDE6" }} />)}</RadioGroup>}
-      {step === 3 && <RadioGroup value={round.format} onChange={(event) => changeRound(index, { format: event.target.value as TournamentFormat })} sx={{ gap: 1, mb: 2 }}>{formatOptions.map(([value, label]) => <FormControlLabel key={value} value={value} control={<Radio />} label={label} sx={{ ...optionSx, borderColor: round.format === value ? "#2F80ED" : "#D9DDE6" }} />)}</RadioGroup>}
-      {step === 4 && <RadioGroup value={round.match_rule} onChange={(event) => changeRound(index, { match_rule: event.target.value })} sx={{ gap: 1 }}>{ruleOptions.map(([value, label]) => <FormControlLabel key={value} value={value} control={<Radio />} label={label} sx={{ ...optionSx, borderColor: round.match_rule === value ? "#2F80ED" : "#D9DDE6" }} />)}</RadioGroup>}
+      {step === 1 && <RadioGroup value={round.league_type} onChange={(event) => changeRound(index, { league_type: event.target.value as TournamentLeagueType })} sx={{ gap: 1, mb: 2 }}>{typeOptions.map(([value, label]) => <FormControlLabel key={value} value={value} control={<Radio />} label={label} sx={{ ...optionSx, borderColor: round.league_type === value ? "#2F80ED" : "#D9DDE6" }} />)}</RadioGroup>}
+      {step === 2 && <RadioGroup value={round.format} onChange={(event) => changeRound(index, { format: event.target.value as TournamentFormat })} sx={{ gap: 1, mb: 2 }}>{formatOptions.map(([value, label]) => <FormControlLabel key={value} value={value} control={<Radio />} label={label} sx={{ ...optionSx, borderColor: round.format === value ? "#2F80ED" : "#D9DDE6" }} />)}</RadioGroup>}
+      {step === 3 && <RadioGroup value={round.match_rule} onChange={(event) => changeRound(index, { match_rule: event.target.value })} sx={{ gap: 1 }}>{ruleOptions.map(([value, label]) => <FormControlLabel key={value} value={value} control={<Radio />} label={label} sx={{ ...optionSx, borderColor: round.match_rule === value ? "#2F80ED" : "#D9DDE6" }} />)}</RadioGroup>}
       <Divider sx={{ mt: 3 }} />
     </Box>)}
-    {step === 2 && <Button fullWidth variant="outlined" sx={{ mb: 2, borderRadius: 1, fontWeight: 800 }} onClick={() => setRounds((current) => [...current, { league_type: "SINGLES", format: "GROUP", match_rule: "BEST_OF_3" }])}>+ 라운드 추가</Button>}
-    <Stack direction="row" spacing={1}><Button fullWidth variant="contained" color="inherit" onClick={() => step === 1 ? navigate(`/tournament/${id}`) : setStep(step - 1)} sx={{ borderRadius: 1, fontWeight: 800 }}>이전</Button><Button fullWidth variant="contained" disabled={saving} onClick={() => { if (step === 4) void save(); else if (name.trim()) { setError(""); setStep(step + 1); } else setError("부문 이름을 입력해주세요."); }} sx={{ borderRadius: 1, fontWeight: 800 }}>{step === 4 ? "저장" : "다음"}</Button></Stack>
+    {step === 1 && <Button fullWidth variant="outlined" sx={{ mb: 2, borderRadius: 1, fontWeight: 800 }} onClick={() => setRounds((current) => [...current, { league_type: "SINGLES", format: "GROUP", match_rule: "BEST_OF_3" }])}>+ 라운드 추가</Button>}
+    <Stack direction="row" spacing={1}><Button fullWidth variant="contained" color="inherit" onClick={() => step === 1 ? navigate(`/tournament/${id}`) : setStep(step - 1)} sx={{ borderRadius: 1, fontWeight: 800 }}>이전</Button><Button fullWidth variant="contained" disabled={saving} onClick={() => step === 3 ? void save() : setStep(step + 1)} sx={{ borderRadius: 1, fontWeight: 800 }}>{step === 3 ? "저장" : "다음"}</Button></Stack>
   </Box>;
 }

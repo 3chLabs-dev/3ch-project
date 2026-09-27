@@ -5,6 +5,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useGetTournamentQuery, useOpenTournamentMutation, useUpdateTournamentMutation } from "../../features/tournament/tournamentApi";
 import TournamentParticipants from "./TournamentParticipants";
 
+const floatingBoxSx = { position: "fixed", bottom: "calc(56px + env(safe-area-inset-bottom))", left: "50%", transform: "translateX(-50%)", width: "min(calc(100% - 32px), 398px)", pb: 1, zIndex: 10 } as const;
 const rowSx = { display: "grid", gridTemplateColumns: "72px 1fr", alignItems: "center", py: 0.8 };
 const labelSx = { fontSize: 13, fontWeight: 700, color: "#6B7280" };
 const valueSx = { fontSize: 13, fontWeight: 700 };
@@ -71,7 +72,8 @@ export default function TournamentDetail() {
     <Typography sx={labelSx}>:</Typography>
     <Select variant="standard" displayEmpty value={(draft?.[name] ?? "").split(":")[1] ?? ""} onChange={(event) => setDraft((current) => current ? { ...current, [name]: `${current[name].split(":")[0] || "00"}:${event.target.value}` } : current)} sx={selectSx}><MenuItem value="">분</MenuItem>{minutes.map((minute) => <MenuItem key={minute} value={minute}>{minute}</MenuItem>)}</Select>
   </Stack>;
-  return <Box sx={{ pb: 4 }}>
+  const canEnterApplication = new Date() < new Date(tournament.starts_at) && (tournament.status === "open" || tournament.can_manage);
+  return <Box sx={{ pb: canEnterApplication ? 11 : 4 }}>
     <Stack direction="row" alignItems="center" sx={{ mb: 2 }}><IconButton onClick={() => navigate("/league")} size="small" sx={{ mr: 0.5 }}><ArrowBackIcon /></IconButton><Typography fontWeight={900} fontSize={18} sx={{ flex: 1 }}>{tournament.title}</Typography></Stack>
     {error && <Alert severity="error" sx={{ mb: 1 }}>{error}</Alert>}
     <Box sx={{ bgcolor: "#fff", borderRadius: 1, border: "1px solid #E5E7EB", px: 2, py: 1, mb: 2.5 }}>
@@ -88,10 +90,10 @@ export default function TournamentDetail() {
       <Box sx={{ py: 1 }}><Typography sx={labelSx}>프로그램</Typography></Box>
       {(tournament.divisions ?? []).map((division) => <Box key={division.id} sx={{ mb: 1.2 }}>
         <Stack direction="row" alignItems="center" sx={{ mb: 0.7 }}><Typography fontWeight={900} fontSize={14} sx={{ flex: 1 }}>{division.name} <Typography component="span" sx={{ fontSize: 12, fontWeight: 600, color: "text.secondary" }}>신청 {division.applicant_count}명 · 확정 {division.confirmed_count}명</Typography></Typography>{tournament.can_manage && <Button size="small" variant="outlined" onClick={() => navigate(`/tournament/${id}/divisions/${division.id}/program`)} sx={{ minWidth: 44, height: 24, borderRadius: 1, px: 1.25, fontSize: 11, fontWeight: 800 }}>수정</Button>}</Stack>
-        <Stack spacing={0.8}>{(division.rounds ?? []).map((round) => <Box key={round.id} sx={{ border: "1px solid #E5E7EB", borderRadius: 2, bgcolor: "#F9FAFB", p: 1.2 }}><Stack direction="row" alignItems="center" spacing={0.5} sx={{ flexWrap: "wrap", rowGap: 0.5 }}><Typography sx={{ fontSize: 13, fontWeight: 900, mr: 0.3 }}>{round.round_no}라운드</Typography><Box sx={{ px: 0.8, py: 0.25, borderRadius: 3, bgcolor: "#ECFDF5", color: "#047857", border: "1px solid #A7F3D0", fontSize: 11, fontWeight: 800 }}>{typeNames[round.league_type] ?? round.league_type}</Box><Box sx={{ px: 0.8, py: 0.25, borderRadius: 3, bgcolor: "#EFF6FF", color: "#1D4ED8", border: "1px solid #BFDBFE", fontSize: 11, fontWeight: 800 }}>{formatNames[round.format] ?? round.format}</Box><Box sx={{ px: 0.8, py: 0.25, borderRadius: 3, bgcolor: "#FFF7ED", color: "#C2410C", border: "1px solid #FED7AA", fontSize: 11, fontWeight: 800 }}>{ruleNames[String(round.rules?.match_rule)] ?? String(round.rules?.match_rule ?? "규칙 미정")}</Box></Stack></Box>)}</Stack>
+        <Stack spacing={0.8}>{(division.rounds ?? []).map((round) => <Box key={round.id} sx={{ border: "1px solid #E5E7EB", borderRadius: 2, bgcolor: "#F9FAFB", p: 1.2 }}><Stack direction="row" alignItems="center" spacing={0.5} sx={{ flexWrap: "wrap", rowGap: 0.5 }}><Typography sx={{ fontSize: 13, fontWeight: 900, mr: 0.3 }}>{round.round_no}라운드</Typography><Box sx={{ px: 0.8, py: 0.25, borderRadius: 3, bgcolor: "#ECFDF5", color: "#047857", border: "1px solid #A7F3D0", fontSize: 11, fontWeight: 800 }}>{typeNames[round.league_type] ?? round.league_type}</Box><Box sx={{ px: 0.8, py: 0.25, borderRadius: 3, bgcolor: "#EFF6FF", color: "#1D4ED8", border: "1px solid #BFDBFE", fontSize: 11, fontWeight: 800 }}>{formatNames[round.format] ?? round.format}</Box><Box sx={{ px: 0.8, py: 0.25, borderRadius: 3, bgcolor: "#FFF7ED", color: "#C2410C", border: "1px solid #FED7AA", fontSize: 11, fontWeight: 800 }}>{ruleNames[String(round.rules?.match_rule)] ?? String(round.rules?.match_rule ?? "규칙 미정")}</Box></Stack>{round.round_no === 1 && ["GROUP", "GROUP_TOURNAMENT"].includes(round.format) && (tournament.can_manage || ["locked", "active", "completed"].includes(division.status)) && <Button fullWidth variant="outlined" disableElevation onClick={() => navigate(`/tournament/${id}/divisions/${division.id}/groups`)} sx={{ mt: 1.1, height: 36, borderRadius: 2, fontWeight: 800, color: "#6D28D9", borderColor: "#C4B5FD", bgcolor: "#F5F3FF", "&:hover": { borderColor: "#A78BFA", bgcolor: "#EDE9FE" } }}>{["locked", "active", "completed"].includes(division.status) ? "조 편성 결과 보기" : "조 편성하기"}</Button>}</Box>)}</Stack>
       </Box>)}
     </Box>
-    <Typography fontWeight={900} fontSize={17} sx={{ mb: 1, mt: 2 }}>참가 신청 · 조 편성</Typography>
     <TournamentParticipants tournament={tournament} />
+    {canEnterApplication && <Box sx={floatingBoxSx}><Button fullWidth variant="contained" disableElevation onClick={() => navigate(`/tournament/${id}/apply`)} sx={{ borderRadius: 1, height: 44, fontWeight: 900, fontSize: 15, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}>참가 신청</Button></Box>}
   </Box>;
 }

@@ -17,10 +17,12 @@ export default function TournamentApply() {
   const token = useAppSelector((state) => state.auth.token);
   const user = useAppSelector((state) => state.auth.user);
   const { data: tournamentData, isLoading: loadingTournament } = useGetTournamentQuery(id, { skip: !id });
-  const { data: groupData } = useGetMyGroupsQuery(undefined, { skip: !token });
-  const [mode, setMode] = useState("individual");
-  const groupId = mode === "individual" ? null : mode;
-  const { currentData: rosterData, isFetching: loadingRoster } = useGetTournamentApplicationRosterQuery({ id, groupId }, { skip: !id || !token });
+  const { data: groupData, isLoading: loadingGroups } = useGetMyGroupsQuery(undefined, { skip: !token });
+  const [mode, setMode] = useState("");
+  const managers = useMemo(() => (groupData?.groups ?? []).filter((group) => group.role === "owner" || group.role === "admin" && group.management_permissions?.league === true), [groupData]);
+  const selectedMode = mode || managers[0]?.id || "individual";
+  const groupId = selectedMode === "individual" ? null : selectedMode;
+  const { currentData: rosterData, isFetching: loadingRoster } = useGetTournamentApplicationRosterQuery({ id, groupId }, { skip: !id || !token || loadingGroups });
   const { data: groupDetail } = useGetGroupDetailQuery(groupId ?? "", { skip: !groupId });
   const [saveRoster, { isLoading: saving }] = useSaveTournamentApplicationRosterMutation();
   const [rows, setRows] = useState<DraftRow[]>([]);
@@ -34,7 +36,6 @@ export default function TournamentApply() {
   const tournament = tournamentData?.tournament;
   const divisions = tournament?.divisions ?? [];
   const selectedDivisionId = divisions.some((division) => division.id === addDivisionId) ? addDivisionId : divisions[0]?.id ?? "";
-  const managers = useMemo(() => (groupData?.groups ?? []).filter((group) => group.role === "owner" || group.role === "admin" && group.management_permissions?.league), [groupData]);
   const clubMembers = useMemo(() => (groupDetail?.members ?? []).filter((member) => member.is_pre_member || member.user_id !== null), [groupDetail]);
   const canEdit = !!tournament && new Date() < new Date(tournament.starts_at);
   const canAdd = canEdit && !!tournament && new Date() < new Date(tournament.application_deadline_at ?? tournament.starts_at) && (tournament.can_apply || tournament.can_manage);
@@ -76,7 +77,7 @@ export default function TournamentApply() {
     } catch (reason) { setError((reason as { data?: { message?: string } }).data?.message ?? "신청 명단을 저장하지 못했습니다."); }
   };
   if (!token) return <Box sx={{ p: 2 }}><Alert severity="info">로그인 후 참가 신청할 수 있습니다.</Alert><Button onClick={() => navigate("/login")}>로그인</Button></Box>;
-  if (loadingTournament) return <Box sx={{ textAlign: "center", pt: 8 }}><CircularProgress /></Box>;
+  if (loadingTournament || loadingGroups) return <Box sx={{ textAlign: "center", pt: 8 }}><CircularProgress /></Box>;
   if (!tournament) return <Box sx={{ p: 2 }}><Alert severity="error">대회를 찾을 수 없습니다.</Alert></Box>;
   return <Box sx={{ px: 2.5, pt: 2, pb: 4 }}>
     <Stack direction="row" alignItems="center" sx={{ mb: 1.5 }}><IconButton size="small" onClick={() => navigate(`/tournament/${id}`)}><ArrowBackIcon /></IconButton><Typography sx={{ fontSize: 22, fontWeight: 900 }}>대회 참가 신청</Typography></Stack>
@@ -84,18 +85,18 @@ export default function TournamentApply() {
     {error && <Alert severity="error" sx={{ mb: 1.5 }}>{error}</Alert>}
     {!canAdd && canEdit && <Alert severity="info" sx={{ mb: 1.5 }}>신규 신청 기간이 지났습니다. 제출한 참가자 명단은 대회 시작 전까지 수정하거나 취소할 수 있습니다.</Alert>}
     {!canEdit && <Alert severity="warning" sx={{ mb: 1.5 }}>대회가 시작되어 신청 명단을 수정할 수 없습니다.</Alert>}
-    <TextField select fullWidth size="small" label="신청 구분 · 클럽" value={mode} onChange={(event) => changeMode(String(event.target.value))} sx={{ mb: 2 }}><MenuItem value="individual">개인 (클럽명: 개인)</MenuItem>{managers.map((group) => <MenuItem key={group.id} value={group.id}>{group.name}</MenuItem>)}</TextField>
-    {loadingRoster && <Box sx={{ textAlign: "center", py: 2 }}><CircularProgress size={22} /></Box>}
-    {!loadingRoster && divisions.map((division) => <Box key={division.id} sx={{ mb: 2 }}><Stack direction="row" alignItems="center" sx={{ mb: 0.6 }}><Typography sx={{ fontSize: 17, fontWeight: 900, flex: 1 }}>{division.name}</Typography><Typography sx={{ fontSize: 12, color: "text.secondary" }}>{rows.filter((row) => row.division_id === division.id && !row.cancel).length}명</Typography></Stack><Divider />
-      {rows.filter((row) => row.division_id === division.id).map((row) => <Box key={row.key} sx={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 62px 72px", gap: 0.6, alignItems: "center", py: 0.6, borderBottom: "1px solid #ECEFF5", opacity: row.cancel ? 0.5 : 1 }}><TextField size="small" value={row.name} disabled={!canEdit || !!row.cancel} onChange={(event) => updateRow(row.key, { name: event.target.value })} sx={fieldSx} inputProps={{ "aria-label": "참가자 이름" }} /><TextField size="small" value={row.member_division} disabled={!canEdit || !!row.cancel} onChange={(event) => updateRow(row.key, { member_division: event.target.value })} sx={fieldSx} inputProps={{ "aria-label": "참가자 부수" }} /><Button size="small" color={row.cancel ? "primary" : "error"} disabled={!canEdit} onClick={() => { if (row.id) updateRow(row.key, { cancel: !row.cancel }); else { setRows((current) => current.filter((item) => item.key !== row.key)); setDirty(true); } }}>{row.cancel ? "되돌리기" : row.id ? "취소" : "삭제"}</Button>
-        {!row.cancel && divisions.length > 1 && <TextField select size="small" value={row.division_id} disabled={!canEdit} onChange={(event) => updateRow(row.key, { division_id: String(event.target.value) })} sx={{ gridColumn: "1 / -1" }} label="참가 부문">{divisions.map((option) => <MenuItem key={option.id} value={option.id}>{option.name}</MenuItem>)}</TextField>}
-      </Box>)}
-      {!rows.some((row) => row.division_id === division.id) && <Typography sx={{ py: 1, fontSize: 13, color: "text.secondary" }}>등록된 참가자가 없습니다.</Typography>}
-    </Box>)}
+    <TextField select fullWidth size="small" label="신청 구분 · 클럽" value={selectedMode} onChange={(event) => changeMode(String(event.target.value))} sx={{ mb: 2 }}>{managers.map((group) => <MenuItem key={group.id} value={group.id}>{group.name}</MenuItem>)}<MenuItem value="individual">개인 (클럽명: 개인)</MenuItem></TextField>
+    {managers.length > 0 && <Typography sx={{ mt: -1.5, mb: 2, fontSize: 11.5, color: "text.secondary" }}>단체신청은 리더·운영진으로 관리하는 클럽만 표시됩니다.</Typography>}
     {canAdd && <Box sx={{ borderTop: "1px solid #D9DDE6", pt: 1.5, mb: 2 }}><Typography sx={{ fontSize: 16, fontWeight: 900, mb: 1 }}>참가자 추가</Typography><TextField select fullWidth size="small" label="부문" value={selectedDivisionId} onChange={(event) => setAddDivisionId(String(event.target.value))} sx={{ mb: 1 }}>{divisions.map((division) => <MenuItem key={division.id} value={division.id}>{division.name}</MenuItem>)}</TextField>
       {groupId && <Button fullWidth variant="outlined" sx={{ mb: 1, fontWeight: 800 }} onClick={() => setLoadOpen(true)}>클럽 회원 불러오기</Button>}
       <Box component="form" onSubmit={(event) => { event.preventDefault(); addManual(); }} sx={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 66px 62px", gap: 0.6 }}><TextField size="small" placeholder="이름" value={name} onChange={(event) => setName(event.target.value)} sx={fieldSx} /><TextField size="small" placeholder="부수" value={memberDivision} onChange={(event) => setMemberDivision(event.target.value)} sx={fieldSx} /><Button type="submit" variant="contained" sx={{ fontWeight: 800 }}>추가</Button></Box>
     </Box>}
+    {loadingRoster && <Box sx={{ textAlign: "center", py: 2 }}><CircularProgress size={22} /></Box>}
+    {!loadingRoster && divisions.map((division) => <Box key={division.id} sx={{ mb: 2 }}><Stack direction="row" alignItems="center" sx={{ mb: 0.6 }}><Typography sx={{ fontSize: 17, fontWeight: 900, flex: 1 }}>{division.name}</Typography><Typography sx={{ fontSize: 12, color: "text.secondary" }}>{rows.filter((row) => row.division_id === division.id && !row.cancel).length}명</Typography></Stack><Divider />
+      {rows.filter((row) => row.division_id === division.id).map((row) => <Box key={row.key} sx={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 62px 72px", gap: 0.6, alignItems: "center", py: 0.6, borderBottom: "1px solid #ECEFF5", opacity: row.cancel ? 0.5 : 1 }}><TextField size="small" value={row.name} disabled={!canEdit || !!row.cancel} onChange={(event) => updateRow(row.key, { name: event.target.value })} sx={fieldSx} inputProps={{ "aria-label": "참가자 이름" }} /><TextField size="small" value={row.member_division} disabled={!canEdit || !!row.cancel} onChange={(event) => updateRow(row.key, { member_division: event.target.value })} sx={fieldSx} inputProps={{ "aria-label": "참가자 부수" }} /><Button size="small" color={row.cancel ? "primary" : "error"} disabled={!canEdit} onClick={() => { if (row.id) updateRow(row.key, { cancel: !row.cancel }); else { setRows((current) => current.filter((item) => item.key !== row.key)); setDirty(true); } }}>{row.cancel ? "되돌리기" : row.id ? "취소" : "삭제"}</Button>
+      </Box>)}
+      {!rows.some((row) => row.division_id === division.id) && <Typography sx={{ py: 1, fontSize: 13, color: "text.secondary" }}>등록된 참가자가 없습니다.</Typography>}
+    </Box>)}
     <Stack direction="row" spacing={1}><Button fullWidth variant="contained" color="inherit" onClick={() => navigate(`/tournament/${id}`)} sx={{ height: 44, fontWeight: 900 }}>이전</Button><Button fullWidth variant="contained" disabled={saving || loadingRoster || !canEdit || !rows.length} onClick={() => void submit()} sx={{ height: 44, fontWeight: 900 }}>신청 명단 저장</Button></Stack>
     <Dialog open={loadOpen} onClose={() => setLoadOpen(false)} fullWidth maxWidth="sm"><DialogTitle sx={{ fontWeight: 900 }}>클럽 회원 불러오기</DialogTitle><DialogContent dividers><Typography sx={{ fontSize: 13, mb: 1, color: "text.secondary" }}>선택한 회원을 {divisions.find((division) => division.id === selectedDivisionId)?.name}에 추가합니다.</Typography><Box sx={{ maxHeight: 400, overflowY: "auto" }}>{clubMembers.map((member) => <FormControlLabel key={member.id} sx={{ display: "flex", mx: 0 }} control={<Checkbox checked={selectedMembers.includes(member.id)} onChange={(event) => setSelectedMembers((current) => event.target.checked ? [...current, member.id] : current.filter((value) => value !== member.id))} />} label={`${member.name ?? ""}${member.division ? ` ${member.division}` : ""}${member.is_pre_member ? " · 사전등록" : ""}`} />)}</Box></DialogContent><DialogActions><Button onClick={() => setLoadOpen(false)}>취소</Button><Button variant="contained" disabled={!selectedMembers.length} onClick={loadMembers}>선택한 {selectedMembers.length}명 추가</Button></DialogActions></Dialog>
   </Box>;

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Alert, Box, Button, CircularProgress, Divider, IconButton, MenuItem, Select, Stack, TextField, Typography } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useNavigate, useParams } from "react-router-dom";
-import { useGetTournamentQuery, useUpdateTournamentMutation } from "../../features/tournament/tournamentApi";
+import { useGetTournamentQuery, useOpenTournamentMutation, useUpdateTournamentMutation } from "../../features/tournament/tournamentApi";
 import TournamentParticipants from "./TournamentParticipants";
 
 const rowSx = { display: "grid", gridTemplateColumns: "72px 1fr", alignItems: "center", py: 0.8 };
@@ -25,6 +25,7 @@ export default function TournamentDetail() {
   const navigate = useNavigate();
   const { data, isLoading, error: loadError } = useGetTournamentQuery(id, { skip: !id });
   const [update, { isLoading: saving }] = useUpdateTournamentMutation();
+  const [openTournament, { isLoading: opening }] = useOpenTournamentMutation();
   const [draft, setDraft] = useState<DetailDraft | null>(null);
   const [savedDraft, setSavedDraft] = useState<DetailDraft | null>(null);
   const initializedId = useRef("");
@@ -39,22 +40,27 @@ export default function TournamentDetail() {
     }
   }, [tournament]);
   const hasChanges = Boolean(draft && savedDraft && JSON.stringify(draft) !== JSON.stringify(savedDraft));
-  const save = async () => {
-    if (!draft || !hasChanges || saving) return;
+  const save = async (openAfterSave = false) => {
+    if (!draft || saving || opening || (!hasChanges && !openAfterSave)) return;
     if (!draft.title.trim() || !draft.date || !draft.start) { setError("대회명, 날짜, 시작 시간을 입력해주세요."); return; }
     const start = new Date(`${draft.date}T${draft.start}:00`);
     const end = draft.end ? new Date(`${draft.date}T${draft.end}:00`) : null;
     const deadline = draft.application_deadline_at ? new Date(draft.application_deadline_at) : null;
     if (Number.isNaN(start.getTime()) || (end && (Number.isNaN(end.getTime()) || end < start))) { setError("시간을 확인해주세요."); return; }
     if (deadline && (Number.isNaN(deadline.getTime()) || deadline >= start)) { setError("참가 신청 마감을 대회 시작 전으로 설정해주세요."); return; }
+    if (tournament?.status === "draft" && deadline && deadline <= new Date()) { setError("참가 신청 마감은 현재 이후로 설정해주세요."); return; }
     try {
-      await update({ id, body: { title: draft.title.trim(), starts_at: start.toISOString(), ends_at: end?.toISOString() ?? null, application_deadline_at: deadline?.toISOString() ?? null, venue_name: draft.venue_name.trim() || null, court_count: draft.court_count ? Number(draft.court_count) : null, recruit_count: draft.recruit_count ? Number(draft.recruit_count) : null } }).unwrap();
-      setSavedDraft(draft); setError("");
-    } catch (reason) { setError((reason as { data?: { message?: string } }).data?.message ?? "대회 정보를 저장하지 못했습니다."); }
+      if (hasChanges) {
+        await update({ id, body: { title: draft.title.trim(), starts_at: start.toISOString(), ends_at: end?.toISOString() ?? null, application_deadline_at: deadline?.toISOString() ?? null, venue_name: draft.venue_name.trim() || null, court_count: draft.court_count ? Number(draft.court_count) : null, recruit_count: draft.recruit_count ? Number(draft.recruit_count) : null } }).unwrap();
+        setSavedDraft(draft);
+      }
+      if (openAfterSave && tournament?.status === "draft") await openTournament(id).unwrap();
+      setError("");
+    } catch (reason) { setError((reason as { data?: { message?: string } }).data?.message ?? "대회 정보 저장 또는 참가 신청 열기에 실패했습니다."); }
   };
   useEffect(() => {
     if (!tournament?.can_manage || !hasChanges || saving) return;
-    const timer = window.setTimeout(() => { void save(); }, 4000);
+    const timer = window.setTimeout(() => { void save(false); }, 4000);
     return () => window.clearTimeout(timer);
   }, [draft, hasChanges, saving, tournament?.can_manage]);
   if (isLoading) return <Box sx={{ display: "flex", justifyContent: "center", pt: 8 }}><CircularProgress /></Box>;
@@ -77,7 +83,7 @@ export default function TournamentDetail() {
       <Box sx={rowSx}><Typography sx={labelSx}>코트 수</Typography>{tournament.can_manage ? field("court_count", "number") : <Typography sx={valueSx}>{tournament.court_count ? `${tournament.court_count}개` : "미정"}</Typography>}</Box><Divider />
       <Box sx={rowSx}><Typography sx={labelSx}>참가자 수</Typography>{tournament.can_manage ? field("recruit_count", "number") : <Typography sx={valueSx}>{tournament.recruit_count ? `${tournament.recruit_count}명 (전체 부문 합계)` : "미정"}</Typography>}</Box><Divider />
       <Box sx={rowSx}><Typography sx={labelSx}>주최 클럽</Typography><Typography sx={valueSx}>{tournament.host_group_name ?? ""}</Typography></Box><Divider />
-      {tournament.can_manage && hasChanges && <Stack direction="row" justifyContent="flex-end" sx={{ py: 1 }}><Button size="small" variant="contained" disabled={saving} onClick={() => void save()}>저장</Button></Stack>}
+      {tournament.can_manage && (hasChanges || tournament.status === "draft") && <Stack direction="row" justifyContent="flex-end" sx={{ py: 1 }}><Button size="small" variant="contained" disabled={saving || opening} onClick={() => void save(tournament.status === "draft")}>{tournament.status === "draft" ? hasChanges ? "저장하고 참가신청 열기" : "참가신청 열기" : "저장"}</Button></Stack>}
       <Divider sx={{ borderColor: "#F3F4F6" }} />
       <Box sx={{ py: 1 }}><Typography sx={labelSx}>프로그램</Typography></Box>
       {(tournament.divisions ?? []).map((division) => <Box key={division.id} sx={{ mb: 1.2 }}>

@@ -5,6 +5,7 @@ const { requireAuth, optionalAuth } = require('../middlewares/auth');
 const { canChangeTournamentCompetitionSettings } = require('../utils/tournamentDivisionPolicy');
 const { createTournamentGroups, canCreateTournamentGroups } = require('../utils/tournamentGrouping');
 const { matchesExistingRoster, canCancelParticipantWithResults } = require('../utils/tournamentRosterPolicy');
+const { canApplyToTournament } = require('../utils/tournamentApplicationPolicy');
 
 const router = express.Router();
 
@@ -31,7 +32,7 @@ async function canManageHostGroup(client, groupId, userId) {
 async function canViewTournament(client, tournamentId, userId) {
   const found = await client.query(
     `SELECT t.* FROM tournaments t
-     WHERE t.id = $1 AND ((t.premium_visible = TRUE AND t.status <> 'draft') OR t.created_by_id = $2
+     WHERE t.id = $1 AND (t.status <> 'draft' OR t.created_by_id = $2
        OR EXISTS (SELECT 1 FROM group_members gm WHERE gm.group_id = t.host_group_id AND gm.user_id = $2)
        OR EXISTS (SELECT 1 FROM tournament_invited_groups ig JOIN group_members gm ON gm.group_id = ig.group_id WHERE ig.tournament_id = t.id AND ig.status = 'accepted' AND gm.user_id = $2))`,
     [tournamentId, userId],
@@ -48,9 +49,7 @@ async function canSubmitTournamentApplication(client, tournament, userId, groupI
   const hostManager = await hasPremiumSubscription(client, userId) && await canManageHostGroup(client, tournament.host_group_id, userId);
   if (hostManager) return true;
   if (tournament.status !== 'open') return false;
-  if (tournament.premium_visible) return true;
-  const invited = await client.query(`SELECT 1 FROM tournament_invited_groups ig JOIN group_members gm ON gm.group_id = ig.group_id WHERE ig.tournament_id = $1 AND ig.status = 'accepted' AND gm.user_id = $2 AND ($3::text IS NULL OR ig.group_id = $3) LIMIT 1`, [tournament.id, userId, groupId]);
-  return invited.rowCount > 0;
+  return true;
 }
 
 const createSchema = z.object({
@@ -109,8 +108,8 @@ router.post('/tournaments', requireAuth, async (req, res) => {
     const created = await client.query(
       `INSERT INTO tournaments
          (title, description, sport, venue_name, venue_address, notice, court_count, recruit_count,
-          starts_at, ends_at, application_deadline_at, host_group_id, created_by_id, premium_visible)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
+          starts_at, ends_at, application_deadline_at, host_group_id, created_by_id, premium_visible, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'open') RETURNING *`,
       [data.title, data.description ?? null, data.sport, data.venue_name ?? null,
         data.venue_address ?? null, data.notice ?? null, data.court_count ?? null, data.recruit_count ?? null,
         data.starts_at, data.ends_at ?? null, data.application_deadline_at ?? null,
@@ -176,7 +175,7 @@ router.get('/tournaments/:id', optionalAuth, async (req, res) => {
          LEFT JOIN group_members host_member ON host_member.group_id = t.host_group_id AND host_member.user_id = $2
          LEFT JOIN tournament_invited_groups invited ON invited.tournament_id = t.id AND invited.status = 'accepted'
          LEFT JOIN group_members invited_member ON invited_member.group_id = invited.group_id AND invited_member.user_id = $2
-        WHERE t.id = $1 AND ((t.premium_visible = TRUE AND t.status <> 'draft') OR t.created_by_id = $2
+        WHERE t.id = $1 AND (t.status <> 'draft' OR t.created_by_id = $2
           OR host_member.user_id IS NOT NULL OR invited_member.user_id IS NOT NULL)`,
       [id.data, userId],
     );
@@ -203,7 +202,7 @@ router.get('/tournaments/:id', optionalAuth, async (req, res) => {
       roundsByDivision.set(round.division_id, existing);
     }
     const canManage = userId !== null && await hasPremiumSubscription(pool, userId) && await canManageHostGroup(pool, tournament.rows[0].host_group_id, userId);
-    const canApply = tournament.rows[0].status === 'open' && new Date() < new Date(tournament.rows[0].application_deadline_at ?? tournament.rows[0].starts_at) && (tournament.rows[0].premium_visible || userId !== null && (await pool.query(`SELECT 1 FROM tournament_invited_groups ig JOIN group_members gm ON gm.group_id = ig.group_id WHERE ig.tournament_id = $1 AND ig.status = 'accepted' AND gm.user_id = $2 LIMIT 1`, [id.data, userId])).rowCount > 0);
+    const canApply = canApplyToTournament(tournament.rows[0]);
     return res.json({ tournament: { ...tournament.rows[0], can_manage: canManage, can_apply: canApply, divisions: divisions.rows.map((division) => ({ ...division, rounds: roundsByDivision.get(division.id) ?? [] })) } });
   } catch (error) {
     console.error('Tournament detail error:', error);
@@ -225,7 +224,7 @@ router.patch('/tournaments/:id', requireAuth, async (req, res) => {
   }).strict().refine((value) => Object.keys(value).length > 0).safeParse(req.body);
   if (!id.success || !body.success) return res.status(400).json({ message: '대회 정보가 올바르지 않습니다.' });
   try {
-    const existing = await pool.query('SELECT host_group_id, starts_at, ends_at, application_deadline_at FROM tournaments WHERE id = $1', [id.data]);
+    const existing = await pool.query('SELECT host_group_id, starts_at, ends_at, application_deadline_at, status FROM tournaments WHERE id = $1', [id.data]);
     if (!existing.rowCount) return res.status(404).json({ message: '대회를 찾을 수 없습니다.' });
     const userId = Number(req.user.sub);
     if (!await hasPremiumSubscription(pool, userId) || !await canManageHostGroup(pool, existing.rows[0].host_group_id, userId)) return res.status(403).json({ message: '대회 관리 권한이 필요합니다.' });
@@ -234,6 +233,7 @@ router.patch('/tournaments/:id', requireAuth, async (req, res) => {
     if (endsAt && new Date(endsAt) < new Date(startsAt)) return res.status(400).json({ message: '종료 시간은 시작 시간 이후여야 합니다.' });
     const deadlineAt = Object.hasOwn(body.data, 'application_deadline_at') ? body.data.application_deadline_at : existing.rows[0].application_deadline_at;
     if (deadlineAt && new Date(deadlineAt) >= new Date(startsAt)) return res.status(400).json({ message: '참가 신청 마감은 대회 시작 전이어야 합니다.' });
+    if (existing.rows[0].status === 'draft' && deadlineAt && new Date(deadlineAt) <= new Date()) return res.status(400).json({ message: '참가 신청 마감은 현재 이후여야 합니다.' });
     const entries = Object.entries(body.data);
     const values = entries.map(([, value]) => value);
     const sets = entries.map(([key], index) => `${key} = $${index + 1}`);
@@ -613,7 +613,7 @@ router.post('/tournaments/:id/divisions/:divisionId/applications', requireAuth, 
     if (!division) { await client.query('ROLLBACK'); return res.status(404).json({ message: '부문을 찾을 수 없습니다.' }); }
     const hostManager = await hasPremiumSubscription(client, userId) && await canManageHostGroup(client, tournament.rows[0].host_group_id, userId);
     const invited = await client.query(`SELECT ig.group_id FROM tournament_invited_groups ig JOIN group_members gm ON gm.group_id = ig.group_id WHERE ig.tournament_id = $1 AND ig.status = 'accepted' AND gm.user_id = $2`, [ids.data.id, userId]);
-    const publicApplication = tournament.rows[0].status === 'open' && tournament.rows[0].premium_visible;
+    const publicApplication = tournament.rows[0].status === 'open';
     const invitedApplication = tournament.rows[0].status === 'open' && invited.rowCount > 0;
     if (!hostManager && !publicApplication && !invitedApplication) { await client.query('ROLLBACK'); return res.status(403).json({ message: '참가 신청이 열리지 않았습니다.' }); }
     if (division.status === 'locked' || division.status === 'active' || division.status === 'completed') { await client.query('ROLLBACK'); return res.status(409).json({ message: '조 편성이 확정된 부문은 신청할 수 없습니다.' }); }

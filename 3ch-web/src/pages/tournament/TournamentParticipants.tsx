@@ -3,14 +3,13 @@ import { Alert, Box, Button, Chip, Divider, MenuItem, Select, Stack, TextField, 
 import { useNavigate } from "react-router-dom";
 import { useAppSelector } from "../../app/hooks";
 import { formatTournamentParticipantName } from "../../features/tournament/participantLabel";
-import { useGetTournamentParticipantsAllQuery, useOpenTournamentMutation, useReviewTournamentApplicationMutation, type TournamentItem, type TournamentParticipant } from "../../features/tournament/tournamentApi";
+import { useGetTournamentParticipantsAllQuery, useReviewTournamentApplicationMutation, type TournamentItem, type TournamentParticipant } from "../../features/tournament/tournamentApi";
 
 export default function TournamentParticipants({ tournament }: { tournament: TournamentItem }) {
   const navigate = useNavigate();
   const token = useAppSelector((state) => state.auth.token);
   const { data } = useGetTournamentParticipantsAllQuery(tournament.id);
   const [review, { isLoading: reviewing }] = useReviewTournamentApplicationMutation();
-  const [openTournament, { isLoading: opening }] = useOpenTournamentMutation();
   const [view, setView] = useState<"division" | "club">("division");
   const [divisionId, setDivisionId] = useState("");
   const [clubId, setClubId] = useState("");
@@ -36,11 +35,12 @@ export default function TournamentParticipants({ tournament }: { tournament: Tou
   };
   const list = (entries: TournamentParticipant[]) => entries.length ? <Stack divider={<Divider />}>{entries.map((participant) => <Stack key={participant.id} direction="row" alignItems="center" spacing={0.8} sx={{ py: 0.8 }}><Typography sx={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 700 }}>{formatTournamentParticipantName(participant)}</Typography><Chip size="small" label={participant.status === "confirmed" ? "확정" : "신청"} color={participant.status === "confirmed" ? "primary" : "default"} />{tournament.can_manage && participant.status === "applied" && canEdit && <><Button size="small" disabled={reviewing} onClick={() => void reviewParticipant(participant, "confirmed")}>확정</Button><Button size="small" color="error" disabled={reviewing} onClick={() => void reviewParticipant(participant, "rejected")}>거절</Button></>}</Stack>)}</Stack> : <Typography sx={{ fontSize: 13, color: "text.secondary", py: 1 }}>등록된 참가자가 없습니다.</Typography>;
   return <Box sx={{ bgcolor: "#fff", border: "1px solid #E5E7EB", borderRadius: 1, px: 2, py: 1.5, mb: 2 }}>
-    <Stack direction="row" alignItems="center" sx={{ mb: 1 }}><Typography fontWeight={900} fontSize={16} sx={{ flex: 1 }}>참가 신청 · 명단</Typography>{tournament.can_manage && tournament.status === "draft" && <Button size="small" variant="outlined" disabled={opening} onClick={async () => { try { await openTournament(tournament.id).unwrap(); } catch (reason) { setError((reason as { data?: { message?: string } }).data?.message ?? "신청을 열지 못했습니다."); } }}>신청 열기</Button>}</Stack>
+    <Stack direction="row" alignItems="center" sx={{ mb: 1 }}><Typography fontWeight={900} fontSize={16} sx={{ flex: 1 }}>참가 신청 · 명단</Typography></Stack>
+    {tournament.status === "draft" && <Alert severity="warning" sx={{ mb: 1 }}>아직 참가 신청이 열리지 않았습니다. 주최자는 대회 정보의 [참가신청 열기]를 눌러주세요.</Alert>}
     <Typography sx={{ fontSize: 12, color: "text.secondary", mb: 1 }}>신청 마감 {tournament.application_deadline_at ? new Date(tournament.application_deadline_at).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" }) : "미설정"} · 총 {participants.length}명</Typography>
     {deadlinePassed && canEdit && <Alert severity="info" sx={{ mb: 1 }}>새 참가자 신청은 마감되었습니다. 신청한 명단은 대회 시작 전까지 수정할 수 있습니다.</Alert>}
     {error && <Alert severity="error" sx={{ mb: 1 }}>{error}</Alert>}
-    {canEdit && <Button size="small" variant="outlined" sx={{ mb: 1.5, fontWeight: 800 }} onClick={() => token ? navigate(`/tournament/${tournament.id}/apply`) : navigate("/login")}>참가신청 · 명단 수정</Button>}
+    {canEdit && (tournament.status === "open" || tournament.can_manage) && <Button size="small" variant="outlined" sx={{ mb: 1.5, fontWeight: 800 }} onClick={() => token ? navigate(`/tournament/${tournament.id}/apply`) : navigate("/login")}>참가신청 · 명단 수정</Button>}
     <Stack direction="row" spacing={1} sx={{ mb: 1.5, borderBottom: "1px solid #D9DDE6", pb: 1 }}><Button size="small" variant={view === "division" ? "contained" : "text"} onClick={() => setView("division")} sx={{ fontWeight: 800 }}>부문별</Button><Button size="small" variant={view === "club" ? "contained" : "text"} onClick={() => setView("club")} sx={{ fontWeight: 800 }}>클럽별</Button></Stack>
     <TextField size="small" fullWidth placeholder="참가자명 · 클럽명 검색" value={search} onChange={(event) => setSearch(event.target.value)} sx={{ mb: 1.5 }} />
     {view === "division" && selectedDivision && <><Select fullWidth size="small" value={selectedDivision.id} onChange={(event) => setDivisionId(String(event.target.value))} sx={{ mb: 1 }}>{divisions.map((division) => <MenuItem key={division.id} value={division.id}>{division.name} · {participants.filter((participant) => participant.division_id === division.id).length}명</MenuItem>)}</Select>{list(show(participants.filter((participant) => participant.division_id === selectedDivision.id)))}{['GROUP', 'GROUP_TOURNAMENT'].includes(selectedDivision.rounds[0]?.format) && <Button size="small" variant="outlined" sx={{ mt: 1.5, fontWeight: 800 }} onClick={() => navigate(`/tournament/${tournament.id}/divisions/${selectedDivision.id}/groups`)}>조 편성 결과 보기</Button>}</>}

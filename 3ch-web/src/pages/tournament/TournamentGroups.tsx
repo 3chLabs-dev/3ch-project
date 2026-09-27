@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Alert, Box, Button, CircularProgress, IconButton, Stack, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, CircularProgress, Divider, IconButton, Paper, Stack, TextField, Typography } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useNavigate, useParams } from "react-router-dom";
 import { useGenerateTournamentPoolsMutation, useGetTournamentParticipantsQuery, useGetTournamentPoolsQuery, useGetTournamentQuery, useLazyPreviewTournamentPoolsQuery, type TournamentPool } from "../../features/tournament/tournamentApi";
@@ -22,7 +22,7 @@ export default function TournamentGroups() {
   const [error, setError] = useState("");
   const tournament = tournamentData?.tournament;
   const division = tournament?.divisions?.find((item) => item.id === divisionId);
-  const deadlinePassed = tournament ? new Date() >= new Date(tournament.application_deadline_at ?? tournament.starts_at) : false;
+  const deadlinePassed = tournament ? !tournament.application_deadline_at || new Date() >= new Date(tournament.application_deadline_at) : false;
   const confirmed = (participantData?.participants ?? []).filter((participant) => participant.status === "confirmed");
   const applied = (participantData?.participants ?? []).filter((participant) => participant.status === "applied");
   const minGroups = Math.ceil(confirmed.length / 5);
@@ -58,7 +58,7 @@ export default function TournamentGroups() {
     {savedPools.length > 0 && <Alert severity="success" sx={{ mb: 1.5 }}>확정된 조 편성입니다. 참가자도 이 페이지에서 결과를 볼 수 있습니다.</Alert>}
     {visiblePools.length > 0 && <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}><TextField size="small" fullWidth placeholder="조 번호, 참가자명, 클럽명 검색" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} /><Typography fontSize={12} color="text.secondary" whiteSpace="nowrap">{filtered.length}개 조</Typography></Stack>}
     <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" }, gap: 1.5 }}>
-      {shown.map((pool) => <Box key={pool.pool_no} sx={{ bgcolor: "#fff", border: "1px solid #E5E7EB", borderRadius: 1, p: 1.5 }}><Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}><Typography fontWeight={900} color="primary.main">{pool.pool_no}조</Typography><Typography fontSize={11} color="text.secondary">{pool.members.length}명 · 배치 {pool.bracket_slot}</Typography></Stack>{pool.members.map((member) => <Typography key={member.id} sx={{ py: 0.6, borderTop: "1px solid #F3F4F6", fontSize: 13, fontWeight: 700, color: member.status === "withdrawn" ? "text.disabled" : undefined, textDecoration: member.status === "withdrawn" ? "line-through" : undefined }}>{fullName(member)}{member.status === "withdrawn" ? " · 취소" : ""}</Typography>)}</Box>)}
+      {shown.map((pool) => <Paper key={pool.pool_no} elevation={0} sx={{ bgcolor: "#fff", border: "1px solid #D9DDE6", borderRadius: 1.5, p: 1.5 }}><Stack direction="row" justifyContent="space-between" alignItems="center"><Typography fontWeight={900} color="primary.main">{pool.pool_no}조</Typography><Typography fontSize={11} color="text.secondary">{pool.members.length}명 · 배치 {pool.bracket_slot}</Typography></Stack><Divider sx={{ my: 1 }} />{pool.members.map((member) => <Typography key={member.id} sx={{ py: 0.6, borderBottom: "1px solid #F3F4F6", fontSize: 13, fontWeight: 700, color: member.status === "withdrawn" ? "text.disabled" : undefined, textDecoration: member.status === "withdrawn" ? "line-through" : undefined }}>{fullName(member)}{member.status === "withdrawn" ? " · 취소" : ""}</Typography>)}</Paper>)}
     </Box>
     {!visiblePools.length && <Box sx={{ bgcolor: "#fff", border: "1px solid #E5E7EB", borderRadius: 1, p: 3, textAlign: "center" }}><Typography color="text.secondary">아직 조 편성 결과가 없습니다.</Typography></Box>}
     {pageCount > 1 && <Stack direction="row" justifyContent="center" spacing={1} alignItems="center" sx={{ mt: 2 }}><Button size="small" variant="outlined" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>이전</Button><Typography fontSize={13}>{Math.min(page, pageCount)} / {pageCount}</Typography><Button size="small" variant="outlined" disabled={page >= pageCount} onClick={() => setPage((current) => current + 1)}>다음</Button></Stack>}

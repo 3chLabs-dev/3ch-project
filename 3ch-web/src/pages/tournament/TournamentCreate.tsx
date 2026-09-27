@@ -17,7 +17,7 @@ const selectSx = { height: 32, flex: 1, borderRadius: 0.6, bgcolor: "#fff", font
 const hours = Array.from({ length: 24 }, (_, value) => String(value).padStart(2, "0"));
 const minutes = ["00", "10", "20", "30", "40", "50"];
 const optionSx = { m: 0, px: 2, minHeight: 66, border: "1px solid #D9DDE6", borderRadius: 1, bgcolor: "#fff", boxShadow: "0 2px 2px rgba(0,0,0,0.18)", "& .MuiFormControlLabel-label": { fontSize: 20, fontWeight: 800 } };
-const steps = ["", "대회 정보", "대회 구성", "참가 부문", "대회 유형", "대회 방식", "대회 규칙"];
+const steps = ["", "대회 정보", "참가 부문", "대회 유형", "대회 방식", "대회 규칙"];
 const typeOptions: Array<{ value: TournamentLeagueType; label: string }> = [{ value: "SINGLES", label: "단식" }, { value: "DOUBLES", label: "복식" }, { value: "TEAM", label: "단체전" }];
 const formatOptions: Array<{ value: TournamentFormat; label: string }> = [{ value: "LEAGUE", label: "풀리그" }, { value: "GROUP", label: "조별리그" }, { value: "TOURNAMENT", label: "토너먼트" }];
 const ruleOptions = [{ value: "BEST_OF_3", label: "3전 2선승제" }, { value: "BEST_OF_5", label: "5전 3선승제" }, { value: "THREE_SET", label: "3세트제" }];
@@ -41,6 +41,7 @@ export default function TournamentCreate() {
   const groups = useMemo(() => (groupData?.groups ?? []).filter((group) => group.role === "owner" || (group.role === "admin" && group.management_permissions?.league === true)), [groupData]);
   const [step, setStep] = useState(1);
   const dateRef = useRef<HTMLInputElement>(null);
+  const deadlineRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState("");
   const today = new Date();
   const defaultTournamentTitle = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")} 대회`;
@@ -68,11 +69,10 @@ export default function TournamentCreate() {
     if (step === 1 && (!date || !startTime || !effectiveGroupId)) return "날짜와 시작 시간을 입력해주세요.";
     if (step === 1 && participantCount === 1) return "참가자 수는 2명 이상 입력해주세요.";
     if (step === 1 && endTime && endTime <= startTime) return "종료 시간은 시작 시간보다 늦어야 합니다.";
-    if (step === 1 && (!applicationDeadline || new Date(applicationDeadline) >= new Date(`${date}T${startTime}`))) return "참가 신청 마감을 대회 시작 전으로 설정해주세요.";
-    if (step === 1 && new Date(applicationDeadline) <= new Date()) return "참가 신청 마감을 현재 이후로 설정해주세요.";
-    if (step === 3 && divisions.some((division) => !division.name.trim())) return "모든 부문에 이름을 입력해주세요.";
-    if (step === 3 && new Set(divisions.map((division) => division.name.trim())).size !== divisions.length) return "부문 이름은 중복될 수 없습니다.";
-    if (step === 3 && divisions.some((division) => division.recruit_count !== null && (!Number.isInteger(division.recruit_count) || division.recruit_count < 1))) return "모집 인원은 1명 이상 입력해주세요.";
+    if (step === 1 && applicationDeadline && new Date(applicationDeadline) >= new Date(`${date}T${startTime}`)) return "참가 신청 마감을 대회 시작 전으로 설정해주세요.";
+    if (step === 1 && applicationDeadline && new Date(applicationDeadline) <= new Date()) return "참가 신청 마감을 현재 이후로 설정해주세요.";
+    if (step === 2 && divisions.some((division) => !division.name.trim())) return "모든 부문에 이름을 입력해주세요.";
+    if (step === 2 && new Set(divisions.map((division) => division.name.trim())).size !== divisions.length) return "부문 이름은 중복될 수 없습니다.";
     return "";
   };
   const next = () => { const issue = validate(); if (issue) { setError(issue); return; } setError(""); setStep((current) => current + 1); };
@@ -81,9 +81,9 @@ export default function TournamentCreate() {
     setError("");
     const startsAt = new Date(`${date}T${startTime}:00`);
     const endsAt = endTime ? new Date(`${date}T${endTime}:00`) : null;
-    const deadlineAt = new Date(applicationDeadline);
+    const deadlineAt = applicationDeadline ? new Date(applicationDeadline) : null;
     if (!Number.isFinite(startsAt.getTime()) || (endsAt && (!Number.isFinite(endsAt.getTime()) || endsAt <= startsAt))) { setError("대회 시간을 확인해주세요."); return; }
-    if (!Number.isFinite(deadlineAt.getTime()) || deadlineAt >= startsAt) { setError("참가 신청 마감을 확인해주세요."); return; }
+    if (deadlineAt && (!Number.isFinite(deadlineAt.getTime()) || deadlineAt >= startsAt)) { setError("참가 신청 마감을 확인해주세요."); return; }
     try {
       const created = await createTournament({
         title: title.trim() || defaultTournamentTitle,
@@ -91,7 +91,7 @@ export default function TournamentCreate() {
         court_count: courtCount === "" ? null : courtCount,
         recruit_count: participantCount === "" ? null : participantCount,
         starts_at: startsAt.toISOString(), ends_at: endsAt?.toISOString() ?? null,
-        application_deadline_at: deadlineAt.toISOString(),
+        application_deadline_at: deadlineAt?.toISOString() ?? null,
         host_group_id: effectiveGroupId, premium_visible: premiumVisible,
         divisions: divisions.map(({ name, recruit_count, rounds }) => ({ name: name.trim(), recruit_count, rounds: rounds.map(({ league_type, format, matchRule }) => ({ league_type, format, rules: { match_rule: matchRule } })) })),
       }).unwrap();
@@ -109,11 +109,11 @@ export default function TournamentCreate() {
       <Box sx={{ borderTop: "1px solid #D9DDE6" }}>
         <Box sx={rowSx}><Typography fontWeight={900}>대회명 <Box component="span" sx={{ color: "#EF4444" }}>*</Box></Typography><TextField value={title} placeholder={defaultTournamentTitle} onChange={(event) => setTitle(event.target.value)} sx={fieldSx} /></Box>
         <Box sx={{ ...rowSx, cursor: "pointer" }} onClick={() => dateRef.current?.showPicker()}><Typography fontWeight={900}>날짜 <Box component="span" sx={{ color: "#EF4444" }}>*</Box></Typography><TextField inputRef={dateRef} type="date" value={date} onChange={(event) => setDate(event.target.value)} sx={fieldSx} /></Box>
-        <Box sx={rowSx}><Typography fontWeight={900}>시간 *</Typography><Stack spacing={1}>
+        <Box sx={rowSx}><Typography fontWeight={900}>시간 <Box component="span" sx={{ color: "#EF4444" }}>*</Box></Typography><Stack spacing={1}>
           <Stack direction="row" spacing={0.8} alignItems="center"><Typography sx={{ width: 34, fontWeight: 700 }}>시작</Typography>{timeSelect(startHour, "시", (value) => setStartTime(`${value}:${startMinute || "00"}`), hours)}<Typography>:</Typography>{timeSelect(startMinute, "분", (value) => setStartTime(`${startHour || "00"}:${value}`), minutes)}</Stack>
           <Stack direction="row" spacing={0.8} alignItems="center"><Typography sx={{ width: 34, fontWeight: 700 }}>종료</Typography>{timeSelect(endHour, "시", (value) => setEndTime(`${value}:${endMinute || "00"}`), hours)}<Typography>:</Typography>{timeSelect(endMinute, "분", (value) => setEndTime(`${endHour || "00"}:${value}`), minutes)}</Stack>
         </Stack></Box>
-        <Box sx={rowSx}><Typography fontWeight={900}>신청 마감 *</Typography><TextField type="datetime-local" value={applicationDeadline} onChange={(event) => setApplicationDeadline(event.target.value)} sx={fieldSx} inputProps={{ max: date ? `${date}T${startTime || "00:00"}` : undefined }} /></Box>
+        <Box sx={{ ...rowSx, cursor: "pointer" }} onClick={() => deadlineRef.current?.showPicker()}><Typography fontWeight={900}>신청 마감</Typography><TextField inputRef={deadlineRef} type="datetime-local" value={applicationDeadline} onChange={(event) => setApplicationDeadline(event.target.value)} sx={fieldSx} inputProps={{ max: date ? `${date}T${startTime || "00:00"}` : undefined }} /></Box>
         <Box sx={rowSx}><Typography fontWeight={900}>장소</Typography><Stack direction="row" spacing={0.8}><TextField value={location} onChange={(event) => setLocation(event.target.value)} placeholder="장소명 또는 주소" sx={{ ...fieldSx, flex: 1 }} /><Button variant="outlined" size="small" startIcon={<SearchIcon />} onClick={() => setPlaceOpen(true)} sx={{ whiteSpace: "nowrap", fontWeight: 800 }}>주소 검색</Button></Stack></Box>
         {venueAddress && <Box sx={rowSx}><Typography fontWeight={900}>주소</Typography><Typography fontSize={13}>{venueAddress}</Typography></Box>}
         <Box sx={rowSx}><Typography fontWeight={900}>코트 수</Typography><OptionalNumberStepper value={courtCount} onChange={setCourtCount} /></Box>
@@ -135,33 +135,31 @@ export default function TournamentCreate() {
       </Box>
       <PlaceSearchDialog open={placeOpen} initialQuery={location} onClose={() => setPlaceOpen(false)} allowDirectInput onDirectInput={(value) => { setLocation(value); setVenueAddress(""); setPlaceOpen(false); }} onSelect={(place) => { setLocation(place.name); setVenueAddress(place.address); setPlaceOpen(false); }} />
     </>}
-    {step === 2 && <FormControl fullWidth><RadioGroup value="custom"><FormControlLabel value="custom" control={<Radio />} label={<Box><Typography fontWeight={900}>직접 구성하기</Typography><Typography sx={{ mt: 0.5, color: "text.secondary", fontSize: 14 }}>부문별 리그 유형, 방식, 규칙을 직접 선택하여 대회를 생성합니다.</Typography></Box>} sx={{ m: 0, minHeight: 104, px: 2, border: "1px solid #2F80ED", borderRadius: 1, bgcolor: "#EFF6FF" }} /></RadioGroup></FormControl>}
-    {step === 3 && <>
-      <Typography sx={{ mb: 2, color: "text.secondary", fontSize: 14 }}>참가 신청을 받을 부문을 먼저 만듭니다. 모집 인원은 나중에 수정할 수 있습니다.</Typography>
+    {step === 2 && <>
+      <Typography sx={{ mb: 2, color: "text.secondary", fontSize: 14 }}>참가 신청을 받을 부문을 먼저 만듭니다.</Typography>
       <Stack spacing={1.5}>{divisions.map((division, index) => <Box key={division.key} sx={{ border: "1px solid #D9DDE6", borderRadius: 1, p: 2, bgcolor: "#fff" }}>
         <Stack direction="row" alignItems="center" justifyContent="space-between"><Typography fontWeight={900} fontSize={18}>{index + 1}부문</Typography><IconButton aria-label="부문 삭제" disabled={divisions.length === 1} onClick={() => setDivisions((current) => current.filter((item) => item.key !== division.key))}>×</IconButton></Stack>
         <Box sx={rowSx}><Typography fontWeight={900}>부문명 *</Typography><TextField value={division.name} onChange={(event) => updateDivision(division.key, { name: event.target.value })} placeholder="예: 3~4부" sx={fieldSx} /></Box>
-        <Box sx={rowSx}><Typography fontWeight={900}>참가자 수</Typography><TextField type="number" value={division.recruit_count ?? ""} onChange={(event) => updateDivision(division.key, { recruit_count: event.target.value ? Number(event.target.value) : null })} inputProps={{ min: 1 }} sx={fieldSx} /></Box>
       </Box>)}</Stack>
       <Button fullWidth variant="outlined" onClick={() => setDivisions((current) => [...current, makeDivision(Math.max(...current.map((item) => item.key)) + 1)])} sx={{ mt: 1.5, minHeight: 44, borderRadius: 1, fontWeight: 900 }}>+ 부문 추가</Button>
     </>}
-    {[4, 5, 6].includes(step) && <Stack spacing={3}>{divisions.map((division, divisionIndex) => <Box key={division.key}>
-      <Typography sx={{ fontSize: 20, fontWeight: 900, mb: 1.5 }}>{division.name || `${divisionIndex + 1}부문`}</Typography>
+    {[3, 4, 5].includes(step) && <Stack spacing={3}>{divisions.map((division, divisionIndex) => <Box key={division.key} sx={{ pb: 3, borderBottom: divisionIndex < divisions.length - 1 ? "2px solid #D9DDE6" : "none" }}>
+      <Typography sx={{ fontSize: 21, fontWeight: 900, mb: 1.5, color: "#1E4E91" }}>{division.name || `${divisionIndex + 1}부문`}</Typography>
       <Stack spacing={3}>{division.rounds.map((round, roundIndex) => <Box key={round.key}>
         <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
-          <Typography sx={{ fontSize: 20, fontWeight: 900 }}>{roundIndex + 1}라운드</Typography>
-          {step === 4 && division.rounds.length > 1 && <Button size="small" color="error" variant="outlined" onClick={() => removeRound(division.key, round.key)}>삭제</Button>}
+          <Typography sx={{ fontSize: 16, fontWeight: 800 }}>{roundIndex + 1}라운드</Typography>
+          {step === 3 && division.rounds.length > 1 && <Button size="small" color="error" variant="outlined" onClick={() => removeRound(division.key, round.key)}>삭제</Button>}
         </Stack>
-        {step === 4 && <FormControl fullWidth><RadioGroup value={round.league_type} onChange={(event) => updateRound(division.key, round.key, { league_type: event.target.value as TournamentLeagueType })}><Stack spacing={1}>{typeOptions.map((option) => <FormControlLabel key={option.value} value={option.value} control={<Radio />} label={option.label} sx={{ ...optionSx, borderColor: round.league_type === option.value ? "#2F80ED" : "#D9DDE6" }} />)}</Stack></RadioGroup></FormControl>}
-        {step === 5 && <FormControl fullWidth><RadioGroup value={round.format} onChange={(event) => updateRound(division.key, round.key, { format: event.target.value as TournamentFormat })}><Stack spacing={1}>{formatOptions.map((option) => <FormControlLabel key={option.value} value={option.value} control={<Radio />} label={option.label} sx={{ ...optionSx, borderColor: round.format === option.value ? "#2F80ED" : "#D9DDE6" }} />)}</Stack></RadioGroup></FormControl>}
-        {step === 6 && <FormControl fullWidth><RadioGroup value={round.matchRule} onChange={(event) => updateRound(division.key, round.key, { matchRule: event.target.value })}><Stack spacing={1}>{ruleOptions.map((option) => <FormControlLabel key={option.value} value={option.value} control={<Radio />} label={option.label} sx={{ ...optionSx, borderColor: round.matchRule === option.value ? "#2F80ED" : "#D9DDE6" }} />)}</Stack></RadioGroup></FormControl>}
+        {step === 3 && <FormControl fullWidth><RadioGroup value={round.league_type} onChange={(event) => updateRound(division.key, round.key, { league_type: event.target.value as TournamentLeagueType })}><Stack spacing={1}>{typeOptions.map((option) => <FormControlLabel key={option.value} value={option.value} control={<Radio />} label={option.label} sx={{ ...optionSx, borderColor: round.league_type === option.value ? "#2F80ED" : "#D9DDE6" }} />)}</Stack></RadioGroup></FormControl>}
+        {step === 4 && <FormControl fullWidth><RadioGroup value={round.format} onChange={(event) => updateRound(division.key, round.key, { format: event.target.value as TournamentFormat })}><Stack spacing={1}>{formatOptions.map((option) => <FormControlLabel key={option.value} value={option.value} control={<Radio />} label={option.label} sx={{ ...optionSx, borderColor: round.format === option.value ? "#2F80ED" : "#D9DDE6" }} />)}</Stack></RadioGroup></FormControl>}
+        {step === 5 && <FormControl fullWidth><RadioGroup value={round.matchRule} onChange={(event) => updateRound(division.key, round.key, { matchRule: event.target.value })}><Stack spacing={1}>{ruleOptions.map((option) => <FormControlLabel key={option.value} value={option.value} control={<Radio />} label={option.label} sx={{ ...optionSx, borderColor: round.matchRule === option.value ? "#2F80ED" : "#D9DDE6" }} />)}</Stack></RadioGroup></FormControl>}
       </Box>)}</Stack>
-      {step === 4 && <Button fullWidth variant="outlined" onClick={() => addRound(division.key)} sx={{ mt: 2.5, height: 40, borderRadius: 1, fontWeight: 800 }}>+ 라운드 추가</Button>}
+      {step === 3 && <Button fullWidth variant="outlined" onClick={() => addRound(division.key)} sx={{ mt: 2.5, height: 40, borderRadius: 1, fontWeight: 800 }}>+ 라운드 추가</Button>}
     </Box>)}</Stack>}
     {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
     <Stack direction="row" spacing={2} sx={{ mt: 4 }}>
       <Button fullWidth variant="contained" disableElevation onClick={previous} disabled={isCreating} sx={{ height: 44, borderRadius: 1, fontWeight: 900, bgcolor: "#777", "&:hover": { bgcolor: "#777" } }}>이전</Button>
-      <Button fullWidth variant="contained" disableElevation onClick={step === 6 ? submit : next} disabled={isCreating} sx={{ height: 44, borderRadius: 1, fontWeight: 900, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}>{step === 6 ? isCreating ? "생성 중..." : "완료" : "다음"}</Button>
+      <Button fullWidth variant="contained" disableElevation onClick={step === 5 ? submit : next} disabled={isCreating} sx={{ height: 44, borderRadius: 1, fontWeight: 900, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}>{step === 5 ? isCreating ? "생성 중..." : "완료" : "다음"}</Button>
     </Stack>
   </Box>;
 }

@@ -6,7 +6,7 @@ import { useAppSelector } from "../../app/hooks";
 import { useGetGroupDetailQuery, useGetMyGroupsQuery } from "../../features/group/groupApi";
 import { useGetTournamentApplicationRosterQuery, useGetTournamentQuery, useSaveTournamentApplicationRosterMutation } from "../../features/tournament/tournamentApi";
 
-type DraftRow = { key: string; id?: string; division_id: string; name: string; member_division: string; member_id: number | null; pre_member_id: string | null; cancel: boolean };
+type DraftRow = { key: string; id?: string; division_id: string; name: string; member_division: string; previous_member_division?: string | null; member_id: number | null; pre_member_id: string | null; cancel: boolean };
 const fieldSx = { "& .MuiOutlinedInput-root": { borderRadius: 0.6, bgcolor: "#fff", height: 34 }, "& .MuiOutlinedInput-input": { py: 0.5, fontSize: "0.9rem" } };
 let nextKey = 0;
 const makeKey = () => `local-${++nextKey}`;
@@ -42,7 +42,7 @@ export default function TournamentApply() {
   const deadlineText = tournament?.application_deadline_at ? new Date(tournament.application_deadline_at).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" }) : "미설정";
   useEffect(() => {
     if (!rosterData) return;
-    setRows(rosterData.participants.map((participant) => ({ key: participant.id, id: participant.id, division_id: participant.division_id, name: participant.name, member_division: participant.member_division ?? "", member_id: participant.member_id, pre_member_id: participant.pre_member_id ?? null, cancel: false })));
+    setRows(rosterData.participants.map((participant) => ({ key: participant.id, id: participant.id, division_id: participant.division_id, name: participant.name, member_division: participant.member_division ?? "", previous_member_division: participant.member_division, member_id: participant.member_id, pre_member_id: participant.pre_member_id ?? null, cancel: false })));
     setDirty(false);
   }, [rosterData]);
   const changeMode = (value: string) => {
@@ -56,23 +56,23 @@ export default function TournamentApply() {
     if (unique.length) { setRows((current) => [...current, ...unique]); setDirty(true); }
   };
   const addManual = () => {
-    if (!selectedDivisionId || !name.trim()) { setError("부문과 이름을 입력해주세요."); return; }
+    if (!selectedDivisionId || !name.trim() || !memberDivision.trim()) { setError("부문, 이름, 대회 부수를 입력해주세요."); return; }
     appendRows([{ key: makeKey(), division_id: selectedDivisionId, name: name.trim(), member_division: memberDivision.trim(), member_id: groupId ? null : user?.id ?? null, pre_member_id: null, cancel: false }]);
     setName(""); setMemberDivision(""); setError("");
   };
   const loadMembers = () => {
     const selected = clubMembers.filter((member) => selectedMembers.includes(member.id));
-    appendRows(selected.map((member) => ({ key: makeKey(), division_id: selectedDivisionId, name: member.name ?? "", member_division: member.division ?? "", member_id: member.is_pre_member ? null : member.user_id, pre_member_id: member.is_pre_member ? member.id : null, cancel: false })));
+    appendRows(selected.map((member) => ({ key: makeKey(), division_id: selectedDivisionId, name: member.name ?? "", member_division: "", member_id: member.is_pre_member ? null : member.user_id, pre_member_id: member.is_pre_member ? member.id : null, cancel: false })));
     setSelectedMembers([]); setLoadOpen(false);
   };
   const submit = async () => {
     if (!canEdit || !rows.length) { setError("신청할 참가자를 등록해주세요."); return; }
-    if (rows.some((row) => !row.name.trim() || !row.division_id || row.member_division.length > 40)) { setError("참가자 이름, 부문, 부수를 확인해주세요."); return; }
+    if (rows.some((row) => !row.cancel && (!row.name.trim() || !row.division_id || !row.member_division.trim() || row.member_division.trim().length > 40))) { setError("모든 참가자의 이름, 부문, 대회 부수를 입력해주세요."); return; }
     const canceled = rows.filter((row) => row.id && row.cancel);
     if (canceled.length && !window.confirm(`${canceled.map((row) => row.name).join(", ")} 참가 신청을 취소하시겠습니까? 기존 경기 결과가 있으면 취소할 수 없습니다.`)) return;
     setError("");
     try {
-      await saveRoster({ id, group_id: groupId, rows: rows.map((row) => ({ ...(row.id ? { id: row.id } : {}), division_id: row.division_id, name: row.name.trim(), member_division: row.member_division.trim() || null, member_id: row.member_id, pre_member_id: row.pre_member_id, ...(row.cancel ? { cancel: true } : {}) })), ...(canceled.length ? { confirmation_intent: "CANCEL_TOURNAMENT_PARTICIPANTS" as const } : {}) }).unwrap();
+      await saveRoster({ id, group_id: groupId, rows: rows.map((row) => ({ ...(row.id ? { id: row.id, previous_member_division: row.previous_member_division } : {}), division_id: row.division_id, name: row.name.trim(), member_division: row.member_division.trim() || null, member_id: row.member_id, pre_member_id: row.pre_member_id, ...(row.cancel ? { cancel: true } : {}) })), ...(canceled.length ? { confirmation_intent: "CANCEL_TOURNAMENT_PARTICIPANTS" as const } : {}) }).unwrap();
       navigate(`/tournament/${id}`, { replace: true });
     } catch (reason) { setError((reason as { data?: { message?: string } }).data?.message ?? "신청 명단을 저장하지 못했습니다."); }
   };
@@ -89,15 +89,15 @@ export default function TournamentApply() {
     {managers.length > 0 && <Typography sx={{ mt: -1.5, mb: 2, fontSize: 11.5, color: "text.secondary" }}>단체신청은 리더·운영진으로 관리하는 클럽만 표시됩니다.</Typography>}
     {canAdd && <Box sx={{ borderTop: "1px solid #D9DDE6", pt: 1.5, mb: 2 }}><Typography sx={{ fontSize: 16, fontWeight: 900, mb: 1 }}>참가자 추가</Typography><TextField select fullWidth size="small" label="부문" value={selectedDivisionId} onChange={(event) => setAddDivisionId(String(event.target.value))} sx={{ mb: 1 }}>{divisions.map((division) => <MenuItem key={division.id} value={division.id}>{division.name}</MenuItem>)}</TextField>
       {groupId && <Button fullWidth variant="outlined" sx={{ mb: 1, fontWeight: 800 }} onClick={() => setLoadOpen(true)}>클럽 회원 불러오기</Button>}
-      <Box component="form" onSubmit={(event) => { event.preventDefault(); addManual(); }} sx={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 66px 62px", gap: 0.6 }}><TextField size="small" placeholder="이름" value={name} onChange={(event) => setName(event.target.value)} sx={fieldSx} /><TextField size="small" placeholder="부수" value={memberDivision} onChange={(event) => setMemberDivision(event.target.value)} sx={fieldSx} /><Button type="submit" variant="contained" sx={{ fontWeight: 800 }}>추가</Button></Box>
+      <Box component="form" onSubmit={(event) => { event.preventDefault(); addManual(); }} sx={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 66px 62px", gap: 0.6 }}><TextField size="small" placeholder="이름" value={name} onChange={(event) => setName(event.target.value)} sx={fieldSx} /><TextField size="small" placeholder="부수 *" required value={memberDivision} onChange={(event) => setMemberDivision(event.target.value)} sx={fieldSx} /><Button type="submit" variant="contained" sx={{ fontWeight: 800 }}>추가</Button></Box>
     </Box>}
     {loadingRoster && <Box sx={{ textAlign: "center", py: 2 }}><CircularProgress size={22} /></Box>}
     {!loadingRoster && divisions.map((division) => <Box key={division.id} sx={{ mb: 2 }}><Stack direction="row" alignItems="center" sx={{ mb: 0.6 }}><Typography sx={{ fontSize: 17, fontWeight: 900, flex: 1 }}>{division.name}</Typography><Typography sx={{ fontSize: 12, color: "text.secondary" }}>{rows.filter((row) => row.division_id === division.id && !row.cancel).length}명</Typography></Stack><Divider />
-      {rows.filter((row) => row.division_id === division.id).map((row) => <Box key={row.key} sx={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 62px 72px", gap: 0.6, alignItems: "center", py: 0.6, borderBottom: "1px solid #ECEFF5", opacity: row.cancel ? 0.5 : 1 }}><TextField size="small" value={row.name} disabled={!canEdit || !!row.cancel} onChange={(event) => updateRow(row.key, { name: event.target.value })} sx={fieldSx} inputProps={{ "aria-label": "참가자 이름" }} /><TextField size="small" value={row.member_division} disabled={!canEdit || !!row.cancel} onChange={(event) => updateRow(row.key, { member_division: event.target.value })} sx={fieldSx} inputProps={{ "aria-label": "참가자 부수" }} /><Button size="small" color={row.cancel ? "primary" : "error"} disabled={!canEdit} onClick={() => { if (row.id) updateRow(row.key, { cancel: !row.cancel }); else { setRows((current) => current.filter((item) => item.key !== row.key)); setDirty(true); } }}>{row.cancel ? "되돌리기" : row.id ? "취소" : "삭제"}</Button>
+      {rows.filter((row) => row.division_id === division.id).map((row) => <Box key={row.key} sx={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 62px 72px", gap: 0.6, alignItems: "center", py: 0.6, borderBottom: "1px solid #ECEFF5", opacity: row.cancel ? 0.5 : 1 }}><TextField size="small" value={row.name} disabled={!canEdit || !!row.cancel} onChange={(event) => updateRow(row.key, { name: event.target.value })} sx={fieldSx} inputProps={{ "aria-label": "참가자 이름" }} /><TextField size="small" placeholder="부수 *" required error={!row.cancel && !row.member_division.trim()} value={row.member_division} disabled={!canEdit || !!row.cancel} onChange={(event) => updateRow(row.key, { member_division: event.target.value })} sx={fieldSx} inputProps={{ "aria-label": "대회 참가 부수", maxLength: 40 }} /><Button size="small" color={row.cancel ? "primary" : "error"} disabled={!canEdit} onClick={() => { if (row.id) updateRow(row.key, { cancel: !row.cancel }); else { setRows((current) => current.filter((item) => item.key !== row.key)); setDirty(true); } }}>{row.cancel ? "되돌리기" : row.id ? "취소" : "삭제"}</Button>
       </Box>)}
       {!rows.some((row) => row.division_id === division.id) && <Typography sx={{ py: 1, fontSize: 13, color: "text.secondary" }}>등록된 참가자가 없습니다.</Typography>}
     </Box>)}
     <Stack direction="row" spacing={1}><Button fullWidth variant="contained" color="inherit" onClick={() => navigate(`/tournament/${id}`)} sx={{ height: 44, fontWeight: 900 }}>이전</Button><Button fullWidth variant="contained" disabled={saving || loadingRoster || !canEdit || !rows.length} onClick={() => void submit()} sx={{ height: 44, fontWeight: 900 }}>신청 명단 저장</Button></Stack>
-    <Dialog open={loadOpen} onClose={() => setLoadOpen(false)} fullWidth maxWidth="sm"><DialogTitle sx={{ fontWeight: 900 }}>클럽 회원 불러오기</DialogTitle><DialogContent dividers><Typography sx={{ fontSize: 13, mb: 1, color: "text.secondary" }}>선택한 회원을 {divisions.find((division) => division.id === selectedDivisionId)?.name}에 추가합니다.</Typography><Box sx={{ maxHeight: 400, overflowY: "auto" }}>{clubMembers.map((member) => <FormControlLabel key={member.id} sx={{ display: "flex", mx: 0 }} control={<Checkbox checked={selectedMembers.includes(member.id)} onChange={(event) => setSelectedMembers((current) => event.target.checked ? [...current, member.id] : current.filter((value) => value !== member.id))} />} label={`${member.name ?? ""}${member.division ? ` ${member.division}` : ""}${member.is_pre_member ? " · 사전등록" : ""}`} />)}</Box></DialogContent><DialogActions><Button onClick={() => setLoadOpen(false)}>취소</Button><Button variant="contained" disabled={!selectedMembers.length} onClick={loadMembers}>선택한 {selectedMembers.length}명 추가</Button></DialogActions></Dialog>
+    <Dialog open={loadOpen} onClose={() => setLoadOpen(false)} fullWidth maxWidth="sm"><DialogTitle sx={{ fontWeight: 900 }}>클럽 회원 불러오기</DialogTitle><DialogContent dividers><Typography sx={{ fontSize: 13, mb: 1, color: "text.secondary" }}>선택한 회원을 {divisions.find((division) => division.id === selectedDivisionId)?.name}에 추가합니다. 클럽 부수는 참고용이며, 추가 후 대회 부수를 반드시 입력해주세요.</Typography><Box sx={{ maxHeight: 400, overflowY: "auto" }}>{clubMembers.map((member) => <FormControlLabel key={member.id} sx={{ display: "flex", mx: 0 }} control={<Checkbox checked={selectedMembers.includes(member.id)} onChange={(event) => setSelectedMembers((current) => event.target.checked ? [...current, member.id] : current.filter((value) => value !== member.id))} />} label={`${member.name ?? ""}${member.division ? ` ${member.division}` : ""}${member.is_pre_member ? " · 사전등록" : ""}`} />)}</Box></DialogContent><DialogActions><Button onClick={() => setLoadOpen(false)}>취소</Button><Button variant="contained" disabled={!selectedMembers.length} onClick={loadMembers}>선택한 {selectedMembers.length}명 추가</Button></DialogActions></Dialog>
   </Box>;
 }

@@ -495,6 +495,7 @@ router.put('/tournaments/:id/applications/roster', requireAuth, async (req, res)
       division_id: z.string().uuid(),
       name: z.string().trim().min(1).max(120),
       member_division: z.string().trim().max(40).nullable(),
+      previous_member_division: z.string().nullable().optional(),
       member_id: z.number().int().positive().nullable().optional(),
       pre_member_id: z.string().uuid().nullable().optional(),
       cancel: z.boolean().optional(),
@@ -502,6 +503,7 @@ router.put('/tournaments/:id/applications/roster', requireAuth, async (req, res)
     confirmation_intent: z.literal('CANCEL_TOURNAMENT_PARTICIPANTS').optional(),
   }).strict().safeParse(req.body);
   if (!id.success || !body.success) return res.status(400).json({ message: '신청 명단이 올바르지 않습니다.' });
+  if (body.data.rows.some((row) => !row.cancel && !row.member_division?.trim())) return res.status(400).json({ message: '모든 참가자의 대회 부수를 입력해주세요.' });
   const userId = Number(req.user.sub);
   const client = await pool.connect();
   try {
@@ -539,6 +541,7 @@ router.put('/tournaments/:id/applications/roster', requireAuth, async (req, res)
     for (const row of body.data.rows) {
       const saved = row.id ? existingById.get(row.id) : null;
       if (row.id && !saved) { await client.query('ROLLBACK'); return res.status(409).json({ message: '신청 명단이 변경되었습니다.' }); }
+      if (saved && saved.member_division !== row.member_division && row.previous_member_division !== saved.member_division) { await client.query('ROLLBACK'); return res.status(409).json({ message: '참가자의 부수가 변경되었습니다. 새로고침 후 다시 수정해주세요.' }); }
       if (!body.data.group_id) {
         if (row.member_id && row.member_id !== userId || row.pre_member_id) { await client.query('ROLLBACK'); return res.status(403).json({ message: '본인만 개인 신청할 수 있습니다.' }); }
       } else if (!saved && row.pre_member_id) {
@@ -572,13 +575,35 @@ router.put('/tournaments/:id/applications/roster', requireAuth, async (req, res)
       const saved = row.id ? existingById.get(row.id) : null;
       if (saved && row.cancel) await client.query(`UPDATE tournament_participants SET status = 'withdrawn' WHERE id = $1`, [saved.id]);
       else if (saved && (saved.name !== row.name || saved.member_division !== row.member_division || saved.division_id !== row.division_id)) {
-        const status = pooledDivisions.has(saved.division_id) ? saved.status : 'applied';
+        const status = saved.status;
         await client.query(`UPDATE tournament_participants SET division_id = $1, name = $2, member_division = $3, status = $4 WHERE id = $5`, [row.division_id, row.name, row.member_division, status, saved.id]);
       } else if (!saved) await client.query(`INSERT INTO tournament_participants (division_id, member_id, pre_member_id, source_group_id, name, member_division, status) VALUES ($1, $2, $3, $4, $5, $6, 'applied')`, [row.division_id, body.data.group_id ? row.member_id ?? null : userId, row.pre_member_id ?? null, body.data.group_id, row.name, row.member_division]);
     }
     await client.query('COMMIT');
     return res.json({ message: '신청 명단을 저장했습니다.' });
   } catch (error) { await client.query('ROLLBACK'); console.error('Tournament application roster save error:', error); return res.status(500).json({ message: '신청 명단을 저장할 수 없습니다.' }); }
+  finally { client.release(); }
+});
+
+// Only the event-specific division changes; participant identity, status and competition data stay intact.
+router.patch('/tournaments/:id/participants/:participantId/division', requireAuth, async (req, res) => {
+  const ids = z.object({ id: z.string().uuid(), participantId: z.string().uuid() }).safeParse(req.params);
+  const body = z.object({ member_division: z.string().trim().min(1).max(40), previous_member_division: z.string().nullable() }).strict().safeParse(req.body);
+  if (!ids.success || !body.success) return res.status(400).json({ message: '대회 부수를 입력해주세요.' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const found = await client.query('SELECT * FROM tournaments WHERE id = $1 FOR UPDATE', [ids.data.id]);
+    if (!found.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ message: '대회를 찾을 수 없습니다.' }); }
+    const userId = Number(req.user.sub);
+    if (!await hasPremiumSubscription(client, userId) || !await canManageHostGroup(client, found.rows[0].host_group_id, userId)) { await client.query('ROLLBACK'); return res.status(403).json({ message: '대회 관리 권한이 필요합니다.' }); }
+    const participant = await client.query(`SELECT p.id, p.member_division FROM tournament_participants p JOIN tournament_divisions d ON d.id = p.division_id WHERE d.tournament_id = $1 AND p.id = $2 FOR UPDATE OF p`, [ids.data.id, ids.data.participantId]);
+    if (!participant.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ message: '참가자를 찾을 수 없습니다.' }); }
+    if (participant.rows[0].member_division !== body.data.previous_member_division) { await client.query('ROLLBACK'); return res.status(409).json({ message: '참가자의 부수가 변경되었습니다. 새로고침 후 다시 수정해주세요.' }); }
+    await client.query('UPDATE tournament_participants SET member_division = $1 WHERE id = $2', [body.data.member_division, ids.data.participantId]);
+    await client.query('COMMIT');
+    return res.json({ message: '대회 부수를 수정했습니다.' });
+  } catch (error) { await client.query('ROLLBACK'); console.error('Tournament participant division update error:', error); return res.status(500).json({ message: '대회 부수를 수정하지 못했습니다.' }); }
   finally { client.release(); }
 });
 
@@ -598,8 +623,8 @@ router.get('/tournaments/:id/divisions/:divisionId/participants', optionalAuth, 
 router.post('/tournaments/:id/divisions/:divisionId/applications', requireAuth, async (req, res) => {
   const ids = z.object({ id: z.string().uuid(), divisionId: z.string().uuid() }).safeParse(req.params);
   const body = z.discriminatedUnion('kind', [
-    z.object({ kind: z.literal('individual'), member_division: z.string().trim().max(40).nullable().optional() }).strict(),
-    z.object({ kind: z.literal('club'), group_id: z.string().min(1), members: z.array(z.union([z.object({ member_id: z.number().int().positive() }).strict(), z.object({ pre_member_id: z.string().uuid() }).strict()])).min(1).max(100) }).strict(),
+    z.object({ kind: z.literal('individual'), member_division: z.string().trim().min(1).max(40) }).strict(),
+    z.object({ kind: z.literal('club'), group_id: z.string().min(1), members: z.array(z.union([z.object({ member_id: z.number().int().positive(), member_division: z.string().trim().min(1).max(40) }).strict(), z.object({ pre_member_id: z.string().uuid(), member_division: z.string().trim().min(1).max(40) }).strict()])).min(1).max(100) }).strict(),
   ]).safeParse(req.body);
   if (!ids.success || !body.success) return res.status(400).json({ message: '참가 신청 정보가 올바르지 않습니다.' });
   const userId = Number(req.user.sub);
@@ -631,11 +656,11 @@ router.post('/tournaments/:id/divisions/:divisionId/applications', requireAuth, 
         if ('member_id' in item) {
           const member = await client.query(`SELECT gm.user_id, COALESCE(NULLIF(u.name, ''), NULLIF(u.nickname, '')) AS name, gm.division FROM group_members gm JOIN users u ON u.id = gm.user_id WHERE gm.group_id = $1 AND gm.user_id = $2 AND u.deleted_at IS NULL`, [body.data.group_id, item.member_id]);
           if (!member.rows[0]?.name) { await client.query('ROLLBACK'); return res.status(400).json({ message: '클럽 회원 명단이 변경되었습니다.' }); }
-          entries.push({ member_id: member.rows[0].user_id, pre_member_id: null, name: member.rows[0].name, member_division: member.rows[0].division, source_group_id: body.data.group_id });
+          entries.push({ member_id: member.rows[0].user_id, pre_member_id: null, name: member.rows[0].name, member_division: item.member_division, source_group_id: body.data.group_id });
         } else {
           const member = await client.query(`SELECT id, name, division, linked_user_id FROM group_pre_members WHERE id = $1 AND group_id = $2 AND status = 'active'`, [item.pre_member_id, body.data.group_id]);
           if (!member.rows[0]) { await client.query('ROLLBACK'); return res.status(400).json({ message: '클럽 사전등록 명단이 변경되었습니다.' }); }
-          entries.push({ member_id: member.rows[0].linked_user_id, pre_member_id: member.rows[0].id, name: member.rows[0].name, member_division: member.rows[0].division, source_group_id: body.data.group_id });
+          entries.push({ member_id: member.rows[0].linked_user_id, pre_member_id: member.rows[0].id, name: member.rows[0].name, member_division: item.member_division, source_group_id: body.data.group_id });
         }
       }
     }

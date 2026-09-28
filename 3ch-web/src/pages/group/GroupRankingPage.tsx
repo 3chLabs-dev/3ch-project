@@ -29,9 +29,9 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import LanguageIcon from "@mui/icons-material/Language";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import SmsOutlinedIcon from "@mui/icons-material/SmsOutlined";
-import EmojiEventsOutlinedIcon from "@mui/icons-material/EmojiEventsOutlined";
 import QRCode from "react-qr-code";
 import CurvedShareIcon from "../../components/CurvedShareIcon";
+import EmojiEventsOutlinedIcon from "@mui/icons-material/EmojiEventsOutlined";
 import type { PointRankingRow, ThemeRankingRow } from "../../features/group/groupApi";
 import { useGetGroupPointRankingQuery, useUpdateGroupRankingVisibilityMutation } from "../../features/group/groupApi";
 
@@ -45,10 +45,18 @@ export default function GroupRankingPage() {
     : backMode === "ranking"
       ? "/ranking"
       : `/club/${groupId}`;
-  const [selectedYear, setSelectedYear] = useState<number | undefined>(undefined);
+  const requestedYear = Number(searchParams.get("year"));
+  const [selectedYear, setSelectedYear] = useState<number | undefined>(
+    Number.isInteger(requestedYear) && requestedYear > 2000 ? requestedYear : undefined,
+  );
   const [selectedSeasonId, setSelectedSeasonId] = useState<string | undefined>(searchParams.get("season") ?? undefined);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
-  const [rankingTab, setRankingTab] = useState("league");
+  const requestedTab = searchParams.get("tab");
+  const [rankingTab, setRankingTab] = useState(
+    requestedTab && ["league", "attendance", "championships", "lower_championships", "wins", "set_ratio", "runners_up", "prelim_firsts"].includes(requestedTab)
+      ? requestedTab
+      : "league",
+  );
   const [isDownloading, setIsDownloading] = useState(false);
   const [updateRankingVisibility, visibilityState] = useUpdateGroupRankingVisibilityMutation();
   const exportRef = useRef<HTMLDivElement>(null);
@@ -81,7 +89,11 @@ export default function GroupRankingPage() {
   };
 
   const appUrl = String(import.meta.env.VITE_APP_URL || window.location.origin).replace(/\/$/, "");
-  const rankingShareUrl = `${appUrl}/club/${groupId}/ranking${data?.season_id ? `?season=${encodeURIComponent(selectedSeasonId ?? data.season_id)}` : ""}`;
+  const shareParams = new URLSearchParams();
+  if (selectedSeasonId ?? data?.season_id) shareParams.set("season", selectedSeasonId ?? data?.season_id ?? "");
+  else shareParams.set("year", String(activeYear));
+  if (rankingTab !== "league") shareParams.set("tab", rankingTab);
+  const rankingShareUrl = `${appUrl}/club/${groupId}/ranking?${shareParams.toString()}`;
 
   const handleDownloadRanking = async () => {
     if (!exportRef.current || isDownloading) return;
@@ -214,6 +226,9 @@ export default function GroupRankingPage() {
           rows={data.themes?.[rankingTab as keyof typeof data.themes] ?? []}
           currentUserId={data.currentUserId}
           onSelect={(memberId) => navigate(`/club/${groupId}/member/${memberId}`)}
+          onDownload={handleDownloadRanking}
+          onShare={() => setShareDialogOpen(true)}
+          isDownloading={isDownloading}
         />
       )}
 
@@ -222,7 +237,22 @@ export default function GroupRankingPage() {
         <Typography sx={{ mt: 0.4, mb: 2, color: "#6B7280", fontSize: 13, fontWeight: 700 }}>
           {data.season?.name ?? `${activeYear}년`}
         </Typography>
-        <PointRankingList rows={data.league.rankings} currentUserId={data.currentUserId} onSelect={() => undefined} showAll />
+        {rankingTab === "league" ? (
+          <Stack spacing={2}>
+            <Typography sx={{ fontSize: 18, fontWeight: 900 }}>리그</Typography>
+            <PointRankingList rows={data.league.rankings} currentUserId={data.currentUserId} onSelect={() => undefined} showAll />
+            <Typography sx={{ fontSize: 18, fontWeight: 900 }}>대회</Typography>
+            <PointRankingList rows={data.tournament.rankings} currentUserId={data.currentUserId} onSelect={() => undefined} showAll />
+          </Stack>
+        ) : (
+          <ThemeRankingPanel
+            theme={rankingTab}
+            rows={data.themes?.[rankingTab as keyof typeof data.themes] ?? []}
+            currentUserId={data.currentUserId}
+            onSelect={() => undefined}
+            showAll
+          />
+        )}
       </Box>
 
       <RankingShareDialog
@@ -265,8 +295,6 @@ function SectionHeader({
         {title}
       </Typography>
       <Stack direction="row" spacing={0.5} alignItems="center">
-        {onDownload && <IconButton size="small" disabled={isDownloading} onClick={onDownload} aria-label="순위 이미지 다운로드" sx={{ border: "1px solid #D1D5DB", borderRadius: 1 }}><DownloadOutlinedIcon sx={{ fontSize: 18 }} /></IconButton>}
-        {onShare && <IconButton size="small" onClick={onShare} aria-label="순위 공유" sx={{ border: "1px solid #D1D5DB", borderRadius: 1 }}><CurvedShareIcon sx={{ fontSize: 19 }} /></IconButton>}
         <Button
           size="small"
           variant="outlined"
@@ -275,6 +303,8 @@ function SectionHeader({
         >
           자세히 보기
         </Button>
+        {onDownload && <IconButton size="small" disabled={isDownloading} onClick={onDownload} aria-label="현재 순위 이미지 다운로드" sx={{ border: "1px solid #D1D5DB", borderRadius: 1 }}><DownloadOutlinedIcon sx={{ fontSize: 18 }} /></IconButton>}
+        {onShare && <IconButton size="small" onClick={onShare} aria-label="현재 순위 공유" sx={{ border: "1px solid #D1D5DB", borderRadius: 1 }}><CurvedShareIcon sx={{ fontSize: 19 }} /></IconButton>}
       </Stack>
     </Stack>
   );
@@ -290,7 +320,7 @@ const THEME_META: Record<string, { title: string; description: string; suffix: s
   prelim_firsts: { title: "예선왕", description: "예선 풀리그·조별리그 1위 횟수 순위", suffix: "회" },
 };
 
-function ThemeRankingPanel({ theme, rows, currentUserId, onSelect }: { theme: string; rows: ThemeRankingRow[]; currentUserId: number; onSelect: (memberId: number) => void }) {
+function ThemeRankingPanel({ theme, rows, currentUserId, onSelect, showAll = false, onDownload, onShare, isDownloading = false }: { theme: string; rows: ThemeRankingRow[]; currentUserId: number; onSelect: (memberId: number) => void; showAll?: boolean; onDownload?: () => void; onShare?: () => void; isDownloading?: boolean }) {
   const [visibleCount, setVisibleCount] = useState(10);
   const meta = THEME_META[theme] ?? THEME_META.attendance;
   const topRank = rows[0]?.rank;
@@ -307,37 +337,46 @@ function ThemeRankingPanel({ theme, rows, currentUserId, onSelect }: { theme: st
   const remainingRows = winner ? rows.filter((row) => row !== winner) : rows;
   const valueLabel = (row: ThemeRankingRow) => `${theme === "set_ratio" ? row.value.toFixed(1) : row.value}${meta.suffix}`;
   if (!winner) {
-    return <Stack spacing={0.5}><Typography sx={{ fontSize: 18, fontWeight: 900 }}>{meta.title}</Typography><Typography sx={{ fontSize: 12, color: "text.secondary", fontWeight: 700 }}>{meta.description}</Typography><EmptyRankingCard /></Stack>;
+    return <Stack spacing={1.5}><Stack direction="row" alignItems="flex-end" justifyContent="space-between" spacing={1}><Box><Typography sx={{ fontSize: 18, fontWeight: 900 }}>{meta.title}</Typography><Typography sx={{ mt: 0.2, fontSize: 12, color: "text.secondary", fontWeight: 700 }}>{meta.description}</Typography></Box>{(onDownload || onShare) && <Stack direction="row" spacing={0.5}>{onDownload && <IconButton size="small" disabled={isDownloading} onClick={onDownload} aria-label="현재 순위 이미지 다운로드" sx={{ border: "1px solid #D1D5DB", borderRadius: 1 }}><DownloadOutlinedIcon sx={{ fontSize: 18 }} /></IconButton>}{onShare && <IconButton size="small" onClick={onShare} aria-label="현재 순위 공유" sx={{ border: "1px solid #D1D5DB", borderRadius: 1 }}><CurvedShareIcon sx={{ fontSize: 19 }} /></IconButton>}</Stack>}</Stack><EmptyRankingCard /></Stack>;
   }
   return (
-    <Box sx={{ bgcolor: "#EAF1FA", borderRadius: 2, p: 1.5 }}>
-      <Typography sx={{ fontSize: 18, fontWeight: 900 }}>{meta.title}</Typography>
-      <Typography sx={{ mb: 1.5, fontSize: 12, color: "#64748B", fontWeight: 700 }}>{meta.description}</Typography>
-      <Card elevation={0} onClick={() => winner.member_id != null && onSelect(winner.member_id)} sx={{ mb: 1, borderRadius: 1.5, cursor: winner.member_id != null ? "pointer" : "default", border: "1px solid #D8E3F0" }}>
-        <CardContent sx={{ py: 2, px: 2, "&:last-child": { pb: 2 } }}>
-          <Stack alignItems="center" spacing={0.6}>
-            <Box sx={{ width: 36, height: 36, borderRadius: "50%", bgcolor: "#FFC94A", color: "#FFF", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 3px 8px rgba(217,160,0,.28)" }}><EmojiEventsOutlinedIcon sx={{ fontSize: 21 }} /></Box>
-            <Stack direction="row" spacing={0.55} alignItems="center"><Typography sx={{ fontSize: 18, fontWeight: 900 }}>{winner.name}</Typography><DivisionBadge division={winner.division} /></Stack>
-            {winner.is_pre_registered && <Typography sx={{ fontSize: 9, fontWeight: 800, color: "#64748B" }}>사전등록</Typography>}
-            <Typography sx={{ fontSize: 22, lineHeight: 1, color: "#2878F0", fontWeight: 900 }}>{valueLabel(winner)}</Typography>
-            {theme === "set_ratio" && <Typography sx={{ fontSize: 10, color: "#64748B", fontWeight: 700 }}>{winner.matches_played}경기 · {winner.sets_for}/{winner.sets_against}세트</Typography>}
-          </Stack>
-        </CardContent>
-      </Card>
-      <Stack spacing={0.7}>
-        {remainingRows.slice(0, Math.max(0, visibleCount - 1)).map((row) => {
+    <Box>
+      <Stack direction="row" alignItems="flex-end" justifyContent="space-between" spacing={1} sx={{ mb: 1.5 }}>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography sx={{ fontSize: 18, fontWeight: 900 }}>{meta.title}</Typography>
+          <Typography sx={{ mt: 0.2, fontSize: 12, color: "#64748B", fontWeight: 700 }}>{meta.description}</Typography>
+        </Box>
+        {(onDownload || onShare) && <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
+          {onDownload && <IconButton size="small" disabled={isDownloading} onClick={onDownload} aria-label="현재 순위 이미지 다운로드" sx={{ border: "1px solid #D1D5DB", borderRadius: 1 }}><DownloadOutlinedIcon sx={{ fontSize: 18 }} /></IconButton>}
+          {onShare && <IconButton size="small" onClick={onShare} aria-label="현재 순위 공유" sx={{ border: "1px solid #D1D5DB", borderRadius: 1 }}><CurvedShareIcon sx={{ fontSize: 19 }} /></IconButton>}
+        </Stack>}
+      </Stack>
+      <FeaturedRankingCard
+        name={winner.name}
+        division={winner.division}
+        isPreRegistered={winner.is_pre_registered}
+        value={valueLabel(winner)}
+        detail={theme === "set_ratio" ? `${winner.matches_played}경기 · ${winner.sets_for}/${winner.sets_against}세트` : undefined}
+        canOpen={winner.member_id != null}
+        onClick={() => winner.member_id != null && onSelect(winner.member_id)}
+      />
+      <Stack spacing={0.8} sx={{ mt: 0.8 }}>
+        {(showAll ? remainingRows : remainingRows.slice(0, Math.max(0, visibleCount - 1))).map((row) => {
           const isMine = row.member_id != null && row.member_id === currentUserId;
-          return <Card key={row.member_id ?? `pre-${row.pre_member_id}`} elevation={0} onClick={() => row.member_id != null && onSelect(row.member_id)} sx={{ borderRadius: 1.2, cursor: row.member_id != null ? "pointer" : "default", bgcolor: isMine ? "#EEF2FF" : "#FFF", border: "1px solid #DCE5F0" }}>
-            <CardContent sx={{ py: 1, px: 1.25, "&:last-child": { pb: 1 } }}>
-              <Stack direction="row" alignItems="center" spacing={1}>
-                <Typography sx={{ width: 22, textAlign: "center", color: "#64748B", fontSize: 13, fontWeight: 900 }}>{row.rank}</Typography>
-                <Box sx={{ flex: 1, minWidth: 0 }}><Stack direction="row" alignItems="center" spacing={0.5}><Typography sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: isMine ? "#1D4ED8" : "#111827", fontSize: 14, fontWeight: 900 }}>{row.name}</Typography><DivisionBadge division={row.division} />{row.is_pre_registered && <Typography sx={{ fontSize: 9, color: "#64748B", fontWeight: 800 }}>사전등록</Typography>}</Stack>{theme === "set_ratio" && <Typography sx={{ mt: 0.15, fontSize: 9.5, color: "#94A3B8", fontWeight: 700 }}>{row.matches_played}경기 · {row.sets_for}/{row.sets_against}세트</Typography>}</Box>
-                <Typography sx={{ color: "#2878F0", fontSize: 17, fontWeight: 900 }}>{valueLabel(row)}</Typography>
-              </Stack>
-            </CardContent>
-          </Card>;
+          return <RankingRowCard
+            key={row.member_id ?? `pre-${row.pre_member_id}`}
+            rank={row.rank}
+            name={row.name}
+            division={row.division}
+            isPreRegistered={row.is_pre_registered}
+            value={valueLabel(row)}
+            detail={theme === "set_ratio" ? `${row.matches_played}경기 · ${row.sets_for}/${row.sets_against}세트` : undefined}
+            isMine={isMine}
+            canOpen={row.member_id != null}
+            onClick={() => row.member_id != null && onSelect(row.member_id)}
+          />;
         })}
-        {visibleCount < rows.length && <Button variant="outlined" endIcon={<ExpandMoreIcon />} onClick={() => setVisibleCount((count) => Math.min(count + 10, rows.length))} sx={{ bgcolor: "#FFF", borderColor: "#8AB8F8", color: "#2563EB", fontWeight: 900 }}>더보기</Button>}
+        {!showAll && visibleCount < rows.length && <Button variant="outlined" endIcon={<ExpandMoreIcon />} onClick={() => setVisibleCount((count) => Math.min(count + 10, rows.length))} sx={{ bgcolor: "#FFF", borderColor: "#8AB8F8", color: "#2563EB", fontWeight: 900 }}>더보기</Button>}
       </Stack>
     </Box>
   );
@@ -359,90 +398,41 @@ function PointRankingList({
     return <EmptyRankingCard />;
   }
 
-  const visibleRows = showAll ? rows : rows.slice(0, visibleCount);
+  const winner = rows[0];
+  const remainingRows = rows.slice(1);
+  const visibleRows = showAll ? remainingRows : remainingRows.slice(0, Math.max(0, visibleCount - 1));
   const myRow = rows.find((row) => row.member_id === currentUserId);
-  const showPinnedMine = !showAll && myRow && !visibleRows.includes(myRow);
+  const showPinnedMine = !showAll && myRow && myRow !== winner && !visibleRows.includes(myRow);
   const displayRows = showPinnedMine ? [...visibleRows, myRow] : visibleRows;
 
   return (
     <Stack spacing={0.8}>
+      <FeaturedRankingCard
+        name={winner.name}
+        division={winner.division}
+        isPreRegistered={winner.is_pre_registered}
+        value={`${winner.total_points} 포인트`}
+        canOpen={winner.member_id != null}
+        isMine={winner.member_id != null && winner.member_id === currentUserId}
+        onClick={() => winner.member_id != null && onSelect(winner.member_id)}
+      />
       {displayRows.map((row) => {
         const memberId = row.member_id;
         const isMine = memberId != null && memberId === currentUserId;
         const canOpenMember = memberId != null;
-        const rankBadgeBg = row.rank === 1 ? "#E9C23B" : row.rank === 2 ? "#D1D5DB" : row.rank === 3 ? "#D6A348" : "#F3F4F6";
-        const rankBadgeColor = row.rank && row.rank <= 3 ? "#FFF" : "#374151";
-
         return (
-          <Card
+          <RankingRowCard
             key={row.member_id ?? `pre-${row.pre_member_id}`}
-            elevation={2}
+            rank={row.rank}
+            name={row.name}
+            division={row.division}
+            isPreRegistered={row.is_pre_registered}
+            value={`${row.total_points} 포인트`}
+            isMine={isMine}
+            canOpen={canOpenMember}
             onClick={() => { if (memberId != null) onSelect(memberId); }}
-            sx={{
-              order: showPinnedMine && row === myRow ? 3 : 1,
-              borderRadius: 0.85,
-              boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
-              bgcolor: isMine ? "#EEF2FF" : "#FFF",
-              cursor: canOpenMember ? "pointer" : "default",
-              "&:hover": canOpenMember ? { bgcolor: isMine ? "#E0E7FF" : "#F9FAFB" } : undefined,
-            }}
-          >
-            <CardContent sx={{ py: 0.95, px: 1.3, "&:last-child": { pb: 0.95 } }}>
-              <Stack direction="row" alignItems="center" spacing={0.75}>
-                <Box
-                  sx={{
-                    width: 42,
-                    height: 30,
-                    borderRadius: "5px 0 0 5px",
-                    clipPath: "polygon(0 0, 100% 0, 82% 100%, 0 100%)",
-                    bgcolor: rankBadgeBg,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontWeight: 900,
-                    fontSize: 13,
-                    color: rankBadgeColor,
-                    flexShrink: 0,
-                  }}
-                >
-                  {row.rank ?? "-"}
-                </Box>
-
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Stack direction="row" alignItems="center" spacing={0.5}>
-                    <Typography
-                      sx={{
-                        minWidth: 0,
-                        fontSize: 13.5,
-                        fontWeight: 900,
-                        color: isMine ? "#1D4ED8" : "#111827",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {row.name}
-                    </Typography>
-                    <DivisionBadge division={row.division} />
-                    {row.is_pre_registered && (
-                      <Typography sx={{ fontSize: 9, fontWeight: 800, color: "#6B7280", whiteSpace: "nowrap" }}>
-                        사전등록
-                      </Typography>
-                    )}
-                  </Stack>
-                </Box>
-
-                <Box sx={{ textAlign: "right", minWidth: 52 }}>
-                  <Typography sx={{ fontSize: 24, fontWeight: 900, color: "#1D4ED8", lineHeight: 1 }}>
-                    {row.total_points}
-                  </Typography>
-                  <Typography sx={{ fontSize: 10, color: "text.secondary", fontWeight: 700, lineHeight: 1.1 }}>
-                    포인트
-                  </Typography>
-                </Box>
-              </Stack>
-            </CardContent>
-          </Card>
+            order={showPinnedMine && row === myRow ? 3 : 1}
+          />
         );
       })}
       {!showAll && visibleCount < rows.length && (
@@ -456,6 +446,96 @@ function PointRankingList({
         </Button>
       )}
     </Stack>
+  );
+}
+
+function FeaturedRankingCard({ name, division, isPreRegistered, value, detail, canOpen, isMine = false, onClick }: {
+  name: string;
+  division?: string | null;
+  isPreRegistered?: boolean;
+  value: string;
+  detail?: string;
+  canOpen: boolean;
+  isMine?: boolean;
+  onClick: () => void;
+}) {
+  const valueParts = value.trim().match(/^([\d.,]+)\s*(.*)$/);
+  const valueNumber = valueParts?.[1] ?? value;
+  const valueUnit = valueParts?.[2] ?? "";
+  return (
+    <Card
+      elevation={2}
+      onClick={onClick}
+      sx={{
+        position: "relative",
+        minHeight: 154,
+        borderRadius: 1.2,
+        boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+        bgcolor: "#FFF",
+        cursor: canOpen ? "pointer" : "default",
+        "&:hover": canOpen ? { bgcolor: "#F9FAFB" } : undefined,
+      }}
+    >
+      <Box sx={{ position: "absolute", top: 12, left: 12, width: 48, height: 32, borderRadius: "5px 0 0 5px", clipPath: "polygon(0 0, 100% 0, 82% 100%, 0 100%)", bgcolor: "#E9C23B", color: "#FFF", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 900 }}>
+        1
+      </Box>
+      <CardContent sx={{ minHeight: 154, py: 2, px: 7.5, display: "flex", alignItems: "center", justifyContent: "center", "&:last-child": { pb: 2 } }}>
+        <Stack alignItems="center" spacing={0.65} sx={{ minWidth: 0 }}>
+          <Box sx={{ width: 36, height: 36, mb: 0.15, borderRadius: "50%", bgcolor: "#FFC94A", color: "#FFF", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 3px 8px rgba(217,160,0,.28)" }}>
+            <EmojiEventsOutlinedIcon sx={{ fontSize: 21 }} />
+          </Box>
+          <Stack direction="row" alignItems="center" justifyContent="center" spacing={0.5} sx={{ maxWidth: "100%" }}>
+            <Typography sx={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: isMine ? "#1D4ED8" : "#111827", fontSize: 18, fontWeight: 900 }}>{name}</Typography>
+            <DivisionBadge division={division} />
+            {isPreRegistered && <Typography sx={{ color: "#6B7280", fontSize: 9, fontWeight: 800, whiteSpace: "nowrap" }}>사전등록</Typography>}
+          </Stack>
+          <Stack direction="row" alignItems="baseline" justifyContent="center" spacing={0.35}>
+            <Typography sx={{ color: "#1D4ED8", fontSize: 23, lineHeight: 1, fontWeight: 900 }}>{valueNumber}</Typography>
+            {valueUnit && <Typography sx={{ color: "#6B7280", fontSize: 10, lineHeight: 1, fontWeight: 700 }}>{valueUnit}</Typography>}
+          </Stack>
+          {detail && <Typography sx={{ color: "#64748B", fontSize: 10, fontWeight: 700 }}>{detail}</Typography>}
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
+function RankingRowCard({ rank, name, division, isPreRegistered, value, detail, isMine, canOpen, onClick, order = 1 }: {
+  rank: number | null;
+  name: string;
+  division?: string | null;
+  isPreRegistered?: boolean;
+  value: string;
+  detail?: string;
+  isMine: boolean;
+  canOpen: boolean;
+  onClick: () => void;
+  order?: number;
+}) {
+  const rankBadgeBg = rank === 1 ? "#E9C23B" : rank === 2 ? "#D1D5DB" : rank === 3 ? "#D6A348" : "#F3F4F6";
+  const rankBadgeColor = rank != null && rank <= 3 ? "#FFF" : "#374151";
+  const [valueNumber, ...valueUnitParts] = value.split(" ");
+  const valueUnit = valueUnitParts.join(" ");
+  return (
+    <Card elevation={2} onClick={onClick} sx={{ order, borderRadius: 0.85, boxShadow: "0 4px 12px rgba(0,0,0,0.08)", bgcolor: isMine ? "#EEF2FF" : "#FFF", cursor: canOpen ? "pointer" : "default", "&:hover": canOpen ? { bgcolor: isMine ? "#E0E7FF" : "#F9FAFB" } : undefined }}>
+      <CardContent sx={{ py: 0.95, px: 1.3, "&:last-child": { pb: 0.95 } }}>
+        <Stack direction="row" alignItems="center" spacing={0.75}>
+          <Box sx={{ width: 42, height: 30, borderRadius: "5px 0 0 5px", clipPath: "polygon(0 0, 100% 0, 82% 100%, 0 100%)", bgcolor: rankBadgeBg, display: "flex", alignItems: "center", justifyContent: "center", color: rankBadgeColor, flexShrink: 0, fontSize: 13, fontWeight: 900 }}>{rank ?? "-"}</Box>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Stack direction="row" alignItems="center" spacing={0.5}>
+              <Typography sx={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: isMine ? "#1D4ED8" : "#111827", fontSize: 13.5, fontWeight: 900 }}>{name}</Typography>
+              <DivisionBadge division={division} />
+              {isPreRegistered && <Typography sx={{ color: "#6B7280", fontSize: 9, fontWeight: 800, whiteSpace: "nowrap" }}>사전등록</Typography>}
+            </Stack>
+            {detail && <Typography sx={{ mt: 0.15, color: "#94A3B8", fontSize: 9.5, fontWeight: 700 }}>{detail}</Typography>}
+          </Box>
+          <Box sx={{ minWidth: 58, textAlign: "right" }}>
+            <Typography sx={{ color: "#1D4ED8", fontSize: 22, lineHeight: 1, fontWeight: 900 }}>{valueNumber}</Typography>
+            {valueUnit && <Typography sx={{ color: "text.secondary", fontSize: 10, lineHeight: 1.1, fontWeight: 700 }}>{valueUnit}</Typography>}
+          </Box>
+        </Stack>
+      </CardContent>
+    </Card>
   );
 }
 

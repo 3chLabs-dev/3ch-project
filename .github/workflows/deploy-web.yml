@@ -60,13 +60,22 @@ jobs:
           VITE_TOSS_CLIENT_KEY: ${{ secrets.VITE_TOSS_CLIENT_KEY }}
         run: npm run build
 
+      - name: Stage Woorileague web files
+        run: |
+          mkdir -p 3ch-web/deploy
+          rsync -a \
+            --exclude='/woonse-admin/' \
+            --exclude='/wooriwoonse/' \
+            --exclude='/woonse-legal/' \
+            3ch-web/dist/ 3ch-web/deploy/
+
       - name: Upload to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_PEM_KEY }}
-          source: "3ch-web/dist/"
+          source: "3ch-web/deploy/"
           target: /var/www/3ch
           strip_components: 2
 

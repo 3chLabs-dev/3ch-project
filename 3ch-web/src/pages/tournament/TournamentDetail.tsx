@@ -1,8 +1,12 @@
+import { calculateTournamentFee } from "../../features/tournament/participationFee";
 import { useEffect, useRef, useState } from "react";
-import { Alert, Box, Button, CircularProgress, Divider, IconButton, MenuItem, Select, Stack, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, CircularProgress, Dialog, DialogContent, DialogTitle, Divider, IconButton, MenuItem, Select, Stack, TextField, Typography } from "@mui/material";
+import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
+import QRCode from "react-qr-code";
+import { createTossTransferLink, isSmartphoneBrowser, parseBankAccount } from "../../utils/paymentDeepLink";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useNavigate, useParams } from "react-router-dom";
-import { useGetTournamentQuery, useOpenTournamentMutation, useUpdateTournamentMutation } from "../../features/tournament/tournamentApi";
+import { useGetTournamentQuery, useGetTournamentParticipantsAllQuery, useOpenTournamentMutation, useUpdateTournamentMutation } from "../../features/tournament/tournamentApi";
 import TournamentParticipants from "./TournamentParticipants";
 
 const floatingBoxSx = { position: "fixed", bottom: "calc(56px + env(safe-area-inset-bottom))", left: "50%", transform: "translateX(-50%)", width: "min(calc(100% - 32px), 398px)", pb: 1, zIndex: 10 } as const;
@@ -18,8 +22,8 @@ const formatNames: Record<string, string> = { LEAGUE: "풀리그", GROUP: "조�
 const ruleNames: Record<string, string> = { BEST_OF_3: "3전 2선승제", BEST_OF_5: "5전 3선승제", THREE_SET: "3세트제" };
 const localDate = (value: string) => { const date = new Date(value); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`; };
 const localTime = (value: string) => new Date(value).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false });
-type DetailDraft = { title: string; date: string; start: string; end: string; application_deadline_at: string; venue_name: string; court_count: string; recruit_count: string };
-const draftFromTournament = (tournament: NonNullable<ReturnType<typeof useGetTournamentQuery>["data"]>["tournament"]): DetailDraft => ({ title: tournament.title, date: localDate(tournament.starts_at), start: localTime(tournament.starts_at), end: tournament.ends_at ? localTime(tournament.ends_at) : "", application_deadline_at: tournament.application_deadline_at ? `${localDate(tournament.application_deadline_at)}T${localTime(tournament.application_deadline_at)}` : "", venue_name: tournament.venue_name ?? "", court_count: String(tournament.court_count ?? ""), recruit_count: String(tournament.recruit_count ?? "") });
+type DetailDraft = { title: string; date: string; start: string; end: string; application_deadline_at: string; venue_name: string; court_count: string; recruit_count: string; notice: string; entry_fee: string; bank_account: string };
+const draftFromTournament = (tournament: NonNullable<ReturnType<typeof useGetTournamentQuery>["data"]>["tournament"]): DetailDraft => ({ notice: tournament.notice ?? "", entry_fee: String(tournament.entry_fee ?? ""), bank_account: tournament.bank_account ?? "", title: tournament.title, date: localDate(tournament.starts_at), start: localTime(tournament.starts_at), end: tournament.ends_at ? localTime(tournament.ends_at) : "", application_deadline_at: tournament.application_deadline_at ? `${localDate(tournament.application_deadline_at)}T${localTime(tournament.application_deadline_at)}` : "", venue_name: tournament.venue_name ?? "", court_count: String(tournament.court_count ?? ""), recruit_count: String(tournament.recruit_count ?? "") });
 
 export default function TournamentDetail() {
   const { id = "" } = useParams();
@@ -31,6 +35,9 @@ export default function TournamentDetail() {
   const [savedDraft, setSavedDraft] = useState<DetailDraft | null>(null);
   const initializedId = useRef("");
   const [error, setError] = useState("");
+  const [tossQrOpen, setTossQrOpen] = useState(false);
+  const [paymentGroupId, setPaymentGroupId] = useState("");
+  const { data: participantsData } = useGetTournamentParticipantsAllQuery(id, { skip: !id });
   const tournament = data?.tournament;
   useEffect(() => {
     if (tournament && initializedId.current !== tournament.id) {
@@ -44,6 +51,7 @@ export default function TournamentDetail() {
   const save = async (openAfterSave = false) => {
     if (!draft || saving || opening || (!hasChanges && !openAfterSave)) return;
     if (!draft.title.trim() || !draft.date || !draft.start) { setError("대회명, 날짜, 시작 시간을 입력해주세요."); return; }
+    if (draft.entry_fee && (!Number.isInteger(Number(draft.entry_fee)) || Number(draft.entry_fee) < 0 || Number(draft.entry_fee) > 100000000)) { setError("참가비를 0원 이상 1억원 이하의 정수로 입력해주세요."); return; }
     const start = new Date(`${draft.date}T${draft.start}:00`);
     const end = draft.end ? new Date(`${draft.date}T${draft.end}:00`) : null;
     const deadline = draft.application_deadline_at ? new Date(draft.application_deadline_at) : null;
@@ -52,7 +60,7 @@ export default function TournamentDetail() {
     if (tournament?.status === "draft" && deadline && deadline <= new Date()) { setError("참가 신청 마감은 현재 이후로 설정해주세요."); return; }
     try {
       if (hasChanges) {
-        await update({ id, body: { title: draft.title.trim(), starts_at: start.toISOString(), ends_at: end?.toISOString() ?? null, application_deadline_at: deadline?.toISOString() ?? null, venue_name: draft.venue_name.trim() || null, court_count: draft.court_count ? Number(draft.court_count) : null, recruit_count: draft.recruit_count ? Number(draft.recruit_count) : null } }).unwrap();
+        await update({ id, body: { notice: draft.notice.trim() || null, entry_fee: draft.entry_fee ? Number(draft.entry_fee) : null, bank_account: draft.bank_account.trim() || null, title: draft.title.trim(), starts_at: start.toISOString(), ends_at: end?.toISOString() ?? null, application_deadline_at: deadline?.toISOString() ?? null, venue_name: draft.venue_name.trim() || null, court_count: draft.court_count ? Number(draft.court_count) : null, recruit_count: draft.recruit_count ? Number(draft.recruit_count) : null } }).unwrap();
         setSavedDraft(draft);
       }
       if (openAfterSave && tournament?.status === "draft") await openTournament(id).unwrap();
@@ -73,6 +81,13 @@ export default function TournamentDetail() {
     <Select variant="standard" displayEmpty value={(draft?.[name] ?? "").split(":")[1] ?? ""} onChange={(event) => setDraft((current) => current ? { ...current, [name]: `${current[name].split(":")[0] || "00"}:${event.target.value}` } : current)} sx={selectSx}><MenuItem value="">분</MenuItem>{minutes.map((minute) => <MenuItem key={minute} value={minute}>{minute}</MenuItem>)}</Select>
   </Stack>;
   const canEnterApplication = new Date() < new Date(tournament.starts_at) && (tournament.status === "open" || tournament.can_manage);
+  const accountText = tournament.can_manage ? draft?.bank_account ?? "" : tournament.bank_account ?? "";
+  const account = parseBankAccount(accountText);
+  const payers = new Map<string, string>();
+  for (const participant of participantsData?.participants ?? []) payers.set(participant.source_group_id ?? participant.id, participant.source_group_id ? participant.club_name : `${participant.name} (개인)`);
+  const paymentParticipants = (participantsData?.participants ?? []).filter((participant) => (participant.source_group_id ?? participant.id) === paymentGroupId);
+  const paymentAmount = calculateTournamentFee(paymentParticipants, tournament.divisions ?? [], tournament.entry_fee).amount ?? 0;
+  const tossLink = account && paymentAmount > 0 ? createTossTransferLink(account.bankName, account.accountNumber, paymentAmount) : null;
   return <Box sx={{ pb: canEnterApplication ? 11 : 4 }}>
     <Stack direction="row" alignItems="center" sx={{ mb: 2 }}><IconButton onClick={() => navigate("/league")} size="small" sx={{ mr: 0.5 }}><ArrowBackIcon /></IconButton><Typography fontWeight={900} fontSize={18} sx={{ flex: 1 }}>{tournament.title}</Typography></Stack>
     {error && <Alert severity="error" sx={{ mb: 1 }}>{error}</Alert>}
@@ -85,6 +100,19 @@ export default function TournamentDetail() {
       <Box sx={rowSx}><Typography sx={labelSx}>코트 수</Typography>{tournament.can_manage ? field("court_count", "number") : <Typography sx={valueSx}>{tournament.court_count ? `${tournament.court_count}개` : "미정"}</Typography>}</Box><Divider />
       <Box sx={rowSx}><Typography sx={labelSx}>참가자 수</Typography>{tournament.can_manage ? field("recruit_count", "number") : <Typography sx={valueSx}>{tournament.recruit_count ? `${tournament.recruit_count}명 (전체 부문 합계)` : "미정"}</Typography>}</Box><Divider />
       <Box sx={rowSx}><Typography sx={labelSx}>주최 클럽</Typography><Typography sx={valueSx}>{tournament.host_group_name ?? ""}</Typography></Box><Divider />
+      <Box sx={{ py: 1.5 }}>
+        <Typography fontWeight={800} fontSize={14} sx={{ mb: 0.8 }}>안내사항</Typography>
+        {tournament.can_manage ? <TextField fullWidth multiline minRows={3} size="small" placeholder="내용을 입력해주세요" value={draft?.notice ?? ""} onChange={(event) => setDraft((current) => current ? { ...current, notice: event.target.value } : current)} /> : <Typography fontSize={13} sx={{ whiteSpace: "pre-wrap" }}>{tournament.notice || "등록된 안내사항이 없습니다."}</Typography>}
+        <Typography fontWeight={800} fontSize={14} sx={{ mt: 1.5, mb: 0.8 }}>참가비 <Typography component="span" fontSize={12} color="text.secondary">(1인 · 라운드당)</Typography></Typography>
+        {tournament.can_manage ? <TextField fullWidth size="small" type="number" placeholder="라운드당 참가비 (원)" inputProps={{ min: 0, max: 100000000, step: 1 }} value={draft?.entry_fee ?? ""} onChange={(event) => setDraft((current) => current ? { ...current, entry_fee: event.target.value } : current)} /> : <Typography fontSize={13}>{tournament.entry_fee == null ? "등록된 참가비가 없습니다." : `${tournament.entry_fee.toLocaleString()}원`}</Typography>}
+        <Typography fontWeight={800} fontSize={14} sx={{ mt: 1.5, mb: 0.8 }}>입금 계좌</Typography>
+        <Stack direction="row" spacing={0.7} alignItems="center">
+          {tournament.can_manage ? <TextField fullWidth size="small" placeholder="은행명과 계좌번호를 입력해주세요" value={draft?.bank_account ?? ""} onChange={(event) => setDraft((current) => current ? { ...current, bank_account: event.target.value } : current)} /> : <Typography sx={{ flex: 1, fontSize: 13 }}>{accountText || "등록된 입금 계좌가 없습니다."}</Typography>}
+          <IconButton size="small" aria-label="계좌번호 복사" disabled={!accountText.trim()} onClick={() => { void navigator.clipboard.writeText(account?.accountNumber || accountText.trim()).catch(() => setError("계좌번호 복사에 실패했습니다.")); }}><ContentCopyOutlinedIcon fontSize="small" /></IconButton>
+        </Stack>
+        <Button fullWidth variant="contained" disabled={!account || !tournament.entry_fee || !payers.size} onClick={() => setTossQrOpen(true)} startIcon={<Box component="img" src="/images/payment/toss-symbol-mono-white.png" alt="" sx={{ width: 22, height: 22 }} />} sx={{ mt: 1, bgcolor: "#0064FF", fontWeight: 800 }}>토스로 송금</Button>
+        <Dialog open={tossQrOpen} onClose={() => setTossQrOpen(false)}><DialogTitle>토스로 송금</DialogTitle><DialogContent sx={{ textAlign: "center" }}><Select fullWidth size="small" displayEmpty value={paymentGroupId} onChange={(event) => setPaymentGroupId(String(event.target.value))} sx={{ mb: 2 }}><MenuItem value="" disabled>입금할 클럽 · 개인 선택</MenuItem>{[...payers].map(([key, label]) => <MenuItem key={key} value={key}>{label}</MenuItem>)}</Select>{paymentGroupId && <Typography sx={{ mb: 2 }} fontWeight={800}>입금 예정액 {paymentAmount.toLocaleString()}원</Typography>}{tossLink && (isSmartphoneBrowser() ? <Button fullWidth variant="contained" onClick={() => { window.location.href = tossLink; }}>토스 앱 열기</Button> : <QRCode value={tossLink} size={196} />)}<Typography fontSize={13} sx={{ mt: 1 }}>휴대폰 카메라로 QR코드를 스캔해주세요.</Typography></DialogContent></Dialog>
+      </Box><Divider />
       {tournament.can_manage && (hasChanges || tournament.status === "draft") && <Stack direction="row" justifyContent="flex-end" sx={{ py: 1 }}><Button size="small" variant="contained" disabled={saving || opening} onClick={() => void save(tournament.status === "draft")}>{tournament.status === "draft" ? hasChanges ? "저장하고 참가신청 열기" : "참가신청 열기" : "저장"}</Button></Stack>}
       <Divider sx={{ borderColor: "#F3F4F6" }} />
       <Box sx={{ py: 1 }}><Typography sx={labelSx}>프로그램</Typography></Box>

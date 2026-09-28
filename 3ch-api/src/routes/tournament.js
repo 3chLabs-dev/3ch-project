@@ -214,6 +214,9 @@ router.patch('/tournaments/:id', requireAuth, async (req, res) => {
   const id = z.string().uuid().safeParse(req.params.id);
   const body = z.object({
     title: z.string().trim().min(1).max(160).optional(),
+    notice: z.string().trim().max(10000).nullable().optional(),
+    entry_fee: z.number().int().min(0).max(100000000).nullable().optional(),
+    bank_account: z.string().trim().max(300).nullable().optional(),
     venue_name: z.string().trim().max(120).nullable().optional(),
     venue_address: z.string().trim().nullable().optional(),
     court_count: z.number().int().positive().nullable().optional(),
@@ -604,6 +607,30 @@ router.patch('/tournaments/:id/participants/:participantId/division', requireAut
     await client.query('COMMIT');
     return res.json({ message: '대회 부수를 수정했습니다.' });
   } catch (error) { await client.query('ROLLBACK'); console.error('Tournament participant division update error:', error); return res.status(500).json({ message: '대회 부수를 수정하지 못했습니다.' }); }
+  finally { client.release(); }
+});
+
+router.post('/tournaments/:id/clubs/:groupId/confirm', requireAuth, async (req, res) => {
+  const ids = z.object({ id: z.string().uuid(), groupId: z.string().min(1) }).safeParse(req.params);
+  const body = z.object({ participant_ids: z.array(z.string().uuid()).min(1).max(500) }).strict().safeParse(req.body);
+  if (!ids.success || !body.success) return res.status(400).json({ message: '클럽 참가 명단을 확인해주세요.' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const found = await client.query('SELECT * FROM tournaments WHERE id = $1 FOR UPDATE', [ids.data.id]);
+    if (!found.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ message: '대회를 찾을 수 없습니다.' }); }
+    const userId = Number(req.user.sub);
+    if (!await hasPremiumSubscription(client, userId) || !await canManageHostGroup(client, found.rows[0].host_group_id, userId)) { await client.query('ROLLBACK'); return res.status(403).json({ message: '대회 관리 권한이 필요합니다.' }); }
+    await client.query('SELECT id FROM tournament_divisions WHERE tournament_id = $1 ORDER BY sort_order FOR UPDATE', [ids.data.id]);
+    const participants = await client.query(`SELECT p.id, p.status, p.division_id FROM tournament_participants p JOIN tournament_divisions d ON d.id = p.division_id WHERE d.tournament_id = $1 AND p.source_group_id = $2 AND p.status IN ('applied', 'confirmed') ORDER BY p.id FOR UPDATE OF p`, [ids.data.id, ids.data.groupId]);
+    if (!matchesExistingRoster(participants.rows, body.data.participant_ids.map((id) => ({ id })))) { await client.query('ROLLBACK'); return res.status(409).json({ message: '클럽 명단이 변경되었습니다. 새로고침 후 입금 내역을 다시 확인해주세요.' }); }
+    const waiting = participants.rows.filter((participant) => participant.status === 'applied');
+    const competition = await client.query(`SELECT 1 FROM tournament_pools WHERE division_id = ANY($1::uuid[]) UNION ALL SELECT 1 FROM tournament_matches WHERE division_id = ANY($1::uuid[]) LIMIT 1`, [[...new Set(waiting.map((participant) => participant.division_id))]]);
+    if (competition.rowCount) { await client.query('ROLLBACK'); return res.status(409).json({ message: '조 또는 경기가 생성된 부문의 대기 참가자는 확정할 수 없습니다.' }); }
+    await client.query(`UPDATE tournament_participants SET status = 'confirmed' WHERE id = ANY($1::uuid[]) AND status = 'applied'`, [waiting.map((participant) => participant.id)]);
+    await client.query('COMMIT');
+    return res.json({ confirmed_count: waiting.length });
+  } catch (error) { await client.query('ROLLBACK'); console.error('Tournament club confirmation error:', error); return res.status(500).json({ message: '클럽 참가자를 확정하지 못했습니다.' }); }
   finally { client.release(); }
 });
 

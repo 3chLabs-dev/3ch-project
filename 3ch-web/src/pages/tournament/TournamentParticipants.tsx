@@ -1,15 +1,17 @@
+import { calculateTournamentFee } from "../../features/tournament/participationFee";
 import { useMemo, useState } from "react";
 import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, InputAdornment, MenuItem, Select, Stack, TextField, Typography } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import { formatTournamentParticipantName } from "../../features/tournament/participantLabel";
-import { useGetTournamentParticipantsAllQuery, useReviewTournamentApplicationMutation, useUpdateTournamentParticipantDivisionMutation, type TournamentItem, type TournamentParticipant } from "../../features/tournament/tournamentApi";
+import { useGetTournamentParticipantsAllQuery, useReviewTournamentApplicationMutation, useUpdateTournamentParticipantDivisionMutation, useConfirmTournamentClubMutation, type TournamentItem, type TournamentParticipant } from "../../features/tournament/tournamentApi";
 
 const pillSx = { height: 28, minWidth: 64, borderRadius: 4, fontSize: 12, fontWeight: 800, boxShadow: "none" };
 
 export default function TournamentParticipants({ tournament }: { tournament: TournamentItem }) {
   const { data, isLoading } = useGetTournamentParticipantsAllQuery(tournament.id);
   const [review, { isLoading: reviewing }] = useReviewTournamentApplicationMutation();
-  const [view, setView] = useState<"division" | "club">("division");
+  const [confirmClub, { isLoading: confirmingClub }] = useConfirmTournamentClubMutation();
+  const [view, setView] = useState<"division" | "club">("club");
   const [divisionId, setDivisionId] = useState("");
   const [clubId, setClubId] = useState("");
   const [search, setSearch] = useState("");
@@ -35,6 +37,20 @@ export default function TournamentParticipants({ tournament }: { tournament: Tou
     return [...found].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, "ko"));
   }, [participants]);
   const selectedClub = clubs.find((club) => club.id === clubId) ?? clubs[0];
+  const clubSummary = (groupId: string) => {
+    const entries = participants.filter((participant) => (participant.source_group_id ?? "individual") === groupId);
+    const waiting = entries.filter((participant) => participant.status === "applied");
+    const { roundCount: rounds, amount } = calculateTournamentFee(entries, divisions, tournament.entry_fee);
+    return <Stack spacing={0.7} sx={{ mb: 1.2, py: 1 }}>
+      <Typography fontSize={13} fontWeight={800}>{clubs.find((club) => club.id === groupId)?.name} · {entries.length}명 · 대기 {waiting.length}명</Typography>
+      <Typography fontSize={13}>{tournament.entry_fee == null ? "참가비 미설정" : `입금 예정액 ${amount!.toLocaleString()}원 (${entries.length}명 · 총 ${rounds}인·라운드 × ${tournament.entry_fee.toLocaleString()}원)`}</Typography>
+      {tournament.can_manage && groupId !== "individual" && waiting.length > 0 && <Button variant="outlined" size="small" disabled={confirmingClub} sx={{ alignSelf: "flex-end", ...pillSx }} onClick={async () => {
+        if (!window.confirm(`${clubs.find((club) => club.id === groupId)?.name}의 입금을 확인하셨습니까? 대기 참가자 ${waiting.length}명을 모두 확정합니다.`)) return;
+        try { await confirmClub({ id: tournament.id, groupId, participant_ids: entries.map((participant) => participant.id) }).unwrap(); setError(""); }
+        catch (reason) { setError((reason as { data?: { message?: string } }).data?.message ?? "클럽 참가자를 확정하지 못했습니다."); }
+      }}>입금 확인 · 클럽 확정</Button>}
+    </Stack>;
+  };
   const canEdit = new Date() < new Date(tournament.starts_at);
   const deadlinePassed = new Date() >= new Date(tournament.application_deadline_at ?? tournament.starts_at);
   const filtered = (entries: TournamentParticipant[]) => entries.filter((participant) => !search.trim() || formatTournamentParticipantName(participant).toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
@@ -46,7 +62,7 @@ export default function TournamentParticipants({ tournament }: { tournament: Tou
   };
   const list = (entries: TournamentParticipant[]) => <Box sx={{ bgcolor: "#fff", border: "1px solid #E5E7EB", borderRadius: 1.5, overflow: "hidden" }}>
     <Box sx={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 64px", px: 1.5, py: 0.8, bgcolor: "#F9FAFB", borderBottom: "1px solid #E5E7EB" }}><Typography sx={{ fontSize: 12, fontWeight: 700, color: "#6B7280" }}>참가자 · 부수 · 클럽</Typography><Typography sx={{ fontSize: 12, fontWeight: 700, color: "#6B7280", textAlign: "center" }}>상태</Typography></Box>
-    {entries.length ? entries.map((participant, index) => <Box key={participant.id} sx={{ px: 1.5, py: 0.9, borderTop: index ? "1px solid #F3F4F6" : "none" }}><Stack direction="row" alignItems="center" spacing={0.8}><Typography sx={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 800, overflowWrap: "anywhere" }}>{formatTournamentParticipantName(participant)}</Typography>{tournament.can_manage && <Button size="small" variant="outlined" sx={{ ...pillSx, minWidth: 56, height: 25 }} onClick={() => { setEditingParticipant(participant); setDivisionDraft(participant.member_division ?? ""); setDivisionError(""); }}>부수 수정</Button>}<Chip size="small" label={participant.status === "confirmed" ? "확정" : "신청"} sx={{ height: 23, bgcolor: participant.status === "confirmed" ? "#DCFCE7" : "#F3F4F6", color: participant.status === "confirmed" ? "#15803D" : "#4B5563", fontWeight: 800, fontSize: 11 }} /></Stack>{tournament.can_manage && participant.status === "applied" && canEdit && <Stack direction="row" justifyContent="flex-end" spacing={0.7} sx={{ mt: 0.7 }}><Button size="small" variant="outlined" disabled={reviewing} onClick={() => void reviewParticipant(participant, "confirmed")} sx={{ ...pillSx, height: 25 }}>확정</Button><Button size="small" color="error" variant="outlined" disabled={reviewing} onClick={() => void reviewParticipant(participant, "rejected")} sx={{ ...pillSx, height: 25 }}>거절</Button></Stack>}</Box>) : <Typography sx={{ py: 2, textAlign: "center", fontSize: 13, color: "text.secondary" }}>등록된 참가자가 없습니다.</Typography>}
+    {entries.length ? entries.map((participant, index) => <Box key={participant.id} sx={{ px: 1.5, py: 0.9, borderTop: index ? "1px solid #F3F4F6" : "none" }}><Stack direction="row" alignItems="center" spacing={0.8}><Typography sx={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 800, overflowWrap: "anywhere" }}>{formatTournamentParticipantName(participant)}</Typography>{tournament.can_manage && <Button size="small" variant="outlined" sx={{ ...pillSx, minWidth: 56, height: 25 }} onClick={() => { setEditingParticipant(participant); setDivisionDraft(participant.member_division ?? ""); setDivisionError(""); }}>부수 수정</Button>}<Chip size="small" label={participant.status === "confirmed" ? "확정" : "대기"} sx={{ height: 23, bgcolor: participant.status === "confirmed" ? "#DCFCE7" : "#F3F4F6", color: participant.status === "confirmed" ? "#15803D" : "#4B5563", fontWeight: 800, fontSize: 11 }} /></Stack>{tournament.can_manage && participant.status === "applied" && canEdit && <Stack direction="row" justifyContent="flex-end" spacing={0.7} sx={{ mt: 0.7 }}>{!participant.source_group_id && <Button size="small" variant="outlined" disabled={reviewing} onClick={() => void reviewParticipant(participant, "confirmed")} sx={{ ...pillSx, height: 25 }}>입금 확인 · 확정</Button>}<Button size="small" color="error" variant="outlined" disabled={reviewing} onClick={() => void reviewParticipant(participant, "rejected")} sx={{ ...pillSx, height: 25 }}>거절</Button></Stack>}</Box>) : <Typography sx={{ py: 2, textAlign: "center", fontSize: 13, color: "text.secondary" }}>등록된 참가자가 없습니다.</Typography>}
   </Box>;
   const divisionEntries = selectedDivision ? filtered(participants.filter((participant) => participant.division_id === selectedDivision.id)) : [];
   return <Box sx={{ bgcolor: "#fff", border: "1px solid #E5E7EB", borderRadius: 2, px: 2, py: 1.5, mb: 2 }}>
@@ -68,7 +84,7 @@ export default function TournamentParticipants({ tournament }: { tournament: Tou
     <TextField size="small" fullWidth placeholder="참가자명 · 부수 · 클럽명 검색" value={search} onChange={(event) => { setSearch(event.target.value); setVisibleCount(30); }} sx={{ mb: 1.2, "& .MuiOutlinedInput-root": { borderRadius: 1.5, height: 36 }, "& input": { fontSize: 13 } }} slotProps={{ input: { startAdornment: <InputAdornment position="start"><SearchIcon sx={{ fontSize: 18, color: "#9CA3AF" }} /></InputAdornment> } }} />
     {isLoading ? <Box sx={{ py: 3, textAlign: "center" }}><CircularProgress size={24} /></Box> : <>
       {view === "division" && selectedDivision && <><Select fullWidth size="small" value={selectedDivision.id} onChange={(event) => { setDivisionId(String(event.target.value)); setVisibleCount(30); }} sx={{ mb: 1.2, borderRadius: 1.5 }}>{divisions.map((division) => <MenuItem key={division.id} value={division.id}>{division.name} · {participants.filter((participant) => participant.division_id === division.id).length}명</MenuItem>)}</Select>{list(divisionEntries.slice(0, visibleCount))}{divisionEntries.length > visibleCount && <Button fullWidth size="small" onClick={() => setVisibleCount((count) => count + 30)} sx={{ mt: 0.7, fontWeight: 800 }}>더 보기 ({divisionEntries.length - visibleCount}명)</Button>}</>}
-      {view === "club" && (selectedClub ? <><Select fullWidth size="small" value={selectedClub.id} onChange={(event) => setClubId(String(event.target.value))} sx={{ mb: 1.2, borderRadius: 1.5 }}>{clubs.map((club) => <MenuItem key={club.id} value={club.id}>{club.name} · {participants.filter((participant) => (participant.source_group_id ?? "individual") === club.id).length}명</MenuItem>)}</Select>{divisions.map((division) => { const entries = filtered(participants.filter((participant) => (participant.source_group_id ?? "individual") === selectedClub.id && participant.division_id === division.id)); return <Box key={division.id} sx={{ mb: 1.5 }}><Typography sx={{ fontSize: 14, fontWeight: 900, py: 0.7 }}>{division.name} · {entries.length}명</Typography>{list(entries)}</Box>; })}</> : <Typography sx={{ fontSize: 13, color: "text.secondary" }}>등록된 클럽 명단이 없습니다.</Typography>)}
+      {view === "club" && (selectedClub ? <><Select fullWidth size="small" value={selectedClub.id} onChange={(event) => setClubId(String(event.target.value))} sx={{ mb: 1.2, borderRadius: 1.5 }}>{clubs.map((club) => <MenuItem key={club.id} value={club.id}>{club.name} · {participants.filter((participant) => (participant.source_group_id ?? "individual") === club.id).length}명</MenuItem>)}</Select>{clubSummary(selectedClub.id)}{divisions.map((division) => { const entries = filtered(participants.filter((participant) => (participant.source_group_id ?? "individual") === selectedClub.id && participant.division_id === division.id)); return <Box key={division.id} sx={{ mb: 1.5 }}><Typography sx={{ fontSize: 14, fontWeight: 900, py: 0.7 }}>{division.name} · {entries.length}명</Typography>{list(entries)}</Box>; })}</> : <Typography sx={{ fontSize: 13, color: "text.secondary" }}>등록된 클럽 명단이 없습니다.</Typography>)}
     </>}
   </Box>;
 }

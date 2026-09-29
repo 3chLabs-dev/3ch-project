@@ -1809,6 +1809,27 @@ const handleSaveEdit = async () => {
           )}
           </>}
 
+          <Divider sx={{ borderColor: "#F3F4F6" }} />
+          <Box sx={infoRowSx}>
+            <Typography sx={labelSx}>안내사항</Typography>
+            {canManage ? <TextField fullWidth multiline variant="standard" size="small" placeholder="등록된 안내사항이 없습니다." value={notice} onChange={(e) => setNotice(e.target.value)} sx={{ ...inputSx, "& textarea": { fontSize: 13, fontWeight: 700, p: 0 }, "& .MuiInput-root": { p: 0 } }} /> : <Typography sx={{ ...valueSx, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{league.notice || "등록된 안내사항이 없습니다."}</Typography>}
+          </Box>
+          <Divider sx={{ borderColor: "#F3F4F6" }} />
+          <Box sx={infoRowSx}>
+            <Typography sx={labelSx}>참가비</Typography>
+            {canManage ? <TextField fullWidth variant="standard" size="small" placeholder="등록된 참가비가 없습니다." value={entryFee} onChange={(e) => setEntryFee(formatTransferAmountInput(e.target.value))} inputProps={{ inputMode: "numeric" }} sx={inputSx} /> : <Typography sx={{ ...valueSx, overflowWrap: "anywhere" }}>{league.entry_fee ? formatTransferAmountDisplay(league.entry_fee) : "등록된 참가비가 없습니다."}</Typography>}
+          </Box>
+          <Divider sx={{ borderColor: "#F3F4F6" }} />
+          <Box sx={{ ...infoRowSx, alignItems: "start" }}>
+            <Typography sx={{ ...labelSx, pt: 0.4 }}>입금 계좌</Typography>
+            <Box sx={{ minWidth: 0 }}>
+              <Stack direction="row" spacing={0.7} alignItems="center">
+                {canManage ? <TextField fullWidth variant="standard" size="small" placeholder="등록된 입금 계좌가 없습니다." value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} sx={inputSx} /> : <Typography sx={{ ...valueSx, flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>{league.bank_account || "등록된 입금 계좌가 없습니다."}</Typography>}
+                <IconButton size="small" aria-label="계좌번호 복사" disabled={!(bankAccount.trim() || league.bank_account?.trim())} onClick={() => void handleCopyBankAccount()}><ContentCopyOutlinedIcon fontSize="small" /></IconButton>
+              </Stack>
+              <Button fullWidth variant="contained" disableElevation onClick={handleTossTransfer} startIcon={<Box component="img" src="/images/payment/toss-symbol-mono-white.png" alt="" aria-hidden="true" sx={{ width: 22, height: 22, objectFit: "contain" }} />} sx={{ mt: 1, bgcolor: "#0064FF", color: "#fff", fontWeight: 800, "&:hover": { bgcolor: "#0056DB" } }}>토스로 송금</Button>
+            </Box>
+          </Box>
           {isEventProgramFormat && canViewProgram && (
             <>
               <Divider sx={{ borderColor: "#F3F4F6" }} />
@@ -2930,186 +2951,6 @@ const handleSaveEdit = async () => {
             {alertMsg}
           </Alert>
         </Snackbar>
-
-        {/* 안내사항 */}
-        <Box sx={{ mb: 2.5 }}>
-          <Typography fontWeight={900} fontSize={16} sx={{ mb: 1 }}>
-            안내사항
-          </Typography>
-          {canManage  ? (
-            <TextField
-              multiline
-              rows={3}
-              fullWidth
-              placeholder="내용을 입력해주세요"
-              value={notice}
-              onChange={(e) => setNotice(e.target.value)}
-              sx={{
-                "& .MuiOutlinedInput-root": {
-                  borderRadius: 1,
-                  bgcolor: "#fff",
-                  fontSize: 13,
-                },
-              }}
-            />
-          ) : (
-            <Box
-              sx={{
-                bgcolor: "#fff",
-                borderRadius: 1,
-                border: "1px solid #E5E7EB",
-                px: 1.75,
-                py: 1.5,
-                minHeight: 72,
-              }}
-            >
-              <Typography fontSize={13} fontWeight={600} color={league.notice ? "#111827" : "#9CA3AF"}>
-                {league.notice || "안내사항이 없습니다."}
-              </Typography>
-            </Box>
-          )}
-        </Box>
-
-        {/* 참가비 */}
-        <Box sx={{ mb: 2.5 }}>
-          <Typography fontWeight={900} fontSize={16} sx={{ mb: 1 }}>
-            참가비
-          </Typography>
-          {canManage ? (
-            <TextField
-              fullWidth
-              placeholder="참가비를 입력해주세요"
-              value={entryFee}
-              onChange={(e) => setEntryFee(formatTransferAmountInput(e.target.value))}
-              inputProps={{ inputMode: "numeric" }}
-              sx={{
-                "& .MuiOutlinedInput-root": {
-                  borderRadius: 1,
-                  bgcolor: "#fff",
-                  fontSize: 13,
-                },
-              }}
-            />
-          ) : (
-            <Box
-              sx={{
-                bgcolor: "#fff",
-                borderRadius: 1,
-                border: "1px solid #E5E7EB",
-                px: 1.75,
-                py: 1.5,
-                minHeight: 48,
-                display: "flex",
-                alignItems: "center",
-              }}
-            >
-              <Typography
-                fontSize={13}
-                fontWeight={600}
-                color={league.entry_fee ? "#111827" : "#9CA3AF"}
-                sx={{ overflowWrap: "anywhere" }}
-              >
-                {league.entry_fee ? formatTransferAmountDisplay(league.entry_fee) : "등록된 참가비가 없습니다."}
-              </Typography>
-            </Box>
-          )}
-        </Box>
-
-        {/* 입금 계좌 */}
-        <Box sx={{ mb: 2.5 }}>
-          <Typography fontWeight={900} fontSize={16} sx={{ mb: 1 }}>
-            입금 계좌
-          </Typography>
-          {canManage ? (
-            <TextField
-              fullWidth
-              placeholder="은행명과 계좌번호를 입력해주세요"
-              value={bankAccount}
-              onChange={(e) => setBankAccount(e.target.value)}
-              sx={{
-                "& .MuiOutlinedInput-root": {
-                  borderRadius: 1,
-                  bgcolor: "#fff",
-                  fontSize: 13,
-                },
-              }}
-            />
-          ) : (
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                minHeight: 48,
-                bgcolor: "#fff",
-                borderRadius: 1,
-                border: "1px solid #E5E7EB",
-                px: 1.75,
-              }}
-            >
-              <Typography
-                fontSize={13}
-                fontWeight={600}
-                color={league.bank_account ? "#111827" : "#9CA3AF"}
-                sx={{ flex: 1, overflowWrap: "anywhere" }}
-              >
-                {league.bank_account || "등록된 입금 계좌가 없습니다."}
-              </Typography>
-            </Box>
-          )}
-          <Stack direction="row" spacing={1} sx={{ mt: 1.25 }}>
-            <Button
-              fullWidth
-              variant="outlined"
-              disableElevation
-              disabled={!(bankAccount.trim() || league.bank_account?.trim())}
-              onClick={() => void handleCopyBankAccount()}
-              startIcon={<ContentCopyOutlinedIcon sx={{ fontSize: 19 }} />}
-              sx={{
-                flex: 1,
-                minWidth: 0,
-                minHeight: 46,
-                borderRadius: 1,
-                bgcolor: "#fff",
-                borderColor: "#2F80ED",
-                color: "#2F80ED",
-                fontWeight: 800,
-                whiteSpace: "nowrap",
-                "&:hover": { bgcolor: "#F7FAFF", borderColor: "#256FD1" },
-              }}
-            >
-              계좌번호 복사
-            </Button>
-            <Button
-              fullWidth
-              variant="contained"
-              disableElevation
-              onClick={handleTossTransfer}
-              startIcon={(
-                <Box
-                  component="img"
-                  src="/images/payment/toss-symbol-mono-white.png"
-                  alt=""
-                  aria-hidden="true"
-                  sx={{ width: 25, height: 25, objectFit: "contain" }}
-                />
-              )}
-              sx={{
-                flex: 1,
-                minWidth: 0,
-                minHeight: 46,
-                borderRadius: 1,
-                bgcolor: "#0064FF",
-                color: "#fff",
-                fontWeight: 800,
-                whiteSpace: "nowrap",
-                "& .MuiButton-startIcon": { mr: 0.8 },
-                "&:hover": { bgcolor: "#0056DB" },
-              }}
-            >
-              토스로 송금
-            </Button>
-          </Stack>
-        </Box>
 
         <Dialog
           open={tossQrOpen}

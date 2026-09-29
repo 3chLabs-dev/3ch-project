@@ -401,7 +401,7 @@ async function rebuildGroupRanking(groupId) {
       );
     }
 
-    await client.query(`UPDATE group_ranking_settings SET rating_version = 2, updated_at = NOW() WHERE group_id = $1`, [groupId]);
+    await client.query(`UPDATE group_ranking_settings SET rating_version = 3, updated_at = NOW() WHERE group_id = $1`, [groupId]);
     await client.query('COMMIT');
 
     return {
@@ -458,7 +458,7 @@ async function getGroupRanking(groupId) {
     `SELECT rating_version FROM group_ranking_settings WHERE group_id = $1`,
     [groupId],
   );
-  if (rowsResult.rowCount === 0 || Number(versionResult.rows[0]?.rating_version ?? 0) < 2) {
+  if (rowsResult.rowCount === 0 || Number(versionResult.rows[0]?.rating_version ?? 0) < 3) {
     await rebuildGroupRanking(groupId);
   }
 
@@ -544,7 +544,7 @@ async function getGroupRankingDetail(groupId, memberId) {
     `SELECT rating_version FROM group_ranking_settings WHERE group_id = $1`,
     [groupId],
   );
-  if (Number(versionResult.rows[0]?.rating_version ?? 0) < 2) {
+  if (Number(versionResult.rows[0]?.rating_version ?? 0) < 3) {
     await rebuildGroupRanking(groupId);
   }
 

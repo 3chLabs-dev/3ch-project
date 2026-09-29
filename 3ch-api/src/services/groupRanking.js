@@ -177,38 +177,38 @@ async function rebuildGroupRanking(groupId) {
         m.score_b,
         m.match_rule,
         COALESCE(m.created_at, NOW()) AS played_at,
-        COALESCE(pa.member_id, CASE WHEN pma.matched_count = 1 THEN pma.linked_user_id END) AS member_a_id,
-        COALESCE(pb.member_id, CASE WHEN pmb.matched_count = 1 THEN pmb.linked_user_id END) AS member_b_id,
-        CASE WHEN pa.member_id IS NULL AND pma.matched_count = 1 AND pma.linked_user_id IS NULL THEN pma.pre_member_id END AS pre_member_a_id,
-        CASE WHEN pb.member_id IS NULL AND pmb.matched_count = 1 AND pmb.linked_user_id IS NULL THEN pmb.pre_member_id END AS pre_member_b_id
+        CASE WHEN gma.user_id IS NOT NULL THEN pa.member_id END AS member_a_id,
+        CASE WHEN gmb.user_id IS NOT NULL THEN pb.member_id END AS member_b_id,
+        CASE WHEN gma.user_id IS NULL AND pma.matched_count = 1 THEN pma.pre_member_id END AS pre_member_a_id,
+        CASE WHEN gmb.user_id IS NULL AND pmb.matched_count = 1 THEN pmb.pre_member_id END AS pre_member_b_id
       FROM league_matches m
       JOIN leagues l ON l.id = m.league_id
       JOIN league_participants pa ON pa.id = m.participant_a_id
       JOIN league_participants pb ON pb.id = m.participant_b_id
+      LEFT JOIN group_members gma ON gma.group_id = l.group_id AND gma.user_id = pa.member_id
+      LEFT JOIN group_members gmb ON gmb.group_id = l.group_id AND gmb.user_id = pb.member_id
       LEFT JOIN LATERAL (
         SELECT MIN(pm.id::text) AS pre_member_id,
-               MIN(pm.linked_user_id) AS linked_user_id,
                COUNT(*)::int AS matched_count
           FROM group_pre_members pm
          WHERE pm.group_id = l.group_id
-           AND pm.status IN ('active', 'linked')
-           AND (pm.name = pa.name OR EXISTS (
+           AND pm.status = 'active'
+           AND (pm.linked_user_id = pa.member_id OR pm.name = pa.name OR EXISTS (
              SELECT 1 FROM jsonb_array_elements_text(COALESCE(pm.external_aliases, '[]'::jsonb)) alias_name
               WHERE alias_name = pa.name
            ))
-      ) pma ON pa.member_id IS NULL
+      ) pma ON gma.user_id IS NULL
       LEFT JOIN LATERAL (
         SELECT MIN(pm.id::text) AS pre_member_id,
-               MIN(pm.linked_user_id) AS linked_user_id,
                COUNT(*)::int AS matched_count
           FROM group_pre_members pm
          WHERE pm.group_id = l.group_id
-           AND pm.status IN ('active', 'linked')
-           AND (pm.name = pb.name OR EXISTS (
+           AND pm.status = 'active'
+           AND (pm.linked_user_id = pb.member_id OR pm.name = pb.name OR EXISTS (
              SELECT 1 FROM jsonb_array_elements_text(COALESCE(pm.external_aliases, '[]'::jsonb)) alias_name
               WHERE alias_name = pb.name
            ))
-      ) pmb ON pb.member_id IS NULL
+      ) pmb ON gmb.user_id IS NULL
       WHERE l.group_id = $1
         AND m.status = 'done'
         AND m.score_a IS NOT NULL

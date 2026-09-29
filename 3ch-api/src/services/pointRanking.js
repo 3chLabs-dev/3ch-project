@@ -632,9 +632,20 @@ async function getPointRanking(groupId, year, scope, seasonId, onlyLeagueId = nu
        l.group_id,
        prog.program_data,
        lp.id AS participant_id,
+       lp.member_id AS direct_member_id,
+       EXISTS (
+         SELECT 1 FROM group_members direct_gm
+          WHERE direct_gm.group_id = l.group_id AND direct_gm.user_id = lp.member_id
+       ) AS direct_is_group_member,
        COALESCE(lp.member_id, CASE WHEN matched.matched_count = 1 THEN matched.user_id ELSE NULL END) AS member_id,
        CASE
-         WHEN COALESCE(lp.member_id, CASE WHEN matched.matched_count = 1 THEN matched.user_id ELSE NULL END) IS NULL
+         WHEN (
+           COALESCE(lp.member_id, CASE WHEN matched.matched_count = 1 THEN matched.user_id ELSE NULL END) IS NULL
+           OR NOT EXISTS (
+             SELECT 1 FROM group_members direct_gm
+              WHERE direct_gm.group_id = l.group_id AND direct_gm.user_id = lp.member_id
+           )
+         )
            AND matched_pre.matched_count = 1 THEN matched_pre.pre_member_id
          ELSE NULL
        END AS pre_member_id,
@@ -667,8 +678,11 @@ async function getPointRanking(groupId, year, scope, seasonId, onlyLeagueId = nu
        FROM group_pre_members pm
        WHERE pm.group_id = l.group_id
          AND pm.status = 'active'
-         AND (pm.name = lp.name OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(pm.external_aliases) alias_value WHERE alias_value = lp.name))
-     ) matched_pre ON lp.member_id IS NULL
+         AND (pm.linked_user_id = lp.member_id OR pm.name = lp.name OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(pm.external_aliases) alias_value WHERE alias_value = lp.name))
+     ) matched_pre ON lp.member_id IS NULL OR NOT EXISTS (
+       SELECT 1 FROM group_members direct_gm
+        WHERE direct_gm.group_id = l.group_id AND direct_gm.user_id = lp.member_id
+     )
      WHERE ${leagueFilterSql}
        AND ${scopedDateSql}
        AND ($4::text IS NULL OR l.id = $4::text)
@@ -679,6 +693,14 @@ async function getPointRanking(groupId, year, scope, seasonId, onlyLeagueId = nu
      ORDER BY l.start_date ASC, lp.created_at ASC`,
     [scopeValue, rangeStart, rangeEnd, onlyLeagueId],
   );
+
+  if (normalizedScope === "club") {
+    participantResult.rows.forEach((row) => {
+      if (row.direct_member_id != null && !row.direct_is_group_member && row.pre_member_id) {
+        row.member_id = null;
+      }
+    });
+  }
 
   const matchColumnResult = await pool.query(
     `SELECT column_name

@@ -185,6 +185,57 @@ async function triggerRankingRebuildByLeagueId(leagueId) {
   }
 }
 
+async function ensureHostPreMemberForParticipant({ groupId, name, division, createdById }) {
+  if (!groupId || !createdById) return null;
+  const normalizedName = String(name ?? '').normalize('NFKC').trim();
+  const normalizedDivision = String(division ?? '').trim() || null;
+  if (!normalizedName) return null;
+
+  const exactMatch = await pool.query(
+    `SELECT id, division
+       FROM group_pre_members
+      WHERE group_id = $1 AND status = 'active' AND BTRIM(name) = $2
+      ORDER BY created_at ASC
+      LIMIT 1`,
+    [groupId, normalizedName],
+  );
+  let preMember = exactMatch.rows[0] ?? null;
+
+  if (!preMember) {
+    const aliasMatch = await pool.query(
+      `SELECT MIN(id::text) AS id, MIN(division) AS division, COUNT(*)::int AS matched_count
+         FROM group_pre_members pm
+        WHERE pm.group_id = $1
+          AND pm.status = 'active'
+          AND EXISTS (
+            SELECT 1
+              FROM jsonb_array_elements_text(COALESCE(pm.external_aliases, '[]'::jsonb)) alias_name
+             WHERE BTRIM(alias_name) = $2
+          )`,
+      [groupId, normalizedName],
+    );
+    if (aliasMatch.rows[0]?.matched_count === 1) preMember = aliasMatch.rows[0];
+  }
+
+  if (!preMember) {
+    const inserted = await pool.query(
+      `INSERT INTO group_pre_members (id, group_id, name, division, created_by_id)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, division`,
+      [randomUUID(), groupId, normalizedName, normalizedDivision, createdById],
+    );
+    return inserted.rows[0]?.id ?? null;
+  }
+
+  if (!String(preMember.division ?? '').trim() && normalizedDivision) {
+    await pool.query(
+      `UPDATE group_pre_members SET division = $1, updated_at = NOW() WHERE id = $2`,
+      [normalizedDivision, preMember.id],
+    );
+  }
+  return preMember.id;
+}
+
 async function assignLeagueCode(client, { groupId, startDate, leagueId }) {
   if (!groupId) return null;
 
@@ -2346,7 +2397,7 @@ router.post('/league/:leagueId/participants', optionalAuth, async (req, res) => 
 
     // 리그의 join_permission 확인
     const leaguePermRow = await pool.query(
-      `SELECT join_permission, group_id, status FROM leagues WHERE id = $1`,
+      `SELECT join_permission, group_id, status, created_by_id FROM leagues WHERE id = $1`,
       [leagueId],
     );
     if (leaguePermRow.rowCount === 0) {
@@ -2477,12 +2528,46 @@ router.post('/league/:leagueId/participants', optionalAuth, async (req, res) => 
 
     const inserted = [];
     let guestClaimToken = null;
+    const effectiveMemberIds = [...new Set(participants.map((participant) => (
+      participant.is_bot ? null : (isAdmin ? participant.member_id : userId)
+    )).filter((memberId) => memberId != null).map(Number))];
+    const hostMemberResult = effectiveMemberIds.length > 0 && leaguePermRow.rows[0].group_id
+      ? await pool.query(
+        `SELECT user_id FROM group_members WHERE group_id = $1 AND user_id = ANY($2::int[])`,
+        [leaguePermRow.rows[0].group_id, effectiveMemberIds],
+      )
+      : { rows: [] };
+    const hostMemberIds = new Set(hostMemberResult.rows.map((row) => Number(row.user_id)));
     for (const p of participants) {
+      const effectiveMemberId = p.is_bot ? null : (isAdmin ? (p.member_id ?? null) : userId);
+      const autoRegisterInHostClub = Boolean(
+        !p.is_bot
+        && leaguePermRow.rows[0].group_id
+        && (effectiveMemberId == null || !hostMemberIds.has(Number(effectiveMemberId))),
+      );
+      if (autoRegisterInHostClub) {
+        await ensureHostPreMemberForParticipant({
+          groupId: leaguePermRow.rows[0].group_id,
+          name: p.name,
+          division: p.division,
+          createdById: leaguePermRow.rows[0].created_by_id,
+        });
+      }
+      const sourceGroupId = p.is_bot
+        ? null
+        : autoRegisterInHostClub
+          ? leaguePermRow.rows[0].group_id
+          : isAdmin
+            ? (p.source_group_id ?? (p.member_id ? leaguePermRow.rows[0].group_id : null))
+            : participantSourceGroupId;
+      const participantName = autoRegisterInHostClub
+        ? String(p.name).normalize('NFKC').trim()
+        : p.name;
       const result = await pool.query(
         `INSERT INTO league_participants (id, league_id, division, name, member_id, source_group_id, paid, arrived, "after", is_bot)
          VALUES ($1, $2, $3, $4, $5, $6, false, false, false, $7)
          RETURNING id, league_id, division, name, member_id, source_group_id, paid, arrived, "after", is_bot, created_at`,
-        [randomUUID(), leagueId, p.division, p.name, p.is_bot ? null : (isAdmin ? (p.member_id ?? null) : userId), p.is_bot ? null : (isAdmin ? (p.source_group_id ?? (p.member_id ? leaguePermRow.rows[0].group_id : null)) : participantSourceGroupId), p.is_bot],
+        [randomUUID(), leagueId, p.division, participantName, effectiveMemberId, sourceGroupId, p.is_bot],
       );
       inserted.push(result.rows[0]);
       if (!userId) {
@@ -2542,6 +2627,10 @@ router.post('/league/:leagueId/participants', optionalAuth, async (req, res) => 
         );
         throw placementError;
       }
+    }
+
+    if (inserted.some((participant) => !participant.is_bot)) {
+      await triggerRankingRebuildByLeagueId(leagueId);
     }
 
     return res.status(201).json({ message: '참가자가 추가되었습니다.', participants: inserted, guest_claim_token: guestClaimToken });

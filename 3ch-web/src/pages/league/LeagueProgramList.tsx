@@ -277,6 +277,7 @@ type StoredProgramOption = {
   groupSizes?: number[];
   blocks?: StoredProgramBlock[];
   rounds?: StoredProgramBlock[];
+  roundStandings?: ProgramOption["roundStandings"];
 };
 
 function getProgramTypeLabel(type?: StoredProgramBlock["type"]) {
@@ -422,6 +423,12 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
     ? storedProgram.blocks.map((block, index) => {
         const legacySinglesCount = block.description?.match(/단식/g)?.length;
         const legacyDoublesCount = block.description?.match(/복식/g)?.length;
+        const persistedRoundCompleted = storedProgram.roundStandings
+          ?.find((snapshot) => snapshot.round === index + 1)
+          ?.complete === true;
+        const roundMatches = matches.filter(
+          (match) => match.is_program && match.program_round === index + 1,
+        );
 
         return {
         round: index + 1,
@@ -446,10 +453,12 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
         description: block.description,
         advanceCount: block.advanceCount,
         finalAdvancementMode: block.finalAdvancementMode,
-        completed: matches.some((match) => match.is_program && match.program_round === index + 1)
-          && matches
-            .filter((match) => match.is_program && match.program_round === index + 1)
-            .every((match) => match.is_no_game || match.status === "done"),
+        // 완료 시 저장된 서버 순위 스냅샷은 경기 목록 재조회보다 안정적인 근거다.
+        // 목록 API가 일시적으로 실패해도 확정된 결과 화면으로 이동할 수 있어야 한다.
+        completed: persistedRoundCompleted || (
+          roundMatches.length > 0
+          && roundMatches.every((match) => match.is_no_game || match.status === "done")
+        ),
       };
       })
     : [];

@@ -4023,7 +4023,7 @@ router.get('/league/:id/matches', optionalAuth, async (req, res) => {
     let rosterParticipantById = new Map();
     if (rosterParticipantIds.length > 0) {
       const rosterParticipants = await pool.query(
-        `SELECT id, name, division FROM league_participants WHERE league_id = $1 AND id = ANY($2::uuid[])`,
+        `SELECT id, name, division FROM league_participants WHERE league_id = $1 AND id = ANY($2::text[])`,
         [leagueId, rosterParticipantIds],
       );
       rosterParticipantById = new Map(rosterParticipants.rows.map((participant) => [participant.id, participant]));

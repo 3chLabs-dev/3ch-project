@@ -1,6 +1,6 @@
 import { calculateTournamentFee } from "../../features/tournament/participationFee";
 import { useEffect, useRef, useState } from "react";
-import { Alert, Box, Button, CircularProgress, Dialog, DialogContent, DialogTitle, Divider, IconButton, MenuItem, Select, Stack, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, CircularProgress, Dialog, DialogContent, DialogTitle, Divider, IconButton, MenuItem, Select, Snackbar, Stack, TextField, Typography } from "@mui/material";
 import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
 import QRCode from "react-qr-code";
 import { createTossTransferLink, isSmartphoneBrowser, parseBankAccount } from "../../utils/paymentDeepLink";
@@ -35,6 +35,7 @@ export default function TournamentDetail() {
   const [savedDraft, setSavedDraft] = useState<DetailDraft | null>(null);
   const initializedId = useRef("");
   const [error, setError] = useState("");
+  const [saveMessage, setSaveMessage] = useState("");
   const [tossQrOpen, setTossQrOpen] = useState(false);
   const [paymentGroupId, setPaymentGroupId] = useState("");
   const { data: participantsData } = useGetTournamentParticipantsAllQuery(id, { skip: !id });
@@ -48,7 +49,7 @@ export default function TournamentDetail() {
     }
   }, [tournament]);
   const hasChanges = Boolean(draft && savedDraft && JSON.stringify(draft) !== JSON.stringify(savedDraft));
-  const save = async (openAfterSave = false) => {
+  const save = async (openAfterSave = false, automatic = false) => {
     if (!draft || saving || opening || (!hasChanges && !openAfterSave)) return;
     if (!draft.title.trim() || !draft.date || !draft.start) { setError("대회명, 날짜, 시작 시간을 입력해주세요."); return; }
     if (draft.entry_fee && (!Number.isInteger(Number(draft.entry_fee)) || Number(draft.entry_fee) < 0 || Number(draft.entry_fee) > 100000000)) { setError("참가비를 0원 이상 1억원 이하의 정수로 입력해주세요."); return; }
@@ -62,16 +63,17 @@ export default function TournamentDetail() {
       if (hasChanges) {
         await update({ id, body: { notice: draft.notice.trim() || null, entry_fee: draft.entry_fee ? Number(draft.entry_fee) : null, bank_account: draft.bank_account.trim() || null, title: draft.title.trim(), starts_at: start.toISOString(), ends_at: end?.toISOString() ?? null, application_deadline_at: deadline?.toISOString() ?? null, venue_name: draft.venue_name.trim() || null, court_count: draft.court_count ? Number(draft.court_count) : null, recruit_count: draft.recruit_count ? Number(draft.recruit_count) : null } }).unwrap();
         setSavedDraft(draft);
+        setSaveMessage(automatic ? "자동 저장되었습니다." : "저장되었습니다.");
       }
       if (openAfterSave && tournament?.status === "draft") await openTournament(id).unwrap();
       setError("");
     } catch (reason) { setError((reason as { data?: { message?: string } }).data?.message ?? "대회 정보 저장 또는 참가 신청 열기에 실패했습니다."); }
   };
   useEffect(() => {
-    if (!tournament?.can_manage || !hasChanges || saving) return;
-    const timer = window.setTimeout(() => { void save(false); }, 4000);
+    if (!tournament?.can_manage || !hasChanges || saving || opening) return;
+    const timer = window.setTimeout(() => { void save(false, true); }, 4000);
     return () => window.clearTimeout(timer);
-  }, [draft, hasChanges, saving, tournament?.can_manage]);
+  }, [draft, hasChanges, saving, opening, tournament?.can_manage]);
   if (isLoading) return <Box sx={{ display: "flex", justifyContent: "center", pt: 8 }}><CircularProgress /></Box>;
   if (!tournament) return <Box sx={{ p: 2 }}><Alert severity="error">{(loadError as { data?: { message?: string } })?.data?.message ?? "대회를 불러올 수 없습니다."}</Alert></Box>;
   const field = (name: keyof DetailDraft, type = "text") => <TextField fullWidth size="small" variant="standard" type={type} value={draft?.[name] ?? ""} onChange={(event) => setDraft((current) => current ? ({ ...current, [name]: event.target.value }) : current)} inputProps={type === "number" ? { min: 1 } : undefined} sx={inputSx} />;
@@ -115,7 +117,7 @@ export default function TournamentDetail() {
         </Box>
         <Dialog open={tossQrOpen} onClose={() => setTossQrOpen(false)}><DialogTitle>토스로 송금</DialogTitle><DialogContent sx={{ textAlign: "center" }}><Select fullWidth size="small" displayEmpty value={paymentGroupId} onChange={(event) => setPaymentGroupId(String(event.target.value))} sx={{ mb: 2 }}><MenuItem value="" disabled>입금할 클럽 · 개인 선택</MenuItem>{[...payers].map(([key, label]) => <MenuItem key={key} value={key}>{label}</MenuItem>)}</Select>{paymentGroupId && <Typography sx={{ mb: 2 }} fontWeight={800}>입금 예정액 {paymentAmount.toLocaleString()}원</Typography>}{tossLink && (isSmartphoneBrowser() ? <Button fullWidth variant="contained" onClick={() => { window.location.href = tossLink; }}>토스 앱 열기</Button> : <QRCode value={tossLink} size={196} />)}<Typography fontSize={13} sx={{ mt: 1 }}>휴대폰 카메라로 QR코드를 스캔해주세요.</Typography></DialogContent></Dialog>
       </Box><Divider />
-      {tournament.can_manage && (hasChanges || tournament.status === "draft") && <Stack direction="row" justifyContent="flex-end" sx={{ py: 1 }}><Button size="small" variant="contained" disabled={saving || opening} onClick={() => void save(tournament.status === "draft")}>{tournament.status === "draft" ? hasChanges ? "저장하고 참가신청 열기" : "참가신청 열기" : "저장"}</Button></Stack>}
+      {tournament.can_manage && tournament.status === "draft" && <Stack direction="row" justifyContent="flex-end" sx={{ py: 1 }}><Button size="small" variant="contained" disabled={saving || opening} onClick={() => void save(tournament.status === "draft")}>{tournament.status === "draft" ? hasChanges ? "저장하고 참가신청 열기" : "참가신청 열기" : "저장"}</Button></Stack>}
       <Divider sx={{ borderColor: "#F3F4F6" }} />
       <Box sx={{ py: 1 }}><Typography sx={labelSx}>프로그램</Typography></Box>
       {(tournament.divisions ?? []).map((division) => <Box key={division.id} sx={{ mb: 1.2 }}>
@@ -124,6 +126,10 @@ export default function TournamentDetail() {
       </Box>)}
     </Box>
     <TournamentParticipants tournament={tournament} />
+    <Snackbar open={!!saveMessage} autoHideDuration={3000} onClose={() => setSaveMessage("")} anchorOrigin={{ vertical: "bottom", horizontal: "center" }}>
+      <Alert severity="success" onClose={() => setSaveMessage("")} sx={{ fontWeight: 700 }}>{saveMessage}</Alert>
+    </Snackbar>
+    {tournament.can_manage && hasChanges && <Button variant="contained" disableElevation disabled={saving || opening} onClick={() => void save(false)} sx={{ position: "fixed", left: "50%", transform: "translateX(-50%)", bottom: "calc(124px + env(safe-area-inset-bottom))", zIndex: 21, minWidth: 86, height: 54, px: 2, borderRadius: 999, bgcolor: "#2F80ED", color: "#fff", fontSize: 13, fontWeight: 900, boxShadow: "0 6px 18px rgba(37, 99, 235, 0.3)", border: "2px solid rgba(255,255,255,0.9)", "&:hover": { bgcolor: "#256FD1" }, "&.Mui-disabled": { bgcolor: "#93C5FD", color: "#fff" } }}>{saving ? <CircularProgress size={20} sx={{ color: "#fff" }} /> : "저장"}</Button>}
     {canEnterApplication && <Box sx={floatingBoxSx}><Button fullWidth variant="contained" disableElevation onClick={() => navigate(`/tournament/${id}/apply`)} sx={{ borderRadius: 1, height: 44, fontWeight: 900, fontSize: 15, bgcolor: "#2F80ED", "&:hover": { bgcolor: "#256FD1" } }}>참가 신청</Button></Box>}
   </Box>;
 }

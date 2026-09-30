@@ -1,12 +1,12 @@
 import { calculateTournamentFee } from "../../features/tournament/participationFee";
 import { useEffect, useRef, useState } from "react";
-import { Alert, Box, Button, CircularProgress, Dialog, DialogContent, DialogTitle, Divider, IconButton, MenuItem, Select, Snackbar, Stack, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, IconButton, MenuItem, Select, Snackbar, Stack, TextField, Typography } from "@mui/material";
 import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
 import QRCode from "react-qr-code";
 import { createTossTransferLink, isSmartphoneBrowser, parseBankAccount } from "../../utils/paymentDeepLink";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useNavigate, useParams } from "react-router-dom";
-import { useGetTournamentQuery, useGetTournamentParticipantsAllQuery, useOpenTournamentMutation, useUpdateTournamentMutation } from "../../features/tournament/tournamentApi";
+import { useGetTournamentQuery, useGetTournamentParticipantsAllQuery, useLazyGetTournamentDeletePreviewQuery, useDeleteTournamentMutation, useOpenTournamentMutation, useUpdateTournamentMutation, type TournamentDeleteSummary } from "../../features/tournament/tournamentApi";
 import TournamentParticipants from "./TournamentParticipants";
 
 const floatingBoxSx = { position: "fixed", bottom: "calc(56px + env(safe-area-inset-bottom))", left: "50%", transform: "translateX(-50%)", width: "min(calc(100% - 32px), 398px)", pb: 1, zIndex: 10 } as const;
@@ -31,11 +31,17 @@ export default function TournamentDetail() {
   const { data, isLoading, error: loadError } = useGetTournamentQuery(id, { skip: !id });
   const [update, { isLoading: saving }] = useUpdateTournamentMutation();
   const [openTournament, { isLoading: opening }] = useOpenTournamentMutation();
+  const [loadDeletePreview, { isFetching: loadingDeletePreview }] = useLazyGetTournamentDeletePreviewQuery();
+  const [deleteTournament, { isLoading: deleting }] = useDeleteTournamentMutation();
   const [draft, setDraft] = useState<DetailDraft | null>(null);
   const [savedDraft, setSavedDraft] = useState<DetailDraft | null>(null);
   const initializedId = useRef("");
   const [error, setError] = useState("");
   const [saveMessage, setSaveMessage] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteSummary, setDeleteSummary] = useState<TournamentDeleteSummary | null>(null);
+  const [deleteTitle, setDeleteTitle] = useState("");
+  const [deleteError, setDeleteError] = useState("");
   const [tossQrOpen, setTossQrOpen] = useState(false);
   const [paymentGroupId, setPaymentGroupId] = useState("");
   const { data: participantsData } = useGetTournamentParticipantsAllQuery(id, { skip: !id });
@@ -49,6 +55,21 @@ export default function TournamentDetail() {
     }
   }, [tournament]);
   const hasChanges = Boolean(draft && savedDraft && JSON.stringify(draft) !== JSON.stringify(savedDraft));
+  const openDelete = async () => {
+    setDeleteOpen(true); setDeleteSummary(null); setDeleteTitle(""); setDeleteError("");
+    try { const preview = await loadDeletePreview(id).unwrap(); setDeleteSummary(preview.summary); }
+    catch (reason) { setDeleteError((reason as { data?: { message?: string } }).data?.message ?? "삭제 대상을 확인하지 못했습니다."); }
+  };
+  const confirmDelete = async () => {
+    if (!tournament || !deleteSummary || deleteTitle !== tournament.title) return;
+    try {
+      await deleteTournament({ id, title: deleteTitle, expected_summary: deleteSummary, confirmation_intent: "DELETE_TOURNAMENT_AND_ALL_DATA" }).unwrap();
+      navigate("/league", { replace: true });
+    } catch (reason) {
+      setDeleteError((reason as { data?: { message?: string } }).data?.message ?? "대회를 삭제하지 못했습니다.");
+      setDeleteSummary(null);
+    }
+  };
   const save = async (openAfterSave = false, automatic = false) => {
     if (!draft || saving || opening || (!hasChanges && !openAfterSave)) return;
     if (!draft.title.trim() || !draft.date || !draft.start) { setError("대회명, 날짜, 시작 시간을 입력해주세요."); return; }
@@ -126,6 +147,21 @@ export default function TournamentDetail() {
       </Box>)}
     </Box>
     <TournamentParticipants tournament={tournament} />
+    {tournament.can_delete && <Box sx={{ mb: 2, pb: canEnterApplication ? 7 : 0 }}><Button color="error" size="small" sx={{ p: 0, minWidth: 0, fontSize: 13, fontWeight: 700 }} onClick={() => void openDelete()}>대회 삭제</Button></Box>}
+    <Dialog open={deleteOpen} onClose={() => { if (!deleting) setDeleteOpen(false); }} fullWidth maxWidth="xs">
+      <DialogTitle sx={{ fontWeight: 900 }}>대회 삭제</DialogTitle>
+      <DialogContent>
+        {loadingDeletePreview && <Box sx={{ textAlign: "center", py: 2 }}><CircularProgress size={24} /></Box>}
+        {deleteError && <Alert severity="error" sx={{ mb: 1.5 }}>{deleteError}</Alert>}
+        {deleteSummary && <>
+          <Typography fontSize={14} fontWeight={700}>대회 정보와 안내사항·참가비·입금 계좌를 포함한 연결 데이터를 영구 삭제합니다.</Typography>
+          <Typography fontSize={13} sx={{ mt: 1.2, whiteSpace: "pre-line" }}>부문 {deleteSummary.divisions}개 · 라운드 {deleteSummary.rounds}개{"\n"}참가 신청 및 참가자 {deleteSummary.participants}명 · 초대 클럽 {deleteSummary.invited_groups}개{"\n"}조 {deleteSummary.pools}개 · 경기 {deleteSummary.matches}개 (결과 기록 {deleteSummary.recorded_matches}개)</Typography>
+          <Typography fontSize={13} color="error" sx={{ mt: 1.2 }}>참가자 상태, 조 배정, 경기 점수와 결과도 함께 삭제되며 복구할 수 없습니다.</Typography>
+          <TextField fullWidth size="small" label="삭제하려면 대회명을 정확히 입력하세요" value={deleteTitle} onChange={(event) => setDeleteTitle(event.target.value)} sx={{ mt: 2 }} />
+        </>}
+      </DialogContent>
+      <DialogActions><Button onClick={() => setDeleteOpen(false)} disabled={deleting}>취소</Button><Button color="error" variant="contained" disabled={deleting || !deleteSummary || deleteTitle !== tournament.title} onClick={() => void confirmDelete()}>{deleting ? "삭제 중" : "영구 삭제"}</Button></DialogActions>
+    </Dialog>
     <Snackbar open={!!saveMessage} autoHideDuration={3000} onClose={() => setSaveMessage("")} anchorOrigin={{ vertical: "bottom", horizontal: "center" }}>
       <Alert severity="success" onClose={() => setSaveMessage("")} sx={{ fontWeight: 700 }}>{saveMessage}</Alert>
     </Snackbar>

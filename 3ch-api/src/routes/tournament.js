@@ -45,6 +45,18 @@ async function getDivision(client, tournamentId, divisionId, lock = false) {
   return found.rows[0] ?? null;
 }
 
+async function getTournamentDeleteSummary(client, tournamentId) {
+  const result = await client.query(`SELECT
+    (SELECT COUNT(*)::int FROM tournament_divisions WHERE tournament_id = $1) AS divisions,
+    (SELECT COUNT(*)::int FROM tournament_division_rounds r JOIN tournament_divisions d ON d.id = r.division_id WHERE d.tournament_id = $1) AS rounds,
+    (SELECT COUNT(*)::int FROM tournament_participants p JOIN tournament_divisions d ON d.id = p.division_id WHERE d.tournament_id = $1) AS participants,
+    (SELECT COUNT(*)::int FROM tournament_pools po JOIN tournament_divisions d ON d.id = po.division_id WHERE d.tournament_id = $1) AS pools,
+    (SELECT COUNT(*)::int FROM tournament_matches m JOIN tournament_divisions d ON d.id = m.division_id WHERE d.tournament_id = $1) AS matches,
+    (SELECT COUNT(*)::int FROM tournament_matches m JOIN tournament_divisions d ON d.id = m.division_id WHERE d.tournament_id = $1 AND (m.status = 'completed' OR m.score_a IS NOT NULL OR m.score_b IS NOT NULL)) AS recorded_matches,
+    (SELECT COUNT(*)::int FROM tournament_invited_groups WHERE tournament_id = $1) AS invited_groups`, [tournamentId]);
+  return result.rows[0];
+}
+
 async function canSubmitTournamentApplication(client, tournament, userId, groupId) {
   const hostManager = await hasPremiumSubscription(client, userId) && await canManageHostGroup(client, tournament.host_group_id, userId);
   if (hostManager) return true;
@@ -203,11 +215,53 @@ router.get('/tournaments/:id', optionalAuth, async (req, res) => {
     }
     const canManage = userId !== null && await hasPremiumSubscription(pool, userId) && await canManageHostGroup(pool, tournament.rows[0].host_group_id, userId);
     const canApply = canApplyToTournament(tournament.rows[0]);
-    return res.json({ tournament: { ...tournament.rows[0], can_manage: canManage, can_apply: canApply, divisions: divisions.rows.map((division) => ({ ...division, rounds: roundsByDivision.get(division.id) ?? [] })) } });
+    return res.json({ tournament: { ...tournament.rows[0], can_manage: canManage, can_delete: userId === tournament.rows[0].created_by_id, can_apply: canApply, divisions: divisions.rows.map((division) => ({ ...division, rounds: roundsByDivision.get(division.id) ?? [] })) } });
   } catch (error) {
     console.error('Tournament detail error:', error);
     return res.status(500).json({ message: '대회를 불러올 수 없습니다.' });
   }
+});
+
+router.get('/tournaments/:id/delete-preview', requireAuth, async (req, res) => {
+  const id = z.string().uuid().safeParse(req.params.id);
+  if (!id.success) return res.status(400).json({ message: '대회 ID가 올바르지 않습니다.' });
+  try {
+    const found = await pool.query('SELECT id, title, created_by_id FROM tournaments WHERE id = $1', [id.data]);
+    if (!found.rowCount) return res.status(404).json({ message: '대회를 찾을 수 없습니다.' });
+    if (found.rows[0].created_by_id !== Number(req.user.sub)) return res.status(403).json({ message: '대회 생성자만 삭제할 수 있습니다.' });
+    return res.json({ title: found.rows[0].title, summary: await getTournamentDeleteSummary(pool, id.data) });
+  } catch (error) { console.error('Tournament delete preview error:', error); return res.status(500).json({ message: '삭제 대상을 확인하지 못했습니다.' }); }
+});
+
+router.delete('/tournaments/:id', requireAuth, async (req, res) => {
+  const id = z.string().uuid().safeParse(req.params.id);
+  const summarySchema = z.object({ divisions: z.number().int().nonnegative(), rounds: z.number().int().nonnegative(), participants: z.number().int().nonnegative(), pools: z.number().int().nonnegative(), matches: z.number().int().nonnegative(), recorded_matches: z.number().int().nonnegative(), invited_groups: z.number().int().nonnegative() }).strict();
+  const body = z.object({ confirmation_intent: z.literal('DELETE_TOURNAMENT_AND_ALL_DATA'), title: z.string(), expected_summary: summarySchema }).strict().safeParse(req.body);
+  if (!id.success || !body.success) return res.status(400).json({ message: '대회 삭제 확인 정보가 올바르지 않습니다.' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const found = await client.query('SELECT id, title, created_by_id FROM tournaments WHERE id = $1 FOR UPDATE', [id.data]);
+    if (!found.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ message: '대회를 찾을 수 없습니다.' }); }
+    if (found.rows[0].created_by_id !== Number(req.user.sub)) { await client.query('ROLLBACK'); return res.status(403).json({ message: '대회 생성자만 삭제할 수 있습니다.' }); }
+    if (found.rows[0].title !== body.data.title) { await client.query('ROLLBACK'); return res.status(400).json({ message: '대회명을 정확히 입력해주세요.' }); }
+    const divisionIds = await client.query('SELECT id FROM tournament_divisions WHERE tournament_id = $1 ORDER BY id FOR UPDATE', [id.data]);
+    const ids = divisionIds.rows.map((division) => division.id);
+    const summary = await getTournamentDeleteSummary(client, id.data);
+    if (Object.keys(body.data.expected_summary).some((key) => summary[key] !== body.data.expected_summary[key])) { await client.query('ROLLBACK'); return res.status(409).json({ message: '대회 데이터가 변경되었습니다. 삭제 대상을 다시 확인해주세요.' }); }
+    await client.query('DELETE FROM tournament_pool_members WHERE pool_id IN (SELECT id FROM tournament_pools WHERE division_id = ANY($1::uuid[]))', [ids]);
+    await client.query('DELETE FROM tournament_matches WHERE division_id = ANY($1::uuid[])', [ids]);
+    await client.query('DELETE FROM tournament_pools WHERE division_id = ANY($1::uuid[])', [ids]);
+    await client.query('DELETE FROM tournament_participants WHERE division_id = ANY($1::uuid[])', [ids]);
+    await client.query('DELETE FROM tournament_division_rounds WHERE division_id = ANY($1::uuid[])', [ids]);
+    await client.query('DELETE FROM tournament_invited_groups WHERE tournament_id = $1', [id.data]);
+    await client.query('DELETE FROM tournament_divisions WHERE tournament_id = $1', [id.data]);
+    const deleted = await client.query('DELETE FROM tournaments WHERE id = $1 RETURNING id', [id.data]);
+    if (deleted.rowCount !== 1) { await client.query('ROLLBACK'); return res.status(409).json({ message: '대회가 변경되었습니다. 다시 확인해주세요.' }); }
+    await client.query('COMMIT');
+    return res.json({ message: '대회를 삭제했습니다.' });
+  } catch (error) { await client.query('ROLLBACK'); console.error('Tournament delete error:', error); return res.status(500).json({ message: '대회를 삭제하지 못했습니다. 데이터는 변경되지 않았습니다.' }); }
+  finally { client.release(); }
 });
 
 router.patch('/tournaments/:id', requireAuth, async (req, res) => {

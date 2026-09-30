@@ -236,7 +236,7 @@ router.get('/tournaments/:id/delete-preview', requireAuth, async (req, res) => {
 router.delete('/tournaments/:id', requireAuth, async (req, res) => {
   const id = z.string().uuid().safeParse(req.params.id);
   const summarySchema = z.object({ divisions: z.number().int().nonnegative(), rounds: z.number().int().nonnegative(), participants: z.number().int().nonnegative(), pools: z.number().int().nonnegative(), matches: z.number().int().nonnegative(), recorded_matches: z.number().int().nonnegative(), invited_groups: z.number().int().nonnegative() }).strict();
-  const body = z.object({ confirmation_intent: z.literal('DELETE_TOURNAMENT_AND_ALL_DATA'), title: z.string(), expected_summary: summarySchema }).strict().safeParse(req.body);
+  const body = z.object({ confirmation_intent: z.literal('DELETE_TOURNAMENT_AND_ALL_DATA'), confirmation_text: z.literal('삭제'), expected_summary: summarySchema }).strict().safeParse(req.body);
   if (!id.success || !body.success) return res.status(400).json({ message: '대회 삭제 확인 정보가 올바르지 않습니다.' });
   const client = await pool.connect();
   try {
@@ -244,7 +244,6 @@ router.delete('/tournaments/:id', requireAuth, async (req, res) => {
     const found = await client.query('SELECT id, title, created_by_id FROM tournaments WHERE id = $1 FOR UPDATE', [id.data]);
     if (!found.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ message: '대회를 찾을 수 없습니다.' }); }
     if (found.rows[0].created_by_id !== Number(req.user.sub)) { await client.query('ROLLBACK'); return res.status(403).json({ message: '대회 생성자만 삭제할 수 있습니다.' }); }
-    if (found.rows[0].title !== body.data.title) { await client.query('ROLLBACK'); return res.status(400).json({ message: '대회명을 정확히 입력해주세요.' }); }
     const divisionIds = await client.query('SELECT id FROM tournament_divisions WHERE tournament_id = $1 ORDER BY id FOR UPDATE', [id.data]);
     const ids = divisionIds.rows.map((division) => division.id);
     const summary = await getTournamentDeleteSummary(client, id.data);

@@ -8,7 +8,7 @@ const divisionId = '1f40f553-e218-4679-a654-f8b635d28060';
 const summary = { divisions: 1, rounds: 2, participants: 3, pools: 1, matches: 2, recorded_matches: 1, invited_groups: 1 };
 const route = (path, method) => router.stack.find((layer) => layer.route?.path === path && layer.route.methods[method]).route.stack.at(-1).handle;
 
-async function invoke({ userId = 1, intent = 'DELETE_TOURNAMENT_AND_ALL_DATA', expected = summary, typedTitle = '가을 대회', failOn = '', preview = false } = {}) {
+async function invoke({ userId = 1, intent = 'DELETE_TOURNAMENT_AND_ALL_DATA', expected = summary, confirmationText = '삭제', failOn = '', preview = false } = {}) {
   const originalConnect = pool.connect;
   const originalQuery = pool.query;
   const persisted = new Set(['tournament_pool_members', 'tournament_matches', 'tournament_pools', 'tournament_participants', 'tournament_division_rounds', 'tournament_invited_groups', 'tournament_divisions', 'tournaments']);
@@ -37,7 +37,7 @@ async function invoke({ userId = 1, intent = 'DELETE_TOURNAMENT_AND_ALL_DATA', e
   const res = { status(code) { response.statusCode = code; return this; }, json(body) { response.body = body; return this; } };
   try {
     if (preview) await route('/tournaments/:id/delete-preview', 'get')({ params: { id }, user: { sub: String(userId) } }, res);
-    else await route('/tournaments/:id', 'delete')({ params: { id }, user: { sub: String(userId) }, body: { confirmation_intent: intent, title: typedTitle, expected_summary: expected } }, res);
+    else await route('/tournaments/:id', 'delete')({ params: { id }, user: { sub: String(userId) }, body: { confirmation_intent: intent, confirmation_text: confirmationText, expected_summary: expected } }, res);
     return { response, persisted, commands };
   } finally { pool.connect = originalConnect; pool.query = originalQuery; }
 }
@@ -50,15 +50,15 @@ test('삭제 미리보기는 생성자에게 완료 경기 수를 포함해 보�
   assert.equal(denied.response.statusCode, 403);
 });
 
-test('생성자가 대회명과 명시적 확인값을 제출하면 연결 데이터를 한 트랜잭션에서 삭제한다', async () => {
+test('생성자가 삭제 문구와 명시적 확인값을 제출하면 연결 데이터를 한 트랜잭션에서 삭제한다', async () => {
   const result = await invoke();
   assert.equal(result.response.statusCode, 200);
   assert.equal(result.persisted.size, 0);
   assert.equal(result.commands.at(-1), 'COMMIT');
 });
 
-test('다른 사용자, 잘못된 확인값, 대회명, 변경된 건수는 완료 결과를 포함한 전 데이터를 보존한다', async () => {
-  for (const options of [{ userId: 2 }, { intent: 'DELETE' }, { typedTitle: '다른 대회' }, { expected: { ...summary, recorded_matches: 0 } }]) {
+test('다른 사용자, 잘못된 확인값, 삭제 문구, 변경된 건수는 완료 결과를 포함한 전 데이터를 보존한다', async () => {
+  for (const options of [{ userId: 2 }, { intent: 'DELETE' }, { confirmationText: '다른 대회' }, { expected: { ...summary, recorded_matches: 0 } }]) {
     const result = await invoke(options);
     assert.notEqual(result.response.statusCode, 200);
     assert.equal(result.persisted.size, 8);

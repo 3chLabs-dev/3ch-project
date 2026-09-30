@@ -40,7 +40,7 @@ export default function TournamentDetail() {
   const [saveMessage, setSaveMessage] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteSummary, setDeleteSummary] = useState<TournamentDeleteSummary | null>(null);
-  const [deleteTitle, setDeleteTitle] = useState("");
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState("");
   const [deleteError, setDeleteError] = useState("");
   const [tossQrOpen, setTossQrOpen] = useState(false);
   const [paymentGroupId, setPaymentGroupId] = useState("");
@@ -56,14 +56,14 @@ export default function TournamentDetail() {
   }, [tournament]);
   const hasChanges = Boolean(draft && savedDraft && JSON.stringify(draft) !== JSON.stringify(savedDraft));
   const openDelete = async () => {
-    setDeleteOpen(true); setDeleteSummary(null); setDeleteTitle(""); setDeleteError("");
+    setDeleteOpen(true); setDeleteSummary(null); setDeleteConfirmationText(""); setDeleteError("");
     try { const preview = await loadDeletePreview(id).unwrap(); setDeleteSummary(preview.summary); }
     catch (reason) { setDeleteError((reason as { data?: { message?: string } }).data?.message ?? "삭제 대상을 확인하지 못했습니다."); }
   };
   const confirmDelete = async () => {
-    if (!tournament || !deleteSummary || deleteTitle !== tournament.title) return;
+    if (!tournament || !deleteSummary || deleteConfirmationText !== "삭제") return;
     try {
-      await deleteTournament({ id, title: deleteTitle, expected_summary: deleteSummary, confirmation_intent: "DELETE_TOURNAMENT_AND_ALL_DATA" }).unwrap();
+      await deleteTournament({ id, confirmation_text: deleteConfirmationText, expected_summary: deleteSummary, confirmation_intent: "DELETE_TOURNAMENT_AND_ALL_DATA" }).unwrap();
       navigate("/league", { replace: true });
     } catch (reason) {
       setDeleteError((reason as { data?: { message?: string } }).data?.message ?? "대회를 삭제하지 못했습니다.");
@@ -157,10 +157,10 @@ export default function TournamentDetail() {
           <Typography fontSize={14} fontWeight={700}>대회 정보와 안내사항·참가비·입금 계좌를 포함한 연결 데이터를 영구 삭제합니다.</Typography>
           <Typography fontSize={13} sx={{ mt: 1.2, whiteSpace: "pre-line" }}>부문 {deleteSummary.divisions}개 · 라운드 {deleteSummary.rounds}개{"\n"}참가 신청 및 참가자 {deleteSummary.participants}명 · 초대 클럽 {deleteSummary.invited_groups}개{"\n"}조 {deleteSummary.pools}개 · 경기 {deleteSummary.matches}개 (결과 기록 {deleteSummary.recorded_matches}개)</Typography>
           <Typography fontSize={13} color="error" sx={{ mt: 1.2 }}>참가자 상태, 조 배정, 경기 점수와 결과도 함께 삭제되며 복구할 수 없습니다.</Typography>
-          <TextField fullWidth size="small" label="삭제하려면 대회명을 정확히 입력하세요" value={deleteTitle} onChange={(event) => setDeleteTitle(event.target.value)} sx={{ mt: 2 }} />
+          <TextField fullWidth size="small" label={'삭제하려면 "삭제"를 입력하세요'} value={deleteConfirmationText} onChange={(event) => setDeleteConfirmationText(event.target.value)} sx={{ mt: 2 }} />
         </>}
       </DialogContent>
-      <DialogActions><Button onClick={() => setDeleteOpen(false)} disabled={deleting}>취소</Button><Button color="error" variant="contained" disabled={deleting || !deleteSummary || deleteTitle !== tournament.title} onClick={() => void confirmDelete()}>{deleting ? "삭제 중" : "영구 삭제"}</Button></DialogActions>
+      <DialogActions><Button onClick={() => setDeleteOpen(false)} disabled={deleting}>취소</Button><Button color="error" variant="contained" disabled={deleting || !deleteSummary || deleteConfirmationText !== "삭제"} onClick={() => void confirmDelete()}>{deleting ? "삭제 중" : "영구 삭제"}</Button></DialogActions>
     </Dialog>
     <Snackbar open={!!saveMessage} autoHideDuration={3000} onClose={() => setSaveMessage("")} anchorOrigin={{ vertical: "bottom", horizontal: "center" }}>
       <Alert severity="success" onClose={() => setSaveMessage("")} sx={{ fontWeight: 700 }}>{saveMessage}</Alert>

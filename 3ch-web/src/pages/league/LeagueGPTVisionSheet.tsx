@@ -41,6 +41,7 @@ import ImageIcon from "@mui/icons-material/Image";
 import RotateLeftIcon from "@mui/icons-material/RotateLeft";
 import RotateRightIcon from "@mui/icons-material/RotateRight";
 import CropIcon from "@mui/icons-material/Crop";
+import StarIcon from "@mui/icons-material/Star";
 import NavigateBeforeIcon from "@mui/icons-material/NavigateBefore";
 import NavigateNextIcon from "@mui/icons-material/NavigateNext";
 import ReactCrop, { type Crop, type PixelCrop } from "react-image-crop";
@@ -1173,6 +1174,36 @@ type ImageEditorState = {
   url: string;
 };
 
+type ImageStarPosition = {
+  x: number;
+  y: number;
+};
+
+function drawVisionAnchorStar(context: CanvasRenderingContext2D, x: number, y: number, radius: number) {
+  const innerRadius = radius * 0.44;
+  context.save();
+  context.beginPath();
+  for (let point = 0; point < 10; point += 1) {
+    const angle = -Math.PI / 2 + point * Math.PI / 5;
+    const pointRadius = point % 2 === 0 ? radius : innerRadius;
+    const pointX = x + Math.cos(angle) * pointRadius;
+    const pointY = y + Math.sin(angle) * pointRadius;
+    if (point === 0) context.moveTo(pointX, pointY);
+    else context.lineTo(pointX, pointY);
+  }
+  context.closePath();
+  context.lineJoin = "round";
+  context.strokeStyle = "#FFFFFF";
+  context.lineWidth = Math.max(5, radius * 0.28);
+  context.stroke();
+  context.fillStyle = "#000000";
+  context.fill();
+  context.strokeStyle = "#000000";
+  context.lineWidth = Math.max(2, radius * 0.08);
+  context.stroke();
+  context.restore();
+}
+
 
 function getErrorMessage(error: unknown, fallback: string) {
   if (!error || typeof error !== "object") return fallback;
@@ -1410,6 +1441,8 @@ export default function LeagueGPTVisionSheet() {
   const [cropMode, setCropMode] = useState(false);
   const [crop, setCrop] = useState<Crop>();
   const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
+  const [starMode, setStarMode] = useState(false);
+  const [imageStarPosition, setImageStarPosition] = useState<ImageStarPosition | null>(null);
   const [editorLoaded, setEditorLoaded] = useState(false);
   const [guideSlide, setGuideSlide] = useState(0);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -2564,6 +2597,8 @@ export default function LeagueGPTVisionSheet() {
     setCropMode(false);
     setCrop(undefined);
     setCompletedCrop(undefined);
+    setStarMode(false);
+    setImageStarPosition(null);
     setEditorLoaded(false);
     setImageEditor({ file, url: URL.createObjectURL(file) });
   };
@@ -2574,6 +2609,8 @@ export default function LeagueGPTVisionSheet() {
     setCropMode(false);
     setCrop(undefined);
     setCompletedCrop(undefined);
+    setStarMode(false);
+    setImageStarPosition(null);
     setEditorLoaded(true);
   };
 
@@ -2581,6 +2618,7 @@ export default function LeagueGPTVisionSheet() {
     const image = editorImageRef.current;
     if (!image) return;
     setCropMode(true);
+    setStarMode(false);
     setCrop({ unit: "%", x: 0, y: 0, width: 100, height: 100 });
     setCompletedCrop({ x: 0, y: 0, width: image.width, height: image.height, unit: "px" });
   };
@@ -2599,6 +2637,8 @@ export default function LeagueGPTVisionSheet() {
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
     if (!blob) return;
     const name = imageEditor.file.name.replace(/\.[^.]+$/, "") || "league-score-sheet";
+    setStarMode(false);
+    setImageStarPosition(null);
     setEditorLoaded(false);
     setImageEditor({ file: new File([blob], `${name}.jpg`, { type: "image/jpeg" }), url: URL.createObjectURL(blob) });
   };
@@ -2625,11 +2665,31 @@ export default function LeagueGPTVisionSheet() {
     const context = canvas.getContext("2d");
     if (!context) return;
     context.drawImage(image, pixelCrop.x, pixelCrop.y, pixelCrop.width, pixelCrop.height, 0, 0, outputWidth, outputHeight);
+    if (imageStarPosition) {
+      const sourceStarX = imageStarPosition.x * image.naturalWidth;
+      const sourceStarY = imageStarPosition.y * image.naturalHeight;
+      const starX = (sourceStarX - pixelCrop.x) * outputWidth / pixelCrop.width;
+      const starY = (sourceStarY - pixelCrop.y) * outputHeight / pixelCrop.height;
+      if (starX >= 0 && starX <= outputWidth && starY >= 0 && starY <= outputHeight) {
+        const radius = Math.min(72, Math.max(24, Math.min(outputWidth, outputHeight) * 0.045));
+        drawVisionAnchorStar(context, starX, starY, radius);
+      }
+    }
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
     if (!blob) return;
     const name = imageEditor.file.name.replace(/\.[^.]+$/, "") || "league-score-sheet";
     closeImageEditor();
     await handleVisionImage(new File([blob], `${name}.jpg`, { type: "image/jpeg" }));
+  };
+
+  const placeVisionAnchorStar = (event: React.PointerEvent<HTMLImageElement>) => {
+    if (!starMode) return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    if (!bounds.width || !bounds.height) return;
+    setImageStarPosition({
+      x: Math.min(1, Math.max(0, (event.clientX - bounds.left) / bounds.width)),
+      y: Math.min(1, Math.max(0, (event.clientY - bounds.top) / bounds.height)),
+    });
   };
 
   const handleGuideScroll = () => {
@@ -3758,7 +3818,7 @@ export default function LeagueGPTVisionSheet() {
         <DialogTitle sx={{ px: 2, py: 1, fontWeight: 900 }}>사진 확인</DialogTitle>
         <DialogContent dividers sx={{ p: 1, overflow: "hidden", flex: "1 1 auto", minHeight: 0, display: "flex", flexDirection: "column" }}>
           <Typography sx={{ mb: 0.5, color: "#6B7280", fontSize: 12, lineHeight: 1.35, fontWeight: 700 }}>
-            점수가 잘 인식될 수 있도록 정방향으로 맞춰주고, 대진표 부분만 인식 영역으로 지정해 주세요.
+            정방향으로 맞춘 뒤 대진표만 잘라주세요. 별 넣기를 누르고 인식할 점수 영역의 첫 칸을 누르면 기준 별표가 이미지에 삽입됩니다.
           </Typography>
           <Box
             sx={{
@@ -3795,7 +3855,36 @@ export default function LeagueGPTVisionSheet() {
             }}
           >
             {imageEditor ? <ReactCrop crop={crop} onChange={(_, percentCrop) => setCrop(percentCrop)} onComplete={(pixelCrop) => setCompletedCrop(pixelCrop)} disabled={!cropMode} keepSelection={cropMode} minWidth={48} minHeight={48} ruleOfThirds={cropMode}>
-              <img ref={editorImageRef} src={imageEditor.url} onLoad={handleEditorImageLoad} alt="선택한 대진표" draggable={false} style={{ display: "block", maxWidth: "100%", maxHeight: editorImageMaxHeight, objectFit: "contain" }} />
+              <Box sx={{ position: "relative", display: "inline-block", lineHeight: 0, maxWidth: "100%", maxHeight: editorImageMaxHeight }}>
+                <img
+                  ref={editorImageRef}
+                  src={imageEditor.url}
+                  onLoad={handleEditorImageLoad}
+                  onPointerDown={placeVisionAnchorStar}
+                  alt="선택한 대진표"
+                  draggable={false}
+                  style={{ display: "block", maxWidth: "100%", maxHeight: editorImageMaxHeight, objectFit: "contain", cursor: starMode ? "crosshair" : "default" }}
+                />
+                {imageStarPosition ? (
+                  <StarIcon
+                    aria-label="Vision 기준 별표"
+                    sx={{
+                      position: "absolute",
+                      left: `${imageStarPosition.x * 100}%`,
+                      top: `${imageStarPosition.y * 100}%`,
+                      width: 42,
+                      height: 42,
+                      color: "#000",
+                      stroke: "#fff",
+                      strokeWidth: 1.5,
+                      filter: "drop-shadow(0 1px 2px rgba(0,0,0,.55))",
+                      transform: "translate(-50%, -50%)",
+                      pointerEvents: "none",
+                      zIndex: 3,
+                    }}
+                  />
+                ) : null}
+              </Box>
             </ReactCrop> : null}
           </Box>
           <Stack direction="row" alignItems="flex-start" justifyContent="center" spacing={1} sx={{ pt: 1, minHeight: 64, flexShrink: 0 }}>
@@ -3816,6 +3905,22 @@ export default function LeagueGPTVisionSheet() {
                 <IconButton onClick={() => void rotateEditorImage(90)}><RotateRightIcon /></IconButton>
               </Tooltip>
               <Typography sx={{ fontSize: 11, fontWeight: 700, color: "#6B7280" }}>오른쪽으로 회전</Typography>
+            </Stack>
+            <Stack alignItems="center" sx={{ width: 88 }}>
+              <Tooltip title={imageStarPosition ? "별 위치를 다시 지정" : "Vision 기준 별표 넣기"}>
+                <IconButton
+                  color={starMode ? "primary" : "default"}
+                  onClick={() => {
+                    setCropMode(false);
+                    setStarMode((enabled) => !enabled);
+                  }}
+                >
+                  <StarIcon />
+                </IconButton>
+              </Tooltip>
+              <Typography sx={{ fontSize: 11, fontWeight: 700, color: starMode ? "#1976D2" : "#6B7280" }}>
+                {imageStarPosition ? "별 위치 변경" : "별 넣기"}
+              </Typography>
             </Stack>
           </Stack>
         </DialogContent>

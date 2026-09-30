@@ -273,7 +273,7 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
       thirdPlaceMatch: format === "TOURNAMENT"
         ? isBlueWhiteChampionship ? false : rounds[index].thirdPlaceMatch ?? true
         : undefined,
-      finalAdvancementMode: "top-n",
+      finalAdvancementMode: format === "TOURNAMENT" && index > 0 && !isBlueWhiteChampionship ? "all" : "top-n",
       advanceCount: previousFormat === "TOURNAMENT" || isBlueWhiteChampionship ? 1 : rounds[index].advanceCount ?? 2,
       sourceRoundId: index > 0 ? rounds[index - 1].id : undefined,
       blueWhiteTournamentPlacement: isBlueWhiteChampionship
@@ -369,6 +369,9 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
                 && choice.option === "FINAL";
               updateRound(index, {
                 ...choice,
+                ...(choice.option === "FINAL" && round.option !== "FINAL" && round.format === "TOURNAMENT"
+                  ? { finalAdvancementMode: "all" as const }
+                  : {}),
                 tournamentSeeding:
                   choice.option === "FINAL"
                     ? "seed"
@@ -537,7 +540,7 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
     }
 
     if (round.format === "TOURNAMENT") {
-      const mode = round.finalAdvancementMode ?? "top-n";
+      const mode = round.finalAdvancementMode ?? "all";
       return (
         <>
           <ToggleButtonGroup
@@ -553,8 +556,8 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
             }}
             sx={{ mt: 2, "& .MuiToggleButton-root": { flex: 1 } }}
           >
-            <ToggleButton value="top-n">상위 인원</ToggleButton>
             <ToggleButton value="all">모두 진출</ToggleButton>
+            <ToggleButton value="top-n">상위 인원</ToggleButton>
           </ToggleButtonGroup>
           {mode === "top-n" && (
             <AdvancementCount

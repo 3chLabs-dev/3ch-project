@@ -376,7 +376,7 @@ function ThemeRankingPanel({ theme, rows, currentUserId, onSelect, showAll = fal
             onClick={() => row.member_id != null && onSelect(row.member_id)}
           />;
         })}
-        {!showAll && visibleCount < rows.length && <Button variant="outlined" endIcon={<ExpandMoreIcon />} onClick={() => setVisibleCount((count) => Math.min(count + 10, rows.length))} sx={{ bgcolor: "#FFF", borderColor: "#8AB8F8", color: "#2563EB", fontWeight: 900 }}>더보기</Button>}
+        {!showAll && visibleCount < rows.length && <Button variant="outlined" endIcon={<ExpandMoreIcon />} onClick={() => setVisibleCount((count) => Math.min(count + 10, rows.length))} sx={{ order: 2, bgcolor: "#FFF", borderColor: "#8AB8F8", color: "#2563EB", fontWeight: 900 }}>더보기</Button>}
       </Stack>
     </Box>
   );

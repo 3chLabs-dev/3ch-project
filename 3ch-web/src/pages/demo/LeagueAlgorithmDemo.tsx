@@ -380,6 +380,9 @@ function RoundDivisionEditor({
       update({
         option: option as RoundOption,
         tournamentMode: tournamentMode as TournamentMode,
+        ...(option === "FINAL" && round.option !== "FINAL" && round.format === "TOURNAMENT"
+          ? { finalAdvancementMode: "all" as const }
+          : {}),
         tournamentSeeding:
           option === "FINAL"
             ? "seed"
@@ -511,7 +514,7 @@ function RoundDivisionEditor({
           <ToggleButtonGroup
             exclusive
             fullWidth
-            value={round.finalAdvancementMode ?? "top-n"}
+            value={round.finalAdvancementMode ?? "all"}
             onChange={(_, selectedValue: FinalAdvancementMode | null) => {
               if (selectedValue) update({
                 finalAdvancementMode: selectedValue,
@@ -520,10 +523,10 @@ function RoundDivisionEditor({
             }}
             sx={{ mt: 2 }}
           >
-            <ToggleButton value="top-n">상위 인원</ToggleButton>
             <ToggleButton value="all">모두 진출</ToggleButton>
+            <ToggleButton value="top-n">상위 인원</ToggleButton>
           </ToggleButtonGroup>
-          {(round.finalAdvancementMode ?? "top-n") === "top-n" && (
+          {(round.finalAdvancementMode ?? "all") === "top-n" && (
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "12px" }}>
               <strong>{advancementPrefix}</strong>
               <AdvancementStepper
@@ -534,7 +537,7 @@ function RoundDivisionEditor({
             </div>
           )}
           <p style={helperStyle}>
-            {(round.finalAdvancementMode ?? "top-n") === "all"
+            {(round.finalAdvancementMode ?? "all") === "all"
               ? "예선 참가자 모두가 본선에 진출하며, 전체 인원에 맞춰 토너먼트 시작 단계와 BYE를 자동으로 구성합니다."
               : previousFormat === "GROUP"
               ? "각 조의 상위 순위 참가자가 진출하며, 총 진출 인원에 맞춰 토너먼트 시작 단계와 BYE를 자동으로 구성합니다."
@@ -974,7 +977,7 @@ function RoundConfigEditor({
                                   format: value,
                                   option: rounds.length === 1 ? "NONE" : "PRELIM",
                                   tournamentMode: value === "TOURNAMENT" ? "single" : undefined,
-                                  finalAdvancementMode: "top-n",
+                                  finalAdvancementMode: value === "TOURNAMENT" && roundIndex > 0 ? "all" : "top-n",
                                   advanceCount: x.advanceCount ?? 2,
                                   sourceRoundId: roundIndex > 0 ? rounds[roundIndex - 1].id : undefined,
                                   tournamentSeeding:
@@ -3025,7 +3028,7 @@ const LeagueAlgorithmDemo = ({
 	                              format: value,
                                 option: rounds.length === 1 ? "NONE" : "PRELIM",
                                 tournamentMode: value === "TOURNAMENT" ? "single" : undefined,
-                                finalAdvancementMode: "top-n",
+                                finalAdvancementMode: value === "TOURNAMENT" && roundIndex > 0 ? "all" : "top-n",
                                 advanceCount: x.advanceCount ?? 2,
                                 sourceRoundId: roundIndex > 0 ? rounds[roundIndex - 1].id : undefined,
                                 tournamentSeeding:

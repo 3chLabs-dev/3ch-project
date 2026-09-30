@@ -248,7 +248,7 @@ function normalizeRoundStages(rounds: RoundConfig[]): RoundConfig[] {
       ...round,
       option: "FINAL",
       sourceRoundId: rounds[previousSameProgramIndex].id,
-      finalAdvancementMode: round.finalAdvancementMode ?? "top-n",
+      finalAdvancementMode: round.finalAdvancementMode ?? (round.format === "TOURNAMENT" ? "all" : "top-n"),
       advanceCount: round.advanceCount ?? 2,
     };
   });

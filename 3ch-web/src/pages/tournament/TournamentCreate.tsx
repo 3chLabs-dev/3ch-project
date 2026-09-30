@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { Alert, Box, Button, CircularProgress, Divider, FormControl, FormControlLabel, IconButton, MenuItem, Radio, RadioGroup, Select, Stack, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, CircularProgress, Divider, FormControl, FormControlLabel, IconButton, MenuItem, Radio, RadioGroup, Select, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import PlaceSearchDialog from "../../components/PlaceSearchDialog";
 import { useNavigate } from "react-router-dom";
@@ -7,9 +7,9 @@ import { useAppSelector } from "../../app/hooks";
 import { useGetMyGroupsQuery } from "../../features/group/groupApi";
 import { useCreateTournamentMutation, useGetTournamentEligibilityQuery, type TournamentDivisionInput, type TournamentFormat, type TournamentLeagueType } from "../../features/tournament/tournamentApi";
 
-type RoundDraft = { key: number; league_type: TournamentLeagueType; format: TournamentFormat; matchRule: string };
+type RoundDraft = { key: number; league_type: TournamentLeagueType; format: TournamentFormat; matchRule: string; stage: "PRELIM" | "FINAL"; tournamentMode: "single" | "upper-lower"; finalAdvancementMode: "all" | "top-n"; advanceCount: number };
 type DivisionDraft = Omit<TournamentDivisionInput, "rounds"> & { key: number; rounds: RoundDraft[] };
-const makeRound = (key: number): RoundDraft => ({ key, league_type: "SINGLES", format: "GROUP", matchRule: "BEST_OF_3" });
+const makeRound = (key: number): RoundDraft => ({ key, league_type: "SINGLES", format: "GROUP", matchRule: "BEST_OF_3", stage: key === 1 ? "PRELIM" : "FINAL", tournamentMode: "single", finalAdvancementMode: "all", advanceCount: 2 });
 const makeDivision = (key: number, name = ""): DivisionDraft => ({ key, name, recruit_count: null, rounds: [makeRound(1)] });
 const rowSx = { display: "grid", gridTemplateColumns: "72px 1fr", alignItems: "center", gap: 2, py: 1.2, borderBottom: "1px solid #D9DDE6" };
 const fieldSx = { "& .MuiOutlinedInput-root": { borderRadius: 0.6, bgcolor: "#fff", height: 32 }, "& .MuiOutlinedInput-input": { py: 0.5, fontSize: "0.95rem" } };
@@ -93,7 +93,7 @@ export default function TournamentCreate() {
         starts_at: startsAt.toISOString(), ends_at: endsAt?.toISOString() ?? null,
         application_deadline_at: deadlineAt?.toISOString() ?? null,
         host_group_id: effectiveGroupId, premium_visible: premiumVisible,
-        divisions: divisions.map(({ name, recruit_count, rounds }) => ({ name: name.trim(), recruit_count, rounds: rounds.map(({ league_type, format, matchRule }) => ({ league_type, format, rules: { match_rule: matchRule } })) })),
+        divisions: divisions.map(({ name, recruit_count, rounds }) => ({ name: name.trim(), recruit_count, rounds: rounds.map(({ league_type, format, matchRule, stage, tournamentMode, finalAdvancementMode, advanceCount }, index) => ({ league_type, format, rules: { match_rule: matchRule, round_label: index === 0 || stage === "PRELIM" ? "예선" : index === 1 ? "본선" : "결선", ...(index > 0 && format === "TOURNAMENT" ? { tournament_mode: tournamentMode, final_advancement_mode: finalAdvancementMode, advance_count: advanceCount } : {}) } })) })),
       }).unwrap();
       navigate(`/tournament/${created.tournament.id}`, { replace: true });
     } catch (reason) { setError((reason as { data?: { message?: string } }).data?.message ?? "대회를 생성하지 못했습니다."); }
@@ -152,6 +152,19 @@ export default function TournamentCreate() {
         </Stack>
         {step === 3 && <FormControl fullWidth><RadioGroup value={round.league_type} onChange={(event) => updateRound(division.key, round.key, { league_type: event.target.value as TournamentLeagueType })}><Stack spacing={1}>{typeOptions.map((option) => <FormControlLabel key={option.value} value={option.value} control={<Radio />} label={option.label} sx={{ ...optionSx, borderColor: round.league_type === option.value ? "#2F80ED" : "#D9DDE6" }} />)}</Stack></RadioGroup></FormControl>}
         {step === 4 && <FormControl fullWidth><RadioGroup value={round.format} onChange={(event) => updateRound(division.key, round.key, { format: event.target.value as TournamentFormat })}><Stack spacing={1}>{formatOptions.map((option) => <FormControlLabel key={option.value} value={option.value} control={<Radio />} label={option.label} sx={{ ...optionSx, borderColor: round.format === option.value ? "#2F80ED" : "#D9DDE6" }} />)}</Stack></RadioGroup></FormControl>}
+        {step === 4 && <Box sx={{ mt: 2 }}>
+          <Typography sx={{ mb: 1, fontWeight: 800 }}>라운드 구분</Typography>
+          {roundIndex === 0 && round.format !== "TOURNAMENT" ? <TextField fullWidth disabled size="small" value="예선" /> : round.format === "TOURNAMENT" ? <ToggleButtonGroup fullWidth exclusive value={`${round.stage}:${round.tournamentMode}`} onChange={(_, value: string | null) => { if (!value) return; const [stage, tournamentMode] = value.split(":") as ["PRELIM" | "FINAL", "single" | "upper-lower"]; updateRound(division.key, round.key, { stage, tournamentMode }); }} sx={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", mb: 2, "& .MuiToggleButton-root": { margin: 0, border: "1px solid #D1D5DB" } }}>
+            {roundIndex > 0 && <ToggleButton value="FINAL:single">{roundIndex === 1 ? "본선" : "결선"}(일반)</ToggleButton>}{roundIndex > 0 && <ToggleButton value="FINAL:upper-lower">{roundIndex === 1 ? "본선" : "결선"}(상·하위)</ToggleButton>}<ToggleButton value="PRELIM:single">예선(일반)</ToggleButton><ToggleButton value="PRELIM:upper-lower">예선(상·하위)</ToggleButton>
+          </ToggleButtonGroup> : <ToggleButtonGroup fullWidth exclusive value={round.stage} onChange={(_, value: "PRELIM" | "FINAL" | null) => value && updateRound(division.key, round.key, { stage: value })} sx={{ mb: 2 }}><ToggleButton value="FINAL">{roundIndex === 1 ? "본선" : "결선"}</ToggleButton><ToggleButton value="PRELIM">예선</ToggleButton></ToggleButtonGroup>}
+        </Box>}
+        {step === 4 && roundIndex > 0 && round.format === "TOURNAMENT" && round.stage === "FINAL" && <Box sx={{ mt: 2 }}>
+          <Typography sx={{ mb: 1, fontWeight: 800 }}>진출자 선택</Typography>
+          <ToggleButtonGroup fullWidth exclusive value={round.finalAdvancementMode} onChange={(_, value: "all" | "top-n" | null) => value && updateRound(division.key, round.key, { finalAdvancementMode: value })}>
+            <ToggleButton value="all">모두 진출</ToggleButton><ToggleButton value="top-n">상위 인원</ToggleButton>
+          </ToggleButtonGroup>
+          {round.finalAdvancementMode === "top-n" && <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 1.5 }}><Typography fontWeight={800}>전체 상위</Typography><IconButton aria-label="진출 인원 감소" onClick={() => updateRound(division.key, round.key, { advanceCount: Math.max(1, round.advanceCount - 1) })}>−</IconButton><TextField size="small" type="number" value={round.advanceCount} onChange={(event) => updateRound(division.key, round.key, { advanceCount: Math.max(1, Number(event.target.value) || 1) })} inputProps={{ min: 1, "aria-label": "진출 인원" }} sx={{ width: 72 }} /><IconButton aria-label="진출 인원 증가" onClick={() => updateRound(division.key, round.key, { advanceCount: round.advanceCount + 1 })}>+</IconButton><Typography fontWeight={800}>명</Typography></Stack>}
+        </Box>}
         {step === 5 && <FormControl fullWidth><RadioGroup value={round.matchRule} onChange={(event) => updateRound(division.key, round.key, { matchRule: event.target.value })}><Stack spacing={1}>{ruleOptions.map((option) => <FormControlLabel key={option.value} value={option.value} control={<Radio />} label={option.label} sx={{ ...optionSx, borderColor: round.matchRule === option.value ? "#2F80ED" : "#D9DDE6" }} />)}</Stack></RadioGroup></FormControl>}
       </Box>)}</Stack>
       {step === 3 && <Button fullWidth variant="outlined" onClick={() => addRound(division.key)} sx={{ mt: 2.5, height: 40, borderRadius: 1, fontWeight: 800 }}>+ 라운드 추가</Button>}

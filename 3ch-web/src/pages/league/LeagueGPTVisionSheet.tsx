@@ -11,7 +11,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, FormControlLabel, IconButton, LinearProgress, MenuItem, Paper, Popover, Radio, RadioGroup,
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+  Slider, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography, Stack, Snackbar,
 } from "@mui/material";
 import { styled } from "@mui/material/styles";
@@ -1179,6 +1179,8 @@ type ImageStarPosition = {
   y: number;
 };
 
+const DEFAULT_VISION_STAR_SIZE = 42;
+
 function drawVisionAnchorStar(context: CanvasRenderingContext2D, x: number, y: number, radius: number) {
   const innerRadius = radius * 0.44;
   context.save();
@@ -1443,6 +1445,8 @@ export default function LeagueGPTVisionSheet() {
   const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
   const [starMode, setStarMode] = useState(false);
   const [imageStarPosition, setImageStarPosition] = useState<ImageStarPosition | null>(null);
+  const [imageStarSize, setImageStarSize] = useState(DEFAULT_VISION_STAR_SIZE);
+  const starDragPointerRef = useRef<number | null>(null);
   const [editorLoaded, setEditorLoaded] = useState(false);
   const [guideSlide, setGuideSlide] = useState(0);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -2599,6 +2603,7 @@ export default function LeagueGPTVisionSheet() {
     setCompletedCrop(undefined);
     setStarMode(false);
     setImageStarPosition(null);
+    setImageStarSize(DEFAULT_VISION_STAR_SIZE);
     setEditorLoaded(false);
     setImageEditor({ file, url: URL.createObjectURL(file) });
   };
@@ -2611,6 +2616,7 @@ export default function LeagueGPTVisionSheet() {
     setCompletedCrop(undefined);
     setStarMode(false);
     setImageStarPosition(null);
+    starDragPointerRef.current = null;
     setEditorLoaded(true);
   };
 
@@ -2639,6 +2645,7 @@ export default function LeagueGPTVisionSheet() {
     const name = imageEditor.file.name.replace(/\.[^.]+$/, "") || "league-score-sheet";
     setStarMode(false);
     setImageStarPosition(null);
+    starDragPointerRef.current = null;
     setEditorLoaded(false);
     setImageEditor({ file: new File([blob], `${name}.jpg`, { type: "image/jpeg" }), url: URL.createObjectURL(blob) });
   };
@@ -2671,7 +2678,7 @@ export default function LeagueGPTVisionSheet() {
       const starX = (sourceStarX - pixelCrop.x) * outputWidth / pixelCrop.width;
       const starY = (sourceStarY - pixelCrop.y) * outputHeight / pixelCrop.height;
       if (starX >= 0 && starX <= outputWidth && starY >= 0 && starY <= outputHeight) {
-        const radius = Math.min(72, Math.max(24, Math.min(outputWidth, outputHeight) * 0.045));
+        const radius = imageStarSize * scaleX * outputWidth / pixelCrop.width / 2;
         drawVisionAnchorStar(context, starX, starY, radius);
       }
     }
@@ -2682,14 +2689,43 @@ export default function LeagueGPTVisionSheet() {
     await handleVisionImage(new File([blob], `${name}.jpg`, { type: "image/jpeg" }));
   };
 
-  const placeVisionAnchorStar = (event: React.PointerEvent<HTMLImageElement>) => {
-    if (!starMode) return;
-    const bounds = event.currentTarget.getBoundingClientRect();
+  const updateVisionAnchorStarPosition = (image: HTMLImageElement, clientX: number, clientY: number) => {
+    const bounds = image.getBoundingClientRect();
     if (!bounds.width || !bounds.height) return;
     setImageStarPosition({
-      x: Math.min(1, Math.max(0, (event.clientX - bounds.left) / bounds.width)),
-      y: Math.min(1, Math.max(0, (event.clientY - bounds.top) / bounds.height)),
+      x: Math.min(1, Math.max(0, (clientX - bounds.left) / bounds.width)),
+      y: Math.min(1, Math.max(0, (clientY - bounds.top) / bounds.height)),
     });
+  };
+
+  const startVisionAnchorStarDrag = (event: React.PointerEvent<HTMLImageElement>) => {
+    if (cropMode || (!starMode && !imageStarPosition)) return;
+    if (!starMode && imageStarPosition) {
+      const bounds = event.currentTarget.getBoundingClientRect();
+      const starCenterX = bounds.left + imageStarPosition.x * bounds.width;
+      const starCenterY = bounds.top + imageStarPosition.y * bounds.height;
+      const hitRadius = Math.max(24, imageStarSize / 2 + 12);
+      if (Math.hypot(event.clientX - starCenterX, event.clientY - starCenterY) > hitRadius) return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    starDragPointerRef.current = event.pointerId;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    updateVisionAnchorStarPosition(event.currentTarget, event.clientX, event.clientY);
+  };
+
+  const moveVisionAnchorStar = (event: React.PointerEvent<HTMLImageElement>) => {
+    if (starDragPointerRef.current !== event.pointerId) return;
+    updateVisionAnchorStarPosition(event.currentTarget, event.clientX, event.clientY);
+  };
+
+  const stopVisionAnchorStarDrag = (event: React.PointerEvent<HTMLImageElement>) => {
+    if (starDragPointerRef.current !== event.pointerId) return;
+    starDragPointerRef.current = null;
+    setStarMode(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
   };
 
   const handleGuideScroll = () => {
@@ -3818,7 +3854,7 @@ export default function LeagueGPTVisionSheet() {
         <DialogTitle sx={{ px: 2, py: 1, fontWeight: 900 }}>사진 확인</DialogTitle>
         <DialogContent dividers sx={{ p: 1, overflow: "hidden", flex: "1 1 auto", minHeight: 0, display: "flex", flexDirection: "column" }}>
           <Typography sx={{ mb: 0.5, color: "#6B7280", fontSize: 12, lineHeight: 1.35, fontWeight: 700 }}>
-            정방향으로 맞춘 뒤 대진표만 잘라주세요. 별 넣기를 누르고 인식할 점수 영역의 첫 칸을 누르면 기준 별표가 이미지에 삽입됩니다.
+            정방향으로 맞춘 뒤 대진표만 잘라주세요. 별 넣기로 첫 점수 칸에 별을 놓고, 별을 드래그해 위치와 크기를 조절할 수 있습니다.
           </Typography>
           <Box
             sx={{
@@ -3860,10 +3896,13 @@ export default function LeagueGPTVisionSheet() {
                   ref={editorImageRef}
                   src={imageEditor.url}
                   onLoad={handleEditorImageLoad}
-                  onPointerDown={placeVisionAnchorStar}
+                  onPointerDown={startVisionAnchorStarDrag}
+                  onPointerMove={moveVisionAnchorStar}
+                  onPointerUp={stopVisionAnchorStarDrag}
+                  onPointerCancel={stopVisionAnchorStarDrag}
                   alt="선택한 대진표"
                   draggable={false}
-                  style={{ display: "block", maxWidth: "100%", maxHeight: editorImageMaxHeight, objectFit: "contain", cursor: starMode ? "crosshair" : "default" }}
+                  style={{ display: "block", maxWidth: "100%", maxHeight: editorImageMaxHeight, objectFit: "contain", cursor: starMode ? "crosshair" : imageStarPosition ? "grab" : "default", touchAction: starMode || imageStarPosition ? "none" : "auto" }}
                 />
                 {imageStarPosition ? (
                   <StarIcon
@@ -3872,8 +3911,8 @@ export default function LeagueGPTVisionSheet() {
                       position: "absolute",
                       left: `${imageStarPosition.x * 100}%`,
                       top: `${imageStarPosition.y * 100}%`,
-                      width: 42,
-                      height: 42,
+                      width: imageStarSize,
+                      height: imageStarSize,
                       color: "#000",
                       stroke: "#fff",
                       strokeWidth: 1.5,
@@ -3923,6 +3962,20 @@ export default function LeagueGPTVisionSheet() {
               </Typography>
             </Stack>
           </Stack>
+          {imageStarPosition ? (
+            <Stack direction="row" alignItems="center" spacing={1.5} sx={{ width: "min(320px, 100%)", mx: "auto", pt: 0.5 }}>
+              <Typography sx={{ fontSize: 12, fontWeight: 800, whiteSpace: "nowrap" }}>별 크기</Typography>
+              <Slider
+                aria-label="별 크기"
+                min={20}
+                max={80}
+                step={2}
+                value={imageStarSize}
+                onChange={(_, value) => setImageStarSize(value as number)}
+                valueLabelDisplay="auto"
+              />
+            </Stack>
+          ) : null}
         </DialogContent>
         <DialogActions sx={{ px: 2.5, py: 1.25, flexShrink: 0 }}>
           <Button onClick={closeImageEditor} sx={{ minHeight: 40, px: 2 }}>취소</Button>

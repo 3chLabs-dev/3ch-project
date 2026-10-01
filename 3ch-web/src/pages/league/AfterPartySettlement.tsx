@@ -8,6 +8,7 @@ import LanguageIcon from "@mui/icons-material/Language";
 import SmsOutlinedIcon from "@mui/icons-material/SmsOutlined";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
 import QRCode from "react-qr-code";
 import CurvedShareIcon from "../../components/CurvedShareIcon";
 import { DivisionBadge } from "../../components/ParticipantName";
@@ -24,6 +25,8 @@ type Settlement = { id: string; round_no: number; title: string; status: "draft"
 type CombinedPerson = { participantId: string; name: string; total: number; rounds: Record<string, number> };
 type CombinedSummary = { total: number; people: CombinedPerson[] };
 type ListResponse = { settlements: Settlement[]; summary: CombinedSummary; canManage: boolean; payments: Record<string, boolean> };
+type ReceiptItem = { id: string; name: string; unitPrice: number; quantity: number; amount: number; category: "common" | "alcohol" | "nonalcohol"; confidence: number; needsReview: boolean };
+type ReceiptResult = { scanId: string; merchant: string; purchasedAt: string; receiptTotal: number; recognizedTotal: number; difference: number; items: Omit<ReceiptItem, "id">[] };
 const money = (value: number) => `${value.toLocaleString("ko-KR")}원`;
 const categories = { common: "음식", alcohol: "술", nonalcohol: "음료" };
 const roundTotals = (entry: Settlement) => ({
@@ -201,6 +204,11 @@ export default function AfterPartySettlement() {
   const [sharedLeagueDate, setSharedLeagueDate] = useState("");
   const [tossDialogOpen, setTossDialogOpen] = useState(false);
   const [tossPersonId, setTossPersonId] = useState("");
+  const receiptInputRef = useRef<HTMLInputElement>(null);
+  const [receiptOpen, setReceiptOpen] = useState(false);
+  const [receiptScanning, setReceiptScanning] = useState(false);
+  const [receiptItems, setReceiptItems] = useState<ReceiptItem[]>([]);
+  const [receiptMeta, setReceiptMeta] = useState({ merchant: "", purchasedAt: "", receiptTotal: 0 });
   const base = `${import.meta.env.VITE_API_BASE_URL ?? "/api"}/leagues/${leagueId}/after-party`;
   const listPath = `/league/${leagueId}/after-party`;
   const canEditAccount = canManage && (localPreview || groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.league === true));
@@ -328,11 +336,33 @@ export default function AfterPartySettlement() {
     if (!editable) return;
     const name = draftName.trim();
     const amount = Number(draftAmount);
-    if (!name || !Number.isInteger(draftQuantity) || draftQuantity < 1 || draftQuantity > 20 || !Number.isInteger(amount) || amount <= 0 || amount > 1_000_000_000) { setError("메뉴, 수량, 0원보다 큰 품목 합계금액을 입력해 주세요."); return; }
+    if (!name || !Number.isInteger(draftQuantity) || draftQuantity < 1 || draftQuantity > 999 || !Number.isInteger(amount) || amount <= 0 || amount > 1_000_000_000) { setError("메뉴, 수량, 0원보다 큰 품목 합계금액을 입력해 주세요."); return; }
     if (editingItemId) setItems((old) => old.map((item) => item.id === editingItemId ? { ...item, name, quantity: draftQuantity, amount, category: draftCategory, personIds: [] } : item));
     else setItems((old) => [...old, { id: crypto.randomUUID(), name, quantity: draftQuantity, amount, category: draftCategory, personIds: [] }]);
     setDraftName(""); setDraftQuantity(1); setDraftAmount(""); setEditingItemId(null); setDirty(true); setError("");
     itemNameRef.current?.focus();
+  };
+  const scanReceipt = async (file?: File) => {
+    if (!file || !editable) return;
+    if (localPreview || !token) { setError("영수증 인식은 로컬 API에 로그인하여 연결한 뒤 사용할 수 있습니다."); return; }
+    setReceiptScanning(true); setError("");
+    try {
+      const form = new FormData(); form.append("image", file); form.append("round_no", String(selected?.round_no ?? 0));
+      const response = await fetch(`${base}/receipt-scan`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "영수증을 인식하지 못했습니다.");
+      const receipt = result as ReceiptResult;
+      setReceiptMeta({ merchant: receipt.merchant || "", purchasedAt: receipt.purchasedAt || "", receiptTotal: Number(receipt.receiptTotal || 0) });
+      setReceiptItems((receipt.items ?? []).map((entry) => ({ ...entry, id: crypto.randomUUID(), quantity: Number(entry.quantity || 1), unitPrice: Number(entry.unitPrice || 0), amount: Number(entry.amount || 0) })));
+      setReceiptOpen(true);
+    } catch (cause) { setError((cause as Error).message); }
+    finally { setReceiptScanning(false); if (receiptInputRef.current) receiptInputRef.current.value = ""; }
+  };
+  const importReceiptItems = () => {
+    const valid = receiptItems.filter((entry) => entry.name.trim() && Number.isInteger(entry.quantity) && entry.quantity > 0 && entry.quantity <= 999 && Number.isInteger(entry.amount) && entry.amount > 0);
+    if (!valid.length) { setError("추가할 영수증 메뉴를 확인해 주세요."); return; }
+    setItems((current) => [...current, ...valid.map((entry) => ({ id: crypto.randomUUID(), name: entry.name.trim(), quantity: entry.quantity, amount: entry.amount, category: entry.category, personIds: [] }))]);
+    setDirty(true); setReceiptOpen(false); setError("");
   };
   const addContribution = () => {
     if (!editable) return;
@@ -464,6 +494,7 @@ export default function AfterPartySettlement() {
     nonalcohol: items.filter((item) => item.category === "nonalcohol").reduce((sum, item) => sum + Number(item.amount || 0), 0),
   }), [items]);
   const editable = !!selected && canManage;
+  const receiptRecognizedTotal = receiptItems.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
   const leagueAfterIds = useMemo(() => {
     const ids = new Set((participantData?.participants ?? []).filter((person) => person.after).map((person) => person.id));
     if (localPreview && !participantData?.participants) samplePeople.slice(0, 2).forEach((person) => ids.add(person.id));
@@ -506,12 +537,12 @@ export default function AfterPartySettlement() {
     </Stack> : selected?.round_no === roundNo ? <Stack spacing={2}>
       <Card sx={{ p: 2 }}><Typography fontWeight={900} fontSize={18}>{title}</Typography><Typography fontSize={13} color="text.secondary">뒤풀이 정산</Typography></Card>
       <Card sx={{ p: 2 }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}><Typography fontWeight={900}>메뉴</Typography><Typography fontSize={13} fontWeight={800}>합계 {money(items.reduce((sum, item) => sum + item.amount, 0))}</Typography></Stack>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}><Typography fontWeight={900}>메뉴</Typography><Stack direction="row" alignItems="center" spacing={1}>{editable && <><input ref={receiptInputRef} hidden type="file" accept="image/*" onChange={(event) => void scanReceipt(event.target.files?.[0])} /><Button size="small" variant="outlined" disabled={receiptScanning} startIcon={<ReceiptLongOutlinedIcon />} onClick={() => receiptInputRef.current?.click()} sx={{ fontWeight: 800, whiteSpace: "nowrap" }}>{receiptScanning ? "인식 중" : "영수증 인식"}</Button></>}<Typography fontSize={13} fontWeight={800}>합계 {money(items.reduce((sum, item) => sum + item.amount, 0))}</Typography></Stack></Stack>
         {editable && <>
           <Stack direction="row" gap={0.75} mb={1}>{Object.entries(categories).map(([key, label]) => <Button key={key} variant={draftCategory === key ? "contained" : "outlined"} size="small" onClick={() => setDraftCategory(key as typeof draftCategory)} sx={{ minWidth: 64, minHeight: 36, fontWeight: 800 }}>{label}</Button>)}</Stack>
           <Box sx={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 54px 92px 50px", gap: 0.5 }}>
             <TextField inputRef={itemNameRef} size="small" placeholder="메뉴" value={draftName} onChange={(event) => setDraftName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); addItem(); } }} inputProps={{ "aria-label": "메뉴" }} />
-            <TextField select size="small" value={draftQuantity} onChange={(event) => setDraftQuantity(Number(event.target.value))} inputProps={{ "aria-label": "수량" }} sx={{ "& .MuiSelect-select": { pl: 0.75, pr: "20px !important" }, "& .MuiSelect-icon": { right: 1 } }}>{Array.from({ length: 20 }, (_, index) => <MenuItem key={index + 1} value={index + 1}>{index + 1}</MenuItem>)}</TextField>
+            <TextField select size="small" value={draftQuantity} onChange={(event) => setDraftQuantity(Number(event.target.value))} inputProps={{ "aria-label": "수량" }} sx={{ "& .MuiSelect-select": { pl: 0.75, pr: "20px !important" }, "& .MuiSelect-icon": { right: 1 } }}>{[...Array.from({ length: 20 }, (_, index) => index + 1), ...(draftQuantity > 20 ? [draftQuantity] : [])].map((value) => <MenuItem key={value} value={value}>{value}</MenuItem>)}</TextField>
             <TextField size="small" type="text" placeholder="금액" value={draftAmount} onChange={(event) => setDraftAmount(event.target.value.replace(/\D/g, ""))} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); addItem(); } }} inputProps={{ inputMode: "numeric", pattern: "[0-9]*", "aria-label": "품목 합계금액" }} sx={{ "& .MuiInputBase-input": { px: 1 } }} />
             <Button variant="contained" onClick={addItem} sx={{ minWidth: 0, px: 0, fontWeight: 800 }}>{editingItemId ? "수정" : "추가"}</Button>
           </Box>
@@ -569,6 +600,30 @@ export default function AfterPartySettlement() {
       <Card sx={{ p: 2, bgcolor: "#F8FAFF" }}><Typography fontWeight={900} mb={1}>정산 결과</Typography>{calculation ? <><Typography fontSize={13} color="text.secondary" sx={{ overflowWrap: "anywhere" }}>{costBreakdown(currentTotals, calculation.contributed)}</Typography><Typography fontWeight={900} my={1}>= 정산 금액 {money(calculation.distributable)}</Typography>{people.filter((p) => p.attending).map((p) => <Stack key={p.id} direction="row" justifyContent="space-between"><Typography>{p.name}{p.excluded ? " (제외)" : ""}</Typography><Typography fontWeight={800}>{money(calculation.shares[p.id] ?? 0)}</Typography></Stack>)}</> : <Alert severity="warning">찬조금이 총비용보다 많거나 부담 대상이 없는 항목이 있습니다.</Alert>}</Card>
       {editable && <Button fullWidth variant="contained" disabled={busy || !calculation || !dirty} onClick={() => void save()}>저장</Button>}
     </Stack> : <Typography color="text.secondary">{error || (listLoaded ? "해당 차수의 정산을 찾을 수 없습니다." : "정산을 불러오는 중...")}</Typography>}
+    <Dialog open={receiptOpen} onClose={() => setReceiptOpen(false)} maxWidth="md" fullWidth>
+      <DialogTitle fontWeight={900}>영수증 인식 결과</DialogTitle>
+      <DialogContent>
+        <Stack spacing={1.5} sx={{ pt: 1 }}>
+          {(receiptMeta.merchant || receiptMeta.purchasedAt) && <Typography color="text.secondary" fontSize={13}>{[receiptMeta.merchant, receiptMeta.purchasedAt].filter(Boolean).join(" · ")}</Typography>}
+          <Alert severity={receiptMeta.receiptTotal > 0 && receiptRecognizedTotal === receiptMeta.receiptTotal ? "success" : "warning"}>
+            인식 품목 합계 {money(receiptRecognizedTotal)}{receiptMeta.receiptTotal > 0 ? ` / 영수증 합계 ${money(receiptMeta.receiptTotal)} / 차이 ${money(Math.abs(receiptMeta.receiptTotal - receiptRecognizedTotal))}` : " · 영수증 합계 금액을 찾지 못했습니다."}
+          </Alert>
+          <Typography fontSize={12} color="text.secondary">잘못 인식된 메뉴, 단가, 수량, 금액과 구분을 수정한 뒤 추가해 주세요. 정산에는 품목별 금액이 반영됩니다.</Typography>
+          {receiptItems.map((entry) => <Card key={entry.id} variant="outlined" sx={{ p: 1.25, bgcolor: entry.needsReview ? "#FFF8E1" : "#fff" }}>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ sm: "center" }}>
+              <ToggleButtonGroup exclusive size="small" value={entry.category} onChange={(_event, value) => { if (value) setReceiptItems((current) => current.map((item) => item.id === entry.id ? { ...item, category: value } : item)); }} sx={{ flexShrink: 0 }}>{Object.entries(categories).map(([value, label]) => <ToggleButton key={value} value={value} sx={{ fontWeight: 800, px: 1.25 }}>{label}</ToggleButton>)}</ToggleButtonGroup>
+              <TextField size="small" label="메뉴" value={entry.name} onChange={(event) => setReceiptItems((current) => current.map((item) => item.id === entry.id ? { ...item, name: event.target.value } : item))} sx={{ flex: 1, minWidth: 150 }} />
+              <TextField size="small" label="단가" value={entry.unitPrice || ""} onChange={(event) => setReceiptItems((current) => current.map((item) => item.id === entry.id ? { ...item, unitPrice: Number(event.target.value.replace(/\D/g, "")) } : item))} inputProps={{ inputMode: "numeric" }} sx={{ width: 105 }} />
+              <TextField size="small" label="수량" value={entry.quantity || ""} onChange={(event) => setReceiptItems((current) => current.map((item) => item.id === entry.id ? { ...item, quantity: Number(event.target.value.replace(/\D/g, "")) } : item))} inputProps={{ inputMode: "numeric" }} sx={{ width: 76 }} />
+              <TextField size="small" label="금액" value={entry.amount || ""} onChange={(event) => setReceiptItems((current) => current.map((item) => item.id === entry.id ? { ...item, amount: Number(event.target.value.replace(/\D/g, "")) } : item))} inputProps={{ inputMode: "numeric" }} sx={{ width: 118 }} />
+              <IconButton color="error" aria-label={`${entry.name} 삭제`} onClick={() => setReceiptItems((current) => current.filter((item) => item.id !== entry.id))}><DeleteOutlineIcon /></IconButton>
+            </Stack>
+          </Card>)}
+          {!receiptItems.length && <Alert severity="info">인식된 품목이 없습니다. 창을 닫고 메뉴를 직접 입력해 주세요.</Alert>}
+        </Stack>
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 2.5 }}><Button onClick={() => setReceiptOpen(false)}>취소</Button><Button variant="contained" disabled={!receiptItems.some((entry) => entry.name.trim() && entry.amount > 0)} onClick={importReceiptItems}>정산 메뉴에 추가</Button></DialogActions>
+    </Dialog>
     <Dialog open={shareDialogOpen} onClose={() => setShareDialogOpen(false)} maxWidth="sm" fullWidth>
       <DialogTitle fontWeight={900}>뒤풀이 정산 공유</DialogTitle>
       <DialogContent>

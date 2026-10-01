@@ -1727,6 +1727,42 @@ const tokenPackageSchema = z.object({
   is_visible: z.boolean(),
 });
 
+router.get('/settlements/menu-settings', requireAdmin, async (_req, res) => {
+  try {
+    const result = await pool.query('SELECT alcohol_keywords,beverage_keywords,updated_at FROM after_party_menu_settings WHERE id=1');
+    return res.json({ ok: true, settings: result.rows[0] ?? { alcohol_keywords: [], beverage_keywords: [], updated_at: null } });
+  } catch (error) { console.error('admin settlement menu settings lookup error:', error); return res.status(500).json({ ok: false, error: 'DB_ERROR' }); }
+});
+
+router.put('/settlements/menu-settings', requireAdmin, async (req, res) => {
+  const parsed = z.object({ alcohol_keywords: z.array(z.string().trim().min(1).max(50)).max(200), beverage_keywords: z.array(z.string().trim().min(1).max(50)).max(200) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ ok: false, error: 'INVALID_KEYWORDS' });
+  const unique = (values) => [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+  try {
+    const result = await pool.query(`INSERT INTO after_party_menu_settings(id,alcohol_keywords,beverage_keywords,updated_by_id) VALUES(1,$1,$2,$3) ON CONFLICT(id) DO UPDATE SET alcohol_keywords=EXCLUDED.alcohol_keywords,beverage_keywords=EXCLUDED.beverage_keywords,updated_by_id=EXCLUDED.updated_by_id,updated_at=NOW() RETURNING alcohol_keywords,beverage_keywords,updated_at`, [unique(parsed.data.alcohol_keywords), unique(parsed.data.beverage_keywords), Number(req.user.sub)]);
+    return res.json({ ok: true, settings: result.rows[0] });
+  } catch (error) { console.error('admin settlement menu settings update error:', error); return res.status(500).json({ ok: false, error: 'DB_ERROR' }); }
+});
+
+router.get('/settlements/history', requireAdmin, async (req, res) => {
+  const page = Math.max(1, Number.parseInt(String(req.query.page || '1'), 10) || 1);
+  const limit = Math.min(100, Math.max(10, Number.parseInt(String(req.query.limit || '30'), 10) || 30));
+  try {
+    const result = await pool.query(`
+      WITH history AS (
+        SELECT s.id::text,'settlement'::text AS kind,'saved'::text AS status,s.created_at,l.name AS league_name,l.league_code,u.name AS user_name,s.round_no,
+               (SELECT COUNT(*)::int FROM jsonb_array_elements(s.participants) p WHERE COALESCE((p->>'attending')::boolean,false)) AS item_count,
+               (s.calculation->>'total')::int AS receipt_total,(s.calculation->>'distributable')::int AS recognized_total,0::int AS difference,NULL::text AS error_message
+          FROM after_party_settlements s JOIN leagues l ON l.id=s.league_id LEFT JOIN users u ON u.id=s.created_by_id
+        UNION ALL
+        SELECT r.id::text,'receipt_scan'::text,r.status,r.created_at,l.name,l.league_code,u.name,r.round_no,r.item_count,r.receipt_total,r.recognized_total,r.difference,r.error_message
+          FROM after_party_receipt_scans r JOIN leagues l ON l.id=r.league_id LEFT JOIN users u ON u.id=r.requested_by_id
+      )
+      SELECT *,COUNT(*) OVER()::int AS total_count FROM history ORDER BY created_at DESC LIMIT $1 OFFSET $2`, [limit, (page - 1) * limit]);
+    return res.json({ ok: true, history: result.rows, total: result.rows[0]?.total_count ?? 0, page, limit });
+  } catch (error) { console.error('admin settlement history lookup error:', error); return res.status(500).json({ ok: false, error: 'DB_ERROR' }); }
+});
+
 router.get('/token-packages', requireAdmin, async (_req, res) => {
   try {
     const result = await pool.query(

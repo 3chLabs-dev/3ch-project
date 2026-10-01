@@ -31,6 +31,10 @@ const PAYMENT_MENU = [
   { label: "요금제", path: "/admin/pricing-plans" },
   { label: "토큰 상품", path: "/admin/token-packages" },
 ];
+const SETTLEMENT_MENU = [
+  { label: "정산 내역", path: "/admin/settlement" },
+  { label: "메뉴 관리", path: "/admin/settlement/menu" },
+];
 
 function SideMenuItem({ label, active, depth = 0, onClick }: {
   label: string; active: boolean; depth?: number; onClick: () => void;
@@ -73,8 +77,10 @@ export default function AdminShell() {
 
   const isBoardActive = BOARD_MENU.some((item) => location.pathname === item.path);
   const isPaymentActive = PAYMENT_MENU.some((item) => location.pathname === item.path);
+  const isSettlementActive = SETTLEMENT_MENU.some((item) => location.pathname === item.path);
   const [boardOpen, setBoardOpen] = useState(isBoardActive);
   const [paymentOpen, setPaymentOpen] = useState(isPaymentActive);
+  const [settlementOpen, setSettlementOpen] = useState(isSettlementActive);
 
   const handleLogout = () => {
     dispatch(adminLogout());
@@ -110,6 +116,14 @@ export default function AdminShell() {
               onClick={() => navigate(item.path)}
             />
           ))}
+
+          <Divider sx={{ my: 1.5, mx: 2 }} />
+
+          <Box onClick={() => setSettlementOpen((value) => !value)} sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", px: 2, py: 1.2, cursor: "pointer", bgcolor: isSettlementActive ? "#EEF2FF" : "transparent", borderRight: isSettlementActive ? "3px solid #2F80ED" : "3px solid transparent", "&:hover": { bgcolor: "#F9FAFB" } }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1.2 }}><Box sx={{ width: 7, height: 7, borderRadius: "50%", bgcolor: isSettlementActive ? "#2F80ED" : "#D1D5DB" }} /><Typography sx={{ fontSize: 13, fontWeight: isSettlementActive ? 800 : 600, color: isSettlementActive ? "#2F80ED" : "#374151" }}>정산 관리</Typography></Box>
+            {settlementOpen ? <ExpandLessIcon sx={{ fontSize: 16, color: "#9CA3AF" }} /> : <ExpandMoreIcon sx={{ fontSize: 16, color: "#9CA3AF" }} />}
+          </Box>
+          <Collapse in={settlementOpen} timeout="auto">{SETTLEMENT_MENU.map((item) => <SideMenuItem key={item.path} label={item.label} active={location.pathname === item.path} depth={1} onClick={() => navigate(item.path)} />)}</Collapse>
 
           <Divider sx={{ my: 1.5, mx: 2 }} />
 

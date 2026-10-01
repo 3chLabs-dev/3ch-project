@@ -1,4 +1,5 @@
 const express = require('express');
+const multer = require('multer');
 const { randomUUID } = require('crypto');
 const { z } = require('zod');
 const pool = require('../db/pool');
@@ -6,8 +7,12 @@ const { requireAuth, optionalAuth } = require('../middlewares/auth');
 const { calculate } = require('../services/afterPartyCalculation');
 const { buildSummary } = require('../services/afterPartySummary');
 const { normalizeParticipants } = require('../services/afterPartyParticipants');
+const { scanReceiptWithOpenAIVision } = require('../services/receiptVisionScanner');
+const { defaultAlcoholKeywords, defaultBeverageKeywords, classifyReceiptItem } = require('../services/receiptClassification');
+const { FEATURES, consumeFeatureCredit, refundFeatureCredit } = require('../services/featureUsageService');
 
 const router = express.Router();
+const receiptUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 12 * 1024 * 1024 } });
 const uuid = z.string().uuid();
 const leagueCode = z.string().min(1).max(100);
 
@@ -27,10 +32,13 @@ router.param('leagueId', async (req, _res, next, value) => {
   next();
 });
 const person = z.object({ id: uuid, name: z.string().trim().min(1).max(100), division: z.string().trim().max(30).optional(), guest: z.boolean().optional(), attending: z.boolean(), drinking: z.boolean(), excluded: z.boolean() });
-const item = z.object({ id: uuid, name: z.string().trim().min(1).max(100), quantity: z.number().int().min(1).max(20).optional(), amount: z.number().int().min(0).max(1000000000), category: z.enum(['common', 'alcohol', 'nonalcohol', 'specific']), personIds: z.array(uuid) });
+const item = z.object({ id: uuid, name: z.string().trim().min(1).max(100), quantity: z.number().int().min(1).max(999).optional(), amount: z.number().int().min(0).max(1000000000), category: z.enum(['common', 'alcohol', 'nonalcohol', 'specific']), personIds: z.array(uuid) });
 const contribution = z.object({ id: uuid, name: z.string().trim().min(1).max(100), amount: z.number().int().min(0).max(1000000000), personId: uuid.optional() });
 const bodySchema = z.object({ title: z.string().trim().min(1).max(100), participants: z.array(person).max(300), items: z.array(item).max(200), contributions: z.array(contribution).max(100), version: z.number().int().positive().optional() });
-
+const receiptResultSchema = z.object({
+  merchant: z.string().max(200), purchasedAt: z.string().max(100), receiptTotal: z.number().int().min(0).max(1000000000),
+  items: z.array(z.object({ name: z.string().trim().min(1).max(100), unitPrice: z.number().int().min(0).max(1000000000), quantity: z.number().int().min(1).max(999), amount: z.number().int().min(0).max(1000000000), confidence: z.number().min(0).max(1), needsReview: z.boolean() })).max(200),
+});
 async function access(client, leagueId, userId) {
   const result = await client.query(`SELECT l.created_by_id,l.group_id,gm.role,COALESCE((gm.management_permissions->>'settlement')::boolean,true) AS settlement_permission FROM leagues l LEFT JOIN group_members gm ON gm.group_id=l.group_id AND gm.user_id=$2 WHERE l.id=$1`, [leagueId, userId]);
   if (!result.rowCount) return { allowed: false, manage: false };
@@ -46,6 +54,52 @@ async function paymentStatus(client, leagueId, summary) {
   const amounts = new Map(rows.rows.map((row) => [row.participant_id, row.paid_amount]));
   return Object.fromEntries(summary.people.map((person) => [person.participantId, amounts.get(person.participantId) === person.total]));
 }
+
+router.post('/leagues/:leagueId/after-party/receipt-scan', requireAuth, receiptUpload.single('image'), async (req, res) => {
+  const leagueId = req.params.leagueId;
+  const userId = Number(req.user.sub);
+  const scanId = randomUUID();
+  const requestKey = `after-party-receipt:${leagueId}:${String(req.get('Idempotency-Key') || randomUUID()).slice(0, 64)}`;
+  let usageOwnerId = null;
+  let creditConsumed = false;
+  let logCreated = false;
+  try {
+    if (!leagueCode.safeParse(leagueId).success) return fail(res, 400, '리그 ID가 올바르지 않습니다.');
+    const rights = await access(pool, leagueId, userId);
+    if (!rights.manage) return fail(res, 403, '영수증 인식 권한이 없습니다.');
+    if (!req.file || !String(req.file.mimetype || '').startsWith('image/')) return fail(res, 400, '영수증 이미지 파일이 필요합니다.');
+    const league = await pool.query('SELECT COALESCE(billing_owner_id,created_by_id) AS billing_owner_id FROM leagues WHERE id=$1', [leagueId]);
+    if (!league.rowCount) return fail(res, 404, '리그를 찾을 수 없습니다.');
+    usageOwnerId = Number(league.rows[0].billing_owner_id);
+    const roundNo = /^\d+$/.test(String(req.body?.round_no || '')) ? Number(req.body.round_no) : null;
+    await pool.query(`INSERT INTO after_party_receipt_scans(id,league_id,round_no,requested_by_id,status) VALUES($1,$2,$3,$4,'processing')`, [scanId, leagueId, roundNo, userId]);
+    logCreated = true;
+    const usage = await consumeFeatureCredit({ userId: usageOwnerId, feature: FEATURES.VISION_SCAN, requestKey, referenceType: 'LEAGUE', referenceId: leagueId, metadata: { requestedBy: userId, kind: 'after_party_receipt' } });
+    if (!usage.allowed) {
+      await pool.query(`UPDATE after_party_receipt_scans SET status='failed',error_message=$2,completed_at=NOW() WHERE id=$1`, [scanId, '사진 인식 잔여 횟수가 없습니다.']);
+      return res.status(402).json({ message: '사진 인식 잔여 횟수가 없습니다.', code: 'VISION_QUOTA_EXHAUSTED', pricingPath: '/mypage/pricing' });
+    }
+    creditConsumed = true;
+    const settingsResult = await pool.query('SELECT alcohol_keywords,beverage_keywords FROM after_party_menu_settings WHERE id=1');
+    const alcoholKeywords = settingsResult.rows[0]?.alcohol_keywords ?? defaultAlcoholKeywords;
+    const beverageKeywords = settingsResult.rows[0]?.beverage_keywords ?? defaultBeverageKeywords;
+    const vision = await scanReceiptWithOpenAIVision({ imageBuffer: req.file.buffer, mimeType: req.file.mimetype });
+    const parsed = receiptResultSchema.parse(vision.result);
+    const items = parsed.items.map((entry) => ({ ...entry, category: classifyReceiptItem(entry.name, alcoholKeywords, beverageKeywords) }));
+    const recognizedTotal = items.reduce((sum, entry) => sum + entry.amount, 0);
+    const difference = recognizedTotal - parsed.receiptTotal;
+    const result = { merchant: parsed.merchant, purchasedAt: parsed.purchasedAt, receiptTotal: parsed.receiptTotal, recognizedTotal, difference, items };
+    await pool.query(`UPDATE after_party_receipt_scans SET status='success',engine=$2,merchant=$3,purchased_at=$4,receipt_total=$5,recognized_total=$6,difference=$7,item_count=$8,result=$9,completed_at=NOW() WHERE id=$1`, [scanId, vision.engine, parsed.merchant || null, parsed.purchasedAt || null, parsed.receiptTotal, recognizedTotal, difference, items.length, JSON.stringify(result)]);
+    return res.json({ scanId, engine: vision.engine, ...result });
+  } catch (error) {
+    if (creditConsumed && usageOwnerId) await refundFeatureCredit({ userId: usageOwnerId, feature: FEATURES.VISION_SCAN, requestKey, reason: error?.code || 'RECEIPT_SCAN_FAILED' }).catch(() => {});
+    if (logCreated) await pool.query(`UPDATE after_party_receipt_scans SET status='failed',error_message=$2,completed_at=NOW() WHERE id=$1`, [scanId, String(error.message || '영수증 인식 실패').slice(0, 1000)]).catch(() => {});
+    if (error?.code === 'OPENAI_API_KEY_MISSING') return res.status(503).json({ message: error.message, code: error.code });
+    if (error?.code === 'OPENAI_VISION_FAILED') return res.status(502).json({ message: error.message, code: error.code });
+    console.error('After-party receipt scan failed:', error);
+    return fail(res, 500, '영수증 사진 인식 중 오류가 발생했습니다.');
+  }
+});
 
 router.get('/after-party/shared/:token', optionalAuth, async (req, res) => {
   try {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Alert, Box, Button, Card, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
+import { Alert, Box, Button, Card, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
 import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
@@ -600,6 +600,15 @@ export default function AfterPartySettlement() {
       <Card sx={{ p: 2, bgcolor: "#F8FAFF" }}><Typography fontWeight={900} mb={1}>정산 결과</Typography>{calculation ? <><Typography fontSize={13} color="text.secondary" sx={{ overflowWrap: "anywhere" }}>{costBreakdown(currentTotals, calculation.contributed)}</Typography><Typography fontWeight={900} my={1}>= 정산 금액 {money(calculation.distributable)}</Typography>{people.filter((p) => p.attending).map((p) => <Stack key={p.id} direction="row" justifyContent="space-between"><Typography>{p.name}{p.excluded ? " (제외)" : ""}</Typography><Typography fontWeight={800}>{money(calculation.shares[p.id] ?? 0)}</Typography></Stack>)}</> : <Alert severity="warning">찬조금이 총비용보다 많거나 부담 대상이 없는 항목이 있습니다.</Alert>}</Card>
       {editable && <Button fullWidth variant="contained" disabled={busy || !calculation || !dirty} onClick={() => void save()}>저장</Button>}
     </Stack> : <Typography color="text.secondary">{error || (listLoaded ? "해당 차수의 정산을 찾을 수 없습니다." : "정산을 불러오는 중...")}</Typography>}
+    <Dialog open={receiptScanning} disableEscapeKeyDown maxWidth="xs" fullWidth aria-labelledby="receipt-scanning-title" aria-describedby="receipt-scanning-description" slotProps={{ paper: { sx: { borderRadius: 3 } } }}>
+      <DialogContent sx={{ py: 4, px: 3, textAlign: "center" }}>
+        <Stack spacing={2} alignItems="center" role="status" aria-live="polite">
+          <CircularProgress size={40} aria-label="영수증 인식 진행 중" />
+          <Typography id="receipt-scanning-title" fontWeight={900}>영수증을 인식하고 있습니다</Typography>
+          <Typography id="receipt-scanning-description" fontSize={13} color="text.secondary">메뉴, 수량, 금액을 확인하고 있습니다.<br />잠시만 기다려 주세요.</Typography>
+        </Stack>
+      </DialogContent>
+    </Dialog>
     <Dialog open={receiptOpen} onClose={() => setReceiptOpen(false)} maxWidth="md" fullWidth>
       <DialogTitle fontWeight={900}>영수증 인식 결과</DialogTitle>
       <DialogContent>

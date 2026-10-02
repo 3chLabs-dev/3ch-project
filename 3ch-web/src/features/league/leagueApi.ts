@@ -432,6 +432,8 @@ export interface LeagueResultImportParticipant {
   confidence: number;
   needsReview: boolean;
   member_id: number | null;
+  pre_member_id?: string | null;
+  source_group_id?: string | null;
   canonical_name: string | null;
   imageIndex: number;
 }

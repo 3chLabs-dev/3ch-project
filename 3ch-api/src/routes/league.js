@@ -14,6 +14,7 @@ const { FEATURES, consumeFeatureCredit, refundFeatureCredit } = require('../serv
 const { getPointRanking, ensureDefaultRankingSeasons, normalizePointRules } = require('../services/pointRanking');
 const { winnerSide } = require('../utils/matchOutcome');
 const { resolveProgramParticipantId } = require('../utils/programParticipantResolver');
+const { matchResultParticipant } = require('../services/leagueResultParticipantMatcher');
 
 const isWebPushConfigured = Boolean(
   process.env.VAPID_MAILTO && process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY,
@@ -1648,16 +1649,30 @@ router.post('/league', requireAuth, async (req, res) => {
       const participantId = randomUUID();
       const sourceGroupId = p.source_group_id ?? group_id;
       let resolvedMemberId = p.member_id ?? null;
+      let resolvedDivision = String(p.division ?? '').trim();
       if (!resolvedMemberId) {
         const memberMatch = await client.query(
-          `SELECT u.id
+          `SELECT u.id, gm.division
            FROM group_members gm
            JOIN users u ON u.id = gm.user_id
            WHERE gm.group_id = $1 AND BTRIM(u.name) = BTRIM($2)
            LIMIT 2`,
           [sourceGroupId, p.name],
         );
-        if (memberMatch.rowCount === 1) resolvedMemberId = memberMatch.rows[0].id;
+        if (register_unmatched_as_pre_members && memberMatch.rowCount > 1) {
+          throw new Error('같은 이름의 클럽 회원이 여러 명입니다. 참가자를 확인해 주세요.');
+        }
+        if (memberMatch.rowCount === 1) {
+          if (register_unmatched_as_pre_members) {
+            const duplicatePreMember = await client.query(
+              `SELECT id FROM group_pre_members WHERE group_id = $1 AND status = 'active' AND BTRIM(name) = BTRIM($2) LIMIT 1`,
+              [sourceGroupId, p.name],
+            );
+            if (duplicatePreMember.rowCount > 0) throw new Error('실제 회원과 사전등록 회원에 같은 이름이 있습니다. 참가자를 확인해 주세요.');
+          }
+          resolvedMemberId = memberMatch.rows[0].id;
+          if (!resolvedDivision) resolvedDivision = String(memberMatch.rows[0].division ?? '');
+        }
       }
       if (!resolvedMemberId && register_unmatched_as_pre_members) {
         const existingPreMember = await client.query(
@@ -1665,9 +1680,13 @@ router.post('/league', requireAuth, async (req, res) => {
              FROM group_pre_members
             WHERE group_id = $1 AND status = 'active' AND BTRIM(name) = BTRIM($2)
             ORDER BY created_at ASC
-            LIMIT 1`,
+            LIMIT 2`,
           [sourceGroupId, p.name],
         );
+        if (existingPreMember.rowCount > 1) throw new Error('같은 이름의 사전등록 회원이 여러 명입니다. 참가자를 확인해 주세요.');
+        if (existingPreMember.rowCount === 1 && !resolvedDivision) {
+          resolvedDivision = String(existingPreMember.rows[0].division ?? '');
+        }
         if (existingPreMember.rowCount === 0) {
           await client.query(
             `INSERT INTO group_pre_members (id, group_id, name, division, created_by_id)
@@ -1684,12 +1703,12 @@ router.post('/league', requireAuth, async (req, res) => {
       await client.query(
         `INSERT INTO league_participants (id, league_id, division, name, member_id, source_group_id, paid, arrived, "after")
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [participantId, leagueId, p.division ?? '', p.name, resolvedMemberId, sourceGroupId, p.paid ?? false, p.arrived ?? false, p.after ?? false],
+        [participantId, leagueId, resolvedDivision, p.name, resolvedMemberId, sourceGroupId, p.paid ?? false, p.arrived ?? false, p.after ?? false],
       );
       createdParticipants.push({
         id: participantId,
         league_id: leagueId,
-        division: p.division ?? '',
+        division: resolvedDivision,
         name: p.name,
         member_id: resolvedMemberId,
         source_group_id: sourceGroupId,
@@ -5244,19 +5263,14 @@ router.post('/league/result-import/scan', requireAuth, participantImageUpload.ar
            LEFT JOIN user_external_aliases ua ON ua.user_id = u.id AND ua.group_id = gm.group_id
           WHERE gm.group_id = ANY($1::text[])`, [groupIds],
       );
-      for (const participant of participants) {
-        const normalized = participant.name.normalize('NFKC').replace(/\s+/g, '').toLocaleLowerCase('ko-KR');
-        // 빠른 결과 등록은 선택한 클럽의 실제 회원 이름과 일치할 때만 계정을 연결한다.
-        // 닉네임이나 외부 별칭은 우연한 오매칭을 만들 수 있으므로 이 흐름에서는 사용하지 않는다.
-        const candidates = memberResult.rows.filter((row) =>
-          String(row.name || '').normalize('NFKC').replace(/\s+/g, '').toLocaleLowerCase('ko-KR') === normalized);
-        const ids = [...new Set(candidates.map((row) => row.member_id))];
-        if (ids.length === 1) {
-          const match = candidates[0];
-          participant.member_id = match.member_id;
-          participant.canonical_name = match.canonical_name;
-          if (!participant.division && match.division) participant.division = String(match.division);
-        } else if (ids.length > 1) participant.needsReview = true;
+      const preMemberResult = await pool.query(
+        `SELECT id AS pre_member_id, group_id, name, name AS canonical_name, division
+           FROM group_pre_members
+          WHERE group_id = ANY($1::text[]) AND status = 'active'`, [groupIds],
+      );
+      const candidates = [...memberResult.rows, ...preMemberResult.rows];
+      for (let index = 0; index < participants.length; index += 1) {
+        participants[index] = matchResultParticipant(participants[index], candidates);
       }
     }
     return res.json({ engine: scans[0]?.engine || 'openai', imageCount: files.length, participants, matches });

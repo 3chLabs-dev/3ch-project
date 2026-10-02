@@ -9,6 +9,8 @@ import ImageIcon from "@mui/icons-material/Image";
 import RotateLeftIcon from "@mui/icons-material/RotateLeft";
 import RotateRightIcon from "@mui/icons-material/RotateRight";
 import CropIcon from "@mui/icons-material/Crop";
+import StarIcon from "@mui/icons-material/Star";
+import Slider from "@mui/material/Slider";
 import NavigateBeforeIcon from "@mui/icons-material/NavigateBefore";
 import NavigateNextIcon from "@mui/icons-material/NavigateNext";
 import TuneIcon from "@mui/icons-material/Tune";
@@ -76,6 +78,10 @@ export default function LeagueQuickResult() {
   const [crop, setCrop] = useState<Crop>();
   const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
   const [editorLoaded, setEditorLoaded] = useState(false);
+  const [starMode, setStarMode] = useState(false);
+  const [starPosition, setStarPosition] = useState<{ x: number; y: number } | null>(null);
+  const [starSize, setStarSize] = useState(42);
+  const starPointer = useRef<number | null>(null);
   const [resultOpen, setResultOpen] = useState(false);
   const [resultGroup, setResultGroup] = useState(0);
   const [selectedParticipantKeys, setSelectedParticipantKeys] = useState<Set<string>>(new Set());
@@ -124,6 +130,7 @@ export default function LeagueQuickResult() {
   const openImageEditor = (file?: File) => {
     if (!file || files.length >= expectedFiles) return;
     setCropMode(false); setCrop(undefined); setCompletedCrop(undefined); setEditorLoaded(false);
+    setStarMode(false); setStarPosition(null); setStarSize(42); starPointer.current = null;
     setImageEditor({ file, url: URL.createObjectURL(file) });
   };
   const handleFile = (event: ChangeEvent<HTMLInputElement>) => { openImageEditor(event.target.files?.[0]); event.target.value = ""; };
@@ -135,24 +142,61 @@ export default function LeagueQuickResult() {
     context.translate(canvas.width / 2, canvas.height / 2); context.rotate(degrees * Math.PI / 180);
     context.drawImage(image, -image.naturalWidth / 2, -image.naturalHeight / 2);
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", .92)); if (!blob) return;
+    setStarPosition(null); setStarMode(false); starPointer.current = null;
+    setCropMode(false); setCrop(undefined); setCompletedCrop(undefined);
     setEditorLoaded(false); setImageEditor({ file: new File([blob], imageEditor.file.name, { type: "image/jpeg" }), url: URL.createObjectURL(blob) });
   };
   const enableCrop = () => {
     const image = editorImageRef.current; if (!image) return;
-    setCropMode(true); setCrop({ unit:"%", x:0, y:0, width:100, height:100 });
+    setStarMode(false); setCropMode(true); setCrop({ unit:"%", x:0, y:0, width:100, height:100 });
     setCompletedCrop({ unit:"px", x:0, y:0, width:image.width, height:image.height });
   };
   const confirmEditedImage = async () => {
     const image = editorImageRef.current; if (!image || !imageEditor) return;
-    const selected = cropMode && completedCrop ? completedCrop : { x:0, y:0, width:image.width, height:image.height };
+    const selected = completedCrop ?? { x:0, y:0, width:image.width, height:image.height };
     const scaleX = image.naturalWidth / Math.max(image.width, 1), scaleY = image.naturalHeight / Math.max(image.height, 1);
     const sx=selected.x*scaleX, sy=selected.y*scaleY, sw=selected.width*scaleX, sh=selected.height*scaleY;
     const canvas=document.createElement("canvas"); canvas.width=Math.min(2000,Math.max(1,Math.round(sw))); canvas.height=Math.max(1,Math.round(sh*canvas.width/sw));
     const context=canvas.getContext("2d"); if (!context) return;
     context.drawImage(image,sx,sy,sw,sh,0,0,canvas.width,canvas.height);
+    if (starPosition) {
+      const x = (starPosition.x * image.naturalWidth - sx) * canvas.width / sw;
+      const y = (starPosition.y * image.naturalHeight - sy) * canvas.height / sh;
+      const radius = starSize * scaleX * canvas.width / sw / 2;
+      context.beginPath();
+      for (let point = 0; point < 10; point += 1) {
+        const angle = -Math.PI / 2 + point * Math.PI / 5;
+        const r = radius * (point % 2 === 0 ? 1 : 0.44);
+        const px = x + Math.cos(angle) * r, py = y + Math.sin(angle) * r;
+        if (point === 0) context.moveTo(px, py); else context.lineTo(px, py);
+      }
+      context.closePath(); context.lineJoin = "round";
+      context.strokeStyle = "#fff"; context.lineWidth = Math.max(5, radius * 0.28); context.stroke();
+      context.fillStyle = "#000"; context.fill();
+      context.strokeStyle = "#000"; context.lineWidth = Math.max(2, radius * 0.08); context.stroke();
+    }
     const blob=await new Promise<Blob|null>((resolve)=>canvas.toBlob(resolve,"image/jpeg",.92)); if(!blob)return;
     setFiles((current)=>[...current,new File([blob],`league-sheet-${current.length+1}.jpg`,{type:"image/jpeg"})]);
     setParticipants([]); setMatches([]); setError(""); setImageEditor(null);
+  };
+  const moveStar = (event: React.PointerEvent<HTMLImageElement>) => {
+    if (starPointer.current !== event.pointerId) return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    setStarPosition({ x: Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width)), y: Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height)) });
+  };
+  const startStarDrag = (event: React.PointerEvent<HTMLImageElement>) => {
+    if (cropMode || (!starMode && !starPosition)) return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    if (!starMode && starPosition && Math.hypot(event.clientX - bounds.left - starPosition.x * bounds.width, event.clientY - bounds.top - starPosition.y * bounds.height) > Math.max(24, starSize / 2 + 12)) return;
+    event.preventDefault(); event.stopPropagation();
+    starPointer.current = event.pointerId;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    moveStar(event);
+  };
+  const stopStarDrag = (event: React.PointerEvent<HTMLImageElement>) => {
+    if (starPointer.current !== event.pointerId) return;
+    starPointer.current = null; setStarMode(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   };
   const openFilePicker = async () => {
     const picker=(window as typeof window & { showOpenFilePicker?: (options: unknown)=>Promise<Array<{getFile:()=>Promise<File>}>> }).showOpenFilePicker;
@@ -217,7 +261,7 @@ export default function LeagueQuickResult() {
           start_date: new Date().toISOString(), rules: "프로그램별 설정", group_id: groupId,
           recruit_count: unique.length, participant_count: unique.length, sort_order: "이름 > 부수",
           register_unmatched_as_pre_members: true,
-          participants: unique.map((item) => ({ name: item.name, division: item.division, member_id: item.member_id })),
+          participants: unique.map((item) => ({ name: item.name, division: item.division, member_id: item.member_id, source_group_id: item.source_group_id })),
           program_data: quickProgram,
         }).unwrap();
         targetLeagueId = created.league.id;
@@ -226,7 +270,7 @@ export default function LeagueQuickResult() {
         quickProgramMatches = generatedMatches;
         await syncProgramMatches({ leagueId: targetLeagueId, matches: generatedMatches, resetResults: false }).unwrap();
       } else if (missing.length) {
-        await addParticipants({ leagueId: targetLeagueId, participants: missing.map((item) => ({ name: item.name, division: item.division, member_id: item.member_id })) }).unwrap();
+        await addParticipants({ leagueId: targetLeagueId, participants: missing.map((item) => ({ name: item.name, division: item.division, member_id: item.member_id, source_group_id: item.source_group_id })) }).unwrap();
       }
       setProgress(40);
       const initialized = mode === "new" && quickProgram
@@ -273,7 +317,7 @@ export default function LeagueQuickResult() {
     </Paper>
     <LeagueFilterDialog key={leagueFilterOpen ? "open" : "closed"} open={leagueFilterOpen} onClose={()=>setLeagueFilterOpen(false)} startDate={leagueFilterStart} endDate={leagueFilterEnd} status={leagueFilterStatus} onApply={({startDate,endDate,status})=>{setLeagueFilterStart(startDate);setLeagueFilterEnd(endDate);setLeagueFilterStatus(status);setVisibleLeagueCounts({});setLeagueFilterOpen(false);}} />
     <Dialog open={resultOpen} onClose={()=>{if(!(progress>0&&progress<100))setResultOpen(false)}} fullWidth maxWidth="lg" slotProps={{paper:{sx:{position:"relative",borderRadius:{xs:2,sm:3},m:{xs:1,sm:4},width:{xs:"calc(100% - 16px)",sm:"calc(100% - 64px)"},maxHeight:{xs:"calc(100% - 16px)",sm:"calc(100% - 64px)"}}}}}><DialogTitle fontWeight={900}>AI 인식 결과</DialogTitle><DialogContent dividers sx={{px:{xs:1.5,sm:3}}}><Typography sx={{mb:2,color:"#6B7280",fontSize:13,fontWeight:700}}>클럽 회원 이름과 동일하면 회원 계정에 연결합니다. 나머지는 사전등록 회원으로 등록되며 참가명단 열에서 이름과 부수를 수정할 수 있습니다.</Typography>{expectedFiles>1&&<Stack direction="row" spacing={1} sx={{mb:2,overflowX:"auto"}}>{Array.from({length:expectedFiles},(_,i)=><Button key={i} variant={resultGroup===i?"contained":"outlined"} onClick={()=>setResultGroup(i)} sx={{minWidth:64}}>{i+1}조</Button>)}</Stack>}<ResultMatrix participants={participants.filter((item)=>item.imageIndex===resultGroup&&selectedParticipantKeys.has(item.key))} matches={matches.filter((item)=>item.imageIndex===resultGroup)} allMatches={matches} onChange={setMatches} onParticipantsChange={(key, updates)=>setParticipants((all)=>all.map((item)=>item.key===key?{...item,...updates}:item))}/></DialogContent><DialogActions><Button disabled={progress>0&&progress<100} onClick={()=>setResultOpen(false)}>취소</Button><Button variant="contained" disabled={!selectedParticipantKeys.size||progress>0&&progress<100} onClick={save}>대진표에 입력</Button></DialogActions>{progress>0&&progress<100&&<Box sx={{position:"absolute",inset:0,bgcolor:"rgba(255,255,255,.82)",display:"grid",placeItems:"center",zIndex:2}}><Paper elevation={8} sx={{width:"min(420px,80%)",p:2.5,borderRadius:3}}><Stack direction="row" justifyContent="space-between"><Typography fontWeight={900}>경기 결과 저장 중</Typography><Typography color="primary" fontWeight={900}>{progress}%</Typography></Stack><LinearProgress variant="determinate" value={progress} sx={{mt:1,height:10,borderRadius:99}}/></Paper></Box>}</Dialog>
-    <Dialog open={Boolean(imageEditor)} onClose={()=>setImageEditor(null)} fullWidth maxWidth="md"><DialogTitle fontWeight={900}>사진 확인</DialogTitle><DialogContent dividers><Typography sx={{mb:1,color:"#6B7280",fontSize:13,fontWeight:700}}>이름과 점수가 잘 인식되도록 정방향으로 맞추고, 대진표 부분만 인식 영역으로 지정해 주세요.</Typography><Box sx={{height:"min(58vh,520px)",bgcolor:"#111827",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden","& .ReactCrop":{maxWidth:"100%",maxHeight:"100%",lineHeight:0,touchAction:"none"},"& .ReactCrop__crop-mask":{fill:"rgba(0,0,0,.62)"},"& .ReactCrop__crop-selection":{border:"1px solid rgba(255,255,255,.9)",backgroundImage:"none",animation:"none"},"& .ReactCrop__drag-handle":{display:"block !important",width:28,height:28,background:"transparent",border:0,borderRadius:0},"& .ReactCrop__drag-handle.ord-nw":{top:0,left:0,transform:"none",borderTop:"3px solid #fff",borderLeft:"3px solid #fff"},"& .ReactCrop__drag-handle.ord-ne":{top:0,right:0,transform:"none",borderTop:"3px solid #fff",borderRight:"3px solid #fff"},"& .ReactCrop__drag-handle.ord-se":{right:0,bottom:0,transform:"none",borderRight:"3px solid #fff",borderBottom:"3px solid #fff"},"& .ReactCrop__drag-handle.ord-sw":{bottom:0,left:0,transform:"none",borderBottom:"3px solid #fff",borderLeft:"3px solid #fff"},"& .ReactCrop__drag-handle.ord-n, & .ReactCrop__drag-handle.ord-s":{display:"block !important",width:48,height:24,left:"50%"},"& .ReactCrop__drag-handle.ord-n":{top:0,transform:"translateX(-50%)",borderTop:"3px solid #fff"},"& .ReactCrop__drag-handle.ord-s":{bottom:0,transform:"translateX(-50%)",borderBottom:"3px solid #fff"},"& .ReactCrop__drag-handle.ord-e, & .ReactCrop__drag-handle.ord-w":{display:"block !important",width:24,height:48,top:"50%"},"& .ReactCrop__drag-handle.ord-e":{right:0,transform:"translateY(-50%)",borderRight:"3px solid #fff"},"& .ReactCrop__drag-handle.ord-w":{left:0,transform:"translateY(-50%)",borderLeft:"3px solid #fff"}}}>{imageEditor&&<ReactCrop crop={crop} onChange={(_,percent)=>setCrop(percent)} onComplete={setCompletedCrop} disabled={!cropMode} keepSelection={cropMode} ruleOfThirds={cropMode} minWidth={48} minHeight={48}><img ref={editorImageRef} src={imageEditor.url} onLoad={()=>setEditorLoaded(true)} alt="선택한 대진표" draggable={false} style={{display:"block",maxWidth:"100%",maxHeight:"min(58vh,520px)",objectFit:"contain"}}/></ReactCrop>}</Box><Stack direction="row" justifyContent="center" spacing={2} sx={{pt:1}}><EditorButton label="왼쪽으로 회전" icon={<RotateLeftIcon/>} onClick={()=>rotateImage(-90)}/><EditorButton label="자르기" icon={<CropIcon color={cropMode?"primary":"inherit"}/>} onClick={enableCrop}/><EditorButton label="오른쪽으로 회전" icon={<RotateRightIcon/>} onClick={()=>rotateImage(90)}/></Stack></DialogContent><DialogActions><Button onClick={()=>setImageEditor(null)}>취소</Button><Button variant="contained" disabled={!editorLoaded} onClick={confirmEditedImage}>{format==="조별리그"?`${files.length+1}조 사진 확인`:"사진 확인"}</Button></DialogActions></Dialog>
+<Dialog open={Boolean(imageEditor)} onClose={()=>setImageEditor(null)} fullWidth maxWidth="md"><DialogTitle fontWeight={900}>사진 확인</DialogTitle><DialogContent dividers><Typography sx={{mb:1,color:"#6B7280",fontSize:13,fontWeight:700}}>이름과 점수가 잘 인식되도록 정방향으로 맞추고, 대진표 부분만 인식 영역으로 지정해 주세요. 별 넣기로 첫 점수 칸에 별을 놓고 드래그와 크기 조절로 맞출 수 있습니다.</Typography><Box sx={{height:"min(58vh,520px)",bgcolor:"#111827",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden","& .ReactCrop":{maxWidth:"100%",maxHeight:"100%",lineHeight:0,touchAction:"none"},"& .ReactCrop__crop-mask":{fill:"rgba(0,0,0,.62)"},"& .ReactCrop__crop-selection":{border:"1px solid rgba(255,255,255,.9)",backgroundImage:"none",animation:"none"},"& .ReactCrop__drag-handle":{display:"block !important",width:28,height:28,background:"transparent",border:0,borderRadius:0},"& .ReactCrop__drag-handle.ord-nw":{top:0,left:0,transform:"none",borderTop:"3px solid #fff",borderLeft:"3px solid #fff"},"& .ReactCrop__drag-handle.ord-ne":{top:0,right:0,transform:"none",borderTop:"3px solid #fff",borderRight:"3px solid #fff"},"& .ReactCrop__drag-handle.ord-se":{right:0,bottom:0,transform:"none",borderRight:"3px solid #fff",borderBottom:"3px solid #fff"},"& .ReactCrop__drag-handle.ord-sw":{bottom:0,left:0,transform:"none",borderBottom:"3px solid #fff",borderLeft:"3px solid #fff"},"& .ReactCrop__drag-handle.ord-n, & .ReactCrop__drag-handle.ord-s":{display:"block !important",width:48,height:24,left:"50%"},"& .ReactCrop__drag-handle.ord-n":{top:0,transform:"translateX(-50%)",borderTop:"3px solid #fff"},"& .ReactCrop__drag-handle.ord-s":{bottom:0,transform:"translateX(-50%)",borderBottom:"3px solid #fff"},"& .ReactCrop__drag-handle.ord-e, & .ReactCrop__drag-handle.ord-w":{display:"block !important",width:24,height:48,top:"50%"},"& .ReactCrop__drag-handle.ord-e":{right:0,transform:"translateY(-50%)",borderRight:"3px solid #fff"},"& .ReactCrop__drag-handle.ord-w":{left:0,transform:"translateY(-50%)",borderLeft:"3px solid #fff"}}}>{imageEditor&&<ReactCrop crop={crop} onChange={(_,percent)=>setCrop(percent)} onComplete={setCompletedCrop} disabled={!cropMode} keepSelection={cropMode} ruleOfThirds={cropMode} minWidth={48} minHeight={48}><Box sx={{position:"relative",display:"inline-block",lineHeight:0,maxWidth:"100%"}}><img ref={editorImageRef} src={imageEditor.url} onLoad={()=>setEditorLoaded(true)} onPointerDown={startStarDrag} onPointerMove={moveStar} onPointerUp={stopStarDrag} onPointerCancel={stopStarDrag} alt="선택한 대진표" draggable={false} style={{display:"block",maxWidth:"100%",maxHeight:"min(58vh,520px)",objectFit:"contain",touchAction:starPosition||starMode?"none":"auto",cursor:starMode?"crosshair":starPosition?"grab":"default"}}/>{starPosition&&<StarIcon sx={{position:"absolute",left:`${starPosition.x*100}%`,top:`${starPosition.y*100}%`,width:starSize,height:starSize,color:"#000",stroke:"#fff",strokeWidth:1.5,transform:"translate(-50%,-50%)",pointerEvents:"none"}}/>}</Box></ReactCrop>}</Box><Stack direction="row" justifyContent="center" spacing={2} sx={{pt:1}}><EditorButton label="왼쪽으로 회전" icon={<RotateLeftIcon/>} onClick={()=>rotateImage(-90)}/><EditorButton label="자르기" icon={<CropIcon color={cropMode?"primary":"inherit"}/>} onClick={enableCrop}/><EditorButton label="오른쪽으로 회전" icon={<RotateRightIcon/>} onClick={()=>rotateImage(90)}/><EditorButton label={starPosition?"별 위치 변경":"별 넣기"} icon={<StarIcon color={starMode?"primary":"inherit"}/>} onClick={()=>{setCropMode(false);setStarMode((enabled)=>!enabled);}}/></Stack>{starPosition&&<Stack direction="row" alignItems="center" spacing={1.5} sx={{width:"min(320px,100%)",mx:"auto",pt:1}}><Typography sx={{fontSize:12,fontWeight:800,whiteSpace:"nowrap"}}>별 크기</Typography><Slider aria-label="별 크기" min={20} max={80} step={2} value={starSize} onChange={(_,value)=>setStarSize(value as number)} valueLabelDisplay="auto"/></Stack>}</DialogContent><DialogActions><Button onClick={()=>setImageEditor(null)}>취소</Button><Button variant="contained" disabled={!editorLoaded} onClick={confirmEditedImage}>{format==="조별리그"?`${files.length+1}조 사진 확인`:"사진 확인"}</Button></DialogActions></Dialog>
     <Dialog open={scanning} fullWidth maxWidth="xs"><DialogContent sx={{px:3.5,py:4}}><Typography textAlign="center" fontWeight={900}>AI가 사진 속 이름과 점수를 인식하는 중입니다.</Typography><Typography textAlign="center" sx={{my:1.5,color:"#6B7280",fontSize:13,lineHeight:1.5}}>사진 상태에 따라 인식 결과가 다를 수 있습니다.<br/>결과 화면에서 이름과 점수를 확인하고 수정해 주세요.</Typography><LinearProgress sx={{height:11,borderRadius:99,bgcolor:"#DBEAFE","& .MuiLinearProgress-bar":{borderRadius:99}}}/></DialogContent></Dialog>
   </Box>;
 }
@@ -351,7 +395,7 @@ function ResultMatrix({ participants, matches, allMatches, onChange, onParticipa
             <TableCell sx={{ bgcolor: "#F8FAFC", p: .75 }}>
               <Stack direction="row" spacing={.6} alignItems="center">
                 <Chip label={rowIndex + 1} size="small" color="primary" variant="outlined" />
-                <TextField size="small" placeholder="이름" value={rowParticipant.name} onChange={(event) => onParticipantsChange(rowParticipant.key, { name: event.target.value, member_id: rowParticipant.canonical_name === event.target.value ? rowParticipant.member_id : null })} inputProps={{ style: { padding: "7px 5px", fontWeight: 800, textAlign: "center" } }} sx={{ width: 64, flexShrink: 0, bgcolor: "#fff" }} />
+<TextField size="small" placeholder="이름" value={rowParticipant.name} onChange={(event) => onParticipantsChange(rowParticipant.key, { name: event.target.value, member_id: rowParticipant.canonical_name === event.target.value ? rowParticipant.member_id : null, pre_member_id: rowParticipant.canonical_name === event.target.value ? rowParticipant.pre_member_id : null })} inputProps={{ style: { padding: "7px 5px", fontWeight: 800, textAlign: "center" } }} sx={{ width: 64, flexShrink: 0, bgcolor: "#fff" }} />
                 <TextField size="small" placeholder="부수" value={rowParticipant.division} onChange={(event) => onParticipantsChange(rowParticipant.key, { division: event.target.value })} inputProps={{ style: { textAlign: "center", padding: "7px 3px" } }} sx={{ width: 46, flexShrink: 0, bgcolor: "#fff" }} />
               </Stack>
             </TableCell>

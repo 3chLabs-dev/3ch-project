@@ -342,12 +342,18 @@ export default function AfterPartySettlement() {
     setDraftName(""); setDraftQuantity(1); setDraftAmount(""); setEditingItemId(null); setDirty(true); setError("");
     itemNameRef.current?.focus();
   };
-  const scanReceipt = async (file?: File) => {
-    if (!file || !editable) return;
+  const scanReceipt = async (files?: FileList | null) => {
+    if (!files?.length || !editable || receiptScanning) return;
+    const images = Array.from(files);
+    if (images.length > 10 || images.some((file) => file.size > 12 * 1024 * 1024) || images.reduce((sum, file) => sum + file.size, 0) > 40 * 1024 * 1024) {
+      setError("사진은 최대 10장, 한 장당 12MB, 전체 40MB 이하로 선택해 주세요.");
+      if (receiptInputRef.current) receiptInputRef.current.value = "";
+      return;
+    }
     if (localPreview || !token) { setError("영수증 인식은 로컬 API에 로그인하여 연결한 뒤 사용할 수 있습니다."); return; }
     setReceiptScanning(true); setError("");
     try {
-      const form = new FormData(); form.append("image", file); form.append("round_no", String(selected?.round_no ?? 0));
+      const form = new FormData(); images.forEach((file) => form.append("image", file)); form.append("round_no", String(selected?.round_no ?? 0));
       const response = await fetch(`${base}/receipt-scan`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form });
       const result = await response.json();
       if (!response.ok) throw new Error(result.message || "영수증을 인식하지 못했습니다.");
@@ -537,8 +543,9 @@ export default function AfterPartySettlement() {
     </Stack> : selected?.round_no === roundNo ? <Stack spacing={2}>
       <Card sx={{ p: 2 }}><Typography fontWeight={900} fontSize={18}>{title}</Typography><Typography fontSize={13} color="text.secondary">뒤풀이 정산</Typography></Card>
       <Card sx={{ p: 2 }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}><Typography fontWeight={900}>메뉴</Typography><Stack direction="row" alignItems="center" spacing={1}>{editable && <><input ref={receiptInputRef} hidden type="file" accept="image/*" onChange={(event) => void scanReceipt(event.target.files?.[0])} /><Button size="small" variant="outlined" disabled={receiptScanning} startIcon={<ReceiptLongOutlinedIcon />} onClick={() => receiptInputRef.current?.click()} sx={{ fontWeight: 800, whiteSpace: "nowrap" }}>{receiptScanning ? "인식 중" : "영수증 인식"}</Button></>}<Typography fontSize={13} fontWeight={800}>합계 {money(items.reduce((sum, item) => sum + item.amount, 0))}</Typography></Stack></Stack>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}><Typography fontWeight={900}>메뉴</Typography><Stack direction="row" alignItems="center" spacing={1}>{editable && <><input ref={receiptInputRef} hidden type="file" accept="image/*" multiple onChange={(event) => void scanReceipt(event.target.files)} /><Button size="small" variant="outlined" disabled={receiptScanning} startIcon={<ReceiptLongOutlinedIcon />} onClick={() => receiptInputRef.current?.click()} sx={{ fontWeight: 800, whiteSpace: "nowrap" }}>{receiptScanning ? "인식 중" : "영수증 인식"}</Button></>}<Typography fontSize={13} fontWeight={800}>합계 {money(items.reduce((sum, item) => sum + item.amount, 0))}</Typography></Stack></Stack>
         {editable && <>
+          <Typography fontSize={12} color="text.secondary" mb={1}>긴 영수증은 위에서 아래로 나눠 찍어 최대 10장을 함께 선택해 주세요.</Typography>
           <Stack direction="row" gap={0.75} mb={1}>{Object.entries(categories).map(([key, label]) => <Button key={key} variant={draftCategory === key ? "contained" : "outlined"} size="small" onClick={() => setDraftCategory(key as typeof draftCategory)} sx={{ minWidth: 64, minHeight: 36, fontWeight: 800 }}>{label}</Button>)}</Stack>
           <Box sx={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 54px 92px 50px", gap: 0.5 }}>
             <TextField inputRef={itemNameRef} size="small" placeholder="메뉴" value={draftName} onChange={(event) => setDraftName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); addItem(); } }} inputProps={{ "aria-label": "메뉴" }} />

@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
-  Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, FormControlLabel, IconButton, LinearProgress, MenuItem, Paper, Popover, Radio, RadioGroup,
+  Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, LinearProgress, MenuItem, Paper, Popover, Radio, RadioGroup,
   Slider, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography, Stack, Snackbar,
 } from "@mui/material";
@@ -1234,7 +1234,7 @@ export default function LeagueGPTVisionSheet() {
   const [quickTournamentSeeding, setQuickTournamentSeeding] = useState<TournamentSeedingType>("seed");
   const [quickTournamentBracketCount, setQuickTournamentBracketCount] = useState(1);
   const [quickThirdPlace, setQuickThirdPlace] = useState(false);
-  const [quickAdvanceMode, setQuickAdvanceMode] = useState<"top-n" | "all">("top-n");
+  const [quickAdvanceMode, setQuickAdvanceMode] = useState<"top-n" | "all">("all");
   const [quickAdvanceCount, setQuickAdvanceCount] = useState(2);
   const [quickMatchRule, setQuickMatchRule] = useState<MatchRuleType>("BEST_OF_5");
   const [quickRuleSwitchSize, setQuickRuleSwitchSize] = useState<number | "">("");
@@ -4079,7 +4079,7 @@ export default function LeagueGPTVisionSheet() {
             <Box>
               <Typography sx={{ fontWeight: 900, mb: 1 }}>진출 인원</Typography>
               <ToggleButtonGroup exclusive fullWidth value={quickAdvanceMode} onChange={(_, value: "top-n" | "all" | null) => value && setQuickAdvanceMode(value)}>
-                <ToggleButton value="top-n">상위 인원</ToggleButton><ToggleButton value="all">모두 진출</ToggleButton>
+                <ToggleButton value="all">모두 진출</ToggleButton><ToggleButton value="top-n">상위 인원</ToggleButton>
               </ToggleButtonGroup>
               {quickAdvanceMode === "top-n" && <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 1.25 }}>
                 <Typography fontWeight={900}>{currentProgramBlock?.format === "GROUP" ? "각 조 상위" : "전체 상위"}</Typography>
@@ -4097,9 +4097,9 @@ export default function LeagueGPTVisionSheet() {
             </Box>
             <Box>
               <Typography sx={{ fontWeight: 900, mb: 1 }}>경기 규칙</Typography>
-              <FormControl fullWidth><RadioGroup value={quickMatchRule} onChange={(event) => setQuickMatchRule(event.target.value as MatchRuleType)}><Stack spacing={1}>
-                <FormControlLabel value="BEST_OF_3" control={<Radio />} label="3전 2선승제"/><FormControlLabel value="BEST_OF_5" control={<Radio />} label="5전 3선승제"/><FormControlLabel value="THREE_SET" control={<Radio />} label="3세트제"/>
-              </Stack></RadioGroup></FormControl>
+              <ToggleButtonGroup exclusive fullWidth value={quickMatchRule} onChange={(_, value: MatchRuleType | null) => value && setQuickMatchRule(value)} sx={{ "& .MuiToggleButton-root": { flex: 1, px: .5, textTransform: "none" } }}>
+                <ToggleButton value="BEST_OF_3">3전 2선승제</ToggleButton><ToggleButton value="BEST_OF_5">5전 3선승제</ToggleButton><ToggleButton value="THREE_SET">3세트제</ToggleButton>
+              </ToggleButtonGroup>
             </Box>
             <Stack direction="row" spacing={1.5}>
               <TextField select fullWidth size="small" label="규칙 전환 단계" value={quickRuleSwitchSize} onChange={(event) => setQuickRuleSwitchSize(event.target.value === "" ? "" : Number(event.target.value))}>

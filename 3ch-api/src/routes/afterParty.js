@@ -12,7 +12,7 @@ const { defaultAlcoholKeywords, defaultBeverageKeywords, classifyReceiptItem } =
 const { FEATURES, consumeFeatureCredit, refundFeatureCredit } = require('../services/featureUsageService');
 
 const router = express.Router();
-const receiptUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 12 * 1024 * 1024 } });
+const receiptUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 12 * 1024 * 1024, files: 10 } });
 const uuid = z.string().uuid();
 const leagueCode = z.string().min(1).max(100);
 
@@ -55,7 +55,7 @@ async function paymentStatus(client, leagueId, summary) {
   return Object.fromEntries(summary.people.map((person) => [person.participantId, amounts.get(person.participantId) === person.total]));
 }
 
-router.post('/leagues/:leagueId/after-party/receipt-scan', requireAuth, receiptUpload.single('image'), async (req, res) => {
+router.post('/leagues/:leagueId/after-party/receipt-scan', requireAuth, receiptUpload.array('image', 10), async (req, res) => {
   const leagueId = req.params.leagueId;
   const userId = Number(req.user.sub);
   const scanId = randomUUID();
@@ -67,7 +67,9 @@ router.post('/leagues/:leagueId/after-party/receipt-scan', requireAuth, receiptU
     if (!leagueCode.safeParse(leagueId).success) return fail(res, 400, '리그 ID가 올바르지 않습니다.');
     const rights = await access(pool, leagueId, userId);
     if (!rights.manage) return fail(res, 403, '영수증 인식 권한이 없습니다.');
-    if (!req.file || !String(req.file.mimetype || '').startsWith('image/')) return fail(res, 400, '영수증 이미지 파일이 필요합니다.');
+    const images = req.files ?? [];
+    if (!images.length || images.some((file) => !String(file.mimetype || '').startsWith('image/'))) return fail(res, 400, '영수증 이미지 파일이 필요합니다.');
+    if (images.reduce((sum, file) => sum + file.size, 0) > 40 * 1024 * 1024) return fail(res, 400, '사진 전체 용량은 40MB 이하로 선택해 주세요.');
     const league = await pool.query('SELECT COALESCE(billing_owner_id,created_by_id) AS billing_owner_id FROM leagues WHERE id=$1', [leagueId]);
     if (!league.rowCount) return fail(res, 404, '리그를 찾을 수 없습니다.');
     usageOwnerId = Number(league.rows[0].billing_owner_id);
@@ -83,7 +85,7 @@ router.post('/leagues/:leagueId/after-party/receipt-scan', requireAuth, receiptU
     const settingsResult = await pool.query('SELECT alcohol_keywords,beverage_keywords FROM after_party_menu_settings WHERE id=1');
     const alcoholKeywords = settingsResult.rows[0]?.alcohol_keywords ?? defaultAlcoholKeywords;
     const beverageKeywords = settingsResult.rows[0]?.beverage_keywords ?? defaultBeverageKeywords;
-    const vision = await scanReceiptWithOpenAIVision({ imageBuffer: req.file.buffer, mimeType: req.file.mimetype });
+    const vision = await scanReceiptWithOpenAIVision({ images: images.map((file) => ({ imageBuffer: file.buffer, mimeType: file.mimetype })) });
     const parsed = receiptResultSchema.parse(vision.result);
     const items = parsed.items.map((entry) => ({ ...entry, category: classifyReceiptItem(entry.name, alcoholKeywords, beverageKeywords) }));
     const recognizedTotal = items.reduce((sum, entry) => sum + entry.amount, 0);

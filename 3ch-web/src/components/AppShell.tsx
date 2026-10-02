@@ -1,7 +1,7 @@
 // AppShell.tsx
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
-    AppBar, Box, Toolbar, Paper, Select, MenuItem, IconButton, Stack, Button,
+    AppBar, Box, Toolbar, Paper, Select, MenuItem, IconButton, Stack, Button, Fab, ClickAwayListener,
     Dialog, DialogTitle, DialogContent, DialogActions, Divider, Typography,
 } from "@mui/material";
 import type { SelectChangeEvent } from "@mui/material";
@@ -20,6 +20,11 @@ import { getLocalDevProfileByToken } from "../utils/localDevAuth";
 import logo from "../assets/512_우리리그 로고.svg";
 import SettingsIcon from "@mui/icons-material/Settings";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import AddIcon from "@mui/icons-material/Add";
+import CloseIcon from "@mui/icons-material/Close";
+import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
+import EmojiEventsOutlinedIcon from "@mui/icons-material/EmojiEventsOutlined";
+import { resetRenewalLeagueCreation, setRenewalGroupId, setRenewalStep } from "../features/league/leagueRenewalCreationSlice";
 import homeHeaderBg from "../assets/메인 배너_900x700_버튼X.png"
 import ClubSelectionDialog from "./ClubSelectionDialog";
 import SearchVisibility from "./SearchVisibility";
@@ -34,6 +39,7 @@ export default function AppShell() {
     const token = useSelector((s: RootState) => s.auth.token);
     const preferredGroupId = useSelector((s: RootState) => s.leagueCreation.preferredGroupId);
     const isHome = location.pathname === "/";
+    const showLeagueQuickActions = isHome || location.pathname === "/league";
     const isMyPage = location.pathname === "/mypage";
     const isLeagueSheet = /^\/league\/[^/]+\/(omr|openai-vision|gpt-vision)$/.test(location.pathname);
     const isMatchOrderPage = /^\/league\/[^/]+\/(?:program\/matches|tournament\/matches|matches)$/.test(location.pathname);
@@ -43,6 +49,9 @@ export default function AppShell() {
     const [showHomeBar, setShowHomeBar] = useState(false);
     const [usageOpen, setUsageOpen] = useState(false);
     const [clubSelectionOpen, setClubSelectionOpen] = useState(false);
+    const [quickActionsOpen, setQuickActionsOpen] = useState(false);
+
+    useEffect(() => setQuickActionsOpen(false), [location.pathname]);
 
     // 앱의 실제 스크롤 영역은 window가 아니라 contentRef이므로,
     // 라우트가 바뀔 때마다 이전 페이지의 스크롤 위치를 초기화한다.
@@ -89,6 +98,30 @@ export default function AppShell() {
     const effectiveGroupId = (preferredGroupId && groups.some((g) => g.id === preferredGroupId))
         ? preferredGroupId
         : groups.find((g) => g.is_primary)?.id ?? groups[0]?.id ?? "";
+    const creationGroup = groups.find((group) => group.id === effectiveGroupId);
+    const canCreateLeague = Boolean(token && creationGroup && (
+        creationGroup.role === "owner"
+        || (creationGroup.role === "admin" && creationGroup.management_permissions?.league === true)
+    ));
+
+    const openQuickResult = () => {
+        setQuickActionsOpen(false);
+        navigate(token ? "/league/quick-result" : `/login?redirect=${encodeURIComponent("/league/quick-result")}`);
+    };
+
+    const openLeagueCreation = () => {
+        setQuickActionsOpen(false);
+        if (!token) {
+            navigate(`/login?redirect=${encodeURIComponent("/league")}`);
+            return;
+        }
+        if (!canCreateLeague || !creationGroup) return;
+        dispatch(resetRenewalLeagueCreation());
+        dispatch(setRenewalGroupId(creationGroup.id));
+        dispatch(setPreferredGroupId(creationGroup.id));
+        dispatch(setRenewalStep(1));
+        navigate("/league/new");
+    };
 
     useEffect(() => {
         const primaryGroupId = groups.find((group) => group.is_primary)?.id;
@@ -384,6 +417,58 @@ export default function AppShell() {
                     >
                         <RefreshIcon sx={{ fontSize: 20 }} />
                     </IconButton>
+                )}
+                {showLeagueQuickActions && (
+                    <ClickAwayListener onClickAway={() => setQuickActionsOpen(false)}>
+                        <Stack
+                            alignItems="flex-end"
+                            spacing={1}
+                            onKeyDown={(event) => {
+                                if (event.key === "Escape") setQuickActionsOpen(false);
+                            }}
+                            sx={{
+                                position: "absolute",
+                                right: 16,
+                                bottom: "calc(72px + env(safe-area-inset-bottom))",
+                                zIndex: 22,
+                            }}
+                        >
+                            {quickActionsOpen && (
+                                <Paper elevation={5} sx={{ p: 0.75, borderRadius: 2.5, minWidth: 176 }}>
+                                    <Stack spacing={0.25}>
+                                        <Button
+                                            fullWidth
+                                            startIcon={<FactCheckOutlinedIcon />}
+                                            onClick={openQuickResult}
+                                            sx={{ justifyContent: "flex-start", fontWeight: 800, color: "#1F2937" }}
+                                        >
+                                            리그 결과 등록
+                                        </Button>
+                                        <Button
+                                            fullWidth
+                                            startIcon={<EmojiEventsOutlinedIcon />}
+                                            onClick={openLeagueCreation}
+                                            disabled={Boolean(token) && !canCreateLeague}
+                                            title={token && !canCreateLeague ? "리그 생성 권한이 있는 클럽 운영진만 사용할 수 있습니다." : undefined}
+                                            sx={{ justifyContent: "flex-start", fontWeight: 800, color: "#1F2937" }}
+                                        >
+                                            새 리그 생성
+                                        </Button>
+                                    </Stack>
+                                </Paper>
+                            )}
+                            <Fab
+                                color="primary"
+                                size="medium"
+                                aria-label={quickActionsOpen ? "빠른 메뉴 닫기" : "빠른 메뉴 열기"}
+                                aria-expanded={quickActionsOpen}
+                                onClick={() => setQuickActionsOpen((open) => !open)}
+                                sx={{ boxShadow: "0 5px 16px rgba(37,99,235,0.3)" }}
+                            >
+                                {quickActionsOpen ? <CloseIcon /> : <AddIcon />}
+                            </Fab>
+                        </Stack>
+                    </ClickAwayListener>
                 )}
                 {!isLeagueSheet && <BottomTab />}
 

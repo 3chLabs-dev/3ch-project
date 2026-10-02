@@ -434,13 +434,17 @@ export default function AppShell() {
                             }}
                         >
                             {quickActionsOpen && (
-                                <Paper elevation={5} sx={{ p: 0.75, borderRadius: 2.5, minWidth: 160 }}>
-                                    <Stack spacing={0.25}>
+                                <Paper elevation={5} sx={{ p: 0.75, borderRadius: 2.5, minWidth: 176 }}>
+                                    <Stack spacing={0.25} sx={{
+                                        "& .MuiButton-root": { justifyContent: "flex-start", pl: 2.5, pr: 1.5, fontWeight: 800, color: "#1F2937" },
+                                        "& .MuiButton-root.Mui-disabled": { color: "action.disabled" },
+                                        "& .MuiButton-startIcon": { ml: 0, mr: 1.25, width: 20, flexShrink: 0 },
+                                        "& .MuiButton-startIcon > *:first-of-type": { fontSize: 20 },
+                                    }}>
                                         <Button
                                             fullWidth
                                             startIcon={<FactCheckOutlinedIcon />}
                                             onClick={openQuickResult}
-                                            sx={{ justifyContent: "center", fontWeight: 800, color: "#1F2937" }}
                                         >
                                             리그 결과 등록
                                         </Button>
@@ -450,7 +454,6 @@ export default function AppShell() {
                                             onClick={openLeagueCreation}
                                             disabled={Boolean(token) && !canCreateLeague}
                                             title={token && !canCreateLeague ? "리그 생성 권한이 있는 클럽 운영진만 사용할 수 있습니다." : undefined}
-                                            sx={{ justifyContent: "center", fontWeight: 800, color: "#1F2937" }}
                                         >
                                             새 리그 생성
                                         </Button>

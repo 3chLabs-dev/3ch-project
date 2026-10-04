@@ -1461,6 +1461,29 @@ function scoreCrossGroupSeedOrder(
   return score;
 }
 
+function buildThreeGroupSixQualifierSeedOrder(rankedPools: MatchUnit[][]): MatchUnit[] | null {
+  if (rankedPools.length !== 3 || rankedPools.some((pool) =>
+    pool.length !== 6 || pool.some((unit) => !unit.id))) return null;
+
+  // 아이핑 공개 GameHelp의 3개조 × 6명 배치 호환 정책.
+  // 공식 규정의 유일한 배치라고 주장하지 않는다. 순위별 순환 시드를
+  // 계산한 뒤 확인된 네 쌍만 보정하고, 라인/BYE는 재귀 계산한다.
+  const entrants = Array.from({ length: 6 }, (_, rankIndex) =>
+    Array.from({ length: 3 }, (_, offset) =>
+      rankedPools[(rankIndex + offset) % 3][rankIndex])).flat();
+  for (const [left, right] of [[1, 2], [10, 11], [12, 14], [16, 17]]) {
+    [entrants[left], entrants[right]] = [entrants[right], entrants[left]];
+  }
+  const bracketSize = 2 ** Math.ceil(Math.log2(entrants.length));
+  const internalSeeds = seededBracket(bracketSize);
+  const result = Array<MatchUnit>(bracketSize);
+  officialSeedLineOrder(bracketSize).forEach((seed, slotIndex) => {
+    result[internalSeeds[slotIndex] - 1] = entrants[seed - 1]
+      ?? { id: null, name: null, division: null };
+  });
+  return result;
+}
+
 export function buildCrossGroupTournamentSeedOrder(rankedPools: MatchUnit[][]): MatchUnit[] {
   // 참가자의 토너먼트 시드 순서와 예선 출처 표시는 서로 다른 값이다.
   // 교차 시드 순서를 계산하기 전에 각 참가자에게 원래의 "조-순위"
@@ -1474,6 +1497,9 @@ export function buildCrossGroupTournamentSeedOrder(rankedPools: MatchUnit[][]): 
 
   const exactTwoGroupOrder = buildTwoGroupOfficialSeedOrder(labeledPools);
   if (exactTwoGroupOrder) return exactTwoGroupOrder;
+
+  const threeGroupSixOrder = buildThreeGroupSixQualifierSeedOrder(labeledPools);
+  if (threeGroupSixOrder) return threeGroupSixOrder;
 
   const rankedTiers = Array.from(
     { length: Math.max(...labeledPools.map((pool) => pool.length)) },

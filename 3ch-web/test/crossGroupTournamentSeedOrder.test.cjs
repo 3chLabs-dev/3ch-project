@@ -30,6 +30,18 @@ test('기존 2개조×6명 배치는 유지한다', () => {
     '1-1 BYE 1-5 2-4 1-3 2-6 BYE 2-2 1-2 BYE 1-6 2-3 1-4 2-5 BYE 2-1'.split(' '));
 });
 
+test('아이핑 3개조×6명: 세 번째 경기 2조 3위와 전체 32개 슬롯 일치', () => {
+  const reference = require('./ipingDraws.fixture.json').draws.find(draw =>
+    draw.groups === 3 && draw.ranks === 6);
+  assert.ok(reference);
+  const groups = pools(3);
+  const slots = buildTournamentSlots('fixture', 1, {}, buildCrossGroupTournamentSeedOrder(groups), 'seed');
+  assert.deepEqual(slots.map(slot => slot?.id ?? 'BYE'), reference.slots);
+  assert.deepEqual(slots.slice(4, 6).map(slot => slot?.id ?? 'BYE'), ['2-3', 'BYE']);
+  assert.deepEqual(slots.slice(6, 8).map(slot => slot?.id ?? 'BYE'), ['BYE', '1-3']);
+  assert.equal(new Set(slots.filter(slot => slot?.id).map(slot => slot.id)).size, 18);
+});
+
 const configurations = [];
 for (const count of [3, 4]) {
   for (const rankCount of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 16, 17, 21, 22, 32, 43, 64, 65, 85]) {
@@ -52,7 +64,9 @@ for (const [count, sizes] of configurations) {
     assert.equal(slots.filter(slot => !slot?.id).length, slots.length - total);
     const winners = groups.flatMap(group => group.length ? [group[0].id] : []);
     assert.equal(slots[0].id, winners[0]);
-    assert.equal(slots.at(-1).id, winners[1]);
+    // 아이핑의 3개조×6명에서는 2조 1위가 후반 첫 칸, 3조 1위가 마지막이다.
+    assert.equal(slots.at(-1).id,
+      count === 3 && sizes.every(size => size === 6) ? winners[2] : winners[1]);
     const winnerSlots = winners.map(id => slots.findIndex(slot => slot.id === id));
     assert.equal(new Set(winnerSlots.map(slot => Math.floor(slot / (slots.length / 4)))).size, winners.length);
     const byeRanks = [], playedRanks = [];

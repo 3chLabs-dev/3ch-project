@@ -1,7 +1,12 @@
 const normalizeName = (name) => String(name || '').normalize('NFKC').replace(/\s+/g, '').toLocaleLowerCase('ko-KR');
 
 function matchResultParticipant(participant, candidates) {
-  const matches = candidates.filter((candidate) => normalizeName(candidate.name) === normalizeName(participant.name));
+  const recognizedName = normalizeName(participant.name);
+  if (!recognizedName) return { ...participant };
+  const matches = candidates.filter((candidate) => [
+    candidate.name, candidate.nickname, candidate.canonical_name, candidate.external_alias,
+    ...(Array.isArray(candidate.external_aliases) ? candidate.external_aliases : []),
+  ].some((name) => normalizeName(name) === recognizedName));
   const unique = [...new Map(matches.map((candidate) => [
     `${candidate.group_id}:${candidate.member_id ? `member:${candidate.member_id}` : `pre:${candidate.pre_member_id}`}`,
     candidate,

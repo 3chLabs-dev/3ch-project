@@ -5,6 +5,44 @@ const { matchResultParticipant } = require('../src/services/leagueResultParticip
 const participant = { name: '조현진', division: '', member_id: null, needsReview: false };
 const preMember = { name: '조현진', division: '8', pre_member_id: 'pre-1', group_id: 'club-1' };
 
+test('본명이 없는 클럽장도 닉네임으로 회원 ID와 부수를 연결한다', () => {
+  const result = matchResultParticipant({ ...participant, name: '클럽장' }, [
+    { name: null, nickname: '클럽장', canonical_name: '클럽장', member_id: 12, group_id: 'club-1', division: '5', role: 'owner' },
+  ]);
+  assert.equal(result.member_id, 12);
+  assert.equal(result.division, '5');
+  assert.equal(result.source_group_id, 'club-1');
+});
+
+test('회원 별칭의 중복 조회 행은 같은 회원으로 묶고 등록 이름으로 저장한다', () => {
+  const member = { name: '조현진', canonical_name: '조현진', member_id: 12, group_id: 'club-1', division: '8' };
+  const result = matchResultParticipant({ ...participant, name: '현진' }, [
+    { ...member, external_alias: '현진' }, { ...member, nickname: '현진', external_alias: '다른별칭' },
+  ]);
+  assert.equal(result.member_id, 12);
+  assert.equal(result.name, '조현진');
+  assert.equal(result.division, '8');
+});
+
+test('사전등록회원 별칭도 등록 이름으로 연결하여 순위 이름 매칭을 유지한다', () => {
+  const result = matchResultParticipant({ ...participant, name: '현진' }, [{ ...preMember, external_aliases: ['현진'] }]);
+  assert.equal(result.pre_member_id, 'pre-1');
+  assert.equal(result.name, '조현진');
+});
+
+test('다른 회원의 본명과 겹치는 닉네임은 임의로 연결하지 않는다', () => {
+  const result = matchResultParticipant(participant, [
+    { ...preMember, member_id: 12, pre_member_id: null },
+    { name: '다른회원', nickname: '조현진', member_id: 13, group_id: 'club-1' },
+  ]);
+  assert.equal(result.member_id, null);
+  assert.equal(result.needsReview, true);
+});
+
+test('빈 인식 이름을 비어 있는 회원 이름에 연결하지 않는다', () => {
+  assert.equal(matchResultParticipant({ ...participant, name: ' ' }, [{ name: null, member_id: 12 }]).member_id, null);
+});
+
 test('사전등록 회원의 정식 이름과 부수 및 클럽을 인식 결과에 연결한다', () => {
   const result = matchResultParticipant({ ...participant, name: '조 현진' }, [preMember]);
   assert.equal(result.name, '조현진');

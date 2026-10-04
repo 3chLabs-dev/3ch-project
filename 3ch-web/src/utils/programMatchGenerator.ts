@@ -754,13 +754,7 @@ function getRankedPlayersFromPreviousRound(
   const playerById = new Map(players.map((player) => [player.id, player]));
   const playerIndex = new Map(players.map((player, index) => [player.id, index]));
   const manualIndex = new Map((manualParticipantOrder ?? []).map((id, index) => [id, index]));
-  const divisionNumber = (player: ProgramPlayer) => {
-    const parsed = Number.parseInt(String(player.division ?? "").replace(/[^0-9]/g, ""), 10);
-    return Number.isFinite(parsed) ? parsed : Number.MIN_SAFE_INTEGER;
-  };
   const compareFinalTieBreak = (left: ProgramPlayer, right: ProgramPlayer) => {
-    const divisionDiff = divisionNumber(right) - divisionNumber(left);
-    if (divisionDiff !== 0) return divisionDiff;
     const manualDiff = (manualIndex.get(left.id) ?? Number.MAX_SAFE_INTEGER)
       - (manualIndex.get(right.id) ?? Number.MAX_SAFE_INTEGER);
     if (manualDiff !== 0) return manualDiff;

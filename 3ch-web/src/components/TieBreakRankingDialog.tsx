@@ -69,8 +69,8 @@ export default function TieBreakRankingDialog({
       <DialogTitle sx={{ fontWeight: 900 }}>동점자 순위 결정</DialogTitle>
       <DialogContent>
         <Typography sx={{ fontSize: 13, color: "text.secondary", lineHeight: 1.65, mb: 2 }}>
-          동점자 간 세트 득실이 같을 경우 부수가 낮은 참가자가 높은 순위가 되며,
-          부수도 동률일 경우 가위바위보를 하여 순위를 정합니다.
+          동점자 간 세트 득실까지 같으면 부수와 관계없이 운영자가 순위를 결정합니다.
+          합의한 결정 방식에 따라 화살표로 순서를 조정한 뒤 확정해주세요.
         </Typography>
 
         <Stack spacing={1}>
@@ -98,7 +98,7 @@ export default function TieBreakRankingDialog({
                 <Box minWidth={0}>
                   <Stack direction="row" spacing={0.45} alignItems="center"><Typography sx={{ fontSize: 14, fontWeight: 800 }}>{player.name}</Typography><DivisionBadge division={player.division}/></Stack>
                   <Typography sx={{ fontSize: 11, color: manualGroup ? "#C2410C" : "text.secondary" }}>
-                    {manualGroup ? "가위바위보 순위 지정" : "부수 우선 자동 확정"}
+                    {manualGroup ? "동점자 순위 지정" : "경기 결과로 순위 결정"}
                   </Typography>
                 </Box>
                 <Stack direction="row" spacing={0.5}>

@@ -16,11 +16,6 @@ export interface RoundRobinStandings {
   allMatchesComplete: boolean;
 }
 
-function divisionNumber(division?: string | null): number {
-  const parsed = Number.parseInt(String(division ?? "").replace(/[^0-9]/g, ""), 10);
-  return Number.isFinite(parsed) ? parsed : Number.MIN_SAFE_INTEGER;
-}
-
 export function getRoundRobinWinScore(rule?: string | null): number | null {
   if (rule === "BEST_OF_5" || rule === "5전 3선승제") return 3;
   if (rule === "BEST_OF_3" || rule === "3전 2선승제") return 2;
@@ -99,7 +94,7 @@ export function calculateRoundRobinStandings(
       const ratioDiff = ratio(right) - ratio(left);
       if (ratioDiff !== 0 && !Number.isNaN(ratioDiff)) return ratioDiff;
     }
-    return divisionNumber(players[right].division) - divisionNumber(players[left].division);
+    return 0;
   };
 
   const manualIndex = new Map(manualParticipantOrder.map((id, index) => [id, index]));

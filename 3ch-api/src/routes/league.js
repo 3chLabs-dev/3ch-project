@@ -5264,7 +5264,7 @@ router.post('/league/result-import/scan', requireAuth, participantImageUpload.ar
           WHERE gm.group_id = ANY($1::text[])`, [groupIds],
       );
       const preMemberResult = await pool.query(
-        `SELECT id AS pre_member_id, group_id, name, name AS canonical_name, division
+        `SELECT id AS pre_member_id, group_id, name, name AS canonical_name, division, external_aliases
            FROM group_pre_members
           WHERE group_id = ANY($1::text[]) AND status = 'active'`, [groupIds],
       );

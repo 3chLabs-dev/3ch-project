@@ -34,7 +34,7 @@ router.param('leagueId', async (req, _res, next, value) => {
 const person = z.object({ id: uuid, name: z.string().trim().min(1).max(100), division: z.string().trim().max(30).optional(), guest: z.boolean().optional(), attending: z.boolean(), drinking: z.boolean(), excluded: z.boolean() });
 const item = z.object({ id: uuid, name: z.string().trim().min(1).max(100), quantity: z.number().int().min(1).max(999).optional(), amount: z.number().int().min(0).max(1000000000), category: z.enum(['common', 'alcohol', 'nonalcohol', 'specific']), personIds: z.array(uuid) });
 const contribution = z.object({ id: uuid, name: z.string().trim().min(1).max(100), amount: z.number().int().min(0).max(1000000000), personId: uuid.optional() });
-const bodySchema = z.object({ title: z.string().trim().min(1).max(100), participants: z.array(person).max(300), items: z.array(item).max(200), contributions: z.array(contribution).max(100), version: z.number().int().positive().optional() });
+const bodySchema = z.object({ title: z.string().trim().min(1).max(100), participants: z.array(person).max(300), items: z.array(item).max(200), contributions: z.array(contribution).max(100), version: z.number().int().positive().optional(), receipt_thumbnails: z.array(z.string().max(30000).regex(/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/)).max(30).optional() });
 const receiptResultSchema = z.object({
   merchant: z.string().max(200), purchasedAt: z.string().max(100), receiptTotal: z.number().int().min(0).max(1000000000),
   items: z.array(z.object({ name: z.string().trim().min(1).max(100), unitPrice: z.number().int().min(0).max(1000000000), quantity: z.number().int().min(1).max(999), amount: z.number().int().min(0).max(1000000000), confidence: z.number().min(0).max(1), needsReview: z.boolean() })).max(200),
@@ -116,7 +116,7 @@ router.get('/after-party/shared/:token', optionalAuth, async (req, res) => {
       const member = await pool.query('SELECT 1 FROM group_members WHERE group_id=$1 AND user_id=$2', [league.group_id, Number(req.user.sub)]);
       if (!member.rowCount) return fail(res, 403, '클럽 회원만 볼 수 있습니다.');
     }
-    const result = await pool.query(`SELECT id,round_no,title,status,version,created_at,updated_at,participants,items,contributions,calculation FROM after_party_settlements WHERE league_id=$1 AND ${visibleRounds} ORDER BY round_no`, [league.id]);
+    const result = await pool.query(`SELECT id,round_no,title,status,version,created_at,updated_at,participants,items,contributions,calculation,receipt_thumbnails FROM after_party_settlements WHERE league_id=$1 AND ${visibleRounds} ORDER BY round_no`, [league.id]);
     const summary = buildSummary(result.rows);
     return res.json({ league: { id: league.id, league_code: league.league_code, name: league.name, start_date: league.start_date, bank_account: league.bank_account }, settlements: result.rows, summary, canManage: false, visibility: league.visibility });
   } catch (error) { console.error(error); return fail(res, 500, '공유 정산 조회에 실패했습니다.'); }
@@ -155,7 +155,7 @@ router.get('/leagues/:leagueId/after-party', requireAuth, async (req, res) => {
     if (!leagueCode.safeParse(leagueId).success) return fail(res, 400, '리그 ID가 올바르지 않습니다.');
     const rights = await access(pool, leagueId, Number(req.user.sub));
     if (!rights.allowed) return fail(res, 403, '조회 권한이 없습니다.');
-    const result = await pool.query(`SELECT id,round_no,title,status,version,created_at,updated_at,participants,items,contributions,calculation FROM after_party_settlements WHERE league_id=$1 AND ${visibleRounds} ORDER BY round_no`, [leagueId]);
+    const result = await pool.query(`SELECT id,round_no,title,status,version,created_at,updated_at,participants,items,contributions,calculation,receipt_thumbnails FROM after_party_settlements WHERE league_id=$1 AND ${visibleRounds} ORDER BY round_no`, [leagueId]);
     const summary = buildSummary(result.rows);
     return res.json({ settlements: result.rows, summary, canManage: rights.manage, payments: await paymentStatus(pool, leagueId, summary) });
   } catch (error) { console.error(error); return fail(res, 500, '정산 목록 조회에 실패했습니다.'); }
@@ -202,6 +202,10 @@ router.post('/leagues/:leagueId/after-party', requireAuth, async (req, res) => {
     const latest = await client.query('SELECT COALESCE(MAX(round_no),0)::int AS value FROM after_party_settlements WHERE league_id=$1', [leagueId]);
     const roundNo = latest.rows[0].value + 1;
     const result = await client.query(`INSERT INTO after_party_settlements(id,league_id,round_no,title,participants,items,contributions,calculation,version,created_by_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,2,$9) RETURNING *`, [id, leagueId, roundNo, `${roundNo}차`, JSON.stringify(participants), JSON.stringify(body.items), JSON.stringify(contributions), JSON.stringify(calculation), Number(req.user.sub)]);
+    if (body.receipt_thumbnails?.length) {
+      await client.query('UPDATE after_party_settlements SET receipt_thumbnails=$2::jsonb WHERE id=$1', [id, JSON.stringify(body.receipt_thumbnails)]);
+      result.rows[0].receipt_thumbnails = body.receipt_thumbnails;
+    }
     await client.query('COMMIT');
     return res.status(201).json({ settlement: result.rows[0] });
   } catch (error) { await client.query('ROLLBACK'); console.error(error); return fail(res, 500, '정산 생성에 실패했습니다.'); }
@@ -242,6 +246,12 @@ router.put('/leagues/:leagueId/after-party/:id', requireAuth, async (req, res) =
     try { calculation = calculate(participants, body.items, contributions); }
     catch (error) { await client.query('ROLLBACK'); return fail(res, 400, error.message); }
     const updated = await client.query(`UPDATE after_party_settlements SET title=$3,participants=$4,items=$5,contributions=$6,calculation=$7,version=version+1,updated_at=now() WHERE league_id=$1 AND id=$2 RETURNING *`, [leagueId,id,body.title,JSON.stringify(participants),JSON.stringify(body.items),JSON.stringify(contributions),JSON.stringify(calculation)]);
+    if (body.receipt_thumbnails?.length) {
+      const thumbnails = [...new Set([...(current.receipt_thumbnails ?? []), ...body.receipt_thumbnails])];
+      if (thumbnails.length > 30) { await client.query('ROLLBACK'); return fail(res, 400, '영수증 사진은 차수당 최대 30장까지 저장할 수 있습니다.'); }
+      await client.query('UPDATE after_party_settlements SET receipt_thumbnails=$2::jsonb WHERE id=$1', [id, JSON.stringify(thumbnails)]);
+      updated.rows[0].receipt_thumbnails = thumbnails;
+    }
     await client.query('COMMIT');
     return res.json({ settlement: updated.rows[0] });
   } catch (error) { await client.query('ROLLBACK'); console.error(error); return fail(res, 500, '정산 저장에 실패했습니다.'); }

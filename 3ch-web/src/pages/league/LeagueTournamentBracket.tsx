@@ -34,7 +34,7 @@ import {
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
 import { formatLeagueDate } from "../../utils/dateUtils";
 import { DivisionBadge } from "../../components/ParticipantName";
-import { applyProgramMatchState, applyProgramTournamentAdvancement, clearProgramMatchState, generateProgramRoundMatches, getStoredProgramOption, isAutomaticProgramWalkover, saveProgramMatchPatch, withProgramRoundStandingsSnapshot, type ProgramMatchPatch } from "../../utils/programMatchGenerator";
+import { applyProgramMatchState, applyProgramTournamentAdvancement, clearProgramMatchState, generateProgramRoundMatches, getStoredProgramOption, saveProgramMatchPatch, withProgramRoundStandingsSnapshot, type ProgramMatchPatch } from "../../utils/programMatchGenerator";
 
 // ─── 단일 토너먼트 레이아웃 상수 ────────────────────────────────────────────
 // 단일 토너먼트(라운드로빈 등)에서 매치 박스를 좌→우 방향으로 나열할 때 사용
@@ -1232,7 +1232,6 @@ export default function LeagueTournamentBracket() {
   const headerSummary = isProgramMode && programBlock
     ? `${programRound}라운드 ${getProgramTypeLabel(programBlock.type)} ${getProgramFormatLabel(programBlock.format)} │ ${getProgramRuleLabel(headerRule)}`
     : league ? `${league.type} ${league.format ?? ""} │ ${league.rules ?? ""}` : "";
-  const isManualProgramSeeding = programBlock?.tournamentSeeding === "manual";
   const programSourceMatches = useMemo(() => {
     if (!isProgramMode || !id || !programOption) return matchesData?.matches ?? [];
 
@@ -1289,25 +1288,27 @@ export default function LeagueTournamentBracket() {
     const hydratedMatches = generatedMatches.map((match) => {
       const serverMatch = serverById.get(match.id);
       if (!serverMatch) return match;
-      const preserveWalkover = isAutomaticProgramWalkover(match);
-      const manualRoundOneParticipants =
-        isManualProgramSeeding && match.round_number === 1
-          ? {
+      const persistedParticipants = {
               participant_a_id: serverMatch.participant_a_id,
               participant_a_name: serverMatch.participant_a_name,
               participant_a_division: serverMatch.participant_a_division,
+              participant_a_seed_label: serverMatch.participant_a_seed_label,
+              participant_a_roster: serverMatch.participant_a_roster,
+              participant_a_roster_details: serverMatch.participant_a_roster_details,
               participant_b_id: serverMatch.participant_b_id,
               participant_b_name: serverMatch.participant_b_name,
               participant_b_division: serverMatch.participant_b_division,
-            }
-          : {};
+              participant_b_seed_label: serverMatch.participant_b_seed_label,
+              participant_b_roster: serverMatch.participant_b_roster,
+              participant_b_roster_details: serverMatch.participant_b_roster_details,
+            };
       return {
         ...match,
-        ...manualRoundOneParticipants,
-        score_a: preserveWalkover ? match.score_a : serverMatch.score_a,
-        score_b: preserveWalkover ? match.score_b : serverMatch.score_b,
+        ...persistedParticipants,
+        score_a: serverMatch.score_a,
+        score_b: serverMatch.score_b,
         court: serverMatch.court,
-        status: preserveWalkover ? match.status : serverMatch.status,
+        status: serverMatch.status,
         match_rule: match.match_rule ?? serverMatch.match_rule,
       };
     });
@@ -1318,7 +1319,6 @@ export default function LeagueTournamentBracket() {
     canonicalProgramMatches,
     programRound,
     serverProgramMatches,
-    isManualProgramSeeding,
   ]);
   const tournamentBracketIndexes = useMemo(
     () => [...new Set(allProgramMatches.map((match) => match.tournament_bracket_index ?? 1))].sort((a, b) => a - b),
@@ -1603,6 +1603,13 @@ export default function LeagueTournamentBracket() {
       const firstMatch = allProgramMatches.find((match) => match.id === first.matchId);
       const secondMatch = allProgramMatches.find((match) => match.id === matchId);
       if (!firstMatch || !secondMatch) return;
+      const hasPlayedResult = (match: LeagueMatch) => match.status === "playing"
+        || (match.status === "done" && Boolean(match.participant_a_id) && Boolean(match.participant_b_id))
+        || Number(match.score_a ?? 0) !== 0 || Number(match.score_b ?? 0) !== 0;
+      if (hasPlayedResult(firstMatch) || hasPlayedResult(secondMatch)) {
+        window.alert("진행 중이거나 결과가 입력된 경기는 선수를 교환할 수 없습니다.");
+        return;
+      }
 
       const readSlot = (match: LeagueMatch, targetSlot: "a" | "b") => targetSlot === "a"
         ? {
@@ -1939,7 +1946,11 @@ export default function LeagueTournamentBracket() {
     swapFirstKey: swapFirst ? `${swapFirst.matchId}:${swapFirst.slot}` : null,
     seedMap,
     onRegister: handleRegister,
-    onSwapSelect: handleSwapSelect,
+    onSwapSelect: (matchId, slot, participantId, name) => {
+      void handleSwapSelect(matchId, slot, participantId, name).catch(() => {
+        window.alert("선수 교환을 저장하지 못했습니다. 다시 시도해주세요.");
+      });
+    },
     onOpenSlotActions: (matchId, slot, participantId, name) => setSwapFirst({ matchId, slot, participantId, name }),
     onMoveToLower: handleMoveSelectedToLower,
     onDeleteSelected: () => setDeleteSlotDialogOpen(true),

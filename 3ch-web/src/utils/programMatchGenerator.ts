@@ -1309,32 +1309,6 @@ function distributeRankedUnitPoolsToBrackets(
     );
 }
 
-function buildFourGroupSixteenSeedOrder(rankedPools: MatchUnit[][]): MatchUnit[] | null {
-  if (rankedPools.length !== 4 || rankedPools.some((pool) => pool.length !== 4)) {
-    return null;
-  }
-
-  const [group1, group2, group3, group4] = rankedPools;
-  const bracketSlots = [
-    group1[0], group2[3],
-    group3[2], group4[1],
-    group1[1], group2[2],
-    group3[3], group4[0],
-    group3[0], group4[3],
-    group1[2], group2[1],
-    group3[1], group4[2],
-    group1[3], group2[0],
-  ];
-  const seedAtSlot = seededBracket(16);
-  const seedOrder = Array<MatchUnit>(16);
-
-  bracketSlots.forEach((unit, slotIndex) => {
-    seedOrder[seedAtSlot[slotIndex] - 1] = unit;
-  });
-
-  return seedOrder;
-}
-
 function officialSeedLineOrder(size: number): number[] {
   if (size === 2) return [1, 2];
   const previous = officialSeedLineOrder(size / 2);
@@ -1375,51 +1349,6 @@ function buildTwoGroupOfficialSeedOrder(rankedPools: MatchUnit[][]): MatchUnit[]
   return seedOrder;
 }
 
-function buildThreeGroupEightRankSeedOrder(rankedPools: MatchUnit[][]): MatchUnit[] | null {
-  if (rankedPools.length !== 3 || rankedPools.some((pool) => pool.length !== 8)) {
-    return null;
-  }
-
-  const unit = (groupIndex: number, rankIndex: number): MatchUnit => ({
-    ...rankedPools[groupIndex][rankIndex],
-    ...(rankedPools[groupIndex][rankIndex].id
-      ? { seedLabel: `${groupIndex + 1}-${rankIndex + 1}` }
-      : { seedLabel: undefined }),
-  });
-  const bye = (): MatchUnit => ({ id: null, name: null, division: null });
-
-  // 3개 조 × 조별 8명 진출용 표준 32강 대진표의 실제 슬롯 순서.
-  // 두 항목씩 한 경기이며, 참고 대진표의 좌측 위→아래 다음 우측
-  // 위→아래 순서를 그대로 사용한다.
-  const bracketSlots: MatchUnit[] = [
-    unit(0, 0), bye(),
-    unit(1, 5), unit(2, 5),
-    unit(1, 2), unit(0, 7),
-    bye(), unit(0, 2),
-    unit(2, 1), bye(),
-    unit(2, 6), unit(0, 4),
-    unit(2, 3), unit(1, 6),
-    bye(), unit(1, 1),
-    unit(1, 0), bye(),
-    unit(0, 6), unit(2, 4),
-    unit(1, 3), unit(2, 7),
-    bye(), unit(0, 1),
-    unit(2, 2), bye(),
-    unit(1, 7), unit(0, 3),
-    unit(1, 4), unit(0, 5),
-    bye(), unit(2, 0),
-  ];
-
-  // buildTournamentSlots는 입력 배열을 시드 순서로 받은 뒤 다시 실제
-  // 슬롯에 배치하므로, 위의 실제 슬롯 배열을 시드 순서로 역변환한다.
-  const seedAtSlot = seededBracket(32);
-  const seedOrder = Array<MatchUnit>(32);
-  bracketSlots.forEach((entry, slotIndex) => {
-    seedOrder[seedAtSlot[slotIndex] - 1] = entry;
-  });
-  return seedOrder;
-}
-
 type RankedSeedUnit = {
   unit: MatchUnit;
   poolIndex: number;
@@ -1434,6 +1363,13 @@ function rotateItems<T>(items: T[], offset: number): T[] {
 
 function buildRankOrderVariants(items: RankedSeedUnit[]): RankedSeedUnit[][] {
   if (items.length < 2) return [[...items]];
+  if (items.length <= 4) {
+    const permutations = (remaining: RankedSeedUnit[]): RankedSeedUnit[][] => remaining.length === 0
+      ? [[]]
+      : remaining.flatMap((item, index) => permutations(remaining.filter((_, otherIndex) => index !== otherIndex))
+          .map((tail) => [item, ...tail]));
+    return permutations(items);
+  }
   const variants: RankedSeedUnit[][] = [];
   const seen = new Set<string>();
   const bases = [[...items], [...items].reverse()];
@@ -1469,16 +1405,16 @@ function scoreCrossGroupSeedOrder(
   totalEntrants: number,
   bracketSize: number,
   maxRank: number,
+  previousCount: number,
+  previousScore: number,
+  slotBySeed: Map<number, number>,
 ): number {
-  const slotBySeed = new Map(
-    seededBracket(bracketSize).map((seed, slotIndex) => [seed, slotIndex]),
-  );
   const placed = seedOrder.map((entry, index) => ({
     ...entry,
     seed: index + 1,
     slot: slotBySeed.get(index + 1) ?? index,
   }));
-  let score = 0;
+  let score = previousScore;
 
   // 같은 조끼리만 비교하면 되므로 전체 참가자 O(n²) 비교를 피한다.
   const placedByPool = new Map<number, typeof placed>();
@@ -1486,12 +1422,12 @@ function scoreCrossGroupSeedOrder(
     placedByPool.set(entry.poolIndex, [...(placedByPool.get(entry.poolIndex) ?? []), entry]);
   });
   for (const poolEntries of placedByPool.values()) {
-    for (let leftIndex = 0; leftIndex < poolEntries.length; leftIndex += 1) {
-      const left = poolEntries[leftIndex];
-      for (let rightIndex = leftIndex + 1; rightIndex < poolEntries.length; rightIndex += 1) {
-        const right = poolEntries[rightIndex];
+    for (const right of poolEntries.filter((entry) => entry.seed > previousCount)) {
+      for (const left of poolEntries) {
+        if (left.seed >= right.seed) continue;
       const meetingRound = tournamentMeetingRound(left.slot, right.slot, bracketSize);
-      if (meetingRound === 1) score += 1_000_000;
+      // 1회전 같은 조 대결 방지가 이후 라운드 분산보다 항상 우선한다.
+      if (meetingRound === 1) score += 1_000_000_000_000;
       score += (Math.log2(bracketSize) - meetingRound + 1) * 5_000;
       if (left.rankIndex === 0 || right.rankIndex === 0) {
         score += (Math.log2(bracketSize) - meetingRound + 1) * 10_000;
@@ -1505,15 +1441,17 @@ function scoreCrossGroupSeedOrder(
     const left = placedBySlot.get(slotIndex);
     const right = placedBySlot.get(slotIndex + 1);
     if (!left || !right) continue;
+    if (left.seed <= previousCount && right.seed <= previousCount) continue;
     if (left.rankIndex === 0 && right.rankIndex === 0) score += 500_000;
     score += Math.abs((left.rankIndex + 1) + (right.rankIndex + 1) - (maxRank + 1)) * 100;
   }
 
   const byeCount = bracketSize - totalEntrants;
   if (byeCount > 0) {
-    placed.forEach((entry) => {
+    const seedBySlot = new Map([...slotBySeed].map(([seed, slot]) => [slot, seed]));
+    placed.filter((entry) => entry.seed > previousCount).forEach((entry) => {
       const pairedSlot = entry.slot % 2 === 0 ? entry.slot + 1 : entry.slot - 1;
-      const hasOpponent = placedBySlot.has(pairedSlot);
+      const hasOpponent = (seedBySlot.get(pairedSlot) ?? Infinity) <= totalEntrants;
       if (!hasOpponent) {
         score += entry.rankIndex * 20_000;
       }
@@ -1534,36 +1472,35 @@ export function buildCrossGroupTournamentSeedOrder(rankedPools: MatchUnit[][]): 
     })),
   );
 
-  const exactFourGroupOrder = buildFourGroupSixteenSeedOrder(labeledPools);
-  if (exactFourGroupOrder) return exactFourGroupOrder;
-
   const exactTwoGroupOrder = buildTwoGroupOfficialSeedOrder(labeledPools);
   if (exactTwoGroupOrder) return exactTwoGroupOrder;
-
-  const exactThreeGroupOrder = buildThreeGroupEightRankSeedOrder(labeledPools);
-  if (exactThreeGroupOrder) return exactThreeGroupOrder;
 
   const rankedTiers = Array.from(
     { length: Math.max(...labeledPools.map((pool) => pool.length)) },
     (_, rankIndex) =>
       labeledPools.flatMap((pool, poolIndex) => {
         const unit = pool[rankIndex];
-        return unit ? [{ unit, poolIndex, rankIndex }] : [];
+        return unit?.id ? [{ unit, poolIndex, rankIndex }] : [];
       }),
   ).filter((tier) => tier.length > 0);
   const totalEntrants = rankedTiers.reduce((sum, tier) => sum + tier.length, 0);
+  if (totalEntrants === 0) return [];
   const bracketSize = 2 ** Math.ceil(Math.log2(Math.max(2, totalEntrants)));
   const maxRank = rankedTiers.length;
+  const slotBySeed = new Map(officialSeedLineOrder(bracketSize).map((seed, slot) => [seed, slot]));
   let candidates: Array<{ order: RankedSeedUnit[]; score: number }> = [{ order: [], score: 0 }];
 
-  rankedTiers.forEach((tier) => {
-    const variants = buildRankOrderVariants(tier);
+  rankedTiers.forEach((tier, tierIndex) => {
+    const variants = buildRankOrderVariants(tier).filter((variant) => tierIndex !== 0
+      || (variant[0].poolIndex === tier[0].poolIndex
+        && (tier.length < 2 || variant[1].poolIndex === tier[1].poolIndex)));
     const nextCandidates = candidates.flatMap((candidate) =>
       variants.map((variant) => {
         const order = [...candidate.order, ...variant];
         return {
           order,
-          score: scoreCrossGroupSeedOrder(order, totalEntrants, bracketSize, maxRank),
+          score: scoreCrossGroupSeedOrder(order, totalEntrants, bracketSize, maxRank,
+            candidate.order.length, candidate.score, slotBySeed),
         };
       }),
     );
@@ -1571,7 +1508,19 @@ export function buildCrossGroupTournamentSeedOrder(rankedPools: MatchUnit[][]): 
     candidates = nextCandidates.slice(0, 32);
   });
 
-  return (candidates[0]?.order ?? rankedTiers.flat()).map(({ unit }) => unit);
+  // ITTF 3.6.1/3.6.2의 시드 위치와 BYE 배정 원칙에 따라 재귀적으로 배치한다.
+  // 조별 동일 순위 사이의 우열은 정하지 않고, 동일 순위 안에서만
+  // 같은 조 재대결을 줄이는 순서를 선택한다(우리리그의 추가 배치 정책).
+  // 결과를 결정적으로 선택하여 재생성 때 배치가 임의로 달라지지 않게 한다.
+  const selected = (candidates[0]?.order ?? rankedTiers.flat()).map(({ unit }) => unit);
+  const slotSeeds = officialSeedLineOrder(bracketSize);
+  const internalSeeds = seededBracket(bracketSize);
+  const seedOrder = Array<MatchUnit>(bracketSize);
+  slotSeeds.forEach((seed, slotIndex) => {
+    seedOrder[internalSeeds[slotIndex] - 1] = selected[seed - 1]
+      ?? { id: null, name: null, division: null };
+  });
+  return seedOrder;
 }
 
 function balancedSizes(total: number, preferredGroupCount: number) {

@@ -88,6 +88,38 @@ test('완료된 경기 결과는 일반 동기화와 경기 ID 변경 뒤에도 
   assert.equal(released, true);
 });
 
+test('자동 부전승 선수 교환은 이전 선수가 복원되지 않고 부전승 상태로 저장된다', async () => {
+  const { response, persisted } = await invokeSync({
+    initial: [{ ...existingMatch(), bracket: 'upper', round_number: 1, participant_b_id: null, score_a: 0, score_b: 0 }],
+    matches: [{ ...incomingMatch(), bracket: 'upper', round_number: 1, participant_a_id: 'player-c', participant_b_id: null, status: 'done', score_a: 0, score_b: 0 }],
+  });
+  assert.equal(response.statusCode, 200);
+  assert.equal(persisted.get('old-match').participant_a_id, 'player-c');
+  assert.equal(persisted.get('old-match').status, 'done');
+  assert.equal(persisted.get('old-match').score_a, 0);
+});
+
+test('다음 라운드 자동 부전승에서도 교환한 선수가 저장된다', async () => {
+  const { response, persisted } = await invokeSync({
+    initial: [{ ...existingMatch(), bracket: 'upper', round_number: 2, participant_b_id: null, score_a: 0, score_b: 0 }],
+    matches: [{ ...incomingMatch(), bracket: 'upper', round_number: 2, participant_a_id: 'player-c', participant_b_id: 'player-b' }],
+  });
+  assert.equal(response.statusCode, 200);
+  assert.equal(persisted.get('old-match').participant_a_id, 'player-c');
+  assert.equal(persisted.get('old-match').participant_b_id, 'player-b');
+  assert.equal(persisted.get('old-match').status, 'pending');
+});
+
+test('실제 점수가 있는 한 명짜리 경기의 참가자와 점수는 교환 동기화에도 보존한다', async () => {
+  const { response, persisted } = await invokeSync({
+    initial: [{ ...existingMatch(), bracket: 'upper', round_number: 1, participant_b_id: null }],
+    matches: [{ ...incomingMatch(), bracket: 'upper', round_number: 1, participant_a_id: 'player-c', participant_b_id: null }],
+  });
+  assert.equal(response.statusCode, 200);
+  assert.equal(persisted.get('old-match').participant_a_id, 'player-a');
+  assert.equal(persisted.get('old-match').score_a, 3);
+});
+
 test('여러 토너먼트의 대진표 번호를 순위 집계용으로 보존한다', async () => {
   const { response, persisted } = await invokeSync({
     matches: [{ ...incomingMatch('bracket-b-match'), bracket: 'upper', tournament_bracket_index: 2 }],

@@ -2771,18 +2771,18 @@ const handleSaveEdit = async () => {
             </Typography>
             <Stack direction="row" spacing={1}>
               <TextField
-                label="부수"
-                value={replacementDivision}
-                onChange={(event) => { setReplacementDivision(event.target.value); setReplacementMemberId(null); }}
-                size="small"
-                sx={{ width: 92 }}
-              />
-              <TextField
                 label="이름"
                 value={replacementName}
                 onChange={(event) => { setReplacementName(event.target.value); setReplacementMemberId(null); }}
                 size="small"
                 fullWidth
+              />
+              <TextField
+                label="부수"
+                value={replacementDivision}
+                onChange={(event) => { setReplacementDivision(event.target.value); setReplacementMemberId(null); }}
+                size="small"
+                sx={{ width: 92, flexShrink: 0 }}
               />
             </Stack>
           </DialogContent>

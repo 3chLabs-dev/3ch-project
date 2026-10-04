@@ -21,13 +21,27 @@ type Person = { id: string; name: string; division?: string; guest?: boolean; at
 type Item = { id: string; name: string; quantity?: number; amount: number; category: "common" | "alcohol" | "nonalcohol" | "specific"; personIds: string[] };
 type Contribution = { id: string; name: string; amount: number; personId?: string };
 type Calculation = { total: number; contributed: number; distributable: number; shares: Record<string, number> };
-type Settlement = { id: string; round_no: number; title: string; status: "draft" | "final"; version: number; participants: Person[]; items: Item[]; contributions: Contribution[]; calculation: Calculation };
+type Settlement = { receipt_thumbnails?: string[]; id: string; round_no: number; title: string; status: "draft" | "final"; version: number; participants: Person[]; items: Item[]; contributions: Contribution[]; calculation: Calculation };
 type CombinedPerson = { participantId: string; name: string; total: number; rounds: Record<string, number> };
 type CombinedSummary = { total: number; people: CombinedPerson[] };
 type ListResponse = { settlements: Settlement[]; summary: CombinedSummary; canManage: boolean; payments: Record<string, boolean> };
 type ReceiptItem = { id: string; name: string; unitPrice: number; quantity: number; amount: number; category: "common" | "alcohol" | "nonalcohol"; confidence: number; needsReview: boolean };
 type ReceiptResult = { scanId: string; merchant: string; purchasedAt: string; receiptTotal: number; recognizedTotal: number; difference: number; items: Omit<ReceiptItem, "id">[] };
 const money = (value: number) => `${value.toLocaleString("ko-KR")}원`;
+async function receiptThumbnail(file: File): Promise<string> {
+  const bitmap = await createImageBitmap(file);
+  try {
+    const scale = Math.min(1, 240 / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("영수증 썸네일을 만들지 못했습니다.");
+    context.fillStyle = "#fff"; context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/jpeg", 0.65);
+  } finally { bitmap.close(); }
+}
 const categories = { common: "음식", alcohol: "술", nonalcohol: "음료" };
 const roundTotals = (entry: Settlement) => ({
   attendees: (entry.participants ?? []).filter((person) => person.attending).length,
@@ -122,7 +136,7 @@ function localPreviewRequest(leagueId: string, url: string, method: string, body
     const calculation = preview(input.participants, input.items, input.contributions);
     if (!calculation) throw new Error("정산 금액과 부담 대상을 확인해 주세요.");
     const roundNo = Math.max(0, ...settlements.map((entry) => entry.round_no)) + 1;
-    const entry: Settlement = { id: crypto.randomUUID(), round_no: roundNo, title: `${roundNo}차`, status: "draft", version: 2, participants: input.participants, items: input.items, contributions: input.contributions, calculation };
+    const entry: Settlement = { id: crypto.randomUUID(), round_no: roundNo, title: `${roundNo}차`, status: "draft", version: 2, participants: input.participants, items: input.items, contributions: input.contributions, receipt_thumbnails: (body as Settlement).receipt_thumbnails, calculation };
     localStorage.setItem(key, JSON.stringify([...settlements, entry]));
     return { settlement: entry };
   }
@@ -207,6 +221,8 @@ export default function AfterPartySettlement() {
   const receiptInputRef = useRef<HTMLInputElement>(null);
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [receiptScanning, setReceiptScanning] = useState(false);
+  const [receiptThumbnails, setReceiptThumbnails] = useState<string[]>([]);
+  const [pendingThumbnails, setPendingThumbnails] = useState<string[]>([]);
   const [receiptItems, setReceiptItems] = useState<ReceiptItem[]>([]);
   const [receiptMeta, setReceiptMeta] = useState({ merchant: "", purchasedAt: "", receiptTotal: 0 });
   const base = `${import.meta.env.VITE_API_BASE_URL ?? "/api"}/leagues/${leagueId}/after-party`;
@@ -277,6 +293,7 @@ export default function AfterPartySettlement() {
   }, [selected, participantData?.participants]);
 
   const open = useCallback((settlement: Settlement) => {
+    setReceiptThumbnails(settlement.receipt_thumbnails ?? []); setPendingThumbnails([]);
     const existing = new Map(settlement.participants.map((p) => [p.id, p]));
     const roster = (participantData?.participants ?? []).filter((p) => !p.is_bot).map((p) => existing.get(p.id) ?? { id: p.id, name: p.name, division: p.division ?? "", attending: settlement.participants.length === 0 && !!p.after, drinking: settlement.participants.length === 0 && !!p.after, excluded: false });
     const gone = settlement.participants.filter((p) => !roster.some((current) => current.id === p.id));
@@ -353,6 +370,7 @@ export default function AfterPartySettlement() {
     if (localPreview || !token) { setError("영수증 인식은 로컬 API에 로그인하여 연결한 뒤 사용할 수 있습니다."); return; }
     setReceiptScanning(true); setError("");
     try {
+      const thumbnails = await Promise.all(images.map(receiptThumbnail));
       const form = new FormData(); images.forEach((file) => form.append("image", file)); form.append("round_no", String(selected?.round_no ?? 0));
       const response = await fetch(`${base}/receipt-scan`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form });
       const result = await response.json();
@@ -361,12 +379,15 @@ export default function AfterPartySettlement() {
       setReceiptMeta({ merchant: receipt.merchant || "", purchasedAt: receipt.purchasedAt || "", receiptTotal: Number(receipt.receiptTotal || 0) });
       setReceiptItems((receipt.items ?? []).map((entry) => ({ ...entry, id: crypto.randomUUID(), quantity: Number(entry.quantity || 1), unitPrice: Number(entry.unitPrice || 0), amount: Number(entry.amount || 0) })));
       setReceiptOpen(true);
+      setPendingThumbnails(thumbnails);
     } catch (cause) { setError((cause as Error).message); }
     finally { setReceiptScanning(false); if (receiptInputRef.current) receiptInputRef.current.value = ""; }
   };
   const importReceiptItems = () => {
     const valid = receiptItems.filter((entry) => entry.name.trim() && Number.isInteger(entry.quantity) && entry.quantity > 0 && entry.quantity <= 999 && Number.isInteger(entry.amount) && entry.amount > 0);
     if (!valid.length) { setError("추가할 영수증 메뉴를 확인해 주세요."); return; }
+    if (receiptThumbnails.length + pendingThumbnails.length > 30) { setError("영수증 사진은 차수당 최대 30장까지 저장할 수 있습니다."); return; }
+    setReceiptThumbnails((current) => [...current, ...pendingThumbnails]); setPendingThumbnails([]);
     setItems((current) => [...current, ...valid.map((entry) => ({ id: crypto.randomUUID(), name: entry.name.trim(), quantity: entry.quantity, amount: entry.amount, category: entry.category, personIds: [] }))]);
     setDirty(true); setReceiptOpen(false); setError("");
   };
@@ -386,7 +407,7 @@ export default function AfterPartySettlement() {
     if (!items.length) { setError("메뉴를 하나 이상 추가해 주세요."); return; }
     setBusy(true); setError("");
     try {
-      const body = { title, participants: people, items, contributions };
+      const body = { title, participants: people, items, contributions, receipt_thumbnails: receiptThumbnails };
       if (selected.version === 0) await request(base, "POST", body);
       else await request(`${base}/${selected.id}`, "PUT", { ...body, version: selected.version });
       await loadList(); navigate(listPath);
@@ -531,7 +552,7 @@ export default function AfterPartySettlement() {
         </Stack>
       </Stack>
       <Box ref={exportRef} sx={{ bgcolor: "#FFFFFF", p: 1 }}>
-      <Stack spacing={1}>{list.map((entry) => { const totals = roundTotals(entry); return <Card key={entry.id} sx={{ p: 2, border: "1px solid #E5E7EB" }}><Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}><Box onClick={() => { if (!shareToken) navigate(`${listPath}?round=${entry.round_no}`); }} sx={{ flex: 1, minWidth: 0, cursor: shareToken ? "default" : "pointer" }}><Stack direction="row" justifyContent="space-between" alignItems="center"><Typography fontWeight={900}>{entry.round_no}차</Typography><Typography variant="body2" color="text.secondary" fontWeight={600}>{totals.attendees}명</Typography></Stack><Typography color="text.secondary" fontSize={12} mt={1} sx={{ overflowWrap: "anywhere" }}>{costBreakdown(totals, totals.contributed)}</Typography><Typography fontSize={14} fontWeight={900} mt={0.5}>= 정산 금액 {money(entry.calculation?.distributable ?? 0)}</Typography></Box>{canManage && <IconButton data-html2canvas-ignore aria-label={`${entry.round_no}차 정산 삭제`} size="small" disabled={busy} onClick={() => void archiveRound(entry)}><DeleteOutlineIcon fontSize="small" /></IconButton>}</Stack></Card>; })}</Stack>
+      <Stack spacing={1}>{list.map((entry) => { const totals = roundTotals(entry); return <Card key={entry.id} sx={{ p: 2, border: "1px solid #E5E7EB" }}><Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}><Box onClick={() => { if (!shareToken) navigate(`${listPath}?round=${entry.round_no}`); }} sx={{ flex: 1, minWidth: 0, cursor: shareToken ? "default" : "pointer", position: "relative", pr: entry.receipt_thumbnails?.length ? "88px" : 0, minHeight: entry.receipt_thumbnails?.length ? Math.ceil(entry.receipt_thumbnails.length / 2) * 52 + 24 : 0 }}><Stack direction="row" justifyContent="space-between" alignItems="flex-start"><Typography fontWeight={900}>{entry.round_no}차</Typography><Stack alignItems="flex-end" spacing={0.75} sx={{ ml: 1, ...(entry.receipt_thumbnails?.length ? { position: "absolute", right: 0, top: 0 } : {}) }}><Typography variant="body2" color="text.secondary" fontWeight={600}>{totals.attendees}명</Typography>{!!entry.receipt_thumbnails?.length && <Box sx={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 0.5, width: 78 }}>{entry.receipt_thumbnails.map((src, index) => <Box key={index} component="img" src={src} alt={`${entry.round_no}차 영수증 ${index + 1}`} loading="lazy" sx={{ width: 36, height: 48, objectFit: "contain", bgcolor: "#F9FAFB", border: "1px solid #E5E7EB", borderRadius: 0.5 }} />)}</Box>}</Stack></Stack><Typography color="text.secondary" fontSize={12} mt={1} sx={{ overflowWrap: "anywhere" }}>{costBreakdown(totals, totals.contributed)}</Typography><Typography fontSize={14} fontWeight={900} mt={0.5}>= 정산 금액 {money(entry.calculation?.distributable ?? 0)}</Typography></Box>{canManage && <IconButton data-html2canvas-ignore aria-label={`${entry.round_no}차 정산 삭제`} size="small" disabled={busy} onClick={() => void archiveRound(entry)}><DeleteOutlineIcon fontSize="small" /></IconButton>}</Stack></Card>; })}</Stack>
       {!list.length && <Typography color="text.secondary">아직 만든 정산이 없습니다.</Typography>}
       <Card sx={{ p: 2, mt: 2, border: "1px solid #BFDBFE", bgcolor: "#F8FAFF" }}>
         <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}><Typography fontWeight={900} fontSize={17}>전체 합산</Typography><Typography fontWeight={900} fontSize={18}>{money(summary.total)}</Typography></Stack>

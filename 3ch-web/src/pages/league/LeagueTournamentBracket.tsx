@@ -35,6 +35,7 @@ import { useGetGroupDetailQuery } from "../../features/group/groupApi";
 import { formatLeagueDate } from "../../utils/dateUtils";
 import { DivisionBadge } from "../../components/ParticipantName";
 import { applyProgramMatchState, applyProgramTournamentAdvancement, clearProgramMatchState, generateProgramRoundMatches, getStoredProgramOption, saveProgramMatchPatch, withProgramRoundStandingsSnapshot, type ProgramMatchPatch } from "../../utils/programMatchGenerator";
+import { swapProgramTournamentSlots } from "../../utils/programMatchGenerator";
 
 // ─── 단일 토너먼트 레이아웃 상수 ────────────────────────────────────────────
 // 단일 토너먼트(라운드로빈 등)에서 매치 박스를 좌→우 방향으로 나열할 때 사용
@@ -1586,6 +1587,7 @@ export default function LeagueTournamentBracket() {
     matchId: string, slot: "a" | "b",
     participantId: string | null, name: string | null,
   ) => {
+    if (isSyncingProgramMatches) return;
     if (!swapFirst) {
       setSwapFirst({ matchId, slot, participantId, name });
       return;
@@ -1600,82 +1602,8 @@ export default function LeagueTournamentBracket() {
     setSwapFirst(null);
 
     if (isProgramMode && programBlock) {
-      const firstMatch = allProgramMatches.find((match) => match.id === first.matchId);
-      const secondMatch = allProgramMatches.find((match) => match.id === matchId);
-      if (!firstMatch || !secondMatch) return;
-      const hasPlayedResult = (match: LeagueMatch) => match.status === "playing"
-        || (match.status === "done" && Boolean(match.participant_a_id) && Boolean(match.participant_b_id))
-        || Number(match.score_a ?? 0) !== 0 || Number(match.score_b ?? 0) !== 0;
-      if (hasPlayedResult(firstMatch) || hasPlayedResult(secondMatch)) {
-        window.alert("진행 중이거나 결과가 입력된 경기는 선수를 교환할 수 없습니다.");
-        return;
-      }
-
-      const readSlot = (match: LeagueMatch, targetSlot: "a" | "b") => targetSlot === "a"
-        ? {
-            id: match.participant_a_id,
-            name: match.participant_a_name,
-            division: match.participant_a_division,
-            seedLabel: match.participant_a_seed_label,
-            roster: match.participant_a_roster,
-            rosterDetails: match.participant_a_roster_details,
-          }
-        : {
-            id: match.participant_b_id,
-            name: match.participant_b_name,
-            division: match.participant_b_division,
-            seedLabel: match.participant_b_seed_label,
-            roster: match.participant_b_roster,
-            rosterDetails: match.participant_b_roster_details,
-          };
-      const firstValue = readSlot(firstMatch, first.slot);
-      const secondValue = readSlot(secondMatch, slot);
-      const copyIntoEmptySlot = Boolean(firstValue.id) && !secondValue.id;
-      const writeSlot = (target: LeagueMatch, targetSlot: "a" | "b", value: ReturnType<typeof readSlot>) => {
-        if (targetSlot === "a") {
-          target.participant_a_id = value.id;
-          target.participant_a_name = value.name;
-          target.participant_a_division = value.division;
-          target.participant_a_seed_label = value.seedLabel;
-          target.participant_a_roster = value.roster;
-          target.participant_a_roster_details = value.rosterDetails;
-        } else {
-          target.participant_b_id = value.id;
-          target.participant_b_name = value.name;
-          target.participant_b_division = value.division;
-          target.participant_b_seed_label = value.seedLabel;
-          target.participant_b_roster = value.roster;
-          target.participant_b_roster_details = value.rosterDetails;
-        }
-      };
-      const nextMatches = allProgramMatches.map((match) => {
-        const next = { ...match };
-        if (match.id === first.matchId && !copyIntoEmptySlot) writeSlot(next, first.slot, secondValue);
-        if (match.id === matchId) writeSlot(next, slot, firstValue);
-        if ((!copyIntoEmptySlot && match.id === first.matchId) || match.id === matchId) {
-          const hasA = Boolean(next.participant_a_id);
-          const hasB = Boolean(next.participant_b_id);
-          if (hasA && hasB) {
-            next.status = "pending";
-            next.score_a = null;
-            next.score_b = null;
-          } else if (hasA !== hasB) {
-            next.status = "done";
-            next.score_a = 0;
-            next.score_b = 0;
-          } else {
-            next.status = "pending";
-            next.score_a = null;
-            next.score_b = null;
-          }
-        }
-        return next;
-      });
-      if (copyIntoEmptySlot) {
-        saveProgramMatchPatch(id!, programRound, matchId, slot === "a"
-          ? { participant_a_id: firstValue.id, participant_a_name: firstValue.name, participant_a_division: firstValue.division, participant_a_seed_label: firstValue.seedLabel }
-          : { participant_b_id: firstValue.id, participant_b_name: firstValue.name, participant_b_division: firstValue.division, participant_b_seed_label: firstValue.seedLabel });
-      }
+      const nextMatches = swapProgramTournamentSlots(allProgramMatches,
+        { matchId: first.matchId, slot: first.slot }, { matchId, slot });
       await syncLeagueProgramMatches({
         leagueId: id!,
         matches: nextMatches.map((match) => ({
@@ -1691,7 +1619,7 @@ export default function LeagueTournamentBracket() {
     const copyIntoEmptySlot = Boolean(first.participantId) && !participantId;
     if (copyIntoEmptySlot) {
       const targetMatch = matches.find((candidate) => candidate.id === matchId);
-      await assignParticipant({ leagueId: id!, matchId, ...(slot === "a" ? { participant_a_id: first.participantId } : { participant_b_id: first.participantId }) });
+      await assignParticipant({ leagueId: id!, matchId, ...(slot === "a" ? { participant_a_id: first.participantId } : { participant_b_id: first.participantId }) }).unwrap();
       const otherParticipantId = slot === "a" ? targetMatch?.participant_b_id : targetMatch?.participant_a_id;
       await updateTournamentMatch({ leagueId: id!, matchId, updates: otherParticipantId ? { status: "pending", score_a: null, score_b: null } : { status: "done", score_a: 0, score_b: 0 } }).unwrap();
     } else if (first.matchId === matchId) {
@@ -1701,7 +1629,7 @@ export default function LeagueTournamentBracket() {
         matchId,
         participant_a_id: slot === "a" ? first.participantId : participantId,
         participant_b_id: slot === "b" ? first.participantId : participantId,
-      });
+      }).unwrap();
     } else {
       // 다른 매치 간 스왑 → 순차 처리
       const firstMatch = matches.find((candidate) => candidate.id === first.matchId);
@@ -1712,8 +1640,8 @@ export default function LeagueTournamentBracket() {
       const bodySecond = slot === "a"
         ? { participant_a_id: first.participantId }
         : { participant_b_id: first.participantId };
-      await assignParticipant({ leagueId: id!, matchId: first.matchId, ...bodyFirst });
-      await assignParticipant({ leagueId: id!, matchId, ...bodySecond });
+      await assignParticipant({ leagueId: id!, matchId: first.matchId, ...bodyFirst }).unwrap();
+      await assignParticipant({ leagueId: id!, matchId, ...bodySecond }).unwrap();
       const updateState = async (targetId: string, participantAId: string | null, participantBId: string | null) => {
         const isBye = Boolean(participantAId) !== Boolean(participantBId);
         await updateTournamentMatch({
@@ -1737,6 +1665,7 @@ export default function LeagueTournamentBracket() {
         );
       }
     }
+    await refetchMatches();
   };
 
 
@@ -1947,8 +1876,8 @@ export default function LeagueTournamentBracket() {
     seedMap,
     onRegister: handleRegister,
     onSwapSelect: (matchId, slot, participantId, name) => {
-      void handleSwapSelect(matchId, slot, participantId, name).catch(() => {
-        window.alert("선수 교환을 저장하지 못했습니다. 다시 시도해주세요.");
+      void handleSwapSelect(matchId, slot, participantId, name).catch((error: unknown) => {
+        window.alert(error instanceof Error ? error.message : "선수 교환을 저장하지 못했습니다. 다시 시도해주세요.");
       });
     },
     onOpenSlotActions: (matchId, slot, participantId, name) => setSwapFirst({ matchId, slot, participantId, name }),

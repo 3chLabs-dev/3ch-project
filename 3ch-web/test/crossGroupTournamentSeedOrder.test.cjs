@@ -18,7 +18,7 @@ function loadTypeScript(filename) {
       : require(specifier), module, module.exports);
   return module.exports;
 }
-const { buildCrossGroupTournamentSeedOrder, buildTournamentSlots } =
+const { buildCrossGroupTournamentSeedOrder, buildTournamentSlots, swapProgramTournamentSlots } =
   loadTypeScript(path.resolve(__dirname, '../src/utils/programMatchGenerator.ts'));
 const pools = (count, sizes = Array(count).fill(6)) => Array.from({ length: count }, (_, group) =>
   Array.from({ length: sizes[group] }, (_, rank) => ({
@@ -93,4 +93,52 @@ for (const [count, sizes] of configurations) {
 
 test('모든 조가 비어 있으면 대진을 생성하지 않는다', () => {
   assert.deepEqual(buildCrossGroupTournamentSeedOrder([[], [], []]), []);
+});
+
+const swapFixture = () => [
+  { id: 'bye-a', bracket: 'upper', status: 'done', participant_a_id: 'a', participant_a_name: 'A', participant_a_seed_label: '2-3', participant_b_id: null, participant_b_name: null, score_a: 0, score_b: 0, next_match_id: 'next', next_slot: 'a', round_number: 1 },
+  { id: 'bye-b', bracket: 'upper', status: 'done', participant_a_id: null, participant_a_name: null, participant_b_id: 'b', participant_b_name: 'B', participant_b_seed_label: '1-3', score_a: 0, score_b: 0, next_match_id: 'next', next_slot: 'b', round_number: 1 },
+  { id: 'next', bracket: 'upper', status: 'pending', participant_a_id: 'a', participant_a_name: 'A', participant_a_seed_label: '2-3', participant_b_id: 'b', participant_b_name: 'B', participant_b_seed_label: '1-3', score_a: 0, score_b: 0, round_number: 2 },
+];
+test('선수 교환: BYE 슬롯 교환을 다음 경기에도 반영하고 입력 객체는 보존한다', () => {
+  const original = swapFixture();
+  const before = JSON.stringify(original);
+  const result = swapProgramTournamentSlots(original, { matchId: 'bye-a', slot: 'a' }, { matchId: 'bye-b', slot: 'b' });
+  assert.deepEqual(result.map(match => [match.participant_a_id, match.participant_b_id]), [['b', null], [null, 'a'], ['b', 'a']]);
+  assert.equal(result[2].participant_a_seed_label, '1-3');
+  assert.equal(JSON.stringify(original), before);
+});
+test('선수 교환: 부전승 다음 경기에서 클릭해도 원래 BYE와 함께 교환된다', () => {
+  const result = swapProgramTournamentSlots(swapFixture(), { matchId: 'next', slot: 'a' }, { matchId: 'next', slot: 'b' });
+  assert.deepEqual(result.map(match => [match.participant_a_id, match.participant_b_id]), [['b', null], [null, 'a'], ['b', 'a']]);
+});
+test('선수 교환: 뒤 경기의 실제 결과를 손상시키는 교환은 전체 거부한다', () => {
+  const original = swapFixture();
+  Object.assign(original[2], { status: 'done', score_a: 3, score_b: 1 });
+  const before = JSON.stringify(original);
+  assert.throws(() => swapProgramTournamentSlots(original, { matchId: 'bye-a', slot: 'a' }, { matchId: 'bye-b', slot: 'b' }), /결과가 입력/);
+  assert.equal(JSON.stringify(original), before);
+});
+test('선수 교환: 같은 선수의 BYE 전후 슬롯은 교환 대상이 아니다', () => {
+  assert.throws(() => swapProgramTournamentSlots(swapFixture(), { matchId: 'bye-a', slot: 'a' }, { matchId: 'next', slot: 'a' }), /같은 선수/);
+});
+test('선수 교환: 미정 슬롯 복사는 원본 선수를 삭제하지 않는다', () => {
+  const original = swapFixture();
+  original.push({ id: 'empty', bracket: 'lower', status: 'pending', participant_a_id: null, participant_b_id: null, score_a: null, score_b: null });
+  const result = swapProgramTournamentSlots(original, { matchId: 'bye-a', slot: 'a' }, { matchId: 'empty', slot: 'a' });
+  assert.equal(result[0].participant_a_id, 'a');
+  assert.equal(result[3].participant_a_id, 'a');
+  assert.equal(result[3].status, 'pending');
+});
+
+test('선수 교환: 여러 BYE 라운드를 거슬러 교환해도 모든 진출 슬롯이 일치한다', () => {
+  const original = swapFixture();
+  original[0].next_match_id = 'middle';
+  original.push({ ...original[0], id: 'middle', round_number: 2, next_match_id: 'next', next_slot: 'a' });
+  original[2].round_number = 3;
+  const result = swapProgramTournamentSlots(original, { matchId: 'next', slot: 'a' }, { matchId: 'next', slot: 'b' });
+  assert.equal(result[0].participant_a_id, 'b');
+  assert.equal(result[3].participant_a_id, 'b');
+  assert.equal(result[2].participant_a_id, 'b');
+  assert.equal(result[2].participant_b_id, 'a');
 });

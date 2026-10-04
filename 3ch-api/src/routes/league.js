@@ -3839,7 +3839,11 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
             identityMatch.score_a != null || identityMatch.score_b != null
           ) ? identityMatch : null
         );
-        const hasStartedState = previous && (
+        // BYE 승자가 채워진 다음 경기의 초기 0:0은 실제 입력 결과가 아니다.
+        // 이 상태까지 동결하면 수정 모드의 교환이 저장 직후 원래 선수로 돌아간다.
+        const isUnplayedTournament = previous?.bracket && previous.status === 'pending'
+          && Number(previous.score_a ?? 0) === 0 && Number(previous.score_b ?? 0) === 0;
+        const hasStartedState = previous && !isUnplayedTournament && (
           previous.status === 'playing' || previous.status === 'done' ||
           previous.score_a != null || previous.score_b != null
         );

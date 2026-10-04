@@ -1739,6 +1739,95 @@ function getTournamentLoser(match: LeagueMatch) {
       };
 }
 
+export function swapProgramTournamentSlots(
+  matches: LeagueMatch[],
+  first: { matchId: string; slot: "a" | "b" },
+  second: { matchId: string; slot: "a" | "b" },
+): LeagueMatch[] {
+  const originals = new Map(matches.map(match => [match.id, match]));
+  const result = new Map(matches.map(match => [match.id, { ...match }]));
+  const changed = new Set<string>();
+  const participantId = (match: LeagueMatch, slot: "a" | "b") => match[`participant_${slot}_id`];
+  const protectedResult = (match: LeagueMatch) => match.status === "playing"
+    || (match.status === "done" && Boolean(match.participant_a_id) && Boolean(match.participant_b_id))
+    || Number(match.score_a ?? 0) !== 0 || Number(match.score_b ?? 0) !== 0
+    || (match.bracket === "lower" && match.status === "done");
+  const automaticBye = (match: LeagueMatch) => match.bracket === "upper"
+    && match.status === "done" && !protectedResult(match)
+    && Boolean(match.participant_a_id) !== Boolean(match.participant_b_id);
+  const getMatch = (matchId: string) => {
+    const match = originals.get(matchId);
+    if (!match) throw new Error("선택한 경기를 찾지 못했습니다.");
+    if (protectedResult(match)) throw new Error("진행 중이거나 결과가 입력된 경기는 선수를 교환할 수 없습니다.");
+    return match;
+  };
+  getMatch(first.matchId);
+  getMatch(second.matchId);
+  // 부전승에서 올라온 슬롯을 클릭했다면 원래 BYE 슬롯까지 거슬러 올라간다.
+  const origin = (selected: typeof first): typeof first => {
+    let current = selected;
+    const visited = new Set<string>();
+    while (!visited.has(current.matchId)) {
+      visited.add(current.matchId);
+      const currentMatch = getMatch(current.matchId);
+      const id = participantId(currentMatch, current.slot);
+      if (!id) break;
+      const feeders = matches.filter(match => match.next_match_id === current.matchId
+        && match.next_slot === current.slot && automaticBye(match)
+        && (match.participant_a_id === id || match.participant_b_id === id));
+      if (feeders.length !== 1) break;
+      current = { matchId: feeders[0].id, slot: feeders[0].participant_a_id === id ? "a" : "b" };
+    }
+    return current;
+  };
+  const fields = ["id", "name", "division", "seed_label", "roster", "roster_details"];
+  const read = (selected: typeof first) => {
+    const match = getMatch(selected.matchId);
+    return Object.fromEntries(fields.map(field => [field,
+      match[`participant_${selected.slot}_${field}` as keyof LeagueMatch]]));
+  };
+  const write = (selected: typeof first, value: ReturnType<typeof read>) => {
+    getMatch(selected.matchId);
+    Object.assign(result.get(selected.matchId)!, Object.fromEntries(fields.map(field =>
+      [`participant_${selected.slot}_${field}`, value[field]])));
+    changed.add(selected.matchId);
+  };
+  const copyIntoEmpty = Boolean(participantId(getMatch(first.matchId), first.slot))
+    && !participantId(getMatch(second.matchId), second.slot);
+  const firstOrigin = copyIntoEmpty ? first : origin(first);
+  const secondOrigin = copyIntoEmpty ? second : origin(second);
+  if (!copyIntoEmpty && firstOrigin.matchId === secondOrigin.matchId && firstOrigin.slot === secondOrigin.slot) {
+    throw new Error("같은 선수의 부전승 전후 슬롯입니다. 다른 선수를 선택해주세요.");
+  }
+  const firstValue = read(firstOrigin);
+  const secondValue = read(secondOrigin);
+  const replace = (selected: typeof first, value: ReturnType<typeof read>) => {
+    let current = selected;
+    const visited = new Set<string>();
+    while (!visited.has(current.matchId)) {
+      visited.add(current.matchId);
+      const previous = getMatch(current.matchId);
+      write(current, value);
+      if (!automaticBye(previous) || !previous.next_match_id
+        || (previous.next_slot !== "a" && previous.next_slot !== "b")) break;
+      const parent = originals.get(previous.next_match_id);
+      if (!parent || participantId(parent, previous.next_slot) !== participantId(previous, current.slot)) break;
+      current = { matchId: parent.id, slot: previous.next_slot };
+    }
+  };
+  if (!copyIntoEmpty) replace(firstOrigin, secondValue);
+  replace(secondOrigin, firstValue);
+  changed.forEach(matchId => {
+    const match = result.get(matchId)!;
+    const bye = match.bracket === "upper"
+      && Boolean(match.participant_a_id) !== Boolean(match.participant_b_id);
+    match.status = bye ? "done" : "pending";
+    match.score_a = bye ? 0 : null;
+    match.score_b = bye ? 0 : null;
+  });
+  return applyProgramTournamentAdvancement(matches.map(match => result.get(match.id)!));
+}
+
 export function applyProgramTournamentAdvancement(matches: LeagueMatch[]): LeagueMatch[] {
   const matchMap = new Map(matches.map((match) => [match.id, { ...match }]));
   const orderedMatches = [...matchMap.values()].sort((a, b) => (a.round_number ?? 0) - (b.round_number ?? 0));

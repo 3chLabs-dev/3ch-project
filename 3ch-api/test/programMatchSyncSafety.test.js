@@ -129,6 +129,29 @@ test('여러 토너먼트의 대진표 번호를 순위 집계용으로 보존�
   assert.equal(persisted.get('bracket-b-match').tournament_bracket_index, 2);
 });
 
+for (const bracket of ['upper', 'lower']) {
+  test(`${bracket}: pending 0:0은 실제 결과가 아니므로 교환한 참가자를 저장한다`, async () => {
+    const { response, persisted } = await invokeSync({
+      initial: [{ ...existingMatch(), bracket, status: 'pending', score_a: 0, score_b: 0 }],
+      matches: [{ ...incomingMatch(), bracket, participant_a_id: 'player-c' }],
+    });
+    assert.equal(response.statusCode, 200);
+    assert.equal(persisted.get('old-match').participant_a_id, 'player-c');
+    assert.equal(persisted.get('old-match').participant_b_id, 'player-b');
+    assert.equal(persisted.get('old-match').status, 'pending');
+  });
+}
+
+test('playing 0:0은 진행 중 결과이므로 교환 동기화로 변경하지 않는다', async () => {
+  const { response, persisted } = await invokeSync({
+    initial: [{ ...existingMatch(), bracket: 'upper', status: 'playing', score_a: 0, score_b: 0 }],
+    matches: [{ ...incomingMatch(), bracket: 'upper', participant_a_id: 'player-c' }],
+  });
+  assert.equal(response.statusCode, 200);
+  assert.equal(persisted.get('old-match').participant_a_id, 'player-a');
+  assert.equal(persisted.get('old-match').status, 'playing');
+});
+
 test('완료된 경기가 누락되면 전체 동기화를 거부하고 같은 연결에서 롤백한다', async () => {
   const { response, persisted, commands, released } = await invokeSync({
     initial: [existingMatch()],

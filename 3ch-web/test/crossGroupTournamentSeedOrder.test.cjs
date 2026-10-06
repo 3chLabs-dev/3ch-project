@@ -45,6 +45,12 @@ test('아이핑 3개조×6명: 세 번째 경기 2조 3위와 전체 32개 슬�
 });
 
 assert.equal(ipingReferences.length, 96);
+test('사용자 캡처 4개조×3명: 1조·3조 우승자 인접 경기까지 그대로 일치', () => {
+  const expected = '1-1 BYE 3-3 2-2 3-2 2-3 BYE 4-1 3-1 BYE 1-3 4-2 1-2 4-3 BYE 2-1'.split(' ');
+  assert.deepEqual(buildIpingSlotLabels(4, 3), expected);
+  const slots = buildTournamentSlots('fixture', 1, {}, buildCrossGroupTournamentSeedOrder(pools(4, [3, 3, 3, 3])), 'seed');
+  assert.deepEqual(slots.map(slot => slot?.id ?? 'BYE'), expected);
+});
 for (const reference of ipingReferences) {
   const { groups: groupCount, ranks: rankCount, slots: expected } = reference;
   test(`아이핑 전체 비교 ${groupCount}개조×${rankCount}명: 원본 모든 슬롯과 BYE 일치`, () => {
@@ -91,6 +97,12 @@ for (const reference of ipingReferences) {
       assert.equal(new Set(matches.map(match => match.id)).size, matches.length);
       assert.equal(JSON.stringify(option), before);
       assert.deepEqual(generateProgramRoundMatches('fixture', option, participants, 2), matches);
+      const previewOption = { ...option, roundStandings: undefined };
+      const previewMatches = generateProgramRoundMatches('fixture', previewOption, participants, 2);
+      const preview = previewMatches.filter(match => match.round_number === 1 && match.bracket !== 'lower')
+        .sort((a, b) => a.match_order - b.match_order)
+        .flatMap(match => [match.participant_a_seed_label ?? 'BYE', match.participant_b_seed_label ?? 'BYE']);
+      assert.deepEqual(preview, safeExpected, '예선 미완료 가상 순위도 같은 슬롯을 사용한다');
     });
   }
 }

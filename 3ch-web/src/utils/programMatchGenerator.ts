@@ -9,6 +9,7 @@ import type {
 } from "../features/league/types/tournament.types";
 import { getRoundRobinWinScore } from "./roundRobinStandings";
 import { generateRoundRobin } from "./leagueUtils";
+import { buildIpingSlotLabels } from "./ipingTournamentDraw";
 
 export type ProgramMatchPatch = Partial<Pick<
   LeagueMatch,
@@ -1461,24 +1462,23 @@ function scoreCrossGroupSeedOrder(
   return score;
 }
 
-function buildThreeGroupSixQualifierSeedOrder(rankedPools: MatchUnit[][]): MatchUnit[] | null {
-  if (rankedPools.length !== 3 || rankedPools.some((pool) =>
-    pool.length !== 6 || pool.some((unit) => !unit.id))) return null;
-
-  // 아이핑 공개 GameHelp의 3개조 × 6명 배치 호환 정책.
-  // 공식 규정의 유일한 배치라고 주장하지 않는다. 순위별 순환 시드를
-  // 계산한 뒤 확인된 네 쌍만 보정하고, 라인/BYE는 재귀 계산한다.
-  const entrants = Array.from({ length: 6 }, (_, rankIndex) =>
-    Array.from({ length: 3 }, (_, offset) =>
-      rankedPools[(rankIndex + offset) % 3][rankIndex])).flat();
-  for (const [left, right] of [[1, 2], [10, 11], [12, 14], [16, 17]]) {
-    [entrants[left], entrants[right]] = [entrants[right], entrants[left]];
-  }
-  const bracketSize = 2 ** Math.ceil(Math.log2(entrants.length));
-  const internalSeeds = seededBracket(bracketSize);
-  const result = Array<MatchUnit>(bracketSize);
-  officialSeedLineOrder(bracketSize).forEach((seed, slotIndex) => {
-    result[internalSeeds[slotIndex] - 1] = entrants[seed - 1]
+function buildIpingCompatibleSeedOrder(rankedPools: MatchUnit[][]): MatchUnit[] | null {
+  const rankCount = rankedPools[0]?.length ?? 0;
+  // 인원이 다른 조와 지원 범위 밖 입력은 기존 분산 계산을 사용한다.
+  // 빈 조를 압축하면 원래의 조 번호가 달라지므로 호환 경로에서 제외한다.
+  if (rankCount < 1 || rankedPools.some(pool =>
+    pool.length !== rankCount || pool.some(unit => !unit.id))) return null;
+  const labels = buildIpingSlotLabels(rankedPools.length, rankCount);
+  if (labels === null) return null;
+  // 1개조·1명은 원본 페이지에 대진이 없지만 실제 참가자를 버리지 않는다.
+  const slots = labels.length === 0 ? ["1-1", "BYE"] : labels;
+  const internalSeeds = seededBracket(slots.length);
+  const result = Array<MatchUnit>(slots.length);
+  slots.forEach((label, slotIndex) => {
+    const [groupNumber, rankNumber] = label.split("-").map(Number);
+    const unit = rankedPools[groupNumber - 1]?.[rankNumber - 1];
+    // 원본 2개조·1명의 잘못된 2위 라벨은 빈 슬롯으로만 유지한다.
+    result[internalSeeds[slotIndex] - 1] = unit
       ?? { id: null, name: null, division: null };
   });
   return result;
@@ -1495,11 +1495,11 @@ export function buildCrossGroupTournamentSeedOrder(rankedPools: MatchUnit[][]): 
     })),
   );
 
+  const ipingOrder = buildIpingCompatibleSeedOrder(labeledPools);
+  if (ipingOrder) return ipingOrder;
+
   const exactTwoGroupOrder = buildTwoGroupOfficialSeedOrder(labeledPools);
   if (exactTwoGroupOrder) return exactTwoGroupOrder;
-
-  const threeGroupSixOrder = buildThreeGroupSixQualifierSeedOrder(labeledPools);
-  if (threeGroupSixOrder) return threeGroupSixOrder;
 
   const rankedTiers = Array.from(
     { length: Math.max(...labeledPools.map((pool) => pool.length)) },

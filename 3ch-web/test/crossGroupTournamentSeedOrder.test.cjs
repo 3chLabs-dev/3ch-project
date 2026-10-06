@@ -18,8 +18,10 @@ function loadTypeScript(filename) {
       : require(specifier), module, module.exports);
   return module.exports;
 }
-const { buildCrossGroupTournamentSeedOrder, buildTournamentSlots, swapProgramTournamentSlots } =
+const { buildCrossGroupTournamentSeedOrder, buildTournamentSlots, swapProgramTournamentSlots, generateProgramRoundMatches } =
   loadTypeScript(path.resolve(__dirname, '../src/utils/programMatchGenerator.ts'));
+const { buildIpingSlotLabels } = loadTypeScript(path.resolve(__dirname, '../src/utils/ipingTournamentDraw.ts'));
+const ipingReferences = require('./ipingDraws.fixture.json').draws;
 const pools = (count, sizes = Array(count).fill(6)) => Array.from({ length: count }, (_, group) =>
   Array.from({ length: sizes[group] }, (_, rank) => ({
     id: `${group + 1}-${rank + 1}`, name: `${group + 1}-${rank + 1}`, division: '5',
@@ -42,9 +44,62 @@ test('아이핑 3개조×6명: 세 번째 경기 2조 3위와 전체 32개 슬�
   assert.equal(new Set(slots.filter(slot => slot?.id).map(slot => slot.id)).size, 18);
 });
 
+assert.equal(ipingReferences.length, 96);
+for (const reference of ipingReferences) {
+  const { groups: groupCount, ranks: rankCount, slots: expected } = reference;
+  test(`아이핑 전체 비교 ${groupCount}개조×${rankCount}명: 원본 모든 슬롯과 BYE 일치`, () => {
+    assert.deepEqual(buildIpingSlotLabels(groupCount, rankCount), expected);
+  });
+  test(`아이핑 선수 적용 ${groupCount}개조×${rankCount}명: 출처·유일성·안전한 퇴화 입력`, () => {
+    const groups = pools(groupCount, Array(groupCount).fill(rankCount));
+    const before = JSON.stringify(groups);
+    const seedOrder = buildCrossGroupTournamentSeedOrder(groups);
+    const slots = buildTournamentSlots('fixture', 1, {}, seedOrder, 'seed');
+    const ids = new Set(groups.flat().map(unit => unit.id));
+    const safeExpected = expected.length ? expected.map(label => ids.has(label) ? label : 'BYE') : ['1-1', 'BYE'];
+    assert.deepEqual(slots.map(slot => slot?.id ?? 'BYE'), safeExpected);
+    assert.equal(slots.filter(slot => slot?.id).length, groupCount * rankCount);
+    assert.equal(new Set(slots.filter(slot => slot?.id).map(slot => slot.id)).size, groupCount * rankCount);
+    slots.filter(slot => slot?.id).forEach(slot => assert.equal(slot.seedLabel, slot.id));
+    assert.equal(JSON.stringify(groups), before);
+    assert.deepEqual(buildCrossGroupTournamentSeedOrder(groups), seedOrder);
+  });
+  for (const tournamentMode of ['single', 'upper-lower']) {
+    test(`실제 생성 ${tournamentMode} ${groupCount}개조×${rankCount}명: 아이핑 배치 유지`, () => {
+      const groups = pools(groupCount, Array(groupCount).fill(rankCount));
+      const participants = groups.flat();
+      // 리그 생성의 최소 참가 인원은 2명. 비진출자는 대진에 포함하지 않는다.
+      if (participants.length === 1) participants.push({ id: 'non-qualifier', name: '비진출자', division: '1' });
+      const option = {
+        blocks: [
+          { type: 'SINGLES', title: '예선', format: 'GROUP', groupSizes: Array(groupCount).fill(rankCount) },
+          { type: 'SINGLES', title: '2라운드 본선', format: 'TOURNAMENT', roundOption: 'FINAL', sourceRoundId: 1,
+            finalAdvancementMode: 'all', tournamentSeeding: 'seed', tournamentMode, tournamentBracketCount: 1 },
+        ],
+        roundStandings: [{ round: 1, complete: true, pools: groups.map((group, index) => ({
+          label: `${index + 1}조`, complete: true, participantIds: group.map(unit => unit.id),
+        })) }],
+      };
+      const before = JSON.stringify(option);
+      const matches = generateProgramRoundMatches('fixture', option, participants, 2);
+      const firstRound = matches.filter(match => match.round_number === 1 && match.bracket !== 'lower')
+        .sort((a, b) => a.match_order - b.match_order);
+      const actual = firstRound.flatMap(match => [match.participant_a_id ?? 'BYE', match.participant_b_id ?? 'BYE']);
+      const ids = new Set(groups.flat().map(unit => unit.id));
+      const safeExpected = expected.length ? expected.map(label => ids.has(label) ? label : 'BYE') : ['1-1', 'BYE'];
+      assert.deepEqual(actual, safeExpected);
+      assert.equal(new Set(matches.map(match => match.id)).size, matches.length);
+      assert.equal(JSON.stringify(option), before);
+      assert.deepEqual(generateProgramRoundMatches('fixture', option, participants, 2), matches);
+    });
+  }
+}
+
 const configurations = [];
 for (const count of [3, 4]) {
-  for (const rankCount of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 16, 17, 21, 22, 32, 43, 64, 65, 85]) {
+  // 아이핑 지원 범위 안에서는 공식 규정 추정 조건보다 원본 슬롯 일치가 기준이다.
+  // 지원 범위 밖과 조별 인원이 다른 입력은 기존 일반 분산 정책을 계속 검사한다.
+  for (const rankCount of [16, 17, 21, 22, 32, 43, 64, 65, 85]) {
     configurations.push([count, Array(count).fill(rankCount)]);
   }
   configurations.push([count, Array.from({ length: count }, (_, index) => 6 - index)]);

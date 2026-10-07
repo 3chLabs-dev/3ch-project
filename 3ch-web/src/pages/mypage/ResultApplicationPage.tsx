@@ -71,7 +71,14 @@ export default function ResultApplicationPage() {
       {token && <Button variant="contained" onClick={() => { setForm({ ...initialForm, account_email: user?.email || "" }); setFormError(""); setWriteOpen(true); }}>신청하기</Button>}
     </Stack>
     <Typography color="text.secondary" fontSize={14}>클럽 순위에 필요한 정보를 적어주세요. 신청 내용과 관리자 답변은 본인만 확인할 수 있습니다.</Typography>
-    {!token && <Alert severity="info">로그인 후 결과 등록을 신청할 수 있습니다.</Alert>}
+    {!token && <Card sx={{ borderRadius: 2, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
+      <CardContent>
+        <Stack alignItems="center" spacing={1.2}>
+          <Typography fontWeight={800}>로그인을 해주세요.</Typography>
+          <Button variant="contained" size="medium" onClick={() => navigate("/login")} sx={{ px: 3, borderRadius: 1 }}>로그인</Button>
+        </Stack>
+      </CardContent>
+    </Card>}
     {error && <Alert severity="error" action={<Button onClick={() => void load()}>다시 시도</Button>}>{error}</Alert>}
     {(loading || detailLoading) && <Typography>불러오는 중...</Typography>}
     {token && !loading && !error && !items.length && <Typography color="text.secondary" textAlign="center" py={5}>접수한 신청이 없습니다.</Typography>}

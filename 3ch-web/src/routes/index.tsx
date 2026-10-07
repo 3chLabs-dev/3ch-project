@@ -22,6 +22,7 @@ import AdminFeatureUsagePage from "../pages/admin/AdminFeatureUsagePage";
 import AdminPaymentHistoryPage from "../pages/admin/AdminPaymentHistoryPage";
 import AdminTokenPackagePage from "../pages/admin/AdminTokenPackagePage";
 import AdminCouponPage from "../pages/admin/AdminCouponPage";
+import AdminPopupPage from "../pages/admin/AdminPopupPage";
 import AdminSettlementPage from "../pages/admin/AdminSettlementPage";
 import AdminSettlementMenuPage from "../pages/admin/AdminSettlementMenuPage";
 import Home from "../pages/Home";
@@ -229,6 +230,7 @@ export const router = createBrowserRouter([
           { path: "/admin/token-packages", element: <AdminTokenPackagePage /> },
           { path: "/admin/feature-usage", element: <AdminFeatureUsagePage /> },
           { path: "/admin/coupons", element: <AdminCouponPage /> },
+          { path: "/admin/popups", element: <AdminPopupPage /> },
           { path: "/admin/settlement", element: <AdminSettlementPage /> },
           { path: "/admin/settlement/menu", element: <AdminSettlementMenuPage /> },
         ],

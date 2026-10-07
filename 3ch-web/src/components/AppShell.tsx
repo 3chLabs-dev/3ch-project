@@ -8,6 +8,7 @@ import type { SelectChangeEvent } from "@mui/material";
 import BottomTab from "./BottomTab";
 import AppFooter from "./AppFooter";
 import SupportChat from "./SupportChat";
+import LeaguePopup from "./LeaguePopup";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
@@ -396,6 +397,7 @@ export default function AppShell() {
                 </Box>
 
                 {!isLeagueSheet && <SupportChat />}
+                {!isLeagueSheet && <LeaguePopup />}
                 {isMatchOrderPage && (
                     <IconButton
                         aria-label="경기 순서 새로고침"

@@ -1,0 +1,13 @@
+CREATE TABLE popups (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(200) NOT NULL,
+  image BYTEA NOT NULL,
+  image_type VARCHAR(30) NOT NULL,
+  link_url VARCHAR(2000) NOT NULL,
+  starts_at TIMESTAMPTZ NOT NULL,
+  ends_at TIMESTAMPTZ NOT NULL,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (ends_at > starts_at)
+);

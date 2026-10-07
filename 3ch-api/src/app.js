@@ -147,5 +147,6 @@ app.use("/api", userRouter);
 app.use("/api", supportChatRouter);
 app.use("/api", ocrRouter);
 app.use("/api", couponRouter);
+app.use("/api", require("./routes/popup"));
 
 module.exports = app;

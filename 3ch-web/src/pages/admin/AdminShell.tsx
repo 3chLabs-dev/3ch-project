@@ -209,6 +209,7 @@ export default function AdminShell() {
             active={location.pathname === "/admin/coupons"}
             onClick={() => navigate("/admin/coupons")}
           />
+          <SideMenuItem label="팝업 관리" active={location.pathname === "/admin/popups"} onClick={() => navigate("/admin/popups")} />
         </Box>
 
         {/* 콘텐츠 */}

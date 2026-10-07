@@ -32,6 +32,7 @@ const COMMUNITY_ITEMS = [
     { label: "이용방법", to: "/mypage/guide", icon: <MenuBookOutlinedIcon fontSize="small" /> },
     { label: "요금제", to: "/mypage/pricing", icon: <CreditCardOutlinedIcon fontSize="small" /> },
     { label: "후원하기", to: "/mypage/donate", icon: <FavoriteBorderIcon fontSize="small" /> },
+    { label: "결과 등록 신청", to: "/mypage/result-application", icon: <ArticleOutlinedIcon fontSize="small" /> },
 ];
 
 const SUPPORT_ITEMS = [

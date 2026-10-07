@@ -142,6 +142,7 @@ app.use("/api", policyRouter);
 app.use("/api/admin/board", boardRouter);
 app.use("/api", noticeRouter);
 app.use("/api", inquiryRouter);
+app.use("/api", require("./routes/resultApplication"));
 app.use("/api", paymentRouter);
 app.use("/api", userRouter);
 app.use("/api", supportChatRouter);

@@ -14,6 +14,8 @@ import AdminTournamentPage from "../pages/admin/AdminTournamentPage";
 import AdminNoticePage from "../pages/admin/board/AdminNoticePage";
 import AdminFaqPage from "../pages/admin/board/AdminFaqPage";
 import AdminInquiryPage from "../pages/admin/board/AdminInquiryPage";
+import AdminResultApplicationPage from "../pages/admin/board/AdminResultApplicationPage";
+import ResultApplicationPage from "../pages/mypage/ResultApplicationPage";
 import AdminTermsPage from "../pages/admin/board/AdminTermsPage";
 import AdminPrivacyPage from "../pages/admin/board/AdminPrivacyPage";
 import AdminGuidePage from "../pages/admin/board/AdminGuidePage";
@@ -180,6 +182,7 @@ export const router = createBrowserRouter([
       { path: "/mypage/privacy", element: <PrivacyPolicyPage />},
       { path: "/mypage/license", element: <LicensePage />},
       { path: "/mypage/inquiry", element: <InquiryPage />},
+      { path: "/mypage/result-application", element: <ResultApplicationPage />},
       { path: "/mypage/faq", element: <FaqPage />},
       { path: "/mypage/guide", element: <GuidePage />},
       { path: "/mypage/pricing", element: <PricingPage />},
@@ -221,6 +224,7 @@ export const router = createBrowserRouter([
           { path: "/admin/board/notice",  element: <AdminNoticePage /> },
           { path: "/admin/board/faq",     element: <AdminFaqPage /> },
           { path: "/admin/board/inquiry", element: <AdminInquiryPage /> },
+          { path: "/admin/board/result-application", element: <AdminResultApplicationPage /> },
           { path: "/admin/support-chat", element: <AdminSupportChatPage /> },
           { path: "/admin/board/guide",   element: <AdminGuidePage /> },
           { path: "/admin/board/terms",   element: <AdminTermsPage /> },

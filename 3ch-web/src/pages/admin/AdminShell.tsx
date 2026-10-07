@@ -22,6 +22,7 @@ const BOARD_MENU = [
   { label: "자주 하는 질문",  path: "/admin/board/faq"     },
   { label: "1:1 문의",         path: "/admin/board/inquiry" },
   { label: "이용방법",         path: "/admin/board/guide"   },
+  { label: "결과 등록 신청", path: "/admin/board/result-application" },
   { label: "이용약관",         path: "/admin/board/terms"   },
   { label: "개인정보 처리방침", path: "/admin/board/privacy" },
 ];

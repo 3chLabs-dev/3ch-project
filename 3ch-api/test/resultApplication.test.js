@@ -12,16 +12,17 @@ test('validates required answers, dates and safe URL protocols', () => {
     assert.throws(() => parseApplication({ ...input, ...patch }));
   assert.equal(parseApplication({ ...input, season_configured: false, preferred_at: '2026-10-07T12:30' }).preferred_at, '2026-10-07T12:30');
 });
-test('membership question is unnecessary and help details only apply to setup requests', () => {
+test('membership question is unnecessary and contact details persist for every setup branch', () => {
   const { registered, ...withoutMembership } = input;
   const result = parseApplication({ ...withoutMembership, contact: 'hidden contact', preferred_at: '2026-10-07T12:30' });
   assert.equal(result.registered, undefined);
-  assert.equal(result.contact, '');
-  assert.equal(result.preferred_at, '');
+  assert.equal(result.contact, 'hidden contact');
+  assert.equal(result.preferred_at, '2026-10-07T12:30');
   for (const branch of [{ club_created: false }, { season_configured: false }]) {
     assert.equal(parseApplication({ ...withoutMembership, ...branch, contact: 'help contact' }).contact, 'help contact');
   }
-  assert.doesNotMatch(formatAnswers(result), /회원가입|전화번호|방문 희망/);
+  assert.doesNotMatch(formatAnswers(result), /회원가입/);
+  assert.match(formatAnswers(result), /hidden contact/);
   assert.match(formatAnswers({ ...input, contact: 'historical contact' }), /historical contact/);
 });
 test('skipped branch answers are not retained', () => {

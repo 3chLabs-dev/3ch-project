@@ -33,7 +33,6 @@ export default function ResultApplicationPage() {
   const [detail, setDetail] = useState<Application | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const dateInputRef = useRef<HTMLInputElement>(null);
-  const needsHelp = form.club_created === "no" || (form.club_created === "yes" && form.season_configured === "no");
   const request = useCallback(async (path: string, options: RequestInit = {}) => {
     const response = await fetch(`${API}${path}`, { ...options, headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } });
     const data = await response.json();
@@ -60,7 +59,7 @@ export default function ResultApplicationPage() {
     }
     setSaving(true); setFormError("");
     try {
-      await request("/result-applications", { method: "POST", body: JSON.stringify({ ...form, club_created: form.club_created === "yes", season_configured: form.club_created === "yes" ? form.season_configured === "yes" : null, contact: needsHelp ? form.contact : "", preferred_at: needsHelp ? form.preferred_at : "" }) });
+      await request("/result-applications", { method: "POST", body: JSON.stringify({ ...form, club_created: form.club_created === "yes", season_configured: form.club_created === "yes" ? form.season_configured === "yes" : null }) });
       setWriteOpen(false); await load();
     } catch (e) { setFormError(e instanceof Error ? e.message : "신청 등록에 실패했습니다."); }
     finally { setSaving(false); }
@@ -85,26 +84,32 @@ export default function ResultApplicationPage() {
       <DialogContent><Box component="form" onSubmit={e => { e.preventDefault(); if (!saving) void submit(); }}><Stack spacing={3} pt={1}>
         <TextField required type="email" label="이메일 형태의 아이디(소셜 계정)" value={form.account_email} onChange={e => setForm({ ...form, account_email: e.target.value })} inputProps={{ maxLength: 200 }} />
         <Typography fontWeight={800}>1. 클럽 생성</Typography>
-        <YesNoButtons label="클럽을 생성하셨나요?" value={form.club_created} onChange={value => setForm({ ...form, club_created: value, club_name: "", season_configured: "", photo_url: "", contact: "", preferred_at: "" })} />
+        <YesNoButtons label="클럽을 생성하셨나요?" value={form.club_created} onChange={value => setForm({ ...form, club_created: value, club_name: "", season_configured: "", photo_url: "" })} />
         {form.club_created === "yes" && <>
           <TextField required label="클럽명을 적어주세요." value={form.club_name} onChange={e => setForm({ ...form, club_name: e.target.value })} inputProps={{ maxLength: 100 }} />
           <Typography fontWeight={800}>2. 시즌 설정</Typography>
-          <Typography fontSize={13} color="text.secondary">클럽 &gt; 순위 &gt; 시즌 설정 &gt; 시즌 생성에서 시즌명, 기간, 기본 포인트와 입상자 포인트를 설정해주세요.</Typography>
-          <YesNoButtons label="시즌 설정을 다 하셨나요?" value={form.season_configured} onChange={value => setForm({ ...form, season_configured: value, photo_url: "", contact: "", preferred_at: "" })} />
+          <Stack direction="row" spacing={2} alignItems="flex-start">
+            <Box component="img" src="/images/result-application-season-setting.png" alt="시즌명, 기간과 기본 포인트를 입력하는 순위 시즌 설정 화면"
+              sx={{ width: { xs: 112, sm: 144 }, height: "auto", flexShrink: 0, borderRadius: 2, border: "1px solid", borderColor: "divider" }} />
+            <Stack spacing={1} sx={{ flex: 1, minWidth: 0 }}>
+              <Typography fontSize={13} color="text.secondary" lineHeight={1.8}>클럽 &gt; 순위 &gt; 시즌 설정 &gt; 시즌 생성으로 이동해주세요.</Typography>
+              <Typography fontSize={13} color="text.secondary" lineHeight={1.8}>시즌명과 기간을 입력하고, 기본 포인트와 입상자 포인트를 설정한 뒤 완료를 눌러주세요.</Typography>
+            </Stack>
+          </Stack>
+          <YesNoButtons label="시즌 설정을 다 하셨나요?" value={form.season_configured} onChange={value => setForm({ ...form, season_configured: value, photo_url: "" })} />
         </>}
         {form.club_created === "yes" && form.season_configured === "yes" && <>
           <Typography fontWeight={800}>3. 대진표 사진 등록</Typography>
           <Typography fontSize={13} color="text.secondary">대진표 사진을 구글 드라이브에 올리거나, 사진을 올린 네이버 밴드·소모임의 초대 링크를 입력해주세요. 드라이브 공유 설정은 ‘링크가 있는 모든 사용자’로 설정해주세요.</Typography>
           <TextField type="url" label="대진표 사진 공유 링크 (선택)" value={form.photo_url} onChange={e => setForm({ ...form, photo_url: e.target.value })} inputProps={{ maxLength: 2000 }} />
         </>}
-        {needsHelp && <>
-        <Typography fontWeight={800}>4. 자세한 설명</Typography>
+        <Stack spacing={2} sx={{ bgcolor: "#F3F4F6", borderRadius: 2, p: { xs: 2, sm: 2.5 } }}>
         <Typography fontSize={13} color="text.secondary">직접 찾아뵙거나 메신저로 자세히 설명해드립니다.</Typography>
         <TextField label="전화번호 또는 카카오톡 ID (선택)" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} inputProps={{ maxLength: 200 }} />
         <TextField inputRef={dateInputRef} type="datetime-local" label="방문 희망 일시 (선택, 한국 시간)" value={form.preferred_at} onChange={e => setForm({ ...form, preferred_at: e.target.value })}
           onClick={() => { const input = dateInputRef.current; if (!input) return; input.focus(); try { input.showPicker?.(); } catch { /* Native keyboard remains available when a picker is unsupported. */ } }}
           sx={{ "& .MuiInputBase-root, & input": { cursor: "pointer" } }} slotProps={{ inputLabel: { shrink: true } }} />
-        </>}
+        </Stack>
         {formError && <Alert severity="error">{formError}</Alert>}
         <Button type="submit" variant="contained" disabled={saving}>{saving ? "접수 중..." : "신청 등록"}</Button>
       </Stack></Box></DialogContent>

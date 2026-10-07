@@ -1,3 +1,4 @@
+import { openUsagePurchase } from "../../utils/returnNavigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
@@ -18,7 +19,6 @@ import {
 import CloseIcon from "@mui/icons-material/Close";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import PhotoLibraryOutlinedIcon from "@mui/icons-material/PhotoLibraryOutlined";
-import { useNavigate } from "react-router-dom";
 import { useScanParticipantImagesMutation, type RecognizedParticipant } from "../../features/league/leagueApi";
 
 export type ImportedParticipant = {
@@ -51,7 +51,6 @@ export default function ParticipantImageImportDialog({
   title = "이미지에서 참가자 불러오기",
   recognizeLabel = "참가자 이름 인식",
 }: Props) {
-  const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [rows, setRows] = useState<ReviewRow[]>([]);
@@ -207,8 +206,7 @@ export default function ParticipantImageImportDialog({
             variant="contained"
             disableElevation
             onClick={() => {
-              onClose();
-              navigate("/mypage/pricing#token-packages");
+              openUsagePurchase();
             }}
             sx={{ mt: 1.2, height: 44, fontWeight: 900 }}
           >

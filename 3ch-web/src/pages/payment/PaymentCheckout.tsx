@@ -1,3 +1,5 @@
+import { paymentReturnParams } from "../../utils/returnNavigation";
+import { loginUrl } from "../../utils/returnNavigation";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { Box, Typography, Button, Stack, CircularProgress, IconButton } from "@mui/material";
@@ -28,7 +30,7 @@ export default function PaymentCheckout() {
     if (initializedRef.current) return;
     initializedRef.current = true;
 
-    if (!user) { navigate("/login"); return; }
+    if (!user) { navigate(loginUrl()); return; }
     if (!(paymentType === "token" ? packageId : plan) || !amount) {
       navigate("/mypage/pricing");
       return;
@@ -61,8 +63,8 @@ export default function PaymentCheckout() {
         amount: { currency: "KRW", value: amount },
         orderId,
         orderName: paymentType === "token" ? name : `${name} 요금제`,
-        successUrl: `${window.location.origin}/payment/success?type=${paymentType}`,
-        failUrl: `${window.location.origin}/payment/fail`,
+        successUrl: `${window.location.origin}/payment/success?type=${paymentType}&${paymentReturnParams()}`,
+        failUrl: `${window.location.origin}/payment/fail?${paymentReturnParams()}`,
         customerEmail: user.email,
         customerName: user.name ?? undefined,
         card: {

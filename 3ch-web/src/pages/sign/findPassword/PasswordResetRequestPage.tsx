@@ -1,3 +1,4 @@
+import { loginUrl } from "../../../utils/returnNavigation";
 import * as React from "react";
 import { useState } from "react";
 import { Box, Button, CssBaseline, IconButton, TextField, Typography } from "@mui/material";
@@ -98,7 +99,7 @@ export default function PasswordResetRequestPage(props: Record<string, unknown>)
                     {/* 헤더 */}
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                         <IconButton
-                            onClick={() => navigate("/login")}
+                            onClick={() => navigate(loginUrl())}
                             disableRipple
                             sx={{ p: 0.5, "&:hover": { background: "transparent" } }}
                         >

@@ -1,3 +1,5 @@
+import { paymentReturnParams } from "../../utils/returnNavigation";
+import { loginUrl } from "../../utils/returnNavigation";
 import { useCallback, useEffect, useState } from "react";
 import {
   Box, Typography, IconButton, Stack, Button, Tabs, Tab, Divider, Chip,
@@ -345,7 +347,7 @@ export default function PricingPage() {
   useEffect(() => { void loadCoupons(); }, [loadCoupons]);
   const redeemCoupon = async (confirmUpgrade = false) => {
     const resolvedToken = token ?? localStorage.getItem("token");
-    if (!resolvedToken) { navigate("/login"); return; }
+    if (!resolvedToken) { navigate(loginUrl()); return; }
     setCouponLoading(true); setCouponMessage(null);
     try {
       const response=await fetch(`${API}/coupons/redeem`,{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${resolvedToken}`},body:JSON.stringify({code:couponCode,confirmUpgrade})});
@@ -480,7 +482,7 @@ export default function PricingPage() {
     };
   }).filter((plan) => managedPlans.length === 0 || managedPlans.some((item) => item.code === plan.id));
   const handleBuy = (planId: string) => {
-    navigate(`/payment/billing/checkout?plan=${planId}`);
+    navigate(`/payment/billing/checkout?plan=${planId}&${paymentReturnParams()}`);
   };
   const handleBuyTokens = (tokenPackage: TokenPackage) => {
     const params = new URLSearchParams({
@@ -489,7 +491,7 @@ export default function PricingPage() {
       amount: String(tokenPackage.price),
       name: tokenPackage.name,
     });
-    navigate(`/payment/checkout?${params.toString()}`);
+    navigate(`/payment/checkout?${params.toString()}&${paymentReturnParams()}`);
   };
 
   return (

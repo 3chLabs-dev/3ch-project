@@ -1,3 +1,4 @@
+import { loginUrl } from "../../utils/returnNavigation";
 import { useMemo, useEffect, useState, useRef } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -358,7 +359,7 @@ export default function SignUp() {
                     fullWidth
                     variant="contained"
                     disableElevation
-                    onClick={() => { if (animationRef.current) { clearInterval(animationRef.current); animationRef.current = null; } navigate("/login"); }}
+                    onClick={() => { if (animationRef.current) { clearInterval(animationRef.current); animationRef.current = null; } navigate(loginUrl()); }}
                     sx={{
                         mt: 3,
                         borderRadius: 1,

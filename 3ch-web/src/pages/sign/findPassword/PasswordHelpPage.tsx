@@ -1,3 +1,4 @@
+import { loginUrl } from "../../../utils/returnNavigation";
 import { Box, Button, CssBaseline, IconButton, Typography } from "@mui/material";
 import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew";
 import { useNavigate } from "react-router-dom";
@@ -86,7 +87,7 @@ export default function PasswordHelpPage(props: Record<string, unknown>) {
                     {/* 헤더 */}
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                         <IconButton
-                            onClick={() => navigate("/login")}
+                            onClick={() => navigate(loginUrl())}
                             disableRipple
                             sx={{ p: 0.5, "&:hover": { background: "transparent" } }}
                         >

@@ -1,3 +1,5 @@
+import { paymentReturnParams } from "../../utils/returnNavigation";
+import { loginUrl } from "../../utils/returnNavigation";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -48,7 +50,7 @@ export default function BillingCheckout() {
 
   useEffect(() => {
     if (!user || !token) {
-      navigate("/login", { replace: true });
+      navigate(loginUrl(), { replace: true });
       return;
     }
     if (!planCode) {
@@ -86,13 +88,14 @@ export default function BillingCheckout() {
       const payment = tossPayments.payment({ customerKey });
       const successUrl = new URL("/payment/billing/success", window.location.origin);
       successUrl.searchParams.set("plan", plan.code);
+      new URLSearchParams(paymentReturnParams()).forEach((value, key) => successUrl.searchParams.set(key, value));
       sessionStorage.setItem("billing_plan_code", plan.code);
       sessionStorage.setItem("billing_coupon_id",couponId);
 
       await payment.requestBillingAuth({
         method: "CARD",
         successUrl: successUrl.toString(),
-        failUrl: `${window.location.origin}/payment/billing/fail`,
+        failUrl: `${window.location.origin}/payment/billing/fail?${paymentReturnParams()}`,
         customerEmail: user.email,
         customerName: user.name ?? undefined,
       });

@@ -1,3 +1,4 @@
+import { loginUrl } from "../../utils/returnNavigation";
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Box, Button, Checkbox, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, MenuItem, Stack, TextField, Typography } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -76,7 +77,7 @@ export default function TournamentApply() {
       navigate(`/tournament/${id}`, { replace: true });
     } catch (reason) { setError((reason as { data?: { message?: string } }).data?.message ?? "신청 명단을 저장하지 못했습니다."); }
   };
-  if (!token) return <Box sx={{ p: 2 }}><Alert severity="info">로그인 후 참가 신청할 수 있습니다.</Alert><Button onClick={() => navigate("/login")}>로그인</Button></Box>;
+  if (!token) return <Box sx={{ p: 2 }}><Alert severity="info">로그인 후 참가 신청할 수 있습니다.</Alert><Button onClick={() => navigate(loginUrl())}>로그인</Button></Box>;
   if (loadingTournament || loadingGroups) return <Box sx={{ textAlign: "center", pt: 8 }}><CircularProgress /></Box>;
   if (!tournament) return <Box sx={{ p: 2 }}><Alert severity="error">대회를 찾을 수 없습니다.</Alert></Box>;
   return <Box sx={{ px: 2.5, pt: 2, pb: 4 }}>

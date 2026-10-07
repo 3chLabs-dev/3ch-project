@@ -1,3 +1,4 @@
+import { openUsagePurchase } from "../../utils/returnNavigation";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { createPortal } from "react-dom";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -4003,7 +4004,7 @@ export default function LeagueGPTVisionSheet() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setQuotaDialogOpen(false)}>닫기</Button>
-          <Button variant="contained" onClick={() => navigate("/mypage/pricing")}>요금제 보기</Button>
+          <Button variant="contained" onClick={() => openUsagePurchase("/mypage/pricing")}>요금제 보기</Button>
         </DialogActions>
       </Dialog>
 

@@ -1,3 +1,4 @@
+import { safeReturnPath } from "../../utils/returnNavigation";
 ﻿import * as React from "react";
 import { useState, useEffect, useCallback } from "react";
 import Box from "@mui/material/Box";
@@ -172,7 +173,8 @@ function SocialBtnInner({
 export default function Login(props: Record<string, unknown>) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const redirectTo = searchParams.get("redirect") || "/";
+  const redirectTo = safeReturnPath(searchParams.get("redirect")) || safeReturnPath(sessionStorage.getItem("login-return-to")) || "/";
+  sessionStorage.setItem("login-return-to", redirectTo);
   const sessionExpired = searchParams.get("reason") === "session-expired";
   const dispatch = useDispatch();
   const [email, setEmail] = useState("");
@@ -215,6 +217,7 @@ export default function Login(props: Record<string, unknown>) {
       localStorage.setItem("user", JSON.stringify(user));
       dispatch(setToken(token));
       dispatch(setUser(user));
+      sessionStorage.removeItem("login-return-to");
       navigate(redirectTo, { replace: true });
       return;
     }
@@ -244,6 +247,7 @@ try {
       dispatch(setToken(token));
       dispatch(setUser(user));
 
+      sessionStorage.removeItem("login-return-to");
       navigate(redirectTo, { replace: true });
     } catch (err) {
       console.log("login fail:", err);
@@ -287,7 +291,8 @@ try {
         localStorage.setItem("user", JSON.stringify(user));
         dispatch(setUser(user));
 
-        navigate(redirectTo, { replace: true });
+        sessionStorage.removeItem("login-return-to");
+      navigate(redirectTo, { replace: true });
       } catch (err) {
         console.log("social me fail:", err);
         localStorage.removeItem("token");

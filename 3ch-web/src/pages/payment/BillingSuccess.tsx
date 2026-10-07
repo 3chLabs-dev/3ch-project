@@ -1,3 +1,4 @@
+import { completePaymentReturn } from "../../utils/returnNavigation";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Alert, Box, Button, CircularProgress, Stack, Typography } from "@mui/material";
@@ -44,6 +45,8 @@ export default function BillingSuccess() {
         sessionStorage.removeItem("billing_plan_code");
         sessionStorage.removeItem("billing_coupon_id");
         setStatus("success");
+        const returnTo = completePaymentReturn();
+        if (returnTo) navigate(returnTo, { replace: true });
       })
       .catch((error) => {
         setStatus("error");

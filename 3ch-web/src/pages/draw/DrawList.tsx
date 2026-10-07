@@ -1,3 +1,4 @@
+import { openUsagePurchase } from "../../utils/returnNavigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
@@ -832,7 +833,7 @@ export default function DrawList() {
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5 }}>
           <Button onClick={() => setQuotaDialogOpen(false)}>닫기</Button>
-          <Button variant="contained" onClick={() => navigate("/mypage/pricing")}>요금제 보기</Button>
+          <Button variant="contained" onClick={() => openUsagePurchase("/mypage/pricing")}>요금제 보기</Button>
         </DialogActions>
       </Dialog>
 

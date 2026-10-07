@@ -21,6 +21,7 @@ export const usageApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     getMyFeatureUsage: builder.query<FeatureUsageResponse, number | void>({
       query: () => "/payment/usage/me",
+      providesTags: ["FeatureUsage"],
     }),
   }),
 });

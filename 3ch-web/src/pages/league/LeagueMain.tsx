@@ -1,3 +1,4 @@
+import { loginUrl } from "../../utils/returnNavigation";
 import React, { useEffect, useMemo, useState } from "react";
 import { Link as RouterLink, useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
@@ -199,7 +200,7 @@ export default function LeagueMainBody() {
               <Button component={RouterLink} to="/demo/league" variant="outlined" size="medium" sx={{ px: 2, borderRadius: 1, fontWeight: 800 }}>
                 리그 둘러보기
               </Button>
-              <Button component={RouterLink} to="/login" variant="contained" size="medium" sx={{ px: 3, borderRadius: 1 }}>
+              <Button component={RouterLink} to={loginUrl()} variant="contained" size="medium" sx={{ px: 3, borderRadius: 1 }}>
                 로그인
               </Button>
             </Stack>

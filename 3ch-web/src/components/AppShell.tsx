@@ -1,3 +1,6 @@
+import { openUsagePurchase } from "../utils/returnNavigation";
+import { baseApi } from "../features/api/baseApi";
+import { loginUrl } from "../utils/returnNavigation";
 // AppShell.tsx
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -38,6 +41,20 @@ export default function AppShell() {
     const location = useLocation();
     const navigate = useNavigate();
     const token = useSelector((s: RootState) => s.auth.token);
+    useEffect(() => {
+        const refresh = () => {
+            if (token) dispatch(baseApi.util.invalidateTags(["FeatureUsage"]));
+        };
+        const onStorage = (event: StorageEvent) => {
+            if (event.key === "usage-purchase-completed") refresh();
+        };
+        window.addEventListener("storage", onStorage);
+        window.addEventListener("focus", refresh);
+        return () => {
+            window.removeEventListener("storage", onStorage);
+            window.removeEventListener("focus", refresh);
+        };
+    }, [dispatch, token]);
     const preferredGroupId = useSelector((s: RootState) => s.leagueCreation.preferredGroupId);
     const isHome = location.pathname === "/";
     const showLeagueQuickActions = isHome || location.pathname === "/league";
@@ -272,7 +289,7 @@ export default function AppShell() {
                             <Button
                             variant="contained"
                             disableElevation
-                            onClick={() => navigate("/login")}
+                            onClick={() => navigate(loginUrl())}
                             sx={{ borderRadius: 1.5, fontWeight: 700, fontSize: 14, px: 1.5, whiteSpace: "nowrap" ,width: 85,}}
                         >
                             로그인
@@ -515,7 +532,7 @@ export default function AppShell() {
                             disableElevation
                             onClick={() => {
                                 setUsageOpen(false);
-                                navigate("/mypage/pricing#token-packages");
+                                openUsagePurchase();
                             }}
                             sx={{ fontWeight: 800, bgcolor: "#7C3AED", "&:hover": { bgcolor: "#6D28D9" } }}
                         >
@@ -524,7 +541,7 @@ export default function AppShell() {
                         <Button
                             onClick={() => {
                                 setUsageOpen(false);
-                                navigate("/mypage/pricing");
+                                openUsagePurchase("/mypage/pricing");
                             }}
                             sx={{ fontWeight: 800 }}
                         >

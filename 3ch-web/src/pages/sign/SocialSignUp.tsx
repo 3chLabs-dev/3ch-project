@@ -1,3 +1,4 @@
+import { safeReturnPath } from "../../utils/returnNavigation";
 import { useMemo, useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -136,7 +137,7 @@ export default function SocialSignUp() {
             dispatch(setToken(token));
             dispatch(setUser(user));
 
-            navigate("/", { replace: true });
+            navigate(safeReturnPath(sessionStorage.getItem("login-return-to")) || "/", { replace: true });
         } catch (error) {
             console.error(error);
             setApiError("이름 설정 중 오류가 발생했습니다.");

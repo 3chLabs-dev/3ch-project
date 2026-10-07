@@ -1,3 +1,4 @@
+import { loginUrl } from "../../utils/returnNavigation";
 import { useMemo, useState } from "react";
 import {
   Alert,
@@ -56,7 +57,7 @@ export default function RequiredPasswordResetPage() {
       });
       sessionStorage.removeItem("passwordResetToken");
       window.alert("비밀번호가 변경되었습니다.");
-      navigate("/login", { replace: true });
+      navigate(loginUrl(), { replace: true });
     } catch {
       setError("비밀번호를 변경하지 못했습니다. 임시 비밀번호로 다시 로그인해 주세요.");
     } finally {
@@ -80,7 +81,7 @@ export default function RequiredPasswordResetPage() {
   return (
     <Box sx={{ width: "100%", maxWidth: 430, mx: "auto", px: 3, pt: 3 }}>
       <Stack direction="row" alignItems="center" spacing={1} mb={5}>
-        <IconButton onClick={() => navigate("/login")} sx={{ p: 0.5 }}>
+        <IconButton onClick={() => navigate(loginUrl())} sx={{ p: 0.5 }}>
           <ArrowBackIosNewIcon />
         </IconButton>
         <Typography sx={{ fontSize: 24, fontWeight: 800 }}>비밀번호 초기화</Typography>

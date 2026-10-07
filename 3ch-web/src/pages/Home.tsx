@@ -1,3 +1,4 @@
+import { loginUrl } from "../utils/returnNavigation";
 // src/pages/Home.tsx
 import { useEffect, useMemo, useState } from "react";
 import { formatLeagueDateTime } from "../utils/dateUtils";
@@ -261,7 +262,7 @@ export default function Home() {
                         <Typography fontWeight={800}>로그인을 해주세요.</Typography>
                         <Button
                             component={RouterLink}
-                            to="/login"
+                            to={loginUrl()}
                             variant="contained"
                             size="medium"
                             sx={{ px: 3, borderRadius: 1 }}

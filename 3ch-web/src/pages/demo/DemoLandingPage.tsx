@@ -1,3 +1,4 @@
+import { loginUrl } from "../../utils/returnNavigation";
 import { Box, Button, Card, CardContent, Chip, Divider, Stack, Typography } from "@mui/material";
 import EmojiEventsOutlinedIcon from "@mui/icons-material/EmojiEventsOutlined";
 import LeaderboardOutlinedIcon from "@mui/icons-material/LeaderboardOutlined";
@@ -161,7 +162,7 @@ export default function DemoLandingPage() {
             ))}
           </Stack>
           <Stack direction="row" spacing={1}>
-            <Button component={RouterLink} to="/login" variant="outlined" sx={{ borderRadius: 1, fontWeight: 700 }}>로그인</Button>
+            <Button component={RouterLink} to={loginUrl()} variant="outlined" sx={{ borderRadius: 1, fontWeight: 700 }}>로그인</Button>
             <Button component={RouterLink} to="/signup" variant="contained" disableElevation sx={{ borderRadius: 1, fontWeight: 800 }}>회원가입</Button>
           </Stack>
         </Box>
@@ -377,7 +378,7 @@ export default function DemoLandingPage() {
                 우리리그에 회원가입하면 모두 이용할 수 있습니다.
               </Typography>
               <Stack direction={{ xs: "column", sm: "row" }} spacing={1.2}>
-                <Button component={RouterLink} to="/login" variant="contained" disableElevation sx={{ borderRadius: 1, fontWeight: 900 }}>로그인</Button>
+                <Button component={RouterLink} to={loginUrl()} variant="contained" disableElevation sx={{ borderRadius: 1, fontWeight: 900 }}>로그인</Button>
                 <Button component={RouterLink} to="/signup" variant="outlined" sx={{ borderRadius: 1, fontWeight: 800 }}>회원가입</Button>
               </Stack>
             </Stack>

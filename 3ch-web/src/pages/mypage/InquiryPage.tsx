@@ -1,3 +1,4 @@
+import { loginUrl } from "../../utils/returnNavigation";
 import { useEffect, useRef, useState } from "react";
 import {
     Box, Typography, IconButton, Divider, Stack,
@@ -214,7 +215,7 @@ export default function InquiryPage() {
                             variant="contained"
                             disableElevation
                             size="small"
-                            onClick={() => navigate("/login")}
+                            onClick={() => navigate(loginUrl())}
                             sx={{ mt: 2.5, borderRadius: 1.5, fontWeight: 700, px: 3 }}
                         >
                             로그인

@@ -1,3 +1,4 @@
+import { loginUrl } from "../../utils/returnNavigation";
 import {
     Box, Typography, Stack, Divider, List, ListItemButton,
     ListItemText, ListItemIcon, Button, Card, Chip,
@@ -122,7 +123,7 @@ export default function MyPage() {
                             size="small"
                             variant="contained"
                             disableElevation
-                            onClick={() => navigate("/login")}
+                            onClick={() => navigate(loginUrl())}
                             sx={{ borderRadius: 1.5, fontWeight: 700, fontSize: 12, px: 1.5, whiteSpace: "nowrap" }}
                         >
                             로그인

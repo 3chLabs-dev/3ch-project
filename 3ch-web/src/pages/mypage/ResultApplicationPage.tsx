@@ -1,3 +1,4 @@
+import { loginUrl } from "../../utils/returnNavigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Box, Button, Card, CardContent, Chip, Dialog, DialogContent, DialogTitle, IconButton, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
@@ -75,7 +76,7 @@ export default function ResultApplicationPage() {
       <CardContent>
         <Stack alignItems="center" spacing={1.2}>
           <Typography fontWeight={800}>로그인을 해주세요.</Typography>
-          <Button variant="contained" size="medium" onClick={() => navigate("/login")} sx={{ px: 3, borderRadius: 1 }}>로그인</Button>
+          <Button variant="contained" size="medium" onClick={() => navigate(loginUrl())} sx={{ px: 3, borderRadius: 1 }}>로그인</Button>
         </Stack>
       </CardContent>
     </Card>}

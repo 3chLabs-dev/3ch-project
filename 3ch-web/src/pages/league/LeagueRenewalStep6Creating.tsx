@@ -1,6 +1,6 @@
+import { openUsagePurchase } from "../../utils/returnNavigation";
 import { useEffect, useState } from "react";
 import { Alert, Box, Button, CircularProgress, Snackbar, Stack, Typography } from "@mui/material";
-import { useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import {
   createRenewalLeague,
@@ -11,7 +11,6 @@ import { useGetMyFeatureUsageQuery } from "../../features/payment/usageApi";
 
 export default function LeagueRenewalStep6Creating() {
   const dispatch = useAppDispatch();
-  const navigate = useNavigate();
   const status = useAppSelector((state) => state.leagueRenewalCreation.createStatus);
   const error = useAppSelector((state) => state.leagueRenewalCreation.createError);
   const token = useAppSelector((state) => state.auth.token);
@@ -87,11 +86,16 @@ export default function LeagueRenewalStep6Creating() {
       )}
       {creationFailed && (
         <Stack spacing={1} sx={{ width: "100%", maxWidth: 350, mt: 1 }}>
+          {status === "failed" && error === "EVENT_CREATE_QUOTA_EXHAUSTED" && eventBalance && !clientQuotaExhausted && (
+            <Button variant="contained" onClick={() => dispatch(resetRenewalCreateStatus())}>
+              리그 생성 계속하기
+            </Button>
+          )}
           {quotaExhausted && (
             <Button
               fullWidth
               variant="contained"
-              onClick={() => navigate("/mypage/pricing#token-packages")}
+              onClick={() => openUsagePurchase()}
               sx={{
                 height: 44,
                 borderRadius: 1,
@@ -107,7 +111,7 @@ export default function LeagueRenewalStep6Creating() {
             <Button
               fullWidth
               variant="outlined"
-              onClick={() => navigate("/mypage/pricing")}
+              onClick={() => openUsagePurchase("/mypage/pricing")}
               sx={{ height: 44, borderRadius: 1, fontWeight: 900 }}
             >
               요금제 보기

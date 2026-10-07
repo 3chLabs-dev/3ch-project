@@ -1,3 +1,4 @@
+import { loginUrl } from "../../utils/returnNavigation";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { DivisionBadge } from "../../components/ParticipantName";
 import {
@@ -47,7 +48,7 @@ export default function GroupDetail() {
 
   const handleJoin = async () => {
     if (!isLoggedIn) {
-      navigate("/login");
+      navigate(loginUrl());
       return;
     }
 

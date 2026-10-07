@@ -1,3 +1,4 @@
+import { completePaymentReturn } from "../../utils/returnNavigation";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { Box, CircularProgress, Typography, Button, Stack } from "@mui/material";
@@ -46,6 +47,8 @@ export default function PaymentSuccess() {
           }
         }
         setStatus("ok");
+        const returnTo = completePaymentReturn();
+        if (returnTo) navigate(returnTo, { replace: true });
       })
       .catch((e) => {
         confirmingRef.current = false;

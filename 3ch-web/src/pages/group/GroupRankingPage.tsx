@@ -164,7 +164,13 @@ export default function GroupRankingPage() {
           <Button
             size="small"
             variant="outlined"
-            onClick={() => navigate(`/club/${groupId}/ranking/seasons`)}
+            onClick={() => {
+              const params = new URLSearchParams(searchParams);
+              if (selectedSeasonId) params.set("season", selectedSeasonId);
+              else if (selectedYear) params.set("year", String(selectedYear));
+              params.set("tab", rankingTab);
+              navigate(`/club/${groupId}/ranking/seasons?${params.toString()}`);
+            }}
             aria-label="시즌 설정"
             title="시즌 설정"
             sx={{ borderRadius: 1, minWidth: 0, px: 1.25, whiteSpace: "nowrap", fontWeight: 800 }}

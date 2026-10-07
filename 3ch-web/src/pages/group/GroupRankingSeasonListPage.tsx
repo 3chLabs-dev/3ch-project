@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Box,
   Button,
@@ -31,6 +31,7 @@ function seasonStatus(startDate: string, endDate: string) {
 export default function GroupRankingSeasonListPage() {
   const { id: groupId = "" } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedSeasonId, setSelectedSeasonId] = useState<string | undefined>();
   const { data, isLoading } = useGetGroupRankingSeasonsQuery(groupId, { skip: !groupId });
@@ -52,7 +53,7 @@ export default function GroupRankingSeasonListPage() {
   return (
     <Stack spacing={2.25} sx={{ pb: 3 }}>
       <Stack direction="row" alignItems="center" spacing={1}>
-        <IconButton size="small" onClick={() => navigate(`/club/${groupId}/ranking`)} aria-label="순위로 돌아가기">
+        <IconButton size="small" onClick={() => navigate(`/club/${groupId}/ranking?${searchParams.toString()}`)} aria-label="순위로 돌아가기">
           <ArrowBackIcon />
         </IconButton>
         <Typography variant="h6" fontWeight={900} flex={1}>순위 시즌 설정</Typography>

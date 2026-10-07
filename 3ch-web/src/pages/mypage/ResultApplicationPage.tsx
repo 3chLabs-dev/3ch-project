@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { Alert, Box, Button, Card, CardContent, Chip, Dialog, DialogContent, DialogTitle, IconButton, MenuItem, Stack, TextField, Typography } from "@mui/material";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Alert, Box, Button, Card, CardContent, Chip, Dialog, DialogContent, DialogTitle, IconButton, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import CloseIcon from "@mui/icons-material/Close";
 import { useNavigate } from "react-router-dom";
@@ -7,7 +7,17 @@ import { useAppSelector } from "../../app/hooks";
 
 const API = import.meta.env.VITE_API_BASE_URL ?? "/api";
 type Application = { id: number; title: string; status: string; created_at: string; content?: string; reply?: string; replied_at?: string };
-const initialForm = { registered: true, account_email: "", club_created: "", club_name: "", season_configured: "", photo_url: "", contact: "", preferred_at: "" };
+const initialForm = { account_email: "", club_created: "", club_name: "", season_configured: "", photo_url: "", contact: "", preferred_at: "" };
+
+function YesNoButtons({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return <Stack spacing={1}>
+    <Typography fontSize={14} fontWeight={700}>{label} <Box component="span" color="error.main">*</Box></Typography>
+    <ToggleButtonGroup exclusive fullWidth value={value} aria-label={label} onChange={(_, next: string | null) => { if (next) onChange(next); }}
+      sx={{ borderRadius: 2, "& .MuiToggleButton-root": { flex: 1, py: 1.5, textTransform: "none", color: "text.secondary", borderColor: "#D1D5DB", "&.Mui-selected": { bgcolor: "#EBEBEB", color: "text.primary", fontWeight: 700, "&:hover": { bgcolor: "#E2E2E2" } } } }}>
+      <ToggleButton value="yes">예</ToggleButton><ToggleButton value="no">아니오 (직접 해주세요)</ToggleButton>
+    </ToggleButtonGroup>
+  </Stack>;
+}
 
 export default function ResultApplicationPage() {
   const navigate = useNavigate();
@@ -22,6 +32,8 @@ export default function ResultApplicationPage() {
   const [formError, setFormError] = useState("");
   const [detail, setDetail] = useState<Application | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const dateInputRef = useRef<HTMLInputElement>(null);
+  const needsHelp = form.club_created === "no" || (form.club_created === "yes" && form.season_configured === "no");
   const request = useCallback(async (path: string, options: RequestInit = {}) => {
     const response = await fetch(`${API}${path}`, { ...options, headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } });
     const data = await response.json();
@@ -48,7 +60,7 @@ export default function ResultApplicationPage() {
     }
     setSaving(true); setFormError("");
     try {
-      await request("/result-applications", { method: "POST", body: JSON.stringify({ ...form, club_created: form.club_created === "yes", season_configured: form.club_created === "yes" ? form.season_configured === "yes" : null }) });
+      await request("/result-applications", { method: "POST", body: JSON.stringify({ ...form, club_created: form.club_created === "yes", season_configured: form.club_created === "yes" ? form.season_configured === "yes" : null, contact: needsHelp ? form.contact : "", preferred_at: needsHelp ? form.preferred_at : "" }) });
       setWriteOpen(false); await load();
     } catch (e) { setFormError(e instanceof Error ? e.message : "신청 등록에 실패했습니다."); }
     finally { setSaving(false); }
@@ -71,30 +83,28 @@ export default function ResultApplicationPage() {
     <Dialog open={writeOpen} onClose={() => { if (!saving) setWriteOpen(false); }} fullWidth maxWidth="sm">
       <DialogTitle><Stack direction="row" alignItems="center"><Typography fontWeight={900} flex={1}>결과 등록 신청</Typography><IconButton disabled={saving} aria-label="닫기" onClick={() => setWriteOpen(false)}><CloseIcon /></IconButton></Stack></DialogTitle>
       <DialogContent><Box component="form" onSubmit={e => { e.preventDefault(); if (!saving) void submit(); }}><Stack spacing={3} pt={1}>
-        <Typography fontWeight={800}>1. 우리리그 회원가입</Typography>
-        <TextField label="우리리그에 회원가입 하셨나요?" value="예 (로그인한 회원)" slotProps={{ input: { readOnly: true } }} />
         <TextField required type="email" label="이메일 형태의 아이디(소셜 계정)" value={form.account_email} onChange={e => setForm({ ...form, account_email: e.target.value })} inputProps={{ maxLength: 200 }} />
-        <Typography fontWeight={800}>2. 클럽 생성</Typography>
-        <TextField select required label="클럽을 생성하셨나요?" value={form.club_created} onChange={e => setForm({ ...form, club_created: e.target.value, club_name: "", season_configured: "", photo_url: "" })}>
-          <MenuItem value="yes">예</MenuItem><MenuItem value="no">아니오 (직접 해주세요)</MenuItem>
-        </TextField>
+        <Typography fontWeight={800}>1. 클럽 생성</Typography>
+        <YesNoButtons label="클럽을 생성하셨나요?" value={form.club_created} onChange={value => setForm({ ...form, club_created: value, club_name: "", season_configured: "", photo_url: "", contact: "", preferred_at: "" })} />
         {form.club_created === "yes" && <>
           <TextField required label="클럽명을 적어주세요." value={form.club_name} onChange={e => setForm({ ...form, club_name: e.target.value })} inputProps={{ maxLength: 100 }} />
-          <Typography fontWeight={800}>3. 시즌 설정</Typography>
+          <Typography fontWeight={800}>2. 시즌 설정</Typography>
           <Typography fontSize={13} color="text.secondary">클럽 &gt; 순위 &gt; 시즌 설정 &gt; 시즌 생성에서 시즌명, 기간, 기본 포인트와 입상자 포인트를 설정해주세요.</Typography>
-          <TextField select required label="시즌 설정을 다 하셨나요?" value={form.season_configured} onChange={e => setForm({ ...form, season_configured: e.target.value, photo_url: "" })}>
-            <MenuItem value="yes">예</MenuItem><MenuItem value="no">아니오 (직접 해주세요)</MenuItem>
-          </TextField>
+          <YesNoButtons label="시즌 설정을 다 하셨나요?" value={form.season_configured} onChange={value => setForm({ ...form, season_configured: value, photo_url: "", contact: "", preferred_at: "" })} />
         </>}
         {form.club_created === "yes" && form.season_configured === "yes" && <>
-          <Typography fontWeight={800}>4. 대진표 사진 등록</Typography>
+          <Typography fontWeight={800}>3. 대진표 사진 등록</Typography>
           <Typography fontSize={13} color="text.secondary">대진표 사진을 구글 드라이브에 올리거나, 사진을 올린 네이버 밴드·소모임의 초대 링크를 입력해주세요. 드라이브 공유 설정은 ‘링크가 있는 모든 사용자’로 설정해주세요.</Typography>
           <TextField type="url" label="대진표 사진 공유 링크 (선택)" value={form.photo_url} onChange={e => setForm({ ...form, photo_url: e.target.value })} inputProps={{ maxLength: 2000 }} />
         </>}
-        <Typography fontWeight={800}>5. 자세한 설명</Typography>
+        {needsHelp && <>
+        <Typography fontWeight={800}>4. 자세한 설명</Typography>
         <Typography fontSize={13} color="text.secondary">직접 찾아뵙거나 메신저로 자세히 설명해드립니다.</Typography>
         <TextField label="전화번호 또는 카카오톡 ID (선택)" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} inputProps={{ maxLength: 200 }} />
-        <TextField type="datetime-local" label="방문 희망 일시 (선택, 한국 시간)" value={form.preferred_at} onChange={e => setForm({ ...form, preferred_at: e.target.value })} slotProps={{ inputLabel: { shrink: true } }} />
+        <TextField inputRef={dateInputRef} type="datetime-local" label="방문 희망 일시 (선택, 한국 시간)" value={form.preferred_at} onChange={e => setForm({ ...form, preferred_at: e.target.value })}
+          onClick={() => { const input = dateInputRef.current; if (!input) return; input.focus(); try { input.showPicker?.(); } catch { /* Native keyboard remains available when a picker is unsupported. */ } }}
+          sx={{ "& .MuiInputBase-root, & input": { cursor: "pointer" } }} slotProps={{ inputLabel: { shrink: true } }} />
+        </>}
         {formError && <Alert severity="error">{formError}</Alert>}
         <Button type="submit" variant="contained" disabled={saving}>{saving ? "접수 중..." : "신청 등록"}</Button>
       </Stack></Box></DialogContent>

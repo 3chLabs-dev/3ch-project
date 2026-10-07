@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parseApplication } = require('../src/utils/resultApplication');
+const { parseApplication, formatAnswers } = require('../src/utils/resultApplication');
 const pool = require('../src/db/pool');
 const router = require('../src/routes/resultApplication');
 const { requireAuth, requireAdmin } = require('../src/middlewares/auth');
@@ -8,9 +8,21 @@ const input = { registered: true, account_email: 'member@example.com', club_crea
 
 test('validates required answers, dates and safe URL protocols', () => {
   assert.equal(parseApplication(input).club_name, '테스트 클럽');
-  for (const patch of [{ registered: false }, { account_email: 'invalid' }, { club_created: 'true' }, { club_name: '' }, { season_configured: null }, { photo_url: 'javascript:alert(1)' }, { preferred_at: '2026-02-30T12:00' }, { contact: {} }])
+  for (const patch of [{ account_email: 'invalid' }, { club_created: 'true' }, { club_name: '' }, { season_configured: null }, { photo_url: 'javascript:alert(1)' }, { season_configured: false, preferred_at: '2026-02-30T12:00' }, { season_configured: false, contact: {} }])
     assert.throws(() => parseApplication({ ...input, ...patch }));
-  assert.equal(parseApplication({ ...input, preferred_at: '2026-10-07T12:30' }).preferred_at, '2026-10-07T12:30');
+  assert.equal(parseApplication({ ...input, season_configured: false, preferred_at: '2026-10-07T12:30' }).preferred_at, '2026-10-07T12:30');
+});
+test('membership question is unnecessary and help details only apply to setup requests', () => {
+  const { registered, ...withoutMembership } = input;
+  const result = parseApplication({ ...withoutMembership, contact: 'hidden contact', preferred_at: '2026-10-07T12:30' });
+  assert.equal(result.registered, undefined);
+  assert.equal(result.contact, '');
+  assert.equal(result.preferred_at, '');
+  for (const branch of [{ club_created: false }, { season_configured: false }]) {
+    assert.equal(parseApplication({ ...withoutMembership, ...branch, contact: 'help contact' }).contact, 'help contact');
+  }
+  assert.doesNotMatch(formatAnswers(result), /회원가입|전화번호|방문 희망/);
+  assert.match(formatAnswers({ ...input, contact: 'historical contact' }), /historical contact/);
 });
 test('skipped branch answers are not retained', () => {
   const result = parseApplication({ ...input, club_created: false });

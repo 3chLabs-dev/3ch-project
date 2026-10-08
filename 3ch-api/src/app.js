@@ -126,6 +126,7 @@ app.use("/swagger", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.use("/", testRoutes);
 app.use([
   "/api/auth/login",
+  "/api/auth/find-account",
   "/api/auth/register",
   "/api/auth/member/verify-password",
   "/api/auth/social/complete",

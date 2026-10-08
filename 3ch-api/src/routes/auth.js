@@ -6,6 +6,10 @@ const { requireAuth } = require("../middlewares/auth");
 const passport = require("passport"); // Import passport
 
 const router = express.Router();
+const { createAccountLookup } = require("../utils/accountLookup");
+
+// Read-only lookup: both name and email must match an active account.
+router.post("/find-account", createAccountLookup(pool));
 
 const registerSchema = z.object({
   email: z.string().email(),

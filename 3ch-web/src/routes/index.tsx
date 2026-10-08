@@ -73,6 +73,7 @@ import MemberCheckPage from "../pages/mypage/userinfo/MemberCheckPage.tsx";
 import MemberEditPage from "../pages/mypage/userinfo/MemberEditPage.tsx";
 import SettingsPage from "../pages/mypage/SettingsPage.tsx";
 import PasswordHelpPage from "../pages/sign/findPassword/PasswordHelpPage.tsx";
+import AccountFindPage from "../pages/sign/AccountFindPage";
 import PasswordResetRequestPage from "../pages/sign/findPassword/PasswordResetRequestPage.tsx";
 import RequiredPasswordResetPage from "../pages/sign/RequiredPasswordResetPage.tsx";
 import NoticePage from "../pages/mypage/NoticePage.tsx";
@@ -173,6 +174,7 @@ export const router = createBrowserRouter([
       { path: "/mypage/member/edit", element: <MemberEditPage />},
       { path: "/mypage/settings", element: <SettingsPage />},
       { path: "/password/help", element: <PasswordHelpPage />},
+      { path: "/account/find", element: <AccountFindPage />},
       { path: "/password/verify-email", element: <PasswordResetRequestPage />},
       { path: "/password/reset-required", element: <RequiredPasswordResetPage />},
       { path: "/mypage/notice", element: <NoticePage />},

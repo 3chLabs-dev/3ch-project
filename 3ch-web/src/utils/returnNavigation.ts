@@ -6,7 +6,7 @@ export function safeReturnPath(value: string | null): string | null {
 
 export function loginUrl(): string {
   const path = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-  const authPage = /^\/(login|signup|social-signup|password)(\/|$)/.test(window.location.pathname);
+  const authPage = /^\/(login|signup|social-signup|password|account)(\/|$)/.test(window.location.pathname);
   const returnTo = authPage ? sessionStorage.getItem("login-return-to") || "/" : path;
   return `/login?redirect=${encodeURIComponent(safeReturnPath(returnTo) || "/")}`;
 }

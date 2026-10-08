@@ -441,7 +441,16 @@ try {
               로그인
             </Button>
 
-            <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 1 }}>
+            <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 2, mt: 1 }}>
+              <Link
+                component="button"
+                type="button"
+                underline="hover"
+                sx={{ fontSize: "0.85rem", color: "text.secondary" }}
+                onClick={() => navigate("/account/find")}
+              >
+                아이디 찾기
+              </Link>
               <Link
                 component="button"
                 type="button"

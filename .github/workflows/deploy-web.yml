@@ -1,6 +1,7 @@
 name: Deploy Web
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
@@ -59,6 +60,14 @@ jobs:
         env:
           VITE_TOSS_CLIENT_KEY: ${{ secrets.VITE_TOSS_CLIENT_KEY }}
         run: npm run build
+
+      - name: Install prerender browser
+        working-directory: 3ch-web
+        run: npx playwright install --with-deps chromium
+
+      - name: Prerender public pages
+        working-directory: 3ch-web
+        run: npm run prerender
 
       - name: Stage Woorileague web files
         run: |

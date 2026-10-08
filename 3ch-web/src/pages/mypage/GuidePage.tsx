@@ -3,17 +3,20 @@ import { Box, IconButton, Stack, Typography, Button, CircularProgress } from "@m
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ManageAccountsOutlinedIcon from "@mui/icons-material/ManageAccountsOutlined";
 import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 import { sanitizeGuideHtml } from "../../utils/sanitizeHtml";
 import Seo from "../../components/Seo";
+import { NoIndex } from "../../components/SearchVisibility";
+import NotFoundPage from "../util/NotFoundPage";
 
-const API = import.meta.env.VITE_API_BASE_URL;
+const API = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
 type Guide = { id: number; tab: string; section: string; content: string };
 
 export default function GuidePage() {
   const navigate = useNavigate();
+  const { guideId } = useParams();
   const [tab, setTab] = useState<"leader" | "member">("leader");
   const [section, setSection] = useState("");
   const [guides, setGuides] = useState<Guide[]>([]);
@@ -21,29 +24,41 @@ export default function GuidePage() {
 
   useEffect(() => {
     let cancelled = false;
-    axios.get(`${API}/guides?tab=${tab}`).then((r) => {
+    axios.get(`${API}/guides`).then((r) => {
       if (!cancelled) {
         const nextGuides: Guide[] = r.data.guides ?? [];
         setGuides(nextGuides);
-        setSection(nextGuides[0]?.section ?? "");
+        const selected = nextGuides.find((g) => String(g.id) === guideId);
+        if (selected) {
+          setTab(selected.tab as "leader" | "member");
+          setSection(selected.section);
+        } else {
+          setSection(nextGuides.find((g) => g.tab === tab)?.section ?? "");
+        }
         setLoading(false);
       }
-    });
+    }).catch(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [tab]);
+  }, [guideId, tab]);
 
   const handleTabChange = (t: "leader" | "member") => {
+    if (t === tab && !guideId) return;
     setLoading(true);
+    navigate("/mypage/guide");
     setTab(t);
     setSection("");
   };
 
-  const current = guides.find((g) => g.section === section);
-  const sections = guides.map((g) => g.section);
+  const current = guides.find((g) => g.tab === tab && g.section === section);
+  const sections = guides.filter((g) => g.tab === tab);
+
+  if (guideId && !loading && !guides.some((g) => String(g.id) === guideId)) {
+    return <><NoIndex /><NotFoundPage /></>;
+  }
 
     return (
         <Stack spacing={2} sx={{ width: "100%", mx: "auto", mt: "-4px" }}>
-      <Seo title="이용방법" description="우리리그에서 클럽을 만들고 회원을 관리하며 리그와 추첨을 운영하는 방법을 확인하세요." path="/mypage/guide" />
+      <Seo title={guideId && current ? `${current.section} 이용방법` : "이용방법"} description="우리리그에서 클럽을 만들고 회원을 관리하며 리그와 추첨을 운영하는 방법을 확인하세요." path={guideId ? `/mypage/guide/${guideId}` : "/mypage/guide"} />
       {/* 헤더 */}
       <Stack direction="row" alignItems="center" spacing={1.5}>
         <IconButton onClick={() => navigate("/mypage")} size="small">
@@ -80,13 +95,12 @@ export default function GuidePage() {
       {/* 섹션 버튼 */}
       <Stack direction="row" spacing={0.8} sx={{ flexWrap: "wrap", gap: 0.8 }}>
         {sections.map((s) => (
-          <Button key={s} size="small" variant={section === s ? "contained" : "outlined"} disableElevation
-            onClick={() => setSection(s)}
+          <Button key={s.id} component={Link} to={`/mypage/guide/${s.id}`} size="small" variant={section === s.section ? "contained" : "outlined"} disableElevation
             sx={{ borderRadius: 5, fontWeight: 700, fontSize: 12, px: 1.5,
-              ...(section === s
+              ...(section === s.section
                 ? { bgcolor: "#111827", "&:hover": { bgcolor: "#374151" } }
                 : { borderColor: "#E5E7EB", color: "text.secondary" }) }}>
-            {s}
+            {s.section}
           </Button>
         ))}
       </Stack>
@@ -98,6 +112,7 @@ export default function GuidePage() {
         </Stack>
       ) : current ? (
         <Box
+          data-guide-id={current.id}
           dangerouslySetInnerHTML={{ __html: sanitizeGuideHtml(current.content) }}
           sx={{
             "& img": {

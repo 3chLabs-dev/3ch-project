@@ -185,6 +185,7 @@ export const router = createBrowserRouter([
       { path: "/mypage/result-application", element: <ResultApplicationPage />},
       { path: "/mypage/faq", element: <FaqPage />},
       { path: "/mypage/guide", element: <GuidePage />},
+      { path: "/mypage/guide/:guideId", element: <GuidePage />},
       { path: "/mypage/pricing", element: <PricingPage />},
       { path: "/ranking", element: <RankingHubPage /> },
       { path: "/ranking/sport/:sport", element: <SportRankingPage /> },

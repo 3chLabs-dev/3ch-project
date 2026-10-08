@@ -33,7 +33,8 @@ export default function SearchVisibility() {
   const { pathname } = useLocation();
 
   useEffect(() => {
-    if (!INDEXABLE_PATHS.has(pathname)) setNoIndex();
+    const path = pathname.replace(/\/+$/, "") || "/";
+    if (!INDEXABLE_PATHS.has(path) && !/^\/mypage\/guide\/\d+$/.test(path)) setNoIndex();
   }, [pathname]);
 
   return null;

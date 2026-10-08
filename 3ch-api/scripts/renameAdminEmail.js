@@ -1,6 +1,8 @@
-const configuredPool = require('../src/db/pool');
-const { Pool } = require('pg');
-const pool = new Pool({ ...configuredPool.options, connectionTimeoutMillis: 10000, query_timeout: 10000 });
+const pool = require('../src/db/pool');
+// pg hides options.password as a non-enumerable property. Spreading options
+// into another Pool drops it; use the API's configured pool directly.
+pool.options.connectionTimeoutMillis = 10000;
+pool.options.query_timeout = 10000;
 const oldEmail = 'admin@3ch.com';
 const newEmail = 'admin@threech.com';
 const deadline = setTimeout(() => { console.error('DATABASE_TIMEOUT'); process.exit(1); }, 25000);
@@ -35,4 +37,4 @@ async function main() {
   } finally { client.release(); }
 }
 main().catch(error => { console.error(error.message || error.code || 'DATABASE_ERROR'); process.exitCode = 1; })
-  .finally(async () => { await pool.end(); await configuredPool.end(); clearTimeout(deadline); });
+  .finally(async () => { try { await pool.end(); } finally { clearTimeout(deadline); } });

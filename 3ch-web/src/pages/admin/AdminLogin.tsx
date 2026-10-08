@@ -12,6 +12,27 @@ export default function AdminLogin() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resetToken, setResetToken] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
+  const handleSetup = async () => {
+    if (newPassword.length < 8 || newPassword.length > 72 || newPassword !== confirmPassword || newPassword === password) {
+      setError("기존 비밀번호와 다른 8~72자 비밀번호를 입력하고 확인 값을 맞춰 주세요."); return;
+    }
+    setLoading(true); setError("");
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/admin/password/setup`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resetToken, password: newPassword }),
+      });
+      const data = await response.json();
+      if (!response.ok) { setError("비밀번호 설정에 실패했습니다. 임시 비밀번호로 다시 로그인해 주세요."); return; }
+      dispatch(adminLogin({ token: data.token, user: data.user }));
+      navigate("/admin", { replace: true });
+    } catch { setError("서버에 연결할 수 없습니다."); }
+    finally { setLoading(false); }
+  };
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) return;
@@ -32,6 +53,7 @@ export default function AdminLogin() {
         setError(msg);
         return;
       }
+      if (data.passwordResetRequired) { setResetToken(data.resetToken); return; }
       dispatch(adminLogin({ token: data.token, user: data.user }));
       navigate("/admin", { replace: true });
     } catch {
@@ -73,6 +95,13 @@ export default function AdminLogin() {
           </Alert>
         )}
 
+        {resetToken ? <>
+          <Typography sx={{ mb: 2, fontSize: 13 }}>첫 로그인입니다. 관리자 페이지에서 사용할 새 비밀번호를 설정해 주세요.</Typography>
+          <TextField fullWidth type="password" label="새 비밀번호" helperText="8~72자" value={newPassword} onChange={(e)=>setNewPassword(e.target.value)} size="small" sx={{ mb: 2 }} />
+          <TextField fullWidth type="password" label="새 비밀번호 확인" value={confirmPassword} onChange={(e)=>setConfirmPassword(e.target.value)} size="small" sx={{ mb: 2 }} />
+          <Button fullWidth variant="contained" disabled={loading} onClick={handleSetup}>{loading ? "설정 중..." : "비밀번호 설정 후 로그인"}</Button>
+          <Button fullWidth disabled={loading} onClick={()=>{setResetToken("");setNewPassword("");setConfirmPassword("");setError("");}}>로그인으로 돌아가기</Button>
+        </> : <>
         <TextField
           fullWidth
           placeholder="아이디(이메일)"
@@ -111,6 +140,7 @@ export default function AdminLogin() {
         >
           {loading ? "로그인 중..." : "로그인"}
         </Button>
+        </>}
       </Box>
     </Box>
   );

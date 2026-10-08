@@ -4,7 +4,7 @@ const { z } = require('zod');
 const { randomUUID } = require('crypto');
 const pool = require('../db/pool');
 const { requireAdmin } = require('../middlewares/auth');
-const { signToken } = require('../utils/authUtils');
+const { signToken, verifyToken } = require('../utils/authUtils');
 const { generateMemberCode } = require('../utils/memberCodeUtils');
 const { generateClubCode } = require('../utils/clubCodeUtils');
 const { getPointRanking } = require('../services/pointRanking');
@@ -44,7 +44,7 @@ async function assertMaster(req, res) {
   const user = result.rows[0];
   const email = String(user?.email || "").trim().toLowerCase();
   const isMasterAccount = user?.system_role === "MASTER"
-    || (user?.is_admin && ["admin@3ch.com", "3chlabs@gmail.com"].includes(email));
+    || (user?.is_admin && ["admin@threech.com", "3chlabs@gmail.com"].includes(email));
   if (!isMasterAccount) {
     res.status(403).json({ ok: false, error: "MASTER_REQUIRED" });
     return false;
@@ -97,7 +97,7 @@ router.post('/login', async (req, res) => {
 
   try {
     const result = await pool.query(
-      'SELECT id, email, password_hash, name, is_admin, system_role FROM users WHERE email = $1',
+      'SELECT id, email, password_hash, admin_password_hash, admin_password_reset_required, admin_auth_version, name, is_admin, system_role FROM users WHERE email = $1 AND deleted_at IS NULL',
       [email],
     );
 
@@ -107,25 +107,73 @@ router.post('/login', async (req, res) => {
 
     const user = result.rows[0];
 
-    if (!user.is_admin) {
+    if (!user.is_admin && user.system_role !== 'MANAGER') {
       return res.status(403).json({ ok: false, error: 'NOT_ADMIN' });
     }
 
-    if (!user.password_hash) {
+    const passwordHash = user.admin_password_hash || (user.is_admin ? user.password_hash : null);
+    if (!passwordHash) {
       return res.status(401).json({ ok: false, error: 'NO_LOCAL_PASSWORD' });
     }
 
-    const ok = await bcrypt.compare(password, user.password_hash);
+    const ok = await bcrypt.compare(password, passwordHash);
     if (!ok) {
       return res.status(401).json({ ok: false, error: 'INVALID_CREDENTIALS' });
     }
 
-    const token = signToken({ id: user.id, email: user.email });
+    if (user.admin_password_reset_required) {
+      return res.json({ ok: true, passwordResetRequired: true, resetToken: signToken({ id: user.id, email: user.email, adminVersion: user.admin_auth_version, purpose: 'admin-password-reset' }) });
+    }
+    const token = signToken({ id: user.id, email: user.email, adminVersion: user.admin_auth_version });
 
     return res.json({ ok: true, token, user: { id: user.id, email: user.email, name: user.name, system_role: user.system_role } });
   } catch (e) {
     return res.status(500).json({ ok: false, error: String(e.message || e) });
   }
+});
+
+const adminPasswordSchema = z.string().min(8).max(72);
+router.post('/password/setup', async (req, res) => {
+  const parsed = adminPasswordSchema.safeParse(req.body?.password);
+  if (!parsed.success) return res.status(400).json({ ok: false, error: 'INVALID_PASSWORD' });
+  let ticket;
+  try { ticket = verifyToken(req.body?.resetToken, 'admin-password-reset'); }
+  catch { return res.status(401).json({ ok: false, error: 'INVALID_RESET_TOKEN' }); }
+  try {
+    const existing = await pool.query(`SELECT admin_password_hash FROM users WHERE id=$1 AND deleted_at IS NULL AND admin_password_reset_required=true AND admin_auth_version=$2 AND (is_admin=true OR system_role='MANAGER')`, [Number(ticket.sub), ticket.adminVersion]);
+    if (!existing.rowCount) return res.status(401).json({ok:false,error:'INVALID_RESET_TOKEN'});
+    if (await bcrypt.compare(parsed.data, existing.rows[0].admin_password_hash)) return res.status(400).json({ok:false,error:'SAME_PASSWORD'});
+    const hash = await bcrypt.hash(parsed.data, 12);
+    const result = await pool.query(
+      `UPDATE users SET admin_password_hash=$1, admin_password_reset_required=false, admin_auth_version=admin_auth_version+1
+       WHERE id=$2 AND deleted_at IS NULL AND (is_admin=true OR system_role='MANAGER')
+         AND admin_password_reset_required=true AND admin_auth_version=$3
+       RETURNING id,email,name,system_role,admin_auth_version`, [hash, Number(ticket.sub), ticket.adminVersion]);
+    if (!result.rowCount) return res.status(401).json({ ok: false, error: 'INVALID_RESET_TOKEN' });
+    const user = result.rows[0];
+    return res.json({ ok: true, token: signToken({ ...user, adminVersion: user.admin_auth_version }), user });
+  } catch { return res.status(500).json({ ok: false, error: 'SERVER_ERROR' }); }
+});
+
+router.put('/me', requireAdmin, async (req, res) => {
+  const parsed = z.object({ name: z.string().trim().min(1).max(50), password: adminPasswordSchema.optional(), currentPassword: z.string().optional() }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ ok: false, error: 'VALIDATION_ERROR' });
+  try {
+    const found = await pool.query('SELECT * FROM users WHERE id=$1 AND deleted_at IS NULL', [Number(req.user.sub)]);
+    const account = found.rows[0];
+    let hash = account.admin_password_hash;
+    if (parsed.data.password) {
+      if (!parsed.data.currentPassword || !await bcrypt.compare(parsed.data.currentPassword, hash || account.password_hash || ''))
+        return res.status(400).json({ ok: false, error: 'INVALID_CURRENT_PASSWORD' });
+      if (parsed.data.password === parsed.data.currentPassword) return res.status(400).json({ ok:false, error:'SAME_PASSWORD' });
+      hash = await bcrypt.hash(parsed.data.password, 12);
+    }
+    const result = await pool.query(`UPDATE users SET name=$1,admin_password_hash=$2,admin_auth_version=admin_auth_version+$3 WHERE id=$4 AND admin_auth_version=$5 RETURNING id,email,name,system_role,admin_auth_version`,
+      [parsed.data.name, hash, parsed.data.password ? 1 : 0, account.id, account.admin_auth_version]);
+    if (!result.rowCount) return res.status(409).json({ ok:false,error:'ACCOUNT_CHANGED' });
+    const user = result.rows[0];
+    return res.json({ ok:true,user,token:signToken({ ...user,adminVersion:user.admin_auth_version }) });
+  } catch { return res.status(500).json({ ok:false,error:'SERVER_ERROR' }); }
 });
 
 /**
@@ -398,7 +446,7 @@ router.get('/members/:id', requireAdmin, async (req, res) => {
   try {
     const [userResult, subscriptionResult, clubsResult] = await Promise.all([
       pool.query(
-        `SELECT u.id, u.member_code, u.email, u.name, u.auth_provider,
+        `SELECT u.id, u.member_code, u.email, u.name, u.auth_provider, u.system_role,
                 u.created_at::text, u.deleted_at::text
          FROM users u
          WHERE u.id = $1 AND u.is_admin = false`,
@@ -529,17 +577,23 @@ router.put('/members/:id/system-role', requireAdmin, async (req, res) => {
   }
   try {
     if (!(await assertMaster(req, res))) return;
+    const tempPassword = systemRole === 'MANAGER' ? `${randomUUID().replace(/-/g, '').slice(0, 16)}!` : null;
+    const adminHash = tempPassword ? await bcrypt.hash(tempPassword, 12) : null;
     const result = await pool.query(
       `UPDATE users
-          SET system_role = $1
+          SET system_role = $1,
+              admin_password_hash = CASE WHEN system_role <> $1 THEN $3 ELSE admin_password_hash END,
+              admin_password_reset_required = CASE WHEN system_role <> $1 THEN ($1 = 'MANAGER') ELSE admin_password_reset_required END,
+              admin_auth_version = admin_auth_version + CASE WHEN system_role <> $1 THEN 1 ELSE 0 END
         WHERE id = $2
           AND deleted_at IS NULL
           AND system_role <> 'MASTER'
+          AND system_role <> $1
         RETURNING id, system_role`,
-      [systemRole, id],
+      [systemRole, id, adminHash],
     );
     if (result.rowCount === 0) return res.status(404).json({ ok: false, error: "NOT_FOUND" });
-    return res.json({ ok: true, member: result.rows[0] });
+    return res.json({ ok: true, member: result.rows[0], tempPassword });
   } catch (e) {
     return res.status(500).json({ ok: false, error: String(e.message || e) });
   }

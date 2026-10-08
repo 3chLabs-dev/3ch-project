@@ -1,10 +1,10 @@
-import { useState } from "react";
-import { Box, Button, Collapse, Divider, Typography } from "@mui/material";
+import { useEffect, useState } from "react";
+import { Alert, Box, Button, Collapse, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Stack, TextField, Typography } from "@mui/material";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
-import { adminLogout } from "../../features/admin/adminSlice";
+import { adminLogin, adminLogout, setAdminUser } from "../../features/admin/adminSlice";
 import { NoIndex } from "../../components/SearchVisibility";
 
 const MAIN_MENU = [
@@ -75,6 +75,45 @@ export default function AdminShell() {
   const navigate   = useNavigate();
   const location   = useLocation();
   const user       = useAppSelector((s) => s.admin.user);
+  const token      = useAppSelector((s) => s.admin.token);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileName, setProfileName] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [profileError, setProfileError] = useState("");
+  const [profileSaving, setProfileSaving] = useState(false);
+  useEffect(() => {
+    if (!token) return;
+    let canceled = false;
+    fetch(`${import.meta.env.VITE_API_BASE_URL}/admin/me`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(async (response) => {
+        if (canceled) return;
+        if (response.status === 401 || response.status === 403) { dispatch(adminLogout()); navigate('/admin/login', { replace: true }); return; }
+        if (response.ok) { const data = await response.json(); if (!canceled) dispatch(setAdminUser(data.user)); }
+      }).catch(() => {});
+    return () => { canceled = true; };
+  }, [token, dispatch, navigate]);
+  const openProfile = () => {
+    setProfileName(user?.name ?? ""); setCurrentPassword(""); setNewPassword(""); setConfirmPassword(""); setProfileError(""); setProfileOpen(true);
+  };
+  const saveProfile = async () => {
+    if (!profileName.trim()) { setProfileError("이름을 입력해 주세요."); return; }
+    if (newPassword && (newPassword.length < 8 || newPassword.length > 72 || newPassword !== confirmPassword || !currentPassword)) {
+      setProfileError("현재 비밀번호와 8~72자의 새 비밀번호, 일치하는 확인 값을 입력해 주세요."); return;
+    }
+    setProfileSaving(true); setProfileError("");
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/admin/me`, {
+        method:"PUT", headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},
+        body:JSON.stringify({name:profileName.trim(),...(newPassword ? {password:newPassword,currentPassword} : {})}),
+      });
+      const data=await response.json();
+      if (!response.ok) { setProfileError(data.error === "INVALID_CURRENT_PASSWORD" ? "현재 비밀번호가 올바르지 않습니다." : data.error === "SAME_PASSWORD" ? "기존 비밀번호와 다른 비밀번호를 입력해 주세요." : "계정 정보를 저장하지 못했습니다."); return; }
+      dispatch(adminLogin({token:data.token,user:data.user})); setProfileOpen(false);
+    } catch { setProfileError("서버에 연결할 수 없습니다."); }
+    finally { setProfileSaving(false); }
+  };
 
   const isBoardActive = BOARD_MENU.some((item) => location.pathname === item.path);
   const isPaymentActive = PAYMENT_MENU.some((item) => location.pathname === item.path);
@@ -98,13 +137,27 @@ export default function AdminShell() {
           <Typography sx={{ fontSize: 13, fontWeight: 700, color: "#6B7280" }}>관리자페이지</Typography>
         </Box>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-          {user && <Typography sx={{ fontSize: 13, color: "#6B7280", fontWeight: 700 }}>{user.name ?? user.email}</Typography>}
+          {user && <Button onClick={openProfile} sx={{ fontSize: 13, fontWeight: 700 }}>{user.system_role === "MANAGER" ? "매니저" : "관리자"}</Button>}
           <Button variant="outlined" size="small" onClick={handleLogout} sx={{ fontWeight: 700, borderRadius: 1, fontSize: 12 }}>
             로그아웃
           </Button>
         </Box>
       </Box>
 
+      <Dialog open={profileOpen} onClose={()=>!profileSaving&&setProfileOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>내 계정 설정</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            {profileError && <Alert severity="error">{profileError}</Alert>}
+            <TextField label="아이디(이메일)" value={user?.email ?? ""} slotProps={{ input: { readOnly: true } }} />
+            <TextField label="이름" value={profileName} onChange={(e)=>setProfileName(e.target.value)} />
+            <TextField label="현재 비밀번호" type="password" value={currentPassword} onChange={(e)=>setCurrentPassword(e.target.value)} />
+            <TextField label="새 비밀번호" type="password" value={newPassword} onChange={(e)=>setNewPassword(e.target.value)} helperText="변경할 때만 입력해 주세요. 8~72자" />
+            <TextField label="새 비밀번호 확인" type="password" value={confirmPassword} onChange={(e)=>setConfirmPassword(e.target.value)} />
+          </Stack>
+        </DialogContent>
+        <DialogActions><Button disabled={profileSaving} onClick={()=>setProfileOpen(false)}>취소</Button><Button variant="contained" disabled={profileSaving} onClick={saveProfile}>{profileSaving ? "저장 중..." : "저장"}</Button></DialogActions>
+      </Dialog>
       {/* 바디 */}
       <Box sx={{ display: "flex", flex: 1, minHeight: 0 }}>
         {/* 사이드바 */}

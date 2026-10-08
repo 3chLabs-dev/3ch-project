@@ -48,11 +48,16 @@ async function requireAdmin(req, res, next) {
 
   try {
     const result = await pool.query(
-      "SELECT is_admin FROM users WHERE id = $1",
+      "SELECT is_admin, system_role, admin_password_reset_required, admin_auth_version FROM users WHERE id = $1 AND deleted_at IS NULL",
       [Number(req.user.sub)],
     );
-    if (result.rowCount === 0 || !result.rows[0].is_admin) {
+    if (result.rowCount === 0 || (!result.rows[0].is_admin && result.rows[0].system_role !== 'MANAGER')) {
       return res.status(403).json({ ok: false, error: "FORBIDDEN" });
+    }
+    const account = result.rows[0];
+    if (account.admin_password_reset_required ||
+        ((account.system_role === 'MANAGER' || account.admin_auth_version > 0) && req.user.adminVersion !== account.admin_auth_version)) {
+      return res.status(401).json({ ok: false, error: "ADMIN_LOGIN_REQUIRED" });
     }
     return next();
   } catch (e) {

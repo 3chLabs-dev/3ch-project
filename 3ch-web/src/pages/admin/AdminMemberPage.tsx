@@ -268,6 +268,10 @@ export default function AdminMemberPage() {
           return;
         }
         setEditMember((prev) => prev ? { ...prev, system_role: editSystemRole } : null);
+        if (roleData.tempPassword) {
+          setPasswordCopied(false);
+          setResetPasswordResult(roleData.tempPassword);
+        }
       }
       // 로컬 clubs 배열도 업데이트
       if (selectedClub) {
@@ -1050,7 +1054,7 @@ export default function AdminMemberPage() {
         </DialogTitle>
         <DialogContent dividers>
           <Typography sx={{ fontSize: 14, color: "#374151" }}>
-            임시 비밀번호가 발급되었습니다. 회원에게 아래 비밀번호를 전달해 주세요.
+            임시 비밀번호가 발급되었습니다. 회원에게 아래 비밀번호를 전달해 주세요. 매니저 임명으로 발급된 비밀번호는 관리자 페이지 로그인용이며, 첫 로그인에서 새 비밀번호를 설정해야 합니다.
           </Typography>
           <Box
             sx={{

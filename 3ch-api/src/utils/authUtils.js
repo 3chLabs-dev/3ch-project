@@ -14,12 +14,12 @@ function getJwtSecret() {
   return secret;
 }
 
-function signToken({ id, email }) {
-  return jwt.sign({ sub: String(id), email, purpose: "access" }, getJwtSecret(), {
+function signToken({ id, email, adminVersion, purpose = "access" }) {
+  return jwt.sign({ sub: String(id), email, purpose, ...(adminVersion !== undefined ? { adminVersion } : {}) }, getJwtSecret(), {
     algorithm: "HS256",
     issuer: JWT_OPTIONS.issuer,
     audience: JWT_OPTIONS.audience,
-    expiresIn: process.env.JWT_EXPIRES_IN || "7d",
+    expiresIn: purpose === "admin-password-reset" ? "15m" : process.env.JWT_EXPIRES_IN || "7d",
   });
 }
 

@@ -50,6 +50,8 @@ try {
   await context.route('**/api/**', async (route) => {
     if (route.request().method() !== 'GET') return route.abort();
     const url = new URL(route.request().url());
+    // Popups are visitor-specific interactive portals, never public HTML content.
+    if (url.pathname === '/api/popups') return route.fulfill({ json: { popups: [] } });
     const key = `${url.pathname}${url.search}`;
     if (!apiCache.has(key)) apiCache.set(key, (async () => {
       const response = await fetch(`${origin}${key}`, { signal: AbortSignal.timeout(30000) });
@@ -75,8 +77,13 @@ try {
         if (style.sheet) style.textContent = Array.from(style.sheet.cssRules, (rule) => rule.cssText).join('\n');
       }
       document.querySelectorAll('ins.kakao_ad_area, iframe[src*="doubleclick"], iframe[src*="googlesyndication"]').forEach((node) => node.remove());
+      document.querySelectorAll('body > .MuiModal-root').forEach((node) => node.remove());
+      document.getElementById('root')?.removeAttribute('aria-hidden');
+      document.body.style.removeProperty('overflow');
+      document.body.style.removeProperty('padding-right');
     });
     const html = await page.content();
+    if (html.includes('MuiDialog-root') || html.includes('league-popup-dialog')) throw new Error(`Interactive popup leaked into public HTML: ${route}`);
     if (!html.includes('rel="canonical"') || !html.includes('index,follow,max-image-preview:large')) throw new Error(`Missing public metadata: ${route}`);
     const target = route === '/' ? dist : join(dist, route.slice(1));
     await mkdir(target, { recursive: true });

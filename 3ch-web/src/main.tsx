@@ -24,6 +24,13 @@ import { store } from "./app/store";
 import { router } from "./routes";
 import { theme } from "./theme/theme";
 
+// Older public snapshots captured MUI portals outside #root. createRoot only
+// replaces #root, so those inert dialogs must be removed before mounting.
+document.querySelectorAll('body > .MuiModal-root').forEach((node) => node.remove());
+document.getElementById('root')?.removeAttribute('aria-hidden');
+document.body.style.removeProperty('overflow');
+document.body.style.removeProperty('padding-right');
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <Provider store={store}>

@@ -8,6 +8,9 @@ const today = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Seo
 export default function LeaguePopup() {
   const [rows, setRows] = useState<Popup[]>([]);
   const [closed, setClosed] = useState<number[]>([]);
+  const [dismissed, setDismissed] = useState(() => {
+    try { return sessionStorage.getItem('league-popup-dismissed') === 'true'; } catch { return false; }
+  });
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const controller = new AbortController();
@@ -21,10 +24,16 @@ export default function LeaguePopup() {
     try { hidden = localStorage.getItem(`league-popup-hidden:${item.id}`) === today(); } catch { /* storage may be unavailable */ }
     return item.is_active && Date.parse(item.starts_at) <= now && now < Date.parse(item.ends_at) && !hidden && !closed.includes(item.id);
   });
-  if (!row) return null;
+  let hiddenToday = false;
+  try { hiddenToday = localStorage.getItem('league-popup-hidden-day') === today(); } catch { /* storage may be unavailable */ }
+  if (!row || dismissed || hiddenToday) return null;
   const dismiss = (day: boolean) => {
-    if (day) { try { localStorage.setItem(`league-popup-hidden:${row.id}`, today()); } catch { /* still close for this visit */ } }
-    setClosed(previous => [...previous, row.id]);
+    if (day) {
+      try { localStorage.setItem('league-popup-hidden-day', today()); } catch { /* still close for this visit */ }
+    } else {
+      try { sessionStorage.setItem('league-popup-dismissed', 'true'); } catch { /* still close until unmounted */ }
+    }
+    setDismissed(true);
   };
   return <Dialog open aria-label={row.name} onClose={() => dismiss(false)} maxWidth={false}
     sx={{ zIndex: 1400, '& .MuiDialog-container': { alignItems: 'flex-end' } }}
@@ -32,7 +41,7 @@ export default function LeaguePopup() {
       backdrop: { sx: { bgcolor: 'rgba(0, 0, 0, 0.35)' } },
       paper: { sx: { m: 0, width: '100%', maxWidth: 430, maxHeight: '90dvh', borderRadius: '22px 22px 0 0', overflow: 'auto', bgcolor: '#fff' } },
     }}>
-    <Box component="a" href={row.link_url} sx={{ display: 'block', lineHeight: 0 }}><Box component="img" src={popupImage(row)} alt={row.name} onError={() => dismiss(false)} sx={{ width: '100%', maxHeight: 'calc(90dvh - 72px - env(safe-area-inset-bottom))', objectFit: 'contain', display: 'block' }} /></Box>
+    <Box component="a" href={row.link_url} sx={{ display: 'block', lineHeight: 0 }}><Box component="img" src={popupImage(row)} alt={row.name} onError={() => setClosed(previous => [...previous, row.id])} sx={{ width: '100%', maxHeight: 'calc(90dvh - 72px - env(safe-area-inset-bottom))', objectFit: 'contain', display: 'block' }} /></Box>
     <Stack direction="row" sx={{ bgcolor: '#fff', minHeight: 56, pb: 'env(safe-area-inset-bottom)', flexShrink: 0 }}>
       <Button onClick={() => dismiss(true)} sx={{ flex: 1, minHeight: 56, borderRadius: 0, color: '#8b9098', fontSize: 12, fontWeight: 400 }}>오늘 하루 보지 않기</Button>
       <Button onClick={() => dismiss(false)} sx={{ flex: 1, minHeight: 56, borderRadius: 0, color: '#111', fontSize: 14, fontWeight: 700 }}>닫기</Button>

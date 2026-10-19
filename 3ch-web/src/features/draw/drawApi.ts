@@ -1,3 +1,4 @@
+import { drawApiPath } from '../tournament/eventPaths';
 import { baseApi } from "../api/baseApi";
 
 // ─── 추첨 타입 정의 ───────────────────────────────────────
@@ -81,6 +82,7 @@ export interface DeleteDrawResponse {
 }
 
 export interface RunDrawRequest {
+  confirmation_intent?: "REPLACE_TOURNAMENT_DRAW_RESULTS";
   leagueId: string;
   drawId: string;
   prizes: {
@@ -95,6 +97,7 @@ export interface RunDrawResponse {
 }
 
 export interface DrawPrizeWinnersRequest {
+  confirmation_intent?: "REPLACE_TOURNAMENT_DRAW_WINNERS";
   leagueId: string;
   drawId: string;
   prizeId: string;
@@ -110,13 +113,13 @@ export interface DrawPrizeWinnersResponse {
 export const drawApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     getDraws: builder.query<GetDrawsResponse, string>({
-      query: (leagueId) => `/draw/${leagueId}`,
+      query: (leagueId) => `${drawApiPath(leagueId)}`,
       providesTags: (_result, _error, leagueId) => [{ type: "Draw" as const, id: leagueId }],
     }),
 
     createDraw: builder.mutation<CreateDrawResponse, CreateDrawRequest>({
       query: ({ leagueId, idempotencyKey, ...body }) => ({
-        url: `/draw/${leagueId}`,
+        url: `${drawApiPath(leagueId)}`,
         method: "POST",
         body,
         headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
@@ -125,13 +128,13 @@ export const drawApi = baseApi.injectEndpoints({
     }),
 
     getDrawDetail: builder.query<GetDrawDetailResponse, { leagueId: string; drawId: string }>({
-      query: ({ leagueId, drawId }) => `/draw/${leagueId}/${drawId}`,
+      query: ({ leagueId, drawId }) => `${drawApiPath(leagueId)}/${drawId}`,
       providesTags: (_result, _error, { drawId }) => [{ type: "Draw" as const, id: drawId }],
     }),
 
     updateDraw: builder.mutation<UpdateDrawResponse, UpdateDrawRequest>({
       query: ({ leagueId, drawId, name, newLeagueId }) => ({
-        url: `/draw/${leagueId}/${drawId}`,
+        url: `${drawApiPath(leagueId)}/${drawId}`,
         method: "PATCH",
         body: { name, new_league_id: newLeagueId },
       }),
@@ -144,8 +147,9 @@ export const drawApi = baseApi.injectEndpoints({
 
     deleteDraw: builder.mutation<DeleteDrawResponse, { leagueId: string; drawId: string }>({
       query: ({ leagueId, drawId }) => ({
-        url: `/draw/${leagueId}/${drawId}`,
+        url: `${drawApiPath(leagueId)}/${drawId}`,
         method: "DELETE",
+        body: leagueId.startsWith("tournament:") ? { confirmation_intent: "DELETE_TOURNAMENT_DRAW" } : undefined,
       }),
       invalidatesTags: (_result, _error, { leagueId, drawId }) => [
         { type: "Draw" as const, id: leagueId },
@@ -154,10 +158,10 @@ export const drawApi = baseApi.injectEndpoints({
     }),
 
     runDraw: builder.mutation<RunDrawResponse, RunDrawRequest>({
-      query: ({ leagueId, drawId, prizes }) => ({
-        url: `/draw/${leagueId}/${drawId}/run`,
+      query: ({ leagueId, drawId, prizes, confirmation_intent }) => ({
+        url: `${drawApiPath(leagueId)}/${drawId}/run`,
         method: "POST",
-        body: { prizes },
+        body: { prizes, ...(confirmation_intent ? { confirmation_intent } : {}) },
       }),
       invalidatesTags: (_result, _error, { leagueId, drawId }) => [
         { type: "Draw" as const, id: leagueId },
@@ -166,10 +170,10 @@ export const drawApi = baseApi.injectEndpoints({
     }),
 
     drawPrizeWinners: builder.mutation<DrawPrizeWinnersResponse, DrawPrizeWinnersRequest>({
-      query: ({ leagueId, drawId, prizeId, winners }) => ({
-        url: `/draw/${leagueId}/${drawId}/prizes/${prizeId}/winners`,
+      query: ({ leagueId, drawId, prizeId, winners, confirmation_intent }) => ({
+        url: `${drawApiPath(leagueId)}/${drawId}/prizes/${prizeId}/winners`,
         method: "POST",
-        body: { winners },
+        body: { winners, ...(confirmation_intent ? { confirmation_intent } : {}) },
       }),
       invalidatesTags: (_result, _error, { leagueId, drawId }) => [
         { type: "Draw" as const, id: leagueId },

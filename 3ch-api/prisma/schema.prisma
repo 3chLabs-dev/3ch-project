@@ -8,6 +8,11 @@ datasource db {
 }
 
 model User {
+  tournament_draws TournamentDraw[] @relation("TournamentDrawCreator")
+  tournament_settlements TournamentAfterPartySettlement[]
+  tournament_archived_settlements TournamentAfterPartySettlement[] @relation("TournamentAfterPartyArchivedBy")
+  tournament_settlement_shares TournamentAfterPartyShareLink[]
+  tournament_settlement_payments TournamentAfterPartyPayment[]
   id                      Int       @id @default(autoincrement())
   email                   String    @unique
   password_hash           String?
@@ -362,6 +367,10 @@ model League {
 }
 
 model Tournament {
+  event_draws TournamentDraw[]
+  event_settlements TournamentAfterPartySettlement[]
+  event_share TournamentAfterPartyShareLink?
+  event_payments TournamentAfterPartyPayment[]
   id              String   @id @default(uuid()) @db.Uuid
   title           String   @db.VarChar(160)
   description     String?
@@ -495,6 +504,10 @@ model TournamentParticipant {
 }
 
 model TournamentMatch {
+  program_round Int?
+  @@index([division_id, program_round, match_order])
+  @@index([participant_a_id])
+  @@index([participant_b_id])
   id String @id @default(uuid()) @db.Uuid
   division_id String @db.Uuid
   participant_a_id String? @db.Uuid
@@ -1075,4 +1088,106 @@ model DrawWinner {
   @@index([draw_id])
   @@index([prize_id])
   @@map("draw_winners")
+}
+
+
+model TournamentAfterPartySettlement {
+  id              String   @id @default(uuid()) @db.Uuid
+  tournament_id       String @db.Uuid
+  tournament Tournament @relation(fields: [tournament_id], references: [id], onDelete: Restrict)
+  round_no        Int
+  title           String   @db.VarChar(100)
+  status          String   @default("draft") @db.VarChar(12)
+  participants    Json     @default("[]")
+  items           Json     @default("[]")
+  contributions   Json     @default("[]")
+  calculation     Json     @default("{}")
+  version         Int      @default(1)
+  created_by_id   Int
+  creator         User     @relation(fields: [created_by_id], references: [id])
+  created_at      DateTime @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime @default(now()) @db.Timestamptz(6)
+  archived_at     DateTime? @db.Timestamptz(6)
+  archived_by_id  Int?
+  archived_by     User?     @relation("TournamentAfterPartyArchivedBy", fields: [archived_by_id], references: [id])
+
+  @@index([tournament_id])
+  @@unique([tournament_id, round_no])
+  @@map("tournament_after_party_settlements")
+}
+
+model TournamentAfterPartyShareLink {
+  tournament_id     String   @id @db.Uuid
+  tournament Tournament @relation(fields: [tournament_id], references: [id], onDelete: Restrict)
+  token         String   @unique @db.Uuid
+  created_by_id Int
+  creator       User     @relation(fields: [created_by_id], references: [id])
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+  visibility    String   @default("public") @db.VarChar(12)
+
+  @@map("tournament_after_party_share_links")
+}
+
+model TournamentAfterPartyPayment {
+  tournament_id      String @db.Uuid
+  tournament Tournament @relation(fields: [tournament_id], references: [id], onDelete: Restrict)
+  participant_id String
+  paid_amount    Int?
+  updated_by_id  Int
+  updated_by     User     @relation(fields: [updated_by_id], references: [id])
+  updated_at     DateTime @default(now()) @db.Timestamptz(6)
+
+  @@id([tournament_id, participant_id])
+  @@map("tournament_after_party_payments")
+}
+
+model TournamentDrawPrize {
+  id            String @id @default(dbgenerated("gen_random_uuid()::text"))
+  prize_name    String
+  quantity      Int    @default(1)
+  display_order Int    @default(0)
+
+  draw_id String
+  draw    TournamentDraw   @relation(fields: [draw_id], references: [id], onDelete: Restrict)
+
+  winners TournamentDrawWinner[]
+
+  @@index([draw_id])
+  @@map("tournament_draw_prizes")
+}
+
+model TournamentDrawWinner {
+  id                   String  @id @default(dbgenerated("gen_random_uuid()::text"))
+  participant_name     String
+  participant_division String?
+  display_order        Int     @default(0)
+
+  draw_id String
+  draw    TournamentDraw   @relation(fields: [draw_id], references: [id], onDelete: Restrict)
+
+  prize_id String
+  prize    TournamentDrawPrize @relation(fields: [prize_id], references: [id], onDelete: Restrict)
+
+  @@index([draw_id])
+  @@index([prize_id])
+  @@map("tournament_draw_winners")
+}
+
+model TournamentDraw {
+  id         String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  name       String
+  draw_code  String?  @unique
+  created_at DateTime @default(now())
+
+  tournament_id String @db.Uuid
+  tournament Tournament @relation(fields: [tournament_id], references: [id], onDelete: Restrict)
+
+  created_by_id Int
+  creator       User @relation("TournamentDrawCreator", fields: [created_by_id], references: [id])
+
+  prizes  TournamentDrawPrize[]
+  winners TournamentDrawWinner[]
+
+  @@index([tournament_id])
+  @@map("tournament_draws")
 }

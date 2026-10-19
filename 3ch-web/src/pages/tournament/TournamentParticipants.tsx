@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import { calculateTournamentFee } from "../../features/tournament/participationFee";
 import { useMemo, useState } from "react";
 import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, InputAdornment, MenuItem, Select, Stack, TextField, Typography } from "@mui/material";
@@ -8,6 +9,7 @@ import { useGetTournamentParticipantsAllQuery, useReviewTournamentApplicationMut
 const pillSx = { height: 28, minWidth: 64, borderRadius: 4, fontSize: 12, fontWeight: 800, boxShadow: "none" };
 
 export default function TournamentParticipants({ tournament }: { tournament: TournamentItem }) {
+  const navigate = useNavigate();
   const { data, isLoading } = useGetTournamentParticipantsAllQuery(tournament.id);
   const [review, { isLoading: reviewing }] = useReviewTournamentApplicationMutation();
   const [confirmClub, { isLoading: confirmingClub }] = useConfirmTournamentClubMutation();
@@ -75,7 +77,7 @@ export default function TournamentParticipants({ tournament }: { tournament: Tou
       </DialogContent>
       <DialogActions><Button disabled={savingDivision} onClick={() => setEditingParticipant(null)}>취소</Button><Button variant="contained" disabled={savingDivision || !divisionDraft.trim()} onClick={() => void saveDivision()}>저장</Button></DialogActions>
     </Dialog>
-    <Stack direction="row" alignItems="center" sx={{ mb: 0.5 }}><Typography fontWeight={900} fontSize={16} sx={{ flex: 1 }}>참가 신청 명단</Typography><Typography fontSize={13} fontWeight={700} color="text.secondary">{participants.length}명</Typography></Stack>
+    <Stack direction="row" alignItems="center" sx={{ mb: 0.5 }}><Typography fontWeight={900} fontSize={16} sx={{ flex: 1 }}>참가 신청 명단</Typography><Typography fontSize={13} fontWeight={700} color="text.secondary" sx={{ mr: 1 }}>{participants.length}명</Typography>{tournament.can_manage && <Button size="small" variant="outlined" sx={pillSx} onClick={() => navigate(`/tournament/${tournament.id}/participants/manage`)}>추가/삭제</Button>}</Stack>
     <Typography sx={{ fontSize: 12, color: "text.secondary", mb: 1.5 }}>신청 마감 {tournament.application_deadline_at ? new Date(tournament.application_deadline_at).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" }) : "미설정"}</Typography>
     {tournament.status === "draft" && <Alert severity="warning" sx={{ mb: 1 }}>아직 참가 신청이 열리지 않았습니다. 주최자는 대회 정보의 [참가신청 열기]를 눌러주세요.</Alert>}
     {deadlinePassed && canEdit && <Alert severity="info" sx={{ mb: 1 }}>새 참가자 신청은 마감되었습니다. 신청한 명단은 대회 시작 전까지 수정할 수 있습니다.</Alert>}

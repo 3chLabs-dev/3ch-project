@@ -1,3 +1,4 @@
+import { useEventCompetitionQuery, useEventParticipantsQuery, tournamentEventId, drawPath } from '../../features/tournament/eventContext';
 import { openUsagePurchase } from "../../utils/returnNavigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -28,10 +29,6 @@ import AddIcon from "@mui/icons-material/Add";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import confetti from "canvas-confetti";
-import {
-  useGetLeagueQuery,
-  useGetLeagueParticipantsQuery,
-} from "../../features/league/leagueApi";
 import {
   useGetDrawsQuery,
   useCreateDrawMutation,
@@ -113,8 +110,9 @@ function formatDate(iso: string) {
 
 type PendingWinner = { participant_name: string; participant_division: string | null };
 
-export default function DrawList() {
-  const { leagueId } = useParams<{ leagueId: string; }>();
+export default function DrawList({ tournament = false }: { tournament?: boolean }) {
+  const { leagueId: rawLeagueId } = useParams<{ leagueId: string; }>();
+  const leagueId = rawLeagueId ? (tournament ? tournamentEventId(rawLeagueId) : rawLeagueId) : undefined;
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [drawingPrize, setDrawingPrize] = useState<PrizeInput | null>(null);
@@ -208,28 +206,28 @@ export default function DrawList() {
     refetch: refetchFeatureUsage,
   } = useGetMyFeatureUsageQuery();
 
-  const { data: leagueData } = useGetLeagueQuery(leagueId ?? "", { skip: !leagueId });
+  const { data: leagueData } = useEventCompetitionQuery(leagueId ?? "", { permission: "draw", skip: !leagueId });
   const league = leagueData?.league;
 
   const { data: groupData, isLoading: groupLoading } = useGetGroupDetailQuery(
     league?.group_id ?? "",
     { skip: !league?.group_id },
   );
-  const canManage = !groupLoading && (groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.draw === true));
+  const canManage = tournament ? leagueData?.canManage === true : (!groupLoading && (groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.draw === true)));
 
   useEffect(() => {
     if( draftId ){
       if( canManage ) {
         setPhase("create");
       } else {
-        navigate(`/draw/${leagueId}/${draftId}`, { replace: true });
+        navigate(drawPath(leagueId ?? '', `/${draftId}`), { replace: true });
       }
     } else {
       setPhase("list");
     }
   }, [draftId, canManage, navigate, leagueId]);
 
-  const { data: participantData, isLoading: loadingParticipants } = useGetLeagueParticipantsQuery(
+  const { data: participantData, isLoading: loadingParticipants } = useEventParticipantsQuery(
     leagueId ?? "",
     { skip: !leagueId || phase !== "create", refetchOnMountOrArgChange: true },
   );
@@ -350,7 +348,10 @@ export default function DrawList() {
     if (!drawingPrize || !leagueId || !draftId) return;
     setIsSavingWinner(true);
     try {
+      const replacing = tournament && draftData?.prizes.some((prize) => prize.winners.length > 0);
+      if (replacing && !window.confirm('기존 경품과 당첨 결과를 새 추첨 결과로 변경하시겠습니까?')) { setIsSavingWinner(false); return; }
       await runDraw({
+        ...(replacing ? { confirmation_intent: 'REPLACE_TOURNAMENT_DRAW_RESULTS' as const } : {}),
         leagueId,
         drawId: draftId,
         prizes: prizeResults.map((prize) => ({
@@ -450,7 +451,7 @@ export default function DrawList() {
     setIsSavingDraft(true);
     const usageResult = await refetchFeatureUsage();
     const available = usageResult.data?.usage.draw_create;
-    if (available && !available.unlimited && (available.remaining ?? 0) <= 0) {
+    if (!tournament && available && !available.unlimited && (available.remaining ?? 0) <= 0) {
       setQuotaDialogOpen(true);
       setIsSavingDraft(false);
       return;
@@ -499,13 +500,16 @@ export default function DrawList() {
       if (!draftId) {
         const usageResult = await refetchFeatureUsage();
         const available = usageResult.data?.usage.draw_create;
-        if (available && !available.unlimited && (available.remaining ?? 0) <= 0) {
+        if (!tournament && available && !available.unlimited && (available.remaining ?? 0) <= 0) {
           setQuotaDialogOpen(true);
           return;
         }
       }
       if (draftId) {
-        await runDraw({
+        const replacing = tournament && draftData?.prizes.some((prize) => prize.winners.length > 0);
+      if (replacing && !window.confirm('기존 경품과 당첨 결과를 새 추첨 결과로 변경하시겠습니까?')) { setIsSavingWinner(false); return; }
+      await runDraw({
+        ...(replacing ? { confirmation_intent: 'REPLACE_TOURNAMENT_DRAW_RESULTS' as const } : {}),
           leagueId,
           drawId: draftId,
           prizes: prizeResults.map((p) => ({
@@ -550,9 +554,9 @@ export default function DrawList() {
     setAutoDrawOpen(false);
     // (수정)이 부분에서 다시 원래 화면으로 돌아가야 하는거 추가해야함
     if (draftId) {
-      navigate(`/draw/${leagueId}/${draftId}`, { replace: true });
+      navigate(drawPath(leagueId ?? '', `/${draftId}`), { replace: true });
     } else if (newDrawId) {
-      navigate(`/draw/${leagueId}/${newDrawId}`, { replace: true });
+      navigate(drawPath(leagueId ?? '', `/${newDrawId}`), { replace: true });
     } else {
       setPhase("list");
     }
@@ -589,7 +593,7 @@ export default function DrawList() {
               setPendingQuantity(1);
               setParticipantWeights({});
               setPhase("list");
-              navigate(`/draw/${leagueId}`, { replace: true });
+              navigate(drawPath(leagueId ?? '', ``), { replace: true });
             }}
             size="small"
           >
@@ -1025,7 +1029,7 @@ export default function DrawList() {
   return (
     <Stack spacing={2.2}>
       <Stack direction="row" alignItems="center" spacing={1}>
-        <IconButton onClick={() => navigate("/draw")} size="small">
+        <IconButton onClick={() => navigate(tournament ? `/tournament/${rawLeagueId}` : "/draw")} size="small">
           <ArrowBackIcon />
         </IconButton>
         <Typography fontWeight={900} fontSize={20} sx={{ flex: 1 }}>경품 추첨</Typography>
@@ -1070,7 +1074,7 @@ export default function DrawList() {
               key={draw.id}
               elevation={2}
               sx={{ borderRadius: 1, boxShadow: "0 4px 12px rgba(0,0,0,0.08)", cursor: "pointer" }}
-              onClick={() => navigate(`/draw/${leagueId}?draftId=${draw.id}`)}
+              onClick={() => navigate(drawPath(leagueId ?? '', `?draftId=${draw.id}`))}
             >
               <CardContent sx={{ py: 1.5, px: 2, "&:last-child": { pb: 1.5 } }}>
                 <Stack direction="row" alignItems="center" justifyContent="space-between">
@@ -1118,7 +1122,7 @@ export default function DrawList() {
             <b>{deleteConfirmDraw?.name}</b> 추첨을 삭제하시겠습니까?
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            삭제된 추첨은 복구할 수 없습니다.
+            {tournament ? "추첨과 모든 경품·당첨자 기록이 영구 삭제되며 복구할 수 없습니다." : "삭제된 추첨은 복구할 수 없습니다."}
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>

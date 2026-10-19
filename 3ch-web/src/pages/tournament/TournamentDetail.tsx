@@ -1,3 +1,9 @@
+import EmojiEventsOutlinedIcon from '@mui/icons-material/EmojiEventsOutlined';
+import CardGiftcardOutlinedIcon from '@mui/icons-material/CardGiftcardOutlined';
+import RestaurantOutlinedIcon from '@mui/icons-material/RestaurantOutlined';
+import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
+import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
+import CurvedShareIcon from '../../components/CurvedShareIcon';
 import { calculateTournamentFee } from "../../features/tournament/participationFee";
 import { useEffect, useRef, useState } from "react";
 import { Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, IconButton, MenuItem, Select, Snackbar, Stack, TextField, Typography } from "@mui/material";
@@ -6,7 +12,7 @@ import QRCode from "react-qr-code";
 import { createTossTransferLink, isSmartphoneBrowser, parseBankAccount } from "../../utils/paymentDeepLink";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useNavigate, useParams } from "react-router-dom";
-import { useGetTournamentQuery, useGetTournamentParticipantsAllQuery, useLazyGetTournamentDeletePreviewQuery, useDeleteTournamentMutation, useOpenTournamentMutation, useUpdateTournamentMutation, type TournamentDeleteSummary } from "../../features/tournament/tournamentApi";
+import { useGetTournamentQuery, useGetTournamentResultsQuery, useGetTournamentParticipantsAllQuery, useLazyGetTournamentDeletePreviewQuery, useDeleteTournamentMutation, useOpenTournamentMutation, useUpdateTournamentMutation, type TournamentDeleteSummary } from "../../features/tournament/tournamentApi";
 import TournamentParticipants from "./TournamentParticipants";
 
 const floatingBoxSx = { position: "fixed", bottom: "calc(56px + env(safe-area-inset-bottom))", left: "50%", transform: "translateX(-50%)", width: "min(calc(100% - 32px), 398px)", pb: 1, zIndex: 10 } as const;
@@ -38,6 +44,9 @@ export default function TournamentDetail() {
   const initializedId = useRef("");
   const [error, setError] = useState("");
   const [saveMessage, setSaveMessage] = useState("");
+  const programRef = useRef<HTMLDivElement>(null);
+  const [exporting, setExporting] = useState(false);
+  const [clubsOpen, setClubsOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteSummary, setDeleteSummary] = useState<TournamentDeleteSummary | null>(null);
   const [deleteConfirmationText, setDeleteConfirmationText] = useState("");
@@ -46,6 +55,7 @@ export default function TournamentDetail() {
   const [paymentGroupId, setPaymentGroupId] = useState("");
   const { data: participantsData } = useGetTournamentParticipantsAllQuery(id, { skip: !id });
   const tournament = data?.tournament;
+  const { data: resultData } = useGetTournamentResultsQuery(id, { skip: !id });
   useEffect(() => {
     if (tournament && initializedId.current !== tournament.id) {
       const initial = draftFromTournament(tournament);
@@ -55,6 +65,26 @@ export default function TournamentDetail() {
     }
   }, [tournament]);
   const hasChanges = Boolean(draft && savedDraft && JSON.stringify(draft) !== JSON.stringify(savedDraft));
+  const exportProgram = async (print = false) => {
+    if (!programRef.current || exporting) return;
+    const printWindow = print ? window.open("", "_blank") : null;
+    setExporting(true);
+    try {
+      const html2canvas = (await import("html2canvas")).default;
+      const canvas = await html2canvas(programRef.current, { scale: 2, useCORS: true, backgroundColor: "#fff" });
+      const imageUrl = canvas.toDataURL("image/png");
+      if (print && printWindow) {
+        printWindow.document.title = `${tournament?.title || "대회"} 프로그램`;
+        const style = printWindow.document.createElement("style");
+        style.textContent = "@page{size:A4 portrait;margin:10mm}body{margin:0}img{display:block;width:100%;height:auto}";
+        printWindow.document.head.append(style);
+        const image = printWindow.document.createElement("img"); image.onload = () => printWindow.print(); image.src = imageUrl; image.alt = "대회 프로그램"; printWindow.document.body.append(image);
+      } else if (!print) {
+        const link = document.createElement("a"); link.href = imageUrl; link.download = `프로그램_${tournament?.title || "대회"}.png`; link.click();
+      }
+    } catch { printWindow?.close(); setError("프로그램 내보내기에 실패했습니다."); }
+    finally { setExporting(false); }
+  };
   const openDelete = async () => {
     setDeleteOpen(true); setDeleteSummary(null); setDeleteConfirmationText(""); setDeleteError("");
     try { const preview = await loadDeletePreview(id).unwrap(); setDeleteSummary(preview.summary); }
@@ -112,7 +142,7 @@ export default function TournamentDetail() {
   const paymentAmount = calculateTournamentFee(paymentParticipants, tournament.divisions ?? [], tournament.entry_fee).amount ?? 0;
   const tossLink = account && paymentAmount > 0 ? createTossTransferLink(account.bankName, account.accountNumber, paymentAmount) : null;
   return <Box sx={{ pb: canEnterApplication ? 11 : 4 }}>
-    <Stack direction="row" alignItems="center" sx={{ mb: 2 }}><IconButton onClick={() => navigate("/league")} size="small" sx={{ mr: 0.5 }}><ArrowBackIcon /></IconButton><Typography fontWeight={900} fontSize={18} sx={{ flex: 1 }}>{tournament.title}</Typography></Stack>
+    <Stack direction="row" alignItems="center" sx={{ mb: 2 }}><IconButton onClick={() => navigate("/league")} size="small" sx={{ mr: 0.5 }}><ArrowBackIcon /></IconButton><Typography fontWeight={900} fontSize={18} sx={{ flex: 1 }}>{tournament.title}</Typography><IconButton size="small" aria-label="대회 공유" onClick={async () => { const url = `${window.location.origin}/tournament/${id}`; try { if (navigator.share) await navigator.share({ title: tournament.title, url }); else { await navigator.clipboard.writeText(url); setSaveMessage("대회 링크를 복사했습니다."); } } catch (reason) { if ((reason as Error).name !== "AbortError") setError("대회 링크를 공유하지 못했습니다."); } }}><CurvedShareIcon fontSize="small" /></IconButton></Stack>
     {error && <Alert severity="error" sx={{ mb: 1 }}>{error}</Alert>}
     <Box sx={{ bgcolor: "#fff", borderRadius: 1, border: "1px solid #E5E7EB", px: 2, py: 1, mb: 2.5 }}>
       <Box sx={rowSx}><Typography sx={labelSx}>대회명</Typography>{tournament.can_manage ? field("title") : <Typography sx={valueSx}>{tournament.title}</Typography>}</Box><Divider />
@@ -140,13 +170,18 @@ export default function TournamentDetail() {
       </Box><Divider />
       {tournament.can_manage && tournament.status === "draft" && <Stack direction="row" justifyContent="flex-end" sx={{ py: 1 }}><Button size="small" variant="contained" disabled={saving || opening} onClick={() => void save(tournament.status === "draft")}>{tournament.status === "draft" ? hasChanges ? "저장하고 참가신청 열기" : "참가신청 열기" : "저장"}</Button></Stack>}
       <Divider sx={{ borderColor: "#F3F4F6" }} />
-      <Box sx={{ py: 1 }}><Typography sx={labelSx}>프로그램</Typography></Box>
+      <Stack direction="row" alignItems="center" sx={{ py: 1 }}><Typography sx={{ ...labelSx, flex: 1 }}>프로그램</Typography><Stack direction="row" sx={{ border: "1px solid #E5E7EB", borderRadius: 4 }}><IconButton size="small" aria-label="프로그램 이미지 저장" disabled={exporting} onClick={() => void exportProgram()}><DownloadOutlinedIcon sx={{ fontSize: 17 }} /></IconButton><Divider orientation="vertical" flexItem /><IconButton size="small" aria-label="프로그램 인쇄" disabled={exporting} onClick={() => void exportProgram(true)}><PrintOutlinedIcon sx={{ fontSize: 17 }} /></IconButton></Stack></Stack>
+      <Box ref={programRef}>
       {(tournament.divisions ?? []).map((division) => <Box key={division.id} sx={{ mb: 1.2 }}>
         <Stack direction="row" alignItems="center" sx={{ mb: 0.7 }}><Typography fontWeight={900} fontSize={14} sx={{ flex: 1 }}>{division.name} <Typography component="span" sx={{ fontSize: 12, fontWeight: 600, color: "text.secondary" }}>신청 {division.applicant_count}명 · 확정 {division.confirmed_count}명</Typography></Typography>{tournament.can_manage && <Button size="small" variant="outlined" onClick={() => navigate(`/tournament/${id}/divisions/${division.id}/program`)} sx={{ minWidth: 44, height: 24, borderRadius: 1, px: 1.25, fontSize: 11, fontWeight: 800 }}>수정</Button>}</Stack>
-        <Stack spacing={0.8}>{(division.rounds ?? []).map((round) => <Box key={round.id} sx={{ border: "1px solid #E5E7EB", borderRadius: 2, bgcolor: "#F9FAFB", p: 1.2 }}><Stack direction="row" alignItems="center" spacing={0.5} sx={{ flexWrap: "wrap", rowGap: 0.5 }}><Typography sx={{ fontSize: 13, fontWeight: 900, mr: 0.3 }}>{round.round_no}라운드</Typography><Box sx={{ px: 0.8, py: 0.25, borderRadius: 3, bgcolor: "#ECFDF5", color: "#047857", border: "1px solid #A7F3D0", fontSize: 11, fontWeight: 800 }}>{typeNames[round.league_type] ?? round.league_type}</Box><Box sx={{ px: 0.8, py: 0.25, borderRadius: 3, bgcolor: "#EFF6FF", color: "#1D4ED8", border: "1px solid #BFDBFE", fontSize: 11, fontWeight: 800 }}>{formatNames[round.format] ?? round.format}</Box><Box sx={{ px: 0.8, py: 0.25, borderRadius: 3, bgcolor: "#FFF7ED", color: "#C2410C", border: "1px solid #FED7AA", fontSize: 11, fontWeight: 800 }}>{ruleNames[String(round.rules?.match_rule)] ?? String(round.rules?.match_rule ?? "규칙 미정")}</Box></Stack>{round.round_no === 1 && ["GROUP", "GROUP_TOURNAMENT"].includes(round.format) && (tournament.can_manage || ["locked", "active", "completed"].includes(division.status)) && <Button fullWidth variant="outlined" disableElevation onClick={() => navigate(`/tournament/${id}/divisions/${division.id}/groups`)} sx={{ mt: 1.1, height: 36, borderRadius: 2, fontWeight: 800, color: "#6D28D9", borderColor: "#C4B5FD", bgcolor: "#F5F3FF", "&:hover": { borderColor: "#A78BFA", bgcolor: "#EDE9FE" } }}>{["locked", "active", "completed"].includes(division.status) ? "조 편성 결과 보기" : "조 편성하기"}</Button>}</Box>)}</Stack>
+        <Stack spacing={0.8}>{(division.rounds ?? []).map((round) => <Box key={round.id} sx={{ border: "1px solid #E5E7EB", borderRadius: 2, bgcolor: "#F9FAFB", p: 1.2 }}><Stack direction="row" alignItems="center" spacing={0.5} sx={{ flexWrap: "wrap", rowGap: 0.5 }}><Typography sx={{ fontSize: 13, fontWeight: 900, mr: 0.3 }}>{round.round_no}라운드</Typography><Box sx={{ px: 0.8, py: 0.25, borderRadius: 3, bgcolor: "#ECFDF5", color: "#047857", border: "1px solid #A7F3D0", fontSize: 11, fontWeight: 800 }}>{typeNames[round.league_type] ?? round.league_type}</Box><Box sx={{ px: 0.8, py: 0.25, borderRadius: 3, bgcolor: "#EFF6FF", color: "#1D4ED8", border: "1px solid #BFDBFE", fontSize: 11, fontWeight: 800 }}>{formatNames[round.format] ?? round.format}</Box><Box sx={{ px: 0.8, py: 0.25, borderRadius: 3, bgcolor: "#FFF7ED", color: "#C2410C", border: "1px solid #FED7AA", fontSize: 11, fontWeight: 800 }}>{ruleNames[String(round.rules?.match_rule)] ?? String(round.rules?.match_rule ?? "규칙 미정")}</Box></Stack>{round.round_no === 1 && ["GROUP", "GROUP_TOURNAMENT"].includes(round.format) && (tournament.can_manage || ["locked", "active", "completed"].includes(division.status)) && <Button fullWidth variant="outlined" disableElevation onClick={() => navigate(`/tournament/${id}/divisions/${division.id}/groups`)} sx={{ mt: 1.1, height: 36, borderRadius: 2, fontWeight: 800, color: "#6D28D9", borderColor: "#C4B5FD", bgcolor: "#F5F3FF", "&:hover": { borderColor: "#A78BFA", bgcolor: "#EDE9FE" } }}>{["locked", "active", "completed"].includes(division.status) ? "조 편성 결과 보기" : "조 편성하기"}</Button>}<Stack direction="row" spacing={1} sx={{ mt: 1 }}><Button fullWidth variant="outlined" onClick={() => navigate(`/tournament/${id}/divisions/${division.id}/matches?round=${round.round_no}`)} sx={{ height: 36, borderRadius: 2, fontWeight: 800 }}>경기 순서　›</Button><Button fullWidth variant="contained" disableElevation onClick={() => navigate(`/tournament/${id}/divisions/${division.id}/bracket?round=${round.round_no}`)} sx={{ height: 36, borderRadius: 2, bgcolor: '#2563EB', fontWeight: 800 }}>대진표 보기　›</Button></Stack>{resultData?.divisions.find((entry) => entry.id === division.id)?.rounds.find((entry) => entry.id === round.id)?.complete && <Button fullWidth variant="outlined" onClick={() => navigate(`/tournament/${id}/divisions/${division.id}/results?round=${round.round_no}`)} sx={{ mt: 1, height: 36, borderRadius: 2, borderColor: '#16A34A', color: '#15803D', bgcolor: '#F0FDF4', fontWeight: 800 }}>결과 보기　›</Button>}</Box>)}</Stack>
       </Box>)}
+      </Box>
+      <Divider sx={{ borderColor: "#F3F4F6" }} /><Box sx={{ py: 1 }}><Typography sx={labelSx}>이벤트</Typography><Stack spacing={1} sx={{ mt: 1 }}><Button fullWidth variant="outlined" startIcon={<EmojiEventsOutlinedIcon />} onClick={() => navigate(`/tournament/${id}/ranking`)} sx={{ height: 40, fontWeight: 700, color: '#9A4D00', borderColor: '#F59E0B', bgcolor: '#FFF7D6' }}>순위</Button><Button fullWidth variant="outlined" startIcon={<CardGiftcardOutlinedIcon />} onClick={() => navigate(`/tournament/${id}/draw`)} sx={{ height: 40, fontWeight: 700, color: '#7C3AED', borderColor: '#A78BFA', bgcolor: '#F5F3FF' }}>경품 추첨</Button><Button fullWidth variant="outlined" startIcon={<RestaurantOutlinedIcon />} onClick={() => navigate(`/tournament/${id}/after-party`)} sx={{ height: 40, fontWeight: 700, color: '#0F766E', borderColor: '#5EEAD4', bgcolor: '#F0FDFA' }}>뒤풀이 정산</Button></Stack></Box>
+      <Divider sx={{ borderColor: "#F3F4F6" }} /><Stack direction="row" alignItems="center" sx={{ py: 0.8 }}><Typography sx={{ ...labelSx, flex: 1 }}>참여 클럽</Typography><Button size="small" variant="outlined" onClick={() => setClubsOpen(true)} sx={{ minWidth: 44, height: 24, borderRadius: 1, px: 1.25, fontSize: 11, fontWeight: 800 }}>보기</Button></Stack>
     </Box>
     <TournamentParticipants tournament={tournament} />
+    <Dialog open={clubsOpen} onClose={() => setClubsOpen(false)} fullWidth maxWidth="xs"><DialogTitle sx={{ fontWeight: 900 }}>참여 클럽</DialogTitle><DialogContent>{[...payers].filter(([key]) => (participantsData?.participants ?? []).some((participant) => participant.source_group_id === key)).map(([key, name]) => <Box key={key} sx={{ py: 1, borderBottom: "1px solid #E5E7EB" }}><Typography fontWeight={800}>{name}</Typography>{tournament.divisions?.map((division) => { const count = (participantsData?.participants ?? []).filter((participant) => participant.source_group_id === key && participant.division_id === division.id).length; return count ? <Typography key={division.id} fontSize={13} color="text.secondary">{division.name} · {count}명</Typography> : null; })}</Box>)}{!(participantsData?.participants ?? []).some((participant) => participant.source_group_id) && <Typography color="text.secondary">아직 등록된 참여 클럽이 없습니다.</Typography>}</DialogContent><DialogActions><Button onClick={() => setClubsOpen(false)}>닫기</Button></DialogActions></Dialog>
     {tournament.can_delete && <Box sx={{ mb: 2, pb: canEnterApplication ? 7 : 0 }}><Button color="error" size="small" sx={{ p: 0, minWidth: 0, fontSize: 13, fontWeight: 700 }} onClick={() => void openDelete()}>대회 삭제</Button></Box>}
     <Dialog open={deleteOpen} onClose={() => { if (!deleting) setDeleteOpen(false); }} fullWidth maxWidth="xs">
       <DialogTitle sx={{ fontWeight: 900 }}>대회 삭제</DialogTitle>
@@ -156,7 +191,7 @@ export default function TournamentDetail() {
         {deleteSummary && <>
           <Typography fontSize={14} fontWeight={700}>대회 정보와 안내사항·참가비·입금 계좌를 포함한 연결 데이터를 영구 삭제합니다.</Typography>
           <Typography fontSize={13} sx={{ mt: 1.2, whiteSpace: "pre-line" }}>부문 {deleteSummary.divisions}개 · 라운드 {deleteSummary.rounds}개{"\n"}참가 신청 및 참가자 {deleteSummary.participants}명 · 초대 클럽 {deleteSummary.invited_groups}개{"\n"}조 {deleteSummary.pools}개 · 경기 {deleteSummary.matches}개 (결과 기록 {deleteSummary.recorded_matches}개)</Typography>
-          <Typography fontSize={13} color="error" sx={{ mt: 1.2 }}>참가자 상태, 조 배정, 경기 점수와 결과도 함께 삭제되며 복구할 수 없습니다.</Typography>
+          <Typography fontSize={13} sx={{ mt: 1 }}>경품 추첨 {deleteSummary.draws ?? 0}개 · 정산 {deleteSummary.settlements ?? 0}개 · 입금 확인 {deleteSummary.settlement_payments ?? 0}건 · 영수증 {deleteSummary.receipt_scans ?? 0}건</Typography><Typography fontSize={13} color="error" sx={{ mt: 1.2 }}>경품 당첨 결과와 정산·입금 확인을 포함하여 참가자 상태, 조 배정, 경기 점수와 결과도 함께 삭제되며 복구할 수 없습니다.</Typography>
           <TextField fullWidth size="small" label={'삭제하려면 "삭제"를 입력하세요'} value={deleteConfirmationText} onChange={(event) => setDeleteConfirmationText(event.target.value)} sx={{ mt: 2 }} />
         </>}
       </DialogContent>

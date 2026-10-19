@@ -1,3 +1,5 @@
+import { useEventCompetitionQuery, useEventParticipantsQuery, tournamentEventId } from '../../features/tournament/eventContext';
+import { useUpdateTournamentMutation } from '../../features/tournament/tournamentApi';
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Alert, Box, Button, Card, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
@@ -13,7 +15,7 @@ import QRCode from "react-qr-code";
 import CurvedShareIcon from "../../components/CurvedShareIcon";
 import { DivisionBadge } from "../../components/ParticipantName";
 import { useAppSelector } from "../../app/hooks";
-import { useGetLeagueParticipantsQuery, useGetLeagueQuery, useUpdateLeagueMutation } from "../../features/league/leagueApi";
+import { useUpdateLeagueMutation } from "../../features/league/leagueApi";
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
 import { createTossTransferLink, isSmartphoneBrowser, parseBankAccount } from "../../utils/paymentDeepLink";
 
@@ -169,7 +171,7 @@ function localPreviewRequest(leagueId: string, url: string, method: string, body
   throw new Error("지원되지 않는 미리보기 요청입니다.");
 }
 
-export default function AfterPartySettlement() {
+export default function AfterPartySettlement({ tournament = false }: { tournament?: boolean }) {
   const { id: leagueId, settlementId } = useParams<{ id: string; settlementId?: string }>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -177,11 +179,13 @@ export default function AfterPartySettlement() {
   const roundParam = searchParams.get("round");
   const roundNo = roundParam && /^\d+$/.test(roundParam) ? Number(roundParam) : 0;
   const shareToken = searchParams.get("share");
+  const resourceId = tournament ? tournamentEventId(leagueId ?? "") : leagueId ?? "";
   const token = useAppSelector((state) => state.auth.token);
-  const { data: participantData } = useGetLeagueParticipantsQuery(leagueId ?? "", { skip: !leagueId || !!shareToken });
-  const { data: leagueData } = useGetLeagueQuery(leagueId ?? "", { skip: !leagueId || !!shareToken });
+  const { data: participantData } = useEventParticipantsQuery(resourceId, { skip: !leagueId || !!shareToken });
+  const { data: leagueData } = useEventCompetitionQuery(resourceId, { permission: "settlement", skip: !leagueId || !!shareToken });
   const { data: groupData } = useGetGroupDetailQuery(leagueData?.league.group_id ?? "", { skip: !leagueData?.league.group_id || !!shareToken });
   const [updateLeague] = useUpdateLeagueMutation();
+  const [updateTournament] = useUpdateTournamentMutation();
   const [list, setList] = useState<Settlement[]>([]);
   const [listLoaded, setListLoaded] = useState(false);
   const [summary, setSummary] = useState<CombinedSummary>({ total: 0, people: [] });
@@ -225,12 +229,12 @@ export default function AfterPartySettlement() {
   const [pendingThumbnails, setPendingThumbnails] = useState<string[]>([]);
   const [receiptItems, setReceiptItems] = useState<ReceiptItem[]>([]);
   const [receiptMeta, setReceiptMeta] = useState({ merchant: "", purchasedAt: "", receiptTotal: 0 });
-  const base = `${import.meta.env.VITE_API_BASE_URL ?? "/api"}/leagues/${leagueId}/after-party`;
-  const listPath = `/league/${leagueId}/after-party`;
+  const base = `${import.meta.env.VITE_API_BASE_URL ?? "/api"}/${tournament ? "tournaments" : "leagues"}/${leagueId}/after-party`;
+  const listPath = `/${tournament ? "tournament" : "league"}/${leagueId}/after-party`;
   const canEditAccount = canManage && (localPreview || groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.league === true));
 
   const request = useCallback(async (url: string, method = "GET", body?: unknown) => {
-    if (import.meta.env.DEV && (localPreview || !token)) { setLocalPreview(true); return localPreviewRequest(leagueId!, url, method, body); }
+    if (!tournament && import.meta.env.DEV && (localPreview || !token)) { setLocalPreview(true); return localPreviewRequest(leagueId!, url, method, body); }
     try {
       const response = await fetch(url, { method, headers: { Authorization: `Bearer ${token}`, ...(body ? { "Content-Type": "application/json" } : {}) }, body: body ? JSON.stringify(body) : undefined });
       if (import.meta.env.DEV && (response.status >= 500 || !response.headers.get("content-type")?.includes("application/json"))) throw new TypeError("로컬 API에 연결할 수 없습니다.");
@@ -244,7 +248,7 @@ export default function AfterPartySettlement() {
       }
       throw cause;
     }
-  }, [token, localPreview, leagueId]);
+  }, [token, localPreview, leagueId, tournament]);
   const loadList = useCallback(async () => {
     if (!leagueId || (!shareToken && !token && !import.meta.env.DEV)) return;
     try {
@@ -257,7 +261,7 @@ export default function AfterPartySettlement() {
           setBankAccount(account); setSavedBankAccount(account);
           return;
         }
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL ?? "/api"}/after-party/shared/${shareToken}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL ?? "/api"}/${tournament ? "tournament-after-party" : "after-party"}/shared/${shareToken}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
         const result = await response.json();
         const requestedCode = leagueId.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
         const sharedCode = String(result.league?.league_code ?? "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
@@ -269,7 +273,7 @@ export default function AfterPartySettlement() {
       const result: ListResponse = await request(base); setList(result.settlements); setSummary(result.summary); setPayments(result.payments); setCanManage(result.canManage); setListLoaded(true);
     }
     catch (cause) { setError((cause as Error).message); }
-  }, [base, leagueId, request, token, shareToken]);
+  }, [base, leagueId, request, token, shareToken, tournament]);
   useEffect(() => { void loadList(); }, [loadList]);
   useEffect(() => {
     if (!leagueData?.league || localPreview || bankAccount !== savedBankAccount) return;
@@ -436,11 +440,12 @@ export default function AfterPartySettlement() {
     try {
       const value = bankAccount.trim();
       if (localPreview) localStorage.setItem(`after-party-preview-bank:${leagueId}`, value);
+      else if (tournament) await updateTournament({ id: leagueId, body: { bank_account: value } }).unwrap();
       else await updateLeague({ id: leagueId, updates: { bank_account: value } }).unwrap();
       setBankAccount(value); setSavedBankAccount(value); setAccountAutoSaveFailed(false);
     } catch { setAccountAutoSaveFailed(true); setError("입금 계좌 저장에 실패했습니다."); }
     finally { setSavingBankAccount(false); }
-  }, [leagueId, canEditAccount, shareToken, savingBankAccount, bankAccount, savedBankAccount, localPreview, updateLeague]);
+  }, [leagueId, canEditAccount, shareToken, savingBankAccount, bankAccount, savedBankAccount, localPreview, updateLeague, updateTournament, tournament]);
   useEffect(() => {
     if (!canEditAccount || shareToken || bankAccount === savedBankAccount || savingBankAccount || accountAutoSaveFailed) return;
     const timer = window.setTimeout(() => { void saveBankAccount(); }, 4000);
@@ -540,7 +545,7 @@ export default function AfterPartySettlement() {
   </Card>;
 
   return <Box sx={{ maxWidth: 720, mx: "auto", px: 2, py: 2, pb: 10 }}>
-    <Stack direction="row" alignItems="center" spacing={1} mb={2}><IconButton onClick={() => navigate(roundNo || settlementId ? listPath : `/league/${leagueId}`)}><ArrowBackIcon /></IconButton><Typography variant="h6" fontWeight={900}>{leagueDate ? `${leagueDate} ` : ""}뒤풀이 정산</Typography></Stack>
+    <Stack direction="row" alignItems="center" spacing={1} mb={2}><IconButton onClick={() => navigate(roundNo || settlementId ? listPath : `/${tournament ? "tournament" : "league"}/${leagueId}`)}><ArrowBackIcon /></IconButton><Typography variant="h6" fontWeight={900}>{leagueDate ? `${leagueDate} ` : ""}뒤풀이 정산</Typography></Stack>
     {localPreview && <Alert severity="info" sx={{ mb: 2 }}>로컬 미리보기입니다. 이 브라우저에만 저장되며 실제 리그 정산이나 서버 데이터에는 반영되지 않습니다.</Alert>}
     {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError("")}>{error}</Alert>}
     {!roundNo && !settlementId ? <Stack spacing={1.5}>

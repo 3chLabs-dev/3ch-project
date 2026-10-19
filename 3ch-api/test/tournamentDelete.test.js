@@ -11,7 +11,7 @@ const route = (path, method) => router.stack.find((layer) => layer.route?.path =
 async function invoke({ userId = 1, intent = 'DELETE_TOURNAMENT_AND_ALL_DATA', expected = summary, confirmationText = '삭제', failOn = '', preview = false } = {}) {
   const originalConnect = pool.connect;
   const originalQuery = pool.query;
-  const persisted = new Set(['tournament_pool_members', 'tournament_matches', 'tournament_pools', 'tournament_participants', 'tournament_division_rounds', 'tournament_invited_groups', 'tournament_divisions', 'tournaments']);
+  const persisted = new Set(['tournament_pool_members', 'tournament_matches', 'tournament_pools', 'tournament_participants', 'tournament_division_rounds', 'tournament_invited_groups', 'tournament_divisions', 'tournaments', 'tournament_draw_winners', 'tournament_draw_prizes', 'tournament_draws', 'tournament_after_party_receipt_scans', 'tournament_after_party_payments', 'tournament_after_party_share_links', 'tournament_after_party_settlements']);
   let working;
   const commands = [];
   const query = async (sql) => {
@@ -61,7 +61,7 @@ test('다른 사용자, 잘못된 확인값, 삭제 문구, 변경된 건수는 
   for (const options of [{ userId: 2 }, { intent: 'DELETE' }, { confirmationText: '다른 대회' }, { expected: { ...summary, recorded_matches: 0 } }]) {
     const result = await invoke(options);
     assert.notEqual(result.response.statusCode, 200);
-    assert.equal(result.persisted.size, 8);
+    assert.equal(result.persisted.size, 15);
     assert.equal(result.commands.some((sql) => sql.startsWith('DELETE FROM ')), false);
   }
 });
@@ -69,6 +69,6 @@ test('다른 사용자, 잘못된 확인값, 삭제 문구, 변경된 건수는 
 test('삭제 도중 오류가 나면 완료 결과와 참가자를 포함해 전체 요청을 롤백한다', async () => {
   const result = await invoke({ failOn: 'tournament_participants' });
   assert.equal(result.response.statusCode, 500);
-  assert.equal(result.persisted.size, 8);
+  assert.equal(result.persisted.size, 15);
   assert.equal(result.commands.at(-1), 'ROLLBACK');
 });

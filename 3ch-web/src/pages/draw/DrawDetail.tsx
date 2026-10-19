@@ -1,3 +1,4 @@
+import { useEventCompetitionQuery, useEventParticipantsQuery, tournamentEventId, drawPath } from '../../features/tournament/eventContext';
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAppSelector } from "../../app/hooks";
@@ -23,10 +24,6 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import confetti from "canvas-confetti";
 import { useGetDrawDetailQuery, useDrawPrizeWinnersMutation } from "../../features/draw/drawApi";
 import type { DrawPrizeItem } from "../../features/draw/drawApi";
-import {
-  useGetLeagueQuery,
-  useGetLeagueParticipantsQuery,
-} from "../../features/league/leagueApi";
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
 import { DivisionBadge } from "../../components/ParticipantName";
 
@@ -46,8 +43,9 @@ function formatDate(iso: string) {
 
 type PendingWinner = { participant_name: string; participant_division: string | null };
 
-export default function DrawDetail() {
-  const { leagueId, drawId } = useParams<{ leagueId: string; drawId: string }>();
+export default function DrawDetail({ tournament = false }: { tournament?: boolean }) {
+  const { leagueId: rawLeagueId, drawId } = useParams<{ leagueId: string; drawId: string }>();
+  const leagueId = rawLeagueId ? (tournament ? tournamentEventId(rawLeagueId) : rawLeagueId) : undefined;
   const navigate = useNavigate();
   const [openMyWinDialog, setOpenMyWinDialog] = useState(false);
   const hasCheckedRef = useRef(false); // 1회 실행용
@@ -57,17 +55,17 @@ export default function DrawDetail() {
     { skip: !leagueId || !drawId },
   );
 
-  const { data: leagueData } = useGetLeagueQuery(leagueId ?? "", { skip: !leagueId });
+  const { data: leagueData } = useEventCompetitionQuery(leagueId ?? "", { permission: "draw", skip: !leagueId });
   const league = leagueData?.league;
   const { data: groupData } = useGetGroupDetailQuery(
     league?.group_id ?? "",
     { skip: !league?.group_id },
   );
-  const canManage = groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.draw === true);
+  const canManage = tournament ? leagueData?.canManage === true : (groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.draw === true));
 
   const myName = useAppSelector((s) => s.auth.user?.name ?? null);
 
-  const { data: participantsData } = useGetLeagueParticipantsQuery(leagueId ?? "", {
+  const { data: participantsData } = useEventParticipantsQuery(leagueId ?? "", {
     skip: !leagueId || !canManage,
   });
 
@@ -161,7 +159,9 @@ export default function DrawDetail() {
     if (!drawingPrize || !leagueId || !drawId) return;
     setIsSavingWinner(true);
     try {
+      if (tournament && drawingPrize.winners.length && !window.confirm('기존 당첨자를 새 당첨자로 변경하시겠습니까? 기존 당첨 결과가 교체됩니다.')) { setIsSavingWinner(false); return; }
       await drawPrizeWinners({
+        ...(tournament && drawingPrize.winners.length ? { confirmation_intent: 'REPLACE_TOURNAMENT_DRAW_WINNERS' as const } : {}),
         leagueId,
         drawId,
         prizeId: drawingPrize.id,
@@ -206,7 +206,7 @@ export default function DrawDetail() {
     <>
       <Stack spacing={2.2}>
         <Stack direction="row" alignItems="center" spacing={1}>
-          <IconButton onClick={() => navigate(`/draw/${leagueId}`, { replace: true })} size="small">
+          <IconButton onClick={() => navigate(drawPath(leagueId ?? '', ``), { replace: true })} size="small">
             <ArrowBackIcon />
           </IconButton>
           <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -230,7 +230,7 @@ export default function DrawDetail() {
           <Button
             variant="outlined"
             disableElevation
-            onClick={() => navigate(`/draw/${leagueId}?draftId=${draw.id}`)}
+            onClick={() => navigate(drawPath(leagueId ?? '', `?draftId=${draw.id}`))}
             sx={{ borderRadius: 1, fontWeight: 700, alignSelf: "flex-start" }}
           >
             일괄 자동 추첨
@@ -267,7 +267,7 @@ export default function DrawDetail() {
                         variant={prize.winners.length > 0 ? "outlined" : "contained"}
                         size="small"
                         disableElevation
-                        onClick={() => navigate(`/draw/${leagueId}?draftId=${draw.id}`)}
+                        onClick={() => navigate(drawPath(leagueId ?? '', `?draftId=${draw.id}`))}
                         sx={{ borderRadius: 1, fontWeight: 700, minWidth: 56, height: 28, fontSize: 12 }}
                       >
                         {prize.winners.length > 0 ? "재추첨" : "추첨"}

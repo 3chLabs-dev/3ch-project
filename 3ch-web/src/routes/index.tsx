@@ -1,3 +1,5 @@
+import TournamentManageParticipants from '../pages/tournament/TournamentManageParticipants';
+import TournamentResults from '../pages/tournament/TournamentResults';
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import WoonsePolicyPage from "../pages/wooriwoonse/WoonsePolicyPage";
 import AppShell from "../components/AppShell";
@@ -127,6 +129,15 @@ export const router = createBrowserRouter([
       { path: "/tournament/new", element: <TournamentCreate /> },
       { path: "/tournament/:id", element: <TournamentDetail /> },
       { path: "/tournament/:id/apply", element: <TournamentApply /> },
+      { path: "/tournament/:id/participants/manage", element: <TournamentManageParticipants /> },
+      { path: "/tournament/:id/ranking", element: <TournamentResults view="ranking" /> },
+      { path: "/tournament/:id/divisions/:divisionId/results", element: <TournamentResults /> },
+      { path: "/tournament/:id/divisions/:divisionId/matches", element: <TournamentResults view="matches" /> },
+      { path: "/tournament/:id/divisions/:divisionId/bracket", element: <TournamentResults view="bracket" /> },
+      { path: "/tournament/:id/after-party", element: <AfterPartySettlement tournament /> },
+      { path: "/tournament/:id/after-party/:settlementId", element: <AfterPartySettlement tournament /> },
+      { path: "/tournament/:leagueId/draw", element: <DrawList tournament /> },
+      { path: "/tournament/:leagueId/draw/:drawId", element: <DrawDetail tournament /> },
       { path: "/tournament/:id/divisions/:divisionId/program", element: <TournamentProgramEdit /> },
       { path: "/tournament/:id/divisions/:divisionId/groups", element: <TournamentGroups /> },
       { path: "/league/quick-result", element: <LeagueQuickResult /> },

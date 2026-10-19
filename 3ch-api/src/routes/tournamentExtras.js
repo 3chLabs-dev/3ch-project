@@ -24,6 +24,33 @@ router.get('/tournaments/:id/results', optionalAuth, async (req, res) => {
   } catch (error) { console.error(error); return res.status(500).json({ message: '경기 결과를 불러오지 못했습니다.' }); }
 });
 
+// Explicit, append-only creation from persisted first-round pool assignments.
+router.post('/tournaments/:id/divisions/:divisionId/matches/generate', requireAuth, async (req, res) => {
+  if (![req.params.id, req.params.divisionId].every((id) => z.string().uuid().safeParse(id).success)) return res.status(400).json({ message: '부문을 확인해주세요.' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('SELECT id FROM tournaments WHERE id=$1 FOR UPDATE', [req.params.id]);
+    const rights = await tournamentAccess(client, req.params.id, Number(req.user.sub));
+    if (!rights.manage) { await client.query('ROLLBACK'); return res.status(403).json({ message: '대회 관리 권한이 필요합니다.' }); }
+    const rounds = await client.query('SELECT r.* FROM tournament_division_rounds r JOIN tournament_divisions d ON d.id=r.division_id WHERE d.tournament_id=$1 AND d.id=$2 ORDER BY r.round_no FOR UPDATE OF d,r', [req.params.id, req.params.divisionId]);
+    const round = rounds.rows[0];
+    if (!round || round.round_no !== 1 || round.league_type !== 'SINGLES' || !['GROUP','GROUP_TOURNAMENT'].includes(round.format)) {
+      await client.query('ROLLBACK'); return res.status(409).json({ message: '현재 확정 조 기반 경기 생성은 1라운드 단식 조별리그에서 지원합니다.' });
+    }
+    const existing = await client.query('SELECT id FROM tournament_matches WHERE division_id=$1 AND (program_round=1 OR program_round IS NULL) LIMIT 1', [req.params.divisionId]);
+    if (existing.rowCount) { await client.query('ROLLBACK'); return res.status(409).json({ message: '기존 경기가 있어 재생성하지 않습니다. 저장된 경기와 결과는 유지됩니다.' }); }
+    const assignments = await client.query(`SELECT po.id AS pool_id, po.pool_no, pm.participant_id FROM tournament_pools po JOIN tournament_pool_members pm ON pm.pool_id=po.id WHERE po.division_id=$1 AND po.round_no=1 ORDER BY po.pool_no,pm.slot_no`, [req.params.divisionId]);
+    const { buildPoolMatchSchedule } = require('../services/tournamentMatchSchedule');
+    const schedule = buildPoolMatchSchedule(assignments.rows);
+    if (!schedule.length) { await client.query('ROLLBACK'); return res.status(409).json({ message: '확정된 조에 경기 가능한 참가자가 없습니다.' }); }
+    for (const [index, match] of schedule.entries()) await client.query(`INSERT INTO tournament_matches (division_id,program_round,phase,pool_name,round_no,match_order,participant_a_id,participant_b_id) VALUES ($1,1,'GROUP',$2,1,$3,$4,$5)`, [req.params.divisionId, String(match.pool_no), index + 1, match.a, match.b]);
+    await client.query('COMMIT');
+    return res.status(201).json({ match_count: schedule.length });
+  } catch (error) { await client.query('ROLLBACK'); console.error(error); return res.status(500).json({ message: '경기를 생성하지 못했습니다.' }); }
+  finally { client.release(); }
+});
+
 router.post('/tournaments/:id/participants/manual', requireAuth, async (req, res) => {
   const parsed = z.object({ group_id: z.string().min(1).nullable(), rows: z.array(z.object({ division_id: z.string().uuid(), name: z.string().trim().min(1).max(120), member_division: z.string().trim().min(1).max(40), member_id: z.number().int().positive().nullable().optional(), pre_member_id: z.string().uuid().nullable().optional() }).strict()).min(1).max(500) }).strict().safeParse(req.body);
   if (!z.string().uuid().safeParse(req.params.id).success || !parsed.success) return res.status(400).json({ message: '참가자의 부문, 이름, 대회 부수를 입력해주세요.' });

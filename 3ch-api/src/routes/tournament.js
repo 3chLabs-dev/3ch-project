@@ -3,6 +3,7 @@ const { z } = require('zod');
 const pool = require('../db/pool');
 const { requireAuth, optionalAuth } = require('../middlewares/auth');
 const { canChangeTournamentCompetitionSettings } = require('../utils/tournamentDivisionPolicy');
+const { buildPoolMatchSchedule } = require('../services/tournamentMatchSchedule');
 const { createTournamentGroups, canCreateTournamentGroups } = require('../utils/tournamentGrouping');
 const { matchesExistingRoster, canCancelParticipantWithResults } = require('../utils/tournamentRosterPolicy');
 const { canApplyToTournament } = require('../utils/tournamentApplicationPolicy');
@@ -868,9 +869,12 @@ router.post('/tournaments/:id/divisions/:divisionId/pools/generate', requireAuth
       const created = await client.query('INSERT INTO tournament_pools (division_id, round_no, pool_no, bracket_slot) VALUES ($1, 1, $2, $3) RETURNING id', [division.id, group.pool_no, group.bracket_slot]);
       for (const [index, participant] of group.members.entries()) await client.query('INSERT INTO tournament_pool_members (pool_id, participant_id, slot_no) VALUES ($1, $2, $3)', [created.rows[0].id, participant.id, index + 1]);
     }
+    const assignments = groups.flatMap((group) => group.members.map((participant) => ({ pool_id: String(group.pool_no), pool_no: group.pool_no, participant_id: participant.id })));
+    const schedule = division.league_type === 'SINGLES' ? buildPoolMatchSchedule(assignments) : [];
+    for (const [index, match] of schedule.entries()) await client.query(`INSERT INTO tournament_matches (division_id,program_round,phase,pool_name,round_no,match_order,participant_a_id,participant_b_id) VALUES ($1,1,'GROUP',$2,1,$3,$4,$5)`, [division.id, String(match.pool_no), index + 1, match.a, match.b]);
     await client.query(`UPDATE tournament_divisions SET status = 'locked', updated_at = NOW() WHERE id = $1`, [division.id]);
     await client.query('COMMIT');
-    return res.status(201).json({ group_count: groups.length });
+    return res.status(201).json({ group_count: groups.length, match_count: schedule.length });
   } catch (error) { await client.query('ROLLBACK'); console.error('Tournament grouping error:', error); return res.status(500).json({ message: '조 편성을 저장할 수 없습니다.' }); }
   finally { client.release(); }
 });

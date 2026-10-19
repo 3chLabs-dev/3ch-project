@@ -59,6 +59,7 @@ import {
   useSyncLeagueProgramMatchesMutation,
   useUpdateLeagueMatchMutation,
   useReorderLeagueParticipantsMutation,
+  type League,
   type LeagueParticipantItem,
   type LeagueMatch,
 } from "../../features/league/leagueApi";
@@ -969,14 +970,19 @@ function MatchSchedulePanel({ matches, localOrder, landscape, leagueId, onProgra
  * 5. landscape(가로) ↔ portrait(세로, writingMode 활용) 전환
  * 6. 15초 폴링으로 실시간 경기 데이터 갱신
  */
-export default function LeagueBracket() {
+export type ExternalBracketData = {
+  league: League; participants: LeagueParticipantItem[]; matches: LeagueMatch[];
+  canScore: boolean; backTo: string; onRefresh: () => void;
+  onMatchUpdate: (id: string, patch: ProgramMatchPatch) => void;
+};
+export default function LeagueBracket({ external }: { external?: ExternalBracketData } = {}) {
   const { id }   = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const isProgramMode = searchParams.get("program") === "1";
+  const isProgramMode = !external && searchParams.get("program") === "1";
   const programRound = Number.parseInt(searchParams.get("round") ?? "1", 10) || 1;
   const backMode = searchParams.get("back");
-  const backTo = backMode === "matches"
+  const backTo = external?.backTo ?? (backMode === "matches"
     ? isProgramMode
       ? `/league/${id}/program/matches?program=1&round=${programRound}`
       : `/league/${id}/matches`
@@ -984,18 +990,21 @@ export default function LeagueBracket() {
       ? `/league/${id}`
       : window.location.pathname.includes("/program/")
         ? `/league/${id}/program`
-        : `/league/${id}`;
+        : `/league/${id}`);
 
   // ── 데이터 페칭 ──────────────────────────────────────────────────────────
   // 참가자·경기는 15초마다 자동 갱신 (실시간 점수 반영)
-  const { data: leagueData, isLoading: leagueLoading, refetch: refetchLeague } =
-    useGetLeagueQuery(id ?? "", { skip: !id });
-  const { data: participantData, isLoading: participantsLoading, refetch: refetchParticipants } =
-    useGetLeagueParticipantsQuery(id ?? "", { skip: !id, pollingInterval: 15000 });
-  const { data: matchData, refetch: refetchMatches } =
-    useGetLeagueMatchesQuery(id ?? "", { skip: !id, pollingInterval: 15000 });
+  const { data: queriedLeagueData, isLoading: leagueLoading, refetch: refetchLeague } =
+    useGetLeagueQuery(id ?? "", { skip: !!external || !id });
+  const { data: queriedParticipantData, isLoading: participantsLoading, refetch: refetchParticipants } =
+    useGetLeagueParticipantsQuery(id ?? "", { skip: !!external || !id, pollingInterval: 15000 });
+  const { data: queriedMatchData, refetch: refetchMatches } =
+    useGetLeagueMatchesQuery(id ?? "", { skip: !!external || !id, pollingInterval: 15000 });
   const { data: programData } = useGetLeagueProgramQuery(id ?? "", { skip: !isProgramMode || !id });
 
+  const leagueData = useMemo(() => external ? { league: external.league } : queriedLeagueData, [external, queriedLeagueData]);
+  const participantData = useMemo(() => external ? { participants: external.participants } : queriedParticipantData, [external, queriedParticipantData]);
+  const matchData = useMemo(() => external ? { matches: external.matches } : queriedMatchData, [external, queriedMatchData]);
   const league          = leagueData?.league;
   const isGroupLeague = league?.format?.startsWith("조별리그") ?? false;
   // useMemo로 감싸서 matchData 객체 참조가 바뀔 때만 재생성 (불필요한 하위 useMemo 재실행 방지)
@@ -1345,11 +1354,11 @@ export default function LeagueBracket() {
 
   // ── 권한 ─────────────────────────────────────────────────────────────────
   // canManage: 점수 편집 + 시드 순서 변경 가능 여부
-  const { data: groupData } = useGetGroupDetailQuery(league?.group_id ?? "", { skip: !league?.group_id });
+  const { data: groupData } = useGetGroupDetailQuery(league?.group_id ?? "", { skip: !!external || !league?.group_id });
   const authUser  = useAppSelector((s) => s.auth.user);
   const isCreator = !!authUser && league?.created_by_id === authUser.id;
-  const canManage = groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.league === true) || isCreator;
-  const canScore = canManage || league?.join_permission === "public";
+  const canManage = !external && (groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.league === true) || isCreator);
+  const canScore = external ? external.canScore : canManage || league?.join_permission === "public";
   // 그룹 멤버 이름 우선, 없으면 계정 이름, 비로그인 게스트는 localStorage 저장 이름 사용
   const myName    = groupData?.members?.find((m) => m.user_id === authUser?.id)?.name
     ?? authUser?.name
@@ -1567,10 +1576,11 @@ export default function LeagueBracket() {
 
   // 수동 새로고침: 리그·참가자·경기 3개 쿼리 동시 refetch
   const handleRefresh = useCallback(() => {
+    if (external) { external.onRefresh(); return; }
     refetchLeague();
     refetchParticipants();
     refetchMatches();
-  }, [refetchLeague, refetchParticipants, refetchMatches]);
+  }, [external, refetchLeague, refetchParticipants, refetchMatches]);
 
   // 이미지 저장: 테이블을 가로 방향으로 캡처 후 PNG 다운로드
   const handleSaveImage = useCallback(async () => {
@@ -2066,7 +2076,7 @@ export default function LeagueBracket() {
                         isMe={!!myName && rowPlayer.name === myName}
                         isBot={rowPlayer.is_bot}
                         rules={getProgramRuleLabel(currentRule ?? "")}
-                        onProgramMatchUpdate={isProgramMode ? updateProgramMatch : undefined}
+                        onProgramMatchUpdate={external?.onMatchUpdate ?? (isProgramMode ? updateProgramMatch : undefined)}
                       />
                     ))}
                     {editMode && canManage && (
@@ -2095,7 +2105,7 @@ export default function LeagueBracket() {
           position: "absolute", zIndex: 5, cursor: "pointer",
           bottom: 0, left: 0, right: 0,
         }}>
-          <MatchSchedulePanel matches={scheduleMatches} localOrder={localOrder} landscape leagueId={id ?? ""} onProgramMatchUpdate={isProgramMode ? updateProgramMatch : undefined} onStartToast={setStartToast} />
+          <MatchSchedulePanel matches={scheduleMatches} localOrder={localOrder} landscape leagueId={id ?? ""} onProgramMatchUpdate={external?.onMatchUpdate ?? (isProgramMode ? updateProgramMatch : undefined)} onStartToast={setStartToast} />
         </Box>
 
         <Box
@@ -2118,7 +2128,7 @@ export default function LeagueBracket() {
             pointerEvents: "auto",
           }}
         >
-        {canScore && (
+        {canScore && !external && (
           <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.8 }}>
             <Box sx={{ bgcolor: "#fff", p: 0.5, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>
               <QRCode

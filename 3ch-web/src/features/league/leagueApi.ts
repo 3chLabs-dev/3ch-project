@@ -257,6 +257,8 @@ export interface ReplaceParticipantRequest {
 }
 
 export interface LeagueMatch {
+  participant_a_club_name?: string | null;
+  participant_b_club_name?: string | null;
   id: string;
   match_order: number;
   participant_a_id: string | null;

@@ -1,4 +1,5 @@
 import TournamentManageParticipants from '../pages/tournament/TournamentManageParticipants';
+import TournamentCompetition from '../pages/tournament/TournamentCompetition';
 import TournamentResults from '../pages/tournament/TournamentResults';
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import WoonsePolicyPage from "../pages/wooriwoonse/WoonsePolicyPage";
@@ -132,8 +133,8 @@ export const router = createBrowserRouter([
       { path: "/tournament/:id/participants/manage", element: <TournamentManageParticipants /> },
       { path: "/tournament/:id/ranking", element: <TournamentResults view="ranking" /> },
       { path: "/tournament/:id/divisions/:divisionId/results", element: <TournamentResults /> },
-      { path: "/tournament/:id/divisions/:divisionId/matches", element: <TournamentResults view="matches" /> },
-      { path: "/tournament/:id/divisions/:divisionId/bracket", element: <TournamentResults view="bracket" /> },
+      { path: "/tournament/:id/divisions/:divisionId/matches", element: <TournamentCompetition view="matches" /> },
+      { path: "/tournament/:id/divisions/:divisionId/bracket", element: <TournamentCompetition view="bracket" /> },
       { path: "/tournament/:id/after-party", element: <AfterPartySettlement tournament /> },
       { path: "/tournament/:id/after-party/:settlementId", element: <AfterPartySettlement tournament /> },
       { path: "/tournament/:leagueId/draw", element: <DrawList tournament /> },

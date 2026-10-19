@@ -24,6 +24,29 @@ router.get('/tournaments/:id/results', optionalAuth, async (req, res) => {
   } catch (error) { console.error(error); return res.status(500).json({ message: '경기 결과를 불러오지 못했습니다.' }); }
 });
 
+router.patch('/tournaments/:id/matches/:matchId', requireAuth, async (req, res) => {
+  const state = z.object({ score_a: z.number().int().min(0).max(99).nullable(), score_b: z.number().int().min(0).max(99).nullable(), status: z.enum(['pending','playing','completed']), court: z.string().max(40).nullable() }).strict();
+  const parsed = z.object({ expected: state, updates: z.object({ score_a: z.number().int().min(0).max(99).optional(), score_b: z.number().int().min(0).max(99).optional(), status: z.enum(['playing','completed']).optional(), court: z.string().max(40).nullable().optional() }).strict() }).strict().safeParse(req.body);
+  if (!parsed.success || ![req.params.id,req.params.matchId].every((id) => z.string().uuid().safeParse(id).success)) return res.status(400).json({ message: '경기 입력을 확인해주세요.' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const rights = await tournamentAccess(client, req.params.id, Number(req.user.sub));
+    if (!rights.manage) { await client.query('ROLLBACK'); return res.status(403).json({ message: '대회 관리 권한이 필요합니다.' }); }
+    const saved = await client.query('SELECT m.* FROM tournament_matches m JOIN tournament_divisions d ON d.id=m.division_id WHERE m.id=$1 AND d.tournament_id=$2 FOR UPDATE OF m', [req.params.matchId,req.params.id]);
+    const match = saved.rows[0];
+    if (!match) { await client.query('ROLLBACK'); return res.status(404).json({ message: '경기를 찾을 수 없습니다.' }); }
+    const { expected, updates } = parsed.data;
+    if (['score_a','score_b','status','court'].some((key) => (match[key] ?? null) !== expected[key])) { await client.query('ROLLBACK'); return res.status(409).json({ message: '다른 사용자가 경기를 수정했습니다. 최신 기록을 다시 확인해주세요.' }); }
+    if (match.status === 'cancelled' || (match.status === 'completed' && updates.status && updates.status !== 'completed')) { await client.query('ROLLBACK'); return res.status(409).json({ message: '완료되거나 취소된 경기는 초기화할 수 없습니다.' }); }
+    const next = { ...match, ...updates };
+    if (next.status === 'completed' && (next.score_a === null || next.score_b === null)) { await client.query('ROLLBACK'); return res.status(400).json({ message: '양쪽 점수를 입력해주세요.' }); }
+    const result = await client.query('UPDATE tournament_matches SET score_a=$1,score_b=$2,status=$3,court=$4 WHERE id=$5 RETURNING *', [next.score_a,next.score_b,next.status,next.court ?? null,match.id]);
+    await client.query('COMMIT'); return res.json({ match: result.rows[0] });
+  } catch (error) { await client.query('ROLLBACK'); console.error(error); return res.status(500).json({ message: '경기 저장에 실패했습니다.' }); }
+  finally { client.release(); }
+});
+
 // Explicit, append-only creation from persisted first-round pool assignments.
 router.post('/tournaments/:id/divisions/:divisionId/matches/generate', requireAuth, async (req, res) => {
   if (![req.params.id, req.params.divisionId].every((id) => z.string().uuid().safeParse(id).success)) return res.status(400).json({ message: '부문을 확인해주세요.' });

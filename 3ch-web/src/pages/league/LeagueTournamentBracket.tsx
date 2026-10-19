@@ -2562,3 +2562,14 @@ export default function LeagueTournamentBracket() {
     document.body,
   );
 }
+
+/** Use the league's actual bracket boxes and connectors with persisted resource matches. */
+export function LeagueKnockoutCanvas({ matches }: { matches: LeagueMatch[] }) {
+  const positions = calcPositions(matches);
+  const width = Math.max(300, ...positions.map((p) => p.x + MW + PX));
+  const height = Math.max(160, ...positions.map((p) => p.y + MH + PB));
+  return <Box sx={{ overflow: "auto", bgcolor: "#F9FAFB", borderRadius: 2 }}><Box sx={{ position: "relative", width, height }}>
+    <svg width={width} height={height} style={{ position: "absolute", inset: 0 }}><Connectors positions={positions} /></svg>
+    {positions.map((pos) => <MatchBox key={pos.id} pos={pos} />)}
+  </Box></Box>;
+}

@@ -504,6 +504,7 @@ model TournamentParticipant {
 }
 
 model TournamentMatch {
+  court String? @db.VarChar(40)
   program_round Int?
   @@index([division_id, program_round, match_order])
   @@index([participant_a_id])

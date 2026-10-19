@@ -122,9 +122,9 @@ function hasReachedAutomaticCompletion(
 
 // ─── 큰 터치형 점수판 ───────────────────────────────────────────────────────
 function ScoreboardPanel({
-  name, division, seedLabel, orderLabel, isMe, score, wins, canEditScore, onMinus, onPlus,
+  name, division, clubName, seedLabel, orderLabel, isMe, score, wins, canEditScore, onMinus, onPlus,
 }: {
-  name: string | null; division: string | null; seedLabel?: string; orderLabel?: string; isMe?: boolean;
+  name: string | null; division: string | null; clubName?: string | null; seedLabel?: string; orderLabel?: string; isMe?: boolean;
   score: number; wins: boolean; canEditScore: boolean;
   onMinus: () => void; onPlus: () => void;
 }) {
@@ -167,6 +167,7 @@ function ScoreboardPanel({
             {name ?? "미정"}
           </Typography>
           {division && <DivisionBadge division={division} />}
+          {clubName && <Typography component="span" sx={{ fontSize: 11, color: "#6B7280" }}>({clubName})</Typography>}
         </Stack>
       </Stack>
 
@@ -234,7 +235,7 @@ function ScoreboardPanel({
 }
 
 // ─── 경기 카드 ────────────────────────────────────────────────────────────────
-function MatchCard({
+export function MatchCard({
   match, index, canManage, canMember, leagueId, rules, myName, seedA, seedB, orderA, orderB, onMatchStarted, onProgramMatchUpdate,
 }: {
   match: LeagueMatch;
@@ -515,6 +516,7 @@ function MatchCard({
           <ScoreboardPanel
             name={displayNameA}
             division={match.participant_a_division}
+            clubName={match.participant_a_club_name}
             seedLabel={seedA}
             orderLabel={orderA}
             isMe={participantNameIncludes(match.participant_a_name, myName)}
@@ -525,6 +527,7 @@ function MatchCard({
           <ScoreboardPanel
             name={displayNameB}
             division={match.participant_b_division}
+            clubName={match.participant_b_club_name}
             seedLabel={seedB}
             orderLabel={orderB}
             isMe={participantNameIncludes(match.participant_b_name, myName)}

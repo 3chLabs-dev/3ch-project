@@ -1,10 +1,11 @@
 import { loginUrl } from "../../utils/returnNavigation";
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Box, Button, Checkbox, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, MenuItem, Stack, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, CircularProgress, Divider, IconButton, MenuItem, Stack, TextField, Typography } from "@mui/material";
+import LoadMembersDialog, { type MemberRow } from "../league/LoadMembersDialog";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAppSelector } from "../../app/hooks";
-import { useGetGroupDetailQuery, useGetMyGroupsQuery } from "../../features/group/groupApi";
+import { useGetMyGroupsQuery } from "../../features/group/groupApi";
 import { useGetTournamentApplicationRosterQuery, useGetTournamentQuery, useSaveTournamentApplicationRosterMutation } from "../../features/tournament/tournamentApi";
 
 type DraftRow = { key: string; id?: string; division_id: string; name: string; member_division: string; previous_member_division?: string | null; member_id: number | null; pre_member_id: string | null; cancel: boolean };
@@ -24,7 +25,6 @@ export default function TournamentApply() {
   const selectedMode = mode || managers[0]?.id || "individual";
   const groupId = selectedMode === "individual" ? null : selectedMode;
   const { currentData: rosterData, isFetching: loadingRoster } = useGetTournamentApplicationRosterQuery({ id, groupId }, { skip: !id || !token || loadingGroups });
-  const { data: groupDetail } = useGetGroupDetailQuery(groupId ?? "", { skip: !groupId });
   const [saveRoster, { isLoading: saving }] = useSaveTournamentApplicationRosterMutation();
   const [rows, setRows] = useState<DraftRow[]>([]);
   const [dirty, setDirty] = useState(false);
@@ -32,12 +32,10 @@ export default function TournamentApply() {
   const [name, setName] = useState("");
   const [memberDivision, setMemberDivision] = useState("");
   const [loadOpen, setLoadOpen] = useState(false);
-  const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [error, setError] = useState("");
   const tournament = tournamentData?.tournament;
   const divisions = tournament?.divisions ?? [];
   const selectedDivisionId = divisions.some((division) => division.id === addDivisionId) ? addDivisionId : divisions[0]?.id ?? "";
-  const clubMembers = useMemo(() => (groupDetail?.members ?? []).filter((member) => member.is_pre_member || member.user_id !== null), [groupDetail]);
   const canEdit = !!tournament && new Date() < new Date(tournament.starts_at);
   const canAdd = canEdit && !!tournament && new Date() < new Date(tournament.application_deadline_at ?? tournament.starts_at) && (tournament.can_apply || tournament.can_manage);
   const deadlineText = tournament?.application_deadline_at ? new Date(tournament.application_deadline_at).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" }) : "미설정";
@@ -61,10 +59,14 @@ export default function TournamentApply() {
     appendRows([{ key: makeKey(), division_id: selectedDivisionId, name: name.trim(), member_division: memberDivision.trim(), member_id: groupId ? null : user?.id ?? null, pre_member_id: null, cancel: false }]);
     setName(""); setMemberDivision(""); setError("");
   };
-  const loadMembers = () => {
-    const selected = clubMembers.filter((member) => selectedMembers.includes(member.id));
-    appendRows(selected.map((member) => ({ key: makeKey(), division_id: selectedDivisionId, name: member.name ?? "", member_division: "", member_id: member.is_pre_member ? null : member.user_id, pre_member_id: member.is_pre_member ? member.id : null, cancel: false })));
-    setSelectedMembers([]); setLoadOpen(false);
+  const loadMembers = (selected: MemberRow[]) => {
+    appendRows(selected.map((member) => ({
+      key: makeKey(), division_id: selectedDivisionId, name: member.name,
+      // 클럽 부수는 참고용이며 대회 부수는 새로 입력합니다.
+      member_division: "", member_id: member.is_pre_member ? null : member.member_id,
+      pre_member_id: member.is_pre_member ? member.id.slice(4) : null, cancel: false,
+    })));
+    setLoadOpen(false);
   };
   const submit = async () => {
     if (!canEdit || !rows.length) { setError("신청할 참가자를 등록해주세요."); return; }
@@ -99,6 +101,6 @@ export default function TournamentApply() {
       {!rows.some((row) => row.division_id === division.id) && <Typography sx={{ py: 1, fontSize: 13, color: "text.secondary" }}>등록된 참가자가 없습니다.</Typography>}
     </Box>)}
     <Stack direction="row" spacing={1}><Button fullWidth variant="contained" color="inherit" onClick={() => navigate(`/tournament/${id}`)} sx={{ height: 44, fontWeight: 900 }}>이전</Button><Button fullWidth variant="contained" disabled={saving || loadingRoster || !canEdit || !rows.length} onClick={() => void submit()} sx={{ height: 44, fontWeight: 900 }}>신청 명단 저장</Button></Stack>
-    <Dialog open={loadOpen} onClose={() => setLoadOpen(false)} fullWidth maxWidth="sm"><DialogTitle sx={{ fontWeight: 900 }}>클럽 회원 불러오기</DialogTitle><DialogContent dividers><Typography sx={{ fontSize: 13, mb: 1, color: "text.secondary" }}>선택한 회원을 {divisions.find((division) => division.id === selectedDivisionId)?.name}에 추가합니다. 클럽 부수는 참고용이며, 추가 후 대회 부수를 반드시 입력해주세요.</Typography><Box sx={{ maxHeight: 400, overflowY: "auto" }}>{clubMembers.map((member) => <FormControlLabel key={member.id} sx={{ display: "flex", mx: 0 }} control={<Checkbox checked={selectedMembers.includes(member.id)} onChange={(event) => setSelectedMembers((current) => event.target.checked ? [...current, member.id] : current.filter((value) => value !== member.id))} />} label={`${member.name ?? ""}${member.division ? ` ${member.division}` : ""}${member.is_pre_member ? " · 사전등록" : ""}`} />)}</Box></DialogContent><DialogActions><Button onClick={() => setLoadOpen(false)}>취소</Button><Button variant="contained" disabled={!selectedMembers.length} onClick={loadMembers}>선택한 {selectedMembers.length}명 추가</Button></DialogActions></Dialog>
+    {groupId && <LoadMembersDialog open={loadOpen} groupId={groupId} onClose={() => setLoadOpen(false)} onConfirm={loadMembers} />}
   </Box>;
 }

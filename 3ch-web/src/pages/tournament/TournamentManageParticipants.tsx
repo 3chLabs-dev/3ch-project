@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { Alert, Autocomplete, Box, Button, Checkbox, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Stack, TextField, Typography } from "@mui/material";
+import { Alert, Autocomplete, Box, Button, CircularProgress, IconButton, MenuItem, Stack, TextField, Typography } from "@mui/material";
+import LoadMembersDialog from "../league/LoadMembersDialog";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useNavigate, useParams } from "react-router-dom";
 import { useGetGroupDetailQuery, useSearchGroupsQuery } from "../../features/group/groupApi";
@@ -18,7 +19,7 @@ export default function TournamentManageParticipants() {
   const { data: clubDetail } = useGetGroupDetailQuery(club?.id ?? "", { skip: !club });
   const [rows, setRows] = useState<Row[]>([]);
   const [divisionId, setDivisionId] = useState(""); const [name, setName] = useState(""); const [rank, setRank] = useState("");
-  const [error, setError] = useState(""); const [loadOpen, setLoadOpen] = useState(false); const [members, setMembers] = useState<string[]>([]);
+  const [error, setError] = useState(""); const [loadOpen, setLoadOpen] = useState(false);
   const [register, { isLoading: saving }] = useRegisterTournamentParticipantsMutation();
   const [withdraw, { isLoading: withdrawing }] = useWithdrawTournamentParticipantMutation();
   const selectedDivision = divisionId || tournament?.divisions?.[0]?.id || "";
@@ -54,6 +55,22 @@ export default function TournamentManageParticipants() {
       {(roster?.participants ?? []).filter((person) => person.division_id === division.id && person.source_group_id === (club?.id ?? null)).map((person) => <Stack key={person.id} direction="row" alignItems="center" sx={{ py: 0.8, borderBottom: "1px solid #F3F4F6" }}><Typography fontSize={13} sx={{ flex: 1 }}>{formatTournamentParticipantName(person)}</Typography>{person.can_withdraw === true && <Button color="error" size="small" disabled={withdrawing} onClick={async () => { if (!window.confirm(`${person.name}의 참가 신청을 취소하시겠습니까? 조 배정이나 경기가 있으면 취소할 수 없습니다.`)) return; try { await withdraw({ id, participantId: person.id, confirmation_intent: "WITHDRAW_TOURNAMENT_PARTICIPANT" }).unwrap(); } catch (reason) { setError((reason as { data?: { message?: string } }).data?.message || "참가를 취소하지 못했습니다."); } }}>취소</Button>}</Stack>)}
     </Box>)}
     <Button fullWidth variant="contained" disabled={saving || !rows.length} onClick={() => void save()}>참가자 등록</Button>
-    <Dialog open={loadOpen} onClose={() => setLoadOpen(false)} fullWidth maxWidth="sm"><DialogTitle>클럽 회원 불러오기</DialogTitle><DialogContent dividers>{clubDetail?.members.map((member) => <FormControlLabel key={member.id} sx={{ display: "flex" }} control={<Checkbox checked={members.includes(member.id)} onChange={(event) => setMembers((current) => event.target.checked ? [...current, member.id] : current.filter((key) => key !== member.id))} />} label={`${member.name} · 클럽 부수 ${member.division || "미설정"}`} />)}</DialogContent><DialogActions><Button onClick={() => setLoadOpen(false)}>취소</Button><Button disabled={!members.length} onClick={() => { append((clubDetail?.members ?? []).filter((member) => members.includes(member.id)).map((member) => ({ key: crypto.randomUUID(), division_id: selectedDivision, name: member.name || "", member_division: "", member_id: member.is_pre_member ? null : member.user_id, pre_member_id: member.is_pre_member ? member.id : null }))); setLoadOpen(false); setMembers([]); }}>선택 회원 추가</Button></DialogActions></Dialog>
+    {club && <LoadMembersDialog
+      open={loadOpen}
+      groupId={club.id}
+      onClose={() => setLoadOpen(false)}
+      onConfirm={(selected) => {
+        append(selected.map((member) => ({
+          key: crypto.randomUUID(),
+          division_id: selectedDivision,
+          name: member.name,
+          // 대회 부수는 클럽 부수와 별개로 반드시 입력합니다.
+          member_division: "",
+          member_id: member.is_pre_member ? null : member.member_id,
+          pre_member_id: member.is_pre_member ? member.id.slice(4) : null,
+        })));
+        setLoadOpen(false);
+      }}
+    />}
   </Box>;
 }

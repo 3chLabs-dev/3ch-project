@@ -19,7 +19,6 @@ import NotificationsIcon from "@mui/icons-material/Notifications";
 import NotificationsOffIcon from "@mui/icons-material/NotificationsOff";
 import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
-import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import DragHandleIcon from "@mui/icons-material/DragHandle";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
@@ -55,6 +54,141 @@ import {
   withProgramRoundStandingsSnapshot,
   type ProgramMatchPatch,
 } from "../../utils/programMatchGenerator";
+
+// League and tournament match-order pages share these exact controls.
+export function MatchOrderHeader({ onBack, onBracket }: {
+  onBack: () => void; onBracket: () => void;
+}) {
+  const { state: pushState, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe } = usePushNotification();
+  return (
+      <Stack direction="row" alignItems="center" spacing={1}>
+        <IconButton size="small" onClick={onBack} sx={{ p: 0.5, color: "#374151" }}>
+          <ChevronLeftIcon />
+        </IconButton>
+        <Typography variant="subtitle1" fontWeight={900} flex={1}>
+          경기 순서
+        </Typography>
+        <Button
+          size="small"
+          variant="outlined"
+          onClick={onBracket}
+          sx={{
+            fontSize: 11,
+            fontWeight: 700,
+            textTransform: "none",
+            color: "#2563EB",
+            flexShrink: 0,
+            borderColor: "#93C5FD",
+            borderRadius: "16px",
+            px: 1.5,
+            py: 0.35,
+            "&:hover": { borderColor: "#2563EB", bgcolor: "#EFF6FF" },
+          }}
+        >
+          대진표 보기
+        </Button>
+        <Tooltip title={
+          pushState === "subscribed" ? "알림 끄기"
+          : pushState === "denied" ? "브라우저에서 알림이 차단됨"
+          : pushState === "unsupported" ? "이 환경에서는 알림을 지원하지 않습니다"
+          : "경기 시작 알림 받기"
+        }>
+          <span>
+            <IconButton
+              size="small"
+              disabled={pushState === "denied" || pushState === "unsupported"}
+              onClick={pushState === "subscribed" ? pushUnsubscribe : pushSubscribe}
+              sx={{ color: pushState === "subscribed" ? "#2563EB" : "#9CA3AF" }}
+            >
+              {pushState === "subscribed"
+                ? <NotificationsIcon sx={{ fontSize: 20 }} />
+                : <NotificationsOffIcon sx={{ fontSize: 20 }} />}
+            </IconButton>
+          </span>
+        </Tooltip>
+      </Stack>
+
+  );
+}
+
+export function MatchOrderGroups({ groupNames, selectedGroup, setSelectedGroup }: {
+  groupNames: string[]; selectedGroup: string | null; setSelectedGroup: (value: string) => void;
+}) {
+  return <>
+      {groupNames.length > 0 && (
+        <Box sx={{ px: 0, pt: 0.25, pb: 0 }}>
+          <Stack direction="row" spacing={1} sx={{ overflowX: "auto", '&::-webkit-scrollbar': { display: 'none' } }}>
+            {groupNames.map(gName => (
+              <Button
+                key={gName}
+                variant={selectedGroup === gName ? "contained" : "outlined"}
+                onClick={() => setSelectedGroup(gName)}
+                size="small"
+                sx={{
+                  minWidth: 60, borderRadius: 1.5, fontWeight: 800, fontSize: 13, boxShadow: "none",
+                  ...(selectedGroup === gName ? { bgcolor: "#2563EB" } : { color: "#6B7280", borderColor: "#D1D5DB", bgcolor: "#fff" })
+                }}
+              >
+                {gName}
+              </Button>
+            ))}
+          </Stack>
+        </Box>
+      )}
+
+  </>;
+}
+
+export function MatchOrderSearch({ search, setSearch, mineOnly, setMineOnly, myName }: {
+  search: string; setSearch: (value: string) => void; mineOnly: boolean;
+  setMineOnly: (value: boolean | ((previous: boolean) => boolean)) => void; myName?: string | null;
+}) {
+  return (
+      <TextField
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="이름 또는 부수 검색"
+        size="small"
+        fullWidth
+        slotProps={{
+          input: {
+            endAdornment: (
+              <InputAdornment position="end" sx={{ gap: 0.75 }}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => setMineOnly((value) => !value)}
+                  disabled={!myName}
+                  sx={{
+                    minWidth: 70,
+                    height: 28,
+                    borderRadius: 1,
+                    px: 1,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: mineOnly ? "#9CA3AF" : "#1976d2",
+                    borderColor: mineOnly ? "#0000001f" : "#1976d2",
+                    bgcolor: "#fff",
+                    whiteSpace: "nowrap",
+                    "&:hover": {
+                      borderColor: mineOnly ? "#0000003d" : "#1976d2",
+                      bgcolor: mineOnly ? "#F9FAFB" : "#EFF6FF",
+                    },
+                  }}
+                >
+                  {mineOnly ? "전체 경기" : "내 경기"}
+                </Button>
+                <SearchIcon sx={{ fontSize: 18, color: "#9CA3AF" }} />
+              </InputAdornment>
+            ),
+          },
+        }}
+        sx={{
+          "& .MuiOutlinedInput-root": { borderRadius: 2, bgcolor: "#F9FAFB", fontSize: 14 },
+        }}
+      />
+  );
+}
 
 // ─── 상태 표시 ────────────────────────────────────────────────────────────────
 const STATUS_LABEL: Record<string, string> = {
@@ -142,23 +276,24 @@ function ScoreboardPanel({
       }}
     >
       <Stack
-        direction="row"
+        direction={clubName ? "column" : "row"}
         alignItems="center"
         justifyContent="center"
-        sx={{ position: "relative", height: 48, px: 3.5, bgcolor: wins ? "#F0FDF4" : "#F9FAFB", borderRadius: 1.75, overflow: "hidden" }}
+        sx={{ position: "relative", minHeight: clubName ? 72 : 48, px: clubName ? 1 : 3.5, py: clubName ? 1 : 0, gap: clubName ? 0.5 : 0, bgcolor: wins ? "#F0FDF4" : "#F9FAFB", borderRadius: 1.75, overflow: "hidden" }}
       >
         {leftLabel && (
-          <Typography sx={{ position: "absolute", left: 10, fontSize: seedLabel ? 12 : 17, fontWeight: 800, color: "#9CA3AF" }}>
+          <Typography sx={{ position: "absolute", left: 10, ...(clubName ? { top: 8 } : {}), fontSize: seedLabel ? 12 : 17, fontWeight: 800, color: "#9CA3AF" }}>
             {leftLabel}
           </Typography>
         )}
-        <Stack direction="row" alignItems="center" justifyContent="center" spacing={0.5} minWidth={0}>
+        <Stack direction="row" alignItems="center" justifyContent="center" spacing={0.5} minWidth={0} sx={clubName ? { width: "100%", pl: leftLabel ? 2.5 : 0, boxSizing: "border-box" } : undefined}>
           <Typography
             sx={{
               minWidth: 0,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
+              overflow: clubName ? "visible" : "hidden",
+              textOverflow: clubName ? "clip" : "ellipsis",
+              whiteSpace: clubName ? "normal" : "nowrap",
+              overflowWrap: clubName ? "anywhere" : undefined,
               fontWeight: 800,
               fontSize: 15,
               color: !name || name === "미정" ? "#9CA3AF" : wins ? "#15803D" : isMe ? "#374151" : "#111827",
@@ -166,9 +301,9 @@ function ScoreboardPanel({
           >
             {name ?? "미정"}
           </Typography>
-          {division && <DivisionBadge division={division} />}
-          {clubName && <Typography component="span" sx={{ fontSize: 11, color: "#6B7280" }}>({clubName})</Typography>}
+          {division && <Box sx={{ flexShrink: 0, display: "flex" }}><DivisionBadge division={division} /></Box>}
         </Stack>
+        {clubName && <Typography sx={{ width: "100%", textAlign: "center", fontSize: 11, lineHeight: 1.4, color: "#6B7280", overflowWrap: "anywhere" }}>({clubName})</Typography>}
       </Stack>
 
       <Button
@@ -592,7 +727,6 @@ export default function LeagueMatchOrder() {
   const [searchParams] = useSearchParams();
   const isProgramMode = searchParams.get("program") === "1";
   const programRound = Number.parseInt(searchParams.get("round") ?? "1", 10) || 1;
-  const { state: pushState, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe } = usePushNotification();
   const matchListRef = useRef<HTMLDivElement>(null);
 
   const { data: leagueData } = useGetLeagueQuery(leagueId, { skip: !leagueId });
@@ -1246,66 +1380,10 @@ export default function LeagueMatchOrder() {
   return (
     <Stack spacing={0} sx={{ height: "100%", minHeight: 0 }}>
       <Stack spacing={0.75} sx={{ flexShrink: 0, pb: 1 }}>
-      {/* 상단 헤더 */}
-      <Stack direction="row" alignItems="center" spacing={1}>
-        <IconButton size="small" onClick={() => navigate(`/league/${leagueId}`)} sx={{ p: 0.5, color: "#374151" }}>
-          <ChevronLeftIcon />
-        </IconButton>
-        <Typography variant="subtitle1" fontWeight={900} flex={1}>
-          경기 순서
-        </Typography>
-        <Button
-          size="small"
-          variant={isTournamentProgramRound ? "text" : "outlined"}
-          startIcon={isTournamentProgramRound ? <AccountTreeIcon sx={{ fontSize: 14 }} /> : undefined}
-          onClick={() =>
-            navigate(
-              isProgramMode
-                ? `/league/${leagueId}/program/${bracketPath}?program=1&round=${programRound}&format=${currentProgramBlock?.format ?? ""}&back=matches`
-                : league?.format === "GPT 인식"
-                  ? `/league/${leagueId}/gpt-vision?back=matches`
-                  : `/league/${leagueId}/bracket?back=matches`,
-            )
-          }
-          sx={{
-            fontSize: 11,
-            fontWeight: 700,
-            textTransform: "none",
-            color: "#2563EB",
-            flexShrink: 0,
-            ...(isTournamentProgramRound
-              ? { minWidth: "auto", px: 1 }
-              : {
-                  borderColor: "#93C5FD",
-                  borderRadius: "16px",
-                  px: 1.5,
-                  py: 0.35,
-                  "&:hover": { borderColor: "#2563EB", bgcolor: "#EFF6FF" },
-                }),
-          }}
-        >
-          대진표 보기
-        </Button>
-        <Tooltip title={
-          pushState === "subscribed" ? "알림 끄기"
-          : pushState === "denied" ? "브라우저에서 알림이 차단됨"
-          : pushState === "unsupported" ? "이 환경에서는 알림을 지원하지 않습니다"
-          : "경기 시작 알림 받기"
-        }>
-          <span>
-            <IconButton
-              size="small"
-              disabled={pushState === "denied" || pushState === "unsupported"}
-              onClick={pushState === "subscribed" ? pushUnsubscribe : pushSubscribe}
-              sx={{ color: pushState === "subscribed" ? "#2563EB" : "#9CA3AF" }}
-            >
-              {pushState === "subscribed"
-                ? <NotificationsIcon sx={{ fontSize: 20 }} />
-                : <NotificationsOffIcon sx={{ fontSize: 20 }} />}
-            </IconButton>
-          </span>
-        </Tooltip>
-      </Stack>
+      <MatchOrderHeader onBack={() => navigate(`/league/${leagueId}`)}
+        onBracket={() => navigate(isProgramMode
+          ? `/league/${leagueId}/program/${bracketPath}?program=1&round=${programRound}&format=${currentProgramBlock?.format ?? ""}&back=matches`
+          : league?.format === "GPT 인식" ? `/league/${leagueId}/gpt-vision?back=matches` : `/league/${leagueId}/bracket?back=matches`)} />
 
       {/* 조 선택 탭 (조별리그일 때만 표시됨) */}
       {isTournamentProgramRound && tournamentBracketIndexes.length > 1 && (
@@ -1335,71 +1413,9 @@ export default function LeagueMatchOrder() {
         </Box>
       )}
 
-      {!isTournamentProgramRound && groupNames.length > 0 && (
-        <Box sx={{ px: 0, pt: 0.25, pb: 0 }}>
-          <Stack direction="row" spacing={1} sx={{ overflowX: "auto", '&::-webkit-scrollbar': { display: 'none' } }}>
-            {groupNames.map(gName => (
-              <Button
-                key={gName}
-                variant={selectedGroup === gName ? "contained" : "outlined"}
-                onClick={() => setSelectedGroup(gName)}
-                size="small"
-                sx={{
-                  minWidth: 60, borderRadius: 1.5, fontWeight: 800, fontSize: 13, boxShadow: "none",
-                  ...(selectedGroup === gName ? { bgcolor: "#2563EB" } : { color: "#6B7280", borderColor: "#D1D5DB", bgcolor: "#fff" })
-                }}
-              >
-                {gName}
-              </Button>
-            ))}
-          </Stack>
-        </Box>
-      )}
+      {!isTournamentProgramRound && <MatchOrderGroups groupNames={groupNames} selectedGroup={selectedGroup} setSelectedGroup={setSelectedGroup} />}
 
-      {/* 검색창 */}
-      <TextField
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="이름 또는 부수 검색"
-        size="small"
-        fullWidth
-        slotProps={{
-          input: {
-            endAdornment: (
-              <InputAdornment position="end" sx={{ gap: 0.75 }}>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  onClick={() => setMineOnly((value) => !value)}
-                  disabled={!myName}
-                  sx={{
-                    minWidth: 70,
-                    height: 28,
-                    borderRadius: 1,
-                    px: 1,
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: mineOnly ? "#9CA3AF" : "#1976d2",
-                    borderColor: mineOnly ? "#0000001f" : "#1976d2",
-                    bgcolor: "#fff",
-                    whiteSpace: "nowrap",
-                    "&:hover": {
-                      borderColor: mineOnly ? "#0000003d" : "#1976d2",
-                      bgcolor: mineOnly ? "#F9FAFB" : "#EFF6FF",
-                    },
-                  }}
-                >
-                  {mineOnly ? "전체 경기" : "내 경기"}
-                </Button>
-                <SearchIcon sx={{ fontSize: 18, color: "#9CA3AF" }} />
-              </InputAdornment>
-            ),
-          },
-        }}
-        sx={{
-          "& .MuiOutlinedInput-root": { borderRadius: 2, bgcolor: "#F9FAFB", fontSize: 14 },
-        }}
-      />
+      <MatchOrderSearch search={search} setSearch={setSearch} mineOnly={mineOnly} setMineOnly={setMineOnly} myName={myName} />
       </Stack>
 
       {/* 생성 중 / 경기 없을 때 */}

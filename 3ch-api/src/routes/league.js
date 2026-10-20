@@ -14,6 +14,7 @@ const { FEATURES, consumeFeatureCredit, refundFeatureCredit } = require('../serv
 const { getPointRanking, ensureDefaultRankingSeasons, normalizePointRules } = require('../services/pointRanking');
 const { winnerSide } = require('../utils/matchOutcome');
 const { resolveProgramParticipantId } = require('../utils/programParticipantResolver');
+const { tournamentAccess } = require('../utils/tournamentAccess');
 const { matchResultParticipant } = require('../services/leagueResultParticipantMatcher');
 
 const isWebPushConfigured = Boolean(
@@ -5395,8 +5396,10 @@ router.post('/league/participants/image-scan', requireAuth, participantImageUplo
   }
 });
 
-router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('image'), async (req, res) => {
+router.post(['/league/:id/openai-vision/scan', '/tournaments/:id/divisions/:divisionId/rounds/:roundNo/openai-vision/scan'], requireAuth, omrUpload.single('image'), async (req, res) => {
   const leagueId = req.params.id;
+  const isTournament = !!req.params.divisionId;
+  if (isTournament && (!z.string().uuid().safeParse(leagueId).success || !z.string().uuid().safeParse(req.params.divisionId).success || !/^\d+$/.test(req.params.roundNo) || Number(req.params.roundNo) < 1)) return res.status(400).json({ message: '대회 부문과 라운드를 확인해주세요.' });
   const userId = Number(req.user.sub);
   const clientRequestKey = String(req.get('Idempotency-Key') || req.body?.idempotency_key || randomUUID())
     .trim()
@@ -5406,6 +5409,13 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
   let creditConsumed = false;
 
   try {
+    if (isTournament) {
+      const rights = await tournamentAccess(pool, leagueId, userId);
+      if (!rights.manage) return res.status(403).json({ message: '사진 결과 등록은 대회 주최자 또는 운영진만 사용할 수 있습니다.' });
+      const round = await pool.query('SELECT r.id FROM tournament_division_rounds r JOIN tournament_divisions d ON d.id=r.division_id WHERE d.tournament_id=$1 AND d.id=$2 AND r.round_no=$3', [leagueId,req.params.divisionId,Number(req.params.roundNo)]);
+      if (!round.rowCount) return res.status(404).json({ message: '대회 라운드를 찾을 수 없습니다.' });
+      usageOwnerId = Number(rights.tournament.created_by_id);
+    } else {
     const leagueRow = await pool.query(
       `SELECT l.join_permission, l.group_id, COALESCE(l.billing_owner_id, l.created_by_id) AS billing_owner_id
          FROM leagues l
@@ -5438,6 +5448,8 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
       }
     }
 
+    }
+
     if (!req.file) {
       return res.status(400).json({ message: '이미지 파일이 필요합니다.' });
     }
@@ -5445,7 +5457,9 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
       return res.status(400).json({ message: '이미지 파일만 업로드할 수 있습니다.' });
     }
 
-    const participantsResult = await pool.query(
+    const participantsResult = isTournament ? await pool.query(
+      'SELECT id,name,member_division AS division FROM tournament_participants WHERE division_id=$1 ORDER BY created_at,id', [req.params.divisionId],
+    ) : await pool.query(
       `SELECT id, name, division
          FROM league_participants
         WHERE league_id = $1
@@ -5496,7 +5510,10 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
       return res.status(400).json({ message: '참가자가 2명 이상이어야 Vision 인식을 사용할 수 있습니다.' });
     }
 
-    const matchesResult = await pool.query(
+    const matchesResult = isTournament ? await pool.query(
+      `SELECT m.id,m.participant_a_id,m.participant_b_id FROM tournament_matches m
+        WHERE m.division_id=$1 AND m.status<>'cancelled' AND (m.program_round=$2 OR (m.program_round IS NULL AND (SELECT COUNT(*) FROM tournament_division_rounds r WHERE r.division_id=$1)=1))`, [req.params.divisionId,Number(req.params.roundNo)],
+    ) : await pool.query(
       `SELECT id, participant_a_id, participant_b_id,
               participant_a_roster_ids, participant_b_roster_ids
          FROM league_matches
@@ -5598,7 +5615,7 @@ router.post('/league/:id/openai-vision/scan', requireAuth, omrUpload.single('ima
       userId: usageOwnerId,
       feature: FEATURES.VISION_SCAN,
       requestKey: usageRequestKey,
-      referenceType: 'LEAGUE',
+      referenceType: isTournament ? 'TOURNAMENT' : 'LEAGUE',
       referenceId: leagueId,
       metadata: { requestedBy: userId, mode: visionMode },
     });

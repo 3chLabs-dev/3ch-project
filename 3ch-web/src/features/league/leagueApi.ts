@@ -1,3 +1,4 @@
+import { competitionApiPath } from "../tournament/competitionPaths";
 import { baseApi } from "../api/baseApi";
 import type { RootState } from "../../app/store";
 import { getLocalDevProfileByToken, isLocalDevToken } from "../../utils/localDevAuth";
@@ -419,6 +420,7 @@ export interface ScanParticipantImagesResponse {
 }
 
 export interface BatchLeagueMatchResult {
+  expected?: { score_a: number | null; score_b: number | null; status: string; court: string | null };
   match_id: string;
   score_a?: number | null;
   score_b?: number | null;
@@ -1262,7 +1264,7 @@ export const leagueApi = baseApi.injectEndpoints({
         if (targetRowEnd !== undefined) formData.append("target_row_end", String(targetRowEnd));
         formData.append("target_cells", JSON.stringify(targetCells));
         return {
-          url: `/league/${leagueId}/openai-vision/scan`,
+          url: competitionApiPath(leagueId, "openai-vision/scan"),
           method: "POST",
           body: formData,
           headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
@@ -1289,7 +1291,7 @@ export const leagueApi = baseApi.injectEndpoints({
       { leagueId: string; matches: BatchLeagueMatchResult[] }
     >({
       query: ({ leagueId, matches }) => ({
-        url: `/league/${leagueId}/matches/batch-results`,
+        url: competitionApiPath(leagueId, "matches/batch-results"),
         method: "PATCH",
         body: { matches },
       }),

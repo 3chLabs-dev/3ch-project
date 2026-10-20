@@ -34,3 +34,15 @@ test('토너먼트 우승자와 준우승자는 저장된 결승 결과로 결�
   assert.equal(result.standings.find((person) => person.id === 'b').rank, 3);
   assert.equal(result.standings.find((person) => person.id === 'd').rank, 3);
 });
+
+test('상위와 하위 우승자를 별도로 집계하고 다음 라운드 순위에서도 상위를 우선한다',()=>{
+ const rows=[
+  match({id:'u1',participant_a_id:'a',participant_b_id:'c',score_a:2,score_b:0,bracket:'upper',round_no:1}),
+  match({id:'u2',participant_a_id:'b',participant_b_id:'d',score_a:2,score_b:0,bracket:'upper',round_no:1}),
+  match({id:'uf',participant_a_id:'a',participant_b_id:'b',score_a:2,score_b:0,bracket:'upper',round_no:2}),
+  match({id:'lf',participant_a_id:'c',participant_b_id:'d',score_a:0,score_b:2,bracket:'lower',round_no:2}),
+ ];
+ const result=buildTournamentRoundResult({format:'TOURNAMENT',rules:{match_rule:'BEST_OF_3'}},rows,participants);
+ assert.equal(result.brackets[0].standings[0].id,'a');assert.equal(result.brackets[1].standings[0].id,'d');
+ assert.deepEqual(result.standings.map(p=>p.id),['a','b','d','c']);
+});

@@ -6,6 +6,7 @@ async function invoke({owner=true,status='playing',stale=false,updates={score_a:
  pool.connect=async()=>({async query(sql,values){commands.push(sql);if(sql==='BEGIN'){working=structuredClone(persisted);return {};}
  if(sql==='ROLLBACK')return {};if(sql==='COMMIT'){Object.assign(persisted,working);return {};}
  if(sql.includes('FROM tournaments t LEFT JOIN'))return {rows:[{created_by_id:owner?1:2,status:'open'}]};
+ if(sql.includes('FOR UPDATE OF d')||sql.startsWith('SELECT id FROM tournament_divisions'))return {rowCount:1,rows:[]};
  if(sql.includes('FROM subscriptions'))return {rowCount:1};if(sql.includes('JOIN group_members gm ON gm.group_id=p.source_group_id'))return {rowCount:0};
  if(sql.includes('SELECT m.*'))return {rows:[working]};
  if(sql.startsWith('UPDATE tournament_matches')){if(fail)throw Error('injected');[working.score_a,working.score_b,working.status,working.court]=values;return {rows:[working]};}

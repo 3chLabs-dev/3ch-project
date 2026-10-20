@@ -504,6 +504,16 @@ model TournamentParticipant {
 }
 
 model TournamentMatch {
+  next_match_id String? @db.Uuid
+  next_slot String? @db.VarChar(1)
+  loser_next_match_id String? @db.Uuid
+  loser_next_slot String? @db.VarChar(1)
+  bracket String? @db.VarChar(20)
+  bracket_index Int?
+  match_label String? @db.VarChar(100)
+  is_bye Boolean @default(false)
+  @@index([next_match_id], map: "tournament_matches_next_idx")
+  @@index([loser_next_match_id], map: "tournament_matches_loser_next_idx")
   court String? @db.VarChar(40)
   program_round Int?
   @@index([division_id, program_round, match_order])

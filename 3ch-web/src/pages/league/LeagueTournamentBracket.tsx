@@ -1,3 +1,4 @@
+import type { ExternalBracketData } from "./LeagueBracket";
 import { createPortal } from "react-dom";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -193,15 +194,20 @@ function RankingSummary({ title, rankings, rankLabels, color, borderColor, left,
   );
 }
 
-function TournamentResultDialog({ open, match, rule, leagueId, splitBracket, onClose }: {
+function TournamentResultDialog({ open, match, rule, leagueId, splitBracket, onClose, onMatchUpdate }: {
   open: boolean;
   match: LeagueMatch | null;
   rule?: string | null;
   leagueId: string;
   splitBracket: boolean;
   onClose: () => void;
+  onMatchUpdate?: (matchId: string, updates: ProgramMatchPatch) => void;
 }) {
   const [updateMatch] = useUpdateLeagueMatchMutation();
+  const persist = useCallback((matchId: string, updates: ProgramMatchPatch) => {
+    if (onMatchUpdate) onMatchUpdate(matchId, updates);
+    else void updateMatch({ leagueId, matchId, updates });
+  }, [leagueId, onMatchUpdate, updateMatch]);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [scoreA, setScoreA] = useState(0);
   const [scoreB, setScoreB] = useState(0);
@@ -217,14 +223,14 @@ function TournamentResultDialog({ open, match, rule, leagueId, splitBracket, onC
     if (timerRef.current) clearTimeout(timerRef.current);
     if (!match || match.status !== "playing" || !hasReachedCompletion(rule, scoreA, scoreB)) return;
     timerRef.current = setTimeout(() => {
-      updateMatch({ leagueId, matchId: match.id, updates: { status: "done", score_a: scoreA, score_b: scoreB } });
+      persist(match.id, { status: "done", score_a: scoreA, score_b: scoreB });
       timerRef.current = null;
     }, AUTO_COMPLETE_DELAY_MS);
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = null;
     };
-  }, [leagueId, match, rule, scoreA, scoreB, updateMatch]);
+  }, [leagueId, match, rule, scoreA, scoreB, persist]);
 
   if (!match) return null;
   const isPlaying = match.status === "playing";
@@ -239,16 +245,12 @@ function TournamentResultDialog({ open, match, rule, leagueId, splitBracket, onC
     const current = slot === "a" ? scoreA : scoreB;
     const next = Math.max(0, current + delta);
     if (slot === "a") setScoreA(next); else setScoreB(next);
-    updateMatch({
-      leagueId,
-      matchId: match.id,
-      updates: slot === "a" ? { score_a: next } : { score_b: next },
-    });
+    persist(match.id, slot === "a" ? { score_a: next } : { score_b: next });
   };
 
   const changeStatus = () => {
     if (match.status === "pending") {
-      updateMatch({ leagueId, matchId: match.id, updates: { status: "playing", score_a: scoreA, score_b: scoreB } });
+      persist(match.id, { status: "playing", score_a: scoreA, score_b: scoreB });
       const rawStage = match.match_label ?? "경기";
       const stage = splitBracket && !rawStage.startsWith("상위") && !rawStage.startsWith("하위")
         ? `${match.bracket === "lower" ? "하위" : "상위"} ${rawStage}`
@@ -257,7 +259,7 @@ function TournamentResultDialog({ open, match, rule, leagueId, splitBracket, onC
       const bDiv = match.participant_b_division ? `(${match.participant_b_division})` : "";
       setStartToast(`${stage} ${match.participant_a_name ?? "미정"}${aDiv} vs ${match.participant_b_name ?? "미정"}${bDiv} 경기 시작!`);
     } else if (match.status === "playing") {
-      updateMatch({ leagueId, matchId: match.id, updates: { status: "done", score_a: scoreA, score_b: scoreB } });
+      persist(match.id, { status: "done", score_a: scoreA, score_b: scoreB });
     }
   };
 
@@ -309,6 +311,7 @@ function TournamentResultDialog({ open, match, rule, leagueId, splitBracket, onC
 
 // ─── 슬롯 액션 타입 ──────────────────────────────────────────────────────────
 interface SlotActions {
+  canScore?: boolean;
   canManage: boolean;
   canRegister: boolean; // 수동 편성일 때만 true
   editMode: boolean;
@@ -641,7 +644,7 @@ function MatchBox({ pos, actions, manualSeeding = false }: { pos: MatchPos; acti
 
   const slotACursor = (isR1 && actions?.canRegister && !nameA) || (actions?.canManage && actions.editMode) ? "pointer" : "default";
   const slotBCursor = (isR1 && actions?.canRegister && !nameB) || (actions?.canManage && actions.editMode) ? "pointer" : "default";
-  const canOpenResult = Boolean(actions?.canManage && !actions.editMode && m.participant_a_id && m.participant_b_id);
+  const canOpenResult = Boolean((actions?.canScore ?? actions?.canManage) && !actions?.editMode && m.participant_a_id && m.participant_b_id);
 
   return (
     <>
@@ -831,7 +834,7 @@ export function LegacySingleSlotBox({ pos, slot, actions, manualSeeding = false 
     }
   };
 
-  const canOpenResult = Boolean(actions?.canManage && !actions.editMode && m.participant_a_id && m.participant_b_id);
+  const canOpenResult = Boolean((actions?.canScore ?? actions?.canManage) && !actions?.editMode && m.participant_a_id && m.participant_b_id);
   const cursor = canOpenResult || (isR1 && actions?.canRegister && !name) || (actions?.canManage && actions.editMode) ? "pointer" : "default";
   const isPendingLowerWalkover = m.bracket === "lower" && m.status !== "done"
     && Boolean(m.participant_a_name) !== Boolean(m.participant_b_name)
@@ -1170,13 +1173,16 @@ export function LegacyCenterOutConnectors({ positions }: { positions: MatchPos[]
 }
 
 // ─── 메인 ────────────────────────────────────────────────────────────────────
-export default function LeagueTournamentBracket() {
+export type ExternalTournamentBracketData = ExternalBracketData & {
+  onGenerate?: () => void; generating?: boolean;
+};
+export default function LeagueTournamentBracket({ external }: { external?: ExternalTournamentBracketData } = {}) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const isProgramMode = searchParams.get("program") === "1" || window.location.pathname.includes("/program/");
+  const isProgramMode = !external && (searchParams.get("program") === "1" || window.location.pathname.includes("/program/"));
   const backMode = searchParams.get("back");
-  const backTo = backMode === "detail"
+  const backTo = external?.backTo ?? (backMode === "detail"
     ? `/league/${id}`
     : backMode === "results"
       ? `/league/${id}/program/results?round=${searchParams.get("round") ?? "1"}`
@@ -1186,7 +1192,7 @@ export default function LeagueTournamentBracket() {
         ? `/league/${id}/tournament`
       : isProgramMode
         ? `/league/${id}/program`
-        : `/league/${id}/tournament`;
+        : `/league/${id}/tournament`);
   const storedProgramRound = id ? localStorage.getItem(`league-program-active-round-${id}`) : null;
   const programRound = Number.parseInt(searchParams.get("round") ?? storedProgramRound ?? "1", 10) || 1;
   const [zoom, setZoom] = useState(1);
@@ -1212,17 +1218,21 @@ export default function LeagueTournamentBracket() {
     participantId: string | null; name: string | null;
   } | null>(null);
 
-  const { data: leagueData, refetch: refetchLeague } = useGetLeagueQuery(id!);
-  const { data: matchesData, isLoading, isFetching: isMatchesFetching, refetch: refetchMatches } =
-    useGetLeagueMatchesQuery(id!, { pollingInterval: 15000 });
+  const { data: queriedLeagueData, refetch: refetchLeague } = useGetLeagueQuery(id!, { skip: !!external || !id });
+  const { data: queriedMatchesData, isLoading, isFetching: isMatchesFetching, refetch: refetchLeagueMatches } =
+    useGetLeagueMatchesQuery(id!, { skip: !!external || !id, pollingInterval: 15000 });
+  const leagueData = useMemo(() => external ? { league: external.league } : queriedLeagueData, [external, queriedLeagueData]);
+  const matchesData = useMemo(() => external ? { matches: external.matches } : queriedMatchesData, [external, queriedMatchesData]);
+  const refetchMatches = useCallback(() => external ? external.onRefresh() : refetchLeagueMatches(), [external, refetchLeagueMatches]);
   const { data: groupData } = useGetGroupDetailQuery(
     leagueData?.league?.group_id ?? "",
-    { skip: !leagueData?.league?.group_id },
+    { skip: !!external || !leagueData?.league?.group_id },
   );
 
   const league = leagueData?.league;
-  const { data: participantsData, isLoading: isParticipantsLoading } = useGetLeagueParticipantsQuery(id!, { skip: !id });
+  const { data: queriedParticipantsData, isLoading: isParticipantsLoading } = useGetLeagueParticipantsQuery(id!, { skip: !!external || !id });
   const { data: programData, isLoading: isProgramLoading } = useGetLeagueProgramQuery(id!, { skip: !isProgramMode || !id });
+  const participantsData = useMemo(() => external ? { participants: external.participants } : queriedParticipantsData, [external, queriedParticipantsData]);
   const participants = useMemo(() => participantsData?.participants ?? [], [participantsData]);
   const programOption = useMemo(
     () => (isProgramMode && id ? (programData?.program?.program_data as ReturnType<typeof getStoredProgramOption> | undefined) ?? getStoredProgramOption(id) : null),
@@ -1232,7 +1242,7 @@ export default function LeagueTournamentBracket() {
   const headerRule = programBlock?.matchRule ?? league?.rules;
   const headerSummary = isProgramMode && programBlock
     ? `${programRound}라운드 ${getProgramTypeLabel(programBlock.type)} ${getProgramFormatLabel(programBlock.format)} │ ${getProgramRuleLabel(headerRule)}`
-    : league ? `${league.type} ${league.format ?? ""} │ ${league.rules ?? ""}` : "";
+    : league ? `${league.type} ${league.format ?? ""} │ ${getProgramRuleLabel(headerRule)}` : "";
   const programSourceMatches = useMemo(() => {
     if (!isProgramMode || !id || !programOption) return matchesData?.matches ?? [];
 
@@ -1401,7 +1411,7 @@ export default function LeagueTournamentBracket() {
     syncLeagueProgramMatches,
   ]);
 
-  const canManage = groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.league === true);
+  const canManage = !external && (groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.league === true));
   const isCompleted = league?.status === "completed";
 
   const [assignParticipant, { isLoading: isAssigning }] = useAssignMatchParticipantMutation();
@@ -1409,6 +1419,7 @@ export default function LeagueTournamentBracket() {
   const [saveLeagueProgram] = useSaveLeagueProgramMutation();
 
   const handleRefresh = () => {
+    if (external) { external.onRefresh(); return; }
     refetchLeague();
     if (!isProgramMode) refetchMatches();
   };
@@ -1869,6 +1880,7 @@ export default function LeagueTournamentBracket() {
   }, [handleUndoLowerWalkover, walkoverUndo]);
 
   const slotActions: SlotActions = {
+    canScore: external ? external.canScore : canManage,
     canManage,
     canRegister: canManage,
     editMode,
@@ -2094,7 +2106,7 @@ export default function LeagueTournamentBracket() {
     return createPortal(
       <Box sx={{ bgcolor: "#fff", position: "fixed", inset: 0, zIndex: 9999, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
         <Typography color="text.secondary" mb={2}>생성된 대진표가 없습니다.</Typography>
-        <Button variant="contained" disableElevation onClick={() => navigate(`/league/${id}/tournament`)}>
+        <Button variant="contained" disableElevation disabled={external ? !external.onGenerate || external.generating : false} onClick={() => external ? external.onGenerate?.() : navigate(`/league/${id}/tournament`)}>
           대진표 생성하기
         </Button>
       </Box>,
@@ -2324,7 +2336,7 @@ export default function LeagueTournamentBracket() {
               )}
 
               {positions.map((pos) => {
-                const visibleSlotActions = canManage && (!isCompleted || isProgramMode)
+                const visibleSlotActions = (external?.canScore || canManage) && (!isCompleted || isProgramMode)
                   ? slotActions
                   : undefined;
                 return (
@@ -2410,6 +2422,7 @@ export default function LeagueTournamentBracket() {
         leagueId={id!}
         splitBracket={isDoubleElim}
         onClose={() => setResultDialogOpen(false)}
+        onMatchUpdate={external?.onMatchUpdate}
       />
 
       <Dialog
@@ -2561,15 +2574,4 @@ export default function LeagueTournamentBracket() {
     </Box>,
     document.body,
   );
-}
-
-/** Use the league's actual bracket boxes and connectors with persisted resource matches. */
-export function LeagueKnockoutCanvas({ matches }: { matches: LeagueMatch[] }) {
-  const positions = calcPositions(matches);
-  const width = Math.max(300, ...positions.map((p) => p.x + MW + PX));
-  const height = Math.max(160, ...positions.map((p) => p.y + MH + PB));
-  return <Box sx={{ overflow: "auto", bgcolor: "#F9FAFB", borderRadius: 2 }}><Box sx={{ position: "relative", width, height }}>
-    <svg width={width} height={height} style={{ position: "absolute", inset: 0 }}><Connectors positions={positions} /></svg>
-    {positions.map((pos) => <MatchBox key={pos.id} pos={pos} />)}
-  </Box></Box>;
 }

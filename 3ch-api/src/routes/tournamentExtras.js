@@ -3,6 +3,7 @@ const { z } = require('zod');
 const pool = require('../db/pool');
 const { requireAuth, optionalAuth } = require('../middlewares/auth');
 const { tournamentAccess } = require('../utils/tournamentAccess');
+const { buildKnockoutBracket, advancePersistedBracket, guardQualifiedSourceResults } = require('../services/tournamentBracket');
 const { buildTournamentRoundResult } = require('../services/tournamentResults');
 const router = express.Router();
 
@@ -24,6 +25,88 @@ router.get('/tournaments/:id/results', optionalAuth, async (req, res) => {
   } catch (error) { console.error(error); return res.status(500).json({ message: '경기 결과를 불러오지 못했습니다.' }); }
 });
 
+router.post('/tournaments/:id/divisions/:divisionId/rounds/:roundNo/bracket', requireAuth, async (req,res) => {
+  if (![req.params.id,req.params.divisionId].every((id)=>z.string().uuid().safeParse(id).success) || !/^[1-9]\d*$/.test(req.params.roundNo)) return res.status(400).json({message:'대회 부문과 라운드를 확인해주세요.'});
+  const client=await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const tournament=await client.query('SELECT * FROM tournaments WHERE id=$1 FOR UPDATE',[req.params.id]);
+    const rights=await tournamentAccess(client,req.params.id,Number(req.user.sub));
+    if (!rights.manage) {await client.query('ROLLBACK');return res.status(403).json({message:'대회 관리 권한이 필요합니다.'});}
+    const division=await client.query('SELECT id FROM tournament_divisions WHERE id=$1 AND tournament_id=$2 FOR UPDATE',[req.params.divisionId,req.params.id]);
+    if (!division.rowCount) {await client.query('ROLLBACK');return res.status(404).json({message:'대회 부문을 찾을 수 없습니다.'});}
+    const rounds=await client.query('SELECT * FROM tournament_division_rounds WHERE division_id=$1 ORDER BY round_no',[req.params.divisionId]);
+    const roundNo=Number(req.params.roundNo), round=rounds.rows.find((r)=>r.round_no===roundNo);
+    if (!round || round.format!=='TOURNAMENT' || round.league_type!=='SINGLES') {await client.query('ROLLBACK');return res.status(409).json({message:'현재 토너먼트 생성은 단식 토너먼트에서 지원합니다.'});}
+    const existing=await client.query('SELECT * FROM tournament_matches WHERE division_id=$1 ORDER BY program_round,match_order FOR UPDATE',[req.params.divisionId]);
+    if (existing.rows.some((m)=>m.program_round===roundNo || m.program_round===null)) {await client.query('ROLLBACK');return res.status(409).json({message:'기존 대진표가 있어 재생성하지 않습니다. 경기와 결과는 유지됩니다.'});}
+    const participants=await client.query("SELECT * FROM tournament_participants WHERE division_id=$1 AND status='confirmed' ORDER BY created_at,id FOR UPDATE",[req.params.divisionId]);
+    let entrants=participants.rows;
+    if (roundNo===1) {
+      if (tournament.rows[0].application_deadline_at && new Date()<new Date(tournament.rows[0].application_deadline_at)) {await client.query('ROLLBACK');return res.status(409).json({message:'참가 신청 마감 후 토너먼트를 생성해주세요.'});}
+      const pending=await client.query("SELECT 1 FROM tournament_participants WHERE division_id=$1 AND status='applied' LIMIT 1",[req.params.divisionId]);
+      if (pending.rowCount) {await client.query('ROLLBACK');return res.status(409).json({message:'신청 대기자를 모두 처리해주세요.'});}
+    } else {
+      const previous=rounds.rows.find((r)=>r.round_no===roundNo-1);
+      const previousMatches=existing.rows.filter((m)=>m.program_round===roundNo-1);
+      const result=previous && buildTournamentRoundResult(previous,previousMatches,participants.rows);
+      if (!result?.complete) {await client.query('ROLLBACK');return res.status(409).json({message:'이전 라운드의 모든 경기를 먼저 완료해주세요.'});}
+      if (previous.format==='GROUP' && previous.round_no===1) {
+        const members=await client.query('SELECT po.id AS pool_id,pm.participant_id FROM tournament_pools po JOIN tournament_pool_members pm ON pm.pool_id=po.id WHERE po.division_id=$1 AND po.round_no=1 ORDER BY po.pool_no,pm.slot_no',[req.params.divisionId]);
+        const pools=new Map(); for (const row of members.rows) {if(!pools.has(row.pool_id))pools.set(row.pool_id,[]);pools.get(row.pool_id).push(row.participant_id);}
+        const pairs=new Set(previousMatches.filter((m)=>m.status!=='cancelled').map((m)=>[m.participant_a_id,m.participant_b_id].sort().join(':')));
+        if (!pools.size || [...pools.values()].some((ids)=>ids.some((a,i)=>ids.slice(i+1).some((b)=>!pairs.has([a,b].sort().join(':')))))) {await client.query('ROLLBACK');return res.status(409).json({message:'예선에 누락된 경기가 있어 진출자를 확정할 수 없습니다.'});}
+      }
+      let ranked=result.standings;
+      if (round.rules?.final_advancement_mode==='top-n') {
+        const count=Number(round.rules.advance_count);
+        if (!Number.isInteger(count)||count<2) {await client.query('ROLLBACK');return res.status(409).json({message:'토너먼트 진출 인원은 2명 이상이어야 합니다.'});}
+        if (ranked[count] && ranked[count-1]?.rank===ranked[count].rank) {await client.query('ROLLBACK');return res.status(409).json({message:'진출 경계의 동점 순위가 확정되지 않았습니다.'});}
+        ranked=ranked.slice(0,count);
+      }
+      entrants=ranked.map((person)=>({...participants.rows.find((p)=>p.id===person.id),source_pool:previousMatches.find((m)=>m.participant_a_id===person.id||m.participant_b_id===person.id)?.pool_name}));
+    }
+    const bracket=buildKnockoutBracket(entrants,{divisionId:req.params.divisionId,roundNo,mode:round.rules?.tournament_mode??'single'});
+    for (const m of bracket) await client.query(`INSERT INTO tournament_matches (id,division_id,program_round,phase,round_no,match_order,participant_a_id,participant_b_id,score_a,score_b,status,bracket,bracket_index,match_label,next_match_id,next_slot,loser_next_match_id,loser_next_slot,is_bye) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,[m.id,m.division_id,m.program_round,m.phase,m.round_no,m.match_order,m.participant_a_id,m.participant_b_id,m.score_a,m.score_b,m.status,m.bracket,m.bracket_index,m.match_label,m.next_match_id,m.next_slot,m.loser_next_match_id,m.loser_next_slot,m.is_bye]);
+    await client.query("UPDATE tournament_divisions SET status='locked',updated_at=NOW() WHERE id=$1",[req.params.divisionId]);
+    await client.query('COMMIT');return res.status(201).json({match_count:bracket.length});
+  } catch(error) {await client.query('ROLLBACK');console.error(error);return res.status(error.statusCode??500).json({message:error.statusCode?error.message:'토너먼트를 생성하지 못했습니다.'});}
+  finally {client.release();}
+});
+
+// Photo-result imports update only the explicitly selected persisted matches atomically.
+router.patch('/tournaments/:id/divisions/:divisionId/rounds/:roundNo/matches/batch-results', requireAuth, async (req,res) => {
+  const state = z.object({ score_a:z.number().int().min(0).max(99).nullable(),score_b:z.number().int().min(0).max(99).nullable(),status:z.enum(['pending','playing','completed']),court:z.string().nullable() }).strict();
+  const parsed = z.object({matches:z.array(z.object({match_id:z.string().uuid(),score_a:z.number().int().min(0).max(99).optional(),score_b:z.number().int().min(0).max(99).optional(),status:z.enum(['done','playing']).optional(),expected:state}).strict()).min(1).max(2000)}).strict().safeParse(req.body);
+  if (!parsed.success || ![req.params.id,req.params.divisionId].every((id)=>z.string().uuid().safeParse(id).success) || !/^\d+$/.test(req.params.roundNo) || Number(req.params.roundNo)<1) return res.status(400).json({message:'저장할 경기 결과를 확인해주세요.'});
+  const items=parsed.data.matches;
+  if (new Set(items.map((m)=>m.match_id)).size!==items.length) return res.status(400).json({message:'중복된 경기입니다.'});
+  const client=await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const rights=await tournamentAccess(client,req.params.id,Number(req.user.sub));
+    if (!rights.manage) {await client.query('ROLLBACK');return res.status(403).json({message:'대회 관리 권한이 필요합니다.'});}
+    await client.query('SELECT id FROM tournament_divisions WHERE id=$1 AND tournament_id=$2 FOR UPDATE',[req.params.divisionId,req.params.id]);
+    const saved=await client.query(`SELECT m.* FROM tournament_matches m JOIN tournament_divisions d ON d.id=m.division_id
+      WHERE d.tournament_id=$1 AND d.id=$2 AND m.id=ANY($3::uuid[]) AND (m.program_round=$4 OR (m.program_round IS NULL AND (SELECT COUNT(*) FROM tournament_division_rounds r WHERE r.division_id=d.id)=1)) ORDER BY m.id FOR UPDATE OF m`,[req.params.id,req.params.divisionId,items.map((m)=>m.match_id),Number(req.params.roundNo)]);
+    if (saved.rows.length!==items.length) {await client.query('ROLLBACK');return res.status(409).json({message:'현재 부문과 라운드의 경기 명단이 변경되었습니다.'});}
+    for (const item of items) {
+      const match=saved.rows.find((m)=>m.id===item.match_id);
+      if (match.status==='cancelled' || (match.status==='completed' && item.status==='playing') || ['score_a','score_b','status','court'].some((key)=>(match[key]??null)!==item.expected[key])) {await client.query('ROLLBACK');return res.status(409).json({message:'경기 결과가 변경되어 전체 저장을 중단했습니다. 최신 기록을 확인해주세요.'});}
+      const next={...match,...(item.score_a!==undefined?{score_a:item.score_a}:{}),...(item.score_b!==undefined?{score_b:item.score_b}:{}),...(item.status?{status:item.status==='done'?'completed':item.status}:{})};
+      await guardQualifiedSourceResults(client,match,next);
+      if (next.status==='completed' && (next.score_a===null || next.score_b===null)) {await client.query('ROLLBACK');return res.status(400).json({message:'양쪽 점수가 필요합니다.'});}
+    }
+    for (const item of items) {
+      const match=saved.rows.find((m)=>m.id===item.match_id);
+      await client.query('UPDATE tournament_matches SET score_a=$1,score_b=$2,status=$3 WHERE id=$4',[item.score_a??match.score_a,item.score_b??match.score_b,item.status==='done'?'completed':item.status??match.status,match.id]);
+    }
+    if (saved.rows.some((m)=>m.phase==='TOURNAMENT')) await advancePersistedBracket(client,req.params.divisionId,Number(req.params.roundNo));
+    await client.query('COMMIT');return res.json({updated:items.length});
+  } catch(error) {await client.query('ROLLBACK');console.error(error);return res.status(error.statusCode??500).json({message:error.statusCode?error.message:'경기 결과 저장에 실패했습니다.'});}
+  finally {client.release();}
+});
+
 router.patch('/tournaments/:id/matches/:matchId', requireAuth, async (req, res) => {
   const state = z.object({ score_a: z.number().int().min(0).max(99).nullable(), score_b: z.number().int().min(0).max(99).nullable(), status: z.enum(['pending','playing','completed']), court: z.string().max(40).nullable() }).strict();
   const parsed = z.object({ expected: state, updates: z.object({ score_a: z.number().int().min(0).max(99).optional(), score_b: z.number().int().min(0).max(99).optional(), status: z.enum(['playing','completed']).optional(), court: z.string().max(40).nullable().optional() }).strict() }).strict().safeParse(req.body);
@@ -33,6 +116,7 @@ router.patch('/tournaments/:id/matches/:matchId', requireAuth, async (req, res) 
     await client.query('BEGIN');
     const rights = await tournamentAccess(client, req.params.id, Number(req.user.sub));
     if (!rights.manage) { await client.query('ROLLBACK'); return res.status(403).json({ message: '대회 관리 권한이 필요합니다.' }); }
+    await client.query('SELECT d.id FROM tournament_divisions d JOIN tournament_matches m ON m.division_id=d.id WHERE m.id=$1 AND d.tournament_id=$2 FOR UPDATE OF d', [req.params.matchId,req.params.id]);
     const saved = await client.query('SELECT m.* FROM tournament_matches m JOIN tournament_divisions d ON d.id=m.division_id WHERE m.id=$1 AND d.tournament_id=$2 FOR UPDATE OF m', [req.params.matchId,req.params.id]);
     const match = saved.rows[0];
     if (!match) { await client.query('ROLLBACK'); return res.status(404).json({ message: '경기를 찾을 수 없습니다.' }); }
@@ -41,9 +125,11 @@ router.patch('/tournaments/:id/matches/:matchId', requireAuth, async (req, res) 
     if (match.status === 'cancelled' || (match.status === 'completed' && updates.status && updates.status !== 'completed')) { await client.query('ROLLBACK'); return res.status(409).json({ message: '완료되거나 취소된 경기는 초기화할 수 없습니다.' }); }
     const next = { ...match, ...updates };
     if (next.status === 'completed' && (next.score_a === null || next.score_b === null)) { await client.query('ROLLBACK'); return res.status(400).json({ message: '양쪽 점수를 입력해주세요.' }); }
+    await guardQualifiedSourceResults(client,match,next);
     const result = await client.query('UPDATE tournament_matches SET score_a=$1,score_b=$2,status=$3,court=$4 WHERE id=$5 RETURNING *', [next.score_a,next.score_b,next.status,next.court ?? null,match.id]);
+    if (next.phase==='TOURNAMENT' && next.program_round!=null) await advancePersistedBracket(client,next.division_id,next.program_round);
     await client.query('COMMIT'); return res.json({ match: result.rows[0] });
-  } catch (error) { await client.query('ROLLBACK'); console.error(error); return res.status(500).json({ message: '경기 저장에 실패했습니다.' }); }
+  } catch (error) { await client.query('ROLLBACK'); console.error(error); return res.status(error.statusCode??500).json({ message: error.statusCode?error.message:'경기 저장에 실패했습니다.' }); }
   finally { client.release(); }
 });
 

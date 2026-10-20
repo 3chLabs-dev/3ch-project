@@ -1,3 +1,4 @@
+import type { ExternalBracketData } from "./LeagueBracket";
 import { openUsagePurchase } from "../../utils/returnNavigation";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { createPortal } from "react-dom";
@@ -1221,11 +1222,11 @@ function getErrorMessage(error: unknown, fallback: string) {
   return message ? `${message}${value.status ? ` (HTTP ${value.status})` : ""}` : fallback;
 }
 
-export default function LeagueGPTVisionSheet() {
+export default function LeagueGPTVisionSheet({ external }: { external?: ExternalBracketData & { resourceKey: string } } = {}) {
   const { id }   = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const isProgramMode = searchParams.get("program") === "1";
+  const isProgramMode = !external && searchParams.get("program") === "1";
   const isQuickFinalsOffer = isProgramMode && searchParams.get("quickFinals") === "1";
   const programRound = Number.parseInt(searchParams.get("round") ?? "1", 10) || 1;
   const [quickFinalsOfferOpen, setQuickFinalsOfferOpen] = useState(isQuickFinalsOffer);
@@ -1242,7 +1243,7 @@ export default function LeagueGPTVisionSheet() {
   const [quickLateMatchRule, setQuickLateMatchRule] = useState<MatchRuleType>("BEST_OF_5");
   const [quickFinalsError, setQuickFinalsError] = useState("");
   const backMode = searchParams.get("back");
-  const backTo = backMode === "detail"
+  const backTo = external?.backTo ?? (backMode === "detail"
     ? `/league/${id}`
     : backMode === "results"
       ? `/league/${id}/program/results?round=${programRound}`
@@ -1252,18 +1253,22 @@ export default function LeagueGPTVisionSheet() {
         : `/league/${id}/matches`
       : window.location.pathname.includes("/program/")
         ? `/league/${id}/program`
-        : `/league/${id}`;
+        : `/league/${id}`);
 
   // ── 데이터 페칭 ──────────────────────────────────────────────────────────
   // 참가자·경기는 15초마다 자동 갱신 (실시간 점수 반영)
-  const { data: leagueData, isLoading: leagueLoading, refetch: refetchLeague } =
-    useGetLeagueQuery(id ?? "", { skip: !id });
-  const { data: participantData, isLoading: participantsLoading, refetch: refetchParticipants } =
-    useGetLeagueParticipantsQuery(id ?? "", { skip: !id, pollingInterval: 15000 });
-  const { data: matchData, refetch: refetchMatches } =
-    useGetLeagueMatchesQuery(id ?? "", { skip: !id, pollingInterval: 15000 });
+  const { data: queriedLeagueData, isLoading: leagueLoading, refetch: refetchLeague } =
+    useGetLeagueQuery(id ?? "", { skip: !!external || !id });
+  const { data: queriedParticipantData, isLoading: participantsLoading, refetch: refetchParticipants } =
+    useGetLeagueParticipantsQuery(id ?? "", { skip: !!external || !id, pollingInterval: 15000 });
+  const { data: queriedMatchData, refetch: refetchLeagueMatches } =
+    useGetLeagueMatchesQuery(id ?? "", { skip: !!external || !id, pollingInterval: 15000 });
   const { data: programData } = useGetLeagueProgramQuery(id ?? "", { skip: !isProgramMode || !id });
 
+  const leagueData = useMemo(() => external ? { league: external.league } : queriedLeagueData, [external, queriedLeagueData]);
+  const participantData = useMemo(() => external ? { participants: external.participants } : queriedParticipantData, [external, queriedParticipantData]);
+  const matchData = useMemo(() => external ? { matches: external.matches } : queriedMatchData, [external, queriedMatchData]);
+  const refetchMatches = useCallback(() => external ? external.onRefresh() : refetchLeagueMatches(), [external, refetchLeagueMatches]);
   const league          = leagueData?.league;
   const isGroupLeague = league?.format?.startsWith("조별리그") ?? false;
   // useMemo로 감싸서 matchData 객체 참조가 바뀔 때만 재생성 (불필요한 하위 useMemo 재실행 방지)
@@ -1717,15 +1722,15 @@ export default function LeagueGPTVisionSheet() {
 
   // ── 권한 ─────────────────────────────────────────────────────────────────
   // canManage: 점수 편집 + 시드 순서 변경 가능 여부
-  const { data: groupData } = useGetGroupDetailQuery(league?.group_id ?? "", { skip: !league?.group_id });
+  const { data: groupData } = useGetGroupDetailQuery(league?.group_id ?? "", { skip: !!external || !league?.group_id });
   const authUser  = useAppSelector((s) => s.auth.user);
   const authToken = useAppSelector((s) => s.auth.token);
   const { refetch: refetchFeatureUsage } = useGetMyFeatureUsageQuery(undefined, {
     skip: !authToken || isLocalDevToken(authToken),
   });
   const isCreator = !!authUser && league?.created_by_id === authUser.id;
-  const canManage = groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.league === true) || isCreator;
-  const canScore = canManage || league?.join_permission === "public";
+  const canManage = !external && (groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.league === true) || isCreator);
+  const canScore = external ? external.canScore : canManage || league?.join_permission === "public";
   // 그룹 멤버 이름 우선, 없으면 계정 이름, 비로그인 게스트는 localStorage 저장 이름 사용
   const myName    = groupData?.members?.find((m) => m.user_id === authUser?.id)?.name
     ?? authUser?.name
@@ -2359,10 +2364,11 @@ export default function LeagueGPTVisionSheet() {
 
   // 수동 새로고침: 리그·참가자·경기 3개 쿼리 동시 refetch
   const handleRefresh = useCallback(() => {
+    if (external) { external.onRefresh(); return; }
     refetchLeague();
     refetchParticipants();
     refetchMatches();
-  }, [refetchLeague, refetchParticipants, refetchMatches]);
+  }, [external, refetchLeague, refetchParticipants, refetchMatches]);
 
   // 이미지 저장: 테이블을 가로 방향으로 캡처 후 PNG 다운로드
   const handleSaveImage = useCallback(async () => {
@@ -2387,7 +2393,7 @@ export default function LeagueGPTVisionSheet() {
       const html2canvas = (await import("html2canvas")).default;
       const canvas = await html2canvas(clone, { scale: 2, useCORS: true });
       const leagueName = league?.name ?? "대진표";
-      const leagueUrl = id ? `${window.location.origin}/league/${id}` : window.location.href;
+      const leagueUrl = external ? window.location.href : id ? `${window.location.origin}/league/${id}` : window.location.href;
       const sheet = document.createElement("div");
       sheet.style.cssText = [
         "position:fixed",
@@ -2460,7 +2466,7 @@ export default function LeagueGPTVisionSheet() {
       const canvas = await html2canvas(clone, { scale: 2, useCORS: true });
       const bracketImageUrl = canvas.toDataURL("image/png");
       const leagueName = league?.name ?? "대진표";
-      const leagueUrl = id ? `${window.location.origin}/league/${id}` : window.location.href;
+      const leagueUrl = external ? window.location.href : id ? `${window.location.origin}/league/${id}` : window.location.href;
       const qrMarkup = renderToStaticMarkup(
         <QRCode
           value={leagueUrl}
@@ -2778,7 +2784,7 @@ export default function LeagueGPTVisionSheet() {
       setVisionNotice({ type: "error", message: "경기 순서가 아직 생성되지 않았습니다. 결과 등록을 다시 눌러 주세요." });
       return;
     }
-    if (isLocalDevToken(authToken)) {
+    if (!external && isLocalDevToken(authToken)) {
       const localPreview: VisionPreviewCell[] = [];
       localOrder.forEach((rowPlayer, rowIndex) => {
         localOrder.forEach((columnPlayer, columnIndex) => {
@@ -2829,7 +2835,7 @@ export default function LeagueGPTVisionSheet() {
         }),
       );
       const result = await scanVision({
-        leagueId: id,
+        leagueId: external?.resourceKey ?? id,
         file,
         mode: "star-grid",
         idempotencyKey: crypto.randomUUID(),
@@ -2972,6 +2978,7 @@ export default function LeagueGPTVisionSheet() {
     try {
       const batch = pendingMatches.map(({ match, scoreA, scoreB }) => ({
         match_id: match.id,
+        ...(external ? { expected: { score_a: match.score_a, score_b: match.score_b, status: match.status === "done" ? "completed" : match.status, court: match.court } } : {}),
         ...(scoreA != null ? { score_a: scoreA } : {}),
         ...(scoreB != null ? { score_b: scoreB } : {}),
         ...(scoreA != null && scoreB != null ? { status: "done" as const } : {}),
@@ -2997,7 +3004,7 @@ export default function LeagueGPTVisionSheet() {
 
       }
 
-      const result = await updateMatchResultsBatch({ leagueId: id ?? "", matches: batch }).unwrap();
+      const result = await updateMatchResultsBatch({ leagueId: external?.resourceKey ?? id ?? "", matches: batch }).unwrap();
       if (result.updated !== batch.length) {
         throw new Error("일부 경기 결과가 저장되지 않아 완료 처리하지 않았습니다.");
       }
@@ -3198,7 +3205,7 @@ export default function LeagueGPTVisionSheet() {
   const winScore      = getWinScore(currentRule);
   const headerSummary = isProgramMode && currentProgramBlock
     ? `${programRound}라운드 ${getProgramTypeLabel(currentProgramBlock.type)} ${getProgramFormatLabel(currentProgramBlock.format)} │ ${getProgramRuleLabel(currentRule)}`
-    : `${league.type} ${league.format} │ ${league.rules}`;
+    : `${league.type} ${league.format} │ ${getProgramRuleLabel(currentRule)}`;
   const appliedScale  = autoFitScale * userZoom;
   const previewByPosition = new Map(previewCells.map((cell) => [`${cell.rowIndex}__${cell.columnIndex}`, cell]));
   const indexedPreviewParticipants = localOrder.map((participant, index) => ({ participant, index }));
@@ -3526,7 +3533,7 @@ export default function LeagueGPTVisionSheet() {
                         isMe={!!myName && rowPlayer.name === myName}
                         isBot={rowPlayer.is_bot}
                         rules={getProgramRuleLabel(currentRule ?? "")}
-                        onProgramMatchUpdate={isProgramMode ? updateProgramMatch : undefined}
+                        onProgramMatchUpdate={external?.onMatchUpdate ?? (isProgramMode ? updateProgramMatch : undefined)}
                         onRestoreNoGame={isProgramMode && canManage && editMode ? restoreProgramNoGame : undefined}
                         groupNames={isProgramMode && currentProgramBlock?.format === "GROUP" ? groupNames : undefined}
                         selectedGroup={selectedGroup}
@@ -3662,7 +3669,7 @@ export default function LeagueGPTVisionSheet() {
                 </Button>
               </Box>
             ) : (
-              <MatchSchedulePanel matches={scheduleMatches} localOrder={localOrder} participantNumberMap={scheduleParticipantNumberMap} landscape leagueId={id ?? ""} onProgramMatchUpdate={isProgramMode ? updateProgramMatch : undefined} onStartToast={setStartToast} />
+              <MatchSchedulePanel matches={scheduleMatches} localOrder={localOrder} participantNumberMap={scheduleParticipantNumberMap} landscape leagueId={id ?? ""} onProgramMatchUpdate={external?.onMatchUpdate ?? (isProgramMode ? updateProgramMatch : undefined)} onStartToast={setStartToast} />
             )}
           </Box>
         </Box>

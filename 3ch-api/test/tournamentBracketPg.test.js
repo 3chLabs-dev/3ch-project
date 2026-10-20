@@ -11,7 +11,7 @@ test('PostgreSQL: qualification, bracket creation, winner/loser advancement and 
  CREATE TABLE tournament_participants(id uuid PRIMARY KEY,division_id uuid,name text,member_division text,source_group_id uuid,status text,created_at timestamptz DEFAULT now());
  CREATE TABLE tournament_pools(id uuid PRIMARY KEY,division_id uuid,round_no int,pool_no int);
  CREATE TABLE tournament_pool_members(pool_id uuid,participant_id uuid,slot_no int);
- CREATE TABLE tournament_matches(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),division_id uuid,program_round int,phase text,round_no int,match_order int,participant_a_id uuid,participant_b_id uuid,score_a int,score_b int,status text DEFAULT 'pending',court varchar(40),pool_name text,created_at timestamptz DEFAULT now());`);
+ CREATE TABLE tournament_matches(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),division_id uuid,program_round int,phase text,round_no int,match_order int,participant_a_id uuid,participant_b_id uuid,score_a int,score_b int,status text DEFAULT 'pending' CONSTRAINT tournament_matches_status_check CHECK (status IN ('pending','completed','cancelled')),court varchar(40),pool_name text,created_at timestamptz DEFAULT now());`);
  await db.exec(fs.readFileSync(path.join(__dirname,'../prisma/migrations/20261019170000_tournament_bracket_links/migration.sql'),'utf8'));
  await db.query("INSERT INTO tournaments VALUES ($1,1,$2,now()-interval '1 day','open')",[id,uuid(200)]);
  await db.query("INSERT INTO tournament_divisions(id,tournament_id,status) VALUES ($1,$2,'locked')",[division,id]);
@@ -23,6 +23,12 @@ test('PostgreSQL: qualification, bracket creation, winner/loser advancement and 
   await db.query("INSERT INTO tournament_matches(id,division_id,program_round,phase,round_no,match_order,participant_a_id,participant_b_id,score_a,score_b,status,pool_name) VALUES ($1,$2,1,'GROUP',1,$3,$4,$5,2,$6,'completed',$7)",[uuid(400+n),division,n,uuid(n*2-1),uuid(n*2),n-1,String(n)]);
  }
  const previous=(await db.query('SELECT * FROM tournament_matches ORDER BY id')).rows;
+ // Reproduce the production constraint before applying the additive status change.
+ await assert.rejects(db.query("UPDATE tournament_matches SET status='playing' WHERE id=$1",[uuid(401)]), /tournament_matches_status_check/);
+ await db.exec(fs.readFileSync(path.join(__dirname,'../prisma/migrations/20261020090000_tournament_match_playing_status/migration.sql'),'utf8'));
+ assert.deepEqual((await db.query('SELECT * FROM tournament_matches ORDER BY id')).rows,previous);
+ await assert.rejects(db.query("UPDATE tournament_matches SET status='invalid' WHERE id=$1",[uuid(401)]), /tournament_matches_status_check/);
+
  pool.connect=async()=>({async query(sql,values){if(sql.includes('FROM tournaments t LEFT JOIN'))return {rows:[{id,created_by_id:1,status:'open'}],rowCount:1};if(sql.includes('FROM subscriptions'))return {rows:[{}],rowCount:1};if(sql.includes('JOIN group_members gm ON gm.group_id=p.source_group_id'))return {rows:[],rowCount:0};const r=await db.query(sql,values);return {...r,rowCount:r.rows?.length??0};},release(){}});
  async function invoke(route,params,body={},userId='1'){const out={status:200};const h=router.stack.find(l=>l.route?.path===route).route.stack.at(-1).handle;await h({params:{id,...params},body,user:{sub:userId}},{status(n){out.status=n;return this},json(body){out.body=body;return this}});return out;}
  const generate=(userId='1')=>invoke('/tournaments/:id/divisions/:divisionId/rounds/:roundNo/bracket',{divisionId:division,roundNo:'2'},{},userId);
@@ -34,7 +40,8 @@ test('PostgreSQL: qualification, bracket creation, winner/loser advancement and 
  const expected=m=>({score_a:m.score_a,score_b:m.score_b,status:m.status,court:m.court});
  for(let step=0;step<10;step++){
   const m=(await db.query("SELECT * FROM tournament_matches WHERE program_round=2 AND status='pending' AND participant_a_id IS NOT NULL AND participant_b_id IS NOT NULL ORDER BY round_no,match_order LIMIT 1")).rows[0];if(!m)break;
-  const done=await invoke('/tournaments/:id/matches/:matchId',{matchId:m.id},{expected:expected(m),updates:{score_a:2,score_b:0,status:'completed'}});assert.equal(done.status,200,done.body.message);
+  const started=await invoke('/tournaments/:id/matches/:matchId',{matchId:m.id},{expected:expected(m),updates:{score_a:0,score_b:0,status:'playing'}});assert.equal(started.status,200,started.body.message);assert.equal(started.body.match.status,'playing');
+  const done=await invoke('/tournaments/:id/matches/:matchId',{matchId:m.id},{expected:expected(started.body.match),updates:{score_a:2,score_b:0,status:'completed'}});assert.equal(done.status,200,done.body.message);
  }
  const finished=(await db.query('SELECT * FROM tournament_matches ORDER BY id')).rows;
  assert.ok(finished.filter(m=>m.program_round===2).every(m=>m.status==='completed'));assert.equal(finished.filter(m=>m.program_round===2&&!m.next_match_id).length,2);

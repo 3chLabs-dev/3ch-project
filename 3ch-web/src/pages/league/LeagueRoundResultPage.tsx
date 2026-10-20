@@ -32,7 +32,7 @@ import { hydrateProgramNoGamePolicy, resolveProgramBlueWhiteTeams } from "../../
 type RoundFormat = "LEAGUE" | "GROUP" | "TOURNAMENT";
 type RoundType = "SINGLES" | "DOUBLES" | "TEAM";
 type ResultUnit = { key: string; name: string; division: string | null };
-type StandingRow = ResultUnit & { rank: string; played: number; wins: number; losses: number; setsFor: number; setsAgainst: number };
+export type StandingRow = ResultUnit & { clubName?: string } & { rank: string; played: number; wins: number; losses: number; setsFor: number; setsAgainst: number };
 type ProgramBlock = {
   title?: string;
   type?: RoundType;
@@ -170,7 +170,7 @@ function tournamentStandings(matches: LeagueMatch[]): StandingRow[] {
     .sort((left, right) => order(left.rank) - order(right.rank) || left.name.localeCompare(right.name, "ko"));
 }
 
-type AwardMode = "league" | "upper" | "lower";
+export type AwardMode = "league" | "upper" | "lower";
 
 function awardStyle(rank: string, mode: AwardMode) {
   const medal = mode === "upper" ? rank : rank === "1" ? "1" : "";
@@ -207,7 +207,7 @@ function ResultTable({ rows, threeSet, awardMode }: { rows: StandingRow[]; three
             const award = awardStyle(row.rank, awardMode);
             return <TableRow key={row.key} sx={award ? { "& > td": { background: award.background } } : undefined}>
             <TableCell sx={{ ...rankCellSx, ...(award ? { borderLeft: `4px solid ${award.accent}`, color: award.color, fontSize: 14 } : {}) }}>{row.rank}</TableCell>
-            <TableCell align="center" sx={{ ...bodyCellSx, fontWeight: 800, px: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{row.name}</TableCell>
+            <TableCell align="center" sx={{ ...bodyCellSx, fontWeight: 800, px: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{row.name}{row.clubName && <Typography sx={{ fontSize: 11, fontWeight: 400, color: "text.secondary", whiteSpace: "normal", overflowWrap: "anywhere" }}>({row.clubName})</Typography>}</TableCell>
             <TableCell align="center" sx={{ ...bodyCellSx, px: 0 }}><Box sx={{ display: "inline-flex", transform: "translateX(-4px)" }}><DivisionBadge division={row.division} /></Box></TableCell>
             <TableCell align="center" sx={bodyCellSx}>{row.played}</TableCell>
             {threeSet
@@ -225,7 +225,6 @@ export default function LeagueRoundResultPage() {
   const { id = "" } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const round = Math.max(1, Number(searchParams.get("round") || 1));
   const { data: leagueData, isLoading: leagueLoading } = useGetLeagueQuery(id, { skip: !id });
   const { data: matchData, isLoading: matchLoading } = useGetLeagueMatchesQuery(id, { skip: !id });
@@ -285,25 +284,36 @@ export default function LeagueRoundResultPage() {
       awardMode: (bracket === "lower" ? "lower" : "upper") as AwardMode,
     })).filter((section) => section.rows.length > 0));
   }, [block, blueWhiteTeams, format, matches]);
+  if (leagueLoading || matchLoading || participantLoading || programLoading) return <Box sx={{ display: "flex", justifyContent: "center", py: 10 }}><CircularProgress /></Box>;
+  return <RoundResultView round={round} subtitle={`${leagueData?.league.name ?? ""} · ${block?.title ?? ""}`} format={format}
+    complete={complete} threeSet={!!threeSet} grouped={grouped} onBack={() => navigate(`/league/${id}`)}
+    onBracket={() => navigate(`/league/${id}/program/${bracketPath}?program=1&round=${round}&format=${format}&back=results`)} />;
+}
+
+export function RoundResultView({ round, subtitle, format, complete, threeSet, grouped, onBack, onBracket }: {
+  round: number; subtitle: string; format: RoundFormat; complete: boolean; threeSet: boolean;
+  grouped: Array<{ key: string; title: string; rows: StandingRow[]; awardMode: AwardMode }>;
+  onBack: () => void; onBracket: () => void;
+}) {
+  const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const activeGroup = format === "GROUP"
     ? grouped.some((section) => section.key === selectedGroup) ? selectedGroup : grouped[0]?.key
     : null;
   const visibleSections = format === "GROUP" ? grouped.filter((section) => section.key === activeGroup) : grouped;
 
-  if (leagueLoading || matchLoading || participantLoading || programLoading) return <Box sx={{ display: "flex", justifyContent: "center", py: 10 }}><CircularProgress /></Box>;
   return (
     <Stack spacing={2.5} sx={{ pb: 5 }}>
       <Stack direction="row" alignItems="center" spacing={1}>
-        <IconButton size="small" onClick={() => navigate(`/league/${id}`)}><ArrowBackIcon /></IconButton>
+        <IconButton size="small" onClick={onBack}><ArrowBackIcon /></IconButton>
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography sx={{ fontSize: 18, fontWeight: 900 }}>{round}라운드 결과</Typography>
-          <Typography sx={{ fontSize: 11, color: "text.secondary", fontWeight: 700 }}>{leagueData?.league.name} · {block?.title}</Typography>
+          <Typography sx={{ fontSize: 11, color: "text.secondary", fontWeight: 700 }}>{subtitle}</Typography>
         </Box>
         <Button
           size="small"
           variant="outlined"
           startIcon={<AccountTreeOutlinedIcon sx={{ fontSize: 15 }} />}
-          onClick={() => navigate(`/league/${id}/program/${bracketPath}?program=1&round=${round}&format=${format}&back=results`)}
+          onClick={onBracket}
           sx={{ flexShrink: 0, borderRadius: "16px", px: 1.25, fontSize: 11, fontWeight: 800, whiteSpace: "nowrap" }}
         >대진표 보기</Button>
       </Stack>

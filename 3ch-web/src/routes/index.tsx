@@ -1,3 +1,4 @@
+import TournamentRankingPage from "../pages/tournament/TournamentRankingPage";
 import TournamentManageParticipants from '../pages/tournament/TournamentManageParticipants';
 import TournamentCompetition from '../pages/tournament/TournamentCompetition';
 import TournamentResults from '../pages/tournament/TournamentResults';
@@ -131,7 +132,7 @@ export const router = createBrowserRouter([
       { path: "/tournament/:id", element: <TournamentDetail /> },
       { path: "/tournament/:id/apply", element: <TournamentApply /> },
       { path: "/tournament/:id/participants/manage", element: <TournamentManageParticipants /> },
-      { path: "/tournament/:id/ranking", element: <TournamentResults view="ranking" /> },
+      { path: "/tournament/:id/ranking", element: <TournamentRankingPage /> },
       { path: "/tournament/:id/divisions/:divisionId/results", element: <TournamentResults /> },
       { path: "/tournament/:id/divisions/:divisionId/matches", element: <TournamentCompetition view="matches" /> },
       { path: "/tournament/:id/divisions/:divisionId/bracket", element: <TournamentCompetition view="bracket" /> },

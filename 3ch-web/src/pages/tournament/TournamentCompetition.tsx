@@ -79,7 +79,7 @@ export default function TournamentCompetition({ view }: { view: "matches" | "bra
       resourceKey: `tournament:${id}:${divisionId}:${round.round_no}`,
       league: { id: `tournament:${id}`, name: `${tournament.title} · ${division?.name}`, type: round.league_type === "DOUBLES" ? "복식" : round.league_type === "TEAM" ? "단체전" : "단식", format: poolNames.length ? "조별리그" : "풀리그", sport: "탁구", start_date: tournament.starts_at, rules: round.rules.match_rule, status: "active", created_by_id: 0, created_at: "", updated_at: "" },
       participants, matches, canScore,
-      backTo: `/tournament/${id}/divisions/${divisionId}/matches?round=${round.round_no}`,
+      backTo: `/tournament/${id}/divisions/${divisionId}/${params.get("back") === "results" ? "results" : "matches"}?round=${round.round_no}`,
       onRefresh: () => refetch(), onMatchUpdate: save,
     }} />{saveError && <Alert severity="error" sx={{ position: "fixed", bottom: 20, left: 20, right: 20, zIndex: 10010 }}>{saveError}</Alert>}</>;
   }
@@ -88,7 +88,7 @@ export default function TournamentCompetition({ view }: { view: "matches" | "bra
     return <><LeagueTournamentBracket key={`${divisionId}-${round.round_no}`} external={{
       league: { id: `tournament:${id}`, name: `${tournament.title} · ${division?.name}`, type: round.league_type === "DOUBLES" ? "복식" : round.league_type === "TEAM" ? "단체전" : "단식", format: "토너먼트", sport: "탁구", start_date: tournament.starts_at, rules: round.rules.match_rule, status: "active", created_by_id: 0, created_at: "", updated_at: "" },
       participants: participantsFor(matches), matches, canScore,
-      backTo: `/tournament/${id}/divisions/${divisionId}/matches?round=${round.round_no}`,
+      backTo: `/tournament/${id}/divisions/${divisionId}/${params.get("back") === "results" ? "results" : "matches"}?round=${round.round_no}`,
       onRefresh: () => refetch(), onMatchUpdate: save,
       generating: generatingBracket,
       onGenerate: canScore ? () => { setSaveError(""); void generateBracket({ id, divisionId, roundNo: round.round_no }).unwrap().catch((reason) => setSaveError((reason as { data?: { message?: string } }).data?.message || "토너먼트를 생성하지 못했습니다.")); } : undefined,

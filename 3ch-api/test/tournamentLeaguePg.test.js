@@ -1,5 +1,7 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const pool=require('../src/db/pool'),router=require('../src/routes/tournamentLeague');
+const {readFileSync}=require('node:fs');
+const {join}=require('node:path');
 const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
 test('shared league program: singles/doubles/teams, later rounds and protected persisted results',{skip:!process.env.TOURNAMENT_PGLITE_MODULE,timeout:90000},async()=>{
  const {PGlite}=require(process.env.TOURNAMENT_PGLITE_MODULE),db=new PGlite(),original=pool.connect;
@@ -13,6 +15,8 @@ test('shared league program: singles/doubles/teams, later rounds and protected p
  CREATE TABLE tournament_pool_members(pool_id uuid,participant_id uuid,slot_no int);
  CREATE TABLE tournament_matches(id uuid PRIMARY KEY,division_id uuid,program_round int,phase text,round_no int,match_order int,participant_a_id uuid,participant_b_id uuid,score_a int,score_b int,status text DEFAULT 'pending' CHECK(status IN ('pending','playing','completed','cancelled')),court varchar(40),pool_name text,created_at timestamptz DEFAULT now(),next_match_id uuid,next_slot text,loser_next_match_id uuid,loser_next_slot text,is_bye bool DEFAULT false,bracket text,bracket_index int,match_label text,league_data jsonb DEFAULT '{}');
  CREATE TABLE tournament_competition_audit(id bigserial PRIMARY KEY,tournament_id uuid,division_id uuid,actor_id int,action text,snapshot jsonb);`);
+ const foundationSql=readFileSync(join(__dirname,'../prisma/migrations/20260922120000_add_tournament_foundation/migration.sql'),'utf8');
+ await db.exec(foundationSql.slice(foundationSql.indexOf('CREATE OR REPLACE FUNCTION check_tournament_match_participants')));
  await db.query('INSERT INTO tournament_divisions(id,tournament_id) VALUES ($1,$2)',[division,id]);
  for(let n=1;n<=12;n++)await db.query("INSERT INTO tournament_participants(id,division_id,name,member_division,status) VALUES ($1,$2,$3,$4,'confirmed')",[uuid(n),division,`선수${n}`,String(n%6+1)]);
  const tournament={id,created_by_id:1,status:'open',starts_at:'2099-01-01',application_deadline_at:'2020-01-01'};
@@ -102,6 +106,21 @@ test('shared league program: singles/doubles/teams, later rounds and protected p
  await db.query('INSERT INTO tournament_divisions(id,tournament_id,league_type,format,rules) VALUES ($1,$2,\'SINGLES\',\'TOURNAMENT\',$3::jsonb)',[combined,id,JSON.stringify({entry_config:config})]);
  await db.query(`INSERT INTO tournament_division_rounds(division_id,round_no,league_type,format,rules) VALUES ($1,1,'SINGLES','TOURNAMENT','{"match_rule":"BEST_OF_3","round_label":"예선"}')`,[combined]);
  await db.query(`INSERT INTO tournament_matches(id,division_id,program_round,phase,status,score_a,score_b,participant_a_id,participant_b_id) VALUES ($1,$2,1,'GROUP','completed',2,0,$3,$4)`,[uuid(803),division,uuid(7),uuid(8)]);
+ // Reproduce the production failure using the original migration's actual trigger.
+ await assert.rejects(()=>db.query(`INSERT INTO tournament_matches(id,division_id,program_round,phase,match_order,participant_a_id) VALUES ($1,$2,1,'TOURNAMENT',1,$3)`,[uuid(804),combined,uuid(1)]),/belongs to another tournament division/);
+ const protectedBeforeMigration=await Promise.all(['tournament_participants','tournament_matches','tournament_divisions'].map(table=>db.query(`SELECT * FROM ${table} ORDER BY id`).then(r=>r.rows)));
+ await db.exec(readFileSync(join(__dirname,'../prisma/migrations/20261021110000_tournament_linked_division_match_participants/migration.sql'),'utf8'));
+ const protectedAfterMigration=await Promise.all(['tournament_participants','tournament_matches','tournament_divisions'].map(table=>db.query(`SELECT * FROM ${table} ORDER BY id`).then(r=>r.rows)));
+ assert.deepEqual(protectedAfterMigration,protectedBeforeMigration);
+ // Even a configured ID must not bypass same-tournament boundaries.
+ const foreignDivision=uuid(890),foreignPerson=uuid(891),unlinkedDivision=uuid(892),unlinkedPerson=uuid(893);
+ await db.query('INSERT INTO tournament_divisions(id,tournament_id,rules) VALUES ($1,$2,$3::jsonb),($4,$5,$3::jsonb)',[foreignDivision,uuid(899),'{}',unlinkedDivision,id]);
+ await db.query("INSERT INTO tournament_participants(id,division_id,name,status) VALUES ($1,$2,'외부','confirmed'),($3,$4,'미연결','confirmed')",[foreignPerson,foreignDivision,unlinkedPerson,unlinkedDivision]);
+ for(const person of [foreignPerson,unlinkedPerson]) await assert.rejects(()=>db.query(`INSERT INTO tournament_matches(id,division_id,program_round,phase,match_order,participant_b_id) VALUES ($1,$2,1,'TOURNAMENT',1,$3)`,[uuid(894),combined,person]),/outside the configured/);
+ await db.query("UPDATE tournament_divisions SET rules=jsonb_set(rules,'{entry_config,source_division_ids}',$1::jsonb) WHERE id=$2",[JSON.stringify([...config.source_division_ids,foreignDivision]),combined]);
+ await assert.rejects(()=>db.query(`INSERT INTO tournament_matches(id,division_id,program_round,phase,match_order,participant_a_id) VALUES ($1,$2,1,'TOURNAMENT',1,$3)`,[uuid(894),combined,foreignPerson]),/outside the configured/);
+ await db.query("UPDATE tournament_divisions SET rules=jsonb_set(rules,'{entry_config}',$1::jsonb) WHERE id=$2",[JSON.stringify(config),combined]);
+ await assert.rejects(()=>db.query('UPDATE tournament_matches SET participant_a_id=$1 WHERE id=$2',[foreignPerson,uuid(803)]),/outside the configured/);
  const sourceResults=(await db.query('SELECT * FROM tournament_matches WHERE division_id=$1',[division])).rows;
  const originalPeople=(await db.query('SELECT * FROM tournament_participants ORDER BY id')).rows;
  targetDivision=combined;
@@ -109,7 +128,7 @@ test('shared league program: singles/doubles/teams, later rounds and protected p
  assert.deepEqual(combinedProgram.program_data.tournamentEntryConfig,config);
  const mergedPeople=await call('GET','/participants');assert.equal(mergedPeople.status,200);
  assert.equal(mergedPeople.body.participants.length,12);
- assert.deepEqual(new Set(mergedPeople.body.participants.map(p=>p.id)),new Set(originalPeople.map(p=>p.id)));
+ assert.deepEqual(new Set(mergedPeople.body.participants.map(p=>p.id)),new Set(originalPeople.filter(p=>[division,other].includes(p.division_id)).map(p=>p.id)));
  const generated=await call('POST','/program/matches/sync',{matches:[{id:'combined-request',program_round:1}]});assert.equal(generated.status,200,JSON.stringify(generated.body));assert.ok(generated.body.inserted>0);
  assert.deepEqual((await db.query('SELECT * FROM tournament_matches WHERE division_id=$1',[division])).rows,sourceResults);
  assert.deepEqual((await db.query('SELECT * FROM tournament_participants ORDER BY id')).rows,originalPeople);

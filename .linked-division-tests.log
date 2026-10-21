@@ -1,0 +1,266 @@
+✔ 신청 마감만 설정된 초안은 명시적으로 신청을 열기 전까지 신청할 수 없다 (1.3905ms)
+✔ 프리미엄 노출과 무관하게 열린 대회는 마감 전 신청할 수 있다 (0.3042ms)
+✔ 마감 또는 대회 시작 후에는 새 신청을 받을 수 없다 (0.2133ms)
+✔ knockout stores every winner/loser edge and handles byes without invented scores (17.7117ms)
+✔ upper/lower puts first-round losers in lower bracket and resolves all rounds (2.3514ms)
+✔ same-club seeds meet late and participants are not mutated (2.2869ms)
+✔ manual assignments and started/completed downstream results cannot be replaced (1.2775ms)
+✔ same winner preserves downstream scores; winner changes fail without resets (0.8417ms)
+✔ cycles, cross-division links and duplicate feeder slots fail safely (0.9864ms)
+◇ injected env (0) from .env // tip: ⌘ enable debugging { debug: true }
+Error: 다음 경기의 참가자 또는 결과가 이미 저장되어 있어 진출자를 변경할 수 없습니다.
+    at conflict (C:\Development\3ch-project-github\3ch-api\src\services\tournamentBracket.js:2:45)
+    at projectBracketAdvancement (C:\Development\3ch-project-github\3ch-api\src\services\tournamentBracket.js:45:115)
+    at advancePersistedBracket (C:\Development\3ch-project-github\3ch-api\src\services\tournamentBracket.js:144:21)
+    at async C:\Development\3ch-project-github\3ch-api\src\routes\tournamentExtras.js:131:64
+    at async invoke (C:\Development\3ch-project-github\3ch-api\test\tournamentBracketPg.test.js:33:158)
+    at async TestContext.<anonymous> (C:\Development\3ch-project-github\3ch-api\test\tournamentBracketPg.test.js:51:19)
+    at async Test.run (node:internal/test_runner/test:1409:7)
+    at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+  statusCode: 409
+}
+Error: 다음 라운드가 이미 생성되어 이전 라운드의 결과를 변경할 수 없습니다. 저장된 진출자와 대진표는 유지됩니다.
+    at conflict (C:\Development\3ch-project-github\3ch-api\src\services\tournamentBracket.js:2:45)
+    at guardQualifiedSourceResults (C:\Development\3ch-project-github\3ch-api\src\services\tournamentBracket.js:156:29)
+    at async C:\Development\3ch-project-github\3ch-api\src\routes\tournamentExtras.js:129:5
+    at async invoke (C:\Development\3ch-project-github\3ch-api\test\tournamentBracketPg.test.js:33:158)
+    at async TestContext.<anonymous> (C:\Development\3ch-project-github\3ch-api\test\tournamentBracketPg.test.js:52:40)
+    at async Test.run (node:internal/test_runner/test:1409:7)
+    at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+  statusCode: 409
+}
+✔ PostgreSQL: qualification, bracket creation, winner/loser advancement and rollback preserve persisted results (20902.1346ms)
+◇ injected env (0) from .env // tip: ⌘ override existing { override: true }
+✔ 클럽 일괄 확정은 대기 참가자만 확정하고 기존 확정을 유지한다 (6.9379ms)
+✔ 권한 없음, 명단 누락, 중복 요청, 경기 생성 시 전체 확정을 거절한다 (12.2454ms)
+◇ injected env (0) from .env // tip: ⌘ override existing { override: true }
+Tournament delete error: Error: simulated failure
+    at Object.query (C:\Development\3ch-project-github\3ch-api\test\tournamentDelete.test.js:27:35)
+    at C:\Development\3ch-project-github\3ch-api\src\routes\tournament.js:283:18
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async invoke (C:\Development\3ch-project-github\3ch-api\test\tournamentDelete.test.js:40:10)
+    at async TestContext.<anonymous> (C:\Development\3ch-project-github\3ch-api\test\tournamentDelete.test.js:70:18)
+    at async Test.run (node:internal/test_runner/test:1409:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+✔ 삭제 미리보기는 생성자에게 완료 경기 수를 포함해 보여준다 (10.7822ms)
+✔ 생성자가 삭제 문구와 명시적 확인값을 제출하면 연결 데이터를 한 트랜잭션에서 삭제한다 (22.9731ms)
+✔ 다른 사용자, 잘못된 확인값, 삭제 문구, 변경된 건수는 완료 결과를 포함한 전 데이터를 보존한다 (56.9532ms)
+✔ 삭제 도중 오류가 나면 완료 결과와 참가자를 포함해 전체 요청을 롤백한다 (19.0998ms)
+✔ 경기 생성 전에는 부문 경기 설정을 수정할 수 있다 (1.7128ms)
+✔ 경기가 있으면 결과에 영향을 줄 유형·방식·규칙 변경을 거부한다 (0.3948ms)
+✔ 경기가 있어도 부문명과 모집 인원 변경은 경기 결과를 건드리지 않는다 (0.3008ms)
+◇ injected env (0) from .env // tip: ⌘ suppress logs { quiet: true }
+✔ 기존 경품 당첨 결과는 명시적 재추첨 확인 없이 덮어쓸 수 없다 (53.668ms)
+✔ 다른 클럽 참가자는 재추첨 확인값을 보내도 경품 결과를 수정할 수 없다 (0.3854ms)
+✔ 대회 정산도 기존 항목 누락과 동시 수정 시 전체 저장을 거부한다 (10.4484ms)
+◇ injected env (0) from .env // tip: ⌘ suppress logs { quiet: true }
+✔ 주최자 직접 등록은 새 참가자만 대기로 추가하고 기존 확정 상태와 부수를 보존한다 (16.8872ms)
+✔ 비주최자, 부수 누락, 잘못된 부문, 중복 참가자, 경기 생성된 부문 등록을 거절한다 (80.2943ms)
+✔ 참가 취소는 확인값을 요구하며 조 배정이나 경기가 있으면 확정 참가자를 보존한다 (2.4108ms)
+✔ 클럽 인원이 조 수 이하면 같은 클럽을 각 조로 분산한다 (64.2981ms)
+✔ 개인은 같은 클럽으로 취급하지 않고 모든 참가자를 한 번씩 배치한다 (2.9742ms)
+✔ 같은 클럽이 서로 다른 조에 있을 때 후속 토너먼트의 반대쪽에 배치한다 (30.33ms)
+✔ 기존 조나 완료된 경기가 있으면 재생성을 거부한다 (0.3904ms)
+◇ injected env (0) from .env // tip: ⌘ enable debugging { debug: true }
+tournament league adapter: Error: simulated insert failure after archiving unplayed matches
+    at Object.query (C:\Development\3ch-project-github\3ch-api\test\tournamentLeaguePg.test.js:25:73)
+    at insertGenerated (C:\Development\3ch-project-github\3ch-api\src\routes\tournamentLeague.js:13:42)
+    at Layer.handle (C:\Development\3ch-project-github\3ch-api\src\routes\tournamentLeague.js:108:15)
+    at async call (C:\Development\3ch-project-github\3ch-api\test\tournamentLeaguePg.test.js:37:81)
+    at async TestContext.<anonymous> (C:\Development\3ch-project-github\3ch-api\test\tournamentLeaguePg.test.js:52:18)
+    at async Test.run (node:internal/test_runner/test:1409:7)
+    at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+tournament league adapter: Error: 이미 경기가 생성된 라운드의 설정과 수동 편성은 유지해야 합니다. 경기 없는 후속 라운드는 수정할 수 있습니다.
+    at conflict (C:\Development\3ch-project-github\3ch-api\src\services\tournamentLeagueProgram.js:5:43)
+    at validateProgram (C:\Development\3ch-project-github\3ch-api\src\services\tournamentLeagueProgram.js:76:113)
+    at Layer.handle (C:\Development\3ch-project-github\3ch-api\src\routes\tournamentLeague.js:80:7)
+    at async call (C:\Development\3ch-project-github\3ch-api\test\tournamentLeaguePg.test.js:37:81)
+    at async TestContext.<anonymous> (C:\Development\3ch-project-github\3ch-api\test\tournamentLeaguePg.test.js:68:20)
+    at async Test.run (node:internal/test_runner/test:1409:7)
+    at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+  statusCode: 409
+}
+tournament league adapter: Error: 결과가 있거나 후속 라운드가 생성된 편성은 변경할 수 없습니다.
+    at conflict (C:\Development\3ch-project-github\3ch-api\src\services\tournamentLeagueProgram.js:5:43)
+    at Layer.handle (C:\Development\3ch-project-github\3ch-api\src\routes\tournamentLeague.js:76:119)
+    at async call (C:\Development\3ch-project-github\3ch-api\test\tournamentLeaguePg.test.js:37:81)
+    at async TestContext.<anonymous> (C:\Development\3ch-project-github\3ch-api\test\tournamentLeaguePg.test.js:69:27)
+    at async Test.run (node:internal/test_runner/test:1409:7)
+    at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+  statusCode: 409
+}
+tournament league adapter: Error: 기존 경기가 누락되어 동기화를 중단했습니다. 저장된 경기와 결과는 유지됩니다.
+    at conflict (C:\Development\3ch-project-github\3ch-api\src\services\tournamentLeagueProgram.js:5:43)
+    at Layer.handle (C:\Development\3ch-project-github\3ch-api\src\routes\tournamentLeague.js:118:180)
+    at async call (C:\Development\3ch-project-github\3ch-api\test\tournamentLeaguePg.test.js:37:81)
+    at async TestContext.<anonymous> (C:\Development\3ch-project-github\3ch-api\test\tournamentLeaguePg.test.js:71:18)
+    at async Test.run (node:internal/test_runner/test:1409:7)
+    at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+  statusCode: 409
+}
+tournament league adapter: Error: 완료 경기를 초기화하거나 잘못된 점수를 저장할 수 없습니다.
+    at conflict (C:\Development\3ch-project-github\3ch-api\src\services\tournamentLeagueProgram.js:5:43)
+    at Layer.handle (C:\Development\3ch-project-github\3ch-api\src\routes\tournamentLeague.js:196:134)
+    at async call (C:\Development\3ch-project-github\3ch-api\test\tournamentLeaguePg.test.js:37:81)
+    at async TestContext.<anonymous> (C:\Development\3ch-project-github\3ch-api\test\tournamentLeaguePg.test.js:74:20)
+    at async Test.run (node:internal/test_runner/test:1409:7)
+    at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+  statusCode: 409
+}
+tournament league adapter: Error: 확인한 미진행 경기만 취소할 수 있습니다.
+    at conflict (C:\Development\3ch-project-github\3ch-api\src\services\tournamentLeagueProgram.js:5:43)
+    at Layer.handle (C:\Development\3ch-project-github\3ch-api\src\routes\tournamentLeague.js:206:101)
+    at async call (C:\Development\3ch-project-github\3ch-api\test\tournamentLeaguePg.test.js:37:81)
+    at async TestContext.<anonymous> (C:\Development\3ch-project-github\3ch-api\test\tournamentLeaguePg.test.js:75:21)
+    at async Test.run (node:internal/test_runner/test:1409:7)
+    at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+  statusCode: 409
+}
+tournament league adapter: Error: 대회 관리 권한이 필요합니다.
+    at conflict (C:\Development\3ch-project-github\3ch-api\src\services\tournamentLeagueProgram.js:5:43)
+    at Layer.handle (C:\Development\3ch-project-github\3ch-api\src\routes\tournamentLeague.js:24:68)
+    at async call (C:\Development\3ch-project-github\3ch-api\test\tournamentLeaguePg.test.js:37:81)
+    at async TestContext.<anonymous> (C:\Development\3ch-project-github\3ch-api\test\tournamentLeaguePg.test.js:76:15)
+    at async Test.run (node:internal/test_runner/test:1409:7)
+    at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+  statusCode: 403
+}
+tournament league adapter: Error: 경기 결과 초기화 확인이 필요합니다.
+    at conflict (C:\Development\3ch-project-github\3ch-api\src\services\tournamentLeagueProgram.js:5:43)
+    at Layer.handle (C:\Development\3ch-project-github\3ch-api\src\routes\tournamentLeague.js:217:75)
+    at async call (C:\Development\3ch-project-github\3ch-api\test\tournamentLeaguePg.test.js:37:81)
+    at async TestContext.<anonymous> (C:\Development\3ch-project-github\3ch-api\test\tournamentLeaguePg.test.js:78:22)
+    at async Test.run (node:internal/test_runner/test:1409:7)
+    at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+  statusCode: 409
+}
+tournament league adapter: Error: 프로그램 삭제 확인이 필요합니다.
+    at conflict (C:\Development\3ch-project-github\3ch-api\src\services\tournamentLeagueProgram.js:5:43)
+    at Layer.handle (C:\Development\3ch-project-github\3ch-api\src\routes\tournamentLeague.js:58:76)
+    at async call (C:\Development\3ch-project-github\3ch-api\test\tournamentLeaguePg.test.js:37:81)
+    at async TestContext.<anonymous> (C:\Development\3ch-project-github\3ch-api\test\tournamentLeaguePg.test.js:97:16)
+    at async Test.run (node:internal/test_runner/test:1409:7)
+    at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+  statusCode: 409
+}
+tournament league adapter: Error: 편성이나 경기가 있는 구성의 참가 대상과 시작 라운드는 변경할 수 없습니다.
+    at conflict (C:\Development\3ch-project-github\3ch-api\src\services\tournamentLeagueProgram.js:5:43)
+    at Layer.handle (C:\Development\3ch-project-github\3ch-api\src\routes\tournamentLeague.js:79:385)
+    at async call (C:\Development\3ch-project-github\3ch-api\test\tournamentLeaguePg.test.js:37:81)
+    at async TestContext.<anonymous> (C:\Development\3ch-project-github\3ch-api\test\tournamentLeaguePg.test.js:138:21)
+    at async Test.run (node:internal/test_runner/test:1409:7)
+    at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+  statusCode: 409
+}
+tournament league adapter: Error: 진행·완료 또는 점수가 저장된 경기의 참가자는 변경할 수 없습니다.
+    at conflict (C:\Development\3ch-project-github\3ch-api\src\services\tournamentLeagueProgram.js:5:43)
+    at Layer.handle (C:\Development\3ch-project-github\3ch-api\src\routes\tournamentLeague.js:130:40)
+    at async call (C:\Development\3ch-project-github\3ch-api\test\tournamentLeaguePg.test.js:37:81)
+    at async assign (C:\Development\3ch-project-github\3ch-api\test\tournamentLeaguePg.test.js:182:16)
+    at async TestContext.<anonymous> (C:\Development\3ch-project-github\3ch-api\test\tournamentLeaguePg.test.js:194:16)
+    at async Test.run (node:internal/test_runner/test:1409:7)
+    at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+  statusCode: 409
+}
+✔ shared league program: singles/doubles/teams, later rounds and protected persisted results (17833.5477ms)
+✔ program exports use actual league match/time estimates without mutating persisted configuration (3.9348ms)
+✔ virtual BYE participates in league formation without becoming a real participant foreign key (43.3892ms)
+✔ SINGLES LEAGUE: actual league generator, canonical participants and graph (3.2859ms)
+✔ SINGLES GROUP: actual league generator, canonical participants and graph (2.1154ms)
+✔ SINGLES TOURNAMENT: actual league generator, canonical participants and graph (2.5189ms)
+✔ DOUBLES LEAGUE: actual league generator, canonical participants and graph (2.6426ms)
+✔ DOUBLES GROUP: actual league generator, canonical participants and graph (7.9985ms)
+✔ DOUBLES TOURNAMENT: actual league generator, canonical participants and graph (2.0849ms)
+✔ TEAM LEAGUE: actual league generator, canonical participants and graph (1.4152ms)
+✔ TEAM GROUP: actual league generator, canonical participants and graph (0.875ms)
+✔ TEAM TOURNAMENT: actual league generator, canonical participants and graph (0.8536ms)
+✔ upper/lower, first-round settings and half-split use persisted program configuration (7.6714ms)
+✔ display/results use the persisted doubles roster and completed scores (5.0433ms)
+✔ future-round configuration can change without changing persisted completed rounds (1.4911ms)
+✔ SINGLES upper/lower progression preserves canonical rosters and resolves persisted edges (14.7481ms)
+✔ DOUBLES upper/lower progression preserves canonical rosters and resolves persisted edges (70.6344ms)
+✔ TEAM upper/lower progression preserves canonical rosters and resolves persisted edges (11.6369ms)
+✔ singles → doubles → team rounds qualify real people from persisted results before forming new units (11.448ms)
+◇ injected env (0) from .env // tip: ⌘ enable debugging { debug: true }
+Error: injected
+    at Object.query (C:\Development\3ch-project-github\3ch-api\test\tournamentMatchSchedule.test.js:26:89)
+    at C:\Development\3ch-project-github\3ch-api\src\routes\tournamentExtras.js:157:67
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async invoke (C:\Development\3ch-project-github\3ch-api\test\tournamentMatchSchedule.test.js:30:6)
+    at async TestContext.<anonymous> (C:\Development\3ch-project-github\3ch-api\test\tournamentMatchSchedule.test.js:33:226)
+    at async Test.run (node:internal/test_runner/test:1409:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+Tournament grouping error: Error: injected match failure
+    at Object.query (C:\Development\3ch-project-github\3ch-api\test\tournamentMatchSchedule.test.js:52:95)
+    at C:\Development\3ch-project-github\3ch-api\src\routes\tournament.js:917:67
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async confirmGroups (C:\Development\3ch-project-github\3ch-api\test\tournamentMatchSchedule.test.js:56:6)
+    at async TestContext.<anonymous> (C:\Development\3ch-project-github\3ch-api\test\tournamentMatchSchedule.test.js:59:273)
+    at async Test.run (node:internal/test_runner/test:1409:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+✔ saved pool slots yield every pair exactly once without mutating assignments (2.9687ms)
+✔ existing matches including completed results block regeneration unchanged (3.991ms)
+✔ creation appends only, failed inserts roll back atomically (23.3266ms)
+✔ confirming groups also saves all matches in the same transaction (62.7598ms)
+✔ existing competition is preserved; match failure rolls back group confirmation too (17.3797ms)
+◇ injected env (0) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+Error: injected
+    at Object.query (C:\Development\3ch-project-github\3ch-api\test\tournamentMatchUpdate.test.js:12:64)
+    at C:\Development\3ch-project-github\3ch-api\src\routes\tournamentExtras.js:130:33
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async invoke (C:\Development\3ch-project-github\3ch-api\test\tournamentMatchUpdate.test.js:15:6)
+    at async TestContext.<anonymous> (C:\Development\3ch-project-github\3ch-api\test\tournamentMatchUpdate.test.js:19:103)
+    at async Test.run (node:internal/test_runner/test:1409:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+✔ tournament score writes preserve participants, ordering and unrelated state (12.0164ms)
+✔ stale writes, non-managers and resets of completed matches cannot overwrite results (29.7848ms)
+✔ failed score writes roll back; explicit completion stores persisted scores (50.8956ms)
+◇ injected env (0) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+✔ 주최자는 다른 클럽의 부수를 확정된 조와 완료 경기 이후에도 수정하며 상태와 연결을 보존한다 (17.8136ms)
+✔ 일반 참가자와 프리미엄 권한이 없는 계정은 부수 수정이 거절된다 (5.6613ms)
+✔ 동시 수정 충돌과 다른 대회 참가자 요청을 거절한다 (5.9283ms)
+✔ 빈 부수와 이름 변경 요청은 DB에 접근하기 전에 거절한다 (39.5082ms)
+✔ 일반 명단 저장과 이전 개별/단체 신청 API도 누락된 대회 부수를 거절한다 (260.3096ms)
+✔ 신청자가 부수만 바꾸면 조 편성 전후 모두 확정 상태를 보존한다 (54.3792ms)
+✔ 신청 명단도 오래된 부수로 덮어쓰거나 기존 참가자를 누락하면 수정 없이 롤백한다 (646.7627ms)
+✔ 완료 상태와 저장된 점수로 결과를 계산하며 원본 기록을 변경하지 않는다 (10.0587ms)
+✔ 모든 경기가 완료되어야 결과 보기를 활성화하고 취소 경기만 있거나 점수가 없으면 완료로 보지 않는다 (0.5488ms)
+✔ 조별 결과는 서로 다른 조의 참가자를 섞지 않는다 (1.8722ms)
+✔ 3세트제는 리그 결과처럼 획득 세트가 우선이다 (1.5446ms)
+✔ 토너먼트 우승자와 준우승자는 저장된 결승 결과로 결정한다 (0.5031ms)
+✔ 상위와 하위 우승자를 별도로 집계하고 다음 라운드 순위에서도 상위를 우선한다 (0.5061ms)
+✔ 저장된 참가자가 요청에서 누락되면 명단 저장을 거부한다 (1.3434ms)
+✔ 완료 경기나 기록된 점수가 있으면 참가 취소를 거부한다 (0.2623ms)
+◇ injected env (0) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+VAPID 환경변수가 없어 푸시 알림을 비활성화합니다.
+Error scanning OpenAI Vision image: Error: injected scan failure
+    at scanner.scanLeagueSheetWithOpenAIVision (C:\Development\3ch-project-github\3ch-api\test\tournamentVision.test.js:6:89)
+    at C:\Development\3ch-project-github\3ch-api\src\routes\league.js:5641:26
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async scan (C:\Development\3ch-project-github\3ch-api\test\tournamentVision.test.js:25:6)
+    at async TestContext.<anonymous> (C:\Development\3ch-project-github\3ch-api\test\tournamentVision.test.js:29:129)
+    at async Test.run (node:internal/test_runner/test:1409:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+✔ same league scanner maps tournament cells to persisted matches and bills tournament owner (9.2731ms)
+✔ permission, round and participant scope errors never invoke OCR or consume credits (4.4583ms)
+✔ failed tournament recognition refunds credit and existing league recognition stays on league path (3.5636ms)
+◇ injected env (0) from .env // tip: ⌘ suppress logs { quiet: true }
+Error: injected batch failure
+    at Object.query (C:\Development\3ch-project-github\3ch-api\test\tournamentVisionBatch.test.js:11:85)
+    at C:\Development\3ch-project-github\3ch-api\src\routes\tournamentExtras.js:103:20
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async invoke (C:\Development\3ch-project-github\3ch-api\test\tournamentVisionBatch.test.js:15:6)
+    at async TestContext.<anonymous> (C:\Development\3ch-project-github\3ch-api\test\tournamentVisionBatch.test.js:19:76)
+    at async Test.run (node:internal/test_runner/test:1409:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+✔ photo batch commits selected results atomically and preserves omitted completed scores and ordering (12.164ms)
+✔ stale result, wrong scope, non-manager and completed reset reject the whole batch (13.706ms)
+✔ failure after first update rolls back every score (8.0727ms)
+ℹ tests 77
+ℹ suites 0
+ℹ pass 77
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 26508.3533

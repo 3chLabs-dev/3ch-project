@@ -60,7 +60,8 @@ export default function AppShell() {
     const showLeagueQuickActions = isHome || location.pathname === "/league";
     const isMyPage = location.pathname === "/mypage";
     const isLeagueSheet = /^\/league\/[^/]+\/(omr|openai-vision|gpt-vision)$/.test(location.pathname);
-    const isMatchOrderPage = /^\/league\/[^/]+\/(?:program\/matches|tournament\/matches|matches)$/.test(location.pathname);
+    const isMatchOrderPage = /^\/league\/[^/]+\/(?:program\/matches|tournament\/matches|matches)$/.test(location.pathname)
+      || /^\/tournament\/[^/]+\/divisions\/[^/]+\/matches$/.test(location.pathname);
 
     const contentRef = useRef<HTMLDivElement>(null);
     const bannerRef = useRef<HTMLDivElement>(null);

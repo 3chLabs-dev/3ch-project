@@ -79,6 +79,7 @@ export interface UpdateLeagueRequest {
  * API 응답 타입 정의
  */
 export interface League {
+  can_manage?: boolean;
   id: string;
   name: string;
   league_code?: string;
@@ -583,6 +584,7 @@ export interface GetLeagueProgramResponse {
 export interface SaveLeagueProgramRequest {
   leagueId: string;
   program: unknown;
+  reconfigureRound?: number;
 }
 
 export interface LeagueProgramTemplate {
@@ -603,6 +605,8 @@ export interface GetLeagueProgramTemplatesResponse {
 
 export interface SyncLeagueProgramMatchesRequest {
   leagueId: string;
+  manualAssignment?: boolean;
+  restoreMatchId?: string;
   resetResults?: boolean;
   resetConfirmation?: "RESET_PROGRAM_RESULTS";
   matches: Array<Partial<LeagueMatch> & {
@@ -1066,7 +1070,7 @@ export const leagueApi = baseApi.injectEndpoints({
     }),
 
     saveLeagueProgram: builder.mutation<GetLeagueProgramResponse, SaveLeagueProgramRequest>({
-      async queryFn({ leagueId, program }, api, _extraOptions, fetchWithBQ) {
+      async queryFn({ leagueId, program, reconfigureRound }, api, _extraOptions, fetchWithBQ) {
         const token = (api.getState() as RootState).auth?.token;
         if (isLocalDevToken(token)) {
           const programData = saveLocalDevProgram(leagueId, program);
@@ -1083,9 +1087,9 @@ export const leagueApi = baseApi.injectEndpoints({
           };
         }
         const result = await fetchWithBQ({
-          url: `/league/${leagueId}/program`,
-          method: "PUT",
-          body: { program_data: program },
+          url: `/league/${leagueId}/${reconfigureRound ? "reconfigure" : "program"}`,
+          method: reconfigureRound ? "POST" : "PUT",
+          body: { program_data: program, ...(reconfigureRound ? { round_no: reconfigureRound } : {}) },
         });
         return result.error ? { error: result.error } : { data: result.data as GetLeagueProgramResponse };
       },
@@ -1116,7 +1120,7 @@ export const leagueApi = baseApi.injectEndpoints({
     }),
 
     syncLeagueProgramMatches: builder.mutation<{ ok: boolean; inserted: number }, SyncLeagueProgramMatchesRequest>({
-      async queryFn({ leagueId, matches, resetResults, resetConfirmation }, api, _extraOptions, fetchWithBQ) {
+      async queryFn({ leagueId, matches, resetResults, resetConfirmation, manualAssignment, restoreMatchId }, api, _extraOptions, fetchWithBQ) {
         if (resetResults && resetConfirmation !== "RESET_PROGRAM_RESULTS") {
           return {
             error: {
@@ -1153,6 +1157,8 @@ export const leagueApi = baseApi.injectEndpoints({
             matches,
             reset_results: Boolean(resetResults),
             reset_confirmation: resetConfirmation,
+            ...(manualAssignment ? { assignment_intent: "REASSIGN_UNPLAYED_TOURNAMENT_MATCHES" } : {}),
+            ...(restoreMatchId ? { restore_match_id: restoreMatchId } : {}),
           },
         });
         return result.error ? { error: result.error } : { data: result.data as { ok: boolean; inserted: number } };

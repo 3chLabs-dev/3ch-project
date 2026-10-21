@@ -141,6 +141,7 @@ app.use("/api", afterPartyRouter);
 app.use("/api", require("./routes/tournamentAfterParty"));
 app.use("/api", require("./routes/tournamentDraw"));
 app.use("/api", require("./routes/tournamentExtras"));
+app.use("/api", require("./routes/tournamentLeague"));
 app.use("/api/admin", adminRouter);
 app.use("/api", policyRouter);
 app.use("/api/admin/board", boardRouter);

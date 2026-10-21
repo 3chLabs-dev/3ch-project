@@ -1,5 +1,6 @@
+import { competitionPublicPath } from "../../features/tournament/leagueScope";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useCompetitionNavigate as useNavigate, useCompetitionParams as useParams, useCompetitionSearchParams as useSearchParams } from "../../features/tournament/leagueScope";
 import {
   DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors,
 } from "@dnd-kit/core";
@@ -9,7 +10,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
-  Box, Button, Card, CardContent, CircularProgress,
+  Alert, Box, Button, Card, CardContent, CircularProgress,
   Dialog, DialogActions, DialogContent, DialogTitle,
   Divider, IconButton, InputAdornment, ListItemIcon, ListItemText,
   Menu, MenuItem, Stack, Tab, Tabs, TextField, Typography, Tooltip, Snackbar,
@@ -551,7 +552,7 @@ export function MatchCard({
   const handleKakaoShare = useCallback(() => {
     setMenuAnchor(null);
     const text = `${matchLabel()}\n곧 경기 시작! 지금 입장해 주세요`;
-    const matchOrderUrl = `${window.location.origin}/league/${leagueId}/matches`;
+    const matchOrderUrl = `${window.location.origin}${competitionPublicPath(leagueId, "matches")}`;
     const kakaoKey = import.meta.env.VITE_KAKAO_JS_KEY;
     const kakao = (window as unknown as { Kakao?: { init?: (key: string) => void; isInitialized?: () => boolean; Share?: { sendDefault: (o: unknown) => void } } }).Kakao;
     if (kakao && kakaoKey && !kakao.isInitialized?.()) {
@@ -637,7 +638,7 @@ export function MatchCard({
                   <ListItemText>카카오톡 알림</ListItemText>
                 </MenuItem>
                 <Divider />
-                <MenuItem onClick={handleDelete} sx={{ color: "#EF4444" }}>
+                <MenuItem onClick={handleDelete} disabled={isDone || isPlaying || match.score_a != null || match.score_b != null} sx={{ color: "#EF4444", ...((isDone || isPlaying || match.score_a != null || match.score_b != null) ? { display: "none" } : {}) }}>
                   <ListItemIcon><DeleteOutlineIcon fontSize="small" sx={{ color: "#EF4444" }} /></ListItemIcon>
                   <ListItemText>경기 삭제</ListItemText>
                 </MenuItem>
@@ -737,20 +738,20 @@ export default function LeagueMatchOrder() {
   const { data: groupData, isLoading: groupLoading } = useGetGroupDetailQuery(groupId, { skip: !groupId });
   const authUser = useAppSelector((s) => s.auth.user);
   const isCreator = !!authUser && league?.created_by_id === authUser?.id;
-  const canManage =
+  const canManage = leagueId.startsWith("tournament~") ? league?.can_manage === true :
     (!groupLoading && (groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.league === true))) || isCreator;
-  const canMember = (!groupLoading && !!groupData?.myRole) || isCreator || league?.join_permission === "public";
+  const canMember = leagueId.startsWith("tournament~") ? league?.can_manage === true : (!groupLoading && !!groupData?.myRole) || isCreator || league?.join_permission === "public";
   const myName = groupData?.members?.find((m) => m.user_id === authUser?.id)?.name
     ?? authUser?.name
     ?? (leagueId ? localStorage.getItem(`guestName_${leagueId}`) : null)
     ?? null;
 
-  const { data: matchData, isLoading: matchLoading, refetch: refetchMatches } = useGetLeagueMatchesQuery(leagueId, { skip: !leagueId, refetchOnMountOrArgChange: true });
-  const { data: participantData } = useGetLeagueParticipantsQuery(leagueId, { skip: !leagueId, refetchOnMountOrArgChange: true, });
-  const { data: programData, refetch: refetchProgram } = useGetLeagueProgramQuery(leagueId, { skip: !isProgramMode || !leagueId });
-  const [updateMatch] = useUpdateLeagueMatchMutation();
+  const { data: matchData, isLoading: matchLoading, refetch: refetchMatches } = useGetLeagueMatchesQuery(leagueId, { skip: !leagueId, refetchOnMountOrArgChange: true, pollingInterval: leagueId.startsWith("tournament~") ? 15000 : undefined });
+  const { data: participantData, isLoading: participantLoading } = useGetLeagueParticipantsQuery(leagueId, { skip: !leagueId, refetchOnMountOrArgChange: true, });
+  const { data: programData, isLoading: programLoading, refetch: refetchProgram } = useGetLeagueProgramQuery(leagueId, { skip: !isProgramMode || !leagueId });
+  const [updateMatch, { error: matchSaveError }] = useUpdateLeagueMatchMutation();
   const [saveLeagueProgram] = useSaveLeagueProgramMutation();
-  const [syncLeagueProgramMatches] = useSyncLeagueProgramMatchesMutation();
+  const [syncLeagueProgramMatches, { error: programSyncError }] = useSyncLeagueProgramMatchesMutation();
   const [search, setSearch] = useState("");
   const [mineOnly, setMineOnly] = useState(false);
   const [finishRoundConfirmOpen, setFinishRoundConfirmOpen] = useState(false);
@@ -776,6 +777,7 @@ export default function LeagueMatchOrder() {
     );
   const programSourceMatches = useMemo(() => {
     if (!isProgramMode || !leagueId || !programOption) return matchData?.matches ?? [];
+    if (leagueId.startsWith("tournament~")) return matchData?.matches ?? [];
 
     const sourceMatches = [...(matchData?.matches ?? [])];
     for (let round = 1; round < programRound; round += 1) {
@@ -822,6 +824,7 @@ export default function LeagueMatchOrder() {
     [matchData?.matches, programRound],
   );
   const programMatches = useMemo(() => {
+    if (leagueId.startsWith("tournament~")) return serverProgramMatches;
     const serverById = new Map(serverProgramMatches.map((match) => [match.id, match]));
     const hydratedMatches = generatedProgramMatches.map((match) => {
       const serverMatch = serverById.get(match.id);
@@ -848,7 +851,7 @@ export default function LeagueMatchOrder() {
     });
     return applyProgramTournamentAdvancement(hydratedMatches)
       .sort((left, right) => left.match_order - right.match_order);
-  }, [currentProgramBlock?.tournamentSeeding, generatedProgramMatches, serverProgramMatches]);
+  }, [leagueId, currentProgramBlock?.tournamentSeeding, generatedProgramMatches, serverProgramMatches]);
 
   useEffect(() => {
     if (!isProgramMode || !leagueId || !programOption || programMatches.length === 0) return;
@@ -1337,12 +1340,14 @@ export default function LeagueMatchOrder() {
 
   useEffect(() => {
     if (!isProgramMode || !programOption) return;
+    if (leagueId.startsWith("tournament~") && !canManage) return;
+    if (leagueId.startsWith("tournament~") && serverProgramMatches.length) return;
     const currentBlock = programOption.blocks?.[programRound - 1];
     if (!currentBlock) return;
-    const matchesToSync = isProgramFinalRound ? programMatches : generatedProgramMatches;
+    const matchesToSync = leagueId.startsWith("tournament~") ? (serverProgramMatches.length ? serverProgramMatches : generatedProgramMatches) : isProgramFinalRound ? programMatches : generatedProgramMatches;
     if (matchesToSync.length === 0) return;
     if (
-      currentBlock.type === "SINGLES" &&
+      !leagueId.startsWith("tournament~") && currentBlock.type === "SINGLES" &&
       !matchesToSync.some(
         (match) =>
           match.participant_a_id &&
@@ -1352,7 +1357,7 @@ export default function LeagueMatchOrder() {
       )
     ) return;
 
-    const syncKey = `${leagueId}-${programRound}-${matchesToSync.map((match) => `${match.id}:${match.participant_a_id ?? ""}:${match.participant_b_id ?? ""}:${match.match_rule ?? ""}`).join("|")}`;
+    const syncKey = `${leagueId}-${programRound}-${matchesToSync.map((match) => `${match.id}:${match.participant_a_id ?? ""}:${match.participant_b_id ?? ""}:${match.match_rule ?? ""}`).join("|")}${leagueId.startsWith("tournament~") ? JSON.stringify(matchData?.matches.map(match => [match.id, match.status, match.score_a, match.score_b])) : ""}`;
     const serverKey = `${leagueId}-${programRound}-${serverProgramMatches.map((match) => `${match.id}:${match.participant_a_id ?? ""}:${match.participant_b_id ?? ""}:${match.match_rule ?? ""}`).join("|")}`;
     if (serverProgramMatches.length > 0 && serverKey === syncKey) return;
     if (programSyncCalledRef.current === syncKey) return;
@@ -1366,10 +1371,10 @@ export default function LeagueMatchOrder() {
         program_block_type: currentBlock.type,
       })),
     });
-  }, [generatedProgramMatches, isProgramFinalRound, isProgramMode, leagueId, programMatches, programOption, programRound, serverProgramMatches, syncLeagueProgramMatches]);
+  }, [canManage, matchData?.matches, generatedProgramMatches, isProgramFinalRound, isProgramMode, leagueId, programMatches, programOption, programRound, serverProgramMatches, syncLeagueProgramMatches]);
 
 
-  if (!isProgramMode && matchLoading) {
+  if ((!isProgramMode && matchLoading) || (leagueId.startsWith("tournament~") && (matchLoading || participantLoading || programLoading))) {
     return (
       <Box display="flex" justifyContent="center" pt={6}>
         <CircularProgress />
@@ -1386,6 +1391,8 @@ export default function LeagueMatchOrder() {
           : league?.format === "GPT 인식" ? `/league/${leagueId}/gpt-vision?back=matches` : `/league/${leagueId}/bracket?back=matches`)} />
 
       {/* 조 선택 탭 (조별리그일 때만 표시됨) */}
+      {leagueId.startsWith("tournament~") && programSyncError && <Alert severity="info">{(programSyncError as { data?: { message?: string } }).data?.message ?? "편성을 확정한 뒤 경기를 불러와주세요."}</Alert>}
+      {matchSaveError && <Alert severity="error">{(matchSaveError as { data?: { message?: string } }).data?.message ?? "경기 저장에 실패했습니다. 최신 기록을 다시 확인해주세요."}</Alert>}
       {isTournamentProgramRound && tournamentBracketIndexes.length > 1 && (
         <Box sx={{ bgcolor: "#F8FAFC", borderBottom: "1px solid #E5E7EB", mx: -2 }}>
           <Tabs
@@ -1429,7 +1436,7 @@ export default function LeagueMatchOrder() {
             <CircularProgress />
           ) : (
             <Typography color="text.secondary" fontWeight={700} fontSize={14}>
-              참가자가 없어 경기를 생성할 수 없습니다.
+              {leagueId.startsWith("tournament~") ? "편성을 확정하면 경기가 표시됩니다." : "참가자가 없어 경기를 생성할 수 없습니다."}
             </Typography>
           )}
         </Box>

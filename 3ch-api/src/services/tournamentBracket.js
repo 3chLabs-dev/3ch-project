@@ -43,7 +43,19 @@ function projectBracketAdvancement(matches) {
         const target = byId.get(source[idKey]), key = `participant_${source[slotKey]}_id`, person = result[personKey];
         if (target[key] === person || (!target[key] && !person)) continue;
         if (target[key] || target.status !== 'pending' || target.score_a != null || target.score_b != null) throw conflict('다음 경기의 참가자 또는 결과가 이미 저장되어 있어 진출자를 변경할 수 없습니다.');
-        if (person) { target[key] = person; changed = true; }
+        if (person) {
+          target[key] = person;
+          if (source.league_data) {
+            const from = source.participant_a_id === person ? 'a' : 'b';
+            const to = source[slotKey];
+            target.league_data = { ...(target.league_data ?? {}) };
+            for (const field of ['id','name','division','roster','roster_details','roster_ids']) {
+              const value = source.league_data[`participant_${from}_${field}`];
+              if (value !== undefined) target.league_data[`participant_${to}_${field}`] = value;
+            }
+          }
+          changed = true;
+        }
       }
     }
     for (const target of rows) {
@@ -132,14 +144,15 @@ async function advancePersistedBracket(client, divisionId, programRound) {
   const projected = projectBracketAdvancement(saved.rows);
   for (const row of projected) {
     const original = saved.rows.find((m) => m.id === row.id);
-    if (['participant_a_id','participant_b_id','status','is_bye'].every((key) => row[key] === original[key])) continue;
-    await client.query('UPDATE tournament_matches SET participant_a_id=$1,participant_b_id=$2,status=$3,is_bye=$4 WHERE id=$5', [row.participant_a_id,row.participant_b_id,row.status,row.is_bye,row.id]);
+    if (['participant_a_id','participant_b_id','status','is_bye'].every((key) => row[key] === original[key]) && JSON.stringify(row.league_data)===JSON.stringify(original.league_data)) continue;
+    if (row.league_data) await client.query('UPDATE tournament_matches SET participant_a_id=$1,participant_b_id=$2,status=$3,is_bye=$4,league_data=$5::jsonb WHERE id=$6', [row.participant_a_id,row.participant_b_id,row.status,row.is_bye,JSON.stringify(row.league_data),row.id]);
+    else await client.query('UPDATE tournament_matches SET participant_a_id=$1,participant_b_id=$2,status=$3,is_bye=$4 WHERE id=$5', [row.participant_a_id,row.participant_b_id,row.status,row.is_bye,row.id]);
   }
 }
 
 async function guardQualifiedSourceResults(client, original, next) {
   if (original.status !== 'completed' || original.program_round == null || (original.score_a === next.score_a && original.score_b === next.score_b)) return;
-  const later = await client.query('SELECT 1 FROM tournament_matches WHERE division_id=$1 AND program_round>$2 LIMIT 1', [original.division_id,original.program_round]);
+  const later = await client.query("SELECT 1 FROM tournament_matches WHERE division_id=$1 AND program_round>$2 AND status<>'cancelled' LIMIT 1", [original.division_id,original.program_round]);
   if (later.rowCount) throw conflict('다음 라운드가 이미 생성되어 이전 라운드의 결과를 변경할 수 없습니다. 저장된 진출자와 대진표는 유지됩니다.');
 }
 

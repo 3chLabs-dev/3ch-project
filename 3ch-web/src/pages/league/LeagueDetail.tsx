@@ -1,3 +1,4 @@
+import { ParticipantRosterSurface, ParticipantRosterHeader, ParticipantRosterRow } from "../../components/ParticipantRoster";
   import { useMemo, useState } from "react";
   import { DivisionBadge } from "../../components/ParticipantName";
   import { useRef } from "react";
@@ -2101,9 +2102,9 @@ const handleSaveEdit = async () => {
             </Box>
           )}
 
-          <Box sx={{ bgcolor: "#fff", borderRadius: 1, border: "1px solid #E5E7EB", overflow: "hidden" }}>
+          <ParticipantRosterSurface>
             {/* 테이블 헤더 */}
-            <Box sx={{ display: "grid", gridTemplateColumns: participantTableColumns, alignItems: "center", px: 1.5, py: 0.8, bgcolor: "#F9FAFB", borderBottom: "1px solid #E5E7EB" }}>
+            <ParticipantRosterHeader columns={participantTableColumns}>
               <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#6B7280", textAlign: "left" }}>
                 {showParticipantGroups ? "클럽" : ""}
               </Typography>
@@ -2117,7 +2118,7 @@ const handleSaveEdit = async () => {
               <Box sx={{ display: "flex", justifyContent: "center" }}>
                 <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#6B7280", textAlign: "center" }}>상태</Typography>
               </Box>
-            </Box>
+            </ParticipantRosterHeader>
 
             {participantsLoading ? (
               <Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
@@ -2133,10 +2134,7 @@ const handleSaveEdit = async () => {
               visibleParticipants.map((p, idx) => {
                 const isMe = isMyParticipant(p);
                 return (
-                  <Box
-                    key={p.id}
-                    sx={{ display: "grid", gridTemplateColumns: participantTableColumns, alignItems: "center", px: 1.5, py: 0.9, borderTop: idx === 0 ? "none" : "1px solid #F3F4F6", bgcolor: isMe ? "#EFF6FF" : "transparent" }}
-                  >
+                  <ParticipantRosterRow key={p.id} columns={participantTableColumns} first={idx === 0} isMe={isMe}>
                       <Typography
                         title={showParticipantGroups ? p.source_group_name ?? "-" : undefined}
                         sx={{
@@ -2208,7 +2206,7 @@ const handleSaveEdit = async () => {
                         </Stack>
                       </Box>
                     {/* )} */}
-                  </Box>
+                  </ParticipantRosterRow>
                 )
               })
             )}
@@ -2236,7 +2234,7 @@ const handleSaveEdit = async () => {
                   : "접기"}
               </Button>
             )}
-          </Box>
+          </ParticipantRosterSurface>
 
           <Dialog
             open={blueWhiteFormationOpen}

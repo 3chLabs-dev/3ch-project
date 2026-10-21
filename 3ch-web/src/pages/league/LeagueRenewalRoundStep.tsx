@@ -213,16 +213,18 @@ function CompactNumberStepper({
 
 export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
   const dispatch = useAppDispatch();
-  const rounds = useAppSelector((state) => state.leagueRenewalCreation.rounds);
-  const hasParticipatingClubs = useAppSelector(
-    (state) => state.leagueRenewalCreation.invitedGroupIds.length > 0,
-  );
-  const participantCount = useAppSelector(
-    (state) => state.leagueRenewalCreation.basicInfo?.participantCount ?? null,
-  );
+  const rounds = useAppSelector(state => state.leagueRenewalCreation.rounds);
+  const hasParticipatingClubs = useAppSelector(state => state.leagueRenewalCreation.invitedGroupIds.length > 0);
+  const participantCount = useAppSelector(state => state.leagueRenewalCreation.basicInfo?.participantCount ?? null);
+  return <LeagueRoundStepForm kind={kind} rounds={rounds} setRounds={value => dispatch(setRenewalRounds(value))}
+    hasParticipatingClubs={hasParticipatingClubs} participantCount={participantCount}
+    onPrevious={() => dispatch(setRenewalStep(previousSteps[kind]))} onNext={() => dispatch(setRenewalStep(nextSteps[kind]))} />;
+}
 
-  const setRounds = (nextRounds: RenewalRoundConfig[]) =>
-    dispatch(setRenewalRounds(nextRounds));
+export function LeagueRoundStepForm({ kind, rounds, setRounds, hasParticipatingClubs, participantCount, onPrevious, onNext, embedded = false }: {
+  kind: StepKind; rounds: RenewalRoundConfig[]; setRounds: (rounds: RenewalRoundConfig[]) => void;
+  hasParticipatingClubs: boolean; participantCount: number | null; onPrevious?: () => void; onNext?: () => void; embedded?: boolean;
+}) {
   const updateRound = (index: number, patch: Partial<RenewalRoundConfig>) =>
     setRounds(
       rounds.map((round, roundIndex) =>
@@ -282,24 +284,7 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
     });
   };
 
-  const canNext = rounds.every((round) => {
-    if (kind === "type") {
-      if (!round.program) return false;
-      if (round.program !== "TEAM") return true;
-      const teamPlayerCount = round.teamPlayerCount ?? 3;
-      const teamMatchCount = (round.teamSinglesCount ?? 3) + (round.teamDoublesCount ?? 0);
-      return (
-        (round.inheritPreviousTeamFormation || Boolean(round.teamPlayerCount)) &&
-        teamPlayerCount >= 2 &&
-        teamPlayerCount <= 10 &&
-        (!participantCount || teamPlayerCount <= participantCount) &&
-        teamMatchCount >= 1 &&
-        teamMatchCount <= 20
-      );
-    }
-    if (kind === "format") return Boolean(round.format);
-    return Boolean(round.matchRule);
-  });
+  const canNext = areLeagueRoundsValid(rounds, kind, participantCount);
 
   const renderRoundDivision = (round: RenewalRoundConfig, index: number) => {
     if (!round.format) return null;
@@ -969,8 +954,8 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
   };
 
   return (
-    <Box sx={{ px: 2.5, pt: 2 }}>
-      <Typography sx={{ fontSize: 22, fontWeight: 900, mb: 2 }}>리그 {labels[kind]}</Typography>
+    <Box sx={embedded ? {} : { px: 2.5, pt: 2 }}>
+      {!embedded && <Typography sx={{ fontSize: 22, fontWeight: 900, mb: 2 }}>리그 {labels[kind]}</Typography>}
       <Stack spacing={3}>
         {rounds.map((round, index) => (
           <Box key={round.id}>
@@ -996,12 +981,12 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
           + 라운드 추가
         </Button>
       )}
-      <Stack direction="row" spacing={2} sx={{ mt: 4 }}>
+      {!embedded && <Stack direction="row" spacing={2} sx={{ mt: 4 }}>
         <Button
           fullWidth
           variant="contained"
           disableElevation
-          onClick={() => dispatch(setRenewalStep(previousSteps[kind]))}
+          onClick={onPrevious}
           sx={{ height: 44, borderRadius: 1, fontWeight: 900, bgcolor: "#777", "&:hover": { bgcolor: "#777" } }}
         >
           이전
@@ -1011,7 +996,7 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
           variant="contained"
           disableElevation
           disabled={!canNext}
-          onClick={() => dispatch(setRenewalStep(nextSteps[kind]))}
+          onClick={onNext}
           sx={{
             height: 44,
             borderRadius: 1,
@@ -1023,7 +1008,28 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
         >
           다음
         </Button>
-      </Stack>
+      </Stack>}
     </Box>
   );
+}
+
+export function areLeagueRoundsValid(rounds: RenewalRoundConfig[], kind: StepKind, participantCount: number | null) {
+  return rounds.every((round) => {
+    if (kind === "type") {
+      if (!round.program) return false;
+      if (round.program !== "TEAM") return true;
+      const teamPlayerCount = round.teamPlayerCount ?? 3;
+      const teamMatchCount = (round.teamSinglesCount ?? 3) + (round.teamDoublesCount ?? 0);
+      return (
+        (round.inheritPreviousTeamFormation || Boolean(round.teamPlayerCount)) &&
+        teamPlayerCount >= 2 &&
+        teamPlayerCount <= 10 &&
+        (!participantCount || teamPlayerCount <= participantCount) &&
+        teamMatchCount >= 1 &&
+        teamMatchCount <= 20
+      );
+    }
+    if (kind === "format") return Boolean(round.format);
+    return Boolean(round.matchRule);
+  });
 }

@@ -2,6 +2,7 @@ import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import type { BaseQueryFn, FetchArgs, FetchBaseQueryError } from "@reduxjs/toolkit/query";
 import type { RootState } from "../../app/store";
 import { logout } from "../auth/authSlice";
+import { tournamentLeagueRequest } from "../tournament/leagueTransport";
 
 const rawBaseQuery = fetchBaseQuery({
   baseUrl: import.meta.env.VITE_API_BASE_URL ?? "/api",
@@ -20,7 +21,8 @@ const baseQueryWithAuthExpiry: BaseQueryFn<
   FetchBaseQueryError
 > = async (args, api, extraOptions) => {
   const hadToken = Boolean((api.getState() as RootState).auth?.token);
-  const result = await rawBaseQuery(args, api, extraOptions);
+  const result = await tournamentLeagueRequest(args, async (request) => rawBaseQuery(request, api, extraOptions),
+    () => api.dispatch({ type: "api/invalidateTags", payload: ["Tournament"] })) ?? await rawBaseQuery(args, api, extraOptions);
 
   if (hadToken && result.error?.status === 401) {
     localStorage.removeItem("token");

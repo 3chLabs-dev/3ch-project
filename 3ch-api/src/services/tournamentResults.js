@@ -1,8 +1,15 @@
 function buildTournamentRoundResult(round, matches, participants) {
-  const active = matches.filter((match) => match.status !== 'cancelled' && (match.participant_a_id || match.participant_b_id));
+  const active = matches.filter((match) => match.status !== 'cancelled' && (match.participant_a_id || match.participant_b_id)
+    && !(match.league_data?.is_no_game && match.status==='pending' && match.score_a==null && match.score_b==null));
   const complete = active.length > 0 && active.every((match) => match.status === 'completed' &&
     ((!match.participant_a_id || !match.participant_b_id) || (match.score_a !== null && match.score_b !== null)));
   const people = new Map(participants.map((participant) => [participant.id, participant]));
+  for (const match of active) for (const slot of ['a','b']) {
+    const id=match[`participant_${slot}_id`], ids=match.league_data?.[`participant_${slot}_roster_ids`];
+    if (!id || !ids?.length || ids.length<2) continue;
+    const members=ids.map(personId=>participants.find(p=>p.id===personId)).filter(Boolean);
+    if(members.length===ids.length) people.set(id,{...people.get(id),name:match.league_data[`participant_${slot}_name`]??members.map(p=>p.name).join(' · '),member_division:String(members.reduce((sum,p)=>sum+(parseInt(p.member_division)||0),0)),club_name:[...new Set(members.map(p=>p.club_name))].join(' · '),roster:members});
+  }
   const stats = new Map();
   const ensure = (id) => {
     if (!id || !people.has(id)) return null;

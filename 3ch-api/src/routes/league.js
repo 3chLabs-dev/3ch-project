@@ -5511,7 +5511,10 @@ router.post(['/league/:id/openai-vision/scan', '/tournaments/:id/divisions/:divi
     }
 
     const matchesResult = isTournament ? await pool.query(
-      `SELECT m.id,m.participant_a_id,m.participant_b_id FROM tournament_matches m
+      `SELECT m.id,
+        CASE WHEN m.participant_a_id IS NULL THEN NULL ELSE COALESCE(m.league_data->>'participant_a_id',m.participant_a_id::text) END AS participant_a_id,
+        CASE WHEN m.participant_b_id IS NULL THEN NULL ELSE COALESCE(m.league_data->>'participant_b_id',m.participant_b_id::text) END AS participant_b_id
+        FROM tournament_matches m
         WHERE m.division_id=$1 AND m.status<>'cancelled' AND (m.program_round=$2 OR (m.program_round IS NULL AND (SELECT COUNT(*) FROM tournament_division_rounds r WHERE r.division_id=$1)=1))`, [req.params.divisionId,Number(req.params.roundNo)],
     ) : await pool.query(
       `SELECT id, participant_a_id, participant_b_id,

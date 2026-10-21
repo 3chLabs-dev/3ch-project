@@ -1,7 +1,7 @@
 import type { ExternalBracketData } from "./LeagueBracket";
 import { createPortal } from "react-dom";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useCompetitionNavigate as useNavigate, useCompetitionParams as useParams, useCompetitionSearchParams as useSearchParams } from "../../features/tournament/leagueScope";
 import {
   Box, Button, CircularProgress, IconButton, InputAdornment,
   TextField, Tooltip, Typography, Tabs, Tab, Dialog, DialogContent, Stack, Snackbar,
@@ -1244,6 +1244,7 @@ export default function LeagueTournamentBracket({ external }: { external?: Exter
     ? `${programRound}라운드 ${getProgramTypeLabel(programBlock.type)} ${getProgramFormatLabel(programBlock.format)} │ ${getProgramRuleLabel(headerRule)}`
     : league ? `${league.type} ${league.format ?? ""} │ ${getProgramRuleLabel(headerRule)}` : "";
   const programSourceMatches = useMemo(() => {
+    if (id?.startsWith("tournament~")) return matchesData?.matches ?? [];
     if (!isProgramMode || !id || !programOption) return matchesData?.matches ?? [];
 
     const sourceMatches = [...(matchesData?.matches ?? [])];
@@ -1286,6 +1287,7 @@ export default function LeagueTournamentBracket({ external }: { external?: Exter
   );
   const allProgramMatches = useMemo(() => {
     if (!isProgramMode) return [];
+    if (id?.startsWith("tournament~") && serverProgramMatches.length) return serverProgramMatches.filter(match => match.bracket);
     const generatedMatches = applyProgramMatchState(canonicalProgramMatches, id ?? "", programRound);
     // 새로고침 직후에는 프로그램 설정이나 참가자 쿼리가 경기 쿼리보다
     // 늦게 도착할 수 있다. 이때 재생성 결과가 비었다고 해서 이미 서버에
@@ -1378,6 +1380,7 @@ export default function LeagueTournamentBracket({ external }: { external?: Exter
 
   useEffect(() => {
     if (!isProgramMode || !id || !programBlock || allProgramMatches.length === 0) return;
+    if (id.startsWith("tournament~") && (!league?.can_manage || serverProgramMatches.length)) return;
     if (
       programBlock.type === "SINGLES" &&
       !allProgramMatches.some((match) => match.participant_a_id && match.participant_b_id)
@@ -1385,7 +1388,7 @@ export default function LeagueTournamentBracket({ external }: { external?: Exter
 
     const generatedKey = allProgramMatches
       .map((match) => `${match.id}:${match.participant_a_id ?? ""}:${match.participant_a_seed_label ?? ""}:${match.participant_b_id ?? ""}:${match.participant_b_seed_label ?? ""}:${match.match_rule ?? ""}`)
-      .join("|");
+      .join("|") + (id.startsWith("tournament~") ? JSON.stringify(matchesData?.matches.map(match => [match.id,match.status,match.score_a,match.score_b])) : "");
     const serverKey = serverProgramMatches
       .map((match) => `${match.id}:${match.participant_a_id ?? ""}:${match.participant_a_seed_label ?? ""}:${match.participant_b_id ?? ""}:${match.participant_b_seed_label ?? ""}:${match.match_rule ?? ""}`)
       .join("|");
@@ -1403,6 +1406,8 @@ export default function LeagueTournamentBracket({ external }: { external?: Exter
     });
   }, [
     allProgramMatches,
+    league?.can_manage,
+    matchesData?.matches,
     id,
     isProgramMode,
     programBlock,
@@ -1411,7 +1416,7 @@ export default function LeagueTournamentBracket({ external }: { external?: Exter
     syncLeagueProgramMatches,
   ]);
 
-  const canManage = !external && (groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.league === true));
+  const canManage = id?.startsWith("tournament~") ? league?.can_manage === true : !external && (groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.league === true));
   const isCompleted = league?.status === "completed";
 
   const [assignParticipant, { isLoading: isAssigning }] = useAssignMatchParticipantMutation();
@@ -1440,6 +1445,7 @@ export default function LeagueTournamentBracket({ external }: { external?: Exter
     if (reseededMatches.length === 0) return;
     clearProgramMatchState(id, programRound);
     await syncLeagueProgramMatches({
+        manualAssignment: id?.startsWith("tournament~"),
       leagueId: id,
       matches: reseededMatches.map((match) => ({
         ...match,
@@ -1573,6 +1579,7 @@ export default function LeagueTournamentBracket({ external }: { external?: Exter
       });
 
       await syncLeagueProgramMatches({
+        manualAssignment: id?.startsWith("tournament~"),
         leagueId: id!,
         matches: nextMatches.map((match) => ({
           ...match,
@@ -1616,6 +1623,7 @@ export default function LeagueTournamentBracket({ external }: { external?: Exter
       const nextMatches = swapProgramTournamentSlots(allProgramMatches,
         { matchId: first.matchId, slot: first.slot }, { matchId, slot });
       await syncLeagueProgramMatches({
+        manualAssignment: id?.startsWith("tournament~"),
         leagueId: id!,
         matches: nextMatches.map((match) => ({
           ...match,
@@ -1769,7 +1777,8 @@ export default function LeagueTournamentBracket({ external }: { external?: Exter
       const nextMatches = allProgramMatches.map((match) => match.id === target.id
         ? { ...match, ...statePatch }
         : downstream && downstreamPatch && match.id === downstream.id ? { ...match, ...downstreamPatch } : match);
-      await syncLeagueProgramMatches({ leagueId: id!, matches: nextMatches.map((match) => ({ ...match, program_round: programRound, program_block_type: programBlock.type })) }).unwrap();
+      await syncLeagueProgramMatches({
+        manualAssignment: id?.startsWith("tournament~"), leagueId: id!, matches: nextMatches.map((match) => ({ ...match, program_round: programRound, program_block_type: programBlock.type })) }).unwrap();
     } else {
       const clearPlaceholderIds = targetSlot === "a" && !target.participant_b_name
         ? { participant_b_id: null }
@@ -1841,6 +1850,7 @@ export default function LeagueTournamentBracket({ external }: { external?: Exter
               : match
         );
         await syncLeagueProgramMatches({
+        manualAssignment: id?.startsWith("tournament~"),
           leagueId: id,
           matches: nextMatches.map((match) => ({ ...match, program_round: programRound, program_block_type: programBlock.type })),
         }).unwrap();
@@ -1880,7 +1890,7 @@ export default function LeagueTournamentBracket({ external }: { external?: Exter
   }, [handleUndoLowerWalkover, walkoverUndo]);
 
   const slotActions: SlotActions = {
-    canScore: external ? external.canScore : canManage,
+    canScore: external ? external.canScore : id?.startsWith("tournament~") ? canManage && serverProgramMatches.length > 0 : canManage,
     canManage,
     canRegister: canManage,
     editMode,
@@ -1955,6 +1965,7 @@ export default function LeagueTournamentBracket({ external }: { external?: Exter
         return downstreamPatch ? { ...match, ...downstreamPatch } : match;
       });
       await syncLeagueProgramMatches({
+        manualAssignment: id?.startsWith("tournament~"),
         leagueId: id!,
         matches: nextMatches.map((match) => ({
           ...match,
@@ -2336,7 +2347,8 @@ export default function LeagueTournamentBracket({ external }: { external?: Exter
               )}
 
               {positions.map((pos) => {
-                const visibleSlotActions = (external?.canScore || canManage) && (!isCompleted || isProgramMode)
+                const protectedTournamentMatch = id?.startsWith("tournament~") && (pos.match.status === "done" || pos.match.status === "playing" || pos.match.score_a != null || pos.match.score_b != null);
+                const visibleSlotActions = !protectedTournamentMatch && (external?.canScore || canManage) && (!isCompleted || isProgramMode)
                   ? slotActions
                   : undefined;
                 return (

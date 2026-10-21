@@ -1,3 +1,5 @@
+import { ParticipantRosterSurface, ParticipantRosterHeader, ParticipantRosterRow } from "../../components/ParticipantRoster";
+import { DivisionBadge } from "../../components/ParticipantName";
 import { useNavigate } from "react-router-dom";
 import { calculateTournamentFee } from "../../features/tournament/participationFee";
 import { useMemo, useState } from "react";
@@ -62,10 +64,19 @@ export default function TournamentParticipants({ tournament }: { tournament: Tou
     try { await review({ id: tournament.id, divisionId: participant.division_id, participantId: participant.id, status, ...(status === "rejected" ? { confirmation_intent: "REJECT_TOURNAMENT_APPLICATION" } : {}) }).unwrap(); }
     catch (reason) { setError((reason as { data?: { message?: string } }).data?.message ?? "신청 상태를 변경하지 못했습니다."); }
   };
-  const list = (entries: TournamentParticipant[]) => <Box sx={{ bgcolor: "#fff", border: "1px solid #E5E7EB", borderRadius: 1.5, overflow: "hidden" }}>
-    <Box sx={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 64px", px: 1.5, py: 0.8, bgcolor: "#F9FAFB", borderBottom: "1px solid #E5E7EB" }}><Typography sx={{ fontSize: 12, fontWeight: 700, color: "#6B7280" }}>참가자 · 부수 · 클럽</Typography><Typography sx={{ fontSize: 12, fontWeight: 700, color: "#6B7280", textAlign: "center" }}>상태</Typography></Box>
-    {entries.length ? entries.map((participant, index) => <Box key={participant.id} sx={{ px: 1.5, py: 0.9, borderTop: index ? "1px solid #F3F4F6" : "none" }}><Stack direction="row" alignItems="center" spacing={0.8}><Typography sx={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 800, overflowWrap: "anywhere" }}>{formatTournamentParticipantName(participant)}</Typography>{tournament.can_manage && <Button size="small" variant="outlined" sx={{ ...pillSx, minWidth: 56, height: 25 }} onClick={() => { setEditingParticipant(participant); setDivisionDraft(participant.member_division ?? ""); setDivisionError(""); }}>부수 수정</Button>}<Chip size="small" label={participant.status === "confirmed" ? "확정" : "대기"} sx={{ height: 23, bgcolor: participant.status === "confirmed" ? "#DCFCE7" : "#F3F4F6", color: participant.status === "confirmed" ? "#15803D" : "#4B5563", fontWeight: 800, fontSize: 11 }} /></Stack>{tournament.can_manage && participant.status === "applied" && canEdit && <Stack direction="row" justifyContent="flex-end" spacing={0.7} sx={{ mt: 0.7 }}>{!participant.source_group_id && <Button size="small" variant="outlined" disabled={reviewing} onClick={() => void reviewParticipant(participant, "confirmed")} sx={{ ...pillSx, height: 25 }}>입금 확인 · 확정</Button>}<Button size="small" color="error" variant="outlined" disabled={reviewing} onClick={() => void reviewParticipant(participant, "rejected")} sx={{ ...pillSx, height: 25 }}>거절</Button></Stack>}</Box>) : <Typography sx={{ py: 2, textAlign: "center", fontSize: 13, color: "text.secondary" }}>등록된 참가자가 없습니다.</Typography>}
-  </Box>;
+  const participantColumns = "minmax(0, 1fr) 42px 116px";
+  const list = (entries: TournamentParticipant[]) => <ParticipantRosterSurface>
+    <ParticipantRosterHeader columns={participantColumns}>{["이름", "부수", "상태"].map(label => <Typography key={label} sx={{ fontSize: 12, fontWeight: 700, color: "#6B7280", textAlign: "center" }}>{label}</Typography>)}</ParticipantRosterHeader>
+    {entries.length ? entries.map((participant, index) => <ParticipantRosterRow key={participant.id} columns={participantColumns} first={index === 0}>
+      <Box sx={{ minWidth: 0, textAlign: "center" }}><Typography fontWeight={800} fontSize={14} sx={{ overflowWrap: "anywhere" }}>{participant.name}</Typography><Typography fontSize={11} color="text.secondary" sx={{ overflowWrap: "anywhere" }}>({participant.club_name})</Typography></Box>
+      <Box sx={{ display: "flex", justifyContent: "center" }}><DivisionBadge division={participant.member_division} /></Box>
+      <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="center">
+        {tournament.can_manage && <Button size="small" variant="outlined" sx={{ minWidth: 50, height: 24, px: 0.5, borderRadius: 0.6, borderColor: "#D1D5DB", fontSize: 11, fontWeight: 700 }} onClick={() => { setEditingParticipant(participant); setDivisionDraft(participant.member_division ?? ""); setDivisionError(""); }}>부수 수정</Button>}
+        <Chip size="small" label={participant.status === "confirmed" ? "확정" : "대기"} sx={{ height: 24, borderRadius: 0.6, fontSize: 11, fontWeight: 700, border: `1px solid ${participant.status === "confirmed" ? "#27AE60" : "#D1D5DB"}`, bgcolor: participant.status === "confirmed" ? "#ECFDF5" : "#F9FAFB", color: participant.status === "confirmed" ? "#16A34A" : "#9CA3AF" }} />
+      </Stack>
+      <Box sx={{ gridColumn: "1 / -1" }}>{tournament.can_manage && participant.status === "applied" && canEdit && <Stack direction="row" justifyContent="flex-end" spacing={0.7} sx={{ mt: 0.7 }}>{!participant.source_group_id && <Button size="small" variant="outlined" disabled={reviewing} onClick={() => void reviewParticipant(participant, "confirmed")} sx={{ ...pillSx, height: 25 }}>입금 확인 · 확정</Button>}<Button size="small" color="error" variant="outlined" disabled={reviewing} onClick={() => void reviewParticipant(participant, "rejected")} sx={{ ...pillSx, height: 25 }}>거절</Button></Stack>}</Box>
+    </ParticipantRosterRow>) : <Typography sx={{ py: 3, textAlign: "center", fontSize: 13, color: "text.secondary" }}>등록된 참가자가 없습니다.</Typography>}
+  </ParticipantRosterSurface>;
   const divisionEntries = selectedDivision ? filtered(participants.filter((participant) => participant.division_id === selectedDivision.id)) : [];
   return <Box sx={{ bgcolor: "#fff", border: "1px solid #E5E7EB", borderRadius: 2, px: 2, py: 1.5, mb: 2 }}>
     <Dialog open={!!editingParticipant} onClose={() => { if (!savingDivision) setEditingParticipant(null); }} fullWidth maxWidth="xs">

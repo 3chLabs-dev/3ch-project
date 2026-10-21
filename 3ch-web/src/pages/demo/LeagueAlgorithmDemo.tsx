@@ -2,7 +2,7 @@ import { generateProgramOptions } from '../../features/league/algorithms/generat
 import { generateProgramBlocks } from '../../features/league/algorithms/generateProgramBlocks';
 import { distributeSnake } from '../../features/league/algorithms/distributeSnake';
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useCompetitionNavigate as useNavigate, useCompetitionParams as useParams, useCompetitionSearchParams as useSearchParams } from "../../features/tournament/leagueScope";
 import { generateGroupOptions } from '../../features/league/algorithms/generateGroupOptions';
 import { useGetLeagueInvitedGroupsQuery, useGetLeagueMatchesQuery, useGetLeagueParticipantsQuery, useGetLeagueProgramQuery, useGetLeagueQuery, useSaveLeagueProgramMutation, useSyncLeagueProgramMatchesMutation } from '../../features/league/leagueApi';
 import type { ProgramBlock, ProgramOption, ProgramType, TeamMatchType, RoundConfig, FormationAssignmentPlayer, FinalAdvancementMode, RoundOption, TournamentMode } from '../../features/league/types/tournament.types';
@@ -786,7 +786,7 @@ interface RoundConfigEditorProps {
   halfSplitMatchEnabled?: boolean;
 }
 
-function RoundConfigEditor({
+export function RoundConfigEditor({
   rounds,
   setRounds,
   clubPoliciesEnabled,

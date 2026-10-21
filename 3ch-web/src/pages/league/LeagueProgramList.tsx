@@ -1,5 +1,5 @@
 import { forwardRef, useMemo, useEffect, useRef, useState, useCallback, useImperativeHandle } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useCompetitionNavigate as useNavigate, useCompetitionParams as useParams } from "../../features/tournament/leagueScope";
 import {
   Box,
   Button,
@@ -354,11 +354,12 @@ const formatClockMinutes = (minutes: number) => {
   return `${String(Math.floor(normalized / 60)).padStart(2, "0")}:${String(normalized % 60).padStart(2, "0")}`;
 };
 
-const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boolean }>(function LeagueProgramList(
-  { embedded = false },
+const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boolean; resourceKey?: string; initialFormation?: boolean }>(function LeagueProgramList(
+  { embedded = false, resourceKey, initialFormation = false },
   ref,
 ) {
-  const { id } = useParams<{ id: string }>();
+  const { id: routeId } = useParams<{ id: string }>();
+  const id = resourceKey ?? routeId;
   const navigate = useNavigate();
   const { data: leagueData, isLoading: leagueLoading } = useGetLeagueQuery(id!);
   const { data: matchesData, isLoading: matchesLoading } = useGetLeagueMatchesQuery(id!);
@@ -378,6 +379,13 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [storedProgram, setStoredProgram] = useState<StoredProgramOption | null>(null);
   const [formationDialog, setFormationDialog] = useState<{ roundIndex: number; mode: "team" | "doubles" | "group" } | null>(null);
+  const openedInitialFormation = useRef(false);
+  useEffect(() => {
+    if (!initialFormation || openedInitialFormation.current || !storedProgram?.blocks?.length) return;
+    openedInitialFormation.current = true;
+    setFormationDialog({ roundIndex: 0, mode: storedProgram.blocks[0].type === "TEAM" ? "team" : storedProgram.blocks[0].type === "DOUBLES" ? "doubles" : "group" });
+  }, [initialFormation, storedProgram]);
+
   const [groupStructureRoundIndex, setGroupStructureRoundIndex] = useState<number | null>(null);
   const [groupStructureMode, setGroupStructureMode] = useState<"group" | "team">("group");
   const [isStructuredReshuffle, setIsStructuredReshuffle] = useState(false);
@@ -413,7 +421,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
   const rawMatches = matchesData?.matches ?? [];
   const participants = participantsData?.participants ?? [];
   const hasProgram = Boolean(storedProgram?.blocks?.length);
-  const canManage = !groupLoading && (groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.league === true));
+  const canManage = id?.startsWith("tournament~") ? leagueData?.league.can_manage === true : !groupLoading && (groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.league === true));
   const matches = useMemo(
     () => hydrateProgramNoGamePolicy(id ?? "", storedProgram as ProgramOption | null, participants, rawMatches),
     [id, participants, rawMatches, storedProgram],
@@ -1072,7 +1080,9 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
 
     setStoredProgram(persistedProgram);
     localStorage.setItem(`league-program-${id}`, JSON.stringify(persistedProgram));
-    await saveLeagueProgram({ leagueId: id, program: persistedProgram }).unwrap();
+    const scopedReconfigure = id.startsWith("tournament~") && matches.some(match => match.program_round === roundIndex + 1);
+    await saveLeagueProgram({ leagueId: id, program: persistedProgram, ...(scopedReconfigure ? { reconfigureRound: roundIndex + 1 } : {}) }).unwrap();
+    if (scopedReconfigure) return;
 
     if (syncMatches) {
       for (const affectedRoundIndex of affectedRoundIndexes) {

@@ -1,3 +1,4 @@
+import { competitionPublicPath } from "../../features/tournament/leagueScope";
 import type { ExternalBracketData } from "./LeagueBracket";
 import { openUsagePurchase } from "../../utils/returnNavigation";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
@@ -17,7 +18,7 @@ import {
   TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography, Stack, Snackbar,
 } from "@mui/material";
 import { styled } from "@mui/material/styles";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useCompetitionNavigate as useNavigate, useCompetitionParams as useParams, useCompetitionSearchParams as useSearchParams } from "../../features/tournament/leagueScope";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import CloseIcon from "@mui/icons-material/Close";
 import ViewSidebarOutlinedIcon from "@mui/icons-material/ViewSidebarOutlined";
@@ -434,7 +435,7 @@ function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, co
 
   if (match?.is_no_game) {
     const restoreNoGame = () => {
-      if (!canManage || !onRestoreNoGame) return;
+      if (!canManage || !onRestoreNoGame || match.status === "done" || match.score_a != null || match.score_b != null) return;
       if (!window.confirm("이 NO-GAME을 실제 경기로 복구하시겠습니까?\n복구 후 경기는 시작 전 상태로 유지됩니다.")) return;
       void onRestoreNoGame(match.id);
     };
@@ -449,7 +450,7 @@ function BracketScoreCell({ match, isA, leagueId, rules, winScore, canManage, co
           <Typography component="span" sx={{ color: "#E53935", fontWeight: 900, fontSize: 10, whiteSpace: "nowrap" }}>
             NO-GAME
           </Typography>
-          {canManage && onRestoreNoGame ? (
+          {canManage && onRestoreNoGame && match.status !== "done" && match.score_a == null && match.score_b == null ? (
             <Box
               component="button"
               type="button"
@@ -1296,6 +1297,7 @@ export default function LeagueGPTVisionSheet({ external }: { external?: External
   }, [id, matchStateResetAt, programRound]);
   const programSourceMatches = useMemo(() => {
     if (!isProgramMode || programRound <= 1) return [];
+    if (id?.startsWith("tournament~")) return (matchData?.matches ?? []).filter(match => (match.program_round ?? 0) < programRound);
 
     const source: LeagueMatch[] = [];
     for (let roundIndex = 1; roundIndex < programRound; roundIndex += 1) {
@@ -1377,6 +1379,7 @@ export default function LeagueGPTVisionSheet({ external }: { external?: External
     || programOption?.rounds?.[programRound - 1]?.halfSplitOnlyMatches
   );
   const programMatchesAll = useMemo(() => {
+    if (id?.startsWith("tournament~") && serverProgramMatchesAll.length) return serverProgramMatchesAll;
     if (!isProgramFinalRound && !isProgramUnitRound && !hasProgramMatchPolicy) {
       return serverProgramMatchesAll.length > 0 ? serverProgramMatchesAll : generatedProgramMatchesAll;
     }
@@ -1729,8 +1732,8 @@ export default function LeagueGPTVisionSheet({ external }: { external?: External
     skip: !authToken || isLocalDevToken(authToken),
   });
   const isCreator = !!authUser && league?.created_by_id === authUser.id;
-  const canManage = !external && (groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.league === true) || isCreator);
-  const canScore = external ? external.canScore : canManage || league?.join_permission === "public";
+  const canManage = id?.startsWith("tournament~") ? league?.can_manage === true : !external && (groupData?.myRole === "owner" || (groupData?.myRole === "admin" && groupData.myPermissions?.league === true) || isCreator);
+  const canScore = external ? external.canScore : id?.startsWith("tournament~") ? canManage && serverProgramMatchesAll.length > 0 : canManage || league?.join_permission === "public";
   // 그룹 멤버 이름 우선, 없으면 계정 이름, 비로그인 게스트는 localStorage 저장 이름 사용
   const myName    = groupData?.members?.find((m) => m.user_id === authUser?.id)?.name
     ?? authUser?.name
@@ -1857,6 +1860,12 @@ export default function LeagueGPTVisionSheet({ external }: { external?: External
   const restoreProgramNoGame = useCallback(async (matchId: string) => {
     if (!id || !programOption || !currentProgramBlock) return;
     try {
+      if (id.startsWith("tournament~")) {
+        await syncProgramMatches({ leagueId: id, matches: [], restoreMatchId: matchId }).unwrap();
+        await refetchMatches();
+        setVisionNotice({ type: "success", message: "경기를 시작 전 상태로 복구했습니다." });
+        return;
+      }
       const addRestoredMatch = <T extends { restoredMatchIds?: string[] }>(value: T): T => ({
         ...value,
         restoredMatchIds: [...new Set([...(value.restoredMatchIds ?? []), matchId])],
@@ -1877,8 +1886,12 @@ export default function LeagueGPTVisionSheet({ external }: { external?: External
         programRound,
         programSourceMatches,
       );
-      await syncProgramMatches({ leagueId: id, matches: nextMatches, resetResults: false }).unwrap();
-      await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
+      if (id.startsWith("tournament~")) {
+        await saveLeagueProgram({ leagueId: id, program: nextProgram, reconfigureRound: programRound }).unwrap();
+      } else {
+        await syncProgramMatches({ leagueId: id, matches: nextMatches, resetResults: false }).unwrap();
+        await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
+      }
       storeProgramOption(id, nextProgram);
       await refetchMatches();
       setVisionNotice({ type: "success", message: "경기를 시작 전 상태로 복구했습니다." });
@@ -2127,8 +2140,12 @@ export default function LeagueGPTVisionSheet({ external }: { external?: External
         programRound,
         programSourceMatches,
       );
-      await syncProgramMatches({ leagueId: id, matches: nextMatches, resetResults: false }).unwrap();
-      await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
+      if (id.startsWith("tournament~")) {
+        await saveLeagueProgram({ leagueId: id, program: nextProgram, reconfigureRound: programRound }).unwrap();
+      } else {
+        await syncProgramMatches({ leagueId: id, matches: nextMatches, resetResults: false }).unwrap();
+        await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
+      }
       storeProgramOption(id, nextProgram);
       await refetchMatches();
       setEditOrder(null);
@@ -2184,7 +2201,7 @@ export default function LeagueGPTVisionSheet({ external }: { external?: External
         ),
       };
       storeProgramOption(id, nextProgram);
-      await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
+      await saveLeagueProgram({ leagueId: id, program: nextProgram, ...(id.startsWith("tournament~") && shouldUpdateHalfSplitMatchOrder ? { reconfigureRound: programRound } : {}) }).unwrap();
       const nextMatches = generateProgramRoundMatches(
         id,
         nextProgram,
@@ -2192,7 +2209,7 @@ export default function LeagueGPTVisionSheet({ external }: { external?: External
         programRound,
         programSourceMatches,
       );
-      await syncProgramMatches({ leagueId: id, matches: nextMatches }).unwrap();
+      if (!id.startsWith("tournament~")) await syncProgramMatches({ leagueId: id, matches: nextMatches }).unwrap();
       await refetchMatches();
     } else {
       await reorderParticipants({
@@ -2299,8 +2316,8 @@ export default function LeagueGPTVisionSheet({ external }: { external?: External
         programSourceMatches,
       );
       storeProgramOption(id, standardProgram);
-      await saveLeagueProgram({ leagueId: id, program: standardProgram }).unwrap();
-      await syncProgramMatches({ leagueId: id, matches: standardMatches }).unwrap();
+      await saveLeagueProgram({ leagueId: id, program: standardProgram, ...(id.startsWith("tournament~") ? { reconfigureRound: programRound } : {}) }).unwrap();
+      if (!id.startsWith("tournament~")) await syncProgramMatches({ leagueId: id, matches: standardMatches }).unwrap();
       await refetchMatches();
       setEditOrder(null);
       setEditMode(false);
@@ -2351,8 +2368,8 @@ export default function LeagueGPTVisionSheet({ external }: { external?: External
         const nextParticipants = [...rawParticipants, bot];
         const nextMatches = generateProgramRoundMatches(id, nextProgram, nextParticipants, programRound, programSourceMatches);
         storeProgramOption(id, nextProgram);
-        await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
-        await syncProgramMatches({ leagueId: id, matches: nextMatches }).unwrap();
+        await saveLeagueProgram({ leagueId: id, program: nextProgram, ...(id.startsWith("tournament~") ? { reconfigureRound: programRound } : {}) }).unwrap();
+        if (!id.startsWith("tournament~")) await syncProgramMatches({ leagueId: id, matches: nextMatches }).unwrap();
       }
       await Promise.all([refetchParticipants(), refetchMatches()]);
       setEditOrder(null);
@@ -2393,7 +2410,7 @@ export default function LeagueGPTVisionSheet({ external }: { external?: External
       const html2canvas = (await import("html2canvas")).default;
       const canvas = await html2canvas(clone, { scale: 2, useCORS: true });
       const leagueName = league?.name ?? "대진표";
-      const leagueUrl = external ? window.location.href : id ? `${window.location.origin}/league/${id}` : window.location.href;
+      const leagueUrl = external ? window.location.href : id ? `${window.location.origin}${competitionPublicPath(id)}` : window.location.href;
       const sheet = document.createElement("div");
       sheet.style.cssText = [
         "position:fixed",
@@ -2466,7 +2483,7 @@ export default function LeagueGPTVisionSheet({ external }: { external?: External
       const canvas = await html2canvas(clone, { scale: 2, useCORS: true });
       const bracketImageUrl = canvas.toDataURL("image/png");
       const leagueName = league?.name ?? "대진표";
-      const leagueUrl = external ? window.location.href : id ? `${window.location.origin}/league/${id}` : window.location.href;
+      const leagueUrl = external ? window.location.href : id ? `${window.location.origin}${competitionPublicPath(id)}` : window.location.href;
       const qrMarkup = renderToStaticMarkup(
         <QRCode
           value={leagueUrl}

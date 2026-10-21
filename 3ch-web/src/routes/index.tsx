@@ -141,6 +141,7 @@ export const router = createBrowserRouter([
       { path: "/tournament/:leagueId/draw", element: <DrawList tournament /> },
       { path: "/tournament/:leagueId/draw/:drawId", element: <DrawDetail tournament /> },
       { path: "/tournament/:id/divisions/:divisionId/program", element: <TournamentProgramEdit /> },
+      { path: "/tournament/:id/divisions/:divisionId/program/view", element: <TournamentGroups /> },
       { path: "/tournament/:id/divisions/:divisionId/groups", element: <TournamentGroups /> },
       { path: "/league/quick-result", element: <LeagueQuickResult /> },
       { path: "/league/result-import", element: <Navigate to="/league/quick-result" replace /> },

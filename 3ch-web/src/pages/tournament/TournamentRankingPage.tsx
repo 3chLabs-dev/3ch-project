@@ -25,12 +25,15 @@ export default function TournamentRankingPage() {
   const exportRef = useRef<HTMLDivElement>(null);
   const divisions = data?.divisions ?? [];
   const division = divisions.find((entry) => entry.id === selectedDivision) ?? divisions[0];
-  const round = [...division?.rounds ?? []].reverse().find((entry) => entry.complete) ?? division?.rounds[0];
-  const threeSet = round?.rules.match_rule === "THREE_SET" || String(round?.rules.match_rule ?? "").includes("3세트");
-  const sections = !round?.complete ? [] : round.brackets?.length
-    ? round.brackets.map((entry) => ({ title: `${entry.name} 순위`, rows: entry.standings }))
-    : round.pools.length ? round.pools.map((entry) => ({ title: `${entry.name}조`, rows: entry.standings }))
-    : [{ title: division?.name ?? "전체 순위", rows: round.standings }];
+  const rounds = [...division?.rounds ?? []].sort((a, b) => a.round_no - b.round_no).map((round) => ({
+    round,
+    threeSet: round.rules.match_rule === "THREE_SET" || String(round.rules.match_rule ?? "").includes("3세트"),
+    sections: !round.complete ? [] : round.brackets?.length
+      ? round.brackets.map((entry) => ({ title: `${entry.name} 순위`, rows: entry.standings }))
+      : round.pools.length ? round.pools.map((entry) => ({ title: `${entry.name}조`, rows: entry.standings }))
+      : [{ title: division?.name ?? "전체 순위", rows: round.standings }],
+  }));
+  const hasResults = rounds.some(({ sections }) => sections.length > 0);
   const download = async () => {
     if (!exportRef.current || downloading) return;
     setDownloading(true);
@@ -55,12 +58,14 @@ export default function TournamentRankingPage() {
       </Select>}
     </Stack>
     <Stack direction="row" justifyContent="flex-end" spacing={0.5} sx={{ mb: 1.2 }}>
-      <IconButton size="small" disabled={downloading || !sections.length} onClick={() => void download()} aria-label="대회 순위 이미지 다운로드" sx={{ border: "1px solid #D1D5DB", borderRadius: 1 }}><DownloadOutlinedIcon sx={{ fontSize: 18 }} /></IconButton>
+      <IconButton size="small" disabled={downloading || !hasResults} onClick={() => void download()} aria-label="대회 순위 이미지 다운로드" sx={{ border: "1px solid #D1D5DB", borderRadius: 1 }}><DownloadOutlinedIcon sx={{ fontSize: 18 }} /></IconButton>
       <IconButton size="small" onClick={() => setShareDialogOpen(true)} aria-label="대회 순위 공유" sx={{ border: "1px solid #D1D5DB", borderRadius: 1 }}><CurvedShareIcon sx={{ fontSize: 19 }} /></IconButton>
     </Stack>
     {notice && <Alert severity="info" onClose={() => setNotice("")} sx={{ mb: 2 }}>{notice}</Alert>}
-    {round && <Typography sx={{ mb: 1.2, color: "text.secondary", fontSize: 12, fontWeight: 700 }}>{round.round_no}라운드 · {String(round.rules.round_label ?? "")}</Typography>}
-    {!sections.length ? <Alert severity="info">아직 라운드가 종료되지 않았습니다.</Alert> : sections.map((section) => <RankingSection key={section.title} title={section.title} rows={rankingRows(section.rows, threeSet)} visibleCount={visibleCount} currentUserId={-1} onSelect={() => undefined} onMore={() => setVisibleCount((count) => count + 10)} />)}
+    {!rounds.length ? <Alert severity="info">등록된 라운드가 없습니다.</Alert> : rounds.map(({ round, sections, threeSet }) => <Box key={round.round_no} sx={{ mb: 3 }}>
+      <Typography sx={{ mb: 1.2, color: "text.secondary", fontSize: 12, fontWeight: 700 }}>{round.round_no}라운드{round.rules.round_label ? ` · ${String(round.rules.round_label)}` : ""}</Typography>
+      {!sections.length ? <Alert severity="info">아직 라운드가 종료되지 않았습니다.</Alert> : sections.map((section) => <RankingSection key={section.title} title={section.title} rows={rankingRows(section.rows, threeSet)} visibleCount={visibleCount} currentUserId={-1} onSelect={() => undefined} onMore={() => setVisibleCount((count) => count + 10)} />)}
+    </Box>)}
     <LeagueRankingShareDialog open={shareDialogOpen} onClose={() => setShareDialogOpen(false)}
       link={`${window.location.origin}/tournament/${id}/ranking`} leagueName={metadata?.tournament.title ?? ""}
       seasonName={division?.name ?? ""} resourceLabel="대회" hideVisibility visibility="public" canManage={false}
@@ -68,7 +73,10 @@ export default function TournamentRankingPage() {
     <Box ref={exportRef} sx={{ position: "fixed", left: -10000, top: 0, width: 430, bgcolor: "#FFF", p: 2.5, zIndex: -1 }}>
       <Typography sx={{ fontSize: 22, fontWeight: 900 }}>{metadata?.tournament.title} 순위</Typography>
       <Typography sx={{ mt: 0.4, mb: 2, color: "#6B7280", fontSize: 13, fontWeight: 700 }}>{division?.name}</Typography>
-      {sections.map((section) => <RankingSection key={section.title} title={section.title} rows={rankingRows(section.rows, threeSet)} visibleCount={Number.MAX_SAFE_INTEGER} currentUserId={-1} onSelect={() => undefined} onMore={() => undefined} />)}
+      {rounds.filter(({ sections }) => sections.length > 0).map(({ round, sections, threeSet }) => <Box key={round.round_no} sx={{ mb: 3 }}>
+        <Typography sx={{ mb: 1.2, color: "text.secondary", fontSize: 12, fontWeight: 700 }}>{round.round_no}라운드{round.rules.round_label ? ` · ${String(round.rules.round_label)}` : ""}</Typography>
+        {sections.map((section) => <RankingSection key={section.title} title={section.title} rows={rankingRows(section.rows, threeSet)} visibleCount={Number.MAX_SAFE_INTEGER} currentUserId={-1} onSelect={() => undefined} onMore={() => undefined} />)}
+      </Box>)}
     </Box>
   </Box>;
 }

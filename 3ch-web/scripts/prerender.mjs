@@ -2,16 +2,27 @@ import { chromium } from 'playwright';
 import { createServer } from 'node:http';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { resolve, join, extname, sep } from 'node:path';
+import { fetchPublicResource } from './prerenderFetch.mjs';
 
 const dist = resolve('dist');
 const origin = process.env.PUBLIC_CONTENT_ORIGIN || 'https://woorileague.com';
 const template = await readFile(join(dist, 'index.html'), 'utf8');
 const routes = ['/', '/demo', '/demo/league', '/demo/club', '/demo/draw', '/mypage/guide', '/mypage/faq', '/mypage/terms', '/mypage/privacy'];
-const guideResponse = await fetch(`${origin}/api/guides`, { signal: AbortSignal.timeout(30000) });
-if (!guideResponse.ok) throw new Error(`Public guide API returned ${guideResponse.status}`);
-const { guides } = await guideResponse.json();
+console.log(`[prerender] Loading public guides from ${origin}/api/guides`);
+const guideResponse = await fetchPublicResource(`${origin}/api/guides`);
+if (guideResponse.status < 200 || guideResponse.status >= 300) throw new Error(`Public guide API returned ${guideResponse.status}`);
+const { guides } = JSON.parse(guideResponse.body.toString('utf8'));
 if (!Array.isArray(guides) || !guides.length) throw new Error('Public guides could not be loaded; refusing to publish an empty snapshot.');
 for (const guide of guides) routes.push(`/mypage/guide/${Number(guide.id)}`);
+console.log(`[prerender] Loaded ${guides.length} guides (${guideResponse.body.length} bytes).`);
+
+// Reuse the exact snapshot used to enumerate the guide routes, including when
+// rendering the guide page. Do not download the same large public payload twice.
+const apiCache = new Map([['/api/guides', Promise.resolve(guideResponse)]]);
+function getPublicApi(key) {
+  if (!apiCache.has(key)) apiCache.set(key, fetchPublicResource(`${origin}${key}`));
+  return apiCache.get(key);
+}
 
 const types = { '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json' };
 let verifySnapshots = false;
@@ -19,9 +30,10 @@ const server = createServer(async (req, res) => {
   try {
     const pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
     if (pathname.startsWith('/api/')) {
-      const response = await fetch(`${origin}${req.url}`, { signal: AbortSignal.timeout(30000) });
-      res.writeHead(response.status, { 'Content-Type': response.headers.get('content-type') || 'application/json' });
-      return res.end(Buffer.from(await response.arrayBuffer()));
+      if (req.method !== 'GET') { res.writeHead(405); return res.end(); }
+      const response = await getPublicApi(req.url);
+      res.writeHead(response.status, { 'Content-Type': response.contentType });
+      return res.end(response.body);
     }
     if (!extname(pathname)) {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -46,18 +58,20 @@ try {
   const context = await browser.newContext({ viewport: { width: 430, height: 932 }, serviceWorkers: 'block' });
   // The production API permits the production origin; read the same public data
   // through Node during local rendering so localhost does not trigger CORS.
-  const apiCache = new Map();
+  const apiFailures = [];
   await context.route('**/api/**', async (route) => {
     if (route.request().method() !== 'GET') return route.abort();
     const url = new URL(route.request().url());
     // Popups are visitor-specific interactive portals, never public HTML content.
     if (url.pathname === '/api/popups') return route.fulfill({ json: { popups: [] } });
     const key = `${url.pathname}${url.search}`;
-    if (!apiCache.has(key)) apiCache.set(key, (async () => {
-      const response = await fetch(`${origin}${key}`, { signal: AbortSignal.timeout(30000) });
-      return { status: response.status, contentType: response.headers.get('content-type') || 'application/json', body: Buffer.from(await response.arrayBuffer()) };
-    })());
-    await route.fulfill(await apiCache.get(key));
+    try {
+      await route.fulfill(await getPublicApi(key));
+    } catch (error) {
+      apiFailures.push(error.message);
+      console.error(error.message);
+      await route.abort('failed').catch(() => undefined);
+    }
   });
   // Do not request ad inventory while generating the same public UI for all visitors.
   await context.route(/kakaocdn\.net\/kas|googlesyndication\.com|doubleclick\.net/, (route) => route.abort());
@@ -65,7 +79,10 @@ try {
     const page = await context.newPage();
     const errors = [];
     page.on('pageerror', (error) => errors.push(error.message));
-    await page.goto(address + route, { waitUntil: 'networkidle', timeout: 60000 });
+    console.log(`[prerender] Rendering ${route}`);
+    // Allow the bounded API retries to finish before navigation times out.
+    await page.goto(address + route, { waitUntil: 'networkidle', timeout: 210000 });
+    if (apiFailures.length) throw new Error(`Cannot prerender ${route}: ${apiFailures.join('; ')}`);
     await page.waitForFunction(() => document.getElementById('root')?.innerText.trim().length > 80 && !document.querySelector('.MuiCircularProgress-root'), undefined, { timeout: 30000 });
     if (errors.length) throw new Error(`${route}: ${errors.join('; ')}`);
     if (/^\/mypage\/guide\/\d+$/.test(route)) {

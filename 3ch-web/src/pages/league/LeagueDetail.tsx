@@ -1,3 +1,4 @@
+import EventShareDialog from "../../components/EventShareDialog";
 import { ParticipantRosterSurface, ParticipantRosterHeader, ParticipantRosterRow } from "../../components/ParticipantRoster";
   import { useMemo, useState } from "react";
   import { DivisionBadge } from "../../components/ParticipantName";
@@ -38,7 +39,6 @@ import {
   import CurvedShareIcon from "../../components/CurvedShareIcon";
   import SearchIcon from "@mui/icons-material/Search";
   import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
-  import SmsOutlinedIcon from "@mui/icons-material/SmsOutlined";
   import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
   import RefreshIcon from "@mui/icons-material/Refresh";
   import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
@@ -2460,17 +2460,10 @@ const handleSaveEdit = async () => {
           groupId={league.group_id}
         />
 
-        {/* 리그 공유 다이얼로그 */}
-        <Dialog
-          open={shareDialogOpen}
-          onClose={() => setShareDialogOpen(false)}
-          maxWidth="sm"
-          fullWidth
-          slotProps={{ paper: { sx: { borderRadius: 1, mx: 2 } } }}
-        >
-          <DialogTitle sx={{ fontWeight: 900, pb: 1 }}>리그 공유</DialogTitle>
-          <DialogContent>
-            <Stack spacing={3} sx={{ pt: 1, alignItems: "center" }}>
+        {/* 리그와 대회에서 같은 공유 UI를 사용합니다. */}
+        <EventShareDialog open={shareDialogOpen} onClose={() => setShareDialogOpen(false)}
+          noun="리그" name={league?.name ?? "리그"} path={`/league/${id}`}
+          onNotice={(message, error) => { setAlertSeverity(error ? "error" : "success"); setAlertMsg(message); }}>
               {canManage && (
                 <Box sx={{ width: "100%" }}>
                   <Typography fontSize={12} color="text.secondary" fontWeight={600} sx={{ mb: 0.8 }}>
@@ -2545,121 +2538,7 @@ const handleSaveEdit = async () => {
                   </Typography>
                 </Box>
               )}
-              <Box sx={{ p: 2, bgcolor: "#fff", borderRadius: 1, border: "1px solid #E0E0E0" }}>
-                <QRCode
-                  value={`${window.location.origin}/league/${id}`}
-                  size={200}
-                  style={{ height: "auto", maxWidth: "100%", width: "100%" }}
-                />
-              </Box>
-              <Box sx={{ width: "100%" }}>
-                <Typography fontSize={12} color="text.secondary" fontWeight={600} sx={{ mb: 0.5 }}>
-                  공유 링크
-                </Typography>
-                <TextField
-                  value={`${window.location.origin}/league/${id}`}
-                  fullWidth
-                  size="small"
-                  slotProps={{ input: { readOnly: true } }}
-                  sx={{ "& .MuiInputBase-input": { fontSize: 13 } }}
-                />
-              </Box>
-              <Stack direction="row" justifyContent="space-around" sx={{ width: "100%", pt: 0.5 }}>
-                {/* 카카오톡 */}
-                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.8 }}>
-                  <IconButton
-                    onClick={() => {
-                      const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
-                      const link = `${appUrl}/league/${id}`;
-                      const kakaoKey = import.meta.env.VITE_KAKAO_JS_KEY;
-                      if (window.Kakao && kakaoKey && !window.Kakao.isInitialized()) {
-                        window.Kakao.init(kakaoKey);
-                      }
-                      if (window.Kakao?.Share) {
-                        window.Kakao.Share.sendDefault({
-                          objectType: "feed",
-                          content: {
-                            title: league?.name ?? "리그",
-                            description: "리그에 참가해보세요!",
-                            imageUrl: `${appUrl}/og-image.png`,
-                            link: { mobileWebUrl: link, webUrl: link },
-                          },
-                          buttons: [{ title: "리그 보기", link: { mobileWebUrl: link, webUrl: link } }],
-                        });
-                      } else {
-                        navigator.clipboard?.writeText(link);
-                        alert("링크가 복사되었습니다.");
-                      }
-                    }}
-                    // sx={{ width: 56, height: 56, bgcolor: "#FFEB3A", "&:hover": { bgcolor: "#E6CE00" }, p: 0, overflow: "hidden" }}
-                    sx={{ width: 56, height: 56, bgcolor: "#FFEB3A", transition: "none", "&:hover": { bgcolor: "#E6CE00", img: { filter: "brightness(0.89)",}, }, }}
-                  >
-                    <Box component="img" src="/kakao-logo.png" alt="카카오톡" sx={{ width: 40, height: 40, objectFit: "contain" }} />
-                  </IconButton>
-                  <Typography fontSize={11} fontWeight={700} color="text.secondary">카카오톡</Typography>
-                </Box>
-
-                {/* 문자 */}
-                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.8 }}>
-                  <IconButton
-                    onClick={() => {
-                      const link = `${window.location.origin}/league/${id}`;
-                      const message = `리그에 초대합니다! ${link}`;
-                      window.location.href = `sms:?body=${encodeURIComponent(message)}`;
-                    }}
-                    sx={{ width: 56, height: 56, bgcolor: "#4CAF50", color: "#fff", "&:hover": { bgcolor: "#43A047" } }}
-                  >
-                    <SmsOutlinedIcon />
-                  </IconButton>
-                  <Typography fontSize={11} fontWeight={700} color="text.secondary">문자</Typography>
-                </Box>
-
-                {/* 링크 복사 */}
-                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.8 }}>
-                  <IconButton
-                    onClick={async () => {
-                      const link = `${window.location.origin}/league/${id}`;
-                      try {
-                        if (navigator.clipboard?.writeText) {
-                          await navigator.clipboard.writeText(link);
-                        } else {
-                          const el = document.createElement("textarea");
-                          el.value = link;
-                          el.style.position = "fixed";
-                          el.style.opacity = "0";
-                          document.body.appendChild(el);
-                          el.focus();
-                          el.select();
-                          document.execCommand("copy");
-                          document.body.removeChild(el);
-                        }
-                        setAlertSeverity("success");
-                        setAlertMsg("링크가 복사되었습니다!");
-                        setShareDialogOpen(false);
-                      } catch {
-                        setAlertMsg("링크 복사에 실패했습니다.");
-                      }
-                    }}
-                    sx={{ width: 56, height: 56, bgcolor: "#E5E7EB", color: "#374151", "&:hover": { bgcolor: "#D1D5DB" } }}
-                  >
-                    <ContentCopyOutlinedIcon />
-                  </IconButton>
-                  <Typography fontSize={11} fontWeight={700} color="text.secondary">링크 복사</Typography>
-                </Box>
-              </Stack>
-            </Stack>
-          </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 2.5 }}>
-            <Button
-              onClick={() => setShareDialogOpen(false)}
-              variant="contained"
-              disableElevation
-              sx={{ borderRadius: 1, px: 3, fontWeight: 700 }}
-            >
-              닫기
-            </Button>
-          </DialogActions>
-        </Dialog>
+        </EventShareDialog>
 
         <Dialog
           open={botPlacementOpen}

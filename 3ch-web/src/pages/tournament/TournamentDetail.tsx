@@ -1,3 +1,4 @@
+import EventShareDialog from "../../components/EventShareDialog";
 import { getEntryConfig } from "./TournamentEntryFields";
 import LeagueProgramList from "../league/LeagueProgramList";
 import { tournamentLeagueKey } from "../../features/tournament/leagueScope";
@@ -47,6 +48,7 @@ export default function TournamentDetail() {
   const programRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState(false);
   const [clubsOpen, setClubsOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteSummary, setDeleteSummary] = useState<TournamentDeleteSummary | null>(null);
   const [deleteConfirmationText, setDeleteConfirmationText] = useState("");
@@ -141,7 +143,7 @@ export default function TournamentDetail() {
   const paymentAmount = calculateTournamentFee(paymentParticipants, tournament.divisions ?? [], tournament.entry_fee).amount ?? 0;
   const tossLink = account && paymentAmount > 0 ? createTossTransferLink(account.bankName, account.accountNumber, paymentAmount) : null;
   return <Box sx={{ pb: canEnterApplication ? 11 : 4 }}>
-    <Stack direction="row" alignItems="center" sx={{ mb: 2 }}><IconButton onClick={() => navigate("/league")} size="small" sx={{ mr: 0.5 }}><ArrowBackIcon /></IconButton><Typography fontWeight={900} fontSize={18} sx={{ flex: 1 }}>{tournament.title}</Typography><IconButton size="small" aria-label="대회 공유" onClick={async () => { const url = `${window.location.origin}/tournament/${id}`; try { if (navigator.share) await navigator.share({ title: tournament.title, url }); else { await navigator.clipboard.writeText(url); setSaveMessage("대회 링크를 복사했습니다."); } } catch (reason) { if ((reason as Error).name !== "AbortError") setError("대회 링크를 공유하지 못했습니다."); } }}><CurvedShareIcon fontSize="small" /></IconButton></Stack>
+    <Stack direction="row" alignItems="center" sx={{ mb: 2 }}><IconButton onClick={() => navigate("/league")} size="small" sx={{ mr: 0.5 }}><ArrowBackIcon /></IconButton><Typography fontWeight={900} fontSize={18} sx={{ flex: 1 }}>{tournament.title}</Typography><IconButton size="small" aria-label="대회 공유" onClick={() => setShareOpen(true)}><CurvedShareIcon fontSize="small" /></IconButton></Stack>
     {error && <Alert severity="error" sx={{ mb: 1 }}>{error}</Alert>}
     <Box sx={{ bgcolor: "#fff", borderRadius: 1, border: "1px solid #E5E7EB", px: 2, py: 1, mb: 2.5 }}>
       <Box sx={rowSx}><Typography sx={labelSx}>대회명</Typography>{tournament.can_manage ? field("title") : <Typography sx={valueSx}>{tournament.title}</Typography>}</Box><Divider />
@@ -197,6 +199,8 @@ export default function TournamentDetail() {
       </DialogContent>
       <DialogActions><Button onClick={() => setDeleteOpen(false)} disabled={deleting}>취소</Button><Button color="error" variant="contained" disabled={deleting || !deleteSummary || deleteConfirmationText !== "삭제"} onClick={() => void confirmDelete()}>{deleting ? "삭제 중" : "영구 삭제"}</Button></DialogActions>
     </Dialog>
+    <EventShareDialog open={shareOpen} onClose={() => setShareOpen(false)} noun="대회" name={tournament.title} path={`/tournament/${id}`}
+      onNotice={(message, failed) => { if (failed) setError(message); else setSaveMessage(message); }} />
     <Snackbar open={!!saveMessage} autoHideDuration={3000} onClose={() => setSaveMessage("")} anchorOrigin={{ vertical: "bottom", horizontal: "center" }}>
       <Alert severity="success" onClose={() => setSaveMessage("")} sx={{ fontWeight: 700 }}>{saveMessage}</Alert>
     </Snackbar>

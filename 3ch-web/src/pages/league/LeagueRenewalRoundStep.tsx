@@ -221,9 +221,9 @@ export default function LeagueRenewalRoundStep({ kind }: { kind: StepKind }) {
     onPrevious={() => dispatch(setRenewalStep(previousSteps[kind]))} onNext={() => dispatch(setRenewalStep(nextSteps[kind]))} />;
 }
 
-export function LeagueRoundStepForm({ kind, rounds, setRounds, hasParticipatingClubs, participantCount, onPrevious, onNext, embedded = false }: {
+export function LeagueRoundStepForm({ kind, rounds, setRounds, hasParticipatingClubs, participantCount, onPrevious, onNext, embedded = false, roundNumberOffset = 0 }: {
   kind: StepKind; rounds: RenewalRoundConfig[]; setRounds: (rounds: RenewalRoundConfig[]) => void;
-  hasParticipatingClubs: boolean; participantCount: number | null; onPrevious?: () => void; onNext?: () => void; embedded?: boolean;
+  hasParticipatingClubs: boolean; participantCount: number | null; onPrevious?: () => void; onNext?: () => void; embedded?: boolean; roundNumberOffset?: number;
 }) {
   const updateRound = (index: number, patch: Partial<RenewalRoundConfig>) =>
     setRounds(
@@ -960,7 +960,7 @@ export function LeagueRoundStepForm({ kind, rounds, setRounds, hasParticipatingC
         {rounds.map((round, index) => (
           <Box key={round.id}>
             <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
-              <Typography sx={{ fontSize: 20, fontWeight: 900 }}>{index + 1}라운드</Typography>
+              <Typography sx={{ fontSize: 20, fontWeight: 900 }}>{index + 1 + roundNumberOffset}라운드</Typography>
               {kind === "type" && rounds.length > 1 && (
                 <Button size="small" color="error" variant="outlined" onClick={() => removeRound(index)}>
                   삭제

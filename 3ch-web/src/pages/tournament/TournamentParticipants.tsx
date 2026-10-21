@@ -1,3 +1,4 @@
+import { getEntryConfig } from "./TournamentEntryFields";
 import { ParticipantRosterSurface, ParticipantRosterHeader, ParticipantRosterRow } from "../../components/ParticipantRoster";
 import { DivisionBadge } from "../../components/ParticipantName";
 import { useNavigate } from "react-router-dom";
@@ -33,7 +34,7 @@ export default function TournamentParticipants({ tournament }: { tournament: Tou
     } catch (reason) { setDivisionError((reason as { data?: { message?: string } }).data?.message ?? "대회 부수를 수정하지 못했습니다."); }
   };
   const participants = data?.participants ?? [];
-  const divisions = tournament.divisions ?? [];
+  const divisions = (tournament.divisions ?? []).filter(d => !getEntryConfig(d).source_division_ids.length);
   const selectedDivision = divisions.find((division) => division.id === divisionId) ?? divisions[0];
   const clubs = useMemo(() => {
     const found = new Map<string, string>();
@@ -44,7 +45,7 @@ export default function TournamentParticipants({ tournament }: { tournament: Tou
   const clubSummary = (groupId: string) => {
     const entries = participants.filter((participant) => (participant.source_group_id ?? "individual") === groupId);
     const waiting = entries.filter((participant) => participant.status === "applied");
-    const { roundCount: rounds, amount } = calculateTournamentFee(entries, divisions, tournament.entry_fee);
+    const { roundCount: rounds, amount } = calculateTournamentFee(entries, tournament.divisions ?? [], tournament.entry_fee);
     return <Stack spacing={0.7} sx={{ mb: 1.2, py: 1 }}>
       <Typography fontSize={13} fontWeight={800}>{clubs.find((club) => club.id === groupId)?.name} · {entries.length}명 · 대기 {waiting.length}명</Typography>
       <Typography fontSize={13}>{tournament.entry_fee == null ? "참가비 미설정" : `입금 예정액 ${amount!.toLocaleString()}원 (${entries.length}명 · 총 ${rounds}인·라운드 × ${tournament.entry_fee.toLocaleString()}원)`}</Typography>

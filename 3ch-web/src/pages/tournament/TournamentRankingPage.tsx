@@ -1,3 +1,4 @@
+import { getEntryConfig } from "./TournamentEntryFields";
 import { useRef, useState } from "react";
 import { Alert, Box, Button, CircularProgress, IconButton, MenuItem, Select, Stack, Typography } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -63,7 +64,7 @@ export default function TournamentRankingPage() {
     </Stack>
     {notice && <Alert severity="info" onClose={() => setNotice("")} sx={{ mb: 2 }}>{notice}</Alert>}
     {!rounds.length ? <Alert severity="info">등록된 라운드가 없습니다.</Alert> : rounds.map(({ round, sections, threeSet }, index) => <Box key={round.round_no} sx={{ mb: 3, ...(index > 0 && { borderTop: "1px solid #D1D5DB", pt: 3 }) }}>
-      <Typography sx={{ mb: 1.5, color: "#111827", fontSize: 20, fontWeight: 900 }}>{round.round_no}라운드{round.rules.round_label ? ` · ${String(round.rules.round_label)}` : ""}</Typography>
+      <Typography sx={{ mb: 1.5, color: "#111827", fontSize: 20, fontWeight: 900 }}>{round.round_no + (division ? getEntryConfig(division).start_round - 1 : 0)}라운드{round.rules.round_label ? ` · ${String(round.rules.round_label)}` : ""}</Typography>
       {!sections.length ? <Alert severity="info">아직 라운드가 종료되지 않았습니다.</Alert> : sections.map((section) => <RankingSection key={section.title} title={section.title} titleFontSize={14} rows={rankingRows(section.rows, threeSet)} visibleCount={visibleCount} currentUserId={-1} onSelect={() => undefined} onMore={() => setVisibleCount((count) => count + 10)} />)}
     </Box>)}
     <LeagueRankingShareDialog open={shareDialogOpen} onClose={() => setShareDialogOpen(false)}
@@ -74,7 +75,7 @@ export default function TournamentRankingPage() {
       <Typography sx={{ fontSize: 22, fontWeight: 900 }}>{metadata?.tournament.title} 순위</Typography>
       <Typography sx={{ mt: 0.4, mb: 2, color: "#6B7280", fontSize: 13, fontWeight: 700 }}>{division?.name}</Typography>
       {rounds.filter(({ sections }) => sections.length > 0).map(({ round, sections, threeSet }, index) => <Box key={round.round_no} sx={{ mb: 3, ...(index > 0 && { borderTop: "1px solid #D1D5DB", pt: 3 }) }}>
-        <Typography sx={{ mb: 1.5, color: "#111827", fontSize: 20, fontWeight: 900 }}>{round.round_no}라운드{round.rules.round_label ? ` · ${String(round.rules.round_label)}` : ""}</Typography>
+        <Typography sx={{ mb: 1.5, color: "#111827", fontSize: 20, fontWeight: 900 }}>{round.round_no + (division ? getEntryConfig(division).start_round - 1 : 0)}라운드{round.rules.round_label ? ` · ${String(round.rules.round_label)}` : ""}</Typography>
         {sections.map((section) => <RankingSection key={section.title} title={section.title} titleFontSize={14} rows={rankingRows(section.rows, threeSet)} visibleCount={Number.MAX_SAFE_INTEGER} currentUserId={-1} onSelect={() => undefined} onMore={() => undefined} />)}
       </Box>)}
     </Box>

@@ -72,6 +72,7 @@ export interface TournamentConfig {
 }
 
 export interface ProgramOption {
+  tournamentEntryConfig?: { source_division_ids: string[]; start_round: number };
   title: string;
   groupSizes: number[];
   matchRule: MatchRule;

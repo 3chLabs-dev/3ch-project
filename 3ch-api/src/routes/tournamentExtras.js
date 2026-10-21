@@ -5,6 +5,7 @@ const { requireAuth, optionalAuth } = require('../middlewares/auth');
 const { tournamentAccess } = require('../utils/tournamentAccess');
 const { buildKnockoutBracket, advancePersistedBracket, guardQualifiedSourceResults } = require('../services/tournamentBracket');
 const { buildTournamentRoundResult } = require('../services/tournamentResults');
+const {entryDivisionIds}=require('../services/tournamentEntryConfig');
 const router = express.Router();
 
 router.get('/tournaments/:id/results', optionalAuth, async (req, res) => {
@@ -20,7 +21,7 @@ router.get('/tournaments/:id/results', optionalAuth, async (req, res) => {
       const program = rounds.rows.filter((round) => round.division_id === division.id);
       const divisionMatches = matches.rows.filter((match) => match.division_id === division.id);
       return { ...division, unassigned_match_count: program.length > 1 ? divisionMatches.filter((match) => match.program_round === null).length : 0,
-        rounds: program.map((round) => ({ ...round, ...buildTournamentRoundResult(round, divisionMatches.filter((match) => match.program_round === round.round_no || (match.program_round === null && program.length === 1)), participants.rows.filter((person) => person.division_id === division.id)) })) };
+        rounds: program.map((round) => ({ ...round, ...buildTournamentRoundResult(round, divisionMatches.filter((match) => match.program_round === round.round_no || (match.program_round === null && program.length === 1)), participants.rows.filter((person) => entryDivisionIds(division).includes(person.division_id))) })) };
     }) });
   } catch (error) { console.error(error); return res.status(500).json({ message: '경기 결과를 불러오지 못했습니다.' }); }
 });
@@ -33,18 +34,18 @@ router.post('/tournaments/:id/divisions/:divisionId/rounds/:roundNo/bracket', re
     const tournament=await client.query('SELECT * FROM tournaments WHERE id=$1 FOR UPDATE',[req.params.id]);
     const rights=await tournamentAccess(client,req.params.id,Number(req.user.sub));
     if (!rights.manage) {await client.query('ROLLBACK');return res.status(403).json({message:'대회 관리 권한이 필요합니다.'});}
-    const division=await client.query('SELECT id FROM tournament_divisions WHERE id=$1 AND tournament_id=$2 FOR UPDATE',[req.params.divisionId,req.params.id]);
+    const division=await client.query('SELECT * FROM tournament_divisions WHERE id=$1 AND tournament_id=$2 FOR UPDATE',[req.params.divisionId,req.params.id]);
     if (!division.rowCount) {await client.query('ROLLBACK');return res.status(404).json({message:'대회 부문을 찾을 수 없습니다.'});}
     const rounds=await client.query('SELECT * FROM tournament_division_rounds WHERE division_id=$1 ORDER BY round_no',[req.params.divisionId]);
     const roundNo=Number(req.params.roundNo), round=rounds.rows.find((r)=>r.round_no===roundNo);
     if (!round || round.format!=='TOURNAMENT' || round.league_type!=='SINGLES') {await client.query('ROLLBACK');return res.status(409).json({message:'현재 토너먼트 생성은 단식 토너먼트에서 지원합니다.'});}
     const existing=await client.query('SELECT * FROM tournament_matches WHERE division_id=$1 ORDER BY program_round,match_order FOR UPDATE',[req.params.divisionId]);
     if (existing.rows.some((m)=>m.program_round===roundNo || m.program_round===null)) {await client.query('ROLLBACK');return res.status(409).json({message:'기존 대진표가 있어 재생성하지 않습니다. 경기와 결과는 유지됩니다.'});}
-    const participants=await client.query("SELECT * FROM tournament_participants WHERE division_id=$1 AND status='confirmed' ORDER BY created_at,id FOR UPDATE",[req.params.divisionId]);
+    const participants=await client.query("SELECT * FROM tournament_participants WHERE division_id=ANY($1::uuid[]) AND status='confirmed' ORDER BY created_at,id FOR UPDATE",[entryDivisionIds(division.rows[0])]);
     let entrants=participants.rows;
     if (roundNo===1) {
       if (tournament.rows[0].application_deadline_at && new Date()<new Date(tournament.rows[0].application_deadline_at)) {await client.query('ROLLBACK');return res.status(409).json({message:'참가 신청 마감 후 토너먼트를 생성해주세요.'});}
-      const pending=await client.query("SELECT 1 FROM tournament_participants WHERE division_id=$1 AND status='applied' LIMIT 1",[req.params.divisionId]);
+      const pending=await client.query("SELECT 1 FROM tournament_participants WHERE division_id=ANY($1::uuid[]) AND status='applied' LIMIT 1",[entryDivisionIds(division.rows[0])]);
       if (pending.rowCount) {await client.query('ROLLBACK');return res.status(409).json({message:'신청 대기자를 모두 처리해주세요.'});}
     } else {
       const previous=rounds.rows.find((r)=>r.round_no===roundNo-1);

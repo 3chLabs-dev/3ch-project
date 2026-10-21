@@ -1,6 +1,7 @@
 const { createHash } = require('crypto');
 const { generateProgramRoundMatches, generateProgramBlocks } = require('../shared/leagueProgramEngine.cjs');
 const { buildTournamentRoundResult } = require('./tournamentResults');
+const {entryConfig}=require('./tournamentEntryConfig');
 const conflict = message => Object.assign(new Error(message), { statusCode: 409 });
 const keyFor = (id, divisionId) => `tournament~${id}~${divisionId}`;
 function matchId(divisionId, key) {
@@ -40,7 +41,7 @@ function leagueMatches(rows, participants, key) {
 }
 function programFor(division, rounds, pools, people) {
   if (division.league_program?.deleted) return {title:'직접 구성',compositionMode:'custom',rounds:[],blocks:[],groupSizes:[people.length],matchRule:'3전 2선승제',matchCount:0,expectedMinutes:0,recommendationScore:0,description:'',totalBlockMatchCount:0,totalProgramMinutes:0,isOverTime:false};
-  if (division.league_program) return structuredClone(division.league_program);
+  if (division.league_program) return {...structuredClone(division.league_program),tournamentEntryConfig:entryConfig(division)};
   const config = rounds.map((r,index) => ({
     ...(r.rules?.league_config ?? {}), id: index+1, expanded: true, program:r.league_type,
     format:r.format === 'GROUP_TOURNAMENT' ? 'GROUP' : r.format,
@@ -60,7 +61,7 @@ function programFor(division, rounds, pools, people) {
         groupAssignments:groups.map(p => p.members.map(person => ({id:person.id,name:person.name,level:parseInt(person.member_division)||0,sourceGroupId:person.source_group_id}))) } : {}),
     };
   });
-  return { title:'직접 구성',compositionMode:'custom',rounds:config,blocks,groupSizes:[people.length],matchRule:'3전 2선승제',
+  return { tournamentEntryConfig:entryConfig(division), title:'직접 구성',compositionMode:'custom',rounds:config,blocks,groupSizes:[people.length],matchRule:'3전 2선승제',
     matchCount:0,expectedMinutes:0,recommendationScore:0,description:'',totalBlockMatchCount:0,totalProgramMinutes:0,isOverTime:false };
 }
 function hasResult(m) { return m.status === 'completed' || m.status === 'playing' || m.score_a != null || m.score_b != null; }

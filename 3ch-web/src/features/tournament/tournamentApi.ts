@@ -11,6 +11,8 @@ export interface TournamentRoundInput {
 
 export interface TournamentDivisionInput {
   name: string;
+  source_division_indices?: number[];
+  start_round?: number;
   recruit_count: number | null;
   rounds: TournamentRoundInput[];
 }
@@ -33,7 +35,7 @@ export interface CreateTournamentRequest {
 }
 
 export interface TournamentRound extends TournamentRoundInput { id: string; round_no: number }
-export interface TournamentDivision { id: string; name: string; status: string; recruit_count: number | null; applicant_count: number; confirmed_count: number; rounds: TournamentRound[] }
+export interface TournamentDivision { rules?: Record<string, unknown>; id: string; name: string; status: string; recruit_count: number | null; applicant_count: number; confirmed_count: number; rounds: TournamentRound[] }
 export interface TournamentItem { id: string; title: string; notice?: string | null; entry_fee?: number | null; bank_account?: string | null; starts_at: string; ends_at: string | null; application_deadline_at: string | null; premium_visible: boolean; status: string; venue_name?: string | null; venue_address?: string | null; court_count?: number | null; recruit_count?: number | null; host_group_id: string; host_group_name?: string; can_manage?: boolean; can_manage_draw?: boolean; can_manage_settlement?: boolean; can_delete?: boolean; can_apply?: boolean; divisions?: TournamentDivision[] }
 export interface TournamentDeleteSummary { draws?: number; settlements?: number; settlement_payments?: number; receipt_scans?: number; divisions: number; rounds: number; participants: number; pools: number; matches: number; recorded_matches: number; invited_groups: number }
 export interface TournamentMatch { next_match_id?: string | null; next_slot?: string | null; loser_next_match_id?: string | null; loser_next_slot?: string | null; bracket?: string | null; bracket_index?: number | null; match_label?: string | null; is_bye?: boolean; court?: string | null;  id: string; division_id: string; program_round: number | null; participant_a_id: string | null; participant_b_id: string | null; score_a: number | null; score_b: number | null; status: string; phase: string; round_no: number | null; pool_name: string | null; match_order: number }
@@ -47,6 +49,9 @@ export const tournamentApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     getTournamentEligibility: builder.query<{ can_create: boolean }, void>({
       query: () => "/tournaments/eligibility",
+    }),
+    createTournamentCompetition: builder.mutation<{ division: { id: string } }, { id: string; body: TournamentDivisionInput & { entry_config: { source_division_ids: string[]; start_round: number } } }>({
+      query: ({ id, body }) => ({ url: `/tournaments/${id}/competitions`, method: "POST", body }), invalidatesTags: ["Tournament"],
     }),
     createTournament: builder.mutation<{ tournament: { id: string } }, CreateTournamentRequest>({
       query: (body) => ({ url: "/tournaments", method: "POST", body }),
@@ -81,4 +86,4 @@ export const tournamentApi = baseApi.injectEndpoints({
   }),
 });
 
-export const { useGenerateTournamentBracketMutation, useUpdateTournamentMatchMutation, useGetTournamentResultsQuery, useRegisterTournamentParticipantsMutation, useWithdrawTournamentParticipantMutation, useGetTournamentEligibilityQuery, useCreateTournamentMutation, useGetTournamentsQuery, useGetTournamentQuery, useLazyGetTournamentDeletePreviewQuery, useDeleteTournamentMutation, useUpdateTournamentMutation, useUpdateTournamentVisibilityMutation, useUpdateTournamentDivisionMutation, useUpdateTournamentRoundMutation, useAddTournamentRoundMutation, useSaveTournamentProgramMutation, useOpenTournamentMutation, useGetTournamentParticipantsQuery, useGetTournamentParticipantsAllQuery, useGetTournamentApplicationRosterQuery, useSaveTournamentApplicationRosterMutation, useConfirmTournamentClubMutation, useReviewTournamentApplicationMutation, useUpdateTournamentParticipantDivisionMutation, useGetTournamentPoolsQuery, useLazyPreviewTournamentPoolsQuery, useGenerateTournamentPoolsMutation } = tournamentApi;
+export const { useCreateTournamentCompetitionMutation, useGenerateTournamentBracketMutation, useUpdateTournamentMatchMutation, useGetTournamentResultsQuery, useRegisterTournamentParticipantsMutation, useWithdrawTournamentParticipantMutation, useGetTournamentEligibilityQuery, useCreateTournamentMutation, useGetTournamentsQuery, useGetTournamentQuery, useLazyGetTournamentDeletePreviewQuery, useDeleteTournamentMutation, useUpdateTournamentMutation, useUpdateTournamentVisibilityMutation, useUpdateTournamentDivisionMutation, useUpdateTournamentRoundMutation, useAddTournamentRoundMutation, useSaveTournamentProgramMutation, useOpenTournamentMutation, useGetTournamentParticipantsQuery, useGetTournamentParticipantsAllQuery, useGetTournamentApplicationRosterQuery, useSaveTournamentApplicationRosterMutation, useConfirmTournamentClubMutation, useReviewTournamentApplicationMutation, useUpdateTournamentParticipantDivisionMutation, useGetTournamentPoolsQuery, useLazyPreviewTournamentPoolsQuery, useGenerateTournamentPoolsMutation } = tournamentApi;

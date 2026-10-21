@@ -1,3 +1,4 @@
+import { getEntryConfig } from "./TournamentEntryFields";
 import { useState } from "react";
 import { Alert, Box, Button, CircularProgress, Stack } from "@mui/material";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -37,7 +38,7 @@ export default function TournamentResults({ view = "results" }: { view?: "result
       {divisions.map((entry) => <Button key={entry.id} size="small" variant={entry.id === division.id ? "contained" : "outlined"}
         onClick={() => setSelectedDivision(entry.id)} sx={{ flexShrink: 0, borderRadius: 1.5, fontWeight: 800 }}>{entry.name}</Button>)}
     </Stack>}
-    <RoundResultView key={`${division.id}-${round.round_no}`} round={round.round_no}
+    <RoundResultView key={`${division.id}-${round.round_no}`} round={round.round_no + getEntryConfig(division).start_round - 1}
       subtitle={`${metadata?.tournament.title ?? ""} · ${division.name} · ${String(round.rules.round_label ?? "")}`}
       format={round.pools?.length ? "GROUP" : round.format === "TOURNAMENT" ? "TOURNAMENT" : "LEAGUE"}
       complete={round.complete} threeSet={round.rules.match_rule === "THREE_SET" || round.rules.match_rule.includes("3세트")}

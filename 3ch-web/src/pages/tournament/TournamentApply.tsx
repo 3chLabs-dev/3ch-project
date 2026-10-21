@@ -1,3 +1,4 @@
+import { getEntryConfig } from "./TournamentEntryFields";
 import { loginUrl } from "../../utils/returnNavigation";
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Box, Button, CircularProgress, Divider, IconButton, MenuItem, Stack, TextField, Typography } from "@mui/material";
@@ -34,7 +35,7 @@ export default function TournamentApply() {
   const [loadOpen, setLoadOpen] = useState(false);
   const [error, setError] = useState("");
   const tournament = tournamentData?.tournament;
-  const divisions = tournament?.divisions ?? [];
+  const divisions = (tournament?.divisions ?? []).filter(d => !getEntryConfig(d).source_division_ids.length);
   const selectedDivisionId = divisions.some((division) => division.id === addDivisionId) ? addDivisionId : divisions[0]?.id ?? "";
   const canEdit = !!tournament && new Date() < new Date(tournament.starts_at);
   const canAdd = canEdit && !!tournament && new Date() < new Date(tournament.application_deadline_at ?? tournament.starts_at) && (tournament.can_apply || tournament.can_manage);

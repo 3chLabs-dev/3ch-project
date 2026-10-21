@@ -6,6 +6,7 @@ const {optionalAuth}=require('../middlewares/auth');
 const {tournamentAccess}=require('../utils/tournamentAccess');
 const {advancePersistedBracket,guardQualifiedSourceResults}=require('../services/tournamentBracket');
 const {keyFor,matchId,leagueParticipants,leagueMatches,programFor,withProgramEstimates,hasResult,validateProgram,generateRound,conflict,statusFor}=require('../services/tournamentLeagueProgram');
+const {entryConfig,entryDivisionIds,validateEntryConfig}=require('../services/tournamentEntryConfig');
 const router=express.Router();
 const uuid=z.string().uuid();
 async function insertGenerated(client,divisionId,roundNo,generated) {
@@ -24,7 +25,7 @@ router.use('/tournaments/:id/divisions/:divisionId/league',optionalAuth,async(re
     const division=(await client.query(`SELECT * FROM tournament_divisions WHERE id=$1 AND tournament_id=$2${write?' FOR UPDATE':''}`,[req.params.divisionId,req.params.id])).rows[0];
     if(!division) throw Object.assign(conflict('대회 부문을 찾을 수 없습니다.'),{statusCode:404});
     const rounds=(await client.query('SELECT * FROM tournament_division_rounds WHERE division_id=$1 ORDER BY round_no',[division.id])).rows;
-    const people=(await client.query("SELECT p.*,COALESCE(g.name,'개인') AS club_name FROM tournament_participants p LEFT JOIN groups g ON g.id=p.source_group_id WHERE p.division_id=$1 ORDER BY p.created_at,p.id",[division.id])).rows;
+    const people=(await client.query("SELECT p.*,COALESCE(g.name,'개인') AS club_name FROM tournament_participants p LEFT JOIN groups g ON g.id=p.source_group_id WHERE p.division_id=ANY($1::uuid[]) ORDER BY p.created_at,p.id",[entryDivisionIds(division)])).rows;
     const raw=(await client.query(`SELECT * FROM tournament_matches WHERE division_id=$1 ORDER BY match_order,created_at,id${write?' FOR UPDATE':''}`,[division.id])).rows;
     const poolRows=(await client.query('SELECT po.*,p.id AS participant_id,p.name,p.member_division,p.source_group_id FROM tournament_pools po JOIN tournament_pool_members pm ON pm.pool_id=po.id JOIN tournament_participants p ON p.id=pm.participant_id WHERE po.division_id=$1 ORDER BY po.round_no,po.pool_no,pm.slot_no',[division.id])).rows;
     const poolMap=new Map();for(const row of poolRows){if(!poolMap.has(row.id))poolMap.set(row.id,{...row,members:[]});poolMap.get(row.id).members.push({...row,id:row.participant_id});}
@@ -74,6 +75,8 @@ router.use('/tournaments/:id/divisions/:divisionId/league',optionalAuth,async(re
         if(!Number.isInteger(reconfigure)||reconfigure<1||req.body.confirmation_intent!=='RECONFIGURE_UNPLAYED_TOURNAMENT_ROUND')throw conflict('미진행 편성 재구성 확인이 필요합니다.');
         if(active.some(m=>((m.program_round??1)===reconfigure&&hasResult(m))||(m.program_round??1)>reconfigure))throw conflict('결과가 있거나 후속 라운드가 생성된 편성은 변경할 수 없습니다.');
       }
+      const config=await validateEntryConfig(client,req.params.id,division.id,incoming?.tournamentEntryConfig??entryConfig(division));
+      if((config.start_round!==entryConfig(division).start_round || JSON.stringify([...config.source_division_ids].sort())!==JSON.stringify([...(entryConfig(division).source_division_ids??[])].sort())) && (raw.length||poolRows.length||program.blocks.some(b=>b.groupAssignments?.some(g=>g.length)||b.teamAssignments?.some(g=>g.length)||b.doublesAssignments?.some(g=>g.length)))) throw conflict('편성이나 경기가 있는 구성의 참가 대상과 시작 라운드는 변경할 수 없습니다.');
       validateProgram(incoming,program,active.filter(m=>(m.program_round??1)!==reconfigure));
       if(req.body.expected_updated_at!==String(division.updated_at instanceof Date?division.updated_at.toISOString():division.updated_at)) throw conflict('프로그램이 변경되었습니다. 새로고침 후 저장해주세요.');
       if(incoming.blocks.length<rounds.length) {
@@ -82,7 +85,7 @@ router.use('/tournaments/:id/divisions/:divisionId/league',optionalAuth,async(re
         await audit('DELETE_EMPTY_PROGRAM_ROUNDS',{rounds:rounds.slice(incoming.blocks.length),program:division.league_program});
         await client.query('DELETE FROM tournament_division_rounds WHERE division_id=$1 AND round_no>$2',[division.id,incoming.blocks.length]);
       }
-      const saved={...incoming,tournament_revision:undefined,byeParticipants:program.byeParticipants??[],roundStandings:undefined,generationKeys:{...(program.generationKeys??{})}};
+      const saved={...incoming,tournamentEntryConfig:config,tournament_revision:undefined,byeParticipants:program.byeParticipants??[],roundStandings:undefined,generationKeys:{...(program.generationKeys??{})}};
       if(reconfigure) {
         await audit('RECONFIGURE_UNPLAYED_ROUND',{round:reconfigure,matches:active.filter(m=>(m.program_round??1)===reconfigure),program});
         await client.query("UPDATE tournament_matches SET status='cancelled' WHERE division_id=$1 AND COALESCE(program_round,1)=$2 AND status<>'cancelled'",[division.id,reconfigure]);
@@ -92,7 +95,7 @@ router.use('/tournaments/:id/divisions/:divisionId/league',optionalAuth,async(re
       for(let index=0;index<incoming.blocks.length;index++) {
         const b=incoming.blocks[index],r=incoming.rounds?.[index]??{};
         if(!['SINGLES','DOUBLES','TEAM'].includes(b.type)||!['LEAGUE','GROUP','TOURNAMENT'].includes(b.format)) throw conflict('라운드 유형과 방식을 확인해주세요.');
-        const rules={...(rounds[index]?.rules??{}),match_rule:r.matchRule??({'3전 2선승제':'BEST_OF_3','5전 3선승제':'BEST_OF_5','3세트제':'THREE_SET'}[b.matchRule]??b.matchRule),
+        const rules={...(rounds[index]?.rules??{}),...(index===0?{entry_config:config}:{}),match_rule:r.matchRule??({'3전 2선승제':'BEST_OF_3','5전 3선승제':'BEST_OF_5','3세트제':'THREE_SET'}[b.matchRule]??b.matchRule),
           round_label:r.option==='PRELIM'?'예선':r.option==='FINAL'?(index>=2?'결선':'본선'):r.option==='UPPER'?'상위':r.option==='LOWER'?'하위':'',tournament_mode:r.tournamentMode??b.tournamentMode??'single',
           half_split_only_matches:r.halfSplitOnlyMatches??b.halfSplitOnlyMatches??false,final_advancement_mode:r.finalAdvancementMode??b.finalAdvancementMode??'all',advance_count:r.advanceCount??b.advanceCount??2,league_config:r};
         if(rounds[index]) await client.query('UPDATE tournament_division_rounds SET league_type=$1,format=$2,rules=$3::jsonb,updated_at=now() WHERE id=$4',[b.type,b.format,JSON.stringify(rules),rounds[index].id]);

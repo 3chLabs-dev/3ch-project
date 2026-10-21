@@ -784,6 +784,7 @@ interface RoundConfigEditorProps {
   clubPoliciesEnabled: boolean;
   participantCount: number;
   halfSplitMatchEnabled?: boolean;
+  roundNumberOffset?: number;
 }
 
 export function RoundConfigEditor({
@@ -792,6 +793,7 @@ export function RoundConfigEditor({
   clubPoliciesEnabled,
   participantCount,
   halfSplitMatchEnabled = false,
+  roundNumberOffset = 0,
 }: RoundConfigEditorProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -873,7 +875,7 @@ export function RoundConfigEditor({
                     minWidth: "70px",
                   }}
                 >
-                  {round.id}라운드
+                  {round.id + roundNumberOffset}라운드
                 </div>
 
                 <div

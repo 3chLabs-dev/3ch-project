@@ -268,6 +268,7 @@ function FormationEditCard({ players, index, label, groupLabels, locked = false,
 }
 
 type StoredProgramOption = {
+  tournamentEntryConfig?: ProgramOption["tournamentEntryConfig"];
   title?: string;
   description?: string;
   recommendationScore?: number;
@@ -440,6 +441,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
 
         return {
         round: index + 1,
+        displayRound: index + (storedProgram.tournamentEntryConfig?.start_round ?? 1),
         title: block.title ?? `${index + 1}라운드 ${getProgramTypeLabel(block.type)}`.trim(),
         format: block.format ?? "GROUP",
         formatLabel: getProgramFormatLabel(block.format),
@@ -1746,7 +1748,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
                   <Box key={round.round} sx={{ border: "1px solid #E5E7EB", borderRadius: 1.5, p: 1.25, bgcolor: "#F9FAFB" }}>
                     <Stack direction="row" alignItems="center" spacing={0.6} mb={1} flexWrap="wrap" useFlexGap>
                       <Typography sx={{ fontSize: 13, fontWeight: 900, mr: 0.25 }}>
-                        {round.round}라운드
+                        {round.displayRound ?? round.round}라운드
                       </Typography>
                       {round.stageLabel && <Chip label={round.stageLabel} size="small" sx={{ height: 22, fontSize: 11, fontWeight: 800, bgcolor: "#ECFDF5", color: "#047857", border: "1px solid #A7F3D0" }} />}
                       <Chip label={round.typeLabel} size="small" sx={{ height: 22, fontSize: 11, fontWeight: 800, bgcolor: "#EFF6FF", color: "#2563EB", border: "1px solid #BFDBFE" }} />
@@ -2007,7 +2009,7 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
                     return (
                       <Box key={round.round} sx={{ p: 1.4, border: "1px solid #E2E8F0", borderRadius: 1.5, bgcolor: "#FFF", boxShadow: "0 2px 7px rgba(15,23,42,0.04)" }}>
                         <Stack direction="row" alignItems="center" spacing={0.7}>
-                          <Typography sx={{ fontSize: 16, fontWeight: 900, color: "#0F172A" }}>{round.round}라운드</Typography>
+                          <Typography sx={{ fontSize: 16, fontWeight: 900, color: "#0F172A" }}>{round.displayRound ?? round.round}라운드</Typography>
                           {round.stageLabel && <Chip label={round.stageLabel} size="small" sx={{ height: 22, fontSize: 11, fontWeight: 800, bgcolor: "#ECFDF5", color: "#047857", border: "1px solid #A7F3D0" }} />}
                         </Stack>
                         <Stack direction="row" spacing={0.6} flexWrap="wrap" useFlexGap sx={{ mt: 0.8 }}>

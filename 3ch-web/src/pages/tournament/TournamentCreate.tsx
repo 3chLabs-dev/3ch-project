@@ -1,3 +1,4 @@
+import { TournamentEntryFields } from "./TournamentEntryFields";
 import { OptionalNumberStepper as LeagueNumberStepper, PremiumExposureOption, LeagueTimeFields, rowSx, fieldSx } from "../league/LeagueRenewalStep1BasicInfo";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { LeagueRoundStepForm, areLeagueRoundsValid } from "../league/LeagueRenewalRoundStep";
@@ -11,7 +12,7 @@ import { useGetMyGroupsQuery } from "../../features/group/groupApi";
 import { useCreateTournamentMutation, useGetTournamentEligibilityQuery, type TournamentDivisionInput } from "../../features/tournament/tournamentApi";
 
 type RoundDraft = RenewalRoundConfig & { key: number };
-type DivisionDraft = Omit<TournamentDivisionInput, "rounds"> & { key: number; rounds: RoundDraft[] };
+type DivisionDraft = Omit<TournamentDivisionInput, "rounds"> & { key: number; merged?: boolean; sourceKeys?: string[]; startRound?: number; rounds: RoundDraft[] };
 const makeRound = (key: number): RoundDraft => ({ key, id: key, expanded: true, program: "SINGLES", format: "GROUP", matchRule: "BEST_OF_3", option: key === 1 ? "PRELIM" : "FINAL", teamPlayerCount: 3, teamMatchType: "SSS", tournamentMode: "single", finalAdvancementMode: "all", advanceCount: 2 });
 const makeDivision = (key: number, name = ""): DivisionDraft => ({ key, name, recruit_count: null, rounds: [makeRound(1)] });
 const steps = ["", "대회 정보", "참가 부문", "대회 유형", "대회 방식", "대회 규칙"];
@@ -59,6 +60,7 @@ export default function TournamentCreate() {
     if (step === 1 && endTime && endTime <= startTime) return "종료 시간은 시작 시간보다 늦어야 합니다.";
     if (step === 1 && applicationDeadline && new Date(applicationDeadline) >= new Date(`${date}T${startTime}`)) return "참가 신청 마감을 대회 시작 전으로 설정해주세요.";
     if (step === 1 && applicationDeadline && new Date(applicationDeadline) <= new Date()) return "참가 신청 마감을 현재 이후로 설정해주세요.";
+    if (step === 2 && divisions.some(d => d.merged && ((d.sourceKeys?.length ?? 0) < 2 || d.sourceKeys?.some(key => !divisions.some(source => String(source.key) === key && !source.merged))))) return "통합할 신청 부문을 두 개 이상 선택해주세요.";
     if (step === 2 && divisions.some((division) => !division.name.trim())) return "모든 부문에 이름을 입력해주세요.";
     if (step === 2 && new Set(divisions.map((division) => division.name.trim())).size !== divisions.length) return "부문 이름은 중복될 수 없습니다.";
     return "";
@@ -82,7 +84,7 @@ export default function TournamentCreate() {
         starts_at: startsAt.toISOString(), ends_at: endsAt?.toISOString() ?? null,
         application_deadline_at: deadlineAt?.toISOString() ?? null,
         host_group_id: effectiveGroupId, premium_visible: premiumVisible,
-        divisions: divisions.map(({ name, recruit_count, rounds }) => ({ name: name.trim(), recruit_count, rounds: rounds.map((round, index) => ({
+        divisions: divisions.map(({ name, recruit_count, rounds, sourceKeys, startRound }) => ({ name: name.trim(), recruit_count, source_division_indices: (sourceKeys ?? []).map(key => divisions.findIndex(d => String(d.key) === key)), start_round: startRound ?? 1, rounds: rounds.map((round, index) => ({
           league_type: round.program!, format: round.format!, rules: { match_rule: round.matchRule!, league_config: round,
             round_label: round.option === "PRELIM" ? "예선" : round.option === "FINAL" ? (index >= 2 ? "결선" : "본선") : round.option === "UPPER" ? "상위" : round.option === "LOWER" ? "하위" : "",
             tournament_mode: round.tournamentMode ?? "single", final_advancement_mode: round.finalAdvancementMode ?? "all", advance_count: round.advanceCount ?? 2,
@@ -115,16 +117,18 @@ export default function TournamentCreate() {
       <PlaceSearchDialog open={placeOpen} initialQuery={location} onClose={() => setPlaceOpen(false)} allowDirectInput onDirectInput={(value) => { setLocation(value); setVenueAddress(""); setPlaceOpen(false); }} onSelect={(place) => { setLocation(place.name); setVenueAddress(place.address); setPlaceOpen(false); }} />
     </>}
     {step === 2 && <>
-      <Typography sx={{ mb: 2, color: "text.secondary", fontSize: 14 }}>참가 신청을 받을 부문을 먼저 만듭니다.</Typography>
+      <Typography sx={{ mb: 2, color: "text.secondary", fontSize: 14 }}>신청 부문을 만든 뒤, 필요하면 여러 부문을 합쳐 진행할 통합 경기 구성을 추가합니다.</Typography>
       <Stack spacing={1.5}>{divisions.map((division, index) => <Box key={division.key} sx={{ border: "1px solid #D9DDE6", borderRadius: 1, p: 2, bgcolor: "#fff" }}>
-        <Stack direction="row" alignItems="center" justifyContent="space-between"><Typography fontWeight={900} fontSize={18}>{index + 1}부문</Typography><IconButton aria-label="부문 삭제" disabled={divisions.length === 1} onClick={() => setDivisions((current) => current.filter((item) => item.key !== division.key))}>×</IconButton></Stack>
-        <Box sx={rowSx}><Typography fontWeight={900}>부문명 *</Typography><TextField value={division.name} onChange={(event) => updateDivision(division.key, { name: event.target.value })} placeholder="예: 3~4부" sx={fieldSx} /></Box>
+        <Stack direction="row" alignItems="center" justifyContent="space-between"><Typography fontWeight={900} fontSize={18}>{division.merged ? "통합 경기 구성" : `${index + 1}부문`}</Typography><IconButton aria-label="부문 삭제" disabled={divisions.length === 1} onClick={() => setDivisions((current) => current.filter((item) => item.key !== division.key))}>×</IconButton></Stack>
+        <Box sx={rowSx}><Typography fontWeight={900}>{division.merged ? "구성명" : "부문명"} *</Typography><TextField value={division.name} onChange={(event) => updateDivision(division.key, { name: event.target.value })} placeholder="예: 3~4부" sx={fieldSx} /></Box>
+        <TournamentEntryFields merged={division.merged === true} divisions={divisions.filter(d => !d.merged).map(d => ({ id: String(d.key), name: d.name }))} config={{ source_division_ids: division.sourceKeys ?? [], start_round: division.startRound ?? 1 }} onChange={config => updateDivision(division.key, { sourceKeys: config.source_division_ids, startRound: config.start_round })} />
       </Box>)}</Stack>
       <Button fullWidth variant="outlined" onClick={() => setDivisions((current) => [...current, makeDivision(Math.max(...current.map((item) => item.key)) + 1)])} sx={{ mt: 1.5, minHeight: 44, borderRadius: 1, fontWeight: 900 }}>+ 부문 추가</Button>
+      <Button fullWidth variant="outlined" disabled={divisions.filter(d => !d.merged).length < 2} onClick={() => setDivisions(current => [...current, { ...makeDivision(Math.max(...current.map(d => d.key)) + 1), merged: true, sourceKeys: [], startRound: 2 }])} sx={{ mt: 1.5, minHeight: 44, borderRadius: 1, fontWeight: 900 }}>+ 통합 경기 구성 추가</Button>
     </>}
     {step >= 3 && <Stack spacing={4}>{divisions.map(division => <Box key={division.key} sx={{ pb: 3, borderBottom: "2px solid #E5E7EB" }}>
       <Typography sx={{ mb: 2, fontSize: 21, fontWeight: 900 }}>{division.name}</Typography>
-      <LeagueRoundStepForm embedded kind={step === 3 ? "type" : step === 4 ? "format" : "rule"}
+      <LeagueRoundStepForm embedded roundNumberOffset={(division.startRound ?? 1) - 1} kind={step === 3 ? "type" : step === 4 ? "format" : "rule"}
         rounds={division.rounds} setRounds={rounds => updateDivision(division.key, { rounds: rounds.map(round => ({ ...round, key: round.id })) })}
         hasParticipatingClubs participantCount={participantCount === "" ? null : participantCount} />
     </Box>)}</Stack>}

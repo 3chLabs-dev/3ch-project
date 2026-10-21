@@ -1281,6 +1281,7 @@ export default function LeagueGPTVisionSheet({ external }: { external?: External
     [isProgramMode, id, programData],
   );
   const currentProgramBlock = programOption?.blocks?.[programRound - 1];
+  const displayProgramRound = programRound + (programOption?.tournamentEntryConfig?.start_round ?? 1) - 1;
   const currentProgramRound = programOption?.rounds?.[programRound - 1];
   const currentFinalAdvancementMode =
     currentProgramRound?.finalAdvancementMode ?? currentProgramBlock?.finalAdvancementMode;
@@ -3226,7 +3227,7 @@ export default function LeagueGPTVisionSheet({ external }: { external?: External
   const date          = formatLeagueDate(league.start_date);
   const winScore      = getWinScore(currentRule);
   const headerSummary = isProgramMode && currentProgramBlock
-    ? `${programRound}라운드 ${getProgramTypeLabel(currentProgramBlock.type)} ${getProgramFormatLabel(currentProgramBlock.format)} │ ${getProgramRuleLabel(currentRule)}`
+    ? `${displayProgramRound}라운드 ${getProgramTypeLabel(currentProgramBlock.type)} ${getProgramFormatLabel(currentProgramBlock.format)} │ ${getProgramRuleLabel(currentRule)}`
     : `${league.type} ${league.format} │ ${getProgramRuleLabel(currentRule)}`;
   const appliedScale  = autoFitScale * userZoom;
   const previewByPosition = new Map(previewCells.map((cell) => [`${cell.rowIndex}__${cell.columnIndex}`, cell]));
@@ -3687,7 +3688,7 @@ export default function LeagueGPTVisionSheet({ external }: { external?: External
                   onClick={() => setFinishRoundConfirmOpen(true)}
                   sx={{ height: 44, borderRadius: 2, fontSize: 14, fontWeight: 900, bgcolor: "#2563EB", "&:hover": { bgcolor: "#1D4ED8" } }}
                 >
-                  {programRound}라운드 종료
+                  {displayProgramRound}라운드 종료
                 </Button>
               </Box>
             ) : (
@@ -3697,7 +3698,7 @@ export default function LeagueGPTVisionSheet({ external }: { external?: External
         </Box>
 
         <Dialog open={finishRoundConfirmOpen} onClose={() => !isFinishingRound && setFinishRoundConfirmOpen(false)} fullWidth maxWidth="xs" slotProps={{ paper: { sx: { borderRadius: 2, mx: 2 } } }}>
-          <DialogTitle sx={{ fontWeight: 900, fontSize: 17, pb: 1 }}>{programRound}라운드 종료</DialogTitle>
+          <DialogTitle sx={{ fontWeight: 900, fontSize: 17, pb: 1 }}>{displayProgramRound}라운드 종료</DialogTitle>
           <DialogContent sx={{ px: 3, pt: 0 }}>
             <Typography>다음 라운드로 넘어가시겠습니까?</Typography>
           </DialogContent>

@@ -142,6 +142,38 @@ test('shared league program: singles/doubles/teams, later rounds and protected p
  const invalidEvent=await invoke('/tournaments',{title:'잘못된 대상 테스트',host_group_id:uuid(880),starts_at:'2099-01-01T00:00:00Z',divisions:[{name:'통합',source_division_indices:[0,1],start_round:2,rounds:[template]}]});
  assert.equal(invalidEvent.status,400);
  assert.equal((await db.query('SELECT COUNT(*)::int AS count FROM tournaments')).rows[0].count,1);
+ // Empty manual brackets must be saved before a user can assign a persisted slot.
+ const manualCreated=await invoke('/tournaments/:id/competitions',{name:'수동 통합 예선',entry_config:config,rounds:[{...template,rules:{...template.rules,league_config:{tournamentSeeding:'manual'}}}]});
+ assert.equal(manualCreated.status,201,JSON.stringify(manualCreated.body));
+ targetDivision=manualCreated.body.division.id;
+ const manualProgram=(await call('GET','/program')).body.program.program_data;
+ assert.equal(manualProgram.tournamentEntryConfig.start_round,2);
+ assert.equal(manualProgram.blocks[0].tournamentSeeding,'manual');
+ const bootstrap=await call('POST','/program/matches/sync',{matches:[{id:'empty-manual-bracket',program_round:1}]});
+ assert.equal(bootstrap.status,200,JSON.stringify(bootstrap.body));assert.ok(bootstrap.body.inserted>0);
+ let manualRows=(await call('GET','/matches')).body.matches;
+ assert.ok(manualRows.every(m=>!m.participant_a_id&&!m.participant_b_id&&m.status==='pending'));
+ const opening=manualRows.find(m=>m.round_number===1);assert.ok(opening);
+ // Legacy generated metadata can contain an empty name, which must not hide an assignment.
+ await db.query("UPDATE tournament_matches SET league_data=jsonb_set(league_data,'{participant_a_name}','\"\"'::jsonb) WHERE id=$1",[opening.id]);
+ manualRows=(await call('GET','/matches')).body.matches;
+ const assign=async(slot,person)=>{
+  const expected=manualRows;const incoming=structuredClone(manualRows);
+  incoming.find(m=>m.id===opening.id)[`participant_${slot}_id`]=person;
+  const result=await call('POST','/program/matches/sync',{matches:incoming,assignment_intent:'REASSIGN_UNPLAYED_TOURNAMENT_MATCHES',expected_assignments:expected});
+  manualRows=(await call('GET','/matches')).body.matches;return result;
+ };
+ assert.equal((await assign('a',uuid(1))).status,200);
+ assert.equal(manualRows.find(m=>m.id===opening.id).participant_a_name,'선수1');
+ assert.equal((await assign('b',uuid(7))).status,200);
+ assert.equal(manualRows.find(m=>m.id===opening.id).participant_b_name,'선수7');
+ assert.deepEqual((await db.query('SELECT * FROM tournament_participants ORDER BY id')).rows,originalPeople);
+ assert.deepEqual((await db.query('SELECT * FROM tournament_matches WHERE division_id=$1',[division])).rows,sourceResults);
+ assert.equal((await call('PATCH',`/matches/${opening.id}`,{expected:{score_a:null,score_b:null,status:'pending',court:null},updates:{score_a:2,score_b:1,status:'completed'}})).status,200);
+ manualRows=(await call('GET','/matches')).body.matches;
+ const preservedManual=(await db.query('SELECT * FROM tournament_matches WHERE division_id=$1 ORDER BY id',[targetDivision])).rows;
+ assert.equal((await assign('a',uuid(2))).status,409);
+ assert.deepEqual((await db.query('SELECT * FROM tournament_matches WHERE division_id=$1 ORDER BY id',[targetDivision])).rows,preservedManual);
  const {validateEntryConfig}=require('../src/services/tournamentEntryConfig');
  const client=await pool.connect();
  await assert.rejects(()=>validateEntryConfig(client,id,combined,{source_division_ids:[division,uuid(999)],start_round:2}),/같은 대회/);

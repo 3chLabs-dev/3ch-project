@@ -767,6 +767,7 @@ export default function LeagueMatchOrder() {
     [isProgramMode, leagueId, programData],
   );
   const currentProgramBlock = isProgramMode ? programOption?.blocks?.[programRound - 1] : undefined;
+  const displayProgramRound = programRound + (programOption?.tournamentEntryConfig?.start_round ?? 1) - 1;
   const bracketPath = currentProgramBlock?.format === "TOURNAMENT" ? "tournament-bracket" : "bracket";
   const isTournamentProgramRound = isProgramMode && currentProgramBlock?.format === "TOURNAMENT";
   const isProgramFinalRound =
@@ -1514,7 +1515,7 @@ export default function LeagueMatchOrder() {
               "&:hover": { bgcolor: "#1D4ED8" },
             }}
           >
-            {programRound}라운드 종료
+            {displayProgramRound}라운드 종료
           </Button>
         </Box>
       )}
@@ -1533,7 +1534,7 @@ export default function LeagueMatchOrder() {
         slotProps={{ paper: { sx: { borderRadius: 2, mx: 2 } } }}
       >
         <DialogTitle sx={{ fontWeight: 900, fontSize: 17, pb: 1 }}>
-          {programRound}라운드 종료
+          {displayProgramRound}라운드 종료
         </DialogTitle>
         <DialogContent sx={{ px: 3, pt: 0 }}>
           <Typography>

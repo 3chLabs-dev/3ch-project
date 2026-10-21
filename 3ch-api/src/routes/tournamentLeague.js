@@ -138,6 +138,13 @@ router.use('/tournaments/:id/divisions/:divisionId/league',optionalAuth,async(re
             if((view[`participant_${slot}_id`]??null)!==(identity??null))data.manual_assigned_slots=[...new Set([...(data.manual_assigned_slots??[]),slot])];
             data[`participant_${slot}_id`]=identity??null;
             data[`participant_${slot}_roster_ids`]=ids;
+            if((view[`participant_${slot}_id`]??null)!==(identity??null)) {
+              for(const field of ['name','division','club_name','roster','roster_details']) delete data[`participant_${slot}_${field}`];
+              const members=ids.map(id=>people.find(p=>p.id===id));
+              data[`participant_${slot}_name`]=members.length?members.map(p=>p.name).join(' · '):null;
+              data[`participant_${slot}_division`]=members.length===1?members[0].member_division:null;
+              data[`participant_${slot}_club_name`]=[...new Set(members.map(p=>p.club_name).filter(Boolean))].join(' · ');
+            }
           }
           if(data.participant_a_roster_ids.some(id=>data.participant_b_roster_ids.includes(id)))throw conflict('같은 참가자가 양쪽에 포함될 수 없습니다.');
           changes.push({original,next});

@@ -1209,6 +1209,7 @@ export default function LeagueTournamentBracket({ external }: { external?: Exter
   // 참가자 등록 팝업
   const [registerTarget, setRegisterTarget] = useState<{ matchId: string; slot: "a" | "b" } | null>(null);
   const [participantSearch, setParticipantSearch] = useState("");
+  const [assignmentError, setAssignmentError] = useState("");
   const [selectedBracketIndex, setSelectedBracketIndex] = useState(1);
   const [selectedDivision, setSelectedDivision] = useState<"upper" | "lower">("upper");
 
@@ -1241,7 +1242,7 @@ export default function LeagueTournamentBracket({ external }: { external?: Exter
   const programBlock = isProgramMode ? programOption?.blocks?.[programRound - 1] : undefined;
   const headerRule = programBlock?.matchRule ?? league?.rules;
   const headerSummary = isProgramMode && programBlock
-    ? `${programRound}라운드 ${getProgramTypeLabel(programBlock.type)} ${getProgramFormatLabel(programBlock.format)} │ ${getProgramRuleLabel(headerRule)}`
+    ? `${programRound + (programOption?.tournamentEntryConfig?.start_round ?? 1) - 1}라운드 ${getProgramTypeLabel(programBlock.type)} ${getProgramFormatLabel(programBlock.format)} │ ${getProgramRuleLabel(headerRule)}`
     : league ? `${league.type} ${league.format ?? ""} │ ${getProgramRuleLabel(headerRule)}` : "";
   const programSourceMatches = useMemo(() => {
     if (id?.startsWith("tournament~")) return matchesData?.matches ?? [];
@@ -1384,6 +1385,7 @@ export default function LeagueTournamentBracket({ external }: { external?: Exter
     if (
       programBlock.type === "SINGLES" &&
       !allProgramMatches.some((match) => match.participant_a_id && match.participant_b_id)
+      && !(id.startsWith("tournament~") && manualSeeding)
     ) return;
 
     const generatedKey = allProgramMatches
@@ -1403,9 +1405,13 @@ export default function LeagueTournamentBracket({ external }: { external?: Exter
         program_round: programRound,
         program_block_type: programBlock.type,
       })),
+    }).unwrap().catch((error: unknown) => {
+      const reason = error as { data?: { message?: string } };
+      setAssignmentError(reason.data?.message ?? "대진표를 저장하지 못했습니다. 새로고침 후 다시 시도해주세요.");
     });
   }, [
     allProgramMatches,
+    manualSeeding,
     league?.can_manage,
     matchesData?.matches,
     id,
@@ -1892,7 +1898,7 @@ export default function LeagueTournamentBracket({ external }: { external?: Exter
   const slotActions: SlotActions = {
     canScore: external ? external.canScore : id?.startsWith("tournament~") ? canManage && serverProgramMatches.length > 0 : canManage,
     canManage,
-    canRegister: canManage,
+    canRegister: canManage && (!id?.startsWith("tournament~") || serverProgramMatches.length > 0),
     editMode,
     swapFirstKey: swapFirst ? `${swapFirst.matchId}:${swapFirst.slot}` : null,
     seedMap,
@@ -2483,6 +2489,7 @@ export default function LeagueTournamentBracket({ external }: { external?: Exter
         </DialogContent>
       </Dialog>
 
+      <Snackbar open={Boolean(assignmentError)} autoHideDuration={6000} onClose={() => setAssignmentError("")} message={assignmentError} anchorOrigin={{ vertical: "bottom", horizontal: "center" }} sx={{ zIndex: 12000 }} />
       {/* ── 참가자 등록 팝업 (우측 패널) ── */}
       {registerTarget && (
         <Box sx={{
@@ -2552,7 +2559,10 @@ export default function LeagueTournamentBracket({ external }: { external?: Exter
                       size="small"
                       variant={isAssigned ? "outlined" : "contained"}
                       disableElevation
-                      onClick={() => handleAssign(p.id)}
+                      onClick={() => void handleAssign(p.id).catch((error: unknown) => {
+                        const reason = error as { data?: { message?: string }; message?: string };
+                        setAssignmentError(reason.data?.message ?? reason.message ?? "선수 등록을 저장하지 못했습니다.");
+                      })}
                       disabled={isAssigning || isSyncingProgramMatches}
                       sx={{
                         minWidth: 44, height: 24, fontSize: 11, fontWeight: 700,

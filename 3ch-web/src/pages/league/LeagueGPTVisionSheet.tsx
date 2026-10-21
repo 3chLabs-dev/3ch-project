@@ -52,7 +52,7 @@ import "react-image-crop/dist/ReactCrop.css";
 import QRCode from "react-qr-code";
 import { formatLeagueDate } from "../../utils/dateUtils";
 import { calculateRoundRobinStandings } from "../../utils/roundRobinStandings";
-import { sortRoundRobinMatches } from "../../utils/leagueUtils";
+import { sortRoundRobinMatches, buildFixedNumberRoundRobinSchedule, hasStartedRoundRobinMatch } from "../../utils/leagueUtils";
 import { toggleFullscreen } from "../../utils/fullscreen";
 import {
   applyProgramMatchState,
@@ -1022,7 +1022,7 @@ function useMatchStats(
  * - portrait:  테이블 오른쪽에 가로로 붙음 (mr: 1.5)
  */
 function MatchSchedulePanel({ matches, localOrder, participantNumberMap, landscape, leagueId, onProgramMatchUpdate, onStartToast }: {
-  matches: LeagueMatch[];
+  matches: Array<LeagueMatch & { display_seed_a?: number; display_seed_b?: number }>;
   localOrder: LeagueParticipantItem[];
   participantNumberMap: Map<string, string>;
   landscape: boolean;
@@ -1082,10 +1082,10 @@ function MatchSchedulePanel({ matches, localOrder, participantNumberMap, landsca
             const p2Idx = localOrder.findIndex((p) => p.id === m.participant_b_id);
             // 참가자 목록에 없는 경기는 표시 생략
             if (p1Idx === -1 || p2Idx === -1) return null;
-            const p1Number = m.participant_a_id
+            const p1Number = m.display_seed_a != null ? String(m.display_seed_a) : m.participant_a_id
               ? participantNumberMap.get(m.participant_a_id) ?? String(p1Idx + 1)
               : String(p1Idx + 1);
-            const p2Number = m.participant_b_id
+            const p2Number = m.display_seed_b != null ? String(m.display_seed_b) : m.participant_b_id
               ? participantNumberMap.get(m.participant_b_id) ?? String(p2Idx + 1)
               : String(p2Idx + 1);
 
@@ -1750,10 +1750,15 @@ export default function LeagueGPTVisionSheet({ external }: { external?: External
   // editOrder≠null: 사용자가 순서를 변경한 로컬 상태 (저장 버튼으로 서버에 확정)
   const [editOrder, setEditOrder] = useState<LeagueParticipantItem[] | null>(null);
   const localOrder = editOrder ?? targetParticipants;
-  const scheduleMatches = useMemo(
-    () => sortRoundRobinMatches(matches, localOrder.map((participant) => participant.id)),
-    [localOrder, matches],
-  );
+  const scheduleMatches = useMemo(() => {
+    const participantIds = localOrder.map(participant => participant.id);
+    // Display-only: retain persisted match IDs, score sides, scores and manual ordering.
+    // Resetting/reordering the table must not retain stale division-based seed labels.
+    const fixedPrestartNumbers = !hasStartedRoundRobinMatch(isProgramMode ? serverProgramMatchesAll : matchData?.matches ?? []);
+    return fixedPrestartNumbers
+      ? buildFixedNumberRoundRobinSchedule(matches, participantIds)
+      : sortRoundRobinMatches(matches, participantIds);
+  }, [localOrder, matches, isProgramMode, serverProgramMatchesAll, matchData?.matches]);
   const targetParticipantKey = targetParticipants.map((participant) => participant.id).join("|");
   useEffect(() => {
     setEditOrder(null);

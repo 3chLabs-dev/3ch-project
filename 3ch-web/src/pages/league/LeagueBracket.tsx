@@ -1377,11 +1377,11 @@ export default function LeagueBracket({ external }: { external?: ExternalBracket
   const localOrder = editOrder ?? targetParticipants;
   const scheduleMatches = useMemo(() => {
     const participantIds = localOrder.map(participant => participant.id);
-    const fixedPrestartNumbers = !hasStartedRoundRobinMatch(matchData?.matches ?? []);
+    const fixedPrestartNumbers = !hasStartedRoundRobinMatch(isProgramMode ? serverProgramMatchesAll : matchData?.matches ?? []);
     return fixedPrestartNumbers
       ? buildFixedNumberRoundRobinSchedule(matches, participantIds)
       : sortRoundRobinMatches(matches, participantIds);
-  }, [localOrder, matches, matchData?.matches]);
+  }, [localOrder, matches, isProgramMode, serverProgramMatchesAll, matchData?.matches]);
   const targetParticipantKey = targetParticipants.map((participant) => participant.id).join("|");
 
   useEffect(() => {

@@ -13,7 +13,7 @@ export function TournamentEntryFields({ config, onChange, divisions, merged, dis
   disabled?: boolean;
 }) {
   return <>
-    <Box sx={rowSx}><Typography fontWeight={900}>시작 라운드</Typography><OptionalNumberStepper value={config.start_round} onChange={value => onChange({ ...config, start_round: value === "" ? 1 : value })} min={1} max={30} suffix="" /></Box>
+    <Box sx={{ ...rowSx, gridTemplateColumns: "max-content minmax(0, 1fr)" }}><Typography fontWeight={900} sx={{ whiteSpace: "nowrap" }}>시작 라운드</Typography><OptionalNumberStepper value={config.start_round} onChange={value => onChange({ ...config, start_round: value === "" ? 1 : value })} min={1} max={30} suffix="" /></Box>
     {merged && <Box sx={{ py: 1 }}>
       <Typography sx={{ fontSize: 14, fontWeight: 800 }}>참가 대상 부문</Typography>
       <Box>{divisions.map(division => <FormControlLabel key={division.id} label={division.name} control={<Checkbox disabled={disabled} size="small" checked={config.source_division_ids.includes(division.id)} onChange={(_, checked) => onChange({ ...config, source_division_ids: checked ? [...config.source_division_ids, division.id] : config.source_division_ids.filter(id => id !== division.id) })} />} />)}</Box>

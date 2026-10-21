@@ -48,3 +48,33 @@ export function sortRoundRobinMatches<T extends {
     })
     .map(({ match }) => match);
 }
+
+/** Keep the numbered schedule's orientation without swapping persisted score sides. */
+export function buildFixedNumberRoundRobinSchedule<T extends {
+  participant_a_id: string | null;
+  participant_b_id: string | null;
+}>(matches: T[], participantIds: string[]): Array<T & { display_seed_a?: number; display_seed_b?: number }> {
+  const pairKey = (left: string, right: string) => [left, right].sort().join("|");
+  const seedPairs = new Map(generateRoundRobin(participantIds.length).map(([a, b]) => [
+    pairKey(participantIds[a], participantIds[b]), [a + 1, b + 1] as const,
+  ]));
+  return sortRoundRobinMatches(matches, participantIds).map(match => {
+    const pair = match.participant_a_id && match.participant_b_id
+      ? seedPairs.get(pairKey(match.participant_a_id, match.participant_b_id)) : undefined;
+    return pair ? { ...match, display_seed_a: pair[0], display_seed_b: pair[1] } : match;
+  });
+}
+
+/** Automatic byes are not evidence that a real match has started. */
+export function hasStartedRoundRobinMatch(matches: Array<{
+  status: string;
+  score_a?: number | null;
+  score_b?: number | null;
+  is_no_game?: boolean;
+  is_bye?: boolean;
+}>): boolean {
+  return matches.some(match => !match.is_no_game && !match.is_bye && match.status !== "cancelled" && (
+    match.status === "playing" || match.status === "done" || match.status === "completed"
+    || match.score_a != null || match.score_b != null
+  ));
+}

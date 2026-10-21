@@ -36,7 +36,7 @@ import PrintIcon from "@mui/icons-material/Print";
 import QRCode from "react-qr-code";
 import { formatLeagueDate } from "../../utils/dateUtils";
 import { calculateRoundRobinStandings } from "../../utils/roundRobinStandings";
-import { sortRoundRobinMatches } from "../../utils/leagueUtils";
+import { sortRoundRobinMatches, buildFixedNumberRoundRobinSchedule, hasStartedRoundRobinMatch } from "../../utils/leagueUtils";
 import { toggleFullscreen } from "../../utils/fullscreen";
 import {
   applyProgramMatchState,
@@ -864,7 +864,7 @@ function useMatchStats(
  * - portrait:  테이블 오른쪽에 가로로 붙음 (mr: 1.5)
  */
 function MatchSchedulePanel({ matches, localOrder, landscape, leagueId, onProgramMatchUpdate, onStartToast }: {
-  matches: LeagueMatch[];
+  matches: Array<LeagueMatch & { display_seed_a?: number; display_seed_b?: number }>;
   localOrder: LeagueParticipantItem[];
   landscape: boolean;
   leagueId: string;
@@ -936,9 +936,9 @@ function MatchSchedulePanel({ matches, localOrder, landscape, leagueId, onProgra
               <Box key={m.id} onClick={() => handleStatus(m, i)} sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.5, flexShrink: 0 }}>
                 {/* 시드 번호 카드 */}
                 <Box sx={{ bgcolor: cardBg, borderRadius: "5px", px: 1.25, py: 0.75, textAlign: "center", minWidth: 42, display: "flex", flexDirection: "column", alignItems: "center" }}>
-                  <Typography sx={{ color: numColor, fontSize: 14, fontWeight: 800, lineHeight: 1.3 }}>{p1Idx + 1}</Typography>
+                  <Typography sx={{ color: numColor, fontSize: 14, fontWeight: 800, lineHeight: 1.3 }}>{m.display_seed_a ?? p1Idx + 1}</Typography>
                   <Box sx={{ width: "100%", height: "1px", bgcolor: "#4B5563", my: 0.25 }} />
-                  <Typography sx={{ color: numColor, fontSize: 14, fontWeight: 800, lineHeight: 1.3 }}>{p2Idx + 1}</Typography>
+                  <Typography sx={{ color: numColor, fontSize: 14, fontWeight: 800, lineHeight: 1.3 }}>{m.display_seed_b ?? p2Idx + 1}</Typography>
                 </Box>
                 {/* 코트 배지: 코트 미배정이면 글자색=배경색(사실상 투명하게) */}
                 <Box sx={{ bgcolor: courtBg, borderRadius: "100px", px: 0.75, py: 0.15 }}>
@@ -1375,10 +1375,13 @@ export default function LeagueBracket({ external }: { external?: ExternalBracket
   // editOrder≠null: 사용자가 순서를 변경한 로컬 상태 (저장 버튼으로 서버에 확정)
   const [editOrder, setEditOrder] = useState<LeagueParticipantItem[] | null>(null);
   const localOrder = editOrder ?? targetParticipants;
-  const scheduleMatches = useMemo(
-    () => sortRoundRobinMatches(matches, localOrder.map((participant) => participant.id)),
-    [localOrder, matches],
-  );
+  const scheduleMatches = useMemo(() => {
+    const participantIds = localOrder.map(participant => participant.id);
+    const fixedPrestartNumbers = !hasStartedRoundRobinMatch(matchData?.matches ?? []);
+    return fixedPrestartNumbers
+      ? buildFixedNumberRoundRobinSchedule(matches, participantIds)
+      : sortRoundRobinMatches(matches, participantIds);
+  }, [localOrder, matches, matchData?.matches]);
   const targetParticipantKey = targetParticipants.map((participant) => participant.id).join("|");
 
   useEffect(() => {

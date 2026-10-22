@@ -3,16 +3,14 @@ import { createServer } from 'node:http';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { resolve, join, extname, sep } from 'node:path';
 import { fetchPublicResource } from './prerenderFetch.mjs';
+import { loadPublicGuides } from './prerenderGuides.mjs';
 
 const dist = resolve('dist');
 const origin = process.env.PUBLIC_CONTENT_ORIGIN || 'https://woorileague.com';
 const template = await readFile(join(dist, 'index.html'), 'utf8');
 const routes = ['/', '/demo', '/demo/league', '/demo/club', '/demo/draw', '/mypage/guide', '/mypage/faq', '/mypage/terms', '/mypage/privacy'];
-console.log(`[prerender] Loading public guides from ${origin}/api/guides`);
-const guideResponse = await fetchPublicResource(`${origin}/api/guides`);
-if (guideResponse.status < 200 || guideResponse.status >= 300) throw new Error(`Public guide API returned ${guideResponse.status}`);
-const { guides } = JSON.parse(guideResponse.body.toString('utf8'));
-if (!Array.isArray(guides) || !guides.length) throw new Error('Public guides could not be loaded; refusing to publish an empty snapshot.');
+console.log(`[prerender] Loading public guide index from ${origin}/api/guides?summary=1`);
+const { guides, response: guideResponse } = await loadPublicGuides(origin);
 for (const guide of guides) routes.push(`/mypage/guide/${Number(guide.id)}`);
 console.log(`[prerender] Loaded ${guides.length} guides (${guideResponse.body.length} bytes).`);
 

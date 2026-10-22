@@ -294,9 +294,16 @@ router.get("/faqs", async (req, res) => {
 // GET /api/guides?tab=leader|member - 공개 이용방법 목록
 router.get("/guides", async (req, res) => {
   const { tab } = req.query;
+  const columns = req.query.summary === '1'
+    ? 'id, tab, section, display_order'
+    : 'id, tab, section, content, display_order';
+  if (req.query.summary === '1') {
+    res.set('X-Guides-Index-Version', '1');
+    if (req.method === 'HEAD') return res.status(200).end();
+  }
   try {
     const r = await pool.query(
-      `SELECT id, tab, section, content, display_order
+      `SELECT ${columns}
        FROM guides
        ${tab ? "WHERE tab = $1" : ""}
        ORDER BY display_order ASC, id ASC`,
@@ -305,6 +312,23 @@ router.get("/guides", async (req, res) => {
     res.json({ guides: r.rows });
   } catch (e) {
     res.status(500).json({ message: String(e.message) });
+  }
+});
+
+// Public detail reads keep large inline-image bodies out of the guide index.
+router.get('/guides/:id', async (req, res) => {
+  if (!/^[1-9]\d*$/.test(req.params.id) || !Number.isSafeInteger(Number(req.params.id))) {
+    return res.status(400).json({ message: '올바른 이용방법 ID가 필요합니다.' });
+  }
+  try {
+    const result = await pool.query(
+      'SELECT id, tab, section, content, display_order FROM guides WHERE id = $1',
+      [req.params.id],
+    );
+    if (!result.rowCount) return res.status(404).json({ message: '이용방법을 찾을 수 없습니다.' });
+    return res.json({ guide: result.rows[0] });
+  } catch (error) {
+    return res.status(500).json({ message: String(error.message) });
   }
 });
 

@@ -65,6 +65,21 @@ jobs:
         working-directory: 3ch-web
         run: npx playwright install --with-deps chromium
 
+      # API and Web workflows can run concurrently after the same push.
+      # Wait for the small-index API before fetching any guide bodies.
+      - name: Wait for public guide index API
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl -fsSI --max-time 10 'https://woorileague.com/api/guides?summary=1' | tr -d '\r' | grep -qi '^x-guides-index-version: 1$'; then
+              echo "Public guide index API is ready."
+              exit 0
+            fi
+            echo "Waiting for API deployment ($attempt/30)..."
+            sleep 5
+          done
+          echo "Public guide index API is unavailable; existing published files have not been changed."
+          exit 1
+
       - name: Prerender public pages
         working-directory: 3ch-web
         run: npm run prerender

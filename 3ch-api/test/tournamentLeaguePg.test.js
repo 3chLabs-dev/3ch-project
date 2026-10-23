@@ -197,5 +197,22 @@ test('shared league program: singles/doubles/teams, later rounds and protected p
  const client=await pool.connect();
  await assert.rejects(()=>validateEntryConfig(client,id,combined,{source_division_ids:[division,uuid(999)],start_round:2}),/같은 대회/);
  await assert.rejects(()=>validateEntryConfig(client,id,combined,{source_division_ids:[division,combined],start_round:2}),/자기 자신/);
+
+ // Photo registration on a fresh singles division must persist the preview
+ // before OCR, even when no league_program JSON has ever been saved.
+ const allExisting=(await db.query('SELECT * FROM tournament_matches ORDER BY id')).rows;
+ targetDivision=uuid(3000);
+ await db.query("INSERT INTO tournament_divisions(id,tournament_id,league_type,format,rules) VALUES ($1,$2,'SINGLES','LEAGUE','{}')",[targetDivision,id]);
+ await db.query("INSERT INTO tournament_division_rounds(division_id,round_no,league_type,format,rules) VALUES ($1,1,'SINGLES','LEAGUE','{\"match_rule\":\"BEST_OF_3\"}')",[targetDivision]);
+ for(let n=1;n<=6;n++)await db.query("INSERT INTO tournament_participants(id,division_id,name,member_division,status) VALUES ($1,$2,$3,'7','confirmed')",[uuid(3100+n),targetDivision,`사진선수${n}`]);
+ assert.equal((await call('GET','/matches')).body.matches.length,0);
+ const preparation=await call('POST','/program/matches/sync',{matches:[{id:'photo-preview-request',program_round:1}],reset_results:false});
+ assert.equal(preparation.status,200);assert.equal(preparation.body.inserted,15);
+ const ready=(await call('GET','/matches')).body.matches;
+ assert.equal(ready.length,15);assert.ok(ready.every(m=>m.status==='pending'&&m.score_a==null&&m.score_b==null));
+ assert.deepEqual((await db.query('SELECT * FROM tournament_matches WHERE division_id<>$1 ORDER BY id',[targetDivision])).rows,allExisting);
+ const readySnapshot=(await db.query('SELECT * FROM tournament_matches WHERE division_id=$1 ORDER BY id',[targetDivision])).rows;
+ assert.equal((await call('POST','/program/matches/sync',{matches:ready,reset_results:false})).body.inserted,0);
+ assert.deepEqual((await db.query('SELECT * FROM tournament_matches WHERE division_id=$1 ORDER BY id',[targetDivision])).rows,readySnapshot);
  }finally{pool.connect=original;await db.close();}
 });

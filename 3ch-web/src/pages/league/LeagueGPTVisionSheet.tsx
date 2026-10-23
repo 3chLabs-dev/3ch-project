@@ -2793,10 +2793,33 @@ export default function LeagueGPTVisionSheet({ external }: { external?: External
     handleGuideScroll();
   };
 
-  const handleOpenResultDialog = (targetRegion: VisionTargetRegion = "all", rowRange: { startRow: number; endRow: number } | null = null) => {
-    setVisionTargetRegion(targetRegion);
-    setVisionTargetRowRange(rowRange);
-    setResultDialogOpen(true);
+  const preparingResultRegistration = useRef(false);
+  const handleOpenResultDialog = async (targetRegion: VisionTargetRegion = "all", rowRange: { startRow: number; endRow: number } | null = null) => {
+    if (preparingResultRegistration.current) return;
+    preparingResultRegistration.current = true;
+    try {
+      if (id?.startsWith("tournament~") && serverProgramMatchesAll.length === 0) {
+        if (!canManage || !programMatchesAll.length) throw new Error("현재 라운드의 경기 편성과 관리 권한을 확인해주세요.");
+        setVisionNotice({ type: "info", message: "사진 인식에 사용할 경기를 준비하고 있습니다." });
+        // The server generates only missing rounds from persisted program data.
+        // Never replace existing matches with the client-generated preview.
+        await syncProgramMatches({ leagueId: id, matches: programMatchesAll, resetResults: false }).unwrap();
+        const refreshed = await refetchMatches();
+        if (!refreshed || !("data" in refreshed) || !refreshed.data?.matches.some((match) => (match.program_round ?? 1) === programRound)) {
+          throw new Error("저장된 라운드 경기를 확인하지 못했습니다. 잠시 후 다시 시도해주세요.");
+        }
+        setVisionNotice(null);
+      }
+      setVisionTargetRegion(targetRegion);
+      setVisionTargetRowRange(rowRange);
+      setResultDialogOpen(true);
+    } catch (error) {
+      const message = getErrorMessage(error, "사진 인식에 사용할 경기를 준비하지 못했습니다.");
+      setVisionNotice({ type: "error", message });
+      setVisionError(message);
+    } finally {
+      preparingResultRegistration.current = false;
+    }
   };
 
   const handleVisionImage = async (file?: File) => {

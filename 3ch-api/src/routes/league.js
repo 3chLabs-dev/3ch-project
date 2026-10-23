@@ -15,6 +15,8 @@ const { getPointRanking, ensureDefaultRankingSeasons, normalizePointRules } = re
 const { winnerSide } = require('../utils/matchOutcome');
 const { resolveProgramParticipantId } = require('../utils/programParticipantResolver');
 const { tournamentAccess } = require('../utils/tournamentAccess');
+const { entryDivisionIds } = require('../services/tournamentEntryConfig');
+const { leagueMatches: tournamentLeagueMatches, keyFor: tournamentLeagueKey } = require('../services/tournamentLeagueProgram');
 const { matchResultParticipant } = require('../services/leagueResultParticipantMatcher');
 
 const isWebPushConfigured = Boolean(
@@ -5407,13 +5409,15 @@ router.post(['/league/:id/openai-vision/scan', '/tournaments/:id/divisions/:divi
   const usageRequestKey = `vision:${leagueId}:${clientRequestKey}`;
   let usageOwnerId = null;
   let creditConsumed = false;
+  let visionDivision = null;
 
   try {
     if (isTournament) {
       const rights = await tournamentAccess(pool, leagueId, userId);
       if (!rights.manage) return res.status(403).json({ message: '사진 결과 등록은 대회 주최자 또는 운영진만 사용할 수 있습니다.' });
-      const round = await pool.query('SELECT r.id FROM tournament_division_rounds r JOIN tournament_divisions d ON d.id=r.division_id WHERE d.tournament_id=$1 AND d.id=$2 AND r.round_no=$3', [leagueId,req.params.divisionId,Number(req.params.roundNo)]);
+      const round = await pool.query('SELECT r.id, d.rules, d.league_program FROM tournament_division_rounds r JOIN tournament_divisions d ON d.id=r.division_id WHERE d.tournament_id=$1 AND d.id=$2 AND r.round_no=$3', [leagueId,req.params.divisionId,Number(req.params.roundNo)]);
       if (!round.rowCount) return res.status(404).json({ message: '대회 라운드를 찾을 수 없습니다.' });
+      visionDivision = { ...round.rows[0], id: req.params.divisionId };
       usageOwnerId = Number(rights.tournament.created_by_id);
     } else {
     const leagueRow = await pool.query(
@@ -5458,7 +5462,10 @@ router.post(['/league/:id/openai-vision/scan', '/tournaments/:id/divisions/:divi
     }
 
     const participantsResult = isTournament ? await pool.query(
-      'SELECT id,name,member_division AS division FROM tournament_participants WHERE division_id=$1 ORDER BY created_at,id', [req.params.divisionId],
+      `SELECT p.id,p.name,p.member_division,p.member_division AS division FROM tournament_participants p
+       JOIN tournament_divisions d ON d.id=p.division_id
+       WHERE p.division_id=ANY($1::uuid[]) AND d.tournament_id=$2 ORDER BY p.created_at,p.id`,
+      [entryDivisionIds(visionDivision),leagueId],
     ) : await pool.query(
       `SELECT id, name, division
          FROM league_participants
@@ -5466,7 +5473,10 @@ router.post(['/league/:id/openai-vision/scan', '/tournaments/:id/divisions/:divi
         ORDER BY sort_order ASC NULLS LAST, division ASC, created_at ASC`,
       [leagueId],
     );
-    let participants = participantsResult.rows;
+    const tournamentPeople = isTournament
+      ? [...participantsResult.rows, ...(visionDivision.league_program?.byeParticipants ?? [])]
+      : participantsResult.rows;
+    let participants = tournamentPeople;
     let requestedParticipantIds = [];
     try {
       const parsedParticipantIds = JSON.parse(String(req.body?.participant_ids || '[]'));
@@ -5511,11 +5521,9 @@ router.post(['/league/:id/openai-vision/scan', '/tournaments/:id/divisions/:divi
     }
 
     const matchesResult = isTournament ? await pool.query(
-      `SELECT m.id,
-        CASE WHEN m.participant_a_id IS NULL THEN NULL ELSE COALESCE(m.league_data->>'participant_a_id',m.participant_a_id::text) END AS participant_a_id,
-        CASE WHEN m.participant_b_id IS NULL THEN NULL ELSE COALESCE(m.league_data->>'participant_b_id',m.participant_b_id::text) END AS participant_b_id
+      `SELECT m.*
         FROM tournament_matches m
-        WHERE m.division_id=$1 AND m.status<>'cancelled' AND (m.program_round=$2 OR (m.program_round IS NULL AND (SELECT COUNT(*) FROM tournament_division_rounds r WHERE r.division_id=$1)=1))`, [req.params.divisionId,Number(req.params.roundNo)],
+        WHERE m.division_id=$1 AND m.status<>'cancelled' AND COALESCE(m.program_round,1)=$2`, [req.params.divisionId,Number(req.params.roundNo)],
     ) : await pool.query(
       `SELECT id, participant_a_id, participant_b_id,
               participant_a_roster_ids, participant_b_roster_ids
@@ -5538,7 +5546,11 @@ router.post(['/league/:id/openai-vision/scan', '/tournaments/:id/divisions/:divi
       return rosterId || canonicalParticipantId(participantId);
     };
     const matchLookup = new Map();
-    for (const match of matchesResult.rows) {
+    const visionMatches = isTournament
+      ? tournamentLeagueMatches(matchesResult.rows, tournamentPeople, tournamentLeagueKey(leagueId, req.params.divisionId))
+      : matchesResult.rows;
+    for (const match of visionMatches) {
+      if (match.is_no_game === true) continue;
       const participantAId = resolveMatchParticipantId(match.participant_a_id, match.participant_a_roster_ids);
       const participantBId = resolveMatchParticipantId(match.participant_b_id, match.participant_b_roster_ids);
       if (!participantAId || !participantBId) continue;
@@ -5612,7 +5624,7 @@ router.post(['/league/:id/openai-vision/scan', '/tournaments/:id/divisions/:divi
         )
       : null;
     if (visionMode === 'star-grid' && playableCells.length === 0) {
-      return res.status(409).json({ message: '현재 복식 편성과 대진표 경기가 연결되지 않았습니다. 대진표를 다시 생성해 주세요.' });
+      return res.status(409).json({ code: 'VISION_MATCH_SCOPE_MISMATCH', message: '현재 선택한 부문·라운드에서 사진 인식 대상 경기를 찾지 못했습니다. 대진표를 새로고침한 후 다시 시도해주세요. 저장된 경기와 결과는 유지됩니다.' });
     }
     const usage = await consumeFeatureCredit({
       userId: usageOwnerId,

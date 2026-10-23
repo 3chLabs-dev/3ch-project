@@ -58,7 +58,7 @@ router.post('/tournaments/:leagueId/after-party/receipt-scan', requireAuth, rece
   const leagueId = req.params.leagueId;
   const userId = Number(req.user.sub);
   const scanId = randomUUID();
-  const requestKey = `after-party-receipt:${leagueId}:${String(req.get('Idempotency-Key') || randomUUID()).slice(0, 64)}`;
+  const requestKey = `after-party-receipt:${userId}:${leagueId}:${String(req.get('Idempotency-Key') || randomUUID()).slice(0, 64)}`;
   let usageOwnerId = null;
   let creditConsumed = false;
   let logCreated = false;
@@ -71,7 +71,7 @@ router.post('/tournaments/:leagueId/after-party/receipt-scan', requireAuth, rece
     if (images.reduce((sum, file) => sum + file.size, 0) > 40 * 1024 * 1024) return fail(res, 400, '사진 전체 용량은 40MB 이하로 선택해 주세요.');
     const league = await pool.query('SELECT COALESCE(billing_owner_id,created_by_id) AS billing_owner_id FROM tournament_event_context WHERE id=$1', [leagueId]);
     if (!league.rowCount) return fail(res, 404, '대회를 찾을 수 없습니다.');
-    usageOwnerId = Number(league.rows[0].billing_owner_id);
+    usageOwnerId = userId;
     const roundNo = /^\d+$/.test(String(req.body?.round_no || '')) ? Number(req.body.round_no) : null;
     await pool.query(`INSERT INTO tournament_after_party_receipt_scans(id,tournament_id,round_no,requested_by_id,status) VALUES($1,$2,$3,$4,'processing')`, [scanId, leagueId, roundNo, userId]);
     logCreated = true;

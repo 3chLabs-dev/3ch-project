@@ -44,13 +44,19 @@ test('주최자는 다른 클럽의 부수를 확정된 조와 완료 경기 이
   assert.equal(result.released, true);
 });
 
-test('일반 참가자와 프리미엄 권한이 없는 계정은 부수 수정이 거절된다', async () => {
-  for (const options of [{ manager: false }, { premium: false }]) {
+test('일반 참가자는 부수 수정이 거절된다', async () => {
+  for (const options of [{ manager: false }]) {
     const result = await update({ member_division: '7', previous_member_division: '4' }, options);
     assert.equal(result.response.statusCode, 403);
     assert.equal(result.participant.member_division, '4');
     assert.equal(result.commands.at(-1), 'ROLLBACK');
   }
+});
+
+test('프리미엄이 없는 주최 클럽 리더도 부수를 수정할 수 있다', async () => {
+  const result = await update({ member_division: '7', previous_member_division: '4' }, { premium: false });
+  assert.equal(result.response.statusCode, 200);
+  assert.equal(result.commands.some(sql => sql.includes('FROM subscriptions')), false);
 });
 
 test('동시 수정 충돌과 다른 대회 참가자 요청을 거절한다', async () => {
@@ -92,6 +98,7 @@ async function saveRoster({ previous = '4', pooled = false, omit = false } = {})
       if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(sql)) return {};
       if (sql.includes('FROM tournaments')) return { rowCount: 1, rows: [{ starts_at: '2099-01-01', status: 'open', host_group_id: 'host' }] };
       if (sql.includes('FROM subscriptions')) return { rowCount: 0, rows: [] };
+      if (sql.includes('FROM group_members')) return { rows: [] };
       if (sql.includes('FROM tournament_divisions WHERE')) return { rows: [{ id: tournamentId }] };
       if (sql.includes('SELECT p.*')) return { rowCount: 1, rows: [saved] };
       if (sql.includes('FROM tournament_pools')) return { rows: pooled ? [{ division_id: tournamentId }] : [] };

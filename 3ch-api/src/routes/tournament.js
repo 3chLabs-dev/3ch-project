@@ -64,7 +64,7 @@ async function getTournamentDeleteSummary(client, tournamentId) {
 }
 
 async function canSubmitTournamentApplication(client, tournament, userId, groupId) {
-  const hostManager = await hasPremiumSubscription(client, userId) && await canManageHostGroup(client, tournament.host_group_id, userId);
+  const hostManager = await canManageHostGroup(client, tournament.host_group_id, userId);
   if (hostManager) return true;
   if (tournament.status !== 'open') return false;
   return true;
@@ -231,11 +231,10 @@ router.get('/tournaments/:id', optionalAuth, async (req, res) => {
       existing.push(round);
       roundsByDivision.set(round.division_id, existing);
     }
-    const premium = userId !== null && await hasPremiumSubscription(pool, userId);
-    const canManage = premium && await canManageHostGroup(pool, tournament.rows[0].host_group_id, userId);
+    const canManage = userId !== null && await canManageHostGroup(pool, tournament.rows[0].host_group_id, userId);
     const creator = userId === tournament.rows[0].created_by_id;
-    const canManageDraw = premium && (creator || await canManageHostGroup(pool, tournament.rows[0].host_group_id, userId, 'draw'));
-    const canManageSettlement = premium && (creator || await canManageHostGroup(pool, tournament.rows[0].host_group_id, userId, 'settlement'));
+    const canManageDraw = userId !== null && (creator || await canManageHostGroup(pool, tournament.rows[0].host_group_id, userId, 'draw'));
+    const canManageSettlement = userId !== null && (creator || await canManageHostGroup(pool, tournament.rows[0].host_group_id, userId, 'settlement'));
     const canApply = canApplyToTournament(tournament.rows[0]);
     return res.json({ tournament: { ...tournament.rows[0], can_manage: canManage, can_manage_draw: canManageDraw, can_manage_settlement: canManageSettlement, can_delete: creator, can_apply: canApply, divisions: divisions.rows.map((division) => ({ ...division, rounds: roundsByDivision.get(division.id) ?? [] })) } });
   } catch (error) {
@@ -312,7 +311,7 @@ router.patch('/tournaments/:id', requireAuth, async (req, res) => {
     const existing = await pool.query('SELECT host_group_id, starts_at, ends_at, application_deadline_at, status FROM tournaments WHERE id = $1', [id.data]);
     if (!existing.rowCount) return res.status(404).json({ message: '대회를 찾을 수 없습니다.' });
     const userId = Number(req.user.sub);
-    if (!await hasPremiumSubscription(pool, userId) || !await canManageHostGroup(pool, existing.rows[0].host_group_id, userId)) return res.status(403).json({ message: '대회 관리 권한이 필요합니다.' });
+    if (!await canManageHostGroup(pool, existing.rows[0].host_group_id, userId)) return res.status(403).json({ message: '대회 관리 권한이 필요합니다.' });
     const startsAt = body.data.starts_at ?? existing.rows[0].starts_at;
     const endsAt = Object.hasOwn(body.data, 'ends_at') ? body.data.ends_at : existing.rows[0].ends_at;
     if (endsAt && new Date(endsAt) < new Date(startsAt)) return res.status(400).json({ message: '종료 시간은 시작 시간 이후여야 합니다.' });
@@ -340,7 +339,7 @@ router.post('/tournaments/:id/competitions', requireAuth, async (req,res) => {
     const found=await client.query('SELECT * FROM tournaments WHERE id=$1 FOR UPDATE',[req.params.id]);
     if (!found.rowCount) {await client.query('ROLLBACK');return res.status(404).json({message:'대회를 찾을 수 없습니다.'});}
     const userId=Number(req.user.sub);
-    if (!await hasPremiumSubscription(client,userId)||!await canManageHostGroup(client,found.rows[0].host_group_id,userId)) {await client.query('ROLLBACK');return res.status(403).json({message:'대회 관리 권한이 필요합니다.'});}
+    if (!await canManageHostGroup(client,found.rows[0].host_group_id,userId)) {await client.query('ROLLBACK');return res.status(403).json({message:'대회 관리 권한이 필요합니다.'});}
     const config=await validateEntryConfig(client,req.params.id,null,parsed.data.entry_config);
     if (config.source_division_ids.length<2) throw Object.assign(new Error('통합할 신청 부문을 두 개 이상 선택해주세요.'),{statusCode:409});
     const duplicate=await client.query('SELECT 1 FROM tournament_divisions WHERE tournament_id=$1 AND name=$2',[req.params.id,parsed.data.name]);
@@ -365,7 +364,7 @@ router.post('/tournaments/:id/divisions/:divisionId/rounds', requireAuth, async 
     const found = await client.query(`SELECT d.id, t.host_group_id FROM tournament_divisions d JOIN tournaments t ON t.id = d.tournament_id WHERE t.id = $1 AND d.id = $2 FOR UPDATE OF d`, [ids.data.id, ids.data.divisionId]);
     if (!found.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ message: '부문을 찾을 수 없습니다.' }); }
     const userId = Number(req.user.sub);
-    if (!await hasPremiumSubscription(client, userId) || !await canManageHostGroup(client, found.rows[0].host_group_id, userId)) { await client.query('ROLLBACK'); return res.status(403).json({ message: '대회 관리 권한이 필요합니다.' }); }
+    if (!await canManageHostGroup(client, found.rows[0].host_group_id, userId)) { await client.query('ROLLBACK'); return res.status(403).json({ message: '대회 관리 권한이 필요합니다.' }); }
     const matches = await client.query("SELECT 1 FROM tournament_matches WHERE division_id = $1 AND status<>'cancelled' LIMIT 1", [ids.data.divisionId]);
     const pools = await client.query('SELECT 1 FROM tournament_pools WHERE division_id = $1 LIMIT 1', [ids.data.divisionId]);
     if (matches.rowCount || pools.rowCount) { await client.query('ROLLBACK'); return res.status(409).json({ code: 'COMPETITION_ALREADY_CREATED', message: '조 또는 경기가 생성된 부문에는 라운드를 추가할 수 없습니다.' }); }
@@ -398,7 +397,7 @@ router.put('/tournaments/:id/divisions/:divisionId/program', requireAuth, async 
     const found = await client.query(`SELECT d.*, t.host_group_id FROM tournament_divisions d JOIN tournaments t ON t.id = d.tournament_id WHERE t.id = $1 AND d.id = $2 FOR UPDATE OF d`, [ids.data.id, ids.data.divisionId]);
     if (!found.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ message: '부문을 찾을 수 없습니다.' }); }
     const userId = Number(req.user.sub);
-    if (!await hasPremiumSubscription(client, userId) || !await canManageHostGroup(client, found.rows[0].host_group_id, userId)) { await client.query('ROLLBACK'); return res.status(403).json({ message: '대회 관리 권한이 필요합니다.' }); }
+    if (!await canManageHostGroup(client, found.rows[0].host_group_id, userId)) { await client.query('ROLLBACK'); return res.status(403).json({ message: '대회 관리 권한이 필요합니다.' }); }
     const current = await client.query('SELECT * FROM tournament_division_rounds WHERE division_id = $1 ORDER BY round_no FOR UPDATE', [ids.data.divisionId]);
     const incomingExisting = body.data.rounds.filter((round) => round.id);
     if (incomingExisting.length !== current.rowCount || incomingExisting.some((round, index) => round.id !== current.rows[index].id)) {
@@ -447,9 +446,6 @@ router.patch('/tournaments/:id/divisions/:divisionId', requireAuth, async (req, 
     );
     if (!existing.rowCount) return res.status(404).json({ message: '대회 부문을 찾을 수 없습니다.' });
     const userId = Number(req.user.sub);
-    if (!await hasPremiumSubscription(pool, userId)) {
-      return res.status(403).json({ code: 'PREMIUM_REQUIRED', message: '프리미엄 구독이 필요합니다.' });
-    }
     if (!await canManageHostGroup(pool, existing.rows[0].host_group_id, userId)) {
       return res.status(403).json({ message: '주최 클럽 관리 권한이 필요합니다.' });
     }
@@ -491,7 +487,7 @@ router.patch('/tournaments/:id/divisions/:divisionId/rounds/:roundId', requireAu
       [ids.data.id, ids.data.divisionId, ids.data.roundId],
     );
     if (!found.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ message: '라운드를 찾을 수 없습니다.' }); }
-    if (!await hasPremiumSubscription(client, userId) || !await canManageHostGroup(client, found.rows[0].host_group_id, userId)) {
+    if (!await canManageHostGroup(client, found.rows[0].host_group_id, userId)) {
       await client.query('ROLLBACK');
       return res.status(403).json({ message: '대회 관리 권한이 필요합니다.' });
     }
@@ -535,9 +531,6 @@ router.patch('/tournaments/:id/visibility', requireAuth, async (req, res) => {
     if (!await canManageHostGroup(pool, existing.rows[0].host_group_id, userId)) {
       return res.status(403).json({ message: '주최 클럽 관리 권한이 필요합니다.' });
     }
-    if (!await hasPremiumSubscription(pool, userId)) {
-      return res.status(403).json({ code: 'PREMIUM_REQUIRED', message: '프리미엄 구독이 필요합니다.' });
-    }
     const updated = await pool.query(
       'UPDATE tournaments SET premium_visible = $1, updated_at = NOW() WHERE id = $2 RETURNING id, premium_visible',
       [parsed.data.premium_visible, id.data],
@@ -557,7 +550,7 @@ router.patch('/tournaments/:id/status', requireAuth, async (req, res) => {
     const found = await pool.query('SELECT host_group_id, status, application_deadline_at, starts_at FROM tournaments WHERE id = $1', [id.data]);
     if (!found.rowCount) return res.status(404).json({ message: '대회를 찾을 수 없습니다.' });
     const userId = Number(req.user.sub);
-    if (!await hasPremiumSubscription(pool, userId) || !await canManageHostGroup(pool, found.rows[0].host_group_id, userId)) return res.status(403).json({ message: '대회 관리 권한이 필요합니다.' });
+    if (!await canManageHostGroup(pool, found.rows[0].host_group_id, userId)) return res.status(403).json({ message: '대회 관리 권한이 필요합니다.' });
     if (found.rows[0].status !== 'draft') return res.status(409).json({ message: '초안 대회만 참가 신청을 열 수 있습니다.' });
     if (new Date(found.rows[0].application_deadline_at ?? found.rows[0].starts_at) <= new Date()) return res.status(409).json({ message: '참가 신청 기간이 끝났습니다.' });
     const updated = await pool.query(`UPDATE tournaments SET status = 'open', updated_at = NOW() WHERE id = $1 RETURNING id, status`, [id.data]);
@@ -588,7 +581,7 @@ router.get('/tournaments/:id/applications/roster', requireAuth, async (req, res)
   try {
     const tournament = await pool.query('SELECT * FROM tournaments WHERE id = $1', [id.data]);
     if (!tournament.rowCount) return res.status(404).json({ message: '대회를 찾을 수 없습니다.' });
-    const hostManager = await hasPremiumSubscription(pool, userId) && await canManageHostGroup(pool, tournament.rows[0].host_group_id, userId);
+    const hostManager = await canManageHostGroup(pool, tournament.rows[0].host_group_id, userId);
     if (groupId && !hostManager && !await canManageHostGroup(pool, groupId, userId)) return res.status(403).json({ message: '클럽 명단 관리 권한이 필요합니다.' });
     const rows = await pool.query(`SELECT p.id, p.division_id, p.member_id, p.pre_member_id, p.name, p.member_division, p.status, p.source_group_id
       FROM tournament_participants p JOIN tournament_divisions d ON d.id = p.division_id
@@ -624,7 +617,7 @@ router.put('/tournaments/:id/applications/roster', requireAuth, async (req, res)
     const found = await client.query('SELECT * FROM tournaments WHERE id = $1 FOR UPDATE', [id.data]);
     if (!found.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ message: '대회를 찾을 수 없습니다.' }); }
     const tournament = found.rows[0];
-    const hostManager = await hasPremiumSubscription(client, userId) && await canManageHostGroup(client, tournament.host_group_id, userId);
+    const hostManager = await canManageHostGroup(client, tournament.host_group_id, userId);
     if (!hostManager && new Date() >= new Date(tournament.starts_at)) { await client.query('ROLLBACK'); return res.status(409).json({ message: '대회 시작 후에는 신청 명단을 수정할 수 없습니다.' }); }
     if (body.data.group_id && !hostManager && !await canManageHostGroup(client, body.data.group_id, userId)) { await client.query('ROLLBACK'); return res.status(403).json({ message: '클럽 명단 관리 권한이 필요합니다.' }); }
     const existing = await client.query(`SELECT p.* FROM tournament_participants p JOIN tournament_divisions d ON d.id = p.division_id
@@ -706,7 +699,7 @@ router.patch('/tournaments/:id/participants/:participantId/division', requireAut
     const found = await client.query('SELECT * FROM tournaments WHERE id = $1 FOR UPDATE', [ids.data.id]);
     if (!found.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ message: '대회를 찾을 수 없습니다.' }); }
     const userId = Number(req.user.sub);
-    if (!await hasPremiumSubscription(client, userId) || !await canManageHostGroup(client, found.rows[0].host_group_id, userId)) { await client.query('ROLLBACK'); return res.status(403).json({ message: '대회 관리 권한이 필요합니다.' }); }
+    if (!await canManageHostGroup(client, found.rows[0].host_group_id, userId)) { await client.query('ROLLBACK'); return res.status(403).json({ message: '대회 관리 권한이 필요합니다.' }); }
     const participant = await client.query(`SELECT p.id, p.member_division FROM tournament_participants p JOIN tournament_divisions d ON d.id = p.division_id WHERE d.tournament_id = $1 AND p.id = $2 FOR UPDATE OF p`, [ids.data.id, ids.data.participantId]);
     if (!participant.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ message: '참가자를 찾을 수 없습니다.' }); }
     if (participant.rows[0].member_division !== body.data.previous_member_division) { await client.query('ROLLBACK'); return res.status(409).json({ message: '참가자의 부수가 변경되었습니다. 새로고침 후 다시 수정해주세요.' }); }
@@ -727,7 +720,7 @@ router.post('/tournaments/:id/clubs/:groupId/confirm', requireAuth, async (req, 
     const found = await client.query('SELECT * FROM tournaments WHERE id = $1 FOR UPDATE', [ids.data.id]);
     if (!found.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ message: '대회를 찾을 수 없습니다.' }); }
     const userId = Number(req.user.sub);
-    if (!await hasPremiumSubscription(client, userId) || !await canManageHostGroup(client, found.rows[0].host_group_id, userId)) { await client.query('ROLLBACK'); return res.status(403).json({ message: '대회 관리 권한이 필요합니다.' }); }
+    if (!await canManageHostGroup(client, found.rows[0].host_group_id, userId)) { await client.query('ROLLBACK'); return res.status(403).json({ message: '대회 관리 권한이 필요합니다.' }); }
     await client.query('SELECT id FROM tournament_divisions WHERE tournament_id = $1 ORDER BY sort_order FOR UPDATE', [ids.data.id]);
     const participants = await client.query(`SELECT p.id, p.status, p.division_id FROM tournament_participants p JOIN tournament_divisions d ON d.id = p.division_id WHERE d.tournament_id = $1 AND p.source_group_id = $2 AND p.status IN ('applied', 'confirmed') ORDER BY p.id FOR UPDATE OF p`, [ids.data.id, ids.data.groupId]);
     if (!matchesExistingRoster(participants.rows, body.data.participant_ids.map((id) => ({ id })))) { await client.query('ROLLBACK'); return res.status(409).json({ message: '클럽 명단이 변경되었습니다. 새로고침 후 입금 내역을 다시 확인해주세요.' }); }
@@ -766,7 +759,7 @@ router.post('/tournaments/:id/divisions/:divisionId/applications', requireAuth, 
     await client.query('BEGIN');
     const tournament = await client.query('SELECT * FROM tournaments WHERE id = $1 FOR UPDATE', [ids.data.id]);
     if (!tournament.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ message: '대회를 찾을 수 없습니다.' }); }
-    const hostManager = await hasPremiumSubscription(client, userId) && await canManageHostGroup(client, tournament.rows[0].host_group_id, userId);
+    const hostManager = await canManageHostGroup(client, tournament.rows[0].host_group_id, userId);
     if (!hostManager && new Date() >= new Date(tournament.rows[0].application_deadline_at ?? tournament.rows[0].starts_at)) { await client.query('ROLLBACK'); return res.status(409).json({ message: '참가 신청이 마감되었습니다. 기존 명단은 대회 시작 전까지 수정할 수 있습니다.' }); }
     const division = await getDivision(client, ids.data.id, ids.data.divisionId, true);
     if (!division) { await client.query('ROLLBACK'); return res.status(404).json({ message: '부문을 찾을 수 없습니다.' }); }
@@ -822,7 +815,7 @@ router.patch('/tournaments/:id/divisions/:divisionId/applications/:participantId
     const found = await client.query(`SELECT p.id, p.status, t.host_group_id, d.status AS division_status FROM tournament_participants p JOIN tournament_divisions d ON d.id = p.division_id JOIN tournaments t ON t.id = d.tournament_id WHERE t.id = $1 AND d.id = $2 AND p.id = $3 FOR UPDATE OF d, p`, [ids.data.id, ids.data.divisionId, ids.data.participantId]);
     if (!found.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ message: '신청자를 찾을 수 없습니다.' }); }
     const userId = Number(req.user.sub);
-    if (!await hasPremiumSubscription(client, userId) || !await canManageHostGroup(client, found.rows[0].host_group_id, userId)) { await client.query('ROLLBACK'); return res.status(403).json({ message: '대회 관리 권한이 필요합니다.' }); }
+    if (!await canManageHostGroup(client, found.rows[0].host_group_id, userId)) { await client.query('ROLLBACK'); return res.status(403).json({ message: '대회 관리 권한이 필요합니다.' }); }
     if (found.rows[0].status !== 'applied') { await client.query('ROLLBACK'); return res.status(409).json({ message: '변경할 수 없는 신청 상태입니다.' }); }
     if (body.data.status === 'rejected') {
       const protectedMatch=await client.query(`SELECT 1 FROM tournament_matches WHERE status<>'cancelled' AND
@@ -865,7 +858,7 @@ router.get('/tournaments/:id/divisions/:divisionId/pools/preview', requireAuth, 
     if (!tournament.rowCount || !division) return res.status(404).json({ message: '부문을 찾을 수 없습니다.' });
     if (!['GROUP', 'GROUP_TOURNAMENT'].includes(division.format)) return res.status(409).json({ message: '1라운드가 조별리그인 부문에서만 조를 편성할 수 있습니다.' });
     const userId = Number(req.user.sub);
-    if (!await hasPremiumSubscription(pool, userId) || !await canManageHostGroup(pool, tournament.rows[0].host_group_id, userId)) return res.status(403).json({ message: '대회 관리 권한이 필요합니다.' });
+    if (!await canManageHostGroup(pool, tournament.rows[0].host_group_id, userId)) return res.status(403).json({ message: '대회 관리 권한이 필요합니다.' });
     const participants = await pool.query(`SELECT p.id, p.name, p.member_division, p.source_group_id, COALESCE(g.name, '개인') AS club_name FROM tournament_participants p LEFT JOIN groups g ON g.id = p.source_group_id WHERE p.division_id = ANY($1::uuid[]) AND p.status = 'confirmed' ORDER BY p.id`, [entryDivisionIds(division)]);
     const groups = createTournamentGroups(participants.rows, count.data);
     return res.json({ participant_ids: participants.rows.map((participant) => participant.id), pools: groups });
@@ -888,7 +881,7 @@ router.post('/tournaments/:id/divisions/:divisionId/pools/generate', requireAuth
     if (!tournament.rowCount || !division) { await client.query('ROLLBACK'); return res.status(404).json({ message: '부문을 찾을 수 없습니다.' }); }
     if (!['GROUP', 'GROUP_TOURNAMENT'].includes(division.format)) { await client.query('ROLLBACK'); return res.status(409).json({ message: '1라운드가 조별리그인 부문에서만 조를 편성할 수 있습니다.' }); }
     const userId = Number(req.user.sub);
-    if (!await hasPremiumSubscription(client, userId) || !await canManageHostGroup(client, tournament.rows[0].host_group_id, userId)) { await client.query('ROLLBACK'); return res.status(403).json({ message: '대회 관리 권한이 필요합니다.' }); }
+    if (!await canManageHostGroup(client, tournament.rows[0].host_group_id, userId)) { await client.query('ROLLBACK'); return res.status(403).json({ message: '대회 관리 권한이 필요합니다.' }); }
     const existing = await client.query('SELECT 1 FROM tournament_pools WHERE division_id = $1 LIMIT 1', [division.id]);
     const matches = await client.query("SELECT 1 FROM tournament_matches WHERE division_id = $1 AND status<>'cancelled' LIMIT 1", [division.id]);
     if (!canCreateTournamentGroups({ hasPools: existing.rowCount > 0, hasMatches: matches.rowCount > 0, divisionStatus: division.status })) { await client.query('ROLLBACK'); return res.status(409).json({ message: '이미 조나 경기가 생성된 부문입니다. 기존 조와 결과는 유지됩니다.' }); }

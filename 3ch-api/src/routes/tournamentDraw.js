@@ -101,7 +101,7 @@ router.post('/tournaments/:leagueId/draw', requireAuth, async (req, res) => {
 
     const { name, prizes } = drawSchema.parse(req.body);
 
-    quotaUserId = Number(accessCheck.rows[0].billing_owner_id);
+    quotaUserId = userId;
     if (!Number.isFinite(quotaUserId) || quotaUserId <= 0) {
       return res.status(409).json({ message: '사용량을 차감할 계정을 확인할 수 없습니다.', code: 'BILLING_OWNER_NOT_FOUND' });
     }

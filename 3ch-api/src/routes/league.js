@@ -5406,7 +5406,7 @@ router.post(['/league/:id/openai-vision/scan', '/tournaments/:id/divisions/:divi
   const clientRequestKey = String(req.get('Idempotency-Key') || req.body?.idempotency_key || randomUUID())
     .trim()
     .slice(0, 64);
-  const usageRequestKey = `vision:${leagueId}:${clientRequestKey}`;
+  const usageRequestKey = isTournament ? `vision:${userId}:${leagueId}:${clientRequestKey}` : `vision:${leagueId}:${clientRequestKey}`;
   let usageOwnerId = null;
   let creditConsumed = false;
   let visionDivision = null;
@@ -5418,7 +5418,7 @@ router.post(['/league/:id/openai-vision/scan', '/tournaments/:id/divisions/:divi
       const round = await pool.query('SELECT r.id, d.rules, d.league_program FROM tournament_division_rounds r JOIN tournament_divisions d ON d.id=r.division_id WHERE d.tournament_id=$1 AND d.id=$2 AND r.round_no=$3', [leagueId,req.params.divisionId,Number(req.params.roundNo)]);
       if (!round.rowCount) return res.status(404).json({ message: '대회 라운드를 찾을 수 없습니다.' });
       visionDivision = { ...round.rows[0], id: req.params.divisionId };
-      usageOwnerId = Number(rights.tournament.created_by_id);
+      usageOwnerId = userId;
     } else {
     const leagueRow = await pool.query(
       `SELECT l.join_permission, l.group_id, COALESCE(l.billing_owner_id, l.created_by_id) AS billing_owner_id

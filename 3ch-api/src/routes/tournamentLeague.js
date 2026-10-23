@@ -67,6 +67,26 @@ router.use('/tournaments/:id/divisions/:divisionId/league',optionalAuth,async(re
       result={ok:true};
     } else if(path==='/matches'&&req.method==='DELETE'&&raw.length===0) {
       result={ok:true};
+    } else if(/^\/program\/rounds\/[1-9]\d*\/rule$/.test(path)&&req.method==='PATCH') {
+      const roundNo=Number(path.split('/')[3]),round=rounds.find(r=>r.round_no===roundNo);
+      const matchRule=req.body?.match_rule;
+      const codes={'3전 2선승제':'BEST_OF_3','5전 3선승제':'BEST_OF_5','3세트제':'THREE_SET'};
+      if(!round||!Object.hasOwn(codes,matchRule)||req.body.confirmation_intent!=='CHANGE_TOURNAMENT_ROUND_RULE')throw conflict('라운드 규칙 변경 내용을 확인해주세요.');
+      const revision=division.updated_at instanceof Date?division.updated_at.toISOString():String(division.updated_at);
+      if(req.body.expected_updated_at!==revision)throw conflict('프로그램이 변경되었습니다. 새로고침 후 다시 시도해주세요.');
+      const active=raw.filter(m=>m.status!=='cancelled'),target=active.filter(m=>(m.program_round??1)===roundNo);
+      if(target.some(hasResult)||active.some(m=>(m.program_round??1)>roundNo))throw conflict('진행·완료·점수가 있는 경기 또는 후속 라운드는 유지해야 하므로 규칙을 변경할 수 없습니다.');
+      const next=structuredClone(program);
+      next.blocks[roundNo-1]={...next.blocks[roundNo-1],matchRule};
+      next.rounds=next.rounds?.map((r,i)=>i===roundNo-1?{...r,matchRule:codes[matchRule]}:r);
+      await audit('CHANGE_UNPLAYED_ROUND_RULE',{round:roundNo,program,roundRules:round.rules,matches:target});
+      // Only rule metadata changes: IDs, assignments, ordering, scores and statuses remain intact.
+      const rules={...(round.rules??{}),match_rule:codes[matchRule],league_config:{...(round.rules?.league_config??{}),matchRule:codes[matchRule]}};
+      await client.query('UPDATE tournament_division_rounds SET rules=$1::jsonb,updated_at=now() WHERE id=$2',[JSON.stringify(rules),round.id]);
+      if(roundNo===1)await client.query('UPDATE tournament_divisions SET rules=$1::jsonb WHERE id=$2',[JSON.stringify({...division.rules,...rules}),division.id]);
+      for(const m of target)await client.query('UPDATE tournament_matches SET league_data=$1::jsonb WHERE id=$2',[JSON.stringify({...m.league_data,match_rule:matchRule}),m.id]);
+      const updated=await client.query('UPDATE tournament_divisions SET league_program=$1::jsonb,updated_at=now() WHERE id=$2 RETURNING updated_at',[JSON.stringify(next),division.id]);
+      result={program:{id:division.id,league_id:key,program_data:next,updated_at:updated.rows[0].updated_at}};
     } else if(path==='/program'&&req.method==='PUT'||path==='/reconfigure'&&req.method==='POST') {
       const incoming=req.body?.program_data;
       const reconfigure=path==='/reconfigure'?Number(req.body.round_no):null;

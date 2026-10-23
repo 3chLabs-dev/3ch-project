@@ -20,9 +20,10 @@ test('shared league program: singles/doubles/teams, later rounds and protected p
  await db.query('INSERT INTO tournament_divisions(id,tournament_id) VALUES ($1,$2)',[division,id]);
  for(let n=1;n<=12;n++)await db.query("INSERT INTO tournament_participants(id,division_id,name,member_division,status) VALUES ($1,$2,$3,$4,'confirmed')",[uuid(n),division,`선수${n}`,String(n%6+1)]);
  const tournament={id,created_by_id:1,status:'open',starts_at:'2099-01-01',application_deadline_at:'2020-01-01'};
- let failInsert=false;
+ let failInsert=false,failRuleChange=false;
  pool.connect=async()=>({async query(sql,values){
   if(failInsert&&sql.startsWith('INSERT INTO tournament_matches'))throw new Error('simulated insert failure after archiving unplayed matches');
+  if(failRuleChange&&sql.startsWith('UPDATE tournament_matches SET league_data'))throw new Error('simulated rule metadata update failure');
   if(sql.includes('FROM tournaments t LEFT JOIN'))return {rows:[tournament],rowCount:1};
   if(sql.startsWith('SELECT * FROM tournaments WHERE id=$1 FOR UPDATE'))return {rowCount:1,rows:[tournament]};
   if(sql.includes('SELECT role, management_permissions FROM group_members'))return {rowCount:1,rows:[{role:'owner'}]};
@@ -212,7 +213,39 @@ test('shared league program: singles/doubles/teams, later rounds and protected p
  assert.equal(ready.length,15);assert.ok(ready.every(m=>m.status==='pending'&&m.score_a==null&&m.score_b==null));
  assert.deepEqual((await db.query('SELECT * FROM tournament_matches WHERE division_id<>$1 ORDER BY id',[targetDivision])).rows,allExisting);
  const readySnapshot=(await db.query('SELECT * FROM tournament_matches WHERE division_id=$1 ORDER BY id',[targetDivision])).rows;
- assert.equal((await call('POST','/program/matches/sync',{matches:ready,reset_results:false})).body.inserted,0);
+ const changeRule=async(rule,intent='CHANGE_TOURNAMENT_ROUND_RULE',revision)=>{
+  const current=(await call('GET','/program')).body.program;
+  return call('PATCH','/program/rounds/1/rule',{match_rule:rule,confirmation_intent:intent,expected_updated_at:revision??(current.updated_at instanceof Date?current.updated_at.toISOString():String(current.updated_at))});
+ };
+ // A rule-only photo correction cannot regenerate or reorder any saved match.
+ const beforeRuleFailure=(await call('GET','/program')).body.program;
+ failRuleChange=true;
+ assert.equal((await changeRule('5전 3선승제')).status,500);
+ failRuleChange=false;
+ assert.deepEqual((await call('GET','/program')).body.program,beforeRuleFailure);
  assert.deepEqual((await db.query('SELECT * FROM tournament_matches WHERE division_id=$1 ORDER BY id',[targetDivision])).rows,readySnapshot);
+ assert.equal((await changeRule('5전 3선승제')).status,200);
+ const changedRules=(await db.query('SELECT * FROM tournament_matches WHERE division_id=$1 ORDER BY id',[targetDivision])).rows;
+ assert.deepEqual(changedRules.map(({league_data,...m})=>m),readySnapshot.map(({league_data,...m})=>m));
+ assert.ok(changedRules.every(m=>m.league_data.match_rule==='5전 3선승제'));
+ assert.equal((await call('GET','/program')).body.program.program_data.rounds[0].matchRule,'BEST_OF_5');
+ assert.equal((await changeRule('3세트제')).status,200);
+ assert.equal((await changeRule('3전 2선승제','WRONG_INTENT')).status,409);
+ assert.equal((await changeRule('3전 2선승제','CHANGE_TOURNAMENT_ROUND_RULE','stale-revision')).status,409);
+ const guarded=(await db.query('SELECT * FROM tournament_matches WHERE division_id=$1 ORDER BY id',[targetDivision])).rows;
+ await db.query("UPDATE tournament_matches SET status='completed',score_a=3,score_b=0 WHERE id=$1",[guarded[0].id]);
+ const completedBeforeRuleChange=(await db.query('SELECT * FROM tournament_matches WHERE division_id=$1 ORDER BY id',[targetDivision])).rows;
+ assert.equal((await changeRule('3전 2선승제')).status,409);
+ assert.deepEqual((await db.query('SELECT * FROM tournament_matches WHERE division_id=$1 ORDER BY id',[targetDivision])).rows,completedBeforeRuleChange);
+ assert.deepEqual((await db.query('SELECT * FROM tournament_matches WHERE division_id<>$1 ORDER BY id',[targetDivision])).rows,allExisting);
+ // Restore the test fixture with the dedicated confirmed reset action.
+ assert.equal((await call('POST','/reset',{confirmation_intent:'RESET_TOURNAMENT_RESULTS'})).status,200);
+ const resetReady=(await call('GET','/matches')).body.matches;
+ assert.equal((await call('POST','/program/matches/sync',{matches:ready,reset_results:false})).body.inserted,0);
+ assert.deepEqual((await db.query('SELECT * FROM tournament_matches WHERE division_id=$1 ORDER BY id',[targetDivision])).rows.map(m=>m.id),resetReady.map(m=>m.id).sort());
+ await db.query("INSERT INTO tournament_matches(id,division_id,program_round,match_order,status) VALUES ($1,$2,2,100,'pending')",[uuid(3999),targetDivision]);
+ const laterBefore=(await db.query('SELECT * FROM tournament_matches ORDER BY id')).rows;
+ assert.equal((await changeRule('5전 3선승제')).status,409);
+ assert.deepEqual((await db.query('SELECT * FROM tournament_matches ORDER BY id')).rows,laterBefore);
  }finally{pool.connect=original;await db.close();}
 });

@@ -1100,6 +1100,16 @@ export const leagueApi = baseApi.injectEndpoints({
       ],
     }),
 
+    changeTournamentRoundRule: builder.mutation<GetLeagueProgramResponse, { leagueId: string; round: number; matchRule: string; expectedUpdatedAt: string }>({
+      query: ({ leagueId, round, matchRule, expectedUpdatedAt }) => ({
+        url: `/league/${leagueId}/program/rounds/${round}/rule`, method: "PATCH",
+        body: { match_rule: matchRule, expected_updated_at: expectedUpdatedAt, confirmation_intent: "CHANGE_TOURNAMENT_ROUND_RULE" },
+      }),
+      invalidatesTags: (_result, _error, { leagueId }) => [
+        { type: "League", id: `program-${leagueId}` }, { type: "League", id: `matches-${leagueId}` }, { type: "League", id: leagueId },
+      ],
+    }),
+
     deleteLeagueProgram: builder.mutation<{ ok: boolean }, { leagueId: string }>({
       async queryFn({ leagueId }, api, _extraOptions, fetchWithBQ) {
         const token = (api.getState() as RootState).auth?.token;
@@ -1459,6 +1469,7 @@ export const {
   useDeleteLeagueProgramTemplateMutation,
   useGetLeagueProgramQuery,
   useSaveLeagueProgramMutation,
+  useChangeTournamentRoundRuleMutation,
   useDeleteLeagueProgramMutation,
   useSyncLeagueProgramMatchesMutation,
   useGetLeagueMatchesQuery,

@@ -73,6 +73,7 @@ import {
   useGetLeagueProgramQuery,
   useAddParticipantsMutation,
   useSaveLeagueProgramMutation,
+  useChangeTournamentRoundRuleMutation,
   useSyncLeagueProgramMatchesMutation,
   useUpdateLeagueMatchMutation,
   useUpdateLeagueMatchResultsBatchMutation,
@@ -1861,6 +1862,7 @@ export default function LeagueGPTVisionSheet({ external }: { external?: External
   const [reorderParticipants] = useReorderLeagueParticipantsMutation();
   const [addParticipants, { isLoading: isAddingBot }] = useAddParticipantsMutation();
   const [saveLeagueProgram] = useSaveLeagueProgramMutation();
+  const [changeTournamentRoundRule] = useChangeTournamentRoundRuleMutation();
   const [syncProgramMatches] = useSyncLeagueProgramMatchesMutation();
 
   const restoreProgramNoGame = useCallback(async (matchId: string) => {
@@ -3093,22 +3095,32 @@ export default function LeagueGPTVisionSheet({ external }: { external?: External
         blocks: programOption.blocks.map((block, index) => index === roundIndex ? { ...block, matchRule } : block),
         rounds: programOption.rounds?.map((round, index) => index === roundIndex ? { ...round, matchRule: roundMatchRule } : round),
       };
-      const nextMatches = generateProgramRoundMatches(
-        id,
-        nextProgram,
-        rawParticipants,
-        programRound,
-        programSourceMatches,
-      );
-      await syncProgramMatches({ leagueId: id, matches: nextMatches }).unwrap();
-      await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
-      storeProgramOption(id, nextProgram);
+      if (id.startsWith("tournament~")) {
+        const revision = programData?.program?.updated_at;
+        if (!revision) throw new Error("프로그램 정보를 다시 불러온 후 시도해주세요.");
+        const saved = await changeTournamentRoundRule({ leagueId: id, round: programRound, matchRule, expectedUpdatedAt: revision }).unwrap();
+        if (!saved.program) throw new Error("변경된 라운드 규칙을 확인하지 못했습니다.");
+        storeProgramOption(id, saved.program.program_data as ProgramOption);
+      } else {
+        const nextMatches = generateProgramRoundMatches(
+          id,
+          nextProgram,
+          rawParticipants,
+          programRound,
+          programSourceMatches,
+        );
+        await syncProgramMatches({ leagueId: id, matches: nextMatches }).unwrap();
+        await saveLeagueProgram({ leagueId: id, program: nextProgram }).unwrap();
+        storeProgramOption(id, nextProgram);
+      }
       await refetchMatches();
       setVisionRuleMismatch(null);
       setIsSavingVision(false);
       await saveVisionPreview(true);
     } catch (error) {
-      setVisionNotice({ type: "error", message: getErrorMessage(error, "라운드 규칙 변경에 실패했습니다.") });
+      const message = getErrorMessage(error, "라운드 규칙 변경에 실패했습니다.");
+      setVisionNotice({ type: "error", message });
+      setVisionError(message);
       setIsSavingVision(false);
     }
   };

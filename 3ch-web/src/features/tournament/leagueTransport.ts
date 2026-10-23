@@ -52,7 +52,7 @@ export async function tournamentLeagueRequest<T extends { data?: unknown; error?
       if (!window.confirm("이 부문의 프로그램을 삭제하시겠습니까? 모든 라운드·조/팀 편성·경기·점수 결과가 삭제됩니다. 참가자 명단은 유지하며 변경 전 기록은 관리자 감사 기록에 보관합니다.")) return { error: { status: 400, data: { message: "프로그램 삭제를 중단했습니다." } } } as T;
       body = { confirmation_intent: "DELETE_TOURNAMENT_PROGRAM" };
     }
-    if ((method === "PUT" && suffix === "/program") || (method === "POST" && suffix === "/reconfigure")) {
+    if ((method === "PUT" && suffix === "/program") || (method === "POST" && (suffix === "/reconfigure" || suffix === "/program/reset-and-save"))) {
       if (!programs.has(key)) await capture(await execute(`${prefix}/program`), "/program");
       const previous = programs.get(key);
       const incoming = body?.program_data as { blocks?: unknown[]; tournament_revision?: string } | undefined;
@@ -61,7 +61,7 @@ export async function tournamentLeagueRequest<T extends { data?: unknown; error?
         if (!window.confirm("이 라운드의 미진행 편성을 다시 구성하시겠습니까? 기존 미진행 경기는 취소 상태로 보관하고 새 편성으로 경기를 만듭니다. 점수나 진행·완료 기록이 있으면 변경하지 않습니다.")) return { error: { status: 400, data: { message: "편성 재구성을 중단했습니다." } } } as T;
         body.confirmation_intent = "RECONFIGURE_UNPLAYED_TOURNAMENT_ROUND";
       }
-      if ((incoming?.blocks?.length ?? 0) < (previous?.program_data.blocks?.length ?? 0)) {
+      if (suffix !== "/program/reset-and-save" && (incoming?.blocks?.length ?? 0) < (previous?.program_data.blocks?.length ?? 0)) {
         if (!window.confirm("삭제한 빈 라운드의 설정을 제거하시겠습니까? 편성·경기가 있는 라운드는 삭제되지 않습니다.")) return { error: { status: 400, data: { message: "라운드 삭제를 중단했습니다." } } } as T;
         body.confirmation_intent = "DELETE_EMPTY_PROGRAM_ROUNDS";
       }

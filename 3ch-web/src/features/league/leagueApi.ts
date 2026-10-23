@@ -585,6 +585,8 @@ export interface SaveLeagueProgramRequest {
   leagueId: string;
   program: unknown;
   reconfigureRound?: number;
+  resetForEdit?: boolean;
+  expectedMatches?: LeagueMatch[];
 }
 
 export interface LeagueProgramTemplate {
@@ -1070,7 +1072,7 @@ export const leagueApi = baseApi.injectEndpoints({
     }),
 
     saveLeagueProgram: builder.mutation<GetLeagueProgramResponse, SaveLeagueProgramRequest>({
-      async queryFn({ leagueId, program, reconfigureRound }, api, _extraOptions, fetchWithBQ) {
+      async queryFn({ leagueId, program, reconfigureRound, resetForEdit, expectedMatches }, api, _extraOptions, fetchWithBQ) {
         const token = (api.getState() as RootState).auth?.token;
         if (isLocalDevToken(token)) {
           const programData = saveLocalDevProgram(leagueId, program);
@@ -1087,14 +1089,15 @@ export const leagueApi = baseApi.injectEndpoints({
           };
         }
         const result = await fetchWithBQ({
-          url: `/league/${leagueId}/${reconfigureRound ? "reconfigure" : "program"}`,
-          method: reconfigureRound ? "POST" : "PUT",
-          body: { program_data: program, ...(reconfigureRound ? { round_no: reconfigureRound } : {}) },
+          url: `/league/${leagueId}/${resetForEdit ? "program/reset-and-save" : reconfigureRound ? "reconfigure" : "program"}`,
+          method: resetForEdit || reconfigureRound ? "POST" : "PUT",
+          body: { program_data: program, ...(reconfigureRound ? { round_no: reconfigureRound } : {}), ...(resetForEdit ? { confirmation_intent: "RESET_TOURNAMENT_PROGRAM_FOR_EDIT", expected_matches: expectedMatches } : {}) },
         });
         return result.error ? { error: result.error } : { data: result.data as GetLeagueProgramResponse };
       },
       invalidatesTags: (_result, _error, { leagueId }) => [
         { type: "League", id: `program-${leagueId}` },
+        { type: "League", id: `matches-${leagueId}` },
         { type: "League", id: leagueId },
         "HomeSummary",
       ],

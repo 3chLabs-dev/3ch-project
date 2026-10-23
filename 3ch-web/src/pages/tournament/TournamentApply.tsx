@@ -37,8 +37,8 @@ export default function TournamentApply() {
   const tournament = tournamentData?.tournament;
   const divisions = (tournament?.divisions ?? []).filter(d => !getEntryConfig(d).source_division_ids.length);
   const selectedDivisionId = divisions.some((division) => division.id === addDivisionId) ? addDivisionId : divisions[0]?.id ?? "";
-  const canEdit = !!tournament && new Date() < new Date(tournament.starts_at);
-  const canAdd = canEdit && !!tournament && new Date() < new Date(tournament.application_deadline_at ?? tournament.starts_at) && (tournament.can_apply || tournament.can_manage);
+  const canEdit = !!tournament && (tournament.can_manage || new Date() < new Date(tournament.starts_at));
+  const canAdd = canEdit && !!tournament && (tournament.can_manage || new Date() < new Date(tournament.application_deadline_at ?? tournament.starts_at) && tournament.can_apply);
   const deadlineText = tournament?.application_deadline_at ? new Date(tournament.application_deadline_at).toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" }) : "미설정";
   useEffect(() => {
     if (!rosterData) return;
@@ -85,7 +85,7 @@ export default function TournamentApply() {
   if (!tournament) return <Box sx={{ p: 2 }}><Alert severity="error">대회를 찾을 수 없습니다.</Alert></Box>;
   return <Box sx={{ px: 2.5, pt: 2, pb: 4 }}>
     <Stack direction="row" alignItems="center" sx={{ mb: 1.5 }}><IconButton size="small" onClick={() => navigate(`/tournament/${id}`)}><ArrowBackIcon /></IconButton><Typography sx={{ fontSize: 22, fontWeight: 900 }}>대회 참가 신청</Typography></Stack>
-    <Typography sx={{ fontWeight: 800, mb: 0.5 }}>{tournament.title}</Typography><Typography sx={{ fontSize: 13, color: "text.secondary", mb: 1.5 }}>신청 마감: {deadlineText} · 제출한 명단은 대회 시작 전까지 수정할 수 있습니다.</Typography><Divider sx={{ mb: 2 }} />
+    <Typography sx={{ fontWeight: 800, mb: 0.5 }}>{tournament.title}</Typography><Typography sx={{ fontSize: 13, color: "text.secondary", mb: 1.5 }}>신청 마감: {deadlineText} · {tournament.can_manage ? "주최자는 언제든 명단을 관리할 수 있습니다." : "제출한 명단은 대회 시작 전까지 수정할 수 있습니다."}</Typography><Divider sx={{ mb: 2 }} />
     {error && <Alert severity="error" sx={{ mb: 1.5 }}>{error}</Alert>}
     {!canAdd && canEdit && <Alert severity="info" sx={{ mb: 1.5 }}>신규 신청 기간이 지났습니다. 제출한 참가자 명단은 대회 시작 전까지 수정하거나 취소할 수 있습니다.</Alert>}
     {!canEdit && <Alert severity="warning" sx={{ mb: 1.5 }}>대회가 시작되어 신청 명단을 수정할 수 없습니다.</Alert>}

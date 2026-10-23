@@ -17,6 +17,28 @@ const tournament={id:uuid(100),application_deadline_at:'2020-01-01'},division={i
 const participants=Array.from({length:12},(_,i)=>({id:uuid(i+1),name:`선수${i+1}`,member_division:String(i%6+1),club_name:`클럽${i%3}`,source_group_id:uuid(200+i%3),status:'confirmed'}));
 const block=(type,format)=>({type,format,title:'1라운드',matchRule:'3전 2선승제',teamPlayerCount:3,teamSinglesCount:3,teamDoublesCount:0,crossClubGrouping:true,
  groupSizes:type==='SINGLES'?[4,4,4]:type==='DOUBLES'?[3,3]:[2,2]});
+
+test('confirmed entrants can be scheduled before the application deadline without including waiting players',()=>{
+ const people=[...participants.slice(0,6),{...participants[6],status:'applied'}];
+ const rows=generateRound({tournament:{...tournament,application_deadline_at:'2099-01-01'},division,roundNo:1,program:{blocks:[block('SINGLES','LEAGUE')]},participants:people,matches:[]});
+ assert.equal(rows.length,15);assert.ok(rows.every(m=>m.participant_a_id!==people[6].id&&m.participant_b_id!==people[6].id));
+});
+
+test('a confirmed program edit clears formations and cached results without changing the input or new rules',()=>{
+ const {clearedProgramFormation}=require('../src/services/tournamentLeagueProgram');
+ const formation={groupAssignments:[[{id:uuid(1)}]],teamAssignments:[[{id:uuid(2)}]],doublesAssignments:[[{id:uuid(3)}]],participantOrder:[uuid(1)],groupFormationCustomized:true};
+ const program={participantOrder:[uuid(1)],blueWhiteTeams:[{id:uuid(1)}],roundStandings:[{old:true}],roundTieBreaks:{old:true},byeParticipants:[{id:uuid(99)}],blocks:[{...block('SINGLES','GROUP'),...formation}],rounds:[{program:'SINGLES',...formation}]};
+ const before=structuredClone(program),cleared=clearedProgramFormation(program);
+ assert.deepEqual(program,before);assert.equal(cleared.blocks[0].matchRule,'3전 2선승제');assert.deepEqual(cleared.blocks[0].groupSizes,[4,4,4]);
+ for(const item of [cleared,...cleared.blocks,...cleared.rounds])for(const key of Object.keys(formation))assert.equal(item[key],undefined);
+ assert.equal(cleared.roundStandings,undefined);assert.equal(cleared.roundTieBreaks,undefined);assert.equal(cleared.blueWhiteTeams,undefined);assert.deepEqual(cleared.byeParticipants,[]);
+ assert.equal(cleared.blocks[0].groupFormationPublished,false);assert.ok(Date.parse(cleared.blocks[0].matchStateResetAt));
+});
+
+test('archived completed scores cannot qualify a later round after a program reset',()=>{
+ const old=[{program_round:1,status:'cancelled',participant_a_id:participants[0].id,participant_b_id:participants[1].id,score_a:2,score_b:1}];
+ assert.throws(()=>generateRound({tournament,division,roundNo:2,program:{blocks:[block('SINGLES','LEAGUE'),block('SINGLES','TOURNAMENT')]},participants,matches:old}),/이전 라운드/);
+});
 test('program exports use actual league match/time estimates without mutating persisted configuration',()=>{
  const program={blocks:[block('SINGLES','LEAGUE')],groupSizes:[12]},snapshot=structuredClone(program);
  const result=withProgramEstimates(program,12,3,540);

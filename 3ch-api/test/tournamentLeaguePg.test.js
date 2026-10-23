@@ -7,25 +7,26 @@ test('shared league program: singles/doubles/teams, later rounds and protected p
  const {PGlite}=require(process.env.TOURNAMENT_PGLITE_MODULE),db=new PGlite(),original=pool.connect;
  const id=uuid(100),division=uuid(101);
  try{
- await db.exec(`CREATE TABLE tournament_divisions(id uuid PRIMARY KEY,tournament_id uuid,league_type text,format text,rules jsonb,league_program jsonb,updated_at timestamptz DEFAULT now());
+ await db.exec(`CREATE TABLE tournament_divisions(id uuid PRIMARY KEY,tournament_id uuid,league_type text,format text,rules jsonb,league_program jsonb,status text DEFAULT 'draft',updated_at timestamptz DEFAULT now());
  CREATE TABLE tournament_division_rounds(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),division_id uuid,round_no int,league_type text,format text,rules jsonb,updated_at timestamptz DEFAULT now());
  CREATE TABLE groups(id uuid PRIMARY KEY,name text);
- CREATE TABLE tournament_participants(id uuid PRIMARY KEY,division_id uuid,name text,member_division text,source_group_id uuid,status text,created_at timestamptz DEFAULT now());
- CREATE TABLE tournament_pools(id uuid PRIMARY KEY,division_id uuid,round_no int,pool_no int);
+ CREATE TABLE tournament_participants(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),division_id uuid,name text,member_division text,source_group_id uuid,member_id int,pre_member_id uuid,status text,created_at timestamptz DEFAULT now());
+ CREATE TABLE tournament_pools(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),division_id uuid,round_no int,pool_no int,bracket_slot int);
  CREATE TABLE tournament_pool_members(pool_id uuid,participant_id uuid,slot_no int);
- CREATE TABLE tournament_matches(id uuid PRIMARY KEY,division_id uuid,program_round int,phase text,round_no int,match_order int,participant_a_id uuid,participant_b_id uuid,score_a int,score_b int,status text DEFAULT 'pending' CHECK(status IN ('pending','playing','completed','cancelled')),court varchar(40),pool_name text,created_at timestamptz DEFAULT now(),next_match_id uuid,next_slot text,loser_next_match_id uuid,loser_next_slot text,is_bye bool DEFAULT false,bracket text,bracket_index int,match_label text,league_data jsonb DEFAULT '{}');
+ CREATE TABLE tournament_matches(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),division_id uuid,program_round int,phase text,round_no int,match_order int,participant_a_id uuid,participant_b_id uuid,score_a int,score_b int,status text DEFAULT 'pending' CHECK(status IN ('pending','playing','completed','cancelled')),court varchar(40),pool_name text,created_at timestamptz DEFAULT now(),next_match_id uuid,next_slot text,loser_next_match_id uuid,loser_next_slot text,is_bye bool DEFAULT false,bracket text,bracket_index int,match_label text,league_data jsonb DEFAULT '{}');
  CREATE TABLE tournament_competition_audit(id bigserial PRIMARY KEY,tournament_id uuid,division_id uuid,actor_id int,action text,snapshot jsonb);`);
  const foundationSql=readFileSync(join(__dirname,'../prisma/migrations/20260922120000_add_tournament_foundation/migration.sql'),'utf8');
  await db.exec(foundationSql.slice(foundationSql.indexOf('CREATE OR REPLACE FUNCTION check_tournament_match_participants')));
  await db.query('INSERT INTO tournament_divisions(id,tournament_id) VALUES ($1,$2)',[division,id]);
  for(let n=1;n<=12;n++)await db.query("INSERT INTO tournament_participants(id,division_id,name,member_division,status) VALUES ($1,$2,$3,$4,'confirmed')",[uuid(n),division,`선수${n}`,String(n%6+1)]);
  const tournament={id,created_by_id:1,status:'open',starts_at:'2099-01-01',application_deadline_at:'2020-01-01'};
- let failInsert=false,failRuleChange=false;
+ let failInsert=false,failRuleChange=false,failProgramReset=false;
  pool.connect=async()=>({async query(sql,values){
   if(failInsert&&sql.startsWith('INSERT INTO tournament_matches'))throw new Error('simulated insert failure after archiving unplayed matches');
+  if(failProgramReset&&sql.startsWith('UPDATE tournament_divisions SET league_program'))throw new Error('simulated reset save failure');
   if(failRuleChange&&sql.startsWith('UPDATE tournament_matches SET league_data'))throw new Error('simulated rule metadata update failure');
   if(sql.includes('FROM tournaments t LEFT JOIN'))return {rows:[tournament],rowCount:1};
-  if(sql.startsWith('SELECT * FROM tournaments WHERE id=$1 FOR UPDATE'))return {rowCount:1,rows:[tournament]};
+  if(/^SELECT \* FROM tournaments WHERE id\s*=\s*\$1 FOR UPDATE/.test(sql))return {rowCount:1,rows:[tournament]};
   if(sql.includes('SELECT role, management_permissions FROM group_members'))return {rowCount:1,rows:[{role:'owner'}]};
   if(sql.includes('FROM subscriptions'))return {rowCount:1,rows:[{}]};
   if(sql.includes('JOIN group_members gm ON gm.group_id=p.source_group_id'))return {rowCount:0,rows:[]};
@@ -277,5 +278,63 @@ test('shared league program: singles/doubles/teams, later rounds and protected p
  assert.equal(afterEdit.filter(m=>m.status==='pending').length,6);
  assert.deepEqual(afterEdit.filter(m=>m.status==='cancelled').map(({status,...m})=>m),editorMatches.map(({status,...m})=>m));
  assert.deepEqual((await db.query('SELECT * FROM tournament_matches WHERE division_id<>$1 ORDER BY id',[targetDivision])).rows,beforeEditor);
+ {
+ // Full program editing resets only after explicit confirmation, with no
+ // automatic match regeneration or application-deadline requirement.
+ await db.query("INSERT INTO tournaments(id,host_group_id,starts_at,application_deadline_at,status) VALUES ($1,$2,'2020-01-01','2099-01-01','open')",[id,uuid(9000)]);
+ const extras=require('../src/routes/tournamentExtras'),applications=require('../src/routes/tournament');
+ const invokeRosterFlow=async(r,path,method,params,body)=>{
+  const result={status:200};const h=r.stack.find(l=>l.route?.path===path&&l.route.methods[method]).route.stack.at(-1).handle;
+  await h({params,user:{sub:'1'},body},{status(n){result.status=n;return this},json(body){result.body=body;return this}});return result;
+ };
+ // Adding a waiting replacement must not change any existing games, including completed results.
+ const live=(await call('GET','/matches')).body.matches;
+ await db.query("UPDATE tournament_matches SET status='completed',score_a=2,score_b=1 WHERE id=$1",[live[0].id]);
+ const protectedBeforeAdd=(await db.query('SELECT * FROM tournament_matches ORDER BY id')).rows;
+ assert.equal((await invokeRosterFlow(extras,'/tournaments/:id/participants/:participantId/withdraw','post',{id,participantId:live[0].participant_a_id},{confirmation_intent:'WITHDRAW_TOURNAMENT_PARTICIPANT'})).status,409);
+ assert.deepEqual((await db.query('SELECT * FROM tournament_matches ORDER BY id')).rows,protectedBeforeAdd);
+ tournament.recruit_count=1;
+ const added=await invokeRosterFlow(extras,'/tournaments/:id/participants/manual','post',{id},{group_id:null,rows:[{division_id:targetDivision,name:'추가선수',member_division:'8'}]});
+ assert.equal(added.status,201);assert.deepEqual((await db.query('SELECT * FROM tournament_matches ORDER BY id')).rows,protectedBeforeAdd);
+ const replacement=(await db.query("SELECT * FROM tournament_participants WHERE name='추가선수'")).rows[0];assert.equal(replacement.status,'applied');
+ // Include both an occupied pool and an empty header in the recoverable backup.
+ const oldPool=uuid(5000);
+ await db.query('INSERT INTO tournament_pools(id,division_id,round_no,pool_no) VALUES ($1,$2,1,1),($3,$2,1,2)',[oldPool,targetDivision,uuid(5001)]);
+ await db.query('INSERT INTO tournament_pool_members(pool_id,participant_id,slot_no) VALUES ($1,$2,1)',[oldPool,live[0].participant_a_id]);
+ const snapshot=async()=>({matches:(await db.query('SELECT * FROM tournament_matches ORDER BY id')).rows,pools:(await db.query('SELECT * FROM tournament_pools ORDER BY id')).rows,members:(await db.query('SELECT * FROM tournament_pool_members ORDER BY pool_id,slot_no')).rows,program:(await call('GET','/program')).body.program,people:(await db.query('SELECT * FROM tournament_participants ORDER BY id')).rows});
+ const beforeReset=await snapshot(),expected=(await call('GET','/matches')).body.matches;
+ const resetBody={program_data:beforeReset.program.program_data,expected_updated_at:beforeReset.program.updated_at instanceof Date?beforeReset.program.updated_at.toISOString():String(beforeReset.program.updated_at),expected_matches:expected,confirmation_intent:'RESET_TOURNAMENT_PROGRAM_FOR_EDIT'};
+ assert.equal((await call('POST','/program/reset-and-save',{...resetBody,confirmation_intent:'WRONG'})).status,409);
+ assert.equal((await call('POST','/program/reset-and-save',{...resetBody,expected_matches:expected.slice(1)})).status,409);
+ const staleExpected=structuredClone(expected);staleExpected[0].score_a=99;
+ assert.equal((await call('POST','/program/reset-and-save',{...resetBody,expected_matches:staleExpected})).status,409);
+ assert.deepEqual(await snapshot(),beforeReset);
+ failProgramReset=true;
+ assert.equal((await call('POST','/program/reset-and-save',resetBody)).status,500);
+ failProgramReset=false;assert.deepEqual(await snapshot(),beforeReset);
+ tournament.application_deadline_at='2099-01-01';
+ const resetDone=await call('POST','/program/reset-and-save',resetBody);assert.equal(resetDone.status,200);
+ assert.equal(Object.keys(resetDone.body.program.program_data.generationKeys).length,30);
+ assert.notEqual(resetDone.body.program.program_data.generationKeys[1],beforeReset.program.program_data.generationKeys[1]);
+ assert.match(resetDone.body.program.program_data.generationKeys[30],/^[a-f0-9-]{36}$/);
+ assert.equal((await call('GET','/matches')).body.matches.length,0);
+ assert.equal((await db.query('SELECT * FROM tournament_pools WHERE division_id=$1',[targetDivision])).rows.length,0);
+ const archived=(await db.query('SELECT * FROM tournament_matches WHERE division_id=$1 ORDER BY id',[targetDivision])).rows;
+ assert.deepEqual(archived.map(({status,...m})=>m),beforeReset.matches.filter(m=>m.division_id===targetDivision).map(({status,...m})=>m));
+ assert.ok(archived.every(m=>m.status==='cancelled'));
+ const clearedRanking=require('../src/services/tournamentResults').buildTournamentRoundResult({format:'GROUP',rules:{}},archived,beforeReset.people);
+ assert.equal(clearedRanking.complete,false);assert.equal(clearedRanking.match_count,0);assert.equal(clearedRanking.standings.length,0);
+ assert.deepEqual((await db.query('SELECT * FROM tournament_matches WHERE division_id<>$1 ORDER BY id',[targetDivision])).rows,beforeReset.matches.filter(m=>m.division_id!==targetDivision));
+ assert.deepEqual((await db.query('SELECT * FROM tournament_participants ORDER BY id')).rows,beforeReset.people);
+ const backup=(await db.query("SELECT snapshot FROM tournament_competition_audit WHERE action='RESET_PROGRAM_FOR_EDIT' ORDER BY id DESC LIMIT 1")).rows[0].snapshot;
+ assert.equal(backup.pools.length,2);assert.equal(backup.pool_members[0].slot_no,1);assert.ok(backup.matches.some(m=>m.status==='completed'&&m.score_a===2));
+ // Archived fixtures no longer prevent a replacement or new group formation.
+ assert.equal((await invokeRosterFlow(extras,'/tournaments/:id/participants/:participantId/withdraw','post',{id,participantId:live[0].participant_a_id},{confirmation_intent:'WITHDRAW_TOURNAMENT_PARTICIPANT'})).status,200);
+ assert.equal((await invokeRosterFlow(applications,'/tournaments/:id/divisions/:divisionId/applications/:participantId','patch',{id,divisionId:targetDivision,participantId:replacement.id},{status:'confirmed'})).status,200);
+ const entrants=(await db.query("SELECT id FROM tournament_participants WHERE division_id=$1 AND status='confirmed' ORDER BY id",[targetDivision])).rows.map(p=>p.id);
+ const regrouped=await invokeRosterFlow(applications,'/tournaments/:id/divisions/:divisionId/pools/generate','post',{id,divisionId:targetDivision},{group_count:2,participant_ids:entrants});
+ assert.equal(regrouped.status,201);assert.equal(regrouped.body.group_count,2);assert.equal(regrouped.body.match_count,6);
+ assert.equal((await call('GET','/matches')).body.matches.length,6);
+ }
  }finally{pool.connect=original;await db.close();}
 });

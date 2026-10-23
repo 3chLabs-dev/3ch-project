@@ -5,7 +5,7 @@ const pool=require('../db/pool');
 const {optionalAuth}=require('../middlewares/auth');
 const {tournamentAccess}=require('../utils/tournamentAccess');
 const {advancePersistedBracket,guardQualifiedSourceResults}=require('../services/tournamentBracket');
-const {keyFor,matchId,leagueParticipants,leagueMatches,programFor,withProgramEstimates,hasResult,validateProgram,generateRound,conflict,statusFor}=require('../services/tournamentLeagueProgram');
+const {keyFor,matchId,leagueParticipants,leagueMatches,programFor,withProgramEstimates,hasResult,validateProgram,generateRound,conflict,statusFor,clearedProgramFormation}=require('../services/tournamentLeagueProgram');
 const {entryConfig,entryDivisionIds,validateEntryConfig}=require('../services/tournamentEntryConfig');
 const router=express.Router();
 const uuid=z.string().uuid();
@@ -27,7 +27,7 @@ router.use('/tournaments/:id/divisions/:divisionId/league',optionalAuth,async(re
     const rounds=(await client.query('SELECT * FROM tournament_division_rounds WHERE division_id=$1 ORDER BY round_no',[division.id])).rows;
     const people=(await client.query("SELECT p.*,COALESCE(g.name,'개인') AS club_name FROM tournament_participants p LEFT JOIN groups g ON g.id=p.source_group_id WHERE p.division_id=ANY($1::uuid[]) ORDER BY p.created_at,p.id",[entryDivisionIds(division)])).rows;
     const raw=(await client.query(`SELECT * FROM tournament_matches WHERE division_id=$1 ORDER BY match_order,created_at,id${write?' FOR UPDATE':''}`,[division.id])).rows;
-    const poolRows=(await client.query('SELECT po.*,p.id AS participant_id,p.name,p.member_division,p.source_group_id FROM tournament_pools po JOIN tournament_pool_members pm ON pm.pool_id=po.id JOIN tournament_participants p ON p.id=pm.participant_id WHERE po.division_id=$1 ORDER BY po.round_no,po.pool_no,pm.slot_no',[division.id])).rows;
+    const poolRows=(await client.query('SELECT po.*,pm.slot_no,p.id AS participant_id,p.name,p.member_division,p.source_group_id FROM tournament_pools po JOIN tournament_pool_members pm ON pm.pool_id=po.id JOIN tournament_participants p ON p.id=pm.participant_id WHERE po.division_id=$1 ORDER BY po.round_no,po.pool_no,pm.slot_no',[division.id])).rows;
     const poolMap=new Map();for(const row of poolRows){if(!poolMap.has(row.id))poolMap.set(row.id,{...row,members:[]});poolMap.get(row.id).members.push({...row,id:row.participant_id});}
     const key=keyFor(req.params.id,division.id), program=programFor(division,rounds,[...poolMap.values()],people.filter(p=>p.status==='confirmed'));
     people.push(...(program.byeParticipants??[]));
@@ -87,33 +87,54 @@ router.use('/tournaments/:id/divisions/:divisionId/league',optionalAuth,async(re
       for(const m of target)await client.query('UPDATE tournament_matches SET league_data=$1::jsonb WHERE id=$2',[JSON.stringify({...m.league_data,match_rule:matchRule}),m.id]);
       const updated=await client.query('UPDATE tournament_divisions SET league_program=$1::jsonb,updated_at=now() WHERE id=$2 RETURNING updated_at',[JSON.stringify(next),division.id]);
       result={program:{id:division.id,league_id:key,program_data:next,updated_at:updated.rows[0].updated_at}};
-    } else if(path==='/program'&&req.method==='PUT'||path==='/reconfigure'&&req.method==='POST') {
+    } else if(path==='/program'&&req.method==='PUT'||path==='/reconfigure'&&req.method==='POST'||path==='/program/reset-and-save'&&req.method==='POST') {
       const incoming=req.body?.program_data;
+      const resetForEdit=path==='/program/reset-and-save';
       const reconfigure=path==='/reconfigure'?Number(req.body.round_no):null;
       const active=raw.filter(m=>m.status!=='cancelled');
+      if(resetForEdit) {
+        if(req.body.confirmation_intent!=='RESET_TOURNAMENT_PROGRAM_FOR_EDIT')throw conflict('프로그램 수정 및 초기화 확인이 필요합니다.');
+        const expected=req.body.expected_matches;
+        const fields=['score_a','score_b','status','court','match_order','participant_a_id','participant_b_id'];
+        if(!Array.isArray(expected)||expected.length!==active.length||new Set(expected.map(m=>m.id)).size!==expected.length||converted.some(m=>!expected.some(row=>row.id===m.id&&fields.every(field=>(row[field]??null)===(m[field]??null)))))throw conflict('경기 기록이나 편성이 변경되었습니다. 새로고침 후 초기화할 내용을 다시 확인해주세요.');
+      }
       if(reconfigure) {
         if(!Number.isInteger(reconfigure)||reconfigure<1||req.body.confirmation_intent!=='RECONFIGURE_UNPLAYED_TOURNAMENT_ROUND')throw conflict('미진행 편성 재구성 확인이 필요합니다.');
         if(active.some(m=>((m.program_round??1)===reconfigure&&hasResult(m))||(m.program_round??1)>reconfigure))throw conflict('결과가 있거나 후속 라운드가 생성된 편성은 변경할 수 없습니다.');
       }
       const config=await validateEntryConfig(client,req.params.id,division.id,incoming?.tournamentEntryConfig??entryConfig(division));
       if((config.start_round!==entryConfig(division).start_round || JSON.stringify([...config.source_division_ids].sort())!==JSON.stringify([...(entryConfig(division).source_division_ids??[])].sort())) && (raw.length||poolRows.length||program.blocks.some(b=>b.groupAssignments?.some(g=>g.length)||b.teamAssignments?.some(g=>g.length)||b.doublesAssignments?.some(g=>g.length)))) throw conflict('편성이나 경기가 있는 구성의 참가 대상과 시작 라운드는 변경할 수 없습니다.');
-      validateProgram(incoming,program,active.filter(m=>(m.program_round??1)!==reconfigure));
+      validateProgram(incoming,program,resetForEdit?[]:active.filter(m=>(m.program_round??1)!==reconfigure));
       if(req.body.expected_updated_at!==String(division.updated_at instanceof Date?division.updated_at.toISOString():division.updated_at)) throw conflict('프로그램이 변경되었습니다. 새로고침 후 저장해주세요.');
+      if(resetForEdit) {
+        const pools=(await client.query('SELECT * FROM tournament_pools WHERE division_id=$1 ORDER BY id FOR UPDATE',[division.id])).rows;
+        const poolMembers=(await client.query('SELECT pm.* FROM tournament_pool_members pm JOIN tournament_pools po ON po.id=pm.pool_id WHERE po.division_id=$1 ORDER BY pm.pool_id,pm.slot_no',[division.id])).rows;
+        await audit('RESET_PROGRAM_FOR_EDIT',{matches:active,pools,pool_members:poolMembers,rounds,participants:people,program:division.league_program??program});
+        // Confirmed reset only: keep old match identities and scores in history;
+        // pool memberships are recoverable from the audit including slot numbers.
+        await client.query("UPDATE tournament_matches SET status='cancelled' WHERE division_id=$1 AND status<>'cancelled'",[division.id]);
+        await client.query('DELETE FROM tournament_pool_members WHERE pool_id IN (SELECT id FROM tournament_pools WHERE division_id=$1)',[division.id]);
+        await client.query('DELETE FROM tournament_pools WHERE division_id=$1',[division.id]);
+        await client.query("UPDATE tournament_divisions SET status='draft' WHERE id=$1",[division.id]);
+      }
       if(incoming.blocks.length<rounds.length) {
-        if(req.body.confirmation_intent!=='DELETE_EMPTY_PROGRAM_ROUNDS') throw conflict('빈 라운드 삭제 확인이 필요합니다.');
-        if(poolRows.some(p=>p.round_no>incoming.blocks.length)||raw.some(m=>(m.program_round??1)>incoming.blocks.length)) throw conflict('편성이나 경기가 있는 라운드는 삭제할 수 없습니다.');
+        if(!resetForEdit&&req.body.confirmation_intent!=='DELETE_EMPTY_PROGRAM_ROUNDS') throw conflict('빈 라운드 삭제 확인이 필요합니다.');
+        if(!resetForEdit&&(poolRows.some(p=>p.round_no>incoming.blocks.length)||raw.some(m=>(m.program_round??1)>incoming.blocks.length))) throw conflict('편성이나 경기가 있는 라운드는 삭제할 수 없습니다.');
         await audit('DELETE_EMPTY_PROGRAM_ROUNDS',{rounds:rounds.slice(incoming.blocks.length),program:division.league_program});
         await client.query('DELETE FROM tournament_division_rounds WHERE division_id=$1 AND round_no>$2',[division.id,incoming.blocks.length]);
       }
-      const saved={...incoming,tournamentEntryConfig:config,tournament_revision:undefined,byeParticipants:program.byeParticipants??[],roundStandings:undefined,generationKeys:{...(program.generationKeys??{})}};
+      const saved={...(resetForEdit?clearedProgramFormation(incoming):incoming),tournamentEntryConfig:config,tournament_revision:undefined,byeParticipants:resetForEdit?[]:program.byeParticipants??[],roundStandings:undefined,generationKeys:resetForEdit?{}:{...(program.generationKeys??{})}};
+      // Reserve fresh identities for future/re-added rounds as well, so their
+      // matches cannot collide with archived records from a prior program.
+      if(resetForEdit)for(let index=1;index<=30;index++)saved.generationKeys[index]=randomUUID();
       if(reconfigure) {
         await audit('RECONFIGURE_UNPLAYED_ROUND',{round:reconfigure,matches:active.filter(m=>(m.program_round??1)===reconfigure),program});
         await client.query("UPDATE tournament_matches SET status='cancelled' WHERE division_id=$1 AND COALESCE(program_round,1)=$2 AND status<>'cancelled'",[division.id,reconfigure]);
         saved.generationKeys[reconfigure]=require('crypto').randomUUID();
       }
       // A generated flag or client cache never deletes existing matches/results.
-      for(let index=0;index<incoming.blocks.length;index++) {
-        const b=incoming.blocks[index],r=incoming.rounds?.[index]??{};
+      for(let index=0;index<saved.blocks.length;index++) {
+        const b=saved.blocks[index],r=saved.rounds?.[index]??{};
         if(!['SINGLES','DOUBLES','TEAM'].includes(b.type)||!['LEAGUE','GROUP','TOURNAMENT'].includes(b.format)) throw conflict('라운드 유형과 방식을 확인해주세요.');
         const rules={...(rounds[index]?.rules??{}),...(index===0?{entry_config:config}:{}),match_rule:r.matchRule??({'3전 2선승제':'BEST_OF_3','5전 3선승제':'BEST_OF_5','3세트제':'THREE_SET'}[b.matchRule]??b.matchRule),
           round_label:r.option==='PRELIM'?'예선':r.option==='FINAL'?(index>=2?'결선':'본선'):r.option==='UPPER'?'상위':r.option==='LOWER'?'하위':'',tournament_mode:r.tournamentMode??b.tournamentMode??'single',

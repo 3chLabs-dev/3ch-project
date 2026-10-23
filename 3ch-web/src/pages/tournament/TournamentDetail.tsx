@@ -134,7 +134,7 @@ export default function TournamentDetail() {
     <Typography sx={labelSx}>:</Typography>
     <Select variant="standard" displayEmpty value={(draft?.[name] ?? "").split(":")[1] ?? ""} onChange={(event) => setDraft((current) => current ? { ...current, [name]: `${current[name].split(":")[0] || "00"}:${event.target.value}` } : current)} sx={selectSx}><MenuItem value="">분</MenuItem>{minutes.map((minute) => <MenuItem key={minute} value={minute}>{minute}</MenuItem>)}</Select>
   </Stack>;
-  const canEnterApplication = new Date() < new Date(tournament.starts_at) && (tournament.status === "open" || tournament.can_manage);
+  const canEnterApplication = tournament.can_manage || new Date() < new Date(tournament.starts_at) && tournament.status === "open";
   const accountText = tournament.can_manage ? draft?.bank_account ?? "" : tournament.bank_account ?? "";
   const account = parseBankAccount(accountText);
   const payers = new Map<string, string>();

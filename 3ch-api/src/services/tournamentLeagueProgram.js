@@ -65,6 +65,20 @@ function programFor(division, rounds, pools, people) {
     matchCount:0,expectedMinutes:0,recommendationScore:0,description:'',totalBlockMatchCount:0,totalProgramMinutes:0,isOverTime:false };
 }
 function hasResult(m) { return m.status === 'completed' || m.status === 'playing' || m.score_a != null || m.score_b != null; }
+function clearedProgramFormation(program) {
+  const clean=structuredClone(program),stamp=new Date().toISOString();
+  const fields=['groupAssignments','groupFormationCustomized','groupFormationSchemaVersion','teamAssignments','teamAssignmentModes','teamAssignmentLocks','doublesAssignments','doublesAssignmentModes','doublesAssignmentLocks','participantOrder','participantOrderCustomized','halfSplitMatchOrder','restoredMatchIds','deletedMatchIds'];
+  for(const field of fields)delete clean[field];
+  delete clean.blueWhiteTeams;
+  for(const item of [...clean.blocks,...(clean.rounds??[])]) {
+    for(const field of fields)delete item[field];
+    item.groupFormationPublished=false;
+    item.matchStateResetAt=stamp;
+  }
+  delete clean.roundStandings;delete clean.roundTieBreaks;
+  clean.byeParticipants=[];
+  return clean;
+}
 function validateProgram(program, previous, matches) {
   if (!Array.isArray(program?.blocks) || !program.blocks.length || program.blocks.length>30) throw conflict('라운드 구성을 확인해주세요.');
   if(program.blocks.some(b=>!['SINGLES','DOUBLES','TEAM'].includes(b.type)||!['LEAGUE','GROUP','TOURNAMENT'].includes(b.format)))throw conflict('라운드 유형과 방식을 확인해주세요.');
@@ -83,9 +97,7 @@ function validateProgram(program, previous, matches) {
   }
 }
 function generateRound({ tournament, division, roundNo, program, participants, matches }) {
-  if (new Date() < new Date(tournament.application_deadline_at ?? 0)) throw conflict('신청 마감 후 경기를 생성해주세요.');
-  if (participants.some(p => p.status==='applied')) throw conflict('신청 대기자를 먼저 처리해주세요.');
-  const previous=matches.filter(m => m.program_round===roundNo-1);
+  const previous=matches.filter(m => (m.program_round??1)===roundNo-1 && m.status!=='cancelled');
   if (roundNo>1 && (!previous.length || previous.some(m => m.status!=='completed' && m.status!=='cancelled' && !(m.league_data?.is_no_game && !hasResult(m))))) throw conflict('이전 라운드를 먼저 완료해주세요.');
   let people=leagueParticipants(participants,keyFor(tournament.id,division.id));
   const source=leagueMatches(matches,participants,keyFor(tournament.id,division.id));
@@ -96,7 +108,7 @@ function generateRound({ tournament, division, roundNo, program, participants, m
   // A singles ranking cannot be looked up using a newly-created doubles/team key.
   // Qualify the persisted people first, then form the new event's units with the same league engine.
   if(roundNo>1&&sourceBlock?.type!==block.type) {
-    const sourceRows=matches.filter(m=>m.program_round===sourceRound);
+    const sourceRows=matches.filter(m=>(m.program_round??1)===sourceRound&&m.status!=='cancelled');
     const result=buildTournamentRoundResult({format:sourceBlock.format,rules:{match_rule:({'3세트제':'THREE_SET','3전 2선승제':'BEST_OF_3','5전 3선승제':'BEST_OF_5'}[sourceBlock.matchRule]??sourceBlock.matchRule)}},sourceRows,participants);
     if(!result.complete)throw conflict('진출 기준 라운드의 실제 경기 결과를 먼저 확정해주세요.');
     const pools=result.pools.length?result.pools:result.brackets.length?result.brackets:[result];
@@ -144,4 +156,4 @@ function withProgramEstimates(program, peopleCount, courts, startMinutes=0) {
   const count=blocks.reduce((sum,b)=>sum+b.matchCount,0);
   return {...program,blocks,matchCount:count,totalBlockMatchCount:count,expectedMinutes:elapsed,totalProgramMinutes:elapsed};
 }
-module.exports={matchId,keyFor,statusFor,ruleLabel,leagueParticipants,leagueMatches,programFor,withProgramEstimates,hasResult,validateProgram,generateRound,conflict};
+module.exports={matchId,keyFor,statusFor,ruleLabel,leagueParticipants,leagueMatches,programFor,withProgramEstimates,hasResult,validateProgram,generateRound,conflict,clearedProgramFormation};

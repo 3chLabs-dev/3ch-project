@@ -39,12 +39,11 @@ router.post('/tournaments/:id/divisions/:divisionId/rounds/:roundNo/bracket', re
     const rounds=await client.query('SELECT * FROM tournament_division_rounds WHERE division_id=$1 ORDER BY round_no',[req.params.divisionId]);
     const roundNo=Number(req.params.roundNo), round=rounds.rows.find((r)=>r.round_no===roundNo);
     if (!round || round.format!=='TOURNAMENT' || round.league_type!=='SINGLES') {await client.query('ROLLBACK');return res.status(409).json({message:'현재 토너먼트 생성은 단식 토너먼트에서 지원합니다.'});}
-    const existing=await client.query('SELECT * FROM tournament_matches WHERE division_id=$1 ORDER BY program_round,match_order FOR UPDATE',[req.params.divisionId]);
+    const existing=await client.query("SELECT * FROM tournament_matches WHERE division_id=$1 AND status<>'cancelled' ORDER BY program_round,match_order FOR UPDATE",[req.params.divisionId]);
     if (existing.rows.some((m)=>m.program_round===roundNo || m.program_round===null)) {await client.query('ROLLBACK');return res.status(409).json({message:'기존 대진표가 있어 재생성하지 않습니다. 경기와 결과는 유지됩니다.'});}
     const participants=await client.query("SELECT * FROM tournament_participants WHERE division_id=ANY($1::uuid[]) AND status='confirmed' ORDER BY created_at,id FOR UPDATE",[entryDivisionIds(division.rows[0])]);
     let entrants=participants.rows;
     if (roundNo===1) {
-      if (tournament.rows[0].application_deadline_at && new Date()<new Date(tournament.rows[0].application_deadline_at)) {await client.query('ROLLBACK');return res.status(409).json({message:'참가 신청 마감 후 토너먼트를 생성해주세요.'});}
       const pending=await client.query("SELECT 1 FROM tournament_participants WHERE division_id=ANY($1::uuid[]) AND status='applied' LIMIT 1",[entryDivisionIds(division.rows[0])]);
       if (pending.rowCount) {await client.query('ROLLBACK');return res.status(409).json({message:'신청 대기자를 모두 처리해주세요.'});}
     } else {
@@ -148,7 +147,7 @@ router.post('/tournaments/:id/divisions/:divisionId/matches/generate', requireAu
     if (!round || round.round_no !== 1 || round.league_type !== 'SINGLES' || !['GROUP','GROUP_TOURNAMENT'].includes(round.format)) {
       await client.query('ROLLBACK'); return res.status(409).json({ message: '현재 확정 조 기반 경기 생성은 1라운드 단식 조별리그에서 지원합니다.' });
     }
-    const existing = await client.query('SELECT id FROM tournament_matches WHERE division_id=$1 AND (program_round=1 OR program_round IS NULL) LIMIT 1', [req.params.divisionId]);
+    const existing = await client.query("SELECT id FROM tournament_matches WHERE division_id=$1 AND status<>'cancelled' AND (program_round=1 OR program_round IS NULL) LIMIT 1", [req.params.divisionId]);
     if (existing.rowCount) { await client.query('ROLLBACK'); return res.status(409).json({ message: '기존 경기가 있어 재생성하지 않습니다. 저장된 경기와 결과는 유지됩니다.' }); }
     const assignments = await client.query(`SELECT po.id AS pool_id, po.pool_no, pm.participant_id FROM tournament_pools po JOIN tournament_pool_members pm ON pm.pool_id=po.id WHERE po.division_id=$1 AND po.round_no=1 ORDER BY po.pool_no,pm.slot_no`, [req.params.divisionId]);
     const { buildPoolMatchSchedule } = require('../services/tournamentMatchSchedule');
@@ -178,10 +177,6 @@ router.post('/tournaments/:id/participants/manual', requireAuth, async (req, res
       if (!group.rowCount) { await client.query('ROLLBACK'); return res.status(400).json({ message: '클럽을 찾을 수 없습니다.' }); }
     }
     const existing = await client.query(`SELECT p.* FROM tournament_participants p JOIN tournament_divisions d ON d.id=p.division_id WHERE d.tournament_id=$1 AND p.status IN ('applied','confirmed') FOR UPDATE OF p`, [req.params.id]);
-    if (tournament.rows[0].recruit_count && existing.rowCount + body.rows.length > tournament.rows[0].recruit_count) { await client.query('ROLLBACK'); return res.status(409).json({ message: '총 모집 인원을 초과했습니다.' }); }
-    const ids = [...new Set(body.rows.map((row) => row.division_id))];
-    const competition = await client.query('SELECT 1 FROM tournament_pools WHERE division_id=ANY($1::uuid[]) UNION ALL SELECT 1 FROM tournament_matches WHERE division_id=ANY($1::uuid[]) LIMIT 1', [ids]);
-    if (competition.rowCount) { await client.query('ROLLBACK'); return res.status(409).json({ message: '조 또는 경기가 생성된 부문은 참가자를 추가할 수 없습니다.' }); }
     const keys = new Set(existing.rows.map((row) => `${row.source_group_id ?? ''}:${row.name}`));
     const identities = new Set(existing.rows.flatMap((row) => [row.member_id ? `user:${row.member_id}` : null, row.pre_member_id ? `pre:${row.pre_member_id}` : null].filter(Boolean)));
     for (const row of body.rows) {
@@ -215,8 +210,8 @@ router.post('/tournaments/:id/participants/:participantId/withdraw', requireAuth
     await client.query('SELECT id FROM tournaments WHERE id=$1 FOR UPDATE', [ids.data.id]);
     const found = await client.query('SELECT p.* FROM tournament_participants p JOIN tournament_divisions d ON d.id=p.division_id WHERE d.tournament_id=$1 AND p.id=$2 FOR UPDATE OF d,p', [ids.data.id, ids.data.participantId]);
     if (!found.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ message: '참가자를 찾을 수 없습니다.' }); }
-    const linked = await client.query('SELECT 1 FROM tournament_pool_members WHERE participant_id=$1 UNION ALL SELECT 1 FROM tournament_matches WHERE participant_a_id=$1 OR participant_b_id=$1 LIMIT 1', [ids.data.participantId]);
-    if (linked.rowCount) { await client.query('ROLLBACK'); return res.status(409).json({ message: '조 배정이나 경기가 있는 참가자는 이 화면에서 취소할 수 없습니다.' }); }
+    const linked = await client.query(`SELECT 1 FROM tournament_matches WHERE status<>'cancelled' AND (participant_a_id=$1 OR participant_b_id=$1 OR (league_data->'participant_a_roster_ids') ? $1::text OR (league_data->'participant_b_roster_ids') ? $1::text) AND (status IN ('playing','completed') OR score_a IS NOT NULL OR score_b IS NOT NULL) LIMIT 1`, [ids.data.participantId]);
+    if (linked.rowCount) { await client.query('ROLLBACK'); return res.status(409).json({ message: '진행 중이거나 결과가 있는 참가자입니다. 프로그램 초기화를 확인한 후 참가자를 변경해주세요.' }); }
     await client.query("UPDATE tournament_participants SET status='withdrawn' WHERE id=$1 AND status IN ('applied','confirmed')", [ids.data.participantId]);
     await client.query('COMMIT'); return res.json({ message: '참가 신청을 취소했습니다.' });
   } catch (error) { await client.query('ROLLBACK'); console.error(error); return res.status(500).json({ message: '참가자를 취소하지 못했습니다.' }); }

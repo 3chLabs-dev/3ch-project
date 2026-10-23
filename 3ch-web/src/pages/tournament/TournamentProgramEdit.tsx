@@ -1,11 +1,11 @@
 import { TournamentEntryFields, getEntryConfig, type TournamentEntryConfig } from "./TournamentEntryFields";
-import { useGetTournamentQuery, useCreateTournamentCompetitionMutation } from "../../features/tournament/tournamentApi";
+import { useGetTournamentQuery, useGetTournamentPoolsQuery, useCreateTournamentCompetitionMutation } from "../../features/tournament/tournamentApi";
 import { useEffect, useRef, useState } from "react";
-import { Alert, Box, Button, CircularProgress, IconButton, Stack, Typography, TextField } from "@mui/material";
+import { Alert, Box, Button, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Stack, Typography, TextField } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { RoundConfigEditor } from "../demo/LeagueAlgorithmDemo";
-import { useGetLeagueProgramQuery, useGetLeagueQuery, useSaveLeagueProgramMutation } from "../../features/league/leagueApi";
+import { useGetLeagueProgramQuery, useGetLeagueMatchesQuery, useGetLeagueQuery, useSaveLeagueProgramMutation, type LeagueMatch } from "../../features/league/leagueApi";
 import type { ProgramOption, RoundConfig } from "../../features/league/types/tournament.types";
 import { tournamentLeagueKey } from "../../features/tournament/leagueScope";
 
@@ -21,16 +21,19 @@ export default function TournamentProgramEdit() {
   const key = tournamentLeagueKey(id, divisionId);
   const { currentData: data, isLoading } = useGetLeagueProgramQuery(key);
   const { data: metadata, isLoading: metadataLoading } = useGetLeagueQuery(key);
+  const { currentData: matchData } = useGetLeagueMatchesQuery(key, { skip: creating });
+  const { currentData: poolsData } = useGetTournamentPoolsQuery({ id, divisionId }, { skip: creating });
   const [saveProgram, { isLoading: saving }] = useSaveLeagueProgramMutation();
   const [rounds, setRounds] = useState<RoundConfig[]>([]);
   const [error, setError] = useState("");
   const [program, setProgram] = useState<ProgramOption>();
+  const [resetSnapshot, setResetSnapshot] = useState<LeagueMatch[] | null>(null);
   const hydratedKey = useRef("");
   useEffect(() => {
     const loaded = data?.program?.program_data as ProgramOption | undefined;
     if (loaded && hydratedKey.current !== key) { hydratedKey.current = key; setProgram(loaded); setRounds(creating ? [{ id: 1, expanded: true, program: "SINGLES", format: "TOURNAMENT", matchRule: "BEST_OF_3", option: "PRELIM", teamPlayerCount: 3, teamMatchType: "SSS", tournamentMode: "single", finalAdvancementMode: "all", advanceCount: 2 }] : loaded.rounds ?? []); setEntry(creating ? { source_division_ids: [], start_round: 2 } : loaded.tournamentEntryConfig ?? { source_division_ids: [], start_round: 1 }); }
   }, [data, key, creating]);
-  const save = async () => {
+  const save = async (confirmedReset = false) => {
     if (!program || !rounds.length) return;
     if ((creating || entry.source_division_ids.length > 0) && entry.source_division_ids.length < 2) { setError("통합할 신청 부문을 두 개 이상 선택해주세요."); return; }
     if (creating && !name.trim()) { setError("통합 구성 이름을 입력해주세요."); return; }
@@ -48,18 +51,17 @@ export default function TournamentProgramEdit() {
       return;
     }
     const editedProgram = { ...program, tournamentEntryConfig: entry, rounds, blocks, compositionMode: "custom" as const };
+    if (!matchData || !poolsData) { setError("초기화할 경기와 편성을 불러온 후 다시 시도해주세요."); return; }
+    const hasFormation = program.blocks.some(block => [block.groupAssignments, block.teamAssignments, block.doublesAssignments].some(groups => groups?.some(group => group.length)));
+    if (!confirmedReset && (matchData.matches.length || poolsData.pools.length || hasFormation)) {
+      setResetSnapshot(structuredClone(matchData.matches));
+      return;
+    }
     try {
-      try { await saveProgram({ leagueId: key, program: editedProgram }).unwrap(); }
-      catch (reason) {
-        const detail=(reason as { data?: { code?: string; can_reconfigure?: boolean; reconfigure_round?: number } }).data;
-        if(detail?.code!=="PROGRAM_RECONFIGURATION_REQUIRED" || detail.can_reconfigure!==true || !detail.reconfigure_round) throw reason;
-        // The dedicated operation confirms the archived pending fixtures and
-        // validates persisted scores/status again under the server transaction.
-        await saveProgram({ leagueId: key, program: editedProgram, reconfigureRound: detail.reconfigure_round }).unwrap();
-      }
+      await saveProgram({ leagueId: key, program: editedProgram, resetForEdit: true, expectedMatches: confirmedReset ? resetSnapshot ?? [] : matchData.matches }).unwrap();
       navigate(`/tournament/${id}`);
     }
-    catch (reason) { setError((reason as { data?: { message?: string } }).data?.message ?? "프로그램을 저장하지 못했습니다."); }
+    catch (reason) { setResetSnapshot(null); setError((reason as { data?: { message?: string } }).data?.message ?? "프로그램을 저장하지 못했습니다."); }
   };
   if (isLoading || metadataLoading || (data?.program && !program)) return <Box sx={{ textAlign: "center", py: 8 }}><CircularProgress /></Box>;
   if (!program || metadata?.league.can_manage !== true) return <Alert severity="error">프로그램을 수정할 수 없습니다.</Alert>;
@@ -70,6 +72,14 @@ export default function TournamentProgramEdit() {
     <TournamentEntryFields merged={creating || entry.source_division_ids.length > 0} config={entry} onChange={setEntry} divisions={(tournamentData?.tournament.divisions ?? []).filter(d => !getEntryConfig(d).source_division_ids.length && (creating || d.id !== divisionId)).map(d => ({ id: d.id, name: d.name }))} />
     <Typography fontWeight={800} sx={{ my: 1.5 }}>라운드 구성</Typography>
     <RoundConfigEditor roundNumberOffset={entry.start_round - 1} rounds={rounds} setRounds={setRounds} clubPoliciesEnabled participantCount={entry.source_division_ids.length ? (tournamentData?.tournament.divisions ?? []).filter(d => entry.source_division_ids.includes(d.id)).reduce((sum, d) => sum + d.confirmed_count, 0) : metadata.league.participant_count ?? 0} halfSplitMatchEnabled />
-    <Button fullWidth variant="contained" disabled={saving || creatingCompetition || !rounds.length} onClick={() => void save()} sx={{ mt: 3, height: 44, fontWeight: 900 }}>{creating ? "추가" : "수정 완료"}</Button>
+    <Button fullWidth variant="contained" disabled={saving || creatingCompetition || !rounds.length || !creating && (!matchData || !poolsData)} onClick={() => void save()} sx={{ mt: 3, height: 44, fontWeight: 900 }}>{creating ? "추가" : "수정 완료"}</Button>
+    <Dialog open={resetSnapshot !== null} onClose={() => { if (!saving) setResetSnapshot(null); }} fullWidth maxWidth="xs">
+      <DialogTitle sx={{ fontWeight: 900 }}>프로그램 수정 및 초기화</DialogTitle>
+      <DialogContent dividers><Typography sx={{ mb: 1.5 }}>이 부문의 모든 라운드 경기 {resetSnapshot?.length ?? 0}개와 조·복식·단체 편성을 초기화합니다. 삭제한 라운드 설정도 제거됩니다.</Typography>
+        {!!resetSnapshot?.some(match => match.status === "done" || match.status === "playing" || match.score_a != null || match.score_b != null) && <Alert severity="warning" sx={{ mb: 1.5 }}>진행 중이거나 결과가 입력된 경기 {resetSnapshot.filter(match => match.status === "done" || match.status === "playing" || match.score_a != null || match.score_b != null).length}개도 현재 대진표와 순위에서 초기화됩니다.</Alert>}
+        <Typography sx={{ mb: 1.5 }}>참가자 명단·부수·소속·신청 상태는 유지하며, 이전 편성과 결과는 복구용 기록에 보관합니다.</Typography><Typography>경기를 즉시 다시 생성하지 않습니다. 참가자를 변경하고 조편성을 다시 진행할 수 있습니다.</Typography>
+      </DialogContent>
+      <DialogActions><Button disabled={saving} onClick={() => setResetSnapshot(null)}>취소</Button><Button color="error" variant="contained" disabled={saving} onClick={() => void save(true)}>{saving ? "저장 중" : "초기화하고 수정 완료"}</Button></DialogActions>
+    </Dialog>
   </Box>;
 }

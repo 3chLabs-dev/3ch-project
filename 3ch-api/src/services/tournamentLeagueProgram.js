@@ -73,7 +73,13 @@ function validateProgram(program, previous, matches) {
     if (!next) throw conflict('기존 경기가 있는 라운드를 삭제할 수 없습니다.');
     // Existing rounds are immutable through ordinary configuration/formation saves.
     const fields=['type','format','matchRule','nextMatchRule','ruleSwitchSize','lateMatchRule','lowerMatchRule','lowerRuleSwitchSize','lowerLateMatchRule','teamPlayerCount','teamFormationSizes','teamSinglesCount','teamDoublesCount','tournamentMode','groupAssignments','teamAssignments','doublesAssignments','groupSizes','teamGroupSizes','halfSplitOnlyMatches','halfSplitMatchOrder','competitionMode','blueWhiteTournamentPlacement','tournamentBracketCount','thirdPlaceMatch'];
-    if (fields.some(field => JSON.stringify(old?.[field] ?? null)!==JSON.stringify(next[field] ?? null))) throw conflict('이미 경기가 생성된 라운드의 설정과 수동 편성은 유지해야 합니다. 경기 없는 후속 라운드는 수정할 수 있습니다.');
+    if (fields.some(field => JSON.stringify(old?.[field] ?? null)!==JSON.stringify(next[field] ?? null))) {
+      const canReconfigure=!matches.some(row=>(row.program_round??1)>index+1||((row.program_round??1)===index+1&&hasResult(row)));
+      throw Object.assign(conflict(canReconfigure
+        ? '기존 경기를 유지해야 하므로 미진행 편성을 확인 후 다시 구성해야 합니다.'
+        : '진행·완료·점수 또는 후속 라운드가 있는 편성은 유지해야 합니다. 경기 없는 후속 라운드는 수정할 수 있습니다.'),
+        {code:'PROGRAM_RECONFIGURATION_REQUIRED',reconfigureRound:index+1,canReconfigure});
+    }
   }
 }
 function generateRound({ tournament, division, roundNo, program, participants, matches }) {

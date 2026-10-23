@@ -47,7 +47,18 @@ export default function TournamentProgramEdit() {
       } catch (reason) { setError((reason as { data?: { message?: string } }).data?.message ?? "통합 구성을 저장하지 못했습니다."); }
       return;
     }
-    try { await saveProgram({ leagueId: key, program: { ...program, tournamentEntryConfig: entry, rounds, blocks, compositionMode: "custom" } }).unwrap(); navigate(`/tournament/${id}`); }
+    const editedProgram = { ...program, tournamentEntryConfig: entry, rounds, blocks, compositionMode: "custom" as const };
+    try {
+      try { await saveProgram({ leagueId: key, program: editedProgram }).unwrap(); }
+      catch (reason) {
+        const detail=(reason as { data?: { code?: string; can_reconfigure?: boolean; reconfigure_round?: number } }).data;
+        if(detail?.code!=="PROGRAM_RECONFIGURATION_REQUIRED" || detail.can_reconfigure!==true || !detail.reconfigure_round) throw reason;
+        // The dedicated operation confirms the archived pending fixtures and
+        // validates persisted scores/status again under the server transaction.
+        await saveProgram({ leagueId: key, program: editedProgram, reconfigureRound: detail.reconfigure_round }).unwrap();
+      }
+      navigate(`/tournament/${id}`);
+    }
     catch (reason) { setError((reason as { data?: { message?: string } }).data?.message ?? "프로그램을 저장하지 못했습니다."); }
   };
   if (isLoading || metadataLoading || (data?.program && !program)) return <Box sx={{ textAlign: "center", py: 8 }}><CircularProgress /></Box>;

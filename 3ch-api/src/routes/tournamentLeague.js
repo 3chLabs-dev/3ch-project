@@ -255,7 +255,7 @@ router.use('/tournaments/:id/divisions/:divisionId/league',optionalAuth,async(re
     } else throw Object.assign(conflict('이 작업은 대회 전용 메뉴에서 실행해주세요.'),{statusCode:409});
     if(result?.program)result.program.program_data={...result.program.program_data,tournament_revision:result.program.updated_at instanceof Date?result.program.updated_at.toISOString():String(result.program.updated_at)};
     await client.query('COMMIT');return res.json(result);
-  } catch(error) {await client.query('ROLLBACK');console.error('tournament league adapter:',error);return res.status(error.statusCode??500).json({message:error.statusCode?error.message:'대회 프로그램 처리에 실패했습니다.'});}
+  } catch(error) {await client.query('ROLLBACK');console.error('tournament league adapter:',error);return res.status(error.statusCode??500).json({message:error.statusCode?error.message:'대회 프로그램 처리에 실패했습니다.',...(error.code==='PROGRAM_RECONFIGURATION_REQUIRED'?{code:error.code,reconfigure_round:error.reconfigureRound,can_reconfigure:error.canReconfigure}:{})});}
   finally{client.release();}
 });
 module.exports=router;

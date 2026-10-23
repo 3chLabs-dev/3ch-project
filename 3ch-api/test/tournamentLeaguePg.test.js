@@ -247,5 +247,35 @@ test('shared league program: singles/doubles/teams, later rounds and protected p
  const laterBefore=(await db.query('SELECT * FROM tournament_matches ORDER BY id')).rows;
  assert.equal((await changeRule('5전 3선승제')).status,409);
  assert.deepEqual((await db.query('SELECT * FROM tournament_matches ORDER BY id')).rows,laterBefore);
+
+ // The program editor can confirm a pending round reset instead of treating
+ // generated fixtures as permanently immutable. Existing records are archived.
+ const beforeEditor=(await db.query('SELECT * FROM tournament_matches ORDER BY id')).rows;
+ targetDivision=uuid(4000);
+ await db.query("INSERT INTO tournament_divisions(id,tournament_id,league_type,format,rules) VALUES ($1,$2,'SINGLES','LEAGUE','{}')",[targetDivision,id]);
+ await db.query("INSERT INTO tournament_division_rounds(division_id,round_no,league_type,format,rules) VALUES ($1,1,'SINGLES','LEAGUE','{\"match_rule\":\"BEST_OF_3\"}')",[targetDivision]);
+ for(let n=1;n<=6;n++)await db.query("INSERT INTO tournament_participants(id,division_id,name,member_division,status) VALUES ($1,$2,$3,'7','confirmed')",[uuid(4100+n),targetDivision,`수정선수${n}`]);
+ await call('POST','/program/matches/sync',{matches:[{id:'editor-preview',program_round:1}]});
+ const editorMatches=(await db.query('SELECT * FROM tournament_matches WHERE division_id=$1 ORDER BY id',[targetDivision])).rows;
+ const edited=structuredClone((await call('GET','/program')).body.program);
+ const revised=edited.program_data;
+ revised.blocks[0]={...revised.blocks[0],format:'GROUP',groupSizes:[3,3]};
+ revised.rounds[0]={...revised.rounds[0],format:'GROUP'};
+ revised.groupSizes=[3,3];
+ const editBody={program_data:revised,expected_updated_at:edited.updated_at instanceof Date?edited.updated_at.toISOString():String(edited.updated_at)};
+ const ordinarySave=await call('PUT','/program',editBody);
+ assert.equal(ordinarySave.status,409);
+ assert.equal(ordinarySave.body.code,'PROGRAM_RECONFIGURATION_REQUIRED');
+ assert.equal(ordinarySave.body.can_reconfigure,true);
+ assert.equal(ordinarySave.body.reconfigure_round,1);
+ assert.deepEqual((await db.query('SELECT * FROM tournament_matches WHERE division_id=$1 ORDER BY id',[targetDivision])).rows,editorMatches);
+ assert.equal((await call('POST','/reconfigure',{...editBody,round_no:1})).status,409);
+ const confirmedEdit=await call('POST','/reconfigure',{...editBody,round_no:1,confirmation_intent:'RECONFIGURE_UNPLAYED_TOURNAMENT_ROUND'});
+ assert.equal(confirmedEdit.status,200);
+ const afterEdit=(await db.query('SELECT * FROM tournament_matches WHERE division_id=$1 ORDER BY id',[targetDivision])).rows;
+ assert.equal(afterEdit.filter(m=>m.status==='cancelled').length,15);
+ assert.equal(afterEdit.filter(m=>m.status==='pending').length,6);
+ assert.deepEqual(afterEdit.filter(m=>m.status==='cancelled').map(({status,...m})=>m),editorMatches.map(({status,...m})=>m));
+ assert.deepEqual((await db.query('SELECT * FROM tournament_matches WHERE division_id<>$1 ORDER BY id',[targetDivision])).rows,beforeEditor);
  }finally{pool.connect=original;await db.close();}
 });

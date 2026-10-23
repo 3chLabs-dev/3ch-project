@@ -1,5 +1,15 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const {generateRound,keyFor,leagueMatches,validateProgram,withProgramEstimates}=require('../src/services/tournamentLeagueProgram');
+
+test('unplayed edits request confirmed reconfiguration; scored, playing, completed and later rounds remain protected',()=>{
+ const before={blocks:[{type:'SINGLES',format:'LEAGUE',matchRule:'3전 2선승제'}]};
+ const after={blocks:[{type:'SINGLES',format:'GROUP',matchRule:'3전 2선승제'}]};
+ const pending={program_round:1,status:'pending',score_a:null,score_b:null};
+ assert.throws(()=>validateProgram(after,before,[pending]),error=>error.code==='PROGRAM_RECONFIGURATION_REQUIRED'&&error.reconfigureRound===1&&error.canReconfigure===true);
+ for(const matches of [[{...pending,status:'playing'}],[{...pending,status:'completed'}],[{...pending,score_a:0}],[pending,{...pending,program_round:2}]]) {
+  assert.throws(()=>validateProgram(after,before,matches),error=>error.code==='PROGRAM_RECONFIGURATION_REQUIRED'&&error.canReconfigure===false);
+ }
+});
 const {buildTournamentRoundResult}=require('../src/services/tournamentResults');
 const {projectBracketAdvancement}=require('../src/services/tournamentBracket');
 const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');

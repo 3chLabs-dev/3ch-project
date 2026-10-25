@@ -553,7 +553,7 @@ export default function AfterPartySettlement({ tournament = false }: { tournamen
     return [...groups.entries()].sort(([, a], [, b]) => {
       if (!a.rounds.length || !b.rounds.length) return b.rounds.length - a.rounds.length;
       return a.rounds.length - b.rounds.length || a.rounds.join(",").localeCompare(b.rounds.join(","), "ko", { numeric: true });
-    }).map(([key, group]) => ({ key, title: group.rounds.length ? `${group.rounds.map((round) => `${round}차`).join(" + ")}${group.rounds.length === 1 ? "만" : ""} 참석` : "참석 정보 확인 필요", sections: sectionOrder.filter((label) => group.sections.has(label)).map((label) => ({ label, people: group.sections.get(label)! })) }));
+    }).map(([key, group]) => ({ key, title: group.rounds.length ? `${group.rounds.map((round) => `${round}차`).join(", ")} 참석` : "참석 정보 확인 필요", sections: sectionOrder.filter((label) => group.sections.has(label)).map((label) => ({ label, people: group.sections.get(label)! })) }));
   }, [list, summary.people]);
   const accountCard = <Card sx={{ p: 2, mt: 2 }}>
     <Typography fontWeight={900} mb={1}>정산금 입금 계좌</Typography>

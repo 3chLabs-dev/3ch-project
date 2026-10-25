@@ -9,7 +9,7 @@ import { RoundResultView, type StandingRow, type AwardMode } from "../league/Lea
 const resultRows = (rows: TournamentStanding[]): StandingRow[] => rows.map((row) => ({
   key: row.id, name: row.name, division: row.member_division, clubName: row.club_name,
   rank: String(row.rank), played: row.played, wins: row.wins, losses: row.losses,
-  setsFor: row.sets_for, setsAgainst: row.sets_against,
+  setsFor: row.sets_for, setsAgainst: row.sets_against, tieSetDiff: row.tie_set_diff,
 }));
 
 export default function TournamentResults({ view = "results" }: { view?: "results" | "ranking" }) {
@@ -42,7 +42,7 @@ export default function TournamentResults({ view = "results" }: { view?: "result
       subtitle={`${metadata?.tournament.title ?? ""} · ${division.name} · ${String(round.rules.round_label ?? "")}`}
       format={round.pools?.length ? "GROUP" : round.format === "TOURNAMENT" ? "TOURNAMENT" : "LEAGUE"}
       complete={round.complete} threeSet={round.rules.match_rule === "THREE_SET" || round.rules.match_rule.includes("3세트")}
-      grouped={grouped} onBack={() => navigate(`/tournament/${id}`)}
+      tieBreakSets grouped={grouped} onBack={() => navigate(`/tournament/${id}`)}
       onBracket={() => navigate(`/tournament/${id}/divisions/${division.id}/bracket?round=${round.round_no}&back=results`)} />
   </Stack>;
 }

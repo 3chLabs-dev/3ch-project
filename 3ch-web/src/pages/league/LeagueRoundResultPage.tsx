@@ -19,7 +19,7 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
 import { DivisionBadge } from "../../components/ParticipantName";
 import type { LeagueMatch } from "../../features/league/leagueApi";
-import { getRoundRobinWinScore } from "../../utils/roundRobinStandings";
+import { getRoundRobinWinScore, rankRoundRobinResultRows } from "../../utils/roundRobinStandings";
 import {
   useGetLeagueMatchesQuery,
   useGetLeagueParticipantsQuery,
@@ -32,7 +32,7 @@ import { hydrateProgramNoGamePolicy, resolveProgramBlueWhiteTeams } from "../../
 type RoundFormat = "LEAGUE" | "GROUP" | "TOURNAMENT";
 type RoundType = "SINGLES" | "DOUBLES" | "TEAM";
 type ResultUnit = { key: string; name: string; division: string | null };
-export type StandingRow = ResultUnit & { clubName?: string } & { rank: string; played: number; wins: number; losses: number; setsFor: number; setsAgainst: number };
+export type StandingRow = ResultUnit & { clubName?: string; tieSetDiff?: string } & { rank: string; played: number; wins: number; losses: number; setsFor: number; setsAgainst: number };
 type ProgramBlock = {
   title?: string;
   type?: RoundType;
@@ -80,8 +80,7 @@ function setRate(row: StandingRow) {
   return total ? `${((row.setsFor / total) * 100).toFixed(1)}%` : "-";
 }
 
-function roundRobinStandings(matches: LeagueMatch[], rule?: string | null): StandingRow[] {
-  const threeSet = rule === "THREE_SET" || rule?.includes("3세트") === true;
+function roundRobinStandings(matches: LeagueMatch[], rule?: string | null, manualParticipantOrder: string[] = []): StandingRow[] {
   const stats = new Map<string, StandingRow>();
   const ensure = (unit: ResultUnit) => {
     if (!stats.has(unit.key)) stats.set(unit.key, { ...unit, rank: "", played: 0, wins: 0, losses: 0, setsFor: 0, setsAgainst: 0 });
@@ -110,9 +109,15 @@ function roundRobinStandings(matches: LeagueMatch[], rule?: string | null): Stan
       if (scoreB > scoreA) { bRow.wins += 1; aRow.losses += 1; }
     }
   });
-  return [...stats.values()]
-    .sort((left, right) => (threeSet ? right.setsFor - left.setsFor : right.wins - left.wins) || (right.setsFor - right.setsAgainst) - (left.setsFor - left.setsAgainst) || right.setsFor - left.setsFor || left.name.localeCompare(right.name, "ko"))
-    .map((row, index) => ({ ...row, rank: String(index + 1) }));
+  const keyById = new Map<string, string>();
+  const normalized = matches.filter(match => !match.is_no_game).map(match => {
+    const a = sideUnit(match, "a"), b = sideUnit(match, "b");
+    if (a && match.participant_a_id) keyById.set(match.participant_a_id, a.key);
+    if (b && match.participant_b_id) keyById.set(match.participant_b_id, b.key);
+    return { ...match, participant_a_id: a?.key ?? null, participant_b_id: b?.key ?? null };
+  });
+  return rankRoundRobinResultRows([...stats.values()], normalized, rule,
+    manualParticipantOrder.map(id => keyById.get(id) ?? id));
 }
 
 function stageLabel(match: LeagueMatch) {
@@ -180,7 +185,7 @@ function awardStyle(rank: string, mode: AwardMode) {
   return null;
 }
 
-function ResultTable({ rows, threeSet, awardMode }: { rows: StandingRow[]; threeSet: boolean; awardMode: AwardMode }) {
+function ResultTable({ rows, threeSet, awardMode, tieBreakSets }: { rows: StandingRow[]; threeSet: boolean; awardMode: AwardMode; tieBreakSets?: boolean }) {
   return (
     <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 1.5, overflowX: "auto" }}>
       <Table size="small" sx={{ width: "100%", tableLayout: "fixed" }}>
@@ -200,7 +205,7 @@ function ResultTable({ rows, threeSet, awardMode }: { rows: StandingRow[]; three
           {threeSet
             ? <TableCell align="center" sx={{ ...bodyCellSx, fontWeight: 800 }}>세트합</TableCell>
             : <><TableCell align="center" sx={{ ...bodyCellSx, fontWeight: 800 }}>승</TableCell><TableCell align="center" sx={{ ...bodyCellSx, fontWeight: 800 }}>패</TableCell></>}
-          <TableCell align="center" sx={{ ...bodyCellSx, fontWeight: 800 }}>세트득실률</TableCell>
+          <TableCell align="center" sx={{ ...bodyCellSx, fontWeight: 800 }}>{tieBreakSets ? <>동점자<br />세트득실률</> : '세트득실률'}</TableCell>
         </TableRow></TableHead>
         <TableBody>
           {rows.map((row) => {
@@ -213,7 +218,7 @@ function ResultTable({ rows, threeSet, awardMode }: { rows: StandingRow[]; three
             {threeSet
               ? <TableCell align="center" sx={bodyCellSx}>{row.setsFor}</TableCell>
               : <><TableCell align="center" sx={bodyCellSx}>{row.wins}</TableCell><TableCell align="center" sx={bodyCellSx}>{row.losses}</TableCell></>}
-            <TableCell align="center" sx={bodyCellSx}>{setRate(row)}</TableCell>
+            <TableCell align="center" sx={bodyCellSx}>{tieBreakSets ? row.tieSetDiff || '-' : setRate(row)}</TableCell>
           </TableRow>;})}
         </TableBody>
       </Table>
@@ -247,8 +252,12 @@ export default function LeagueRoundResultPage() {
   const bracketPath = format === "TOURNAMENT" ? "tournament-bracket" : "bracket";
   const blueWhiteTeams = resolveProgramBlueWhiteTeams(programOption, programOption?.blocks?.[round - 1]);
   const grouped = useMemo(() => {
+    const tieOrder = (poolLabel: string | null) => programOption?.roundTieBreaks?.find(
+      entry => entry.round === round && entry.poolLabel === poolLabel,
+    )?.participantIds ?? [];
     if (format === "LEAGUE") {
-      const rows = roundRobinStandings(matches, block?.matchRule);
+      const label = matches.find(match => match.match_label)?.match_label ?? null;
+      const rows = roundRobinStandings(matches, block?.matchRule, tieOrder(label));
       if (
         block?.competitionMode === "blue-white"
         && block.blueWhiteRankingMode === "by-team"
@@ -269,7 +278,7 @@ export default function LeagueRoundResultPage() {
     }
     if (format === "GROUP") {
       const labels = [...new Set(matches.map((match) => match.match_label).filter((label): label is string => Boolean(label)))].sort((left, right) => Number.parseInt(left, 10) - Number.parseInt(right, 10));
-      return labels.map((label) => ({ key: label, title: label, rows: roundRobinStandings(matches.filter((match) => match.match_label === label), block?.matchRule), awardMode: "league" as const }));
+      return labels.map((label) => ({ key: label, title: label, rows: roundRobinStandings(matches.filter((match) => match.match_label === label), block?.matchRule, tieOrder(label)), awardMode: "league" as const }));
     }
     const indexes = [...new Set(matches.map((match) => match.tournament_bracket_index || 1))].sort((a, b) => a - b);
     const brackets = [...new Set(matches.map((match) => match.bracket || "upper"))];
@@ -283,17 +292,18 @@ export default function LeagueRoundResultPage() {
       rows: tournamentStandings(matches.filter((match) => (match.tournament_bracket_index || 1) === index && (match.bracket || "upper") === bracket)),
       awardMode: (bracket === "lower" ? "lower" : "upper") as AwardMode,
     })).filter((section) => section.rows.length > 0));
-  }, [block, blueWhiteTeams, format, matches]);
+  }, [block, blueWhiteTeams, format, matches, programOption?.roundTieBreaks, round]);
   if (leagueLoading || matchLoading || participantLoading || programLoading) return <Box sx={{ display: "flex", justifyContent: "center", py: 10 }}><CircularProgress /></Box>;
   return <RoundResultView round={round} subtitle={`${leagueData?.league.name ?? ""} · ${block?.title ?? ""}`} format={format}
-    complete={complete} threeSet={!!threeSet} grouped={grouped} onBack={() => navigate(`/league/${id}`)}
+    complete={complete} threeSet={!!threeSet} tieBreakSets grouped={grouped} onBack={() => navigate(`/league/${id}`)}
     onBracket={() => navigate(`/league/${id}/program/${bracketPath}?program=1&round=${round}&format=${format}&back=results`)} />;
 }
 
-export function RoundResultView({ round, subtitle, format, complete, threeSet, grouped, onBack, onBracket }: {
+export function RoundResultView({ round, subtitle, format, complete, threeSet, grouped, onBack, onBracket, tieBreakSets }: {
   round: number; subtitle: string; format: RoundFormat; complete: boolean; threeSet: boolean;
   grouped: Array<{ key: string; title: string; rows: StandingRow[]; awardMode: AwardMode }>;
   onBack: () => void; onBracket: () => void;
+  tieBreakSets?: boolean;
 }) {
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const activeGroup = format === "GROUP"
@@ -351,7 +361,7 @@ export function RoundResultView({ round, subtitle, format, complete, threeSet, g
       ) : visibleSections.map((section) => (
         <Stack key={section.key} spacing={1}>
           <Typography sx={{ fontSize: 16, fontWeight: 900 }}>{section.title}</Typography>
-          <ResultTable rows={section.rows} threeSet={threeSet} awardMode={section.awardMode} />
+          <ResultTable rows={section.rows} threeSet={threeSet} awardMode={section.awardMode} tieBreakSets={tieBreakSets} />
         </Stack>
       ))}
     </Stack>

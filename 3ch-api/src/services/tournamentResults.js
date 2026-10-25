@@ -1,4 +1,4 @@
-function buildTournamentRoundResult(round, matches, participants) {
+function buildTournamentRoundResult(round, matches, participants, options = {}) {
   const active = matches.filter((match) => match.status !== 'cancelled' && (match.participant_a_id || match.participant_b_id)
     && !(match.league_data?.is_no_game && match.status==='pending' && match.score_a==null && match.score_b==null));
   const complete = active.length > 0 && active.every((match) => match.status === 'completed' &&
@@ -27,20 +27,52 @@ function buildTournamentRoundResult(round, matches, participants) {
   }
   const tournament = round.format === 'TOURNAMENT';
   const lowerIds = new Set(tournament ? active.filter((match) => match.bracket === 'lower').flatMap((match) => [match.participant_a_id, match.participant_b_id]).filter(Boolean) : []);
-  const threeSet = round.rules?.match_rule === 'THREE_SET';
+  const threeSet = ['THREE_SET', '3세트제'].includes(round.rules?.match_rule);
+  const baseValue = row => threeSet ? row.sets_for : row.wins;
+  const tied = new Map();
+  if (!tournament) {
+    for (const row of stats.values()) {
+      const group = tied.get(baseValue(row)) ?? [];
+      group.push(row); tied.set(baseValue(row), group);
+      row.tie_sets_for = 0; row.tie_sets_against = 0; row.tie_set_diff = '';
+    }
+    for (const group of tied.values()) {
+      if (group.length < 2) continue;
+      const ids = new Set(group.map(row => row.id));
+      for (const match of active) {
+        if (match.status !== 'completed' || match.league_data?.is_no_game || match.score_a == null || match.score_b == null
+          || !ids.has(match.participant_a_id) || !ids.has(match.participant_b_id)) continue;
+        const a = stats.get(match.participant_a_id), b = stats.get(match.participant_b_id);
+        a.tie_sets_for += match.score_a; a.tie_sets_against += match.score_b;
+        b.tie_sets_for += match.score_b; b.tie_sets_against += match.score_a;
+      }
+      for (const row of group) if (row.tie_sets_for || row.tie_sets_against) row.tie_set_diff = `${row.tie_sets_for}/${row.tie_sets_against}`;
+    }
+  }
+  const ratio = row => row.tie_sets_against === 0 ? Infinity : row.tie_sets_for / row.tie_sets_against;
+  const compareAutomatic = (a, b) => {
+    const base = baseValue(b) - baseValue(a);
+    if (base) return base;
+    if (threeSet) return b.tie_sets_for - a.tie_sets_for || a.tie_sets_against - b.tie_sets_against;
+    const diff = ratio(b) - ratio(a);
+    return Number.isNaN(diff) ? 0 : diff;
+  };
+  const manualIds = options.tieBreaks?.find(entry => entry.round === round.round_no && entry.poolLabel === (options.poolLabel ?? null))?.participantIds ?? [];
+  const manualIndex = new Map(manualIds.map((id, index) => [id, index]));
   const brackets = tournament && active.some((match) => match.bracket === 'upper') && active.some((match) => match.bracket === 'lower') ? ['upper','lower'].map((bracket) => ({ name: bracket === 'upper' ? '상위' : '하위', ...buildTournamentRoundResult(round, active.filter((match) => match.bracket === bracket), participants) })) : [];
   const branchRanks = new Map(brackets.flatMap((bracket) => bracket.standings.map((person) => [person.id, person.rank])));
   const rows = [...stats.values()].sort((a, b) => tournament
     ? Number(lowerIds.has(a.id)) - Number(lowerIds.has(b.id)) || (brackets.length ? (branchRanks.get(a.id) ?? 0) - (branchRanks.get(b.id) ?? 0) : 0) || (b.eliminated_round === null ? 1 : 0) - (a.eliminated_round === null ? 1 : 0) || (b.eliminated_round ?? 0) - (a.eliminated_round ?? 0) || b.wins - a.wins
-    : (threeSet ? b.sets_for - a.sets_for : b.wins - a.wins) || (b.sets_for - b.sets_against) - (a.sets_for - a.sets_against) || b.sets_for - a.sets_for);
+    : compareAutomatic(a, b) || (manualIndex.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (manualIndex.get(b.id) ?? Number.MAX_SAFE_INTEGER));
   let lastKey, rank = 0;
   rows.forEach((row, index) => {
-    const key = tournament ? `${lowerIds.has(row.id) ? "lower" : "upper"}:${brackets.length ? branchRanks.get(row.id) : row.eliminated_round}` : `${threeSet ? row.sets_for : row.wins}:${row.sets_for - row.sets_against}:${row.sets_for}`;
-    if (key !== lastKey) rank = index + 1;
+    const key = tournament ? `${lowerIds.has(row.id) ? "lower" : "upper"}:${brackets.length ? branchRanks.get(row.id) : row.eliminated_round}` : null;
+    if (tournament ? key !== lastKey : index === 0 || compareAutomatic(rows[index - 1], row) !== 0
+      || manualIndex.has(rows[index - 1].id) || manualIndex.has(row.id)) rank = index + 1;
     row.rank = rank; lastKey = key;
   });
   const pools = ['GROUP','GROUP_TOURNAMENT'].includes(round.format)
-    ? [...new Set(active.map((match) => match.pool_name).filter(Boolean))].map((name) => ({ name, ...buildTournamentRoundResult({ ...round, format: 'LEAGUE' }, active.filter((match) => match.pool_name === name), participants) })) : [];
+    ? [...new Set(active.map((match) => match.pool_name).filter(Boolean))].map((name) => ({ name, ...buildTournamentRoundResult({ ...round, format: 'LEAGUE' }, active.filter((match) => match.pool_name === name), participants, { ...options, poolLabel: `${name}조` }) })) : [];
   return { brackets, complete, match_count: active.length, completed_match_count: active.filter((match) => match.status === 'completed').length, standings: rows, matches, pools };
 }
 module.exports = { buildTournamentRoundResult };

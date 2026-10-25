@@ -23,7 +23,7 @@ export function getRoundRobinWinScore(rule?: string | null): number | null {
 }
 
 export function calculateRoundRobinStandings(
-  players: LeagueParticipantItem[],
+  players: Pick<LeagueParticipantItem, "id">[],
   matches: LeagueMatch[],
   rules?: string | null,
   manualParticipantOrder: string[] = [],
@@ -139,4 +139,14 @@ export function calculateRoundRobinStandings(
     rankingOrder: indices.map((index) => players[index].id),
     allMatchesComplete,
   };
+}
+
+// Result tables use the same head-to-head ranking and saved tie order as brackets.
+export function rankRoundRobinResultRows<T extends { key: string }>(
+  rows: T[], matches: LeagueMatch[], rules?: string | null, manualParticipantOrder: string[] = [],
+): Array<T & { rank: string; tieSetDiff: string }> {
+  const standings = calculateRoundRobinStandings(rows.map(row => ({ id: row.key })), matches, rules, manualParticipantOrder);
+  return rows.map((row, index) => ({
+    ...row, rank: String(standings.rankings[index]), tieSetDiff: standings.tieSetDiffs[index],
+  })).sort((a, b) => Number(a.rank) - Number(b.rank));
 }

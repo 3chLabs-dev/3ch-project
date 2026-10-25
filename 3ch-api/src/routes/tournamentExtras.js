@@ -21,7 +21,7 @@ router.get('/tournaments/:id/results', optionalAuth, async (req, res) => {
       const program = rounds.rows.filter((round) => round.division_id === division.id);
       const divisionMatches = matches.rows.filter((match) => match.division_id === division.id);
       return { ...division, unassigned_match_count: program.length > 1 ? divisionMatches.filter((match) => match.program_round === null).length : 0,
-        rounds: program.map((round) => ({ ...round, ...buildTournamentRoundResult(round, divisionMatches.filter((match) => match.program_round === round.round_no || (match.program_round === null && program.length === 1)), participants.rows.filter((person) => entryDivisionIds(division).includes(person.division_id))) })) };
+        rounds: program.map((round) => ({ ...round, ...buildTournamentRoundResult(round, divisionMatches.filter((match) => match.program_round === round.round_no || (match.program_round === null && program.length === 1)), participants.rows.filter((person) => entryDivisionIds(division).includes(person.division_id)), { tieBreaks: division.league_program?.roundTieBreaks }) })) };
     }) });
   } catch (error) { console.error(error); return res.status(500).json({ message: '경기 결과를 불러오지 못했습니다.' }); }
 });

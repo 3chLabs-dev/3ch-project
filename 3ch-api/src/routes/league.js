@@ -5007,7 +5007,10 @@ router.patch('/league/:id/matches/:matchId', optionalAuth, async (req, res) => {
       sendPushToParticipant(m.participant_b_id, payload);
     }
 
-    await reconcileTournamentMatches(pool, leagueId, { manualSeeding });
+    // An editor placement must not complete that match or advance its participant again.
+    if (participant_a_id === undefined && participant_b_id === undefined) {
+      await reconcileTournamentMatches(pool, leagueId, { manualSeeding });
+    }
     await triggerRankingRebuildByLeagueId(leagueId);
 
     const refreshed = await pool.query(

@@ -1403,7 +1403,7 @@ function applyProgramTournamentAdvancement(matches) {
     const match = matchMap.get(orderedMatch.id) ?? orderedMatch;
     const hasOnlyOneParticipant = Boolean(match.participant_a_name) !== Boolean(match.participant_b_name);
     const sources = inboundSourceIds.get(match.id) ?? [];
-    const allSourcesResolved = sources.length > 0 && sources.every((sourceId) => matchMap.get(sourceId)?.status === "done");
+    const allSourcesResolved = sources.length === 2 && sources.every((sourceId) => matchMap.get(sourceId)?.status === "done");
     if (match.bracket !== "lower" && match.status !== "done" && hasOnlyOneParticipant && allSourcesResolved) {
       if (!match.participant_a_name) match.participant_a_id = null;
       if (!match.participant_b_name) match.participant_b_id = null;

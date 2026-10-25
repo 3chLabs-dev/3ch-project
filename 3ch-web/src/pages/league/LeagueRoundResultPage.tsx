@@ -28,6 +28,7 @@ import {
 } from "../../features/league/leagueApi";
 import type { ProgramOption } from "../../features/league/types/tournament.types";
 import { hydrateProgramNoGamePolicy, resolveProgramBlueWhiteTeams } from "../../utils/programMatchGenerator";
+import { isTournamentResultReady } from "../../utils/tournamentResultReady";
 
 type RoundFormat = "LEAGUE" | "GROUP" | "TOURNAMENT";
 type RoundType = "SINGLES" | "DOUBLES" | "TEAM";
@@ -247,7 +248,8 @@ export default function LeagueRoundResultPage() {
     ).filter((match) => match.is_program && match.program_round === round),
     [id, matchData?.matches, participantData?.participants, programOption, round],
   );
-  const complete = matches.length > 0 && matches.every((match) => match.is_no_game || match.status === "done");
+  const complete = format === "TOURNAMENT" ? isTournamentResultReady(matches)
+    : matches.length > 0 && matches.every((match) => match.is_no_game || match.status === "done");
   const threeSet = block?.matchRule === "THREE_SET" || block?.matchRule?.includes("3세트") || matches.some((match) => match.match_rule === "THREE_SET" || match.match_rule?.includes("3세트"));
   const bracketPath = format === "TOURNAMENT" ? "tournament-bracket" : "bracket";
   const blueWhiteTeams = resolveProgramBlueWhiteTeams(programOption, programOption?.blocks?.[round - 1]);

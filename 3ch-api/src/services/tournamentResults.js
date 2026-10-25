@@ -1,7 +1,46 @@
+function tournamentPlacement(matches) {
+  const groups = new Map(), ranks = new Map();
+  const decided = match => match.status === 'completed' && match.participant_a_id && match.participant_b_id
+    && match.score_a != null && match.score_b != null && match.score_a !== match.score_b;
+  const result = match => match.score_a > match.score_b
+    ? [match.participant_a_id, match.participant_b_id] : [match.participant_b_id, match.participant_a_id];
+  for (const match of matches) {
+    const key = `${match.bracket ?? 'upper'}:${match.bracket_index ?? 1}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(match);
+  }
+  let complete = groups.size > 0;
+  for (const group of groups.values()) {
+    if (!group.some(match => match.participant_a_id || match.participant_b_id)) { complete = false; continue; }
+    const bronze = group.find(match => /3\s*[·./~-]?\s*4위/.test(match.match_label ?? ''));
+    const regular = group.filter(match => match !== bronze);
+    const lastRound = Math.max(...regular.map(match => match.round_no ?? 1));
+    const finals = regular.filter(match => (match.round_no ?? 1) === lastRound);
+    const final = finals.length === 1 ? finals[0] : null;
+    if (!final || !decided(final)) { complete = false; continue; }
+    const [winner, runnerUp] = result(final);
+    ranks.set(winner, 1); ranks.set(runnerUp, 2);
+    const semis = regular.filter(match => match.next_match_id === final.id
+      || (!match.next_match_id && (match.round_no ?? 1) === lastRound - 1));
+    const semiLosers = semis.filter(decided).map(match => result(match)[1]);
+    if (bronze) {
+      if (!decided(bronze)) { complete = false; continue; }
+      const [third, fourth] = result(bronze);
+      ranks.set(third, 3); ranks.set(fourth, 4);
+    } else {
+      for (const loser of semiLosers) ranks.set(loser, 3);
+      const entrantCount = new Set(group.flatMap(match => [match.participant_a_id, match.participant_b_id]).filter(Boolean)).size;
+      if (new Set([winner, runnerUp, ...semiLosers]).size < Math.min(4, entrantCount)) complete = false;
+    }
+  }
+  return { complete, ranks };
+}
+
 function buildTournamentRoundResult(round, matches, participants, options = {}) {
   const active = matches.filter((match) => match.status !== 'cancelled' && (match.participant_a_id || match.participant_b_id)
     && !(match.league_data?.is_no_game && match.status==='pending' && match.score_a==null && match.score_b==null));
-  const complete = active.length > 0 && active.every((match) => match.status === 'completed' &&
+  const placement = round.format === 'TOURNAMENT' ? tournamentPlacement(matches.filter(match => match.status !== 'cancelled')) : null;
+  const complete = placement ? placement.complete : active.length > 0 && active.every((match) => match.status === 'completed' &&
     ((!match.participant_a_id || !match.participant_b_id) || (match.score_a !== null && match.score_b !== null)));
   const people = new Map(participants.map((participant) => [participant.id, participant]));
   for (const match of active) for (const slot of ['a','b']) {
@@ -62,14 +101,14 @@ function buildTournamentRoundResult(round, matches, participants, options = {}) 
   const brackets = tournament && active.some((match) => match.bracket === 'upper') && active.some((match) => match.bracket === 'lower') ? ['upper','lower'].map((bracket) => ({ name: bracket === 'upper' ? '상위' : '하위', ...buildTournamentRoundResult(round, active.filter((match) => match.bracket === bracket), participants) })) : [];
   const branchRanks = new Map(brackets.flatMap((bracket) => bracket.standings.map((person) => [person.id, person.rank])));
   const rows = [...stats.values()].sort((a, b) => tournament
-    ? Number(lowerIds.has(a.id)) - Number(lowerIds.has(b.id)) || (brackets.length ? (branchRanks.get(a.id) ?? 0) - (branchRanks.get(b.id) ?? 0) : 0) || (b.eliminated_round === null ? 1 : 0) - (a.eliminated_round === null ? 1 : 0) || (b.eliminated_round ?? 0) - (a.eliminated_round ?? 0) || b.wins - a.wins
+    ? Number(lowerIds.has(a.id)) - Number(lowerIds.has(b.id)) || (placement.ranks.get(a.id) ?? 999) - (placement.ranks.get(b.id) ?? 999) || (brackets.length ? (branchRanks.get(a.id) ?? 0) - (branchRanks.get(b.id) ?? 0) : 0) || (b.eliminated_round === null ? 1 : 0) - (a.eliminated_round === null ? 1 : 0) || (b.eliminated_round ?? 0) - (a.eliminated_round ?? 0) || b.wins - a.wins
     : compareAutomatic(a, b) || (manualIndex.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (manualIndex.get(b.id) ?? Number.MAX_SAFE_INTEGER));
   let lastKey, rank = 0;
   rows.forEach((row, index) => {
     const key = tournament ? `${lowerIds.has(row.id) ? "lower" : "upper"}:${brackets.length ? branchRanks.get(row.id) : row.eliminated_round}` : null;
     if (tournament ? key !== lastKey : index === 0 || compareAutomatic(rows[index - 1], row) !== 0
       || manualIndex.has(rows[index - 1].id) || manualIndex.has(row.id)) rank = index + 1;
-    row.rank = rank; lastKey = key;
+    row.rank = placement?.ranks.get(row.id) ?? rank; lastKey = key;
   });
   const pools = ['GROUP','GROUP_TOURNAMENT'].includes(round.format)
     ? [...new Set(active.map((match) => match.pool_name).filter(Boolean))].map((name) => ({ name, ...buildTournamentRoundResult({ ...round, format: 'LEAGUE' }, active.filter((match) => match.pool_name === name), participants, { ...options, poolLabel: `${name}조` }) })) : [];

@@ -1819,13 +1819,15 @@ export function swapProgramTournamentSlots(
   replace(secondOrigin, firstValue);
   changed.forEach(matchId => {
     const match = result.get(matchId)!;
-    const bye = match.bracket === "upper"
+    const bye = !copyIntoEmpty && match.bracket === "upper"
       && Boolean(match.participant_a_id) !== Boolean(match.participant_b_id);
     match.status = bye ? "done" : "pending";
     match.score_a = bye ? 0 : null;
     match.score_b = bye ? 0 : null;
   });
-  return applyProgramTournamentAdvancement(matches.map(match => result.get(match.id)!));
+  const updated = matches.map(match => result.get(match.id)!);
+  // Placing a player in an empty later-round slot does not complete that match.
+  return copyIntoEmpty ? updated : applyProgramTournamentAdvancement(updated);
 }
 
 export function applyProgramTournamentAdvancement(matches: LeagueMatch[]): LeagueMatch[] {
@@ -1845,7 +1847,7 @@ export function applyProgramTournamentAdvancement(matches: LeagueMatch[]): Leagu
     const match = matchMap.get(orderedMatch.id) ?? orderedMatch;
     const hasOnlyOneParticipant = Boolean(match.participant_a_name) !== Boolean(match.participant_b_name);
     const sources = inboundSourceIds.get(match.id) ?? [];
-    const allSourcesResolved = sources.length > 0
+    const allSourcesResolved = sources.length === 2
       && sources.every((sourceId) => matchMap.get(sourceId)?.status === "done");
     // A BYE can emerge only after upper-bracket losers have been propagated.
     // Complete it once every feeder match is resolved, then advance its participant.

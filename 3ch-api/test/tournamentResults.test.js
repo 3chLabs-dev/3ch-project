@@ -73,6 +73,36 @@ test('토너먼트 우승자와 준우승자는 저장된 결승 결과로 결�
   assert.equal(result.standings.find((person) => person.id === 'd').rank, 3);
 });
 
+test('결승과 준결승으로 1~4위가 확정되면 미완료 1회전 부전승이 있어도 결과를 표시한다', () => {
+  const people = [...participants, { id: 'e', name: 'e' }];
+  const matches = [
+    match({ id: 'bye', participant_a_id: 'e', participant_b_id: null, score_a: null, score_b: null, status: 'pending', round_no: 1 }),
+    match({ id: 's1', participant_a_id: 'a', participant_b_id: 'b', round_no: 2, next_match_id: 'final' }),
+    match({ id: 's2', participant_a_id: 'c', participant_b_id: 'd', round_no: 2, next_match_id: 'final' }),
+    match({ id: 'final', participant_a_id: 'a', participant_b_id: 'c', round_no: 3, match_label: '결승' }),
+  ];
+  const before = structuredClone(matches);
+  const result = buildTournamentRoundResult({ format: 'TOURNAMENT' }, matches, people);
+  assert.equal(result.complete, true);
+  assert.deepEqual(result.standings.slice(0, 4).map(row => [row.id, row.rank]), [['a',1],['c',2],['b',3],['d',3]]);
+  assert.deepEqual(matches, before);
+  for (const score of [null, 1]) {
+    const incomplete = matches.map(row => row.id === 'final' ? { ...row, score_a: score } : row);
+    assert.equal(buildTournamentRoundResult({ format: 'TOURNAMENT' }, incomplete, people).complete, false);
+  }
+  const bronze = match({ id: 'bronze', participant_a_id: 'b', participant_b_id: 'd', round_no: 3, match_label: '3·4위전' });
+  assert.equal(buildTournamentRoundResult({ format: 'TOURNAMENT' }, [...matches, { ...bronze, status: 'pending' }], people).complete, false);
+  const placed = buildTournamentRoundResult({ format: 'TOURNAMENT' }, [...matches, bronze], people);
+  assert.equal(placed.complete, true);
+  assert.equal(placed.standings.find(row => row.id === 'b').rank, 3);
+  assert.equal(placed.standings.find(row => row.id === 'd').rank, 4);
+});
+
+test('빈 결승 칸을 무시하고 준결승을 결승으로 오인하지 않는다', () => {
+  const matches = [match({ id: 'semi', next_match_id: 'final' }), match({ id: 'final', participant_a_id: null, participant_b_id: null, score_a: null, score_b: null, status: 'pending', round_no: 2 })];
+  assert.equal(buildTournamentRoundResult({ format: 'TOURNAMENT' }, matches, participants).complete, false);
+});
+
 test('상위와 하위 우승자를 별도로 집계하고 다음 라운드 순위에서도 상위를 우선한다',()=>{
  const rows=[
   match({id:'u1',participant_a_id:'a',participant_b_id:'c',score_a:2,score_b:0,bracket:'upper',round_no:1}),

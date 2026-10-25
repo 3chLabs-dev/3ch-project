@@ -1643,10 +1643,7 @@ export default function LeagueTournamentBracket({ external }: { external?: Exter
 
     const copyIntoEmptySlot = Boolean(first.participantId) && !participantId;
     if (copyIntoEmptySlot) {
-      const targetMatch = matches.find((candidate) => candidate.id === matchId);
       await assignParticipant({ leagueId: id!, matchId, ...(slot === "a" ? { participant_a_id: first.participantId } : { participant_b_id: first.participantId }) }).unwrap();
-      const otherParticipantId = slot === "a" ? targetMatch?.participant_b_id : targetMatch?.participant_a_id;
-      await updateTournamentMatch({ leagueId: id!, matchId, updates: otherParticipantId ? { status: "pending", score_a: null, score_b: null } : { status: "done", score_a: 0, score_b: 0 } }).unwrap();
     } else if (first.matchId === matchId) {
       // 같은 매치 내 A↔B 스왑 → 한 번에 처리
       await assignParticipant({

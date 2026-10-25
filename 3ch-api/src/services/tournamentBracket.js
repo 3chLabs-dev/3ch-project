@@ -60,6 +60,8 @@ function projectBracketAdvancement(matches) {
     }
     for (const target of rows) {
       if (target.status !== 'pending' || target.score_a != null || target.score_b != null || (target.participant_a_id && target.participant_b_id)) continue;
+      // An explicit editor assignment is a placement, not a completed walkover.
+      if (target.league_data?.manual_assigned_slots?.length) continue;
       const feeders = ['a','b'].map((slot) => incoming.get(`${target.id}:${slot}`));
       const allFeedersArrived = feeders.every(Boolean) && feeders.every((feeder,index) => {
         const result = outcome(feeder); if (!result) return false;

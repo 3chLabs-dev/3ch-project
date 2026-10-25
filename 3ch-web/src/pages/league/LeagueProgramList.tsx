@@ -50,6 +50,8 @@ import {
   useSyncLeagueProgramMatchesMutation,
 } from "../../features/league/leagueApi";
 import { useGetGroupDetailQuery } from "../../features/group/groupApi";
+import { useGetTournamentResultsQuery } from "../../features/tournament/tournamentApi";
+import { isTournamentResultReady } from "../../utils/tournamentResultReady";
 import { formatLeagueDate } from "../../utils/dateUtils";
 import { distributeSnake } from "../../features/league/algorithms/distributeSnake";
 import { generateGroupOptions } from "../../features/league/algorithms/generateGroupOptions";
@@ -361,6 +363,8 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
 ) {
   const { id: routeId } = useParams<{ id: string }>();
   const id = resourceKey ?? routeId;
+  const tournamentScope = id?.startsWith("tournament~") ? id.split("~") : null;
+  const { data: tournamentResults } = useGetTournamentResultsQuery(tournamentScope?.[1] ?? "", { skip: !tournamentScope });
   const navigate = useNavigate();
   const { data: leagueData, isLoading: leagueLoading } = useGetLeagueQuery(id!);
   const { data: matchesData, isLoading: matchesLoading } = useGetLeagueMatchesQuery(id!);
@@ -465,7 +469,9 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
         finalAdvancementMode: block.finalAdvancementMode,
         // 완료 시 저장된 서버 순위 스냅샷은 경기 목록 재조회보다 안정적인 근거다.
         // 목록 API가 일시적으로 실패해도 확정된 결과 화면으로 이동할 수 있어야 한다.
-        completed: persistedRoundCompleted || (
+        completed: tournamentScope && block.format === "TOURNAMENT"
+          ? tournamentResults?.divisions.find(division => division.id === tournamentScope[2])?.rounds.find(round => round.round_no === index + 1)?.complete === true
+          : block.format === "TOURNAMENT" ? isTournamentResultReady(roundMatches) : persistedRoundCompleted || (
           roundMatches.length > 0
           && roundMatches.every((match) => match.is_no_game || match.status === "done")
         ),

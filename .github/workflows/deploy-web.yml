@@ -56,6 +56,7 @@ jobs:
         run: npm ci
 
       - name: Build
+        id: office_build
         working-directory: 3ch-web
         env:
           VITE_TOSS_CLIENT_KEY: ${{ secrets.VITE_TOSS_CLIENT_KEY }}
@@ -94,6 +95,7 @@ jobs:
             3ch-web/dist/ 3ch-web/deploy/
 
       - name: Upload to server
+        id: office_upload
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -104,6 +106,7 @@ jobs:
           strip_components: 2
 
       - name: Set permissions & reload nginx
+        id: office_deploy
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -158,3 +161,67 @@ jobs:
                 timestamp: "${{ github.event.head_commit.timestamp }}"
               }]
             }' | curl -s -X POST "$DISCORD_WEBHOOK" -H "Content-Type: application/json" -d @-
+
+      - name: OFFICE - Web build result
+        if: ${{ always() && (steps.office_build.outcome == 'success' || steps.office_build.outcome == 'failure') }}
+        continue-on-error: true
+        timeout-minutes: 1
+        env:
+          OFFICE_INGEST_URL: ${{ vars.OFFICE_GITHUB_INGEST_URL }}
+          OFFICE_GITHUB_SECRET: ${{ secrets.OFFICE_GITHUB_SECRET }}
+          OFFICE_EVENT_KIND: build
+          OFFICE_EVENT_STATUS: ${{ steps.office_build.outcome }}
+          OFFICE_TARGET: web
+        run: |
+          node --input-type=module <<'OFFICE_NOTIFY'
+          // Add as an independent step after the actual build/deploy step, with continue-on-error: true.
+          // Required env: OFFICE_INGEST_URL, OFFICE_GITHUB_SECRET, OFFICE_EVENT_KIND (build|deploy),
+          // OFFICE_EVENT_STATUS (success|failure), OFFICE_TARGET (api|web|ci), GitHub standard env.
+          import {createHmac} from 'node:crypto';
+          const env=process.env;
+          if(!env.OFFICE_INGEST_URL||!env.OFFICE_GITHUB_SECRET){console.log('OFFICE 알림 설정 없음. 기존 알림은 유지됩니다.');process.exit(0);}
+          const kind=env.OFFICE_EVENT_KIND,status=env.OFFICE_EVENT_STATUS;
+          if(!['build','deploy'].includes(kind)||!['success','failure'].includes(status))throw new Error('Explicit event kind/status required; never infer deployment from workflow success.');
+          if(!['3chLabs-dev/3ch-project','M-OWEN-10/woori-woonse'].includes(env.GITHUB_REPOSITORY))throw new Error('Repository not allowed');
+          if(env.OFFICE_INGEST_URL!=='https://threech.com/office/api/ingest/github'||env.OFFICE_GITHUB_SECRET.length<32)throw new Error('Invalid OFFICE configuration');
+          const payload=JSON.stringify({id:`${env.GITHUB_REPOSITORY.replace('/','-')}:${env.GITHUB_RUN_ID}:${env.GITHUB_RUN_ATTEMPT}:${env.GITHUB_JOB}:${env.OFFICE_TARGET||'default'}:${kind}:${status}`,type:`github.${kind}.${status}`,priority:status==='failure'?'urgent':'normal',title:`${env.GITHUB_REPOSITORY.split('/')[1]} ${env.OFFICE_TARGET||''} ${kind==='build'?'빌드':'배포'} ${status==='success'?'성공':'실패'}`,message:`대표님, ${env.GITHUB_REPOSITORY}의 ${kind==='build'?'빌드':'배포'}가 ${status==='success'?'성공':'실패'}했습니다.${kind==='build'?' 빌드 결과는 실제 배포 완료와 구분됩니다.':''}`,occurredAt:new Date().toISOString(),sourceUrl:`https://github.com/${env.GITHUB_REPOSITORY}/actions/runs/${env.GITHUB_RUN_ID}`});
+          let delivered=false;
+          for(let attempt=0;attempt<3;attempt++){
+           const timestamp=String(Date.now()),signature='sha256='+createHmac('sha256',env.OFFICE_GITHUB_SECRET).update(timestamp+'.'+payload).digest('hex');
+           try{const response=await fetch(env.OFFICE_INGEST_URL,{method:'POST',headers:{'Content-Type':'application/json','x-office-timestamp':timestamp,'x-office-signature':signature},body:payload,signal:AbortSignal.timeout(10000)});if(response.ok){console.log('OFFICE 알림 전달 완료');delivered=true;break;}if(response.status>=400&&response.status<500)throw new Error('OFFICE 알림 요청 거부');}catch(e){if(attempt===2)throw new Error('OFFICE 알림 전달 실패. 기존 Discord 단계와 분리되어 있습니다.');}
+           if(attempt<2)await new Promise(resolve=>setTimeout(resolve,1000*(attempt+1)));
+          }
+          if(!delivered)throw new Error('OFFICE 알림 서버 오류');
+          OFFICE_NOTIFY
+
+      - name: OFFICE - Web deploy result
+        if: ${{ always() && (steps.office_upload.outcome == 'failure' || steps.office_deploy.outcome == 'failure' || (steps.office_upload.outcome == 'success' && steps.office_deploy.outcome == 'success')) }}
+        continue-on-error: true
+        timeout-minutes: 1
+        env:
+          OFFICE_INGEST_URL: ${{ vars.OFFICE_GITHUB_INGEST_URL }}
+          OFFICE_GITHUB_SECRET: ${{ secrets.OFFICE_GITHUB_SECRET }}
+          OFFICE_EVENT_KIND: deploy
+          OFFICE_EVENT_STATUS: ${{ (steps.office_upload.outcome == 'failure' || steps.office_deploy.outcome == 'failure') && 'failure' || 'success' }}
+          OFFICE_TARGET: web
+        run: |
+          node --input-type=module <<'OFFICE_NOTIFY'
+          // Add as an independent step after the actual build/deploy step, with continue-on-error: true.
+          // Required env: OFFICE_INGEST_URL, OFFICE_GITHUB_SECRET, OFFICE_EVENT_KIND (build|deploy),
+          // OFFICE_EVENT_STATUS (success|failure), OFFICE_TARGET (api|web|ci), GitHub standard env.
+          import {createHmac} from 'node:crypto';
+          const env=process.env;
+          if(!env.OFFICE_INGEST_URL||!env.OFFICE_GITHUB_SECRET){console.log('OFFICE 알림 설정 없음. 기존 알림은 유지됩니다.');process.exit(0);}
+          const kind=env.OFFICE_EVENT_KIND,status=env.OFFICE_EVENT_STATUS;
+          if(!['build','deploy'].includes(kind)||!['success','failure'].includes(status))throw new Error('Explicit event kind/status required; never infer deployment from workflow success.');
+          if(!['3chLabs-dev/3ch-project','M-OWEN-10/woori-woonse'].includes(env.GITHUB_REPOSITORY))throw new Error('Repository not allowed');
+          if(env.OFFICE_INGEST_URL!=='https://threech.com/office/api/ingest/github'||env.OFFICE_GITHUB_SECRET.length<32)throw new Error('Invalid OFFICE configuration');
+          const payload=JSON.stringify({id:`${env.GITHUB_REPOSITORY.replace('/','-')}:${env.GITHUB_RUN_ID}:${env.GITHUB_RUN_ATTEMPT}:${env.GITHUB_JOB}:${env.OFFICE_TARGET||'default'}:${kind}:${status}`,type:`github.${kind}.${status}`,priority:status==='failure'?'urgent':'normal',title:`${env.GITHUB_REPOSITORY.split('/')[1]} ${env.OFFICE_TARGET||''} ${kind==='build'?'빌드':'배포'} ${status==='success'?'성공':'실패'}`,message:`대표님, ${env.GITHUB_REPOSITORY}의 ${kind==='build'?'빌드':'배포'}가 ${status==='success'?'성공':'실패'}했습니다.${kind==='build'?' 빌드 결과는 실제 배포 완료와 구분됩니다.':''}`,occurredAt:new Date().toISOString(),sourceUrl:`https://github.com/${env.GITHUB_REPOSITORY}/actions/runs/${env.GITHUB_RUN_ID}`});
+          let delivered=false;
+          for(let attempt=0;attempt<3;attempt++){
+           const timestamp=String(Date.now()),signature='sha256='+createHmac('sha256',env.OFFICE_GITHUB_SECRET).update(timestamp+'.'+payload).digest('hex');
+           try{const response=await fetch(env.OFFICE_INGEST_URL,{method:'POST',headers:{'Content-Type':'application/json','x-office-timestamp':timestamp,'x-office-signature':signature},body:payload,signal:AbortSignal.timeout(10000)});if(response.ok){console.log('OFFICE 알림 전달 완료');delivered=true;break;}if(response.status>=400&&response.status<500)throw new Error('OFFICE 알림 요청 거부');}catch(e){if(attempt===2)throw new Error('OFFICE 알림 전달 실패. 기존 Discord 단계와 분리되어 있습니다.');}
+           if(attempt<2)await new Promise(resolve=>setTimeout(resolve,1000*(attempt+1)));
+          }
+          if(!delivered)throw new Error('OFFICE 알림 서버 오류');
+          OFFICE_NOTIFY

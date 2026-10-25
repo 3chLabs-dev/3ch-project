@@ -534,6 +534,27 @@ export default function AfterPartySettlement({ tournament = false }: { tournamen
   }, [participantData?.participants, localPreview]);
   const leagueDivisions = useMemo(() => new Map((participantData?.participants ?? []).map((person) => [person.id, person.division])), [participantData?.participants]);
   const guestIds = useMemo(() => new Set(list.flatMap((entry) => entry.participants.filter((person) => person.guest).map((person) => person.id))), [list]);
+  const attendanceGroups = useMemo(() => {
+    const groups = new Map<string, { rounds: number[]; sections: Map<string, CombinedPerson[]> }>();
+    const orderedRounds = [...list].sort((a, b) => a.round_no - b.round_no);
+    for (const person of summary.people) {
+      const attendance = orderedRounds.flatMap((round) => {
+        const participant = round.participants.find((entry) => entry.id === person.participantId && entry.attending);
+        return participant ? [{ round: round.round_no, drinking: participant.drinking }] : [];
+      });
+      const rounds = attendance.map((entry) => entry.round);
+      const key = rounds.join("+");
+      const section = !attendance.length ? "참석 정보 확인 필요" : attendance.every((entry) => entry.drinking) ? "주류" : attendance.every((entry) => !entry.drinking) ? "비주류" : "차수별 주류·비주류 선택 다름";
+      const group = groups.get(key) ?? { rounds, sections: new Map<string, CombinedPerson[]>() };
+      group.sections.set(section, [...(group.sections.get(section) ?? []), person]);
+      groups.set(key, group);
+    }
+    const sectionOrder = ["주류", "비주류", "차수별 주류·비주류 선택 다름", "참석 정보 확인 필요"];
+    return [...groups.entries()].sort(([, a], [, b]) => {
+      if (!a.rounds.length || !b.rounds.length) return b.rounds.length - a.rounds.length;
+      return a.rounds.length - b.rounds.length || a.rounds.join(",").localeCompare(b.rounds.join(","), "ko", { numeric: true });
+    }).map(([key, group]) => ({ key, title: group.rounds.length ? `${group.rounds.map((round) => `${round}차`).join(" + ")}${group.rounds.length === 1 ? "만" : ""} 참석` : "참석 정보 확인 필요", sections: sectionOrder.filter((label) => group.sections.has(label)).map((label) => ({ label, people: group.sections.get(label)! })) }));
+  }, [list, summary.people]);
   const accountCard = <Card sx={{ p: 2, mt: 2 }}>
     <Typography fontWeight={900} mb={1}>정산금 입금 계좌</Typography>
     {canEditAccount && !shareToken ? <TextField fullWidth placeholder="은행명과 계좌번호를 입력해 주세요" value={bankAccount} onChange={(event) => { setBankAccount(event.target.value); setAccountAutoSaveFailed(false); }} /> : <Typography sx={{ p: 1.5, border: "1px solid #E5E7EB", borderRadius: 1, overflowWrap: "anywhere" }}>{bankAccount || "등록된 입금 계좌가 없습니다."}</Typography>}
@@ -562,7 +583,7 @@ export default function AfterPartySettlement({ tournament = false }: { tournamen
       <Card sx={{ p: 2, mt: 2, border: "1px solid #BFDBFE", bgcolor: "#F8FAFF" }}>
         <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}><Typography fontWeight={900} fontSize={17}>전체 합산</Typography><Typography fontWeight={900} fontSize={18}>{money(summary.total)}</Typography></Stack>
         <Typography color="text.secondary" fontSize={12} mt={0.5} mb={1}>모든 정산을 합하여 계산된 개인별 정산금입니다.</Typography>
-        {summary.people.length ? <Stack spacing={0.75}>{summary.people.map((person) => <Stack key={person.participantId} direction="row" justifyContent="space-between" alignItems="center" gap={1} sx={{ borderTop: "1px solid #E5E7EB", pt: 1 }}><Box minWidth={0}><Stack direction="row" alignItems="center" spacing={0.5}><Typography fontWeight={800}>{person.name}</Typography>{guestIds.has(person.participantId) && <Chip label="게스트" size="small" sx={{ height: 20, bgcolor: "#E0F2FE", color: "#0369A1", fontWeight: 800 }} />}{canManage && <Button data-html2canvas-ignore size="small" variant={payments[person.participantId] ? "contained" : "outlined"} disabled={busy} onClick={() => void togglePaid(person)} sx={{ minWidth: payments[person.participantId] ? 66 : 54, px: 0.75, py: 0, fontSize: 11, whiteSpace: "nowrap" }}>{payments[person.participantId] ? "입금 완료" : "입금 전"}</Button>}</Stack><Typography fontSize={12} color="text.secondary">{list.filter((entry) => person.rounds[String(entry.round_no)] != null).map((entry) => `${entry.round_no}차 ${money(person.rounds[String(entry.round_no)])}`).join(" + ")}</Typography></Box><Typography fontWeight={900} whiteSpace="nowrap">{money(person.total)}</Typography></Stack>)}</Stack> : <Typography color="text.secondary" fontSize={13}>청구할 금액이 아직 없습니다.</Typography>}
+        {summary.people.length ? <Stack spacing={2} sx={{ mt: 2 }}>{attendanceGroups.map((group) => <Box key={group.key} sx={{ border: "1px solid #DBEAFE", borderRadius: 2, p: 1.5, bgcolor: "#fff" }}><Typography fontWeight={900} fontSize={15} mb={1}>{group.title}</Typography><Stack spacing={1.5}>{group.sections.map((section) => <Box key={section.label}><Stack direction="row" alignItems="center" spacing={0.75} mb={0.5}><Chip size="small" label={section.label} sx={{ fontWeight: 800, bgcolor: section.label === "주류" ? "#FFF3E0" : section.label === "비주류" ? "#E0F2FE" : "#F3F4F6" }} /><Typography fontSize={12} color="text.secondary">{section.people.length}명</Typography></Stack><Stack spacing={0.75}>{section.people.map((person) => <Stack key={person.participantId} direction="row" justifyContent="space-between" alignItems="center" gap={1} sx={{ borderTop: "1px solid #E5E7EB", pt: 1 }}><Box minWidth={0}><Stack direction="row" alignItems="center" spacing={0.5}><Typography fontWeight={800}>{person.name}</Typography>{guestIds.has(person.participantId) && <Chip label="게스트" size="small" sx={{ height: 20, bgcolor: "#E0F2FE", color: "#0369A1", fontWeight: 800 }} />}{canManage && <Button data-html2canvas-ignore size="small" variant={payments[person.participantId] ? "contained" : "outlined"} disabled={busy} onClick={() => void togglePaid(person)} sx={{ minWidth: payments[person.participantId] ? 66 : 54, px: 0.75, py: 0, fontSize: 11, whiteSpace: "nowrap" }}>{payments[person.participantId] ? "입금 완료" : "입금 전"}</Button>}</Stack><Typography fontSize={12} color="text.secondary">{list.filter((entry) => person.rounds[String(entry.round_no)] != null).map((entry) => `${entry.round_no}차${section.label === "차수별 주류·비주류 선택 다름" ? (entry.participants.find((participant) => participant.id === person.participantId)?.drinking ? " 주류" : " 비주류") : ""} ${money(person.rounds[String(entry.round_no)])}`).join(" + ")}</Typography></Box><Typography fontWeight={900} whiteSpace="nowrap">{money(person.total)}</Typography></Stack>)}</Stack></Box>)}</Stack></Box>)}</Stack> : <Typography color="text.secondary" fontSize={13}>청구할 금액이 아직 없습니다.</Typography>}
       </Card>
       {accountCard}
       </Box>

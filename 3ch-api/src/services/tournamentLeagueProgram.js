@@ -1,3 +1,4 @@
+const { validateTournamentEntrySettings } = require('./tournamentEntryPolicy');
 const { createHash } = require('crypto');
 const { generateProgramRoundMatches, generateProgramBlocks } = require('../shared/leagueProgramEngine.cjs');
 const { buildTournamentRoundResult } = require('./tournamentResults');
@@ -67,7 +68,7 @@ function programFor(division, rounds, pools, people) {
 function hasResult(m) { return m.status === 'completed' || m.status === 'playing' || m.score_a != null || m.score_b != null; }
 function clearedProgramFormation(program) {
   const clean=structuredClone(program),stamp=new Date().toISOString();
-  const fields=['groupAssignments','groupFormationCustomized','groupFormationSchemaVersion','teamAssignments','teamAssignmentModes','teamAssignmentLocks','doublesAssignments','doublesAssignmentModes','doublesAssignmentLocks','participantOrder','participantOrderCustomized','halfSplitMatchOrder','restoredMatchIds','deletedMatchIds'];
+  const fields=['groupAssignments','groupFormationCustomized','groupFormationSchemaVersion','teamAssignments','teamAssignmentModes','teamAssignmentLocks','doublesAssignments','doublesAssignmentModes','doublesAssignmentLocks','participantOrder','participantOrderCustomized','halfSplitMatchOrder','restoredMatchIds','deletedMatchIds','tournamentSelectedIds'];
   for(const field of fields)delete clean[field];
   delete clean.blueWhiteTeams;
   for(const item of [...clean.blocks,...(clean.rounds??[])]) {
@@ -80,13 +81,15 @@ function clearedProgramFormation(program) {
   return clean;
 }
 function validateProgram(program, previous, matches) {
+  validateTournamentEntrySettings(program);
   if (!Array.isArray(program?.blocks) || !program.blocks.length || program.blocks.length>30) throw conflict('라운드 구성을 확인해주세요.');
   if(program.blocks.some(b=>!['SINGLES','DOUBLES','TEAM'].includes(b.type)||!['LEAGUE','GROUP','TOURNAMENT'].includes(b.format)))throw conflict('라운드 유형과 방식을 확인해주세요.');
+  for (const block of program.blocks) if (block.tournamentStartSize != null && ![2,4,8,16,32,64,128,256,512,1024].includes(block.tournamentStartSize)) throw conflict('시작 강수를 확인해주세요.');
   for (const m of matches) {
     const index=(m.program_round ?? 1)-1, old=previous.blocks[index], next=program.blocks[index];
     if (!next) throw conflict('기존 경기가 있는 라운드를 삭제할 수 없습니다.');
     // Existing rounds are immutable through ordinary configuration/formation saves.
-    const fields=['type','format','matchRule','nextMatchRule','ruleSwitchSize','lateMatchRule','lowerMatchRule','lowerRuleSwitchSize','lowerLateMatchRule','teamPlayerCount','teamFormationSizes','teamSinglesCount','teamDoublesCount','tournamentMode','groupAssignments','teamAssignments','doublesAssignments','groupSizes','teamGroupSizes','halfSplitOnlyMatches','halfSplitMatchOrder','competitionMode','blueWhiteTournamentPlacement','tournamentBracketCount','thirdPlaceMatch'];
+    const fields=['type','format','matchRule','nextMatchRule','ruleSwitchSize','lateMatchRule','lowerMatchRule','lowerRuleSwitchSize','lowerLateMatchRule','teamPlayerCount','teamFormationSizes','teamSinglesCount','teamDoublesCount','tournamentMode','groupAssignments','teamAssignments','doublesAssignments','groupSizes','teamGroupSizes','halfSplitOnlyMatches','halfSplitMatchOrder','competitionMode','blueWhiteTournamentPlacement','tournamentBracketCount','thirdPlaceMatch','tournamentStartSize','tournamentSelectedIds','tournamentSeeding'];
     if (fields.some(field => JSON.stringify(old?.[field] ?? null)!==JSON.stringify(next[field] ?? null))) {
       const canReconfigure=!matches.some(row=>(row.program_round??1)>index+1||((row.program_round??1)===index+1&&hasResult(row)));
       throw Object.assign(conflict(canReconfigure

@@ -1,3 +1,5 @@
+import { hasCappedTournamentEntryChanges } from "../../utils/tournamentEntrants";
+import TournamentStartSizeField from "../../components/TournamentStartSizeField";
 import { generateProgramOptions } from '../../features/league/algorithms/generateProgramOptions';
 import { generateProgramBlocks } from '../../features/league/algorithms/generateProgramBlocks';
 import { distributeSnake } from '../../features/league/algorithms/distributeSnake';
@@ -1009,7 +1011,8 @@ export function RoundConfigEditor({
                     </ToggleButton>
 	                  </ToggleButtonGroup>
 
-                    {round.format === "TOURNAMENT" && round.option !== "FINAL" && (
+                    {round.format === "TOURNAMENT" && round.option !== "FINAL" && <TournamentStartSizeField value={round.tournamentStartSize} onChange={value => setRounds(rounds.map(x => x.id === round.id ? { ...x, tournamentStartSize: value, tournamentSelectedIds: undefined } : x))} />}
+                  {round.format === "TOURNAMENT" && round.option !== "FINAL" && (
                       <div style={{ marginTop: "16px" }}>
                         <div
                           style={{
@@ -1930,16 +1933,20 @@ const LeagueAlgorithmDemo = ({
 
       localStorage.setItem(`league-program-${leagueId}`, JSON.stringify(balancedProgram));
       localStorage.setItem(`league-program-active-round-${leagueId}`, "1");
-      await saveLeagueProgram({ leagueId, program: balancedProgram }).unwrap();
+      const changedEntries = hasCappedTournamentEntryChanges(previousProgram, balancedProgram);
+      const entryReset = resetResults && changedEntries && Boolean(savedMatchesData?.matches?.some(match => match.is_program));
+      const response = await saveLeagueProgram({ leagueId, program: balancedProgram, ...(entryReset ? { resetForEdit: true, expectedMatches: savedMatchesData?.matches ?? [], expectedProgramUpdatedAt: savedProgramData?.program?.updated_at } : {}) }).unwrap();
+      const appliedProgram = (entryReset ? response.program?.program_data : balancedProgram) as ProgramOption;
+      if (entryReset) localStorage.setItem(`league-program-${leagueId}`, JSON.stringify(appliedProgram));
 
       if (syncMatches) {
-        const programMatches = balancedProgram.blocks.flatMap((block, blockIndex) => {
+        const programMatches = appliedProgram.blocks.flatMap((block, blockIndex) => {
           const generated = generateProgramRoundMatches(
             leagueId,
-            balancedProgram,
+            appliedProgram,
             participantData?.participants ?? [],
             blockIndex + 1,
-            savedMatchesData?.matches ?? [],
+            entryReset ? [] : savedMatchesData?.matches ?? [],
           );
           return generated.map((match) => ({
             ...match,
@@ -1947,10 +1954,10 @@ const LeagueAlgorithmDemo = ({
             program_block_type: block.type,
           }));
         });
-        await syncLeagueProgramMatches({
+        if (programMatches.length) await syncLeagueProgramMatches({
           leagueId,
           matches: programMatches,
-          resetResults,
+          resetResults: entryReset ? false : resetResults,
           ...(resetResults ? { resetConfirmation: "RESET_PROGRAM_RESULTS" as const } : {}),
         }).unwrap();
       }
@@ -3060,6 +3067,7 @@ const LeagueAlgorithmDemo = ({
                   </ToggleButton>
 	                </ToggleButtonGroup>
 
+                  {round.format === "TOURNAMENT" && round.option !== "FINAL" && <TournamentStartSizeField value={round.tournamentStartSize} onChange={value => setRounds(rounds.map(x => x.id === round.id ? { ...x, tournamentStartSize: value, tournamentSelectedIds: undefined } : x))} />}
                   {round.format === "TOURNAMENT" && round.option !== "FINAL" && (
                     <div style={{ marginTop: "16px" }}>
                       <div
@@ -4144,13 +4152,15 @@ const LeagueAlgorithmDemo = ({
         <DialogContent dividers>
           <Typography sx={{ fontSize: 15, lineHeight: 1.8 }}>
             계속 진행을 하면 종료·진행 중인 경기는 그대로 유지됩니다.<br />
-            초기화를 하면 대진표와 경기 결과가 초기 상태로 돌아갑니다.<br />
-            (원활한 진행을 위해 대진표 초기화 권장)<br />
+            초기화를 하면 이 리그의 모든 프로그램 라운드 대진표·점수·경기 진행 상태가 초기화됩니다. 참가자 명단은 유지됩니다.<br />
+
             어떤 방식으로 적용하겠습니까?
           </Typography>
+          {Boolean(savedMatchesData?.matches.some(match => match.is_program)) && hasCappedTournamentEntryChanges(savedProgramData?.program?.program_data as ProgramOption | undefined, pendingProgramSave ?? undefined) && <Typography sx={{ mt: 1, fontSize: 13 }} color="error">시작 강수·배치 방식·선정 명단 변경에는 초기화가 필요합니다. 변경 전 프로그램과 경기 기록은 복구용 백업에 보관합니다.</Typography>}
         </DialogContent>
         <DialogActions>
           <Button
+            disabled={Boolean(savedMatchesData?.matches.some(match => match.is_program)) && hasCappedTournamentEntryChanges(savedProgramData?.program?.program_data as ProgramOption | undefined, pendingProgramSave ?? undefined)}
             onClick={() => pendingProgramSave && persistSelectedProgram(pendingProgramSave, false)}
           >
             계속 진행

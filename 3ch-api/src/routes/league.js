@@ -1,3 +1,4 @@
+const { validateTournamentEntrySettings, guardTournamentEntryChanges, validateCappedRoundMatches } = require('../services/tournamentEntryPolicy');
 const express = require('express');
 const { z } = require('zod');
 const { randomUUID, randomBytes, createHash } = require('crypto');
@@ -3609,6 +3610,8 @@ router.get('/league/:id/program', optionalAuth, async (req, res) => {
 });
 
 // 이벤트 프로그램 저장/수정 (owner/admin)
+router.post('/league/:id/program/reset-and-save', requireAuth, require('../services/leagueProgramEntryReset').leagueProgramEntryReset(pool, triggerRankingRebuildByLeagueId));
+
 router.put('/league/:id/program', requireAuth, async (req, res) => {
   const userId = Number(req.user.sub);
   const leagueId = req.params.id;
@@ -3618,6 +3621,7 @@ router.put('/league/:id/program', requireAuth, async (req, res) => {
     return res.status(400).json({ message: '프로그램 데이터가 올바르지 않습니다.' });
   }
 
+  let client;
   try {
     const access = await pool.query(
       `SELECT l.id
@@ -3631,7 +3635,14 @@ router.put('/league/:id/program', requireAuth, async (req, res) => {
       return res.status(403).json({ message: '권한이 없습니다.' });
     }
 
-    const result = await pool.query(
+    validateTournamentEntrySettings(programData);
+    client = await pool.connect();
+    await client.query('BEGIN');
+    await client.query('SELECT id FROM leagues WHERE id=$1 FOR UPDATE', [leagueId]);
+    const previous = await client.query('SELECT program_data FROM league_programs WHERE league_id=$1 FOR UPDATE', [leagueId]);
+    const persisted = await client.query('SELECT program_round FROM league_matches WHERE league_id=$1 AND is_program=TRUE FOR UPDATE', [leagueId]);
+    guardTournamentEntryChanges(previous.rows[0]?.program_data, programData, persisted.rows);
+    const result = await client.query(
       `INSERT INTO league_programs (league_id, program_data, created_by_id)
        VALUES ($1, $2::jsonb, $3)
        ON CONFLICT (league_id)
@@ -3640,11 +3651,13 @@ router.put('/league/:id/program', requireAuth, async (req, res) => {
       [leagueId, JSON.stringify(programData), userId],
     );
 
+    await client.query('COMMIT');
     return res.json({ program: result.rows[0] });
   } catch (err) {
+    if (client) await client.query('ROLLBACK').catch(() => {});
     console.error('Error saving league program:', err);
-    return res.status(500).json({ message: '프로그램 저장 중 서버 오류' });
-  }
+    return res.status(err.statusCode || 500).json({ message: err.statusCode ? err.message : '프로그램 저장 중 서버 오류' });
+  } finally { client?.release(); }
 });
 
 // 이벤트 프로그램 삭제 (owner/admin)
@@ -3766,6 +3779,15 @@ router.post('/league/:id/program/matches/sync', requireAuth, async (req, res) =>
     await client.query('BEGIN');
     await client.query('SELECT id FROM leagues WHERE id = $1 FOR UPDATE', [leagueId]);
     const targetProgramRounds = [...new Set(validMatches.map((match) => match.program_round).filter((round) => Number.isFinite(round)))];
+    const cappedProgramRow = await client.query('SELECT program_data FROM league_programs WHERE league_id=$1', [leagueId]);
+    const cappedProgram = cappedProgramRow.rows[0]?.program_data;
+    if (cappedProgram?.blocks?.some(block => block.tournamentStartSize)) {
+      const roster = await client.query("SELECT * FROM league_participants WHERE league_id=$1 AND status='active' ORDER BY sort_order,created_at,id", [leagueId]);
+      for (const round of targetProgramRounds) {
+        const existing = await client.query('SELECT id FROM league_matches WHERE league_id=$1 AND is_program=TRUE AND program_round=$2', [leagueId, round]);
+        if (!existing.rows.length) validateCappedRoundMatches(leagueId, cappedProgram, round, roster.rows, matches);
+      }
+    }
     const existingState = new Map();
     const existingStateByParticipants = new Map();
     const participantMatchKey = (match) => {

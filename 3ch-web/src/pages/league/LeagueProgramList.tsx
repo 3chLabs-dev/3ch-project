@@ -1,3 +1,4 @@
+import TournamentEntrantSelection from "../../components/TournamentEntrantSelection";
 import { forwardRef, useMemo, useEffect, useRef, useState, useCallback, useImperativeHandle } from "react";
 import { useCompetitionNavigate as useNavigate, useCompetitionParams as useParams } from "../../features/tournament/leagueScope";
 import {
@@ -1767,6 +1768,8 @@ const LeagueProgramList = forwardRef<LeagueProgramListHandle, { embedded?: boole
                         단식 {round.teamSinglesCount ?? 3}경기, 복식 {round.teamDoublesCount ?? 0}경기
                       </Typography>
                     )}
+
+                    {storedProgram && id && round.format === "TOURNAMENT" && <TournamentEntrantSelection leagueId={id} program={storedProgram as ProgramOption} round={round.round} participants={participants} matches={matches} canManage={canManage} onSaved={next => setStoredProgram(next)} />}
 
                     {(round.type === "TEAM" || round.type === "DOUBLES" || round.format === "GROUP") && (
                       <Stack direction="row" spacing={1} sx={{ mb: 1 }}>

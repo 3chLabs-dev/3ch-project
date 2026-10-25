@@ -1,3 +1,4 @@
+import TournamentStartSizeField from "../../components/TournamentStartSizeField";
 import {
   Box,
   Button,
@@ -792,6 +793,8 @@ export function LeagueRoundStepForm({ kind, rounds, setRounds, hasParticipatingC
               </ToggleButtonGroup>
             </Box>
           )}
+
+          {round.format === "TOURNAMENT" && round.option !== "FINAL" && <TournamentStartSizeField value={round.tournamentStartSize} onChange={value => updateRound(index, { tournamentStartSize: value, tournamentSelectedIds: undefined })} />}
 
           {renderFinalOptions(round, index)}
 

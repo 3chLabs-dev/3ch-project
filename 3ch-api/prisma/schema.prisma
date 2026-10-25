@@ -1197,6 +1197,17 @@ model TournamentDrawWinner {
   @@map("tournament_draw_winners")
 }
 
+model LeagueProgramEntryResetAudit {
+  id         BigInt   @id @default(autoincrement())
+  league_id  String
+  actor_id   Int
+  snapshot   Json
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([league_id, created_at], map: "league_program_entry_reset_audit_league_idx")
+  @@map("league_program_entry_reset_audit")
+}
+
 model TournamentDraw {
   id         String   @id @default(dbgenerated("gen_random_uuid()::text"))
   name       String

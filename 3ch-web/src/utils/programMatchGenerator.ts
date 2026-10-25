@@ -10,6 +10,7 @@ import type {
 import { getRoundRobinWinScore } from "./roundRobinStandings";
 import { generateRoundRobin } from "./leagueUtils";
 import { buildIpingSlotLabels } from "./ipingTournamentDraw";
+import { resolveTournamentEntrants, tournamentCutoff } from "./tournamentEntrants";
 
 export type ProgramMatchPatch = Partial<Pick<
   LeagueMatch,
@@ -391,10 +392,18 @@ export function buildTournamentSlots(
   block: ProgramBlock,
   players: MatchUnit[],
   forcedSeeding?: "manual" | "seed" | "random",
+  bracketIndex = 1,
 ) {
-  const bracketSize = 2 ** Math.ceil(Math.log2(Math.max(2, players.length)));
-  const emptySlots = Array.from<MatchUnit | null>({ length: bracketSize }).fill(null);
+  const configuredSize = block.roundOption !== "FINAL" ? block.tournamentStartSize : undefined;
   const seeding = forcedSeeding ?? block.tournamentSeeding ?? "seed";
+  if (configuredSize) {
+    const selected = resolveTournamentEntrants(players, configuredSize, seeding, block.tournamentSelectedIds?.[String(bracketIndex)],
+      values => shuffleStable(values, `${leagueId}-r${roundIndex + 1}-b${bracketIndex}-entrants-${players.map(player => player.id).sort().join('|')}`));
+    if (!selected) return [];
+    if (seeding !== "manual") players = selected;
+  }
+  const bracketSize = configuredSize ?? 2 ** Math.ceil(Math.log2(Math.max(2, players.length)));
+  const emptySlots = Array.from<MatchUnit | null>({ length: bracketSize }).fill(null);
 
   if (seeding === "manual") {
     return emptySlots;
@@ -485,7 +494,7 @@ function buildTournamentMatches(
   bracketIndex = 1,
 ): LeagueMatch[] {
   const matches: LeagueMatch[] = [];
-  const slots = buildTournamentSlots(leagueId, roundIndex, block, players, forcedSeeding);
+  const slots = buildTournamentSlots(leagueId, roundIndex, block, players, forcedSeeding, bracketIndex);
   const bracketSize = slots.length;
   let previousRoundIds: string[] = [];
 
@@ -584,7 +593,7 @@ function buildUpperLowerTournamentMatches(
   forcedSeeding?: "manual" | "seed" | "random",
   bracketIndex = 1,
 ): LeagueMatch[] {
-  const slots = buildTournamentSlots(leagueId, roundIndex, block, players, forcedSeeding);
+  const slots = buildTournamentSlots(leagueId, roundIndex, block, players, forcedSeeding, bracketIndex);
   const bracketSize = slots.length;
   if (bracketSize < 4) {
     return buildTournamentMatches(leagueId, roundIndex, block, players, forcedSeeding, bracketIndex);
@@ -2200,6 +2209,8 @@ export function generateProgramRoundMatches(
         ].filter((units) => units.length > 0)
       : splitTournamentUnits(matchUnits, block.tournamentBracketCount ?? 1);
 
+    if (block.tournamentStartSize && tournamentUnits.some((bracketPlayers, index) =>
+      buildTournamentSlots(leagueId, round - 1, block, bracketPlayers, undefined, index + 1).length === 0)) return [];
     return withoutDeleted(tournamentUnits.flatMap((bracketPlayers, bracketIndex) =>
       tournamentBuilder(leagueId, round - 1, block, bracketPlayers, undefined, bracketIndex + 1),
     ));
@@ -2381,4 +2392,24 @@ export function hydrateProgramNoGamePolicy(
       is_no_game: hasPersistedPlay ? false : Boolean(noGameById.get(match.id)),
     };
   });
+}
+
+// Preview only: no persisted match, participant or score is modified.
+export function getProgramTournamentSelectionPools(leagueId: string, option: ProgramOption, participants: LeagueParticipantItem[], round: number, sourceMatches: LeagueMatch[]) {
+  const block = option.blocks[round - 1];
+  if (block?.format !== "TOURNAMENT" || block.roundOption === "FINAL" || !block.tournamentStartSize || (block.tournamentSeeding ?? "seed") !== "seed") return [];
+  const preview = { ...option, blocks: option.blocks.map((item, index) => index === round - 1
+    ? { ...item, tournamentStartSize: undefined, tournamentSelectedIds: undefined, tournamentSeeding: "seed" as const } : item) };
+  const matches = generateProgramRoundMatches(leagueId, preview, participants, round, sourceMatches);
+  const pools = new Map<number, Map<string, { id: string; name: string; level: number }>>();
+  for (const match of matches.filter(item => item.round_number === 1 && item.bracket !== "lower")) {
+    const index = match.tournament_bracket_index ?? 1;
+    const people = pools.get(index) ?? new Map();
+    for (const side of ["a", "b"] as const) {
+      const id = match[`participant_${side}_id`], name = match[`participant_${side}_name`];
+      if (id && name) people.set(id, { id, name, level: parseInt(match[`participant_${side}_division`] ?? '') || 0 });
+    }
+    pools.set(index, people);
+  }
+  return [...pools].map(([index, people]) => ({ index, ...tournamentCutoff([...people.values()], block.tournamentStartSize!) })).filter(pool => pool.tied);
 }

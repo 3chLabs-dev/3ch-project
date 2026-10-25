@@ -61,7 +61,8 @@ function splitBalanced(count: number, preferredGroupCount: number) {
   ).filter((size) => size > 0);
 }
 
-function calculateMultipleTournamentMatchCount(count: number, bracketCount = 1, thirdPlaceMatch = false) {
+function calculateMultipleTournamentMatchCount(count: number, bracketCount = 1, thirdPlaceMatch = false, startSize?: number) {
+  if (startSize) count = Math.min(count, startSize * Math.max(1, bracketCount));
   const effectiveBracketCount = Math.min(Math.max(1, bracketCount), count);
   const baseMatchCount = Math.max(0, count - effectiveBracketCount);
   if (!thirdPlaceMatch) return baseMatchCount;
@@ -192,7 +193,7 @@ export function generateProgramBlocks(
     }
 
     if (round.format === "TOURNAMENT") {
-      matchCount = calculateMultipleTournamentMatchCount(isSinglesFinal ? finalSinglesCount : playerCount, effectiveTournamentBracketCount, effectiveThirdPlaceMatch);
+      matchCount = calculateMultipleTournamentMatchCount(isSinglesFinal ? finalSinglesCount : playerCount, effectiveTournamentBracketCount, effectiveThirdPlaceMatch, round.option !== "FINAL" ? round.tournamentStartSize : undefined);
     }
 
   const duration =
@@ -226,6 +227,8 @@ export function generateProgramBlocks(
       tournamentBracketCount: isBlueWhiteChampionship ? 1 : round.tournamentBracketCount ?? 1,
       thirdPlaceMatch: isBlueWhiteChampionship ? false : round.thirdPlaceMatch ?? (round.tournamentBracketCount ?? 1) === 1,
       tournamentSeeding: round.tournamentSeeding,
+      tournamentStartSize: round.option !== "FINAL" ? round.tournamentStartSize : undefined,
+      tournamentSelectedIds: round.tournamentSelectedIds,
       tournamentMode: round.tournamentMode,
       finalAdvancementMode: round.finalAdvancementMode,
       advanceCount: round.advanceCount,
@@ -255,7 +258,7 @@ export function generateProgramBlocks(
     }
 
     if (round.format === "TOURNAMENT") {
-      matchCount = calculateMultipleTournamentMatchCount(Math.floor(playerCount / 2), effectiveTournamentBracketCount, effectiveThirdPlaceMatch);
+      matchCount = calculateMultipleTournamentMatchCount(Math.floor(playerCount / 2), effectiveTournamentBracketCount, effectiveThirdPlaceMatch, round.option !== "FINAL" ? round.tournamentStartSize : undefined);
     }
     const duration =
       calculateDuration(
@@ -289,6 +292,8 @@ export function generateProgramBlocks(
         tournamentBracketCount: isBlueWhiteChampionship ? 1 : round.tournamentBracketCount ?? 1,
         thirdPlaceMatch: isBlueWhiteChampionship ? false : round.thirdPlaceMatch ?? (round.tournamentBracketCount ?? 1) === 1,
         tournamentSeeding: round.tournamentSeeding,
+      tournamentStartSize: round.option !== "FINAL" ? round.tournamentStartSize : undefined,
+      tournamentSelectedIds: round.tournamentSelectedIds,
         tournamentMode: round.tournamentMode,
         finalAdvancementMode: round.finalAdvancementMode,
         advanceCount: round.advanceCount,
@@ -336,7 +341,7 @@ export function generateProgramBlocks(
       }
 
       if (round.format === "TOURNAMENT") {
-        matchCount = calculateMultipleTournamentMatchCount(teamCount, effectiveTournamentBracketCount, effectiveThirdPlaceMatch);
+        matchCount = calculateMultipleTournamentMatchCount(teamCount, effectiveTournamentBracketCount, effectiveThirdPlaceMatch, round.option !== "FINAL" ? round.tournamentStartSize : undefined);
       }
 
     const duration =
@@ -375,6 +380,8 @@ export function generateProgramBlocks(
         tournamentBracketCount: isBlueWhiteChampionship ? 1 : round.tournamentBracketCount ?? 1,
         thirdPlaceMatch: isBlueWhiteChampionship ? false : round.thirdPlaceMatch ?? (round.tournamentBracketCount ?? 1) === 1,
         tournamentSeeding: round.tournamentSeeding,
+      tournamentStartSize: round.option !== "FINAL" ? round.tournamentStartSize : undefined,
+      tournamentSelectedIds: round.tournamentSelectedIds,
         tournamentMode: round.tournamentMode,
         finalAdvancementMode: round.finalAdvancementMode,
         advanceCount: round.advanceCount,

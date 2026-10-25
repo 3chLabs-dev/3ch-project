@@ -158,6 +158,8 @@ export interface ProgramBlock {
   tournamentBracketCount?: number;
   thirdPlaceMatch?: boolean;
   tournamentSeeding?: TournamentSeedingType;
+  tournamentStartSize?: number;
+  tournamentSelectedIds?: Record<string, string[]>;
   tournamentMode?: TournamentMode;
   finalAdvancementMode?: FinalAdvancementMode;
   advanceCount?: number;
@@ -280,6 +282,8 @@ export interface RoundConfig {
   tournamentBracketCount?: number;
   thirdPlaceMatch?: boolean;
   tournamentSeeding?: TournamentSeedingType;
+  tournamentStartSize?: number;
+  tournamentSelectedIds?: Record<string, string[]>;
   tournamentMode?: TournamentMode;
   finalAdvancementMode?: FinalAdvancementMode;
   advanceCount?: number;
